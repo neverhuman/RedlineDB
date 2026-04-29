@@ -832,6 +832,7 @@ dependencies = [
  "fail",
  "parking_lot",
  "proptest",
+ "serde",
  "serde_json",
  "smallvec",
  "tempfile",

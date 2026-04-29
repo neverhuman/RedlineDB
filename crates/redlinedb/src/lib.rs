@@ -233,6 +233,14 @@ impl Database {
                 generation: stats.checkpoint.map(|control| control.generation),
                 vacuum_horizon_csn: stats.vacuum_horizon_csn.0,
             },
+            // Phase 11 Wave 0: forward the structural counter
+            // snapshot. All fields are zero today; emission lands in
+            // subsequent waves. `Some(_)` so manifests carry the
+            // typed shape (Wave 1 dashboards can rely on a stable
+            // schema) while `#[serde(skip_serializing_if =
+            // "Option::is_none")]` keeps the door open for engines
+            // that cannot supply the counters at all.
+            phase11_counters: Some(stats.phase11_counters),
         })
     }
 
