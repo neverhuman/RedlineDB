@@ -15,6 +15,7 @@ pub mod integrity;
 pub mod io;
 pub mod json;
 pub mod storage;
+pub mod telemetry;
 pub mod txn;
 pub mod vector;
 pub mod wal;

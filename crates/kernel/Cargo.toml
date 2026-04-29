@@ -10,6 +10,7 @@ arc-swap = "1.7"
 crc32fast = "1.5"
 fail = { version = "0.5", features = ["failpoints"], optional = true }
 parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 smallvec = "1.13"
 thiserror = "2.0"

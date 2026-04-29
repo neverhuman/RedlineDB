@@ -24,6 +24,7 @@ use crate::storage::{
     BufferPool, BufferPoolStats, ControlFile, ControlStore, DEFAULT_CHECKPOINT_BATCH_PAGES,
     PageFile, TxStatusCheckpoint, TxStatusStore,
 };
+use crate::telemetry::{Phase11Counters, Phase11CountersSnapshot};
 use crate::txn::Isolation;
 use crate::wal::{
     WalConfig, WalCoordinator, WalPayload, WalReader, WalRecord, WalRecordKind, WalScanReport,
@@ -90,6 +91,11 @@ pub struct StorageStatsSnapshot {
     /// so the bench harness can record per-run fsync/pwrite tallies
     /// without reaching into kernel internals.
     pub wal_sync_counters: WalSyncCountersSnapshot,
+    /// Phase 11 Wave 0: structural counter surface. The aggregator
+    /// is allocated alongside the WAL coordinator's sync counters,
+    /// but Wave 0 only defines the addressing — emission sites land
+    /// in subsequent waves so every field stays at `0` for now.
+    pub phase11_counters: Phase11CountersSnapshot,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -190,6 +196,13 @@ pub struct Engine {
     catalog_store: CatalogStore,
     locks: RowLockManager,
     wal: Arc<WalCoordinator>,
+    /// Phase 11 Wave 0: engine-level aggregator for the new
+    /// telemetry counters. Lives next to `wal` because it is the
+    /// sibling container for non-WAL emission sites (leaf visits,
+    /// prefetch, heap rechecks, cursor batches, lock waits) plus
+    /// the per-flush WAL batch histogram. Wave 0 only allocates
+    /// it; subsequent waves wire the `.fetch_add` sites.
+    phase11_counters: Arc<Phase11Counters>,
     control: ControlStore,
     tx_status_store: TxStatusStore,
     checkpoint: Mutex<Option<ControlFile>>,
@@ -237,6 +250,7 @@ impl Engine {
             catalog_store,
             locks: RowLockManager::new(config.lock_shards, config.busy_timeout),
             wal,
+            phase11_counters: Arc::new(Phase11Counters::default()),
             control,
             tx_status_store,
             checkpoint: Mutex::new(checkpoint),
@@ -367,6 +381,7 @@ impl Engine {
             catalog_store,
             locks: RowLockManager::new(config.lock_shards, config.busy_timeout),
             wal,
+            phase11_counters: Arc::new(Phase11Counters::default()),
             control,
             tx_status_store,
             checkpoint: Mutex::new(checkpoint),
@@ -887,7 +902,25 @@ impl Engine {
             wal_durable_lsn: self.wal.durable_lsn()?,
             vacuum_horizon_csn: self.oldest_active_snapshot_csn(),
             wal_sync_counters: self.wal.sync_counters_snapshot(),
+            phase11_counters: self.phase11_counters_snapshot(),
         })
+    }
+
+    /// Phase 11 Wave 0: relaxed-atomic snapshot of the Phase 11
+    /// counter aggregator. Mirrors
+    /// [`crate::wal::WalCoordinator::sync_counters_snapshot`] for
+    /// downstream telemetry callers (the bench harness picks it up
+    /// via `Database::benchmark_stats`).
+    pub fn phase11_counters_snapshot(&self) -> Phase11CountersSnapshot {
+        self.phase11_counters.snapshot()
+    }
+
+    /// Phase 11 Wave 0: shared handle to the Phase 11 counter
+    /// aggregator. Wave 1+ instrumentation sites can clone this
+    /// `Arc` to gain direct access for `.fetch_add` calls without
+    /// going through an additional accessor.
+    pub fn phase11_counters(&self) -> Arc<Phase11Counters> {
+        Arc::clone(&self.phase11_counters)
     }
 
     pub fn checkpoint(&self) -> Result<ControlFile> {

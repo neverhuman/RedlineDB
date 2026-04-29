@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use redlinedb_kernel::telemetry::Phase11CountersSnapshot;
 use serde::Serialize;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -236,6 +237,13 @@ pub struct BenchmarkStats {
     pub tx: TxBenchStats,
     pub wal: WalBenchStats,
     pub checkpoint: CheckpointBenchStats,
+    /// Phase 11 Wave 0: structural counter surface forwarded from
+    /// the kernel. Wave 0 only allocates/exposes the counters; every
+    /// field is `0` until subsequent waves add emission sites. The
+    /// field is `Option<_>` so manifests written by older binaries
+    /// keep deserialising once the schema evolves further.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase11_counters: Option<Phase11CountersSnapshot>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
