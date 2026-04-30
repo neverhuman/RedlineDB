@@ -8,6 +8,7 @@ use std::time::Duration;
 use crate::format::bytes::read_u32;
 use crate::format::{Csn, Lsn, TxId};
 use crate::io::{FileHandle, FileSystem, StdFileSystem};
+use crate::telemetry::{Phase11Counters, phase11_bucket_index};
 use crate::wal::{WAL_HEADER_LEN, WalPayload, WalRecord, WalRecordKind};
 use crate::{Error, Result};
 
@@ -338,6 +339,11 @@ pub struct WalCoordinator {
 struct WalCoordinatorShared {
     state: Mutex<WalCoordinatorState>,
     cvar: Condvar,
+    /// Wave 1A-F: optional Phase 11 telemetry sink, installed
+    /// post-construction by [`WalCoordinator::set_phase11_counters`].
+    /// The writer thread reads this directly (no state-mutex hop) so
+    /// it can bump `wal_batch_size_buckets` per fdatasync.
+    phase11: std::sync::RwLock<Option<Arc<Phase11Counters>>>,
 }
 
 #[derive(Debug)]
@@ -389,6 +395,7 @@ impl WalCoordinator {
                 failure: None,
             }),
             cvar: Condvar::new(),
+            phase11: std::sync::RwLock::new(None),
         });
         // Lane BH P1 #7: hand the manager an `Arc<WalSyncCounters>`
         // before it moves into the writer thread; the coordinator
@@ -538,6 +545,16 @@ impl WalCoordinator {
     /// can sample without holding the coordinator state lock.
     pub fn sync_counters_snapshot(&self) -> WalSyncCountersSnapshot {
         self.sync_counters.snapshot()
+    }
+
+    /// Wave 1A-F: install (or replace) the Phase 11 telemetry sink so
+    /// the writer thread can bump `wal_batch_size_buckets` once per
+    /// fdatasync with the count of records drained. Optional — leaving
+    /// this unset keeps every existing call site working unchanged.
+    pub fn set_phase11_counters(&self, counters: Arc<Phase11Counters>) {
+        if let Ok(mut slot) = self.shared.phase11.write() {
+            *slot = Some(counters);
+        }
     }
 
     pub fn prune_segments_below_checkpoint_lsn(&self, checkpoint_lsn: Lsn) -> Result<usize> {
@@ -711,6 +728,16 @@ fn wal_writer_loop(mut wal: WalManager, config: WalConfig, shared: Arc<WalCoordi
 
         if should_flush {
             wait_for_group_commit_window(&shared, &config, &mut wal, flush_target);
+            // Wave 1A-F: re-sample `flush_requested_lsn` after the
+            // group-commit window. Late-arriving commits within the
+            // same fdatasync interval are now folded into this train
+            // so they don't have to wait for the next sync. The
+            // widening MUST happen before `wal.flush()` so durability
+            // is preserved: every commit whose LSN <= the post-resample
+            // target lands on disk before the corresponding writer is
+            // told the commit succeeded. We do not extend the window —
+            // just one re-sample, then sync.
+            flush_target = resample_flush_target(&shared, flush_target);
             // Lane GC: drain_until may pop & write further records
             // that share this fsync; it returns the count and bytes
             // it wrote so we attribute them to the same group.
@@ -740,6 +767,11 @@ fn wal_writer_loop(mut wal: WalManager, config: WalConfig, shared: Arc<WalCoordi
                     {
                         counters.record_group_commit(group_records, group_bytes);
                     }
+                    // Wave 1A-F: bump Phase 11 wal_batch_size_buckets
+                    // with the per-fdatasync record count. Same shape
+                    // as `group_commit_batch_buckets` so the paper
+                    // figs can reuse the existing bucketing.
+                    bump_phase11_wal_batch(&shared, group_records);
                     group_records = 0;
                     group_bytes = 0;
                     if let Ok(mut state) = shared.state.lock() {
@@ -767,6 +799,7 @@ fn wal_writer_loop(mut wal: WalManager, config: WalConfig, shared: Arc<WalCoordi
                     {
                         counters.record_group_commit(group_records, group_bytes);
                     }
+                    bump_phase11_wal_batch(&shared, group_records);
                     group_records = 0;
                     group_bytes = 0;
                     if let Ok(mut state) = shared.state.lock() {
@@ -782,6 +815,38 @@ fn wal_writer_loop(mut wal: WalManager, config: WalConfig, shared: Arc<WalCoordi
                 }
             }
         }
+    }
+}
+
+/// Wave 1A-F: re-sample `flush_requested_lsn` immediately before the
+/// fdatasync. Late-arriving commits that landed during the
+/// `wait_for_group_commit_window` delay must already be visible in
+/// `state.flush_requested_lsn` (they bumped it via `flush_until`), so
+/// reading it under the state mutex and widening `flush_target` is
+/// sufficient — no scan of `pending` needed. Returns the maximum of
+/// the original and the freshly sampled target so the widening is
+/// monotonic.
+fn resample_flush_target(shared: &Arc<WalCoordinatorShared>, current: Lsn) -> Lsn {
+    if let Ok(state) = shared.state.lock() {
+        if state.flush_requested_lsn > current {
+            return state.flush_requested_lsn;
+        }
+    }
+    current
+}
+
+/// Wave 1A-F: bump `Phase11Counters::wal_batch_size_buckets` with the
+/// number of records covered by the most recent fdatasync. Skips empty
+/// flushes so latency-only syncs do not skew the histogram.
+fn bump_phase11_wal_batch(shared: &Arc<WalCoordinatorShared>, record_count: u64) {
+    if record_count == 0 {
+        return;
+    }
+    if let Ok(slot) = shared.phase11.read()
+        && let Some(counters) = slot.as_ref()
+    {
+        let bucket = phase11_bucket_index(record_count);
+        counters.wal_batch_size_buckets[bucket].fetch_add(1, AtomicOrdering::Relaxed);
     }
 }
 

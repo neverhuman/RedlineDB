@@ -233,6 +233,14 @@ impl Engine {
             catalog_store.save_atomic(&initial_catalog)?;
         }
         let buffer = Arc::clone(&buffer);
+        let phase11_counters = Arc::new(Phase11Counters::default());
+        let locks = RowLockManager::new(config.lock_shards, config.busy_timeout);
+        // Wave 1A-F: pipe Phase11 telemetry into the row-lock manager so
+        // contended-acquire waits land in `lock_wait_us_buckets`. Same
+        // Arc piped into the WAL coordinator so `wal_batch_size_buckets`
+        // gets bumped per fdatasync.
+        locks.set_phase11_counters(Arc::clone(&phase11_counters));
+        wal.set_phase11_counters(Arc::clone(&phase11_counters));
         Ok(Arc::new(Self {
             config: config.clone(),
             data_path,
@@ -248,9 +256,9 @@ impl Engine {
             )?,
             catalog: CatalogManager::new(initial_catalog),
             catalog_store,
-            locks: RowLockManager::new(config.lock_shards, config.busy_timeout),
+            locks,
             wal,
-            phase11_counters: Arc::new(Phase11Counters::default()),
+            phase11_counters,
             control,
             tx_status_store,
             checkpoint: Mutex::new(checkpoint),
@@ -369,6 +377,11 @@ impl Engine {
         heap.load_row_directory_from_pages(page_count)?;
         heap.load_reusable_pages_from_pages(page_count)?;
         let catalog = CatalogManager::new(recovered_catalog.unwrap_or(initial_catalog));
+        let phase11_counters = Arc::new(Phase11Counters::default());
+        let locks = RowLockManager::new(config.lock_shards, config.busy_timeout);
+        // Wave 1A-F: same telemetry pipe on the open path.
+        locks.set_phase11_counters(Arc::clone(&phase11_counters));
+        wal.set_phase11_counters(Arc::clone(&phase11_counters));
         let engine = Arc::new(Self {
             config: config.clone(),
             data_path: page_path,
@@ -379,9 +392,9 @@ impl Engine {
             heap,
             catalog,
             catalog_store,
-            locks: RowLockManager::new(config.lock_shards, config.busy_timeout),
+            locks,
             wal,
-            phase11_counters: Arc::new(Phase11Counters::default()),
+            phase11_counters,
             control,
             tx_status_store,
             checkpoint: Mutex::new(checkpoint),
