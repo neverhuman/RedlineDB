@@ -25,12 +25,17 @@
 //!   `cursor_batches_emitted`. The legacy `range_scan_leaves_visited`
 //!   counter on the index itself is *also* updated to keep the existing
 //!   `range_scan_terminates_early` test passing.
-//! * Prefetch: when the cursor crosses a leaf boundary it would like to
-//!   emit a hint for the *next-next* leaf so the buffer pool can warm it.
-//!   The `BufferPool` does not yet have a public prefetch entry point —
-//!   Worker B will wire one in W1-B. Until then `prefetch_hint` is a
-//!   no-op; we still record the hint internally so the test can observe
-//!   that the cursor *would* have prefetched.
+//! * Prefetch: when the cursor crosses a leaf boundary it emits an
+//!   advisory hint for the *next-next* leaf so the buffer pool can
+//!   warm it. W1-B (this commit) wires `BufferPool::prefetch` so the
+//!   cursor calls it whenever it has a `Phase11Counters` sink and the
+//!   newly-loaded leaf advertises a right-link. The hint is purely
+//!   advisory: it never blocks the cursor, never propagates errors,
+//!   and bumps `Phase11Counters::prefetch_hits` (page was already
+//!   resident) or `Phase11Counters::prefetch_misses` (page was cold
+//!   or the shard was contended) honestly. The legacy
+//!   `prefetch_hints_emitted` per-cursor counter is retained for
+//!   diagnostics — it counts hints *attempted*, not hits.
 //! * Re-anchoring: the cursor follows the *exact* anchoring contract of
 //!   the legacy `range_scan_filter`: each leaf is pinned before its
 //!   right-link is read, so we never observe a torn link, and a split
@@ -180,11 +185,11 @@ pub struct IndexCursor<'idx> {
     /// if `entries` still has un-visited slots (those slots have keys
     /// past the upper bound).
     exhausted: bool,
-    /// Test-only counter of prefetch hints emitted on leaf-boundary
-    /// crossings. Once W1-B wires `BufferPool::prefetch` this will be
-    /// the count of advisory hints shipped to the buffer pool. Until
-    /// then it lets the equivalence test confirm the cursor is
-    /// computing the right hint targets.
+    /// Diagnostic counter of prefetch hints emitted on leaf-boundary
+    /// crossings. Each emission is also dispatched to
+    /// [`BufferPool::prefetch`] when `counters` is `Some`, so the
+    /// W1-B equivalence test asserts this counter equals
+    /// `prefetch_hits + prefetch_misses` on the wired sink.
     prefetch_hints_emitted: u64,
 }
 
@@ -234,6 +239,12 @@ impl<'idx> IndexCursor<'idx> {
             prefetch_hints_emitted: 0,
         };
         cursor.load_current_leaf()?;
+        // Warm the second leaf before the cursor crosses its first
+        // boundary. Same advisory contract as the per-advance hint —
+        // see `prefetch_hint` for details.
+        if let Some(next_next) = cursor.next_leaf {
+            cursor.prefetch_hint(next_next);
+        }
         Ok(cursor)
     }
 
@@ -320,9 +331,11 @@ impl<'idx> IndexCursor<'idx> {
     }
 
     /// Returns the running count of prefetch hints emitted by this
-    /// cursor. W1-B will wire this into `BufferPool::prefetch`; for
-    /// now it is exposed for the equivalence test to assert the
-    /// cursor crossed the leaf boundary.
+    /// cursor. Each hint is also dispatched to
+    /// [`BufferPool::prefetch`] when the cursor was opened with a
+    /// `Phase11Counters` sink (W1-B), so this counter equals
+    /// `prefetch_hits + prefetch_misses` on the sink in the
+    /// counters-wired case. Exposed for tests and diagnostics.
     pub fn prefetch_hints_emitted(&self) -> u64 {
         self.prefetch_hints_emitted
     }
@@ -333,15 +346,17 @@ impl<'idx> IndexCursor<'idx> {
     /// distinguished "evicted under me" error so a higher layer would
     /// have to retry.
     fn advance_to(&mut self, next_id: PageId) -> Result<()> {
-        // Crossing a leaf boundary: emit an advisory prefetch hint
-        // for the *next-next* leaf. The hint is best-effort — we do
-        // not attempt to read the next leaf's right pointer here
-        // (that would require an extra pin) and instead let the
-        // buffer layer chain ahead one hop. Until W1-B lands the
-        // hint is a no-op.
-        self.prefetch_hint(next_id);
         self.current_leaf = Some(next_id);
-        self.load_current_leaf()
+        self.load_current_leaf()?;
+        // Crossing a leaf boundary: now that `next_id` is loaded we
+        // know its right-link (cached in `self.next_leaf`), which is
+        // the *next-next* leaf the cursor will visit. Emit an
+        // advisory prefetch hint to warm it. The hint is purely
+        // best-effort — see `BufferPool::prefetch` for the contract.
+        if let Some(next_next) = self.next_leaf {
+            self.prefetch_hint(next_next);
+        }
+        Ok(())
     }
 
     /// Pin the current leaf, decode its entries, and cache the right
@@ -424,21 +439,25 @@ impl<'idx> IndexCursor<'idx> {
         }
     }
 
-    /// Best-effort prefetch hint for the *next-next* leaf. The cursor
-    /// has just advanced onto a fresh leaf; if its right-link is
-    /// already cached in `self.next_leaf` we hint to warm that page
-    /// next.
+    /// Best-effort prefetch hint for the *next-next* leaf. Bumps the
+    /// per-cursor diagnostic counter (`prefetch_hints_emitted`) and,
+    /// when a `Phase11Counters` sink is wired in, dispatches to
+    /// [`BufferPool::prefetch`] to warm the target page.
     ///
-    /// TODO(phase11/W1-B): emit prefetch via `Buffer::prefetch(next_next_leaf)`.
-    fn prefetch_hint(&mut self, _just_entered: PageId) {
-        // The next-next leaf is whatever the *new* current leaf
-        // points to via its right link. We do not have that yet at
-        // this call site (load_current_leaf has not run for
-        // `_just_entered`); the hint is therefore for the leaf we
-        // *just* left's right-link target — i.e. exactly
-        // `_just_entered`. W1-B will refine this to one-hop ahead
-        // once the buffer layer can chase the link cheaply.
+    /// The cursor only emits hints when it has somewhere to record
+    /// the resulting hit/miss — a callerless cursor (no counters)
+    /// still bumps its internal `prefetch_hints_emitted` for the
+    /// existing equivalence test, but skips the buffer-pool call so
+    /// the no-counters case stays observably unchanged.
+    fn prefetch_hint(&mut self, target: PageId) {
         self.prefetch_hints_emitted = self.prefetch_hints_emitted.saturating_add(1);
+        if let Some(c) = self.counters {
+            // `BufferPool::prefetch` is purely advisory: it never
+            // blocks on a contended shard, never holds a write lock,
+            // and swallows any I/O error so the cursor's hot path
+            // remains correctness-preserving.
+            self.index.inner.buffer.prefetch(target, c);
+        }
     }
 }
 

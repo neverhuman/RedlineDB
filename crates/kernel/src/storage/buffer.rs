@@ -5,6 +5,7 @@ use std::thread;
 
 use crate::format::{Lsn, Page, PageId, PageKind, RelId};
 use crate::storage::PageFile;
+use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
 
 pub const DEFAULT_CHECKPOINT_BATCH_PAGES: usize = 64;
@@ -165,6 +166,58 @@ impl BufferPool {
                 drop(state);
                 return Ok(PageGuard { page_id, frame });
             }
+        }
+    }
+
+    /// Phase 11 W1-B advisory prefetch hint.
+    ///
+    /// Best-effort attempt to warm `page_id` in the buffer pool. The
+    /// call is purely advisory and follows three invariants:
+    ///
+    /// * **Never propagates errors** — a synchronous cold-load is
+    ///   attempted via [`Self::pin`] when the probe says the page is
+    ///   not resident, but any pin error (I/O failure, eviction race,
+    ///   etc.) is swallowed. The caller never observes a `Result`.
+    /// * **Never waits for a contended residency probe** — the shard
+    ///   check uses [`Mutex::try_lock`]. If the shard is contended we
+    ///   drop the hint silently and bump `prefetch_misses`.
+    /// * **Never depends on the warm side effect** — a cold load may
+    ///   block briefly on disk I/O, but the caller must remain correct
+    ///   if the page is not warmed.
+    ///
+    /// Counter semantics (matches the W1-B design note: "miss" means
+    /// the page was *not* resident at probe time, regardless of
+    /// whether the subsequent load actually proceeded — this is the
+    /// metric W1-B verification cares about):
+    ///
+    /// * `prefetch_hits` — page was already resident at probe time.
+    /// * `prefetch_misses` — page was not resident, *or* the shard
+    ///   was contended (hint dropped). The cold-load attempt is
+    ///   best-effort; the miss counter is bumped regardless.
+    pub fn prefetch(&self, page_id: PageId, counters: &Phase11Counters) {
+        let shard_idx = self.shard_idx(page_id);
+        let resident = match self.shards[shard_idx].try_lock() {
+            Ok(shard) => shard.contains_key(&page_id),
+            Err(_) => {
+                // Contended shard: drop the hint as a miss without
+                // attempting a cold load.
+                counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+        };
+        if resident {
+            counters.prefetch_hits.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        // Page was not resident at probe time — count it as a miss
+        // up-front, then attempt a synchronous cold load. The pin
+        // path may briefly block on disk I/O; a future iteration
+        // can defer this to an existing thread pool. Errors are
+        // swallowed by design — prefetch is purely advisory.
+        counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
+        if let Ok(_guard) = self.pin(page_id) {
+            // Drop the guard immediately; the goal is just to warm
+            // the buffer pool, not to keep the page pinned.
         }
     }
 
