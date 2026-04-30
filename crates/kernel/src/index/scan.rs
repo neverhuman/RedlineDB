@@ -1,16 +1,30 @@
-use std::sync::atomic::Ordering as AtomicOrdering;
-
 use crate::engine::ConcurrentTxStatus;
 use crate::format::{PageId, TxId};
 use crate::txn::Snapshot;
 use crate::{Error, Result};
 
-use super::cells::{Entry, entry_visible};
+use super::cells::Entry;
+use super::cursor::{CursorYield, IndexCursor, KeyRange, SnapshotView};
 use super::{BtreeIndex, IndexEntry, IndexRowRef, PAGE_INTERNAL_KIND, PAGE_LEAF_KIND};
+
+/// Default batch size for the materialise-into-`Vec` legacy wrappers.
+/// Sized to amortise the per-batch counter bumps without committing to
+/// hold any particular number of pinned pages — the cursor still
+/// releases its leaf guards between batches.
+const LEGACY_WRAPPER_BATCH: usize = 256;
 
 impl BtreeIndex {
     pub fn range_scan(&self, start: &[u8], end: &[u8]) -> Result<Vec<IndexRowRef>> {
-        self.range_scan_filter(start, end, |entry| entry.physically_live())
+        let range = KeyRange::half_open(start, end);
+        let mut out = Vec::new();
+        let mut cur = IndexCursor::open(self, range, SnapshotView::all())?;
+        loop {
+            match cur.next_batch(&mut out, LEGACY_WRAPPER_BATCH)? {
+                CursorYield::Batch(_) => continue,
+                CursorYield::End => break,
+            }
+        }
+        Ok(out)
     }
 
     pub fn range_scan_visible(
@@ -21,17 +35,54 @@ impl BtreeIndex {
         start: &[u8],
         end: &[u8],
     ) -> Result<Vec<IndexRowRef>> {
-        self.range_scan_filter(start, end, |entry| {
-            entry_visible(entry, tx_status, snapshot, owner)
+        let range = KeyRange::half_open(start, end);
+        let view = SnapshotView::visible(tx_status, snapshot, owner);
+        let mut out = Vec::new();
+        let mut cur = IndexCursor::open(self, range, view)?;
+        loop {
+            match cur.next_batch(&mut out, LEGACY_WRAPPER_BATCH)? {
+                CursorYield::Batch(_) => continue,
+                CursorYield::End => break,
+            }
+        }
+        Ok(out)
+    }
+
+    /// Direct entry-filter range scan. Retained for the equivalence
+    /// test (`tests/index_cursor_equivalence.rs`) which asserts the
+    /// cursor reproduces the legacy `Vec` output bit-for-bit. Crate-
+    /// internal so production code goes through the cursor.
+    #[doc(hidden)]
+    pub fn range_scan_legacy_for_test(&self, start: &[u8], end: &[u8]) -> Result<Vec<IndexRowRef>> {
+        self.range_scan_filter_legacy(start, end, |entry| entry.physically_live())
+    }
+
+    /// Snapshot-visible variant of [`range_scan_legacy_for_test`].
+    #[doc(hidden)]
+    pub fn range_scan_visible_legacy_for_test(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        start: &[u8],
+        end: &[u8],
+    ) -> Result<Vec<IndexRowRef>> {
+        self.range_scan_filter_legacy(start, end, |entry| {
+            super::cells::entry_visible(entry, tx_status, snapshot, owner)
         })
     }
 
-    pub(super) fn range_scan_filter(
+    /// Verbatim copy of the pre-cursor `range_scan_filter` body. The
+    /// equivalence test calls this to compare against the cursor
+    /// output. Production callers must not use this — go through
+    /// `IndexCursor` (or the legacy `range_scan` wrappers above).
+    fn range_scan_filter_legacy(
         &self,
         start: &[u8],
         end: &[u8],
         mut visible: impl FnMut(&Entry) -> bool,
     ) -> Result<Vec<IndexRowRef>> {
+        use std::sync::atomic::Ordering as AtomicOrdering;
         let mut out = Vec::new();
         let mut leaf_id = self.find_leaf(self.meta()?.root_page_id, start)?;
         loop {
@@ -40,7 +91,7 @@ impl BtreeIndex {
                 .range_scan_leaves_visited
                 .fetch_add(1, AtomicOrdering::Relaxed);
             let (next, last_logical_key) = guard.with_page(|page| {
-                let header = Self::read_page_header(page)?;
+                let _header = Self::read_page_header(page)?;
                 let mut last_key: Option<Vec<u8>> = None;
                 for entry in self.read_entries(page)? {
                     if !visible(&entry) {
@@ -56,19 +107,8 @@ impl BtreeIndex {
                         last_key = Some(logical_key);
                     }
                 }
-                Ok((header.right, last_key))
+                Ok((_header.right, last_key))
             })?;
-            // Wave 7 P1 #6: terminate the leaf walk as soon as the leaf
-            // we just scanned has a logical key already at or past the
-            // upper bound. Without this, a `WHERE k BETWEEN 5 AND 10`
-            // over a 100K-entry index loaded every leaf to the end of
-            // the chain — O(N) instead of O(log N + result_size). The
-            // entry-level `< end` filter still trims partial overlap on
-            // the boundary leaf; this short-circuit only skips
-            // *subsequent* leaves whose every key would fail the
-            // filter. `Bound::Unbounded` callers pass a sentinel `end`
-            // (e.g. `[0xff; 32]`) that can never be reached, so they
-            // keep the legacy walk-to-end behavior.
             if let Some(last) = last_logical_key.as_deref()
                 && last >= end
             {
