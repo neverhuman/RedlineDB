@@ -11,6 +11,7 @@ use crate::wal::{WalCoordinator, WalPayload, WalRecordKind};
 use crate::{Error, Result};
 
 mod cells;
+mod cursor;
 mod locks;
 mod lookup;
 mod maintenance;
@@ -19,6 +20,7 @@ mod scan;
 
 use cells::{Entry, InternalCell, LeafCell};
 
+pub use cursor::{CursorYield, IndexCursor, KeyRange, SnapshotView};
 pub use locks::{UniqueKeyGuard, UniqueKeyLockTable};
 
 pub const INDEX_SPECIAL_LEN: usize = 256;
