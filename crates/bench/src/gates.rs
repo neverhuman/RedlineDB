@@ -175,6 +175,74 @@ pub fn gate_zero_lost_acked_commits(report: &FailpointMatrixReport) -> GateResul
     }
 }
 
+/// Phase 11 wave 1a OLTP gap gate.
+///
+/// Evaluates the wave-1a perf-gap floors that Wave 1b is expected to
+/// drive past. These are *abort floors*, not targets — the wave goal
+/// in each row is documented inline as a comment, but the gate fails
+/// only when the redline/sqlite ratio drops below the listed floor.
+///
+/// The gate is intentionally additive: it is **not** wired into the
+/// default `evaluate_records` pipeline so existing phase-9 lanes keep
+/// the same pass/fail semantics. Callers that want phase-11 floors
+/// invoke this directly via [`evaluate_phase11_oltp_gap`].
+pub fn phase11_oltp_gap_gate(records: &[RunRecord]) -> GateSummary {
+    // (workload, threads, floor, wave-target). The floor is what the
+    // gate enforces today; the target is what wave 1b should hit.
+    let floors = [
+        // Wave 1b target 0.50; abort floor 0.30.
+        (WorkloadKind::SecondaryIndexRange, 8usize, 0.30f64),
+        // Covered secondary read; wave target 0.70.
+        (WorkloadKind::SecondaryIndexRead, 8, 0.40),
+        // Wave target 0.85.
+        (WorkloadKind::HotRowUpdate, 8, 0.60),
+        // No-regression floor; sqlite owns this fixture today.
+        (WorkloadKind::PointReadPk, 1, 0.85),
+        // Concurrent writers — Redline's flagship win.
+        (WorkloadKind::WritersDisjoint, 8, 1.30),
+    ];
+    let mut gates = Vec::with_capacity(floors.len());
+    for (workload, threads, floor) in floors {
+        let outcome = compare_ratio(records, threads, floor, workload);
+        gates.push(GateResult {
+            name: format!(
+                "phase11_oltp_gap::{}::t{}",
+                workload.as_str().replace('-', "_"),
+                threads
+            ),
+            passed: outcome.unwrap_or(true),
+            detail: match outcome {
+                Some(true) => format!(
+                    "{} ratio at {} threads >= {:.2} (wave-1a floor)",
+                    workload.as_str(),
+                    threads,
+                    floor
+                ),
+                Some(false) => format!(
+                    "{} ratio at {} threads below floor {:.2}",
+                    workload.as_str(),
+                    threads,
+                    floor
+                ),
+                None => format!(
+                    "skipped: {} sqlite/redline rows at {} threads absent",
+                    workload.as_str(),
+                    threads
+                ),
+            },
+        });
+    }
+    GateSummary { gates }
+}
+
+/// Wave 1a entry point for the phase 11 OLTP gap evaluation. Kept as
+/// a thin wrapper so future wave-1b/c/d/e gates can add their own
+/// `evaluate_phase11_*` siblings without touching the wave-1a
+/// definition.
+pub fn evaluate_phase11_oltp_gap(records: &[RunRecord]) -> GateSummary {
+    phase11_oltp_gap_gate(records)
+}
+
 fn compare_ratio(
     records: &[RunRecord],
     threads: usize,

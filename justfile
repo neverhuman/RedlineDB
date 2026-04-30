@@ -43,6 +43,9 @@ phase9-xbabe1-gap-strace:
   ./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert-strace --seed 7 --repetitions 3 --warmup 1 --with-strace
   ./scripts/bench/xbabe1_fetch.sh gap-cert-strace
 
+phase11-oltp-gap:
+  rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1
+
 # Wave 6 Lane B: strace-instrumented certification (Linux-only). Wraps
 # each per-engine bench child with `strace -c` so the manifest captures
 # aggregate syscall counts.

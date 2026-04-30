@@ -286,6 +286,34 @@ pub enum WorkloadKind {
     VectorAnnSearchDisk,
     /// Phase 10 cert-v3: many tiny commits to expose group-commit batching.
     CommitStormBatched,
+    /// Phase 11 wave 1a: secondary index leaf-walk efficiency probe.
+    /// `SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ? AND ?` over the
+    /// existing `kv_tenant_idx`. Fixture shape mirrors
+    /// `SecondaryIndexRange` but the projection is purely the count
+    /// aggregate so the engine never visits the heap, isolating the
+    /// cost of walking the index leaves.
+    SecondaryIndexCount,
+    /// Phase 11 wave 1a: ordered range with `LIMIT` early-stop. The
+    /// query shape is `SELECT * FROM kv WHERE tenant >= ? ORDER BY
+    /// tenant LIMIT 100`, where the index leading column matches
+    /// `ORDER BY` so the planner can stop after 100 rows.
+    SecondaryIndexOrderedLimit,
+    /// Phase 11 wave 1a: covering range scan with cold cache. A
+    /// fresh database is opened per measurement so the query
+    /// `SELECT k, v FROM covered_kv WHERE k BETWEEN ? AND ?` over the
+    /// `(k, v)` covering index has to fault every leaf page in.
+    CoveredRangeCold,
+    /// Phase 11 wave 1a: same as `CoveredRangeCold` but with a
+    /// warmup pass over the same range before the measurement window
+    /// opens, so the leaf pages are already in cache.
+    CoveredRangeWarm,
+    /// Phase 11 wave 1a: hot-counter increment baseline. Single hot
+    /// row updated as `UPDATE hot_counter SET counter = counter + 1
+    /// WHERE pk = ?` where `counter` is non-indexed. Establishes
+    /// the baseline for the future commutative-delta combiner path;
+    /// distinct from `HotRowUpdate` which writes a general blob
+    /// payload.
+    HotCounterUpdate,
 }
 
 impl WorkloadKind {
@@ -314,6 +342,11 @@ impl WorkloadKind {
             Self::VectorAnnSearch => "vector-ann-search",
             Self::VectorAnnSearchDisk => "vector-ann-search-disk",
             Self::CommitStormBatched => "commit-storm-batched",
+            Self::SecondaryIndexCount => "secondary-index-count",
+            Self::SecondaryIndexOrderedLimit => "secondary-index-ordered-limit",
+            Self::CoveredRangeCold => "covered-range-cold",
+            Self::CoveredRangeWarm => "covered-range-warm",
+            Self::HotCounterUpdate => "hot-counter-update",
         }
     }
 }
@@ -580,6 +613,11 @@ impl FromStr for WorkloadKind {
             "vector-ann-search" => Ok(Self::VectorAnnSearch),
             "vector-ann-search-disk" => Ok(Self::VectorAnnSearchDisk),
             "commit-storm-batched" => Ok(Self::CommitStormBatched),
+            "secondary-index-count" => Ok(Self::SecondaryIndexCount),
+            "secondary-index-ordered-limit" => Ok(Self::SecondaryIndexOrderedLimit),
+            "covered-range-cold" => Ok(Self::CoveredRangeCold),
+            "covered-range-warm" => Ok(Self::CoveredRangeWarm),
+            "hot-counter-update" => Ok(Self::HotCounterUpdate),
             _ => bail!("unknown workload {value}"),
         }
     }

@@ -45,6 +45,9 @@ pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
             | WorkloadKind::VectorAnnSearch
             | WorkloadKind::VectorAnnSearchDisk
             | WorkloadKind::CommitStormBatched
+            | WorkloadKind::CoveredRangeCold
+            | WorkloadKind::CoveredRangeWarm
+            | WorkloadKind::HotCounterUpdate
     ) {
         engine.seed_kv(spec.rows)?;
     }
@@ -81,6 +84,15 @@ pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
     }
     if matches!(spec.workload, WorkloadKind::CommitStormBatched) {
         return run_commit_storm_batched(engine.as_ref(), spec);
+    }
+    if matches!(spec.workload, WorkloadKind::CoveredRangeCold) {
+        return run_covered_range_cold(spec);
+    }
+    if matches!(spec.workload, WorkloadKind::CoveredRangeWarm) {
+        return run_covered_range_warm(engine.as_ref(), spec);
+    }
+    if matches!(spec.workload, WorkloadKind::HotCounterUpdate) {
+        return run_hot_counter_update(engine.as_ref(), spec);
     }
     let started = Instant::now();
     let metrics = run_workload(engine.as_ref(), spec)?;
@@ -163,6 +175,12 @@ fn run_workload(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Metrics> {
                         WorkloadKind::SecondaryIndexRange => {
                             secondary_index_range(&mut *conn, spec.rows, &mut rng)
                         }
+                        WorkloadKind::SecondaryIndexCount => {
+                            secondary_index_count(&mut *conn, spec.rows, &mut rng)
+                        }
+                        WorkloadKind::SecondaryIndexOrderedLimit => {
+                            secondary_index_ordered_limit(&mut *conn, spec.rows, &mut rng)
+                        }
                         WorkloadKind::WritersDisjoint => {
                             update_disjoint(&mut *conn, worker, spec.threads, spec.rows, &mut rng)
                         }
@@ -196,6 +214,11 @@ fn run_workload(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Metrics> {
                         | WorkloadKind::VectorAnnSearchDisk
                         | WorkloadKind::CommitStormBatched => {
                             unreachable!("phase-10 feature workloads are self-managed")
+                        }
+                        WorkloadKind::CoveredRangeCold
+                        | WorkloadKind::CoveredRangeWarm
+                        | WorkloadKind::HotCounterUpdate => {
+                            unreachable!("phase-11 wave-1a workloads are self-managed")
                         }
                     };
                     match result {
@@ -270,6 +293,45 @@ fn secondary_index_range(
     let _ = conn.query_row(
         "SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ?1 AND ?2",
         &[CellValue::Integer(tenant), CellValue::Integer(high)],
+    )?;
+    Ok(())
+}
+
+/// Phase 11 wave 1a: pure index-leaf walk with no heap rechecks.
+/// `SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ? AND ?` over the
+/// existing `kv_tenant_idx`. The COUNT-only projection means the
+/// optimizer never has to re-fetch the heap row, so this isolates the
+/// cost of walking secondary-index leaves end to end.
+fn secondary_index_count(
+    conn: &mut dyn BenchConn,
+    rows: usize,
+    rng: &mut ChaCha8Rng,
+) -> Result<()> {
+    // Same fixture shape as `secondary_index_range`; covers ~3 tenant
+    // buckets per query so the leaf walk has enough work to amortize
+    // statement-prepare overhead while staying well below the table.
+    let tenant = (rng.random_range(0..rows.max(1)) % 32) as i64;
+    let high = (tenant + 3).min(31);
+    let _ = conn.query_row(
+        "SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ?1 AND ?2",
+        &[CellValue::Integer(tenant), CellValue::Integer(high)],
+    )?;
+    Ok(())
+}
+
+/// Phase 11 wave 1a: ordered range with `LIMIT` early-stop.
+/// `SELECT k, tenant FROM kv WHERE tenant >= ? ORDER BY tenant LIMIT 100`.
+/// The index leading column matches `ORDER BY` so a competent planner
+/// can stop after 100 rows without sorting the world.
+fn secondary_index_ordered_limit(
+    conn: &mut dyn BenchConn,
+    rows: usize,
+    rng: &mut ChaCha8Rng,
+) -> Result<()> {
+    let tenant = (rng.random_range(0..rows.max(1)) % 32) as i64;
+    let _ = conn.query_all(
+        "SELECT k, tenant FROM kv WHERE tenant >= ?1 ORDER BY tenant LIMIT 100",
+        &[CellValue::Integer(tenant)],
     )?;
     Ok(())
 }
@@ -940,6 +1002,220 @@ fn setup_commit_storm(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<()> {
 
 fn commit_rows(spec: &RunSpec) -> usize {
     spec.threads.max(1) * 4
+}
+
+/// Phase 11 wave 1a: row-count target for the covering-range fixtures.
+/// We aim for "enough rows that the leaves span multiple pages but the
+/// table fits comfortably in the configured cache" — `spec.rows`
+/// directly controls the corpus size, with a floor of 4_096 so the
+/// scan does meaningful work even at the smoke default of 512.
+fn covered_range_rows(spec: &RunSpec) -> usize {
+    spec.rows.max(4_096)
+}
+
+/// Phase 11 wave 1a: setup the `covered_kv` table used by both
+/// `CoveredRangeCold` and `CoveredRangeWarm`.
+///
+/// Schema is `(id INTEGER PRIMARY KEY, k INTEGER, v INTEGER)` with a
+/// composite index on `(k, v)` so the SELECT projection of `(k, v)`
+/// is fully covered. Rows are seeded deterministically from
+/// `spec.seed` so every replicate sees the same dataset.
+fn setup_covered_kv(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<()> {
+    let mut conn = engine.connect(0)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS covered_kv(id INTEGER PRIMARY KEY, k INTEGER, v INTEGER)",
+        &[],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS covered_kv_kv_idx ON covered_kv(k, v)",
+        &[],
+    )?;
+    conn.execute("DELETE FROM covered_kv", &[])?;
+    let rows = covered_range_rows(spec);
+    let mut rng = ChaCha8Rng::seed_from_u64(spec.seed ^ 0xC07E_C07E);
+    conn.begin_immediate()?;
+    for id in 0..rows {
+        // `k` spans 0..rows so a `BETWEEN ? AND ?` window of `STEP`
+        // entries returns predictable workload-sized batches; `v` is
+        // a deterministic noise column that still rides along in the
+        // covering index.
+        let k = id as i64;
+        let v = (rng.random::<u32>() as i64) % 1_000_000;
+        conn.execute(
+            "INSERT INTO covered_kv(id, k, v) VALUES (?1, ?2, ?3)",
+            &[
+                CellValue::Integer(id as i64),
+                CellValue::Integer(k),
+                CellValue::Integer(v),
+            ],
+        )?;
+    }
+    conn.commit()
+}
+
+/// How many rows each covered-range query asks for. Aim for ~256
+/// entries per scan: large enough that page-level prefetch matters,
+/// small enough that the per-op work stays bounded.
+const COVERED_RANGE_WINDOW: i64 = 256;
+
+fn covered_range_step(
+    conn: &mut dyn BenchConn,
+    total_rows: usize,
+    rng: &mut ChaCha8Rng,
+) -> Result<()> {
+    let rows = total_rows.max(1) as i64;
+    let low = rng.random_range(0..rows.max(1) as u64) as i64;
+    let high = (low + COVERED_RANGE_WINDOW).min(rows.saturating_sub(1).max(low));
+    let _ = conn.query_all(
+        "SELECT k, v FROM covered_kv WHERE k BETWEEN ?1 AND ?2",
+        &[CellValue::Integer(low), CellValue::Integer(high)],
+    )?;
+    Ok(())
+}
+
+/// Phase 11 wave 1a: covered-range scan with cold cache.
+///
+/// Reopens the database from disk for the measurement window so the
+/// engine's buffer pool starts empty; this is the closest portable
+/// approximation to "drop the OS page cache" that works on macOS as
+/// well as Linux. SQLite's per-process cache_size pragma plus a fresh
+/// `Connection::open` walks the same path. Threads are honored —
+/// each worker drives its own connection.
+fn run_covered_range_cold(spec: &RunSpec) -> Result<RunRecord> {
+    let started = Instant::now();
+    // Seed phase: open the engine, populate the table, then drop
+    // the handle so the next open hits a cold buffer pool.
+    let db_dir = spec.base_dir.join(format!(
+        "{}-{}-cold-seed-t{}-s{}",
+        spec.engine.to_possible_value().expect("value").get_name(),
+        spec.workload.as_str(),
+        spec.threads,
+        spec.seed
+    ));
+    let _ = std::fs::remove_dir_all(&db_dir);
+    {
+        let engine = engine::open(spec, &db_dir)?;
+        engine.setup_schema()?;
+        setup_covered_kv(engine.as_ref(), spec)?;
+        engine.checkpoint()?;
+        // engine drops here; buffer pool / process-private caches go
+        // away with it.
+    }
+    // Measurement phase: reopen against the same on-disk dataset and
+    // drive the scan loop. The buffer pool is empty so leaf-page
+    // faults are observable in the latency tail.
+    let measure_engine = engine::open(spec, &db_dir)?;
+    let total = covered_range_rows(spec);
+    let metrics = run_threaded_conn_feature(measure_engine.as_ref(), spec, |conn, _w, rng| {
+        covered_range_step(conn, total, rng)
+    })?;
+    let checksum = checksum_query(
+        measure_engine.as_ref(),
+        "covered-range-cold",
+        "SELECT id, k, v FROM covered_kv ORDER BY id",
+    )?;
+    let mut stats = BTreeMap::new();
+    stats.insert(
+        "covered_range_rows".to_owned(),
+        serde_json::json!(total as u64),
+    );
+    stats.insert("covered_range_window".to_owned(), serde_json::json!(256));
+    stats.insert("covered_range_cold".to_owned(), serde_json::json!(true));
+    finish_self_managed_record(
+        measure_engine.as_ref(),
+        spec,
+        started,
+        metrics,
+        checksum,
+        stats,
+    )
+}
+
+/// Phase 11 wave 1a: covered-range scan with warm cache.
+///
+/// Same shape as the cold variant but issues a deterministic warmup
+/// pass over the same range *before* the measurement window starts,
+/// so the leaf pages are already resident. The throughput delta
+/// versus `CoveredRangeCold` is the headline number — it shows the
+/// covering-scan working set actually fitting in the buffer pool.
+fn run_covered_range_warm(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
+    let started = Instant::now();
+    setup_covered_kv(engine, spec)?;
+    let total = covered_range_rows(spec);
+    // Warmup: a single connection runs the full range scan once so
+    // every leaf page is faulted in. We deliberately do not clock
+    // this against `Metrics`.
+    {
+        let mut warmup_conn = engine.connect(0)?;
+        let _ = warmup_conn.query_all(
+            "SELECT k, v FROM covered_kv WHERE k BETWEEN ?1 AND ?2",
+            &[CellValue::Integer(0), CellValue::Integer(total as i64)],
+        )?;
+    }
+    let metrics = run_threaded_conn_feature(engine, spec, |conn, _w, rng| {
+        covered_range_step(conn, total, rng)
+    })?;
+    let checksum = checksum_query(
+        engine,
+        "covered-range-warm",
+        "SELECT id, k, v FROM covered_kv ORDER BY id",
+    )?;
+    let mut stats = BTreeMap::new();
+    stats.insert(
+        "covered_range_rows".to_owned(),
+        serde_json::json!(total as u64),
+    );
+    stats.insert("covered_range_window".to_owned(), serde_json::json!(256));
+    stats.insert("covered_range_cold".to_owned(), serde_json::json!(false));
+    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+}
+
+/// Phase 11 wave 1a: hot-counter increment baseline.
+///
+/// Uses a dedicated `hot_counter(pk INTEGER PRIMARY KEY, counter
+/// INTEGER)` table with a single row at `pk = 0`. Every step issues
+/// `UPDATE hot_counter SET counter = counter + 1 WHERE pk = ?1`,
+/// which under contention is the future "commutative-delta combiner"
+/// playground. For now the workload simply lets the engine fight
+/// itself — the throughput number is the baseline that the combiner
+/// path needs to beat in Wave 1b.
+///
+/// Multi-thread variants are valid but the canonical run is
+/// `threads = 1`, which we use in `phase11-oltp-gap.toml` to
+/// establish the no-contention baseline the combiner rollout will
+/// be measured against.
+fn run_hot_counter_update(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
+    let started = Instant::now();
+    {
+        let mut conn = engine.connect(0)?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS hot_counter(pk INTEGER PRIMARY KEY, counter INTEGER)",
+            &[],
+        )?;
+        conn.execute("DELETE FROM hot_counter", &[])?;
+        conn.execute(
+            "INSERT INTO hot_counter(pk, counter) VALUES (?1, 0)",
+            &[CellValue::Integer(0)],
+        )?;
+    }
+    let metrics = run_threaded_conn_feature(engine, spec, |conn, _w, _rng| {
+        let _ = conn.execute(
+            "UPDATE hot_counter SET counter = counter + 1 WHERE pk = ?1",
+            &[CellValue::Integer(0)],
+        )?;
+        Ok(())
+    })?;
+    let checksum = checksum_query(
+        engine,
+        "hot-counter-update",
+        "SELECT pk, counter FROM hot_counter ORDER BY pk",
+    )?;
+    let mut stats = BTreeMap::new();
+    stats.insert(
+        "hot_counter_ops".to_owned(),
+        serde_json::json!(metrics.operations()),
+    );
+    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
 }
 
 fn checksum_query(engine: &dyn BenchEngine, label: &str, sql: &str) -> Result<Checksum> {

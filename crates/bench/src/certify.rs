@@ -133,6 +133,19 @@ pub fn run(config: &CompareConfig, args: &CertifyArgs) -> Result<CertificationRe
     let report_md = args.out_dir.join("report.md");
     fs::write(&report_md, crate::gates::markdown_summary(&runs))?;
 
+    // Phase 11 wave 1a: when the config exercises any of the new
+    // phase-11 workloads, also evaluate the phase-11 OLTP gap gate
+    // and stash the result alongside the manifest. The gate is
+    // additive — it never replaces or alters the default
+    // `evaluate_records` pipeline, so phase-9 lanes stay untouched.
+    if config.workloads.iter().any(is_phase11_oltp_gap_workload) {
+        let phase11_gates = crate::gates::evaluate_phase11_oltp_gap(&runs);
+        report::write_json(
+            Some(&args.out_dir.join("phase11_oltp_gap_gates.json")),
+            &phase11_gates,
+        )?;
+    }
+
     let process_metrics_per_run: Vec<ProcessMetrics> = runs
         .iter()
         .filter_map(|run| run.process_metrics.clone())
@@ -938,4 +951,21 @@ fn hash_file(path: &Path) -> Result<String> {
     let bytes = fs::read(path)?;
     let digest = Sha256::digest(&bytes);
     Ok(format!("{digest:x}"))
+}
+
+/// Phase 11 wave 1a: detect whether the certify config exercises any
+/// of the new wave-1a workloads. Used to decide whether to also emit
+/// the phase-11 OLTP gap gate summary alongside the manifest. Kept
+/// in lockstep with the workloads enumerated in
+/// `crates/bench/bench/phase11-oltp-gap.toml`.
+fn is_phase11_oltp_gap_workload(workload: &crate::config::WorkloadKind) -> bool {
+    use crate::config::WorkloadKind;
+    matches!(
+        workload,
+        WorkloadKind::SecondaryIndexCount
+            | WorkloadKind::SecondaryIndexOrderedLimit
+            | WorkloadKind::CoveredRangeCold
+            | WorkloadKind::CoveredRangeWarm
+            | WorkloadKind::HotCounterUpdate
+    )
 }
