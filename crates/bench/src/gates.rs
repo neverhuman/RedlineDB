@@ -196,6 +196,15 @@ pub fn phase11_oltp_gap_gate(records: &[RunRecord]) -> GateSummary {
         (WorkloadKind::SecondaryIndexRead, 8, 0.40),
         // Wave target 0.85.
         (WorkloadKind::HotRowUpdate, 8, 0.60),
+        // W1-E count-only leaf walk; no heap recheck should be needed.
+        (WorkloadKind::SecondaryIndexCount, 8, 0.30),
+        // W1-D ordered range with LIMIT early-stop.
+        (WorkloadKind::SecondaryIndexOrderedLimit, 8, 0.30),
+        // W1-E covering reads; canonical cold/warm comparison is t1.
+        (WorkloadKind::CoveredRangeCold, 1, 0.40),
+        (WorkloadKind::CoveredRangeWarm, 1, 0.40),
+        // W1 write baseline for future hot-counter combiner work.
+        (WorkloadKind::HotCounterUpdate, 1, 0.60),
         // No-regression floor; sqlite owns this fixture today.
         (WorkloadKind::PointReadPk, 1, 0.85),
         // Concurrent writers — Redline's flagship win.

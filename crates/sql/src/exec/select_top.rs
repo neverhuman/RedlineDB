@@ -30,6 +30,101 @@ pub(super) fn execute_select(
             None => 0,
         };
 
+        // Phase 11 W1-E: SELECT COUNT(*) FROM t WHERE k BETWEEN ? AND ?
+        // fast-path. Drains the cursor without loading heap rows; the
+        // result is a single integer row that flows through the rest
+        // of the pipeline (LIMIT/OFFSET) like any other StaticRows
+        // source. Materializes early-return rows here; runtime
+        // assembly happens at the end of `result` so the outer
+        // closure can `tx.take()` without surprising the borrow
+        // checker.
+        let mut fast_path_rows: Option<Vec<Vec<SqlValue>>> = None;
+        if let SelectSource::Table(table) = &plan.source
+            && plan.group_by.is_empty()
+            && !plan.distinct
+            && plan.order_by.is_empty()
+            && plan.having.is_none()
+            && is_count_star_only_projection(&plan.projection)
+            && let Some(matched) = index_access::try_match_index_access(
+                conn.engine(),
+                table,
+                &plan.selection,
+                bindings,
+            )
+            && let index_access::IndexProbe::Range { start, end } = &matched.probe
+            && index_access::open_handle(conn.engine(), &matched.index).is_some()
+        {
+            let tx_ref = tx.as_ref().expect("tx present");
+            let count = index_access::execute_index_count_range(
+                conn.engine(),
+                tx_ref,
+                &matched.index,
+                start,
+                end,
+            )?;
+            fast_path_rows = Some(vec![vec![SqlValue::Integer(count)]]);
+        }
+
+        // Phase 11 W1-E: simple covering scan. Same shape as above:
+        // build the result rows up front, defer runtime assembly to
+        // the unified bottom block.
+        if fast_path_rows.is_none()
+            && let SelectSource::Table(table) = &plan.source
+            && plan.group_by.is_empty()
+            && !plan.distinct
+            && !select_requires_aggregation(plan)
+            && plan.having.is_none()
+            && let Some(matched) = index_access::try_match_index_access(
+                conn.engine(),
+                table,
+                &plan.selection,
+                bindings,
+            )
+            && let index_access::IndexProbe::Range { start, end } = &matched.probe
+            && index_access::open_handle(conn.engine(), &matched.index).is_some()
+            && let Some(out_columns) =
+                covering_projection_for_index(table, &matched.index, &plan.projection)
+            && covering_order_satisfies(&matched.index, table, &plan.order_by)
+        {
+            let tx_ref = tx.as_ref().expect("tx present");
+            let cover_limit = if plan.order_by.is_empty() {
+                None
+            } else if limit < usize::MAX {
+                Some(limit.saturating_add(offset))
+            } else {
+                None
+            };
+            let rows = index_access::execute_index_covering_range(
+                conn.engine(),
+                tx_ref,
+                &matched.index,
+                start,
+                end,
+                &out_columns,
+                cover_limit,
+            )?;
+            fast_path_rows = Some(rows);
+        }
+
+        if let Some(rows) = fast_path_rows {
+            let runtime_tx = tx.take();
+            return Ok(SelectRuntime {
+                tx: runtime_tx,
+                restore_tx,
+                source: SelectRuntimeSource::StaticRows {
+                    rows: Arc::from(rows),
+                    cursor: 0,
+                },
+                selection: None,
+                projection: Vec::new(),
+                limit,
+                offset,
+                seen: 0,
+                yielded: 0,
+                memory,
+            });
+        }
+
         let source = if plan.group_by.is_empty()
             && !select_requires_aggregation(plan)
             && !plan.distinct
@@ -78,6 +173,26 @@ pub(super) fn execute_select(
                             let tx = tx.as_mut().expect("tx present");
                             collect_table_rowids(conn.engine(), tx, table)?
                         };
+                        SelectRuntimeSource::Table {
+                            table: Arc::clone(table),
+                            rowids,
+                            cursor: 0,
+                        }
+                    } else if let Some(rowids) = try_ordered_index_limit_path(
+                        conn,
+                        tx.as_mut().expect("tx present"),
+                        plan,
+                        bindings,
+                        table,
+                        limit,
+                        offset,
+                    )? {
+                        // Phase 11 W1-D: ORDER BY k LIMIT n where the
+                        // index leading column matches `k`. The cursor
+                        // emits in key order, so we collect rowids in
+                        // that order with an early stop and let the
+                        // standard runtime project + apply LIMIT/OFFSET
+                        // without re-sorting.
                         SelectRuntimeSource::Table {
                             table: Arc::clone(table),
                             rowids,
@@ -497,4 +612,180 @@ fn collect_compound_all_rows(
         out.extend(materialize_select_plan_rows(conn, branch, bindings)?);
     }
     Ok(out)
+}
+
+// ============================================================
+// Phase 11 W1-D / W1-E helpers: index-aware ORDER-BY-LIMIT, COUNT(*)
+// fast path, and simple covering scans.
+// ============================================================
+
+/// Phase 11 W1-E: returns `true` iff `projection` is exactly one
+/// `COUNT(*)` aggregate (with or without an alias) and nothing else.
+fn is_count_star_only_projection(projection: &[SelectItem]) -> bool {
+    if projection.len() != 1 {
+        return false;
+    }
+    let inner = match &projection[0] {
+        SelectItem::UnnamedExpr(expr) => expr,
+        SelectItem::ExprWithAlias { expr, .. } => expr,
+        _ => return false,
+    };
+    let Expr::Function(func) = inner else {
+        return false;
+    };
+    if !func.name.to_string().eq_ignore_ascii_case("count") {
+        return false;
+    }
+    let FunctionArguments::List(list) = &func.args else {
+        return false;
+    };
+    list.args.len() == 1
+        && matches!(
+            list.args[0],
+            FunctionArg::Unnamed(FunctionArgExpr::Wildcard)
+        )
+}
+
+/// Phase 11 W1-E: build an `OutputColumnSource` per projected column
+/// when the projection is fully covered by `index`. Returns `None`
+/// when the SELECT mentions any column the index does not carry, or
+/// when the projection contains expressions / aliases / aggregates.
+///
+/// Plain column indexes only this wave — no expression / partial /
+/// generated-column covers.
+fn covering_projection_for_index(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    index: &redlinedb_kernel::catalog::IndexDef,
+    projection: &[SelectItem],
+) -> Option<Vec<index_access::OutputColumnSource>> {
+    use redlinedb_kernel::catalog::IndexKeySource;
+    if projection.is_empty() {
+        return None;
+    }
+    // Map from table-column ordinal -> position within the index keys.
+    let mut col_to_index_pos: std::collections::HashMap<usize, usize> =
+        std::collections::HashMap::new();
+    for (pos, key) in index.keys.iter().enumerate() {
+        let IndexKeySource::Column { attnum } = key.source;
+        col_to_index_pos.insert(attnum as usize, pos);
+    }
+    let mut out: Vec<index_access::OutputColumnSource> = Vec::with_capacity(projection.len());
+    for item in projection {
+        let expr = match item {
+            SelectItem::UnnamedExpr(expr) => expr,
+            // Aliases are fine for the covering case as long as the
+            // underlying expression resolves to a covered column.
+            SelectItem::ExprWithAlias { expr, .. } => expr,
+            // Wildcards / qualified wildcards force a fall-back; a
+            // covering scan can't synthesize the full row from a
+            // partial index.
+            _ => return None,
+        };
+        let column_name = match expr {
+            Expr::Identifier(ident) => ident.value.as_str(),
+            Expr::CompoundIdentifier(parts) => parts.last()?.value.as_str(),
+            _ => return None,
+        };
+        // Rowid alias (and explicit `rowid` / `_rowid_` / `oid`) lives
+        // on `IndexRowRef.row_id` — covered without decoding the leaf
+        // key.
+        let rowid_alias_name: Option<String> = table
+            .rowid_alias_column
+            .and_then(|alias| table.columns.get(alias as usize))
+            .map(|col| col.folded.as_ref().to_owned());
+        if column_name.eq_ignore_ascii_case("rowid")
+            || column_name.eq_ignore_ascii_case("_rowid_")
+            || column_name.eq_ignore_ascii_case("oid")
+            || rowid_alias_name
+                .as_deref()
+                .is_some_and(|alias| alias.eq_ignore_ascii_case(column_name))
+        {
+            out.push(index_access::OutputColumnSource::Rowid);
+            continue;
+        }
+        let table_ord = table
+            .columns
+            .iter()
+            .position(|c| c.folded.as_ref().eq_ignore_ascii_case(column_name))?;
+        let index_pos = *col_to_index_pos.get(&table_ord)?;
+        out.push(index_access::OutputColumnSource::IndexColumn { ordinal: index_pos });
+    }
+    Some(out)
+}
+
+/// Phase 11 W1-E: for the covering path, the cursor already emits in
+/// the index leading-column order. `ORDER BY k` (or no ORDER BY)
+/// matches; anything else needs a downstream sort and falls through.
+fn covering_order_satisfies(
+    index: &redlinedb_kernel::catalog::IndexDef,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    order_by: &[OrderByExpr],
+) -> bool {
+    if order_by.is_empty() {
+        return true;
+    }
+    if order_by.len() != 1 {
+        return false;
+    }
+    let item = &order_by[0];
+    if matches!(item.options.asc, Some(false)) {
+        // Desc ORDER BY does not match an Asc index; the cursor walks
+        // left-to-right and does not currently support reverse
+        // iteration. Fall back so the legacy sort applies.
+        return false;
+    }
+    let Expr::Identifier(ident) = &item.expr else {
+        return false;
+    };
+    let Some(first_key) = index.keys.first() else {
+        return false;
+    };
+    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source;
+    table
+        .columns
+        .get(attnum as usize)
+        .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(&ident.value))
+}
+
+/// Phase 11 W1-D: when the SELECT has `ORDER BY k LIMIT n` and `k`
+/// matches the leading column of the index implied by `selection`,
+/// return rowids in that order with the limit honored as a hard
+/// early-stop. Returns `None` when the conditions don't fit, so the
+/// caller falls back to the full sort+limit path.
+fn try_ordered_index_limit_path(
+    conn: &Connection,
+    tx: &mut Txn,
+    plan: &SelectPlan,
+    bindings: &[Option<SqlValue>],
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    limit: usize,
+    offset: usize,
+) -> Result<Option<Vec<RowId>>> {
+    if plan.order_by.is_empty() || limit == usize::MAX {
+        return Ok(None);
+    }
+    let Some(matched) =
+        index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+    else {
+        return Ok(None);
+    };
+    if !matches!(matched.probe, index_access::IndexProbe::Range { .. }) {
+        return Ok(None);
+    }
+    if !covering_order_satisfies(&matched.index, table, &plan.order_by) {
+        return Ok(None);
+    }
+    if index_access::open_handle(conn.engine(), &matched.index).is_none() {
+        return Ok(None);
+    }
+    let take = limit.saturating_add(offset);
+    let rowids = index_access::execute_index_probe_with_limit(
+        conn.engine(),
+        tx,
+        table,
+        &matched.index,
+        &matched.probe,
+        Some(take),
+    )?;
+    Ok(Some(rowids))
 }

@@ -34,6 +34,7 @@ use crate::value::{SqlValue, canonicalize, compare_values, is_truthy};
 pub(crate) mod expr;
 use expr::*;
 pub(crate) mod index_access;
+pub(crate) mod index_batch;
 pub(crate) mod index_dml;
 mod tail;
 use tail::*;

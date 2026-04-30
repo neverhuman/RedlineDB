@@ -53,6 +53,9 @@
   "phase9-failpoint-matrix": [
     "rtk cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint-matrix.json --seed 7"
   ],
+  "phase11-oltp-gap": [
+    "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1"
+  ],
   "phase9-xbabe1-certification": [
     "./scripts/bench/xbabe1_sync.sh",
     "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/certification --seed 7 --repetitions 5 --warmup 1",

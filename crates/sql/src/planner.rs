@@ -152,6 +152,14 @@ pub struct PhysicalPlan {
     /// `CoveringIndexScan` (which renders distinctly via the
     /// `projected_columns` marker today).
     pub index_probe_kind: Option<&'static str>,
+    /// Phase 11 W1-D: when the index leading column matches the
+    /// `ORDER BY` column AND a `LIMIT n` is in effect, the executor
+    /// truncates the cursor walk after `n` visible rows. The planner
+    /// records the limit here so EXPLAIN can render
+    /// `IndexScan ... LIMIT n` and downstream consumers can spot
+    /// the early-stop annotation. `None` means "drain the full
+    /// range".
+    pub ordered_index_scan_limit: Option<usize>,
     pub estimated_rows: f64,
     pub cost: Cost,
     pub access_predicates: Vec<String>,
@@ -174,6 +182,7 @@ impl PhysicalPlan {
             relation: None,
             index: None,
             index_probe_kind: None,
+            ordered_index_scan_limit: None,
             estimated_rows: 0.0,
             cost: Cost::zero(),
             access_predicates: Vec::new(),
@@ -949,6 +958,30 @@ fn wrap_limit(input: PhysicalPlan, plan: &SelectPlan) -> PhysicalPlan {
     let input_rows = input.cost.rows;
     let input_width = input.cost.width;
     let input_total = input.cost.total;
+    // Phase 11 W1-D: when the LIMIT directly wraps an IndexScan whose
+    // output order satisfies the SELECT's ORDER BY, propagate the
+    // numeric limit down into the leaf so EXPLAIN renders the
+    // early-stop annotation. The executor honors the same fact
+    // independently via `try_ordered_index_limit_path` — this is the
+    // planner-side annotation so that EXPLAIN output reflects the
+    // physical plan the executor will run.
+    let limit_n = plan.limit.as_ref().and_then(|expr| match expr {
+        Expr::Value(v) => match &v.value {
+            sqlparser::ast::Value::Number(n, _) => n.parse::<usize>().ok(),
+            _ => None,
+        },
+        _ => None,
+    });
+    let mut input = input;
+    if let (PhysicalKind::IndexScan, Some(n)) = (input.kind, limit_n)
+        && !input.output_order.is_empty()
+        && input
+            .index_probe_kind
+            .map(|k| k == "RangeScan")
+            .unwrap_or(false)
+    {
+        input.ordered_index_scan_limit = Some(n);
+    }
     let mut node = PhysicalPlan::new(PhysicalKind::Limit);
     node.children = vec![input];
     node.estimated_rows = input_rows;

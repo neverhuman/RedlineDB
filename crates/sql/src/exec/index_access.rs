@@ -30,7 +30,19 @@ use sqlparser::ast::{BinaryOperator, Expr, Value};
 use crate::error::Result;
 use crate::value::SqlValue;
 
+use super::index_batch::{
+    execute_index_count_range as batch_count_range,
+    execute_index_covering_range as batch_covering_range,
+    execute_index_range_scan_streaming as batch_range_streaming,
+};
 use super::tail::load_table_row_by_rowid;
+
+pub(crate) use super::index_batch::OutputColumnSource;
+
+/// Maximum batch size used by the streaming cursor consumer. Matches
+/// the legacy `range_scan_visible` wrapper's chunk size so per-batch
+/// telemetry stays comparable.
+pub(crate) const MAX_BATCH: usize = 256;
 
 /// What kind of index probe the predicate maps to. The planner names
 /// `IndexPointLookup` and `IndexRangeScan`; a "point lookup" here means
@@ -65,6 +77,15 @@ pub(crate) struct IndexAccessMatch {
     pub(crate) kind: IndexProbeKind,
     pub(crate) probe: IndexProbe,
     pub(crate) predicates: Vec<String>,
+    /// Phase 11 W1-D: when this match feeds an ORDER-BY-LIMIT plan
+    /// where the index leading column matches the ORDER BY column, the
+    /// executor stops the cursor walk after `n` snapshot-visible rows.
+    /// `None` means "drain the full range". Currently set only by
+    /// callers that already know the ORDER-BY/LIMIT shape (see
+    /// `select_top::try_ordered_index_limit_path`); the field is
+    /// reserved for the matched path and its tests.
+    #[allow(dead_code)]
+    pub(crate) ordered_limit: Option<usize>,
 }
 
 /// Try to plan an index-driven access path for `(table, selection)`.
@@ -148,6 +169,7 @@ pub(crate) fn try_match_index_access(
                     kind: IndexProbeKind::PointLookup,
                     probe: IndexProbe::Point { key },
                     predicates,
+                    ordered_limit: None,
                 });
             }
             // Leading-prefix range scan: encode just the leading value
@@ -164,6 +186,7 @@ pub(crate) fn try_match_index_access(
                 kind: IndexProbeKind::RangeScan,
                 probe: IndexProbe::Range { start, end },
                 predicates,
+                ordered_limit: None,
             });
         }
 
@@ -191,6 +214,7 @@ pub(crate) fn try_match_index_access(
                 kind: IndexProbeKind::RangeScan,
                 probe: IndexProbe::Range { start, end },
                 predicates,
+                ordered_limit: None,
             });
         }
     }
@@ -227,7 +251,25 @@ pub(crate) fn execute_index_point_lookup(
     Ok(out)
 }
 
-/// Run a visible range scan (half-open `[start, end)`) and return surviving rowids.
+/// Phase 11 W1-C: streaming range scan with batched cursor consumption,
+/// per-heap-page grouped recheck, and optional early-stop after `limit`
+/// visible rows. Implementation lives in `index_batch.rs`; this is the
+/// public re-export.
+pub(crate) fn execute_index_range_scan_streaming(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    index: &IndexDef,
+    start: &[u8],
+    end: &[u8],
+    limit: Option<usize>,
+) -> Result<Vec<RowId>> {
+    batch_range_streaming(engine, tx, table, index, start, end, limit)
+}
+
+/// Run a visible range scan (half-open `[start, end)`) and return
+/// surviving rowids. Thin wrapper around the streaming variant for
+/// callers that don't need a limit.
 pub(crate) fn execute_index_range_scan(
     engine: &Engine,
     tx: &mut Txn,
@@ -236,18 +278,7 @@ pub(crate) fn execute_index_range_scan(
     start: &[u8],
     end: &[u8],
 ) -> Result<Vec<RowId>> {
-    let Some(handle) = open_handle(engine, index) else {
-        return Ok(Vec::new());
-    };
-    let entries =
-        handle.range_scan_visible(engine.tx_status(), tx.snapshot(), Some(tx.id()), start, end)?;
-    let mut out = Vec::with_capacity(entries.len());
-    for entry in entries {
-        if visible_in_relation(engine, tx, table, entry.row_id)? {
-            out.push(entry.row_id);
-        }
-    }
-    Ok(out)
+    batch_range_streaming(engine, tx, table, index, start, end, None)
 }
 
 /// Convenience: run the supplied probe and return its rowids. Lets
@@ -267,6 +298,55 @@ pub(crate) fn execute_index_probe(
     }
 }
 
+/// Run the supplied probe with an optional `LIMIT n` early-stop. Used
+/// by W1-D's ORDER-BY-LIMIT shortcut: when the caller knows the cursor
+/// emits in the index leading-key order and that order matches the
+/// `ORDER BY`, the executor can stop the cursor as soon as the desired
+/// row count is reached, regardless of what the rest of the range
+/// holds. Point lookups ignore the limit (the result is always at most
+/// one row anyway).
+pub(crate) fn execute_index_probe_with_limit(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    index: &IndexDef,
+    probe: &IndexProbe,
+    limit: Option<usize>,
+) -> Result<Vec<RowId>> {
+    match probe {
+        IndexProbe::Point { key } => execute_index_point_lookup(engine, tx, table, index, key),
+        IndexProbe::Range { start, end } => {
+            execute_index_range_scan_streaming(engine, tx, table, index, start, end, limit)
+        }
+    }
+}
+
+/// Phase 11 W1-E: count visible entries inside the supplied range
+/// without any heap loads. Implementation lives in `index_batch.rs`.
+pub(crate) fn execute_index_count_range(
+    engine: &Engine,
+    tx: &Txn,
+    index: &IndexDef,
+    start: &[u8],
+    end: &[u8],
+) -> Result<i64> {
+    batch_count_range(engine, tx, index, start, end)
+}
+
+/// Phase 11 W1-E: serve a covering range scan from the index leaf
+/// chain. Implementation lives in `index_batch.rs`.
+pub(crate) fn execute_index_covering_range(
+    engine: &Engine,
+    tx: &Txn,
+    index: &IndexDef,
+    start: &[u8],
+    end: &[u8],
+    out_columns: &[OutputColumnSource],
+    limit: Option<usize>,
+) -> Result<Vec<Vec<SqlValue>>> {
+    batch_covering_range(engine, tx, index, start, end, out_columns, limit)
+}
+
 // ------------------------------ helpers ------------------------------
 
 pub(crate) fn open_handle(
@@ -277,7 +357,7 @@ pub(crate) fn open_handle(
     engine.index_handle(index.index_id)
 }
 
-fn visible_in_relation(
+pub(super) fn visible_in_relation(
     engine: &Engine,
     tx: &mut Txn,
     table: &Arc<TableDef>,
