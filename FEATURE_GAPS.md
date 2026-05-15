@@ -4,31 +4,23 @@ Append-only tracker for gaps surfaced by veox-native integration work.
 
 ## 2026-05-15
 
-- Need true shared ephemeral in-memory DB support:
-  - `Database::create_in_memory(options: OpenOptions) -> Result<Database>`
-  - `Database::create_ephemeral(session_name: &str, options: OpenOptions) -> Result<Database>`
-  - multiple connections must see the same state
-  - state must drop when the owning session/database drops
-- Need explicit caller-owned temp/spill roots for query spill, sort spill,
-  vector spill, and temp artifacts.
-- Need documented `Send`/`Sync` and pooling contract for `Database`,
-  `Connection`, and `Statement`.
-- Need atomic veox task-queue semantics under contention:
-  - claim once
-  - priority desc + created_at asc
-  - complete/fail only from claimed state
-  - no duplicate claims
-- Need xdoug SQL compatibility coverage for:
-  - `BEGIN IMMEDIATE`
-  - `UPDATE ... RETURNING`
-  - `INSERT ... ON CONFLICT DO UPDATE`
-  - `INSERT OR IGNORE`
-  - `INSERT OR REPLACE`
-  - `BLOB`, `TEXT`, `INTEGER`, nullable columns
-  - JSON scalar functions used by direct tests
-  - partial indexes or a documented replacement
-  - `ORDER BY ... LIMIT 1` subquery inside `UPDATE`
-- Need an explicit MSRV compatibility decision for the xdoug target.
+Historical gaps that were closed in the phase11 follow-up:
+
+- Shared ephemeral in-memory DB support is implemented via
+  `Database::create_in_memory(options: OpenOptions) -> Result<Database>` and
+  `Database::create_ephemeral(session_name: &str, options: OpenOptions) -> Result<Database>`.
+- Caller-owned temp/spill roots are threaded through query spill, sort spill,
+  vector spill, and temp-artifact paths.
+- `Send`/`Sync` and pooling semantics for `Database`, `Connection`, and
+  `Statement` are documented.
+- Veox queue semantics are covered by the SQL-only claim path and regression
+  tests.
+- xdoug SQL compatibility coverage now includes the `BEGIN IMMEDIATE`,
+  `UPDATE ... RETURNING`, `INSERT ... ON CONFLICT DO UPDATE`,
+  `INSERT OR IGNORE`, `INSERT OR REPLACE`, JSON scalar, and
+  `ORDER BY ... LIMIT 1` regression cases; partial indexes remain parser-only
+  with the documented replacement.
+- MSRV remains Rust `1.95` for this workspace.
 
 ## 2026-05-15 phase11 follow-up
 
