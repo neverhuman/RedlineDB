@@ -54,7 +54,15 @@
     "rtk cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint-matrix.json --seed 7"
   ],
   "phase11-oltp-gap": [
-    "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1"
+    "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1"
+  ],
+  "phase11-ephemeral-db": [
+    "rtk cargo test -p redlinedb --test phase11_ephemeral --quiet --locked"
+  ],
+  "phase11-sql-contracts": [
+    "rtk cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked",
+    "rtk cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked",
+    "rtk cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked"
   ],
   "phase9-xbabe1-certification": [
     "./scripts/bench/xbabe1_sync.sh",
@@ -124,7 +132,7 @@
     },
     "lane-v2": {
       "correctness": "rtk cargo test -p redlinedb-kernel --test hnsw_correctness --quiet --locked",
-      "recall": "rtk cargo test -p redlinedb-kernel --test hnsw_recall --quiet --locked",
+      "recall": "rtk cargo test -p redlinedb-kernel --test hnsw_recall --quiet --locked -- --ignored",
       "failpoints": "rtk cargo test -p redlinedb-kernel --test hnsw_failpoints --features failpoints --quiet --locked"
     },
     "lane-v3": {

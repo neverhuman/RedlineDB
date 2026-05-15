@@ -10,6 +10,9 @@ while IFS= read -r file; do
     docs/archive/*|paper/figs/*.eps|target/*)
       continue
       ;;
+    benchmark-results/*)
+      continue
+      ;;
   esac
   [[ -f "$file" ]] || continue
   if ! grep -Iq . "$file"; then

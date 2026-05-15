@@ -18,12 +18,7 @@ impl BtreeIndex {
         let range = KeyRange::half_open(start, end);
         let mut out = Vec::new();
         let mut cur = IndexCursor::open(self, range, SnapshotView::all())?;
-        loop {
-            match cur.next_batch(&mut out, LEGACY_WRAPPER_BATCH)? {
-                CursorYield::Batch(_) => continue,
-                CursorYield::End => break,
-            }
-        }
+        while let CursorYield::Batch(_) = cur.next_batch(&mut out, LEGACY_WRAPPER_BATCH)? {}
         Ok(out)
     }
 
@@ -39,12 +34,7 @@ impl BtreeIndex {
         let view = SnapshotView::visible(tx_status, snapshot, owner);
         let mut out = Vec::new();
         let mut cur = IndexCursor::open(self, range, view)?;
-        loop {
-            match cur.next_batch(&mut out, LEGACY_WRAPPER_BATCH)? {
-                CursorYield::Batch(_) => continue,
-                CursorYield::End => break,
-            }
-        }
+        while let CursorYield::Batch(_) = cur.next_batch(&mut out, LEGACY_WRAPPER_BATCH)? {}
         Ok(out)
     }
 

@@ -56,7 +56,7 @@ fn open_with_recovery_report_records_page_image_redo() {
     let (reopened, report) = Engine::open_with_recovery_report(temp.path(), config()).unwrap();
     assert!(report.scanned_records > 0);
     assert!(report.valid_end_lsn.0 > 0);
-    assert!(report.page_images_redone > 0);
+    assert!(report.legacy_mutations_redone > 0);
     assert!(report.commits_recovered > 0);
     let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
     assert_eq!(reopened.get(&mut tx, row).unwrap(), Some(b"beta".to_vec()));
@@ -802,6 +802,120 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
         reopened.index_handle(index.index_id).is_some(),
         "index handle must rehydrate from catalog snapshot"
     );
+}
+
+#[test]
+fn committed_heap_and_index_deltas_replay_after_reopen() {
+    use redlinedb_kernel::catalog::{
+        ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
+        IndexColumnSpec, IndexOrigin, QualifiedName, SortDir, ValueRef, encode_record,
+    };
+    use redlinedb_kernel::format::{PageGeneration, PageId, TuplePtr};
+    use redlinedb_kernel::index::IndexRowRef;
+
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    let table = engine
+        .create_table(
+            &mut tx,
+            CreateTableSpec {
+                schema: None,
+                name: DbName::new("t"),
+                if_not_exists: false,
+                columns: vec![
+                    ColumnSpec {
+                        name: DbName::new("id"),
+                        declared_type: Some("INTEGER".to_owned()),
+                        constraints: vec![ColumnConstraintSpec::PrimaryKey {
+                            sort_dir: SortDir::Asc,
+                            conflict: ConflictAction::Abort,
+                        }],
+                        collation: None,
+                        default_value: None,
+                    },
+                    ColumnSpec {
+                        name: DbName::new("v"),
+                        declared_type: Some("TEXT".to_owned()),
+                        constraints: vec![],
+                        collation: None,
+                        default_value: None,
+                    },
+                ],
+                constraints: vec![],
+                strict: false,
+                without_rowid: false,
+                normalized_sql: Some("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)".to_owned()),
+            },
+        )
+        .unwrap();
+    engine.commit(tx).unwrap();
+
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    let index = engine
+        .create_index(
+            &mut tx,
+            CreateIndexSpec {
+                schema: None,
+                name: DbName::new("ix_v"),
+                table: QualifiedName {
+                    schema: DbName::new("main"),
+                    name: DbName::new("t"),
+                },
+                unique: false,
+                columns: vec![IndexColumnSpec {
+                    name: DbName::new("v"),
+                    sort_dir: SortDir::Asc,
+                    collation: None,
+                }],
+                origin: IndexOrigin::User,
+                normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
+            },
+        )
+        .unwrap();
+    engine.commit(tx).unwrap();
+
+    let row_ref = IndexRowRef::with_row_id(
+        RowId(1),
+        TuplePtr::new_with_generation(PageId(9), 0, PageGeneration::ONE),
+    );
+    let mut buf = Vec::new();
+    encode_record(&[ValueRef::Integer(1), ValueRef::Text("alpha")], &mut buf).unwrap();
+
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    engine
+        .insert_for_relation(&mut tx, table.relation_id, RowId(1), buf.clone())
+        .unwrap();
+    engine
+        .index_handle(index.index_id)
+        .expect("index handle available")
+        .insert_tx(tx.id(), b"alpha", row_ref)
+        .unwrap();
+    engine.commit(tx).unwrap();
+
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    engine
+        .delete_for_relation(&mut tx, table.relation_id, RowId(1))
+        .unwrap();
+    engine
+        .index_handle(index.index_id)
+        .expect("index handle available")
+        .delete_mark_tx(tx.id(), b"alpha", row_ref)
+        .unwrap();
+    engine.commit(tx).unwrap();
+    drop(engine);
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let reopened_index = reopened
+        .index_handle(index.index_id)
+        .expect("reopened index handle");
+    assert_eq!(
+        reopened_index.point_lookup(b"alpha").unwrap(),
+        Vec::<IndexRowRef>::new()
+    );
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    assert_eq!(reopened.get(&mut tx, RowId(1)).unwrap(), None);
 }
 
 fn wal_segment_count(path: &std::path::Path) -> Vec<u64> {

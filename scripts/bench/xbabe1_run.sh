@@ -47,5 +47,6 @@ ssh "${REMOTE}" "cd '${REMOTE_DIR}' && docker run --rm -u \$(id -u):\$(id -g) \
   -e REDLINEDB_BENCH_GIT_SHA='${REDLINEDB_BENCH_GIT_SHA}' \
   -e REDLINEDB_BENCH_GIT_SHORT='${REDLINEDB_BENCH_GIT_SHORT}' \
   -e REDLINEDB_BENCH_GIT_DIRTY='${REDLINEDB_BENCH_GIT_DIRTY}' \
+  -v /tmp:/tmp \
   -v '${REMOTE_DIR}':/work -w /work '${IMAGE}' \
   bash -c $(printf '%q' "${REMOTE_COMMAND}")"

@@ -619,4 +619,46 @@ mod lane_b {
             assert_eq!(rows.len(), 1, "run {run}: exactly one row must commit");
         }
     }
+
+    #[test]
+    fn concurrent_autocommit_updates_same_row_all_succeed() {
+        use std::sync::{Arc as StdArc, Barrier};
+        use std::thread;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("hot-row.db");
+        let db = Database::create(&path, DbOptions::default()).expect("create");
+        let conn = db.connect();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t(id, v) VALUES (1, 0)")
+            .expect("insert");
+        drop(conn);
+
+        let workers = 4;
+        let barrier = StdArc::new(Barrier::new(workers));
+        let mut handles = Vec::new();
+        for _ in 0..workers {
+            let db = StdArc::clone(&db);
+            let barrier = StdArc::clone(&barrier);
+            handles.push(thread::spawn(move || {
+                let conn = db.connect();
+                barrier.wait();
+                conn.execute("UPDATE t SET v = v + 1 WHERE id = 1")
+            }));
+        }
+        for handle in handles {
+            handle
+                .join()
+                .expect("thread join")
+                .expect("autocommit update succeeds");
+        }
+
+        let conn = db.connect();
+        let mut stmt = conn
+            .prepare("SELECT v FROM t WHERE id = 1")
+            .expect("select");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("v"), workers as i64);
+    }
 }

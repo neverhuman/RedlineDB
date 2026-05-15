@@ -1,5 +1,6 @@
-use crate::format::bytes::{read_u32, read_u64, write_bytes, write_u32, write_u64};
+use crate::format::bytes::{read_u16, read_u32, read_u64, write_bytes, write_u32, write_u64};
 use crate::format::{BackupId, Csn, Lsn, PageId, RelId, RowId, TimelineId, TxId, WalSegmentNo};
+use crate::index::IndexRowRef;
 use crate::{Error, Result};
 
 const TAG_HEAP_INSERT: u8 = 1;
@@ -13,6 +14,8 @@ const TAG_BACKUP_END: u8 = 8;
 const TAG_TIMELINE_FORK: u8 = 9;
 const TAG_LOGICAL_TXN: u8 = 10;
 const TAG_CATALOG_SNAPSHOT: u8 = 11;
+const TAG_INDEX_INSERT: u8 = 12;
+const TAG_INDEX_DELETE: u8 = 13;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogicalEvent {
@@ -57,6 +60,18 @@ pub enum WalPayload {
         tx_id: TxId,
         rel_id: RelId,
         row_id: RowId,
+    },
+    IndexInsert {
+        tx_id: TxId,
+        index_id: u64,
+        logical_key: Vec<u8>,
+        row: IndexRowRef,
+    },
+    IndexDelete {
+        tx_id: TxId,
+        index_id: u64,
+        logical_key: Vec<u8>,
+        row: IndexRowRef,
     },
     Commit {
         tx_id: TxId,
@@ -106,6 +121,8 @@ impl WalPayload {
             Self::HeapInsert { tx_id, .. }
             | Self::HeapUpdate { tx_id, .. }
             | Self::HeapDelete { tx_id, .. }
+            | Self::IndexInsert { tx_id, .. }
+            | Self::IndexDelete { tx_id, .. }
             | Self::Commit { tx_id, .. } => *tx_id,
             Self::PageImage { .. }
             | Self::SegmentSeal { .. }
@@ -143,6 +160,18 @@ impl WalPayload {
                 write_u64(&mut out, 17, row_id.0)?;
                 Ok(out)
             }
+            Self::IndexInsert {
+                tx_id,
+                index_id,
+                logical_key,
+                row,
+            } => encode_index_payload(TAG_INDEX_INSERT, *tx_id, *index_id, logical_key, *row),
+            Self::IndexDelete {
+                tx_id,
+                index_id,
+                logical_key,
+                row,
+            } => encode_index_payload(TAG_INDEX_DELETE, *tx_id, *index_id, logical_key, *row),
             Self::Commit { tx_id, csn } => {
                 let mut out = vec![0; 17];
                 out[0] = TAG_COMMIT;
@@ -292,6 +321,22 @@ impl WalPayload {
                     })
                 }
             }
+            TAG_INDEX_INSERT => decode_index_payload(bytes, |tx_id, index_id, logical_key, row| {
+                Ok(Self::IndexInsert {
+                    tx_id,
+                    index_id,
+                    logical_key,
+                    row,
+                })
+            }),
+            TAG_INDEX_DELETE => decode_index_payload(bytes, |tx_id, index_id, logical_key, row| {
+                Ok(Self::IndexDelete {
+                    tx_id,
+                    index_id,
+                    logical_key,
+                    row,
+                })
+            }),
             TAG_COMMIT => {
                 require_exact_len(bytes, 17)?;
                 Ok(Self::Commit {
@@ -416,6 +461,57 @@ fn encode_row_payload(
     write_u32(&mut out, 25, payload.len() as u32)?;
     write_bytes(&mut out, 29, payload)?;
     Ok(out)
+}
+
+fn encode_index_payload(
+    tag: u8,
+    tx_id: TxId,
+    index_id: u64,
+    logical_key: &[u8],
+    row: IndexRowRef,
+) -> Result<Vec<u8>> {
+    if logical_key.len() > u32::MAX as usize {
+        return Err(Error::CorruptWal("index key too large"));
+    }
+    let mut out = vec![0; 43 + logical_key.len()];
+    out[0] = tag;
+    write_u64(&mut out, 1, tx_id.0)?;
+    write_u64(&mut out, 9, index_id)?;
+    write_u64(&mut out, 17, row.row_id.0)?;
+    write_u64(&mut out, 25, row.tuple.page_id.0)?;
+    out[33..35].copy_from_slice(&row.tuple.slot.to_le_bytes());
+    out[35..39].copy_from_slice(&row.tuple.generation.0.to_le_bytes());
+    write_u32(&mut out, 39, logical_key.len() as u32)?;
+    write_bytes(&mut out, 43, logical_key)?;
+    Ok(out)
+}
+
+fn decode_index_payload<T>(
+    bytes: &[u8],
+    f: impl FnOnce(TxId, u64, Vec<u8>, IndexRowRef) -> Result<T>,
+) -> Result<T> {
+    if bytes.len() < 43 {
+        return Err(Error::BufferTooSmall {
+            needed: 43,
+            actual: bytes.len(),
+        });
+    }
+    let tx_id = TxId(read_u64(bytes, 1)?);
+    let index_id = read_u64(bytes, 9)?;
+    let row = IndexRowRef {
+        row_id: RowId(read_u64(bytes, 17)?),
+        tuple: crate::format::TuplePtr::new_with_generation(
+            PageId(read_u64(bytes, 25)?),
+            read_u16(bytes, 33)?,
+            crate::format::PageGeneration(read_u32(bytes, 35)?),
+        ),
+    };
+    let key_len = read_u32(bytes, 39)? as usize;
+    let expected = 43_usize
+        .checked_add(key_len)
+        .ok_or(Error::CorruptWal("index payload length overflow"))?;
+    require_exact_len(bytes, expected)?;
+    f(tx_id, index_id, bytes[43..expected].to_vec(), row)
 }
 
 fn decode_row_payload(

@@ -49,6 +49,12 @@ pub struct Phase11Counters {
     /// Bumped each time a cursor emits a batch of rows up to its
     /// caller (one bump per batch, not per row).
     pub cursor_batches_emitted: AtomicU64,
+    /// Bumped once when an ORDER BY/LIMIT query uses the ordered
+    /// index cursor shortcut.
+    pub ordered_limit_path_hits: AtomicU64,
+    /// Sum of rows returned by ordered LIMIT shortcuts after heap
+    /// visibility rechecks and LIMIT/OFFSET early-stop.
+    pub ordered_limit_rows_returned: AtomicU64,
     /// 16 power-of-two buckets indexed by
     /// `floor(log2(record_count))` saturated at 15. Bucket k covers
     /// `[2^k, 2^(k+1))` records (bucket 0 holds singleton WAL
@@ -70,6 +76,8 @@ impl Default for Phase11Counters {
             prefetch_misses: AtomicU64::new(0),
             heap_rechecks: AtomicU64::new(0),
             cursor_batches_emitted: AtomicU64::new(0),
+            ordered_limit_path_hits: AtomicU64::new(0),
+            ordered_limit_rows_returned: AtomicU64::new(0),
             // AtomicU64 is not Copy so the array literal must use
             // `from_fn`. 16 elements, fixed at compile time.
             wal_batch_size_buckets: std::array::from_fn(|_| AtomicU64::new(0)),
@@ -102,6 +110,8 @@ impl Phase11Counters {
             prefetch_misses: self.prefetch_misses.load(Relaxed),
             heap_rechecks: self.heap_rechecks.load(Relaxed),
             cursor_batches_emitted: self.cursor_batches_emitted.load(Relaxed),
+            ordered_limit_path_hits: self.ordered_limit_path_hits.load(Relaxed),
+            ordered_limit_rows_returned: self.ordered_limit_rows_returned.load(Relaxed),
             wal_batch_size_buckets: wal_batch,
             lock_wait_us_buckets: lock_wait,
         }
@@ -117,6 +127,8 @@ impl Phase11Counters {
         self.prefetch_misses.store(0, Relaxed);
         self.heap_rechecks.store(0, Relaxed);
         self.cursor_batches_emitted.store(0, Relaxed);
+        self.ordered_limit_path_hits.store(0, Relaxed);
+        self.ordered_limit_rows_returned.store(0, Relaxed);
         for slot in self.wal_batch_size_buckets.iter() {
             slot.store(0, Relaxed);
         }
@@ -143,6 +155,10 @@ pub struct Phase11CountersSnapshot {
     pub heap_rechecks: u64,
     #[serde(default)]
     pub cursor_batches_emitted: u64,
+    #[serde(default)]
+    pub ordered_limit_path_hits: u64,
+    #[serde(default)]
+    pub ordered_limit_rows_returned: u64,
     /// 16 power-of-two buckets. See
     /// [`Phase11Counters::wal_batch_size_buckets`] for the shape.
     #[serde(default = "default_phase11_histogram")]
@@ -196,6 +212,8 @@ mod tests {
         assert_eq!(snap.prefetch_misses, 0);
         assert_eq!(snap.heap_rechecks, 0);
         assert_eq!(snap.cursor_batches_emitted, 0);
+        assert_eq!(snap.ordered_limit_path_hits, 0);
+        assert_eq!(snap.ordered_limit_rows_returned, 0);
         assert!(snap.wal_batch_size_buckets.iter().all(|&v| v == 0));
         assert!(snap.lock_wait_us_buckets.iter().all(|&v| v == 0));
     }
@@ -204,7 +222,7 @@ mod tests {
     fn snapshot_round_trips_through_serde_json() {
         let counters = Phase11Counters::new();
         let snap = counters.snapshot();
-        let json = serde_json::to_value(&snap).expect("serialise");
+        let json = serde_json::to_value(snap).expect("serialise");
         let back: Phase11CountersSnapshot = serde_json::from_value(json).expect("deserialise");
         assert_eq!(snap, back);
     }
@@ -240,6 +258,8 @@ mod tests {
         counters.prefetch_misses.store(9, Relaxed);
         counters.heap_rechecks.store(10, Relaxed);
         counters.cursor_batches_emitted.store(11, Relaxed);
+        counters.ordered_limit_path_hits.store(12, Relaxed);
+        counters.ordered_limit_rows_returned.store(13, Relaxed);
         counters.wal_batch_size_buckets[3].store(12, Relaxed);
         counters.lock_wait_us_buckets[5].store(13, Relaxed);
         counters.reset();

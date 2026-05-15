@@ -1,4 +1,5 @@
 pub mod certify;
+mod chaos;
 pub mod checksum;
 mod compat;
 pub mod config;
@@ -32,8 +33,7 @@ pub fn run(cli: Cli) -> Result<()> {
         }
         config::Command::Certify(args) => {
             let config = config::CompareConfig::load(&args.config)?;
-            let report = certify::run(&config, &args)?;
-            report::write_json(Some(&args.out_dir.join("report.json")), &report)?;
+            let _ = certify::run(&config, &args)?;
         }
         config::Command::Compat(args) => {
             let report = compat::run_suite(&args)?;

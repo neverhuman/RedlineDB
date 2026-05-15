@@ -271,7 +271,7 @@ pub(crate) struct ExecutionResult {
 
 #[derive(Debug)]
 pub(crate) struct SelectRuntime {
-    pub(crate) tx: Option<Txn>,
+    pub(crate) tx: SelectRuntimeTx,
     pub(crate) restore_tx: bool,
     pub(crate) source: SelectRuntimeSource,
     pub(crate) selection: Option<Expr>,
@@ -281,6 +281,38 @@ pub(crate) struct SelectRuntime {
     pub(crate) seen: usize,
     pub(crate) yielded: usize,
     pub(crate) memory: QueryMemoryBroker,
+}
+
+#[derive(Debug)]
+pub(crate) enum SelectRuntimeTx {
+    Owned(Txn),
+    Borrowed(*mut Txn),
+    Empty,
+}
+
+impl SelectRuntimeTx {
+    pub(crate) fn as_mut(&mut self) -> Option<&mut Txn> {
+        match self {
+            Self::Owned(tx) => Some(tx),
+            Self::Borrowed(ptr) => {
+                let tx = unsafe { ptr.as_mut() };
+                debug_assert!(tx.is_some(), "borrowed transaction pointer must be valid");
+                tx
+            }
+            Self::Empty => None,
+        }
+    }
+
+    pub(crate) fn take_owned(&mut self) -> Option<Txn> {
+        match std::mem::replace(self, Self::Empty) {
+            Self::Owned(tx) => Some(tx),
+            Self::Borrowed(ptr) => {
+                *self = Self::Borrowed(ptr);
+                None
+            }
+            Self::Empty => None,
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -4,10 +4,10 @@
 //! helpers. The bulk of the implementation is split across sibling files:
 //!
 //!   * `scalar`        — arithmetic / string / null helpers, vector and
-//!                       datetime helpers, row-context plumbing
+//!     datetime helpers, row-context plumbing
 //!   * `coerce`        — type coercion, comparison, binary-operator eval
 //!   * `json_dispatch` — function-call dispatcher (delegates JSON funcs
-//!                       to `crate::json::scalar`)
+//!     to `crate::json::scalar`)
 //!   * `window`        — window-function execution stubs (parsed-only)
 //!
 //! Submodules import shared symbols via `use super::*`. To keep that

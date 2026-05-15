@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 use rusqlite::types::{Value, ValueRef};
@@ -196,6 +197,16 @@ impl BenchConn for SqliteConn {
 
     fn commit(&mut self) -> Result<()> {
         self.conn.execute_batch("COMMIT")?;
+        Ok(())
+    }
+
+    fn rollback(&mut self) -> Result<()> {
+        self.conn.execute_batch("ROLLBACK")?;
+        Ok(())
+    }
+
+    fn set_busy_timeout(&mut self, timeout: Duration) -> Result<()> {
+        self.conn.busy_timeout(timeout)?;
         Ok(())
     }
 }

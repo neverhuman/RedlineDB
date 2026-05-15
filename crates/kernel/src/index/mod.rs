@@ -18,9 +18,9 @@ mod maintenance;
 mod mutate;
 mod scan;
 
-use cells::{Entry, InternalCell, LeafCell};
+use cells::{Entry, InternalCell, LeafCell, LeafEntry};
 
-pub use cursor::{CursorYield, IndexCursor, KeyRange, SnapshotView};
+pub use cursor::{CursorYield, IndexCursor, KeyRange, RawIndexCursor, SnapshotView};
 pub use locks::{UniqueKeyGuard, UniqueKeyLockTable};
 
 pub const INDEX_SPECIAL_LEN: usize = 256;
@@ -334,6 +334,18 @@ impl BtreeIndex {
         guard.mark_dirty(append.end_lsn)
     }
 
+    pub(super) fn append_index_delta(
+        &self,
+        tx_id: crate::format::TxId,
+        payload: WalPayload,
+    ) -> Result<crate::format::Lsn> {
+        let Some(wal) = &self.inner.wal else {
+            return Ok(crate::format::Lsn(1));
+        };
+        let append = wal.append(WalRecordKind::PageDelta, tx_id, payload.encode()?)?;
+        Ok(append.end_lsn)
+    }
+
     /// Returns a snapshot of per-index runtime counters. Lane KH P1 #6
     /// tests use `range_scan_leaves_visited` to assert the early-exit
     /// path is hit; recovery and benches can sample this for
@@ -424,6 +436,8 @@ impl BtreeIndex {
         root_page_id: PageId,
         root_level: u16,
         tx_id: crate::format::TxId,
+        emit_wal: bool,
+        lsn: crate::format::Lsn,
     ) -> Result<()> {
         let guard = self.inner.buffer.pin(self.inner.meta_page_id)?;
         guard.with_page_mut(|page| {
@@ -432,7 +446,11 @@ impl BtreeIndex {
             meta.root_level = root_level;
             Self::write_meta(page, &meta)
         })?;
-        self.record_page_image(self.inner.meta_page_id, tx_id)
+        if emit_wal {
+            self.record_page_image(self.inner.meta_page_id, tx_id)
+        } else {
+            guard.mark_dirty(lsn)
+        }
     }
 
     pub(in crate::index) fn read_entries(&self, page: &Page) -> Result<Vec<Entry>> {
@@ -443,6 +461,22 @@ impl BtreeIndex {
             match header.kind {
                 PageKind::BtreeLeaf => entries.push(LeafCell::decode(cell)?),
                 PageKind::BtreeInternal => entries.push(InternalCell::decode(cell)?),
+                _ => return Err(Error::CorruptPage("unsupported index page kind")),
+            }
+        }
+        Ok(entries)
+    }
+
+    pub(in crate::index) fn read_leaf_entries(&self, page: &Page) -> Result<Vec<LeafEntry>> {
+        let header = page.header()?;
+        let mut entries = Vec::new();
+        for slot in 0..page.slot_count()? {
+            let cell = page.cell(slot)?;
+            match header.kind {
+                PageKind::BtreeLeaf => entries.push(LeafCell::decode_leaf_entry(cell)?),
+                PageKind::BtreeInternal => {
+                    return Err(Error::CorruptPage("unsupported index page kind"));
+                }
                 _ => return Err(Error::CorruptPage("unsupported index page kind")),
             }
         }

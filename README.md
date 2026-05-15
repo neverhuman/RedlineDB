@@ -179,6 +179,19 @@ while let redlinedb::Step::Row(row) = stmt.step()? {
 }
 ```
 
+### Facade contract
+
+- `Database` is the shared boundary: it is `Send + Sync + Clone`, and callers
+  should hand out fresh connections from it instead of pooling statements.
+- `Connection` is a per-session handle: it is `Send` but not `Sync`, so move
+  it between threads if you must, but do not share one handle for concurrent
+  mutation without external locking.
+- `Statement` is bound to one live connection borrow and is not meant to be
+  pooled or shared across threads.
+- `Database::create_in_memory` and `Database::create_ephemeral` create
+  transient shared sessions that clean up their owned temp root when the last
+  database handle drops.
+
 ### C ABI
 
 ```c

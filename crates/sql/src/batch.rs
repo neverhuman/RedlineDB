@@ -3,7 +3,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use crate::error::Result;
 use crate::value::SqlValue;
@@ -76,16 +79,20 @@ pub struct QueryMemoryBroker {
     pub max_spill_bytes: usize,
     pub used_bytes: usize,
     pub spilled_bytes: usize,
+    spill_root: PathBuf,
     spill_path: Option<PathBuf>,
 }
 
 impl QueryMemoryBroker {
-    pub fn new(work_mem_bytes: usize, max_spill_bytes: usize) -> Self {
+    pub fn new(work_mem_bytes: usize, max_spill_bytes: usize, temp_dir: Option<PathBuf>) -> Self {
+        let spill_root = temp_dir.unwrap_or_else(std::env::temp_dir);
+        let _ = fs::create_dir_all(&spill_root);
         Self {
             work_mem_bytes,
             max_spill_bytes,
             used_bytes: 0,
             spilled_bytes: 0,
+            spill_root,
             spill_path: None,
         }
     }
@@ -110,6 +117,10 @@ impl QueryMemoryBroker {
         self.used_bytes = self.used_bytes.saturating_sub(bytes);
     }
 
+    pub fn spill_root(&self) -> &Path {
+        &self.spill_root
+    }
+
     fn ensure_spill_file(&mut self) -> Result<()> {
         if self.spill_path.is_some() {
             return Ok(());
@@ -119,7 +130,8 @@ impl QueryMemoryBroker {
             .unwrap_or_default()
             .as_nanos();
         let seq = QUERY_SPILL_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!("redline-query-{stamp}-{seq}.spill"));
+        let path =
+            crate::exec::vec::spill::spill_path(&self.spill_root, &format!("query-{stamp}-{seq}"));
         self.spill_path = Some(path);
         Ok(())
     }
@@ -154,9 +166,9 @@ pub struct ExecContext {
 }
 
 impl ExecContext {
-    pub fn new(work_mem_bytes: usize, max_spill_bytes: usize) -> Self {
+    pub fn new(work_mem_bytes: usize, max_spill_bytes: usize, temp_dir: Option<PathBuf>) -> Self {
         Self {
-            memory: QueryMemoryBroker::new(work_mem_bytes, max_spill_bytes),
+            memory: QueryMemoryBroker::new(work_mem_bytes, max_spill_bytes, temp_dir),
         }
     }
 }

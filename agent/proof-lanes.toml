@@ -83,7 +83,24 @@ commands = [
 
 [phase11-oltp-gap]
 commands = [
-  "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1",
+  "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1",
+]
+
+[phase11-ephemeral-db]
+commands = [
+  "rtk cargo test -p redlinedb --test phase11_ephemeral --quiet --locked",
+]
+
+[phase11-sql-contracts]
+commands = [
+  "rtk cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked",
+  "rtk cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked",
+  "rtk cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked",
+]
+
+[phase10-hnsw-recall]
+commands = [
+  "rtk cargo test -p redlinedb-kernel --test hnsw_recall --quiet --locked -- --ignored",
 ]
 
 [phase9-xbabe1-certification]

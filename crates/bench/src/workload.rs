@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 
@@ -15,13 +16,21 @@ use redlinedb_kernel::vector::diskann::{DiskAnnIndex, DiskAnnParams, RowId as Di
 use redlinedb_kernel::vector::hnsw::{HnswIndex, HnswParams, IndexedRowRef};
 use sha2::{Digest, Sha256};
 
+use crate::chaos;
 use crate::config::{EngineKind, RunSpec, WorkloadKind};
 use crate::engine::{self, BenchConn, BenchEngine, CellValue};
 use crate::metrics::{FailureKind, Metrics};
 use crate::process_metrics;
 use crate::report::{Checksum, MetricsSummary, RunRecord};
 
+#[derive(Debug)]
+struct MeasuredMetrics {
+    metrics: Metrics,
+    elapsed: Duration,
+}
+
 pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
+    let wall_started = Instant::now();
     let db_dir = spec.base_dir.join(format!(
         "{}-{}-{}-t{}-s{}",
         spec.engine.to_possible_value().expect("value").get_name(),
@@ -48,6 +57,13 @@ pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
             | WorkloadKind::CoveredRangeCold
             | WorkloadKind::CoveredRangeWarm
             | WorkloadKind::HotCounterUpdate
+            | WorkloadKind::QueueMixed
+            | WorkloadKind::ChaosLockConvoy
+            | WorkloadKind::ChaosConnectionChurn
+            | WorkloadKind::ChaosCheckpointThrash
+            | WorkloadKind::ChaosIndexHammer
+            | WorkloadKind::ChaosTempSpillConvoy
+            | WorkloadKind::ChaosSchemaStorm
     ) {
         engine.seed_kv(spec.rows)?;
     }
@@ -94,12 +110,32 @@ pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
     if matches!(spec.workload, WorkloadKind::HotCounterUpdate) {
         return run_hot_counter_update(engine.as_ref(), spec);
     }
-    let started = Instant::now();
-    let metrics = run_workload(engine.as_ref(), spec)?;
+    if matches!(spec.workload, WorkloadKind::QueueMixed) {
+        return run_queue_mixed(engine.as_ref(), spec);
+    }
+    if matches!(spec.workload, WorkloadKind::ChaosLockConvoy) {
+        return chaos::run_lock_convoy(engine.as_ref(), spec);
+    }
+    if matches!(spec.workload, WorkloadKind::ChaosConnectionChurn) {
+        return chaos::run_connection_churn(engine.as_ref(), spec);
+    }
+    if matches!(spec.workload, WorkloadKind::ChaosCheckpointThrash) {
+        return chaos::run_checkpoint_thrash(engine.as_ref(), spec);
+    }
+    if matches!(spec.workload, WorkloadKind::ChaosIndexHammer) {
+        return chaos::run_index_hammer(engine.as_ref(), spec);
+    }
+    if matches!(spec.workload, WorkloadKind::ChaosTempSpillConvoy) {
+        return chaos::run_temp_spill_convoy(engine.as_ref(), spec);
+    }
+    if matches!(spec.workload, WorkloadKind::ChaosSchemaStorm) {
+        return chaos::run_schema_storm(engine.as_ref(), spec);
+    }
+    let measured = run_workload(engine.as_ref(), spec)?;
     engine.checkpoint()?;
     let snapshot = engine.snapshot()?;
     let checksum = engine.checksum()?;
-    let elapsed = started.elapsed();
+    let wall_elapsed = wall_started.elapsed();
     let mut process = process_metrics::collect_self();
     // Lane BH P1 #7: when the engine surfaced its own kernel-level
     // syscall counters (Redline does, SQLite does not), prefer
@@ -116,6 +152,14 @@ pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
     if snapshot.pwrites_issued.is_some() {
         process.pwrite_count = snapshot.pwrites_issued;
     }
+    let mut engine_stats = match snapshot.engine_stats {
+        serde_json::Value::Object(map) => map,
+        _ => serde_json::Map::new(),
+    };
+    engine_stats.insert(
+        "wall_elapsed_ms".to_owned(),
+        serde_json::json!(wall_elapsed.as_millis() as u64),
+    );
     Ok(RunRecord {
         run_id: crate::report::next_run_id(spec.engine, spec.workload),
         engine: spec.engine,
@@ -125,28 +169,17 @@ pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
         seed: spec.seed,
         cache_bytes: spec.cache_bytes,
         environment: crate::report::collect_environment(),
-        metrics: MetricsSummary {
-            operations: metrics.operations(),
-            failures: metrics.failures(),
-            // Backward-compat: surfaces the original (busy + locked)
-            // count for one minor cycle while consumers migrate to the
-            // split fields below.
-            busy_errors: metrics.busy_errors() + metrics.locked_errors(),
-            locked_errors: metrics.locked_errors(),
-            timeout_errors: metrics.timeout_errors(),
-            elapsed_ms: elapsed.as_millis() as u64,
-            throughput_ops_per_sec: throughput(metrics.operations(), elapsed),
-            latency: metrics.latency(),
-        },
+        metrics: metrics_summary(&measured.metrics, measured.elapsed),
         checksum,
         data_bytes: snapshot.data_bytes,
         wal_bytes: snapshot.wal_bytes,
-        engine_stats: snapshot.engine_stats,
+        engine_stats: serde_json::Value::Object(engine_stats),
         process_metrics: Some(process),
     })
 }
 
-fn run_workload(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Metrics> {
+fn run_workload(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<MeasuredMetrics> {
+    let started = Instant::now();
     let barrier = Arc::new(Barrier::new(spec.threads));
     let deadline = Instant::now() + spec.duration;
     let mut merged = Metrics::new();
@@ -217,7 +250,14 @@ fn run_workload(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Metrics> {
                         }
                         WorkloadKind::CoveredRangeCold
                         | WorkloadKind::CoveredRangeWarm
-                        | WorkloadKind::HotCounterUpdate => {
+                        | WorkloadKind::HotCounterUpdate
+                        | WorkloadKind::QueueMixed
+                        | WorkloadKind::ChaosLockConvoy
+                        | WorkloadKind::ChaosConnectionChurn
+                        | WorkloadKind::ChaosCheckpointThrash
+                        | WorkloadKind::ChaosIndexHammer
+                        | WorkloadKind::ChaosTempSpillConvoy
+                        | WorkloadKind::ChaosSchemaStorm => {
                             unreachable!("phase-11 wave-1a workloads are self-managed")
                         }
                     };
@@ -238,7 +278,10 @@ fn run_workload(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Metrics> {
         Ok(result) => result?,
         Err(_) => anyhow::bail!("worker thread panicked"),
     }
-    Ok(merged)
+    Ok(MeasuredMetrics {
+        metrics: merged,
+        elapsed: started.elapsed(),
+    })
 }
 
 fn single_row_insert(conn: &mut dyn BenchConn, worker: usize, rng: &mut ChaCha8Rng) -> Result<()> {
@@ -404,9 +447,9 @@ fn blob_for(seed: usize) -> Vec<u8> {
 }
 
 fn run_json_path_extract(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     setup_json_docs(engine, spec)?;
-    let metrics = run_threaded_conn_feature(engine, spec, |conn, _worker, rng| {
+    let measured = run_threaded_conn_feature(engine, spec, |conn, _worker, rng| {
         let id = rng.random_range(0..spec.rows.max(1)) as i64;
         let _ = conn.query_row(
             "SELECT json_extract(body, '$.nested.score'), json_extract(body, '$.tags[1]') \
@@ -419,15 +462,15 @@ fn run_json_path_extract(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Run
     let mut stats = BTreeMap::new();
     stats.insert(
         "json_path_ops".to_owned(),
-        serde_json::json!(metrics.operations()),
+        serde_json::json!(measured.metrics.operations()),
     );
-    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
 fn run_json_path_update(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     setup_json_docs(engine, spec)?;
-    let metrics = run_threaded_conn_feature(engine, spec, |conn, _worker, rng| {
+    let measured = run_threaded_conn_feature(engine, spec, |conn, _worker, rng| {
         let id = rng.random_range(0..spec.rows.max(1)) as i64;
         let _ = conn.execute(
             "UPDATE json_docs \
@@ -441,15 +484,15 @@ fn run_json_path_update(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunR
     let mut stats = BTreeMap::new();
     stats.insert(
         "json_path_ops".to_owned(),
-        serde_json::json!(metrics.operations()),
+        serde_json::json!(measured.metrics.operations()),
     );
-    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
 fn run_vector_flat_search(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     setup_vector_table(engine, spec)?;
-    let metrics = run_threaded_conn_feature(engine, spec, |conn, _worker, rng| {
+    let measured = run_threaded_conn_feature(engine, spec, |conn, _worker, rng| {
         let query = vector_for(rng.random::<u64>() as usize, VECTOR_DIM);
         let _ = vector_flat_top_k(conn, spec.engine, &query, 10)?;
         Ok(())
@@ -458,13 +501,13 @@ fn run_vector_flat_search(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Ru
     let mut stats = BTreeMap::new();
     stats.insert(
         "vector_exact_topk_ops".to_owned(),
-        serde_json::json!(metrics.operations()),
+        serde_json::json!(measured.metrics.operations()),
     );
-    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
 fn run_vector_ann_search(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     let rows = ann_rows(spec);
     let vectors = vector_dataset(rows, HNSW_DIM, spec.seed);
     let temp = tempfile::TempDir::new()?;
@@ -481,7 +524,7 @@ fn run_vector_ann_search(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Run
     }
     let index = Arc::new(index);
     let vectors = Arc::new(vectors);
-    let metrics = run_threaded_compute_feature(spec, {
+    let measured = run_threaded_compute_feature(spec, {
         let index = Arc::clone(&index);
         move |_worker, rng| {
             let query = vector_for(rng.random::<u64>() as usize, HNSW_DIM);
@@ -497,11 +540,11 @@ fn run_vector_ann_search(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Run
     stats.insert("vector_recall_at_10".to_owned(), serde_json::json!(recall));
     stats.insert("vector_candidates".to_owned(), serde_json::json!(96));
     stats.insert("vector_index_kind".to_owned(), serde_json::json!("hnsw"));
-    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
 fn run_vector_ann_search_disk(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     let rows = ann_rows(spec);
     let vectors = vector_dataset(rows, DISKANN_DIM, spec.seed ^ 0xD15C_A991);
     let row_ids: Vec<DiskAnnRowId> = (0..rows).map(|idx| DiskAnnRowId(idx as u64)).collect();
@@ -525,7 +568,7 @@ fn run_vector_ann_search_disk(engine: &dyn BenchEngine, spec: &RunSpec) -> Resul
         rows,
     )?);
     let vectors = Arc::new(vectors);
-    let metrics = run_threaded_compute_feature(spec, {
+    let measured = run_threaded_compute_feature(spec, {
         let index = Arc::clone(&index);
         move |_worker, rng| {
             let query = vector_for(rng.random::<u64>() as usize, DISKANN_DIM);
@@ -545,13 +588,13 @@ fn run_vector_ann_search_disk(engine: &dyn BenchEngine, spec: &RunSpec) -> Resul
         "diskann_sector_bytes".to_owned(),
         serde_json::json!(loaded.len() as u64),
     );
-    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
 fn run_commit_storm_batched(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     setup_commit_storm(engine, spec)?;
-    let metrics = run_threaded_conn_feature(engine, spec, |conn, worker, rng| {
+    let measured = run_threaded_conn_feature(engine, spec, |conn, worker, rng| {
         let id =
             ((worker + rng.random_range(0..4) * spec.threads.max(1)) % commit_rows(spec)) as i64;
         let _ = conn.execute(
@@ -568,15 +611,20 @@ fn run_commit_storm_batched(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<
     let mut stats = BTreeMap::new();
     stats.insert(
         "commit_storm_ops".to_owned(),
-        serde_json::json!(metrics.operations()),
+        serde_json::json!(measured.metrics.operations()),
     );
-    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
-fn run_threaded_conn_feature<F>(engine: &dyn BenchEngine, spec: &RunSpec, op: F) -> Result<Metrics>
+fn run_threaded_conn_feature<F>(
+    engine: &dyn BenchEngine,
+    spec: &RunSpec,
+    op: F,
+) -> Result<MeasuredMetrics>
 where
     F: Fn(&mut dyn BenchConn, usize, &mut ChaCha8Rng) -> Result<()> + Sync,
 {
+    let started = Instant::now();
     let barrier = Arc::new(Barrier::new(spec.threads));
     let deadline = Instant::now() + spec.duration;
     let mut merged = Metrics::new();
@@ -609,13 +657,17 @@ where
         Ok(result) => result?,
         Err(_) => anyhow::bail!("worker thread panicked"),
     }
-    Ok(merged)
+    Ok(MeasuredMetrics {
+        metrics: merged,
+        elapsed: started.elapsed(),
+    })
 }
 
-fn run_threaded_compute_feature<F>(spec: &RunSpec, op: F) -> Result<Metrics>
+fn run_threaded_compute_feature<F>(spec: &RunSpec, op: F) -> Result<MeasuredMetrics>
 where
     F: Fn(usize, &mut ChaCha8Rng) -> Result<()> + Sync,
 {
+    let started = Instant::now();
     let barrier = Arc::new(Barrier::new(spec.threads));
     let deadline = Instant::now() + spec.duration;
     let mut merged = Metrics::new();
@@ -647,20 +699,22 @@ where
         Ok(result) => result?,
         Err(_) => anyhow::bail!("worker thread panicked"),
     }
-    Ok(merged)
+    Ok(MeasuredMetrics {
+        metrics: merged,
+        elapsed: started.elapsed(),
+    })
 }
 
 fn finish_self_managed_record(
     engine: &dyn BenchEngine,
     spec: &RunSpec,
-    started: Instant,
-    metrics: Metrics,
+    measured: MeasuredMetrics,
     checksum: Checksum,
     extra_stats: BTreeMap<String, serde_json::Value>,
+    wall_started: Instant,
 ) -> Result<RunRecord> {
     engine.checkpoint()?;
     let snapshot = engine.snapshot()?;
-    let elapsed = started.elapsed();
     let mut process = process_metrics::collect_self();
     if snapshot.fsyncs_issued.is_some() {
         process.fsync_count = snapshot.fsyncs_issued;
@@ -675,6 +729,11 @@ fn finish_self_managed_record(
         serde_json::Value::Object(map) => map,
         _ => serde_json::Map::new(),
     };
+    let wall_elapsed = wall_started.elapsed();
+    engine_stats.insert(
+        "wall_elapsed_ms".to_owned(),
+        serde_json::json!(wall_elapsed.as_millis() as u64),
+    );
     for (key, value) in extra_stats {
         engine_stats.insert(key, value);
     }
@@ -687,16 +746,7 @@ fn finish_self_managed_record(
         seed: spec.seed,
         cache_bytes: spec.cache_bytes,
         environment: crate::report::collect_environment(),
-        metrics: MetricsSummary {
-            operations: metrics.operations(),
-            failures: metrics.failures(),
-            busy_errors: metrics.busy_errors() + metrics.locked_errors(),
-            locked_errors: metrics.locked_errors(),
-            timeout_errors: metrics.timeout_errors(),
-            elapsed_ms: elapsed.as_millis() as u64,
-            throughput_ops_per_sec: throughput(metrics.operations(), elapsed),
-            latency: metrics.latency(),
-        },
+        metrics: metrics_summary(&measured.metrics, measured.elapsed),
         checksum,
         data_bytes: snapshot.data_bytes,
         wal_bytes: snapshot.wal_bytes,
@@ -1082,7 +1132,7 @@ fn covered_range_step(
 /// `Connection::open` walks the same path. Threads are honored —
 /// each worker drives its own connection.
 fn run_covered_range_cold(spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     // Seed phase: open the engine, populate the table, then drop
     // the handle so the next open hits a cold buffer pool.
     let db_dir = spec.base_dir.join(format!(
@@ -1106,7 +1156,7 @@ fn run_covered_range_cold(spec: &RunSpec) -> Result<RunRecord> {
     // faults are observable in the latency tail.
     let measure_engine = engine::open(spec, &db_dir)?;
     let total = covered_range_rows(spec);
-    let metrics = run_threaded_conn_feature(measure_engine.as_ref(), spec, |conn, _w, rng| {
+    let measured = run_threaded_conn_feature(measure_engine.as_ref(), spec, |conn, _w, rng| {
         covered_range_step(conn, total, rng)
     })?;
     let checksum = checksum_query(
@@ -1124,10 +1174,10 @@ fn run_covered_range_cold(spec: &RunSpec) -> Result<RunRecord> {
     finish_self_managed_record(
         measure_engine.as_ref(),
         spec,
-        started,
-        metrics,
+        measured,
         checksum,
         stats,
+        wall_started,
     )
 }
 
@@ -1139,7 +1189,7 @@ fn run_covered_range_cold(spec: &RunSpec) -> Result<RunRecord> {
 /// versus `CoveredRangeCold` is the headline number — it shows the
 /// covering-scan working set actually fitting in the buffer pool.
 fn run_covered_range_warm(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     setup_covered_kv(engine, spec)?;
     let total = covered_range_rows(spec);
     // Warmup: a single connection runs the full range scan once so
@@ -1152,7 +1202,7 @@ fn run_covered_range_warm(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Ru
             &[CellValue::Integer(0), CellValue::Integer(total as i64)],
         )?;
     }
-    let metrics = run_threaded_conn_feature(engine, spec, |conn, _w, rng| {
+    let measured = run_threaded_conn_feature(engine, spec, |conn, _w, rng| {
         covered_range_step(conn, total, rng)
     })?;
     let checksum = checksum_query(
@@ -1167,7 +1217,7 @@ fn run_covered_range_warm(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Ru
     );
     stats.insert("covered_range_window".to_owned(), serde_json::json!(256));
     stats.insert("covered_range_cold".to_owned(), serde_json::json!(false));
-    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
 /// Phase 11 wave 1a: hot-counter increment baseline.
@@ -1185,7 +1235,7 @@ fn run_covered_range_warm(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Ru
 /// establish the no-contention baseline the combiner rollout will
 /// be measured against.
 fn run_hot_counter_update(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     {
         let mut conn = engine.connect(0)?;
         conn.execute(
@@ -1198,7 +1248,7 @@ fn run_hot_counter_update(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Ru
             &[CellValue::Integer(0)],
         )?;
     }
-    let metrics = run_threaded_conn_feature(engine, spec, |conn, _w, _rng| {
+    let measured = run_threaded_conn_feature(engine, spec, |conn, _w, _rng| {
         let _ = conn.execute(
             "UPDATE hot_counter SET counter = counter + 1 WHERE pk = ?1",
             &[CellValue::Integer(0)],
@@ -1213,9 +1263,139 @@ fn run_hot_counter_update(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<Ru
     let mut stats = BTreeMap::new();
     stats.insert(
         "hot_counter_ops".to_owned(),
-        serde_json::json!(metrics.operations()),
+        serde_json::json!(measured.metrics.operations()),
     );
-    finish_self_managed_record(engine, spec, started, metrics, checksum, stats)
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
+}
+
+fn run_queue_mixed(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
+    let wall_started = Instant::now();
+    {
+        let mut conn = engine.connect(0)?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS queue_jobs(id INTEGER PRIMARY KEY, state INTEGER, priority INTEGER, created_at INTEGER, payload BLOB, attempts INTEGER)",
+            &[],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS queue_state_idx ON queue_jobs(state)",
+            &[],
+        )?;
+        conn.execute("DELETE FROM queue_jobs", &[])?;
+        conn.begin_immediate()?;
+        for id in 0..spec.rows.max(1) {
+            let priority = (id % 11) as i64;
+            let created_at = id as i64;
+            conn.execute(
+                "INSERT INTO queue_jobs(id, state, priority, created_at, payload, attempts) VALUES (?1, 0, ?2, ?3, ?4, 0)",
+                &[
+                    CellValue::Integer(id as i64),
+                    CellValue::Integer(priority),
+                    CellValue::Integer(created_at),
+                    CellValue::Blob(blob_for(id)),
+                ],
+            )?;
+        }
+        conn.commit()?;
+    }
+
+    let next_job_id = AtomicI64::new(1_000_000_000);
+    let measured = run_threaded_conn_feature(engine, spec, |conn, _worker, rng| {
+        let choice = rng.random_range(0..100);
+        if choice < 35 {
+            let id = next_job_id.fetch_add(1, Ordering::Relaxed);
+            let priority = id % 11;
+            let created_at = id;
+            let _ = conn.execute(
+                "INSERT INTO queue_jobs(id, state, priority, created_at, payload, attempts) VALUES (?1, 0, ?2, ?3, ?4, 0)",
+                &[
+                    CellValue::Integer(id),
+                    CellValue::Integer(priority),
+                    CellValue::Integer(created_at),
+                    CellValue::Blob(blob_for(id as usize)),
+                ],
+            )?;
+        } else if choice < 85 {
+            if let Some(id) = queue_claim_one(conn)? {
+                let _ = conn.execute(
+                    "UPDATE queue_jobs SET state = 2 WHERE id = ?1 AND state = 1",
+                    &[CellValue::Integer(id)],
+                )?;
+            }
+        } else {
+            let _ = conn.query_row("SELECT COUNT(*) FROM queue_jobs WHERE state = 0", &[])?;
+        }
+        Ok(())
+    })?;
+    let checksum = checksum_query(
+        engine,
+        "queue-mixed",
+        "SELECT id, state, priority, created_at, attempts FROM queue_jobs ORDER BY id",
+    )?;
+    let mut stats = BTreeMap::new();
+    stats.insert(
+        "queue_mixed_ops".to_owned(),
+        serde_json::json!(measured.metrics.operations()),
+    );
+    stats.insert(
+        "queue_seed_rows".to_owned(),
+        serde_json::json!(spec.rows.max(1)),
+    );
+    stats.insert("queue_producer_pct".to_owned(), serde_json::json!(35));
+    stats.insert("queue_consumer_pct".to_owned(), serde_json::json!(50));
+    stats.insert("queue_reader_pct".to_owned(), serde_json::json!(15));
+    finish_self_managed_record(engine, spec, measured, checksum, stats, wall_started)
+}
+
+fn queue_claim_one(conn: &mut dyn BenchConn) -> Result<Option<i64>> {
+    loop {
+        match queue_claim_one_once(conn) {
+            Ok(result) => return Ok(result),
+            Err(err) if is_retryable_queue_claim_error(&err) => {
+                let _ = conn.rollback();
+                std::thread::yield_now();
+                continue;
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+fn queue_claim_one_once(conn: &mut dyn BenchConn) -> Result<Option<i64>> {
+    conn.begin_immediate()?;
+    let outcome = (|| -> Result<Option<i64>> {
+        let row = conn.query_row(
+            "SELECT id \
+             FROM queue_jobs \
+             WHERE state = 0 \
+             ORDER BY priority DESC, created_at ASC, id ASC \
+             LIMIT 1",
+            &[],
+        )?;
+        let Some(CellValue::Integer(id)) = row.first() else {
+            return Ok(None);
+        };
+        let _ = conn.execute(
+            "UPDATE queue_jobs SET state = 1, attempts = attempts + 1 WHERE id = ?1 AND state = 0",
+            &[CellValue::Integer(*id)],
+        )?;
+        Ok(Some(*id))
+    })();
+    match outcome {
+        Ok(result) => {
+            conn.commit()?;
+            Ok(result)
+        }
+        Err(err) => {
+            let _ = conn.rollback();
+            Err(err)
+        }
+    }
+}
+
+fn is_retryable_queue_claim_error(err: &anyhow::Error) -> bool {
+    err.to_string()
+        .to_ascii_lowercase()
+        .contains("serialization failure")
 }
 
 fn checksum_query(engine: &dyn BenchEngine, label: &str, sql: &str) -> Result<Checksum> {
@@ -1304,6 +1484,9 @@ fn encode_cell_for_digest(cell: &CellValue, out: &mut Vec<u8>) {
 /// Algorithm: establish a 1-connection baseline, capture its p99,
 /// then binary-search [low, high] over connection counts. A
 /// candidate `n` is "stable" iff during 1 second of point-reads
+const CONNECTION_LIMIT_MAX_ENV: &str = "REDLINEDB_BENCH_CONNECTION_LIMIT_MAX";
+const DEFAULT_CONNECTION_LIMIT_MAX: usize = 256;
+
 /// across `n` worker threads:
 ///   - error rate is at most 5%
 ///   - locked / busy / timeout ratio is at most 50%
@@ -1319,12 +1502,14 @@ fn encode_cell_for_digest(cell: &CellValue, out: &mut Vec<u8>) {
 fn run_connection_limit(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
     use std::time::Duration;
 
+    let wall_started = Instant::now();
     // Baseline: a single connection, 1s of point-reads.
     let baseline_metrics = run_connection_burst(engine, spec, 1, Duration::from_secs(1))?;
     let baseline_p99 = baseline_metrics.latency.p99_us.max(1);
 
+    let connection_limit_max = connection_limit_max();
     let mut low: usize = 1;
-    let mut high: usize = 64;
+    let mut high: usize = connection_limit_max;
     let mut best_stable = 1;
     let mut last_metrics = baseline_metrics.clone();
     let mut last_n = 1;
@@ -1350,12 +1535,11 @@ fn run_connection_limit(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunR
         }
     }
 
-    let started = Instant::now();
     // Use the captured "last probe" metrics as the run's metrics
     // so latency/throughput on the record reflect the final probe
     // (not just the baseline). The most-load probe is the
     // representative datapoint for telemetry.
-    let elapsed = started.elapsed().max(Duration::from_millis(1));
+    let elapsed = wall_started.elapsed().max(Duration::from_millis(1));
     let snapshot = engine.snapshot()?;
     let checksum = engine.checksum()?;
     let mut process = process_metrics::collect_self();
@@ -1382,6 +1566,14 @@ fn run_connection_limit(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunR
         serde_json::json!(baseline_p99),
     );
     engine_stats.insert("last_probe_n".to_owned(), serde_json::json!(last_n));
+    engine_stats.insert(
+        "connection_limit_max".to_owned(),
+        serde_json::json!(connection_limit_max),
+    );
+    engine_stats.insert(
+        "wall_elapsed_ms".to_owned(),
+        serde_json::json!(elapsed.as_millis() as u64),
+    );
 
     Ok(RunRecord {
         run_id: crate::report::next_run_id(spec.engine, spec.workload),
@@ -1408,6 +1600,14 @@ fn run_connection_limit(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunR
         engine_stats: serde_json::Value::Object(engine_stats),
         process_metrics: Some(process),
     })
+}
+
+fn connection_limit_max() -> usize {
+    std::env::var(CONNECTION_LIMIT_MAX_ENV)
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 1)
+        .unwrap_or(DEFAULT_CONNECTION_LIMIT_MAX)
 }
 
 /// Pre-aggregated metrics shape used by the connection-limit probe.
@@ -1477,7 +1677,7 @@ fn run_connection_burst(
 /// then timeout, then busy) so the same error never lands in more than
 /// one bucket — Reviewer Finding #7 specifically called out that the
 /// previous implementation collapsed LOCKED into BUSY.
-fn classify_failure(err: &anyhow::Error) -> FailureKind {
+pub(crate) fn classify_failure(err: &anyhow::Error) -> FailureKind {
     let text = err.to_string().to_ascii_lowercase();
     if is_locked_error_str(&text) {
         FailureKind::Locked
@@ -1525,7 +1725,7 @@ fn is_timeout_error_str(text: &str) -> bool {
 /// Reports the spill-bytes / total-bytes ratio under
 /// `engine_stats.spill_bytes_ratio`.
 fn run_large_sort_spill(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
-    let started = Instant::now();
+    let wall_started = Instant::now();
     {
         let mut conn = engine.connect(0)?;
         conn.execute(
@@ -1554,6 +1754,7 @@ fn run_large_sort_spill(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunR
     }
 
     // Sort loop; capture how many rows we sorted (proxy for total bytes).
+    let measured_started = Instant::now();
     let mut total_rows: u64 = 0;
     let mut metrics = Metrics::new();
     let mut conn = engine.connect(0)?;
@@ -1569,11 +1770,12 @@ fn run_large_sort_spill(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunR
             Err(err) => metrics.record_failure(classify_failure(&err)),
         }
     }
+    let measured_elapsed = measured_started.elapsed();
 
     engine.checkpoint()?;
     let snapshot = engine.snapshot()?;
     let checksum = engine.checksum()?;
-    let elapsed = started.elapsed();
+    let wall_elapsed = wall_started.elapsed();
     let mut process = process_metrics::collect_self();
     if snapshot.fsyncs_issued.is_some() {
         process.fsync_count = snapshot.fsyncs_issued;
@@ -1618,20 +1820,17 @@ fn run_large_sort_spill(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunR
         seed: spec.seed,
         cache_bytes: spec.cache_bytes,
         environment: crate::report::collect_environment(),
-        metrics: MetricsSummary {
-            operations: metrics.operations(),
-            failures: metrics.failures(),
-            busy_errors: metrics.busy_errors() + metrics.locked_errors(),
-            locked_errors: metrics.locked_errors(),
-            timeout_errors: metrics.timeout_errors(),
-            elapsed_ms: elapsed.as_millis() as u64,
-            throughput_ops_per_sec: throughput(metrics.operations(), elapsed),
-            latency: metrics.latency(),
-        },
+        metrics: metrics_summary(&metrics, measured_elapsed),
         checksum,
         data_bytes: snapshot.data_bytes,
         wal_bytes: snapshot.wal_bytes,
-        engine_stats: serde_json::Value::Object(engine_stats),
+        engine_stats: serde_json::Value::Object({
+            engine_stats.insert(
+                "wall_elapsed_ms".to_owned(),
+                serde_json::json!(wall_elapsed.as_millis() as u64),
+            );
+            engine_stats
+        }),
         process_metrics: Some(process),
     })
 }
@@ -1642,6 +1841,22 @@ fn throughput(operations: u64, elapsed: Duration) -> f64 {
         operations as f64 / seconds
     } else {
         0.0
+    }
+}
+
+fn metrics_summary(metrics: &Metrics, elapsed: Duration) -> MetricsSummary {
+    MetricsSummary {
+        operations: metrics.operations(),
+        failures: metrics.failures(),
+        // Backward-compat: surfaces the original (busy + locked)
+        // count for one minor cycle while consumers migrate to the
+        // split fields below.
+        busy_errors: metrics.busy_errors() + metrics.locked_errors(),
+        locked_errors: metrics.locked_errors(),
+        timeout_errors: metrics.timeout_errors(),
+        elapsed_ms: elapsed.as_millis() as u64,
+        throughput_ops_per_sec: throughput(metrics.operations(), elapsed),
+        latency: metrics.latency(),
     }
 }
 
@@ -1717,5 +1932,16 @@ mod tests {
                 "{raw} classified into multiple buckets: busy={busy} locked={locked} timeout={timeout}"
             );
         }
+    }
+
+    #[test]
+    fn metrics_summary_uses_measured_elapsed() {
+        let mut metrics = Metrics::new();
+        metrics.record_success(Duration::from_millis(10));
+        metrics.record_success(Duration::from_millis(20));
+        let summary = metrics_summary(&metrics, Duration::from_secs(2));
+        assert_eq!(summary.elapsed_ms, 2_000);
+        assert_eq!(summary.operations, 2);
+        assert!((summary.throughput_ops_per_sec - 1.0).abs() < f64::EPSILON);
     }
 }

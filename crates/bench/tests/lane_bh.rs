@@ -15,7 +15,8 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use redlinedb_bench::certify::{
-    self, Job, RESERVED_CORES, available_cores, build_job_queue, dispatch_parallel_with_spawner,
+    self, Job, MAX_PARALLEL_THREADS_ENV, RESERVED_CORES, available_cores, build_job_queue,
+    dispatch_parallel_with_spawner,
 };
 use redlinedb_bench::config::{
     CertifyArgs, CompareConfig, DurabilityKind, EngineKind, RunSpec, WorkloadKind,
@@ -81,6 +82,20 @@ fn certify_scheduler_overlaps_low_thread_combos() {
     );
 }
 
+#[test]
+fn available_cores_honors_parallelism_cap_env() {
+    let prev = std::env::var_os(MAX_PARALLEL_THREADS_ENV);
+    unsafe { std::env::set_var(MAX_PARALLEL_THREADS_ENV, "2") };
+    assert!(
+        available_cores() <= 2,
+        "env cap should bound certify scheduler parallelism"
+    );
+    match prev {
+        Some(value) => unsafe { std::env::set_var(MAX_PARALLEL_THREADS_ENV, value) },
+        None => unsafe { std::env::remove_var(MAX_PARALLEL_THREADS_ENV) },
+    }
+}
+
 /// P0 #1 — warmup rounds are dispatched and discarded.
 ///
 /// We assert the manifest reports the configured counts directly;
@@ -130,6 +145,7 @@ fn certify_warmup_runs_are_discarded() {
     // Confirm the keyword the manifest documentation calls out.
     let _ = certify::CertificationManifest {
         out_dir: args.out_dir.clone(),
+        config_path: args.config.clone(),
         config_hash: String::new(),
         runs_jsonl_hash: String::new(),
         summary_csv_hash: String::new(),
@@ -335,6 +351,102 @@ fn connection_limit_workload_smoke() {
         max_stable >= 1,
         "binary search must converge on at least 1 connection (got {max_stable})"
     );
+    let ceiling = record
+        .engine_stats
+        .get("connection_limit_max")
+        .and_then(|v| v.as_u64())
+        .expect("connection_limit_max present");
+    assert!(
+        ceiling >= 128,
+        "connection limit benchmark should probe beyond the old 64 cap (got {ceiling})"
+    );
+}
+
+#[test]
+fn queue_mixed_workload_smoke() {
+    let spec = RunSpec {
+        engine: EngineKind::Redline,
+        workload: WorkloadKind::QueueMixed,
+        durability: DurabilityKind::Strict,
+        threads: 2,
+        rows: 32,
+        duration: Duration::from_millis(100),
+        cache_bytes: 1024 * 1024,
+        seed: 17,
+        base_dir: std::env::temp_dir().join("lane-bh-queue-mixed"),
+    };
+    let record = redlinedb_bench::workload::run_once(&spec).expect("queue mixed runs");
+    assert!(
+        record.metrics.operations > 0,
+        "queue workload should complete at least one operation"
+    );
+    assert_eq!(
+        record.metrics.failures, 0,
+        "queue workload should not report failures in smoke"
+    );
+    assert_eq!(
+        record
+            .engine_stats
+            .get("queue_seed_rows")
+            .and_then(|v| v.as_u64()),
+        Some(32)
+    );
+}
+
+#[test]
+fn chaos_suite_workloads_smoke() {
+    let workloads = [
+        WorkloadKind::ChaosLockConvoy,
+        WorkloadKind::ChaosConnectionChurn,
+        WorkloadKind::ChaosIndexHammer,
+    ];
+    for workload in workloads {
+        let spec = RunSpec {
+            engine: EngineKind::Redline,
+            workload,
+            durability: DurabilityKind::Strict,
+            threads: 2,
+            rows: 32,
+            duration: Duration::from_millis(50),
+            cache_bytes: 1024 * 1024,
+            seed: 23,
+            base_dir: std::env::temp_dir().join(format!("lane-bh-chaos-{workload:?}")),
+        };
+        let record = redlinedb_bench::workload::run_once(&spec).expect("chaos workload runs");
+        assert!(
+            record.metrics.operations > 0,
+            "chaos workload should complete at least one operation"
+        );
+        assert_eq!(
+            record
+                .engine_stats
+                .get("chaos_suite")
+                .and_then(|v| v.as_str()),
+            Some("dick-head-choas")
+        );
+        assert_eq!(
+            record
+                .engine_stats
+                .get("chaos_workload")
+                .and_then(|v| v.as_str()),
+            Some(match workload {
+                WorkloadKind::ChaosLockConvoy => "lock-convoy",
+                WorkloadKind::ChaosConnectionChurn => "connection-churn",
+                WorkloadKind::ChaosCheckpointThrash => "checkpoint-thrash",
+                WorkloadKind::ChaosIndexHammer => "index-hammer",
+                WorkloadKind::ChaosTempSpillConvoy => "temp-spill-convoy",
+                WorkloadKind::ChaosSchemaStorm => "schema-storm",
+                _ => unreachable!(),
+            })
+        );
+        assert_eq!(
+            record
+                .engine_stats
+                .get("test_code_path")
+                .and_then(|v| v.as_str()),
+            Some("crates/bench/src/chaos.rs")
+        );
+    }
 }
 
 /// P1 #7 — `data_bytes` walks the entire `.redline` directory.

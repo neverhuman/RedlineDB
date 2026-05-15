@@ -709,10 +709,11 @@ Cert-v3 local smoke (`phase10-v3-smoke`):
   crates/bench/bench/certification-phase10-v3-smoke.toml --out-dir
   target/bench/phase10-v3-smoke --seed 7 --repetitions 1 --warmup 0`
   — exit 0
-- `target/bench/phase10-v3-smoke/manifest.json` — `402a1101ee761fbb768482e70680da3e2ccd37c95ba3d0dd3e64dd656c6fff34`
-- `target/bench/phase10-v3-smoke/runs.jsonl` — `7d30c70d705e80197c216357c956ed0532e89b906f4a99092991c38e0b169499`
-- `target/bench/phase10-v3-smoke/summary.csv` — `1ff04f4fea04e794d96131b5c0b2b8c2fefea15c53d8dc10243a92609be37393`
-- `target/bench/phase10-v3-smoke/report.md` — `8a24881ec3a0c2a0e94fa4a9437079f54049a365cb14058d22a369541255e5df`
+- `target/bench/phase10-v3-smoke/manifest.json` — `5d3c9df0c524c29edd8b5d2a7af1957a6d03b7d7c9ff9304a3c37be8dd79ae1c`
+- `target/bench/phase10-v3-smoke/runs.jsonl` — `5379ccf7c4906fc6b2fc2e43c4b03bc7309a3b2bd37ffbe5a5ca315c7e043195`
+- `target/bench/phase10-v3-smoke/summary.csv` — `618165672e8dc2959c9dde6bfe07cffc0880437b8097bdf4d713ba35e5eea0b3`
+- `target/bench/phase10-v3-smoke/report.md` — `6efdd3fb51dfdf77cc700f268703a15613451c39c2f4f1fbe22ffbe2086a296b`
+- `target/bench/phase10-v3-smoke/report.json` — `3fca397adfe54be98368f16d7903ccbf5e16093b7db473a342456c1ec5af7d28`
 
 Test count: **694 passing, 2 ignored** (was 691 at the original
 phase10-fusion-green; +3 cert-v3 tests + the unignored collation test).
@@ -853,3 +854,11 @@ Artifacts:
 2. `target/bench/phase10-v3-smoke/runs.jsonl`
 3. `target/bench/phase10-v3-smoke/report.md`
 4. `paper/main.pdf` SHA-256: `d19666553419439b04903c2013cda0af1ef18466587dc8ce8f0a8bb9801aa717`
+
+Current workspace re-verification after the phase-11 bench additions:
+
+1. `cargo fmt --check` — green
+2. `./scripts/check_file_sizes.sh` — green (2 warnings, none over the 2000-LOC cap)
+3. `cargo check --workspace --locked` — green
+4. `cargo clippy --workspace --all-targets --locked -- -D warnings` — green
+5. `cargo test --workspace --quiet --locked` — `734 passed, 3 ignored` (64 suites, 121.79s)

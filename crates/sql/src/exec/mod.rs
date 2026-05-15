@@ -27,7 +27,7 @@ use crate::planner::{self, ExplainMetrics};
 use crate::session::SessionState;
 use crate::statement::{
     AnalyzePlan, ExecutionResult, ExplainPlan, PragmaPlan, PreparedKind, PreparedTemplate,
-    RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource, SelectSource,
+    RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource, SelectRuntimeTx, SelectSource,
 };
 use crate::value::{SqlValue, canonicalize, compare_values, is_truthy};
 
@@ -49,6 +49,7 @@ use select_top::*;
 
 thread_local! {
     static CURRENT_CONNECTION: Cell<*const Connection> = const { Cell::new(std::ptr::null()) };
+    static CURRENT_TX: Cell<*mut Txn> = const { Cell::new(std::ptr::null_mut()) };
 }
 
 pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> T) -> T {
@@ -69,6 +70,22 @@ pub(crate) fn current_connection() -> Option<&'static Connection> {
             // SAFETY: the pointer is installed only for the duration of statement execution.
             unsafe { ptr.as_ref() }
         }
+    })
+}
+
+pub(crate) fn with_current_tx<T>(tx: *mut Txn, f: impl FnOnce() -> T) -> T {
+    CURRENT_TX.with(|cell| {
+        let prev = cell.replace(tx);
+        let result = f();
+        cell.set(prev);
+        result
+    })
+}
+
+pub(crate) fn current_tx() -> Option<*mut Txn> {
+    CURRENT_TX.with(|cell| {
+        let ptr = cell.get();
+        if ptr.is_null() { None } else { Some(ptr) }
     })
 }
 
@@ -273,8 +290,9 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
 
 fn with_write_tx<T>(
     conn: &Connection,
-    f: impl FnOnce(&mut SessionState, &mut Txn) -> Result<T>,
+    mut f: impl FnMut(&mut SessionState, &mut Txn) -> Result<T>,
 ) -> Result<T> {
+    const AUTOCOMMIT_WRITE_RETRY_LIMIT: usize = 4096;
     conn.with_session(|session| {
         if session.failed {
             return Err(Error::TransactionState(
@@ -283,47 +301,86 @@ fn with_write_tx<T>(
         }
         if session.tx.is_some() {
             let mut tx = session.tx.take().expect("checked some");
-            let result = f(session, &mut tx);
+            let tx_ptr: *mut Txn = &mut tx;
+            let result = with_current_tx(tx_ptr, || {
+                // SAFETY: `tx_ptr` points at the `tx` local above for the
+                // duration of this closure, and no other mutable borrow is
+                // handed out while the closure runs.
+                let tx_ref = unsafe { &mut *tx_ptr };
+                f(session, tx_ref)
+            });
             session.tx = Some(tx);
             if result.is_err() {
                 session.failed = true;
             }
             result
         } else {
-            let mut tx = conn.engine().begin(Isolation::Snapshot)?;
-            let result = f(session, &mut tx);
-            match result {
-                Ok(value) => match conn.engine().commit(tx) {
-                    Ok(CommitOutcome::Committed(_)) => {
+            let mut attempts = 0_usize;
+            loop {
+                let mut tx = conn.engine().begin(Isolation::ReadCommitted)?;
+                let tx_ptr: *mut Txn = &mut tx;
+                let result = with_current_tx(tx_ptr, || {
+                    // SAFETY: same as the branch above; `tx` lives for the
+                    // full duration of the closure and only one mutable
+                    // reference is created at a time.
+                    let tx_ref = unsafe { &mut *tx_ptr };
+                    f(session, tx_ref)
+                });
+                match result {
+                    Ok(value) => match conn.engine().commit(tx) {
+                        Ok(CommitOutcome::Committed(_)) => {
+                            session.kernel_unique_guards.clear();
+                            session.unique_guards.clear();
+                            return Ok(value);
+                        }
+                        Ok(CommitOutcome::MaybeCommitted) => {
+                            session.kernel_unique_guards.clear();
+                            session.unique_guards.clear();
+                            return Err(Error::CommitMaybeCommitted);
+                        }
+                        Ok(CommitOutcome::RolledBack) => {
+                            session.kernel_unique_guards.clear();
+                            session.unique_guards.clear();
+                            return Err(Error::TransactionState("transaction rolled back"));
+                        }
+                        Err(err) => {
+                            session.kernel_unique_guards.clear();
+                            session.unique_guards.clear();
+                            return Err(err.into());
+                        }
+                    },
+                    Err(err)
+                        if is_retryable_autocommit_write_error(&err)
+                            && attempts < AUTOCOMMIT_WRITE_RETRY_LIMIT =>
+                    {
+                        attempts += 1;
+                        let _ = conn.engine().rollback(tx);
                         session.kernel_unique_guards.clear();
                         session.unique_guards.clear();
-                        Ok(value)
-                    }
-                    Ok(CommitOutcome::MaybeCommitted) => {
-                        session.kernel_unique_guards.clear();
-                        session.unique_guards.clear();
-                        Err(Error::CommitMaybeCommitted)
-                    }
-                    Ok(CommitOutcome::RolledBack) => {
-                        session.kernel_unique_guards.clear();
-                        session.unique_guards.clear();
-                        Err(Error::TransactionState("transaction rolled back"))
+                        std::thread::yield_now();
+                        continue;
                     }
                     Err(err) => {
+                        let _ = conn.engine().rollback(tx);
                         session.kernel_unique_guards.clear();
                         session.unique_guards.clear();
-                        Err(err.into())
+                        return Err(err);
                     }
-                },
-                Err(err) => {
-                    let _ = conn.engine().rollback(tx);
-                    session.kernel_unique_guards.clear();
-                    session.unique_guards.clear();
-                    Err(err)
                 }
             }
         }
     })
+}
+
+fn is_retryable_autocommit_write_error(err: &Error) -> bool {
+    matches!(
+        err,
+        Error::Kernel(
+            redlinedb_kernel::Error::SerializationFailure
+                | redlinedb_kernel::Error::WriteConflict
+                | redlinedb_kernel::Error::LockTimeout
+        )
+    )
 }
 
 pub(crate) fn finalize_runtime(conn: &Connection, runtime: &mut RuntimeState) -> Result<()> {
@@ -479,7 +536,7 @@ pub(crate) fn step_select_runtime(
 }
 
 fn finish_select_runtime(conn: &Connection, runtime: &mut SelectRuntime) -> Result<()> {
-    if let Some(tx) = runtime.tx.take() {
+    if let Some(tx) = runtime.tx.take_owned() {
         if runtime.restore_tx {
             conn.with_session(|session| {
                 if session.tx.is_some() {

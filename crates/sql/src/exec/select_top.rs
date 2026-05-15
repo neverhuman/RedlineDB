@@ -1,12 +1,15 @@
 use super::*;
 
-pub(super) fn begin_select_tx(conn: &Connection) -> Result<(Option<Txn>, bool)> {
+pub(super) fn begin_select_tx(conn: &Connection) -> Result<(SelectRuntimeTx, bool)> {
+    if let Some(tx_ptr) = current_tx() {
+        return Ok((SelectRuntimeTx::Borrowed(tx_ptr), false));
+    }
     conn.with_session(|session| {
         if let Some(tx) = session.tx.take() {
-            return Ok((Some(tx), true));
+            return Ok((SelectRuntimeTx::Owned(tx), true));
         }
         let tx = conn.engine().begin(Isolation::Snapshot)?;
-        Ok((Some(tx), false))
+        Ok((SelectRuntimeTx::Owned(tx), false))
     })
 }
 
@@ -16,9 +19,11 @@ pub(super) fn execute_select(
     bindings: &[Option<SqlValue>],
 ) -> Result<SelectRuntime> {
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
+    let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
     let mut memory = QueryMemoryBroker::new(
         conn.query_memory().work_mem_bytes,
         conn.query_memory().max_spill_bytes,
+        temp_dir.clone(),
     );
     let result = (|| -> Result<SelectRuntime> {
         let limit = match &plan.limit {
@@ -36,8 +41,8 @@ pub(super) fn execute_select(
         // of the pipeline (LIMIT/OFFSET) like any other StaticRows
         // source. Materializes early-return rows here; runtime
         // assembly happens at the end of `result` so the outer
-        // closure can `tx.take()` without surprising the borrow
-        // checker.
+        // closure can move the transaction out of the runtime without
+        // surprising the borrow checker.
         let mut fast_path_rows: Option<Vec<Vec<SqlValue>>> = None;
         if let SelectSource::Table(table) = &plan.source
             && plan.group_by.is_empty()
@@ -54,7 +59,7 @@ pub(super) fn execute_select(
             && let index_access::IndexProbe::Range { start, end } = &matched.probe
             && index_access::open_handle(conn.engine(), &matched.index).is_some()
         {
-            let tx_ref = tx.as_ref().expect("tx present");
+            let tx_ref = tx.as_mut().expect("tx present");
             let count = index_access::execute_index_count_range(
                 conn.engine(),
                 tx_ref,
@@ -86,7 +91,7 @@ pub(super) fn execute_select(
                 covering_projection_for_index(table, &matched.index, &plan.projection)
             && covering_order_satisfies(&matched.index, table, &plan.order_by)
         {
-            let tx_ref = tx.as_ref().expect("tx present");
+            let tx_ref = tx.as_mut().expect("tx present");
             let cover_limit = if plan.order_by.is_empty() {
                 None
             } else if limit < usize::MAX {
@@ -107,7 +112,7 @@ pub(super) fn execute_select(
         }
 
         if let Some(rows) = fast_path_rows {
-            let runtime_tx = tx.take();
+            let runtime_tx = std::mem::replace(&mut tx, SelectRuntimeTx::Empty);
             return Ok(SelectRuntime {
                 tx: runtime_tx,
                 restore_tx,
@@ -219,6 +224,7 @@ pub(super) fn execute_select(
                             ctx: ExecContext::new(
                                 conn.query_memory().work_mem_bytes,
                                 conn.query_memory().max_spill_bytes,
+                                temp_dir.clone(),
                             ),
                             batch: RowBatch::new(Arc::new(RowLayout {
                                 columns: Arc::from([]),
@@ -244,6 +250,7 @@ pub(super) fn execute_select(
                         ctx: ExecContext::new(
                             conn.query_memory().work_mem_bytes,
                             conn.query_memory().max_spill_bytes,
+                            temp_dir.clone(),
                         ),
                         batch: RowBatch::new(Arc::new(RowLayout {
                             columns: Arc::from([]),
@@ -272,6 +279,7 @@ pub(super) fn execute_select(
                         ctx: ExecContext::new(
                             conn.query_memory().work_mem_bytes,
                             conn.query_memory().max_spill_bytes,
+                            temp_dir.clone(),
                         ),
                         batch: RowBatch::new(Arc::new(RowLayout {
                             columns: Arc::from([]),
@@ -300,6 +308,7 @@ pub(super) fn execute_select(
                             ctx: ExecContext::new(
                                 conn.query_memory().work_mem_bytes,
                                 conn.query_memory().max_spill_bytes,
+                                temp_dir.clone(),
                             ),
                             batch: RowBatch::new(Arc::new(RowLayout {
                                 columns: Arc::from([]),
@@ -333,6 +342,7 @@ pub(super) fn execute_select(
                         ctx: ExecContext::new(
                             conn.query_memory().work_mem_bytes,
                             conn.query_memory().max_spill_bytes,
+                            temp_dir.clone(),
                         ),
                         batch: RowBatch::new(Arc::new(RowLayout {
                             columns: Arc::from([]),
@@ -357,6 +367,7 @@ pub(super) fn execute_select(
                 ctx: ExecContext::new(
                     conn.query_memory().work_mem_bytes,
                     conn.query_memory().max_spill_bytes,
+                    temp_dir.clone(),
                 ),
                 batch: RowBatch::new(Arc::new(RowLayout {
                     columns: Arc::from([]),
@@ -365,8 +376,7 @@ pub(super) fn execute_select(
             }
         };
 
-        let runtime_tx = tx.take();
-
+        let runtime_tx = std::mem::replace(&mut tx, SelectRuntimeTx::Empty);
         Ok(SelectRuntime {
             tx: runtime_tx,
             restore_tx,
@@ -384,7 +394,7 @@ pub(super) fn execute_select(
     match result {
         Ok(runtime) => Ok(runtime),
         Err(err) => {
-            if let Some(tx) = tx.take() {
+            if let Some(tx) = tx.take_owned() {
                 if restore_tx {
                     conn.with_session(|session| {
                         session.tx = Some(tx);
@@ -509,6 +519,7 @@ pub(super) fn order_and_project_rows(
         directions,
         work_mem,
         max_spill,
+        memory.spill_root().to_path_buf(),
         move |row: &[SqlValue]| -> Result<Vec<SqlValue>> {
             // Keys are stored as the first `order_len` cells in the SpillSort
             // input rows; downstream we strip them.
@@ -747,6 +758,35 @@ fn covering_order_satisfies(
         .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(&ident.value))
 }
 
+fn order_by_rowid_alias(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    order_by: &[OrderByExpr],
+) -> bool {
+    if order_by.len() != 1 {
+        return false;
+    }
+    let item = &order_by[0];
+    if matches!(item.options.asc, Some(false)) {
+        return false;
+    }
+    let rowid_col = |name: &str| {
+        name.eq_ignore_ascii_case("rowid")
+            || name.eq_ignore_ascii_case("_rowid_")
+            || name.eq_ignore_ascii_case("oid")
+            || table
+                .rowid_alias_column
+                .and_then(|alias| table.columns.get(alias as usize))
+                .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
+    };
+    match &item.expr {
+        Expr::Identifier(ident) => rowid_col(&ident.value),
+        Expr::CompoundIdentifier(parts) => {
+            parts.last().is_some_and(|ident| rowid_col(&ident.value))
+        }
+        _ => false,
+    }
+}
+
 /// Phase 11 W1-D: when the SELECT has `ORDER BY k LIMIT n` and `k`
 /// matches the leading column of the index implied by `selection`,
 /// return rowids in that order with the limit honored as a hard
@@ -769,6 +809,24 @@ fn try_ordered_index_limit_path(
     else {
         return Ok(None);
     };
+    if matched.index.keys.len() == 1
+        && order_by_rowid_alias(table, &plan.order_by)
+        && matches!(matched.probe, index_access::IndexProbe::Point { .. })
+    {
+        if index_access::open_handle(conn.engine(), &matched.index).is_none() {
+            return Ok(None);
+        }
+        let take = limit.saturating_add(offset);
+        let rowids = index_access::execute_index_probe_with_limit(
+            conn.engine(),
+            tx,
+            table,
+            &matched.index,
+            &matched.probe,
+            Some(take),
+        )?;
+        return Ok(Some(rowids));
+    }
     if !matches!(matched.probe, index_access::IndexProbe::Range { .. }) {
         return Ok(None);
     }

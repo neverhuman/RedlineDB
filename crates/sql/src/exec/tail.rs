@@ -46,6 +46,7 @@ pub(crate) fn execute_explain(
     plan: &ExplainPlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<SelectRuntime> {
+    let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
     let rows = if plan.analyze {
         let start = Instant::now();
         let mut result = execute_prepared(conn, &plan.inner, bindings)?;
@@ -86,13 +87,14 @@ pub(crate) fn execute_explain(
     };
 
     Ok(SelectRuntime {
-        tx: None,
+        tx: SelectRuntimeTx::Empty,
         restore_tx: false,
         source: SelectRuntimeSource::Batched {
             node: MaterializeNode::new(rows),
             ctx: ExecContext::new(
                 conn.query_memory().work_mem_bytes,
                 conn.query_memory().max_spill_bytes,
+                temp_dir.clone(),
             ),
             batch: RowBatch::new(Arc::new(RowLayout {
                 columns: Arc::from([]),
@@ -108,6 +110,7 @@ pub(crate) fn execute_explain(
         memory: QueryMemoryBroker::new(
             conn.query_memory().work_mem_bytes,
             conn.query_memory().max_spill_bytes,
+            temp_dir.clone(),
         ),
     })
 }
@@ -360,19 +363,31 @@ pub(crate) fn execute_update(
     bindings: &[Option<SqlValue>],
 ) -> Result<ExecutionResult> {
     with_write_tx(conn, |session, tx| {
-        let rows = dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?;
+        let target_rowids =
+            if let Some(rowid) = selection_rowid_eq(&plan.table, &plan.selection, bindings)? {
+                vec![rowid]
+            } else {
+                dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?
+                    .into_iter()
+                    .map(|row| row.rowid)
+                    .collect()
+            };
         let mut count = 0usize;
         let mut returning_rows = Vec::new();
-        for row in rows {
-            if !selection_passes(&plan.selection, &SqlRow::Table(row.clone()), bindings)? {
+        for rowid in target_rowids {
+            // Lock before reloading/evaluating assignments. Autocommit
+            // writes run at read-committed isolation, so expressions like
+            // `version = version + 1` must be based on the latest tuple
+            // after the hot-row handoff, not on the pre-lock probe row.
+            conn.engine()
+                .lock_row_for_relation(tx, plan.table.relation_id, rowid)?;
+            let Some(fresh) = load_table_row_by_rowid(conn.engine(), tx, &plan.table, rowid)?
+            else {
+                continue;
+            };
+            if !selection_passes(&plan.selection, &SqlRow::Table(fresh.clone()), bindings)? {
                 continue;
             }
-            // Reload the heap row before mutating so we trust the
-            // freshest committed/own-tx state when computing the index
-            // delta. The plan-time `row` might be stale if a sibling
-            // statement in the same tx already touched it.
-            let fresh = load_table_row_by_rowid(conn.engine(), tx, &plan.table, row.rowid)?
-                .unwrap_or_else(|| row.clone());
             let old_values = fresh.values.clone();
             let mut values = fresh.values.clone();
             for (ordinal, expr) in &plan.assignments {
@@ -561,7 +576,7 @@ trait ReturningRuntimeExt {
 impl ReturningRuntimeExt for Vec<Vec<SqlValue>> {
     fn into_returning_runtime(self) -> RuntimeState {
         RuntimeState::Select(SelectRuntime {
-            tx: None,
+            tx: SelectRuntimeTx::Empty,
             restore_tx: false,
             source: SelectRuntimeSource::StaticRows {
                 rows: Arc::from(self),
@@ -573,7 +588,7 @@ impl ReturningRuntimeExt for Vec<Vec<SqlValue>> {
             offset: 0,
             seen: 0,
             yielded: 0,
-            memory: QueryMemoryBroker::new(0, 0),
+            memory: QueryMemoryBroker::new(0, 0, None),
         })
     }
 }
@@ -868,6 +883,9 @@ fn apply_upsert_update(
     ctx: UpsertUpdateContext<'_>,
     update: &crate::statement::UpsertUpdatePlan,
 ) -> Result<InsertOutcome> {
+    ctx.conn
+        .engine()
+        .lock_row_for_relation(ctx.tx, ctx.table.relation_id, ctx.conflict.rowid)?;
     let existing =
         load_table_row_by_rowid(ctx.conn.engine(), ctx.tx, ctx.table, ctx.conflict.rowid)?
             .ok_or_else(|| {

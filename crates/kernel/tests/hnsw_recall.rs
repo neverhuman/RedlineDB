@@ -90,6 +90,7 @@ fn make_buffer(temp: &TempDir, capacity: usize) -> Arc<BufferPool> {
 }
 
 #[test]
+#[ignore = "10k-vector recall benchmark; run with --include-ignored"]
 fn recall_at_10_meets_paper_target() {
     // Standard params: M=16, ef_construction=200, ef_search=64.
     let temp = TempDir::new().unwrap();

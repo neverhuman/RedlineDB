@@ -33,6 +33,7 @@ use crate::value::SqlValue;
 use super::index_batch::{
     execute_index_count_range as batch_count_range,
     execute_index_covering_range as batch_covering_range,
+    execute_index_range_scan_ordered as batch_range_ordered,
     execute_index_range_scan_streaming as batch_range_streaming,
 };
 use super::tail::load_table_row_by_rowid;
@@ -314,10 +315,17 @@ pub(crate) fn execute_index_probe_with_limit(
     limit: Option<usize>,
 ) -> Result<Vec<RowId>> {
     match probe {
-        IndexProbe::Point { key } => execute_index_point_lookup(engine, tx, table, index, key),
-        IndexProbe::Range { start, end } => {
-            execute_index_range_scan_streaming(engine, tx, table, index, start, end, limit)
-        }
+        IndexProbe::Point { key } => match limit {
+            Some(n) => {
+                let end = next_key(key);
+                batch_range_ordered(engine, tx, table, index, key, &end, n)
+            }
+            None => execute_index_point_lookup(engine, tx, table, index, key),
+        },
+        IndexProbe::Range { start, end } => match limit {
+            Some(n) => batch_range_ordered(engine, tx, table, index, start, end, n),
+            None => execute_index_range_scan_streaming(engine, tx, table, index, start, end, limit),
+        },
     }
 }
 

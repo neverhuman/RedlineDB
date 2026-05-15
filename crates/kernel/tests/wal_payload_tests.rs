@@ -1,5 +1,6 @@
 use redlinedb_kernel::Error;
-use redlinedb_kernel::format::{Csn, RelId, RowId, TxId};
+use redlinedb_kernel::format::{Csn, PageGeneration, PageId, RelId, RowId, TxId};
+use redlinedb_kernel::index::IndexRowRef;
 use redlinedb_kernel::wal::WalPayload;
 
 #[test]
@@ -22,13 +23,39 @@ fn wal_payload_variants_round_trip() {
             rel_id: RelId(11),
             row_id: RowId(6),
         },
-        WalPayload::Commit {
+        WalPayload::IndexInsert {
             tx_id: TxId(7),
-            csn: Csn(8),
+            index_id: 12,
+            logical_key: b"index-key".to_vec(),
+            row: IndexRowRef::with_row_id(
+                RowId(8),
+                redlinedb_kernel::format::TuplePtr::new_with_generation(
+                    PageId(13),
+                    14,
+                    PageGeneration::ONE,
+                ),
+            ),
+        },
+        WalPayload::IndexDelete {
+            tx_id: TxId(9),
+            index_id: 12,
+            logical_key: b"index-key".to_vec(),
+            row: IndexRowRef::with_row_id(
+                RowId(8),
+                redlinedb_kernel::format::TuplePtr::new_with_generation(
+                    PageId(13),
+                    14,
+                    PageGeneration::ONE,
+                ),
+            ),
+        },
+        WalPayload::Commit {
+            tx_id: TxId(10),
+            csn: Csn(11),
         },
         WalPayload::CatalogSnapshot {
-            tx_id: TxId(9),
-            schema_epoch: 10,
+            tx_id: TxId(12),
+            schema_epoch: 13,
             snapshot: b"catalog-snapshot".to_vec(),
         },
     ];
@@ -59,6 +86,34 @@ fn wal_payload_rejects_truncated_payload() {
 fn wal_payload_rejects_unknown_tag() {
     let err = WalPayload::decode(&[99]).unwrap_err();
     assert_eq!(err, Error::CorruptWal("unknown wal payload tag"));
+}
+
+#[test]
+fn wal_payload_index_insert_and_delete_round_trip() {
+    let row = IndexRowRef::with_row_id(
+        RowId(42),
+        redlinedb_kernel::format::TuplePtr::new_with_generation(PageId(7), 3, PageGeneration::ONE),
+    );
+    let payloads = [
+        WalPayload::IndexInsert {
+            tx_id: TxId(1),
+            index_id: 99,
+            logical_key: b"tenant-1".to_vec(),
+            row,
+        },
+        WalPayload::IndexDelete {
+            tx_id: TxId(2),
+            index_id: 99,
+            logical_key: b"tenant-1".to_vec(),
+            row,
+        },
+    ];
+
+    for payload in payloads {
+        let encoded = payload.encode().unwrap();
+        let decoded = WalPayload::decode(&encoded).unwrap();
+        assert_eq!(decoded, payload);
+    }
 }
 
 #[test]

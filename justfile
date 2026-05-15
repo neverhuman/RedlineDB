@@ -44,7 +44,74 @@ phase9-xbabe1-gap-strace:
   ./scripts/bench/xbabe1_fetch.sh gap-cert-strace
 
 phase11-oltp-gap:
-  rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1
+
+phase11-ephemeral-db:
+  rtk cargo test -p redlinedb --test phase11_ephemeral --quiet --locked
+
+phase11-sql-contracts:
+  rtk cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked
+  rtk cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked
+  rtk cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked
+
+dick-head-choas:
+  just dick-head-choas-smoke
+  just dick-head-choas-xbabe1
+  just dick-head-choas-xbabe1-extreme
+
+dick-head-choas-smoke:
+  rtk cargo test -p redlinedb-bench --test lane_bh chaos_suite_workloads_smoke --locked
+  rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/dick-head-choas.toml --out-dir target/bench/dick-head-choas-smoke --seed 7 --repetitions 1 --warmup 0
+  python3 scripts/bench/export_benchmark_results.py
+
+dick-head-choas-xbabe1:
+  ./scripts/bench/dick_head_choas_xbabe1.sh bounded
+
+dick-head-choas-xbabe1-extreme:
+  ./scripts/bench/dick_head_choas_xbabe1.sh extreme
+
+connection-limit-256:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/connection-limit-256.toml --out-dir target/bench/xbabe1/connection-limit-256 --seed 7 --repetitions 3 --warmup 1
+
+connection-fixed-high:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/connection-fixed-high.toml --out-dir target/bench/xbabe1/connection-fixed-high --seed 7 --repetitions 3 --warmup 1
+
+queue-mixed-highload:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/queue-mixed-highload.toml --out-dir target/bench/xbabe1/queue-mixed-highload --seed 7 --repetitions 3 --warmup 1
+
+phase10-v3-smoke:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-smoke.toml --out-dir target/bench/phase10-v3-smoke --seed 7 --repetitions 1 --warmup 0
+
+phase10-v3-cert:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3.toml --out-dir target/bench/xbabe1/phase10-v3-cert --seed 7 --repetitions 5 --warmup 1
+
+phase10-v3-compare:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-compare.toml --out-dir target/bench/xbabe1/phase10-v3-compare --seed 7 --repetitions 5 --warmup 1
+
+phase10-v3-stress:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-stress.toml --out-dir target/bench/xbabe1/phase10-v3-stress --seed 7 --repetitions 5 --warmup 1
+
+benchmark-export-existing:
+  python3 scripts/bench/export_benchmark_results.py
+
+benchmark-xbabe1-all:
+  just phase9-smoke
+  just phase9-certification
+  just phase9-xbabe1-gap
+  just phase9-xbabe1-gap-strace
+  just phase9-xbabe1-certification
+  just phase9-xbabe1-certify-with-strace
+  just phase10-v3-smoke
+  just phase10-v3-cert
+  just phase10-v3-compare
+  just phase10-v3-stress
+  just phase11-oltp-gap
+  just dick-head-choas
+  just connection-limit-256
+  just connection-fixed-high
+  just queue-mixed-highload
+  just phase9-recovery-matrix
+  just phase9-failpoint-matrix
 
 # Wave 6 Lane B: strace-instrumented certification (Linux-only). Wraps
 # each per-engine bench child with `strace -c` so the manifest captures

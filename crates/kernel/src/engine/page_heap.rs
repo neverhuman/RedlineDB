@@ -137,8 +137,18 @@ impl PageBackedHeap {
         } else {
             rel_id
         };
+        let wal_payload = if lsn != Lsn::ZERO {
+            Some(WalPayload::HeapInsert {
+                tx_id,
+                rel_id,
+                row_id,
+                payload: payload.clone(),
+            })
+        } else {
+            None
+        };
         let tuple = TupleVersion::new(row_id, rel_id, tx_id, payload);
-        let ptr = self.append_tuple(tx_id, row_id, tuple, lsn)?;
+        let ptr = self.append_tuple(tx_id, row_id, tuple, lsn, wal_payload)?;
         self.set_head(row_id, ptr)?;
         self.set_relation_head(rel_id, row_id, ptr)
     }
@@ -171,7 +181,7 @@ impl PageBackedHeap {
     }
 
     pub fn update_recovered(&self, tx_id: TxId, row_id: RowId, payload: Vec<u8>) -> Result<()> {
-        let current = self.current_tuple(row_id)?;
+        let current = self.current_tuple_recovered(self.rel_id, row_id)?;
         // LSN sentinel: legit init. Recovery replay; no fresh WAL record.
         self.append_update_version(tx_id, self.rel_id, row_id, payload, current, Lsn::ZERO)
     }
@@ -183,7 +193,7 @@ impl PageBackedHeap {
         row_id: RowId,
         payload: Vec<u8>,
     ) -> Result<()> {
-        let current = self.current_tuple_for_relation(rel_id, row_id)?;
+        let current = self.current_tuple_recovered(rel_id, row_id)?;
         // LSN sentinel: legit init. Recovery replay; no fresh WAL record.
         self.append_update_version(tx_id, rel_id, row_id, payload, current, Lsn::ZERO)
     }
@@ -219,7 +229,7 @@ impl PageBackedHeap {
     }
 
     pub fn delete_recovered(&self, tx_id: TxId, row_id: RowId) -> Result<()> {
-        let current = self.current_tuple(row_id)?;
+        let current = self.current_tuple_recovered(self.rel_id, row_id)?;
         // LSN sentinel: legit init. Recovery replay; no fresh WAL record.
         self.append_delete_version(tx_id, self.rel_id, row_id, current, Lsn::ZERO)
     }
@@ -230,7 +240,7 @@ impl PageBackedHeap {
         rel_id: RelId,
         row_id: RowId,
     ) -> Result<()> {
-        let current = self.current_tuple_for_relation(rel_id, row_id)?;
+        let current = self.current_tuple_recovered(rel_id, row_id)?;
         // LSN sentinel: legit init. Recovery replay; no fresh WAL record.
         self.append_delete_version(tx_id, rel_id, row_id, current, Lsn::ZERO)
     }
@@ -336,7 +346,7 @@ impl PageBackedHeap {
                     return Ok(());
                 }
 
-                for slot in 0..page.slot_count()? {
+                for slot in (0..page.slot_count()?).rev() {
                     let tuple = TupleVersion::decode(page.cell(slot)?)?;
                     advance_atomic_past(&self.next_row, tuple.row_id.0);
                     let rel_id = if tuple.rel_id == RelId::ZERO {
@@ -345,11 +355,35 @@ impl PageBackedHeap {
                         tuple.rel_id
                     };
                     let ptr = TuplePtr::new_with_generation(page_id, slot, header.generation);
-                    self.set_head(tuple.row_id, ptr)?;
-                    self.set_relation_head(rel_id, tuple.row_id, ptr)?;
+                    if self.head(tuple.row_id)?.is_none() {
+                        self.set_head(tuple.row_id, ptr)?;
+                    }
+                    if self.head_for_relation(rel_id, tuple.row_id)?.is_none() {
+                        self.set_relation_head(rel_id, tuple.row_id, ptr)?;
+                    }
                 }
                 Ok(())
             })?;
+        }
+        Ok(())
+    }
+
+    pub fn invalidate_row_directory_for_pages(&self, pages: &[PageId]) -> Result<()> {
+        let pages: std::collections::HashSet<PageId> = pages.iter().copied().collect();
+        for shard in &self.row_dir {
+            let mut shard = shard
+                .write()
+                .map_err(|_| Error::CorruptPage("row directory shard poisoned"))?;
+            shard.retain(|_, ptr| !pages.contains(&ptr.page_id));
+        }
+        for shard in &self.relation_row_dir {
+            let mut shard = shard
+                .write()
+                .map_err(|_| Error::CorruptPage("relation row directory shard poisoned"))?;
+            shard.retain(|_, rows| {
+                rows.retain(|_, ptr| !pages.contains(&ptr.page_id));
+                !rows.is_empty()
+            });
         }
         Ok(())
     }
@@ -385,6 +419,16 @@ impl PageBackedHeap {
         } else {
             rel_id
         };
+        let wal_payload = if lsn != Lsn::ZERO {
+            Some(WalPayload::HeapUpdate {
+                tx_id,
+                rel_id,
+                row_id,
+                payload: payload.clone(),
+            })
+        } else {
+            None
+        };
         let mut before = current.clone();
         before.end_tx = tx_id;
         let undo_ptr = self.append_undo(
@@ -402,7 +446,7 @@ impl PageBackedHeap {
 
         let mut next = TupleVersion::new(row_id, rel_id, tx_id, payload);
         next.undo_head = undo_ptr;
-        let ptr = self.append_tuple(tx_id, row_id, next, lsn)?;
+        let ptr = self.append_tuple(tx_id, row_id, next, lsn, wal_payload)?;
         self.set_head(row_id, ptr)?;
         self.set_relation_head(rel_id, row_id, ptr)
     }
@@ -437,7 +481,17 @@ impl PageBackedHeap {
 
         let mut tombstone = TupleVersion::deleted(row_id, rel_id, tx_id);
         tombstone.undo_head = undo_ptr;
-        let ptr = self.append_tuple(tx_id, row_id, tombstone, lsn)?;
+        let ptr = self.append_tuple(
+            tx_id,
+            row_id,
+            tombstone,
+            lsn,
+            Some(WalPayload::HeapDelete {
+                tx_id,
+                rel_id,
+                row_id,
+            }),
+        )?;
         self.set_head(row_id, ptr)?;
         self.set_relation_head(rel_id, row_id, ptr)
     }
@@ -448,14 +502,21 @@ impl PageBackedHeap {
         row_id: RowId,
         tuple: TupleVersion,
         lsn: Lsn,
+        wal_payload: Option<WalPayload>,
     ) -> Result<TuplePtr> {
         let encoded = tuple.encode()?;
         let lane_idx = self.lane_for_row(row_id);
         let mut lane = self.append_lanes[lane_idx]
             .lock()
             .map_err(|_| Error::CorruptPage("heap append lane poisoned"))?;
-        let (page_id, slot, generation) =
-            self.append_cell(tx_id, &mut lane.heap_page, PageKind::Heap, &encoded, lsn)?;
+        let (page_id, slot, generation) = self.append_cell(
+            tx_id,
+            &mut lane.heap_page,
+            PageKind::Heap,
+            &encoded,
+            lsn,
+            wal_payload,
+        )?;
         Ok(TuplePtr::new_with_generation(page_id, slot, generation))
     }
 
@@ -471,8 +532,14 @@ impl PageBackedHeap {
         let mut lane = self.append_lanes[lane_idx]
             .lock()
             .map_err(|_| Error::CorruptPage("heap append lane poisoned"))?;
-        let (page_id, slot, _generation) =
-            self.append_cell(tx_id, &mut lane.undo_page, PageKind::Undo, &encoded, lsn)?;
+        let (page_id, slot, _generation) = self.append_cell(
+            tx_id,
+            &mut lane.undo_page,
+            PageKind::Undo,
+            &encoded,
+            lsn,
+            None,
+        )?;
         Ok(encode_undo_ptr(page_id, slot))
     }
 
@@ -483,6 +550,7 @@ impl PageBackedHeap {
         kind: PageKind,
         encoded: &[u8],
         lsn: Lsn,
+        wal_payload: Option<WalPayload>,
     ) -> Result<(PageId, u16, PageGeneration)> {
         let mut needs_reinit = false;
         loop {
@@ -518,31 +586,28 @@ impl PageBackedHeap {
                     Ok(slot) => {
                         if let Some(wal) = &self.wal {
                             // LSN sentinel: legit logic. Caller passes Lsn(1)
-                            // when this is a real, durable mutation; Lsn::ZERO
-                            // signals recovery replay where we must NOT append
-                            // a new WAL record.
+                            // when this is a real, durable mutation;
+                            // Lsn::ZERO signals recovery replay where we
+                            // must NOT append a new WAL record.
                             if lsn != Lsn::ZERO {
-                                // Lane E failpoint: armed at the moment a heap
-                                // mutation would emit a WAL PageImage record.
-                                // Crashing here yields a page that took the
-                                // mutation in memory but never reached the WAL.
-                                crate::fail_point!("heap::mutation");
-                                let snapshot = staged_page.clone();
-                                let generation = snapshot.header()?.generation;
-                                // LSN sentinel: legit init. The page-LSN field
-                                // of the WAL payload is rewritten to the real
-                                // end-LSN on line below after `wal.append`.
-                                let payload = WalPayload::PageImage {
-                                    page_id: snapshot.header()?.page_id,
-                                    page_lsn: Lsn::ZERO,
-                                    page_bytes: snapshot.as_bytes().to_vec(),
-                                };
-                                let append =
-                                    wal.append(WalRecordKind::PageImage, tx_id, payload.encode()?)?;
-                                let mut committed_page = snapshot;
-                                committed_page.set_page_lsn(append.end_lsn)?;
-                                *page = committed_page;
-                                Ok(Some((slot, generation)))
+                                if let Some(payload) = wal_payload.as_ref() {
+                                    // Lane E failpoint: armed at the moment a
+                                    // heap mutation would emit its logical WAL
+                                    // delta. Crashing here yields a page that
+                                    // took the mutation in memory but never
+                                    // reached the WAL.
+                                    crate::fail_point!("heap::mutation");
+                                    let append = wal.append(
+                                        WalRecordKind::PageDelta,
+                                        tx_id,
+                                        payload.encode()?,
+                                    )?;
+                                    staged_page.set_page_lsn(append.end_lsn)?;
+                                } else {
+                                    staged_page.set_page_lsn(lsn)?;
+                                }
+                                *page = staged_page;
+                                Ok(Some((slot, page_generation)))
                             } else {
                                 staged_page.set_page_lsn(lsn)?;
                                 *page = staged_page;
@@ -652,6 +717,7 @@ impl PageBackedHeap {
         }
     }
 
+    #[allow(dead_code)]
     fn current_tuple(&self, row_id: RowId) -> Result<TupleVersion> {
         self.current_tuple_for_relation(self.rel_id, row_id)
     }
@@ -668,6 +734,50 @@ impl PageBackedHeap {
                 "row id missing from relation row directory",
             ))?;
         self.read_tuple(ptr)
+    }
+
+    fn current_tuple_recovered(&self, rel_id: RelId, row_id: RowId) -> Result<TupleVersion> {
+        if let Some(ptr) = self.head_for_relation(rel_id, row_id)? {
+            return self.read_tuple(ptr);
+        }
+        let rel_id = if rel_id == RelId::ZERO {
+            self.rel_id
+        } else {
+            rel_id
+        };
+        let page_count = self.page_count()?;
+        for page_no in 1..=page_count {
+            let page_id = PageId(page_no);
+            let guard = match self.buffer.pin(page_id) {
+                Ok(guard) => guard,
+                Err(Error::InvalidMagic { actual: 0, .. }) => continue,
+                Err(err) => return Err(err),
+            };
+            let current = guard.with_page(|page| {
+                let header = page.header()?;
+                if header.kind != PageKind::Heap || header.rel_id != self.rel_id {
+                    return Ok(None);
+                }
+                for slot in 0..page.slot_count()? {
+                    let tuple = TupleVersion::decode(page.cell(slot)?)?;
+                    let tuple_rel_id = if tuple.rel_id == RelId::ZERO {
+                        self.rel_id
+                    } else {
+                        tuple.rel_id
+                    };
+                    if tuple.row_id == row_id && tuple_rel_id == rel_id {
+                        return Ok(Some(tuple));
+                    }
+                }
+                Ok(None)
+            })?;
+            if let Some(current) = current {
+                return Ok(current);
+            }
+        }
+        Err(Error::CorruptPage(
+            "row id missing from relation row directory",
+        ))
     }
 
     fn read_tuple(&self, ptr: TuplePtr) -> Result<TupleVersion> {

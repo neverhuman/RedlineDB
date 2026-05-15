@@ -314,6 +314,22 @@ pub enum WorkloadKind {
     /// distinct from `HotRowUpdate` which writes a general blob
     /// payload.
     HotCounterUpdate,
+    /// Queue-like mixed read/write workload: concurrent producers
+    /// append pending jobs, consumers claim the oldest pending job,
+    /// and pollers count pending work.
+    QueueMixed,
+    /// Chaos suite: lock convoy under hot-write pressure.
+    ChaosLockConvoy,
+    /// Chaos suite: open a fresh connection per operation.
+    ChaosConnectionChurn,
+    /// Chaos suite: checkpoint storms while readers and writers run.
+    ChaosCheckpointThrash,
+    /// Chaos suite: mixed inserts, deletes, and indexed scans.
+    ChaosIndexHammer,
+    /// Chaos suite: sort/spill convoys under concurrent writes.
+    ChaosTempSpillConvoy,
+    /// Chaos suite: extreme-only DDL / schema churn.
+    ChaosSchemaStorm,
 }
 
 impl WorkloadKind {
@@ -347,6 +363,13 @@ impl WorkloadKind {
             Self::CoveredRangeCold => "covered-range-cold",
             Self::CoveredRangeWarm => "covered-range-warm",
             Self::HotCounterUpdate => "hot-counter-update",
+            Self::QueueMixed => "queue-mixed",
+            Self::ChaosLockConvoy => "chaos-lock-convoy",
+            Self::ChaosConnectionChurn => "chaos-connection-churn",
+            Self::ChaosCheckpointThrash => "chaos-checkpoint-thrash",
+            Self::ChaosIndexHammer => "chaos-index-hammer",
+            Self::ChaosTempSpillConvoy => "chaos-temp-spill-convoy",
+            Self::ChaosSchemaStorm => "chaos-schema-storm",
         }
     }
 }
@@ -618,6 +641,13 @@ impl FromStr for WorkloadKind {
             "covered-range-cold" => Ok(Self::CoveredRangeCold),
             "covered-range-warm" => Ok(Self::CoveredRangeWarm),
             "hot-counter-update" => Ok(Self::HotCounterUpdate),
+            "queue-mixed" => Ok(Self::QueueMixed),
+            "chaos-lock-convoy" => Ok(Self::ChaosLockConvoy),
+            "chaos-connection-churn" => Ok(Self::ChaosConnectionChurn),
+            "chaos-checkpoint-thrash" => Ok(Self::ChaosCheckpointThrash),
+            "chaos-index-hammer" => Ok(Self::ChaosIndexHammer),
+            "chaos-temp-spill-convoy" => Ok(Self::ChaosTempSpillConvoy),
+            "chaos-schema-storm" => Ok(Self::ChaosSchemaStorm),
             _ => bail!("unknown workload {value}"),
         }
     }

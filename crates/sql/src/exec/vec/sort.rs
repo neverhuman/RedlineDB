@@ -8,6 +8,7 @@
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::path::PathBuf;
 
 use super::spill::{SpillFile, SpillReader};
 use super::topk::SortDirection;
@@ -72,6 +73,7 @@ where
     directions: std::sync::Arc<[SortDirection]>,
     work_mem_bytes: usize,
     max_spill_bytes: usize,
+    spill_root: PathBuf,
     key_fn: F,
     buffer: Vec<(Vec<SqlValue>, Vec<SqlValue>)>,
     buffer_bytes: usize,
@@ -88,12 +90,14 @@ where
         directions: Vec<SortDirection>,
         work_mem_bytes: usize,
         max_spill_bytes: usize,
+        spill_root: PathBuf,
         key_fn: F,
     ) -> Self {
         Self {
             directions: std::sync::Arc::from(directions.into_boxed_slice()),
             work_mem_bytes,
             max_spill_bytes,
+            spill_root,
             key_fn,
             buffer: Vec::new(),
             buffer_bytes: 0,
@@ -142,7 +146,7 @@ where
             return Ok(());
         }
         self.sort_buffer();
-        let file = SpillFile::create("sort-run")?;
+        let file = SpillFile::create_in(&self.spill_root, "sort-run")?;
         let mut writer = file.writer()?;
         for (_keys, row) in &self.buffer {
             writer.write_row(row)?;
@@ -220,6 +224,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     fn key_first(row: &[SqlValue]) -> Result<Vec<SqlValue>> {
         Ok(vec![row[0].clone()])
@@ -227,10 +232,12 @@ mod tests {
 
     #[test]
     fn in_memory_path_sorts_ascending() {
+        let root = tempdir().expect("tempdir");
         let mut sorter = SpillSort::new(
             vec![SortDirection::Asc],
             1024 * 1024,
             1024 * 1024,
+            root.path().to_path_buf(),
             key_first,
         );
         for v in [5, 1, 4, 3, 2] {
@@ -250,7 +257,14 @@ mod tests {
     #[test]
     fn spill_triggered_path_returns_correct_order() {
         // Tiny budget forces a spill on every row.
-        let mut sorter = SpillSort::new(vec![SortDirection::Asc], 8, 1024 * 1024, key_first);
+        let root = tempdir().expect("tempdir");
+        let mut sorter = SpillSort::new(
+            vec![SortDirection::Asc],
+            8,
+            1024 * 1024,
+            root.path().to_path_buf(),
+            key_first,
+        );
         let mut input: Vec<i64> = (0..50).rev().collect();
         // Shuffle deterministically.
         input.sort_by_key(|v| (v.wrapping_mul(2654435761)) as u32);
@@ -274,7 +288,14 @@ mod tests {
 
     #[test]
     fn merge_of_five_runs() {
-        let mut sorter = SpillSort::new(vec![SortDirection::Asc], 32, 1024 * 1024, key_first);
+        let root = tempdir().expect("tempdir");
+        let mut sorter = SpillSort::new(
+            vec![SortDirection::Asc],
+            32,
+            1024 * 1024,
+            root.path().to_path_buf(),
+            key_first,
+        );
         // Construct input s.t. ~5 distinct flush events occur.
         for v in (0..200).rev() {
             sorter.push(vec![SqlValue::Integer(v)]).expect("push");
@@ -294,10 +315,12 @@ mod tests {
 
     #[test]
     fn descending_path_still_sorts() {
+        let root = tempdir().expect("tempdir");
         let mut sorter = SpillSort::new(
             vec![SortDirection::Desc],
             1024 * 1024,
             1024 * 1024,
+            root.path().to_path_buf(),
             key_first,
         );
         for v in [5, 1, 4, 3, 2] {

@@ -72,6 +72,7 @@ pub struct DbOptions {
     pub optimizer: OptimizerConfig,
     pub query_memory: QueryMemoryConfig,
     pub stats: StatsConfig,
+    pub temp_dir: Option<PathBuf>,
 }
 
 impl Default for DbOptions {
@@ -83,6 +84,7 @@ impl Default for DbOptions {
             optimizer: OptimizerConfig::default(),
             query_memory: QueryMemoryConfig::default(),
             stats: StatsConfig::default(),
+            temp_dir: None,
         }
     }
 }
@@ -157,6 +159,7 @@ pub struct Database {
     stats: ArcSwap<StatsSnapshot>,
     stats_config: StatsConfig,
     query_memory: QueryMemoryConfig,
+    temp_dir: Option<PathBuf>,
     optimizer: OptimizerConfig,
     user_version: Mutex<i64>,
 }
@@ -188,6 +191,7 @@ impl Database {
             stats: ArcSwap::from(stats),
             stats_config: opts.stats,
             query_memory: opts.query_memory,
+            temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(load_user_version(base)?),
         }))
@@ -212,6 +216,7 @@ impl Database {
             stats: ArcSwap::from(stats),
             stats_config: opts.stats,
             query_memory: opts.query_memory,
+            temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
         }))
@@ -240,6 +245,7 @@ impl Database {
             stats: ArcSwap::from(stats),
             stats_config: opts.stats,
             query_memory: opts.query_memory,
+            temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
         }))
@@ -276,6 +282,10 @@ impl Database {
 
     pub(crate) fn query_memory(&self) -> &QueryMemoryConfig {
         &self.query_memory
+    }
+
+    pub(crate) fn temp_dir(&self) -> Option<&Path> {
+        self.temp_dir.as_deref()
     }
 
     pub(crate) fn optimizer_config(&self) -> &OptimizerConfig {
@@ -738,6 +748,10 @@ impl Connection {
 
     pub(crate) fn query_memory(&self) -> &QueryMemoryConfig {
         self.db.query_memory()
+    }
+
+    pub(crate) fn temp_dir(&self) -> Option<&Path> {
+        self.db.temp_dir()
     }
 
     pub(crate) fn optimizer_config(&self) -> &OptimizerConfig {

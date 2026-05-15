@@ -23,6 +23,22 @@ pub(super) enum Entry {
     },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct LeafEntry {
+    pub logical_key: Vec<u8>,
+    pub row: IndexRowRef,
+    pub create_tx: TxId,
+    pub delete_tx: TxId,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct LeafCellRef<'a> {
+    pub logical_key: &'a [u8],
+    pub row: IndexRowRef,
+    pub create_tx: TxId,
+    pub delete_tx: TxId,
+}
+
 impl Entry {
     pub(super) fn compare(&self, other: &Self) -> Ordering {
         match (self, other) {
@@ -134,6 +150,72 @@ impl LeafCell {
             delete_tx,
         })
     }
+
+    pub(super) fn decode_leaf_entry(bytes: &[u8]) -> Result<LeafEntry> {
+        if bytes.len() < 42 {
+            return Err(Error::BufferTooSmall {
+                needed: 42,
+                actual: bytes.len(),
+            });
+        }
+        let logical_len = read_u16(bytes, 0)? as usize;
+        let physical_len = read_u16(bytes, 2)? as usize;
+        let row = IndexRowRef {
+            row_id: crate::format::RowId(read_u64(bytes, 4)?),
+            tuple: TuplePtr::new_with_generation(
+                PageId(read_u64(bytes, 12)?),
+                read_u16(bytes, 20)?,
+                PageGeneration(read_u32(bytes, 22)?),
+            ),
+        };
+        let create_tx = TxId(read_u64(bytes, 26)?);
+        let delete_tx = TxId(read_u64(bytes, 34)?);
+        let logical_start = 42;
+        let physical_start = logical_start + logical_len;
+        let physical_end = physical_start + physical_len;
+        if physical_end > bytes.len() {
+            return Err(Error::CorruptPage("leaf cell overflow"));
+        }
+        Ok(LeafEntry {
+            logical_key: bytes[logical_start..physical_start].to_vec(),
+            row,
+            create_tx,
+            delete_tx,
+        })
+    }
+
+    pub(super) fn decode_ref<'a>(bytes: &'a [u8]) -> Result<LeafCellRef<'a>> {
+        if bytes.len() < 42 {
+            return Err(Error::BufferTooSmall {
+                needed: 42,
+                actual: bytes.len(),
+            });
+        }
+        let logical_len = read_u16(bytes, 0)? as usize;
+        let physical_len = read_u16(bytes, 2)? as usize;
+        let row = IndexRowRef {
+            row_id: crate::format::RowId(read_u64(bytes, 4)?),
+            tuple: TuplePtr::new_with_generation(
+                PageId(read_u64(bytes, 12)?),
+                read_u16(bytes, 20)?,
+                PageGeneration(read_u32(bytes, 22)?),
+            ),
+        };
+        let create_tx = TxId(read_u64(bytes, 26)?);
+        let delete_tx = TxId(read_u64(bytes, 34)?);
+        let logical_start = 42;
+        let physical_start = logical_start + logical_len;
+        let physical_end = physical_start + physical_len;
+        if physical_end > bytes.len() {
+            return Err(Error::CorruptPage("leaf cell overflow"));
+        }
+        Ok(LeafCellRef {
+            logical_key: &bytes[logical_start..physical_start],
+            row,
+            create_tx,
+            delete_tx,
+        })
+    }
 }
 
 impl InternalCell {
@@ -186,6 +268,24 @@ pub(super) fn entry_visible(
         return false;
     }
     if *delete_tx != TxId::ZERO && tx_status.is_tx_visible(*delete_tx, snapshot, owner) {
+        return false;
+    }
+    true
+}
+
+pub(super) fn leaf_entry_visible(
+    entry: &LeafEntry,
+    tx_status: &ConcurrentTxStatus,
+    snapshot: &Snapshot,
+    owner: Option<TxId>,
+) -> bool {
+    if entry.create_tx != TxId::ZERO && !tx_status.is_tx_visible(entry.create_tx, snapshot, owner) {
+        return false;
+    }
+    if entry.delete_tx == NON_TRANSACTIONAL_DELETE_TX {
+        return false;
+    }
+    if entry.delete_tx != TxId::ZERO && tx_status.is_tx_visible(entry.delete_tx, snapshot, owner) {
         return false;
     }
     true

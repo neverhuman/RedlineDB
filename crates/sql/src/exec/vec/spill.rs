@@ -7,7 +7,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -23,13 +23,13 @@ pub const SPILL_BLOCK_BYTES: usize = 64 * 1024;
 
 static SPILL_FILE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-fn fresh_spill_path(label: &str) -> PathBuf {
+pub(crate) fn spill_path(root: &Path, label: &str) -> PathBuf {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
     let seq = SPILL_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("redline-ve-{label}-{stamp}-{seq}.spill"))
+    root.join(format!("redline-ve-{label}-{stamp}-{seq}.spill"))
 }
 
 /// A single spill file, deleted on drop.
@@ -40,7 +40,14 @@ pub struct SpillFile {
 
 impl SpillFile {
     pub fn create(label: &str) -> Result<Self> {
-        let path = fresh_spill_path(label);
+        Self::create_in(std::env::temp_dir(), label)
+    }
+
+    pub fn create_in(root: impl AsRef<Path>, label: &str) -> Result<Self> {
+        let root = root.as_ref();
+        fs::create_dir_all(root)
+            .map_err(|err| Error::ConstraintViolation(format!("spill root create: {err}")))?;
+        let path = spill_path(root, label);
         // Touch the file so subsequent opens never race.
         OpenOptions::new()
             .create(true)
@@ -161,10 +168,12 @@ fn owned(value: ValueRef<'_>) -> SqlValue {
 mod tests {
     use super::*;
     use std::sync::Arc;
+    use tempfile::tempdir;
 
     #[test]
     fn round_trip_single_row() {
-        let file = SpillFile::create("test-rt").expect("create");
+        let root = tempdir().expect("tempdir");
+        let file = SpillFile::create_in(root.path(), "test-rt").expect("create");
         let mut writer = file.writer().expect("writer");
         writer
             .write_row(&[SqlValue::Integer(42), SqlValue::Text(Arc::from("hello"))])
@@ -181,7 +190,8 @@ mod tests {
 
     #[test]
     fn round_trip_many_rows() {
-        let file = SpillFile::create("test-many").expect("create");
+        let root = tempdir().expect("tempdir");
+        let file = SpillFile::create_in(root.path(), "test-many").expect("create");
         let mut writer = file.writer().expect("writer");
         for i in 0..5_000 {
             writer
@@ -200,7 +210,8 @@ mod tests {
     #[test]
     fn spill_file_is_removed_on_drop() {
         let path = {
-            let file = SpillFile::create("test-drop").expect("create");
+            let root = tempdir().expect("tempdir");
+            let file = SpillFile::create_in(root.path(), "test-drop").expect("create");
             file.path().clone()
         };
         assert!(!path.exists(), "spill file should be removed on drop");

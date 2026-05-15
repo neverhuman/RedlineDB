@@ -212,26 +212,30 @@ pub fn phase11_oltp_gap_gate(records: &[RunRecord]) -> GateSummary {
     ];
     let mut gates = Vec::with_capacity(floors.len());
     for (workload, threads, floor) in floors {
-        let outcome = compare_ratio(records, threads, floor, workload);
+        let outcome = median_ratio(records, threads, workload);
+        let passed = match &outcome {
+            Some(ratio) => ratio.ratio >= floor,
+            None => true,
+        };
         gates.push(GateResult {
             name: format!(
                 "phase11_oltp_gap::{}::t{}",
                 workload.as_str().replace('-', "_"),
                 threads
             ),
-            passed: outcome.unwrap_or(true),
+            passed,
             detail: match outcome {
-                Some(true) => format!(
-                    "{} ratio at {} threads >= {:.2} (wave-1a floor)",
+                Some(ratio) => format!(
+                    "{} ratio {:.6} at {} threads {} floor {:.2} (redline_median_qps={:.6}, sqlite_median_qps={:.6}, redline_samples={}, sqlite_samples={})",
                     workload.as_str(),
+                    ratio.ratio,
                     threads,
-                    floor
-                ),
-                Some(false) => format!(
-                    "{} ratio at {} threads below floor {:.2}",
-                    workload.as_str(),
-                    threads,
-                    floor
+                    if passed { ">=" } else { "below" },
+                    floor,
+                    ratio.redline_median_qps,
+                    ratio.sqlite_median_qps,
+                    ratio.redline_samples,
+                    ratio.sqlite_samples
                 ),
                 None => format!(
                     "skipped: {} sqlite/redline rows at {} threads absent",
@@ -250,6 +254,76 @@ pub fn phase11_oltp_gap_gate(records: &[RunRecord]) -> GateSummary {
 /// definition.
 pub fn evaluate_phase11_oltp_gap(records: &[RunRecord]) -> GateSummary {
     phase11_oltp_gap_gate(records)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MedianRatio {
+    redline_median_qps: f64,
+    sqlite_median_qps: f64,
+    ratio: f64,
+    redline_samples: usize,
+    sqlite_samples: usize,
+}
+
+fn median_ratio(
+    records: &[RunRecord],
+    threads: usize,
+    workload: WorkloadKind,
+) -> Option<MedianRatio> {
+    let redline_values = throughput_values(records, EngineKind::Redline, threads, workload);
+    let sqlite_values = throughput_values(records, EngineKind::Sqlite, threads, workload);
+    let redline_samples = redline_values.len();
+    let sqlite_samples = sqlite_values.len();
+    let redline_median_qps = median_f64(redline_values)?;
+    let sqlite_median_qps = median_f64(sqlite_values)?;
+    if sqlite_median_qps <= 0.0 {
+        return Some(MedianRatio {
+            redline_median_qps,
+            sqlite_median_qps,
+            ratio: 0.0,
+            redline_samples,
+            sqlite_samples,
+        });
+    }
+    Some(MedianRatio {
+        redline_median_qps,
+        sqlite_median_qps,
+        ratio: redline_median_qps / sqlite_median_qps,
+        redline_samples,
+        sqlite_samples,
+    })
+}
+
+fn throughput_values(
+    records: &[RunRecord],
+    engine: EngineKind,
+    threads: usize,
+    workload: WorkloadKind,
+) -> Vec<f64> {
+    records
+        .iter()
+        .filter(|record| {
+            record.engine == engine
+                && record.threads == threads
+                && record.durability == DurabilityKind::Strict
+                && record.workload == workload
+        })
+        .map(|record| record.metrics.throughput_ops_per_sec)
+        .filter(|value| value.is_finite())
+        .collect()
+}
+
+fn median_f64(mut values: Vec<f64>) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(|left, right| left.total_cmp(right));
+    Some(if values.len() % 2 == 1 {
+        values[values.len() / 2]
+    } else {
+        let upper = values.len() / 2;
+        (values[upper - 1] + values[upper]) / 2.0
+    })
 }
 
 fn compare_ratio(
@@ -292,12 +366,21 @@ mod tests {
     use crate::report::{LatencySummary, MetricsSummary, RunRecord};
 
     fn record(engine: EngineKind, throughput: f64) -> RunRecord {
+        record_for(engine, WorkloadKind::PointReadPk, 1, throughput)
+    }
+
+    fn record_for(
+        engine: EngineKind,
+        workload: WorkloadKind,
+        threads: usize,
+        throughput: f64,
+    ) -> RunRecord {
         RunRecord {
             run_id: "run".to_owned(),
             engine,
-            workload: WorkloadKind::PointReadPk,
+            workload,
             durability: DurabilityKind::Strict,
-            threads: 1,
+            threads,
             seed: 7,
             cache_bytes: 1024,
             environment: crate::report::RunEnvironment {
@@ -341,5 +424,32 @@ mod tests {
             record(EngineKind::Redline, 95.0),
         ];
         assert!(gate_single_thread_parity(&records).passed);
+    }
+
+    #[test]
+    fn phase11_gate_uses_median_ratio_not_first_repetition() {
+        let workload = WorkloadKind::CoveredRangeCold;
+        let records = vec![
+            record_for(EngineKind::Sqlite, workload, 1, 100.0),
+            record_for(EngineKind::Redline, workload, 1, 1.0),
+            record_for(EngineKind::Sqlite, workload, 1, 100.0),
+            record_for(EngineKind::Redline, workload, 1, 41.0),
+            record_for(EngineKind::Sqlite, workload, 1, 100.0),
+            record_for(EngineKind::Redline, workload, 1, 50.0),
+        ];
+
+        let summary = evaluate_phase11_oltp_gap(&records);
+        let gate = summary
+            .gates
+            .iter()
+            .find(|gate| gate.name == "phase11_oltp_gap::covered_range_cold::t1")
+            .expect("covered range cold gate");
+
+        assert!(gate.passed, "{}", gate.detail);
+        assert!(gate.detail.contains("ratio 0.410000"), "{}", gate.detail);
+        assert!(gate.detail.contains("redline_median_qps=41.000000"));
+        assert!(gate.detail.contains("sqlite_median_qps=100.000000"));
+        assert!(gate.detail.contains("redline_samples=3"));
+        assert!(gate.detail.contains("sqlite_samples=3"));
     }
 }

@@ -371,11 +371,9 @@ impl Engine {
             // replays the entire WAL starting from the very beginning.
             Lsn::ZERO
         };
+        recover_index_page_images(&scan_report.records, replay_from_lsn, target, &buffer)?;
         let metrics = recover_heap(&scan_report.records, replay_from_lsn, target, &txs, &heap)?;
         let recovered_catalog = recover_catalog_snapshot(&scan_report.records, target)?;
-        let page_count = heap.page_count()?;
-        heap.load_row_directory_from_pages(page_count)?;
-        heap.load_reusable_pages_from_pages(page_count)?;
         let catalog = CatalogManager::new(recovered_catalog.unwrap_or(initial_catalog));
         let phase11_counters = Arc::new(Phase11Counters::default());
         let locks = RowLockManager::new(config.lock_shards, config.busy_timeout);
@@ -401,6 +399,12 @@ impl Engine {
             index_handles: Mutex::new(HashMap::new()),
         });
         engine.rehydrate_index_handles()?;
+        recover_indexes(&scan_report.records, replay_from_lsn, target, &engine)?;
+        if checkpoint.is_some() {
+            let page_count = engine.heap.page_count()?;
+            engine.heap.load_row_directory_from_pages(page_count)?;
+            engine.heap.load_reusable_pages_from_pages(page_count)?;
+        }
         Ok((
             engine,
             RecoveryReport::from_scan(scan_report, metrics, replay_from_lsn),
@@ -517,6 +521,14 @@ impl Engine {
         )
     }
 
+    pub fn lock_row_for_relation(&self, tx: &mut Txn, rel_id: RelId, row_id: RowId) -> Result<()> {
+        tx.ensure_open()?;
+        self.refresh_read_committed(tx);
+        self.lock_row_in_rel(tx, rel_id, row_id)?;
+        self.refresh_read_committed(tx);
+        Ok(())
+    }
+
     pub fn delete(&self, tx: &mut Txn, row_id: RowId) -> Result<()> {
         tx.ensure_open()?;
         self.refresh_read_committed(tx);
@@ -564,6 +576,28 @@ impl Engine {
                 return Err(err);
             }
         };
+
+        if self.config.commit_durability == CommitDurability::Strict
+            && pending_schema.is_none()
+            && tx.pending_index_handles().is_empty()
+        {
+            self.txs.publish_commit(tx.id(), csn);
+            self.release_locks(&mut tx);
+            tx.close();
+            if let Err(err) = self.wal.flush_until(append.end_lsn) {
+                panic!("strict WAL flush failed after commit publish: {err}");
+            }
+            crate::fail_point!("engine::commit::before_publish", |arg: Option<String>| {
+                if !commit_failure_armed_for_thread() {
+                    let _ = arg;
+                    return Ok(CommitOutcome::Committed(csn));
+                }
+                let _detail = arg
+                    .unwrap_or_else(|| "engine::commit::before_publish injected fault".to_string());
+                Ok(CommitOutcome::MaybeCommitted)
+            });
+            return Ok(CommitOutcome::Committed(csn));
+        }
 
         let commit_barrier = match self.config.commit_durability {
             CommitDurability::Strict => self.wal.flush_until(append.end_lsn),
@@ -1309,8 +1343,10 @@ fn recover_heap(
                 page_bytes,
             } if committed.contains_key(&record.tx_id) => {
                 let page = Page::from_bytes(page_bytes)?;
-                heap.redo_page_image(page, record_end_lsn(record))?;
-                metrics.page_images_redone += 1;
+                if page.header()?.kind == crate::format::PageKind::Heap {
+                    heap.redo_page_image(page, record_end_lsn(record))?;
+                    metrics.page_images_redone += 1;
+                }
             }
             WalPayload::PageImage { .. } => {}
             WalPayload::HeapInsert {
@@ -1342,6 +1378,7 @@ fn recover_heap(
             WalPayload::HeapInsert { .. }
             | WalPayload::HeapUpdate { .. }
             | WalPayload::HeapDelete { .. } => {}
+            WalPayload::IndexInsert { .. } | WalPayload::IndexDelete { .. } => {}
             WalPayload::SegmentSeal { .. }
             | WalPayload::BackupBegin { .. }
             | WalPayload::BackupEnd { .. }
@@ -1353,6 +1390,60 @@ fn recover_heap(
     }
 
     Ok(metrics)
+}
+
+fn recover_index_page_images(
+    records: &[WalRecord],
+    replay_from_lsn: Lsn,
+    target: RecoveryTarget,
+    buffer: &Arc<BufferPool>,
+) -> Result<()> {
+    let mut committed = std::collections::HashSet::new();
+    for record in records {
+        if record.kind == WalRecordKind::Commit
+            && let WalPayload::Commit { tx_id, csn } = WalPayload::decode(&record.payload)?
+            && commit_visible(record.lsn, csn, target)
+        {
+            committed.insert(tx_id);
+        }
+    }
+
+    for record in records {
+        if record.lsn < replay_from_lsn {
+            continue;
+        }
+        if matches!(target, RecoveryTarget::Lsn(limit) if record.lsn >= limit) {
+            continue;
+        }
+        if record.kind == WalRecordKind::Commit || !committed.contains(&record.tx_id) {
+            continue;
+        }
+        if let WalPayload::PageImage {
+            page_id: _,
+            page_lsn: _,
+            page_bytes,
+        } = WalPayload::decode(&record.payload)?
+        {
+            let page = Page::from_bytes(page_bytes)?;
+            match page.header()?.kind {
+                crate::format::PageKind::BtreeMeta
+                | crate::format::PageKind::BtreeLeaf
+                | crate::format::PageKind::BtreeInternal => {
+                    buffer.write_page_direct(&page)?;
+                    if let Ok(guard) = buffer.pin(page.header()?.page_id) {
+                        guard.with_page_mut(|resident| {
+                            *resident = page.clone();
+                            Ok(())
+                        })?;
+                        guard.mark_dirty(page.header()?.page_lsn)?;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn recover_catalog_snapshot(
@@ -1390,6 +1481,99 @@ fn recover_catalog_snapshot(
     }
 
     Ok(latest.map(|(_, snapshot)| snapshot))
+}
+
+fn recover_indexes(
+    records: &[WalRecord],
+    replay_from_lsn: Lsn,
+    target: RecoveryTarget,
+    engine: &Arc<Engine>,
+) -> Result<()> {
+    let mut committed = std::collections::HashSet::new();
+    for record in records {
+        if record.kind == WalRecordKind::Commit
+            && let WalPayload::Commit { tx_id, csn } = WalPayload::decode(&record.payload)?
+            && commit_visible(record.lsn, csn, target)
+        {
+            committed.insert(tx_id);
+        }
+    }
+
+    for record in records {
+        if record.lsn < replay_from_lsn {
+            continue;
+        }
+        if matches!(target, RecoveryTarget::Lsn(limit) if record.lsn >= limit) {
+            continue;
+        }
+        if record.kind == WalRecordKind::Commit {
+            continue;
+        }
+        match WalPayload::decode(&record.payload)? {
+            WalPayload::PageImage {
+                page_id: _,
+                page_lsn: _,
+                page_bytes,
+            } if committed.contains(&record.tx_id) => {
+                let page = Page::from_bytes(page_bytes)?;
+                match page.header()?.kind {
+                    crate::format::PageKind::BtreeMeta
+                    | crate::format::PageKind::BtreeLeaf
+                    | crate::format::PageKind::BtreeInternal => {
+                        engine.heap.redo_page_image(page, record_end_lsn(record))?;
+                    }
+                    _ => {}
+                }
+            }
+            WalPayload::PageImage { .. } => {}
+            WalPayload::IndexInsert {
+                tx_id,
+                index_id,
+                logical_key,
+                row,
+            } if record.kind == WalRecordKind::PageDelta && committed.contains(&tx_id) => {
+                let handles = engine
+                    .index_handles
+                    .lock()
+                    .map_err(|_| Error::CorruptPage("engine index handles mutex poisoned"))?;
+                if let Some(handle) = handles.get(&CatalogIndexId(index_id)) {
+                    handle.insert_recovered_tx(tx_id, &logical_key, row, record_end_lsn(record))?;
+                }
+            }
+            WalPayload::IndexDelete {
+                tx_id,
+                index_id,
+                logical_key,
+                row,
+            } if record.kind == WalRecordKind::PageDelta && committed.contains(&tx_id) => {
+                let handles = engine
+                    .index_handles
+                    .lock()
+                    .map_err(|_| Error::CorruptPage("engine index handles mutex poisoned"))?;
+                if let Some(handle) = handles.get(&CatalogIndexId(index_id)) {
+                    handle.delete_mark_recovered_tx(
+                        tx_id,
+                        &logical_key,
+                        row,
+                        record_end_lsn(record),
+                    )?;
+                }
+            }
+            WalPayload::HeapInsert { .. }
+            | WalPayload::HeapUpdate { .. }
+            | WalPayload::HeapDelete { .. }
+            | WalPayload::IndexInsert { .. }
+            | WalPayload::IndexDelete { .. }
+            | WalPayload::Commit { .. }
+            | WalPayload::SegmentSeal { .. }
+            | WalPayload::BackupBegin { .. }
+            | WalPayload::BackupEnd { .. }
+            | WalPayload::TimelineFork { .. }
+            | WalPayload::LogicalTxn { .. }
+            | WalPayload::CatalogSnapshot { .. } => {}
+        }
+    }
+    Ok(())
 }
 
 fn commit_visible(record_lsn: Lsn, csn: Csn, target: RecoveryTarget) -> bool {

@@ -11,7 +11,9 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 use redlinedb_kernel::catalog::{IndexDef, SortDir, TableDef};
 use redlinedb_kernel::engine::{Engine, Txn};
 use redlinedb_kernel::format::RowId;
-use redlinedb_kernel::index::{CursorYield, IndexCursor, IndexRowRef, KeyRange, SnapshotView};
+use redlinedb_kernel::index::{
+    CursorYield, IndexCursor, IndexRowRef, KeyRange, RawIndexCursor, SnapshotView,
+};
 
 use crate::error::Result;
 use crate::value::SqlValue;
@@ -87,6 +89,62 @@ pub(super) fn execute_index_range_scan_streaming(
     Ok(out)
 }
 
+/// Phase 11 W1-D: ordered cursor consumption for ORDER BY/LIMIT
+/// shortcuts. Unlike the general streaming path, this keeps the
+/// cursor's physical index order and never groups by heap page.
+pub(super) fn execute_index_range_scan_ordered(
+    engine: &Engine,
+    tx: &mut Txn,
+    _table: &Arc<TableDef>,
+    index: &IndexDef,
+    start: &[u8],
+    end: &[u8],
+    limit: usize,
+) -> Result<Vec<RowId>> {
+    let Some(handle) = open_handle(engine, index) else {
+        return Ok(Vec::new());
+    };
+    let counters = engine.phase11_counters();
+    counters
+        .ordered_limit_path_hits
+        .fetch_add(1, AtomicOrdering::Relaxed);
+    let tx_status = engine.tx_status();
+    let owner = Some(tx.id());
+    let snapshot = tx.snapshot().clone();
+    let range = KeyRange::half_open(start, end);
+    let mut out: Vec<RowId> = Vec::with_capacity(limit.min(MAX_BATCH));
+    let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
+    {
+        let view = SnapshotView::visible(tx_status, &snapshot, owner);
+        let mut cursor =
+            RawIndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
+        loop {
+            let remaining = limit.saturating_sub(out.len());
+            if remaining == 0 {
+                break;
+            }
+            batch.clear();
+            let batch_cap = remaining.clamp(1, MAX_BATCH);
+            match cursor.next_rowid_batch(&mut batch, batch_cap)? {
+                CursorYield::End => break,
+                CursorYield::Batch(_) => {
+                    for entry in &batch {
+                        if out.len() >= limit {
+                            break;
+                        }
+                        out.push(entry.row_id);
+                    }
+                }
+            }
+        }
+        cursor.close();
+    }
+    counters
+        .ordered_limit_rows_returned
+        .fetch_add(out.len() as u64, AtomicOrdering::Relaxed);
+    Ok(out)
+}
+
 /// Heap recheck for a batch of `IndexRowRef`s. Rows are grouped by
 /// heap `page_id` so consecutive heap touches on the same page stay
 /// adjacent — the buffer pool's per-page warm-cache wins this way
@@ -146,18 +204,8 @@ pub(super) fn execute_index_count_range(
     let snapshot = tx.snapshot().clone();
     let view = SnapshotView::visible(engine.tx_status(), &snapshot, Some(tx.id()));
     let range = KeyRange::half_open(start, end);
-    let mut cursor = IndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
-    let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
-    let mut count: i64 = 0;
-    loop {
-        batch.clear();
-        match cursor.next_batch(&mut batch, MAX_BATCH)? {
-            CursorYield::End => break,
-            CursorYield::Batch(n) => {
-                count = count.saturating_add(n as i64);
-            }
-        }
-    }
+    let mut cursor = RawIndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
+    let count = cursor.count_remaining()? as i64;
     cursor.close();
     Ok(count)
 }
@@ -181,18 +229,21 @@ pub(super) fn execute_index_covering_range(
     let snapshot = tx.snapshot().clone();
     let view = SnapshotView::visible(engine.tx_status(), &snapshot, Some(tx.id()));
     let range = KeyRange::half_open(start, end);
-    let mut cursor = IndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
+    let mut cursor = RawIndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
     let mut batch: Vec<(Vec<u8>, IndexRowRef)> = Vec::with_capacity(MAX_BATCH);
     let mut out: Vec<Vec<SqlValue>> = Vec::new();
     let dirs: Vec<SortDir> = index.keys.iter().map(|k| k.sort_dir).collect();
     'outer: loop {
-        if let Some(n) = limit
-            && out.len() >= n
-        {
+        let remaining = match limit {
+            Some(n) => n.saturating_sub(out.len()),
+            None => usize::MAX,
+        };
+        if remaining == 0 {
             break;
         }
         batch.clear();
-        match cursor.next_batch_with_keys(&mut batch, MAX_BATCH)? {
+        let batch_cap = remaining.clamp(1, MAX_BATCH);
+        match cursor.next_batch_with_keys(&mut batch, batch_cap)? {
             CursorYield::End => break,
             CursorYield::Batch(_) => {
                 for (key_bytes, entry) in batch.drain(..) {
@@ -230,22 +281,14 @@ fn decode_covering_row(
     out_columns: &[OutputColumnSource],
 ) -> Vec<SqlValue> {
     let mut row = Vec::with_capacity(out_columns.len());
-    let needs_index_decode = out_columns
-        .iter()
-        .any(|col| matches!(col, OutputColumnSource::IndexColumn { .. }));
-    let key_parts: Option<Vec<SqlValue>> = if needs_index_decode {
-        Some(decode_index_key_parts(key_bytes, dirs))
-    } else {
-        None
-    };
     for col in out_columns {
         match col {
             OutputColumnSource::Rowid => {
                 row.push(SqlValue::Integer(entry.row_id.0 as i64));
             }
             OutputColumnSource::IndexColumn { ordinal } => {
-                let parts = key_parts.as_ref().expect("decoded above");
-                let value = parts.get(*ordinal).cloned().unwrap_or(SqlValue::Null);
+                let value =
+                    decode_index_key_part(key_bytes, dirs, *ordinal).unwrap_or(SqlValue::Null);
                 row.push(value);
             }
         }
@@ -258,21 +301,34 @@ fn decode_covering_row(
 /// each part starts with a 1-byte type tag, holds its body, and is
 /// terminated by `0xff`. `Desc` parts have every body byte (and the
 /// tag) bit-inverted so we flip them back before decoding.
+#[allow(dead_code)]
 pub(crate) fn decode_index_key_parts(bytes: &[u8], dirs: &[SortDir]) -> Vec<SqlValue> {
     let mut out = Vec::with_capacity(dirs.len());
     let mut idx = 0;
     for &dir in dirs {
-        let Some((part, next_idx)) = decode_next_part(bytes, idx, dir) else {
+        let Some((part, next_idx)) = decode_part_at(bytes, idx, dir) else {
             out.push(SqlValue::Null);
             break;
         };
-        out.push(decode_part(&part));
+        out.push(part);
         idx = next_idx;
     }
     out
 }
 
-fn decode_next_part(bytes: &[u8], idx: usize, dir: SortDir) -> Option<(Vec<u8>, usize)> {
+fn decode_index_key_part(bytes: &[u8], dirs: &[SortDir], target: usize) -> Option<SqlValue> {
+    let mut idx = 0;
+    for (ordinal, &dir) in dirs.iter().enumerate() {
+        let (part, next_idx) = decode_part_at(bytes, idx, dir)?;
+        if ordinal == target {
+            return Some(part);
+        }
+        idx = next_idx;
+    }
+    None
+}
+
+fn decode_part_at(bytes: &[u8], idx: usize, dir: SortDir) -> Option<(SqlValue, usize)> {
     let raw_tag = *bytes.get(idx)?;
     let tag = maybe_uninvert(raw_tag, dir);
     let part_len = match tag {
@@ -285,12 +341,21 @@ fn decode_next_part(bytes: &[u8], idx: usize, dir: SortDir) -> Option<(Vec<u8>, 
     if end > bytes.len() {
         return None;
     }
-    let mut part = bytes[idx..end].to_vec();
-    if dir == SortDir::Desc {
-        for byte in part.iter_mut() {
-            *byte = !*byte;
+    let value = match tag {
+        0x00 => SqlValue::Null,
+        0x10 => decode_integer_part(&bytes[idx + 1..end], dir),
+        0x20 => decode_real_part(&bytes[idx + 1..end], dir),
+        0x30 | 0x40 => {
+            let mut part = bytes[idx..end].to_vec();
+            if dir == SortDir::Desc {
+                for byte in part.iter_mut() {
+                    *byte = !*byte;
+                }
+            }
+            decode_part(&part)
         }
-    }
+        _ => return None,
+    };
     // `encode_index_key` appends an uninverted 0xff separator after
     // every encoded part. Tolerate a missing final separator by moving
     // to `end`; malformed keys decode as far as their tags allow.
@@ -299,7 +364,7 @@ fn decode_next_part(bytes: &[u8], idx: usize, dir: SortDir) -> Option<(Vec<u8>, 
     } else {
         end
     };
-    Some((part, next_idx))
+    Some((value, next_idx))
 }
 
 fn textish_part_len(bytes: &[u8], body_start: usize, dir: SortDir) -> Option<usize> {
@@ -362,6 +427,43 @@ fn decode_part(bytes: &[u8]) -> SqlValue {
         }
         _ => SqlValue::Null,
     }
+}
+
+fn decode_integer_part(bytes: &[u8], dir: SortDir) -> SqlValue {
+    if bytes.len() < 8 {
+        return SqlValue::Null;
+    }
+    let mut arr = [0_u8; 8];
+    if dir == SortDir::Desc {
+        for (slot, byte) in arr.iter_mut().zip(bytes.iter().take(8)) {
+            *slot = !*byte;
+        }
+    } else {
+        arr.copy_from_slice(&bytes[..8]);
+    }
+    let raw = u64::from_be_bytes(arr) ^ 0x8000_0000_0000_0000;
+    SqlValue::Integer(raw as i64)
+}
+
+fn decode_real_part(bytes: &[u8], dir: SortDir) -> SqlValue {
+    if bytes.len() < 8 {
+        return SqlValue::Null;
+    }
+    let mut arr = [0_u8; 8];
+    if dir == SortDir::Desc {
+        for (slot, byte) in arr.iter_mut().zip(bytes.iter().take(8)) {
+            *slot = !*byte;
+        }
+    } else {
+        arr.copy_from_slice(&bytes[..8]);
+    }
+    let sortable = u64::from_be_bytes(arr);
+    let bits = if sortable & 0x8000_0000_0000_0000 != 0 {
+        sortable ^ 0x8000_0000_0000_0000
+    } else {
+        !sortable
+    };
+    SqlValue::Real(f64::from_bits(bits))
 }
 
 /// Inverse of `encode_bytes` in `catalog::key`: strips the trailing

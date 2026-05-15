@@ -7,6 +7,7 @@ use std::path::Path;
 use anyhow::{Result, anyhow};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::time::Duration;
 
 use crate::config::{DurabilityKind, EngineKind, RunSpec};
 
@@ -56,6 +57,8 @@ pub trait BenchConn: Send {
     fn query_all(&mut self, sql: &str, params: &[CellValue]) -> Result<Vec<Vec<CellValue>>>;
     fn begin_immediate(&mut self) -> Result<()>;
     fn commit(&mut self) -> Result<()>;
+    fn rollback(&mut self) -> Result<()>;
+    fn set_busy_timeout(&mut self, timeout: Duration) -> Result<()>;
 }
 
 pub fn open(spec: &RunSpec, db_dir: &Path) -> Result<Box<dyn BenchEngine>> {

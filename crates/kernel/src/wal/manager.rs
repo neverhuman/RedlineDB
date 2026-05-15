@@ -827,10 +827,10 @@ fn wal_writer_loop(mut wal: WalManager, config: WalConfig, shared: Arc<WalCoordi
 /// the original and the freshly sampled target so the widening is
 /// monotonic.
 fn resample_flush_target(shared: &Arc<WalCoordinatorShared>, current: Lsn) -> Lsn {
-    if let Ok(state) = shared.state.lock() {
-        if state.flush_requested_lsn > current {
-            return state.flush_requested_lsn;
-        }
+    if let Ok(state) = shared.state.lock()
+        && state.flush_requested_lsn > current
+    {
+        return state.flush_requested_lsn;
     }
     current
 }

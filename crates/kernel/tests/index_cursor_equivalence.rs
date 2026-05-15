@@ -23,7 +23,7 @@ use tempfile::TempDir;
 use redlinedb_kernel::format::{PageGeneration, PageId, RelId, TuplePtr};
 use redlinedb_kernel::index::{
     BtreeIndex, CursorYield, IndexCursor, IndexDescriptor, IndexId, IndexRowRef, IndexUniqueness,
-    KeyRange, SnapshotView,
+    KeyRange, RawIndexCursor, SnapshotView,
 };
 use redlinedb_kernel::storage::{BufferPool, PageFile};
 use redlinedb_kernel::telemetry::Phase11Counters;
@@ -106,14 +106,28 @@ fn collect_via_cursor(
     let mut out = Vec::new();
     let view = SnapshotView::all();
     let mut cur = IndexCursor::open_with_counters(index, range, view, Some(counters)).unwrap();
-    loop {
-        match cur.next_batch(&mut out, batch_size).unwrap() {
-            CursorYield::Batch(_) => continue,
-            CursorYield::End => break,
-        }
-    }
+    while let CursorYield::Batch(_) = cur.next_batch(&mut out, batch_size).unwrap() {}
     cur.close();
     (out, counters.snapshot().cursor_batches_emitted)
+}
+
+fn count_via_raw_cursor(index: &BtreeIndex, range: KeyRange<'_>) -> i64 {
+    let view = SnapshotView::all();
+    let mut cur = RawIndexCursor::open(index, range, view).unwrap();
+    let mut count = 0_i64;
+    while let CursorYield::Batch(n) = cur.next_count_batch(64).unwrap() {
+        count += n as i64;
+    }
+    cur.close();
+    count
+}
+
+fn count_via_raw_cursor_single_pass(index: &BtreeIndex, range: KeyRange<'_>) -> i64 {
+    let view = SnapshotView::all();
+    let mut cur = RawIndexCursor::open(index, range, view).unwrap();
+    let count = cur.count_remaining().unwrap() as i64;
+    cur.close();
+    count
 }
 
 #[test]
@@ -226,4 +240,51 @@ fn cursor_unbounded_end_walks_full_chain() {
     };
     let (cursor_out, _batches) = collect_via_cursor(&index, range, &counters, 256);
     assert_eq!(legacy, cursor_out);
+}
+
+#[test]
+fn raw_count_matches_legacy_with_duplicates_and_tombstones() {
+    let (_tmp, _buffer, index) = build_fixture();
+
+    let live_row = IndexRowRef::new(TuplePtr::new_with_generation(
+        PageId(99_001),
+        0,
+        PageGeneration::ONE,
+    ));
+    let dup_row = IndexRowRef::new(TuplePtr::new_with_generation(
+        PageId(99_002),
+        1,
+        PageGeneration::ONE,
+    ));
+    let tombstone_row = IndexRowRef::new(TuplePtr::new_with_generation(
+        PageId(99_003),
+        2,
+        PageGeneration::ONE,
+    ));
+    index.insert(b"tenant-01", live_row).unwrap();
+    index.insert(b"tenant-01", dup_row).unwrap();
+    index.insert(b"tenant-02", tombstone_row).unwrap();
+    index.delete_mark(b"tenant-02", tombstone_row).unwrap();
+
+    let start = b"tenant-00";
+    let end = b"tenant-09";
+    let legacy = index.range_scan_legacy_for_test(start, end).unwrap();
+    let raw_count = count_via_raw_cursor(&index, KeyRange::half_open(start, end));
+    let raw_count_single_pass =
+        count_via_raw_cursor_single_pass(&index, KeyRange::half_open(start, end));
+
+    assert_eq!(
+        raw_count,
+        legacy.len() as i64,
+        "raw count diverged from legacy"
+    );
+    assert_eq!(
+        raw_count_single_pass,
+        legacy.len() as i64,
+        "single-pass raw count diverged from legacy"
+    );
+    assert_eq!(
+        raw_count, 2,
+        "duplicate live keys should count; tombstones should not"
+    );
 }

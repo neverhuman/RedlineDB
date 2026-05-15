@@ -1,6 +1,7 @@
 use crate::engine::ConcurrentTxStatus;
-use crate::format::{Csn, PAGE_HEADER_LEN, PageId, SLOT_LEN, TxId};
+use crate::format::{Csn, Lsn, PAGE_HEADER_LEN, PageId, SLOT_LEN, TxId};
 use crate::txn::Snapshot;
+use crate::wal::WalPayload;
 use crate::{Error, Result};
 
 use super::cells::{Entry, delete_marker_visible};
@@ -19,6 +20,27 @@ impl BtreeIndex {
         tx_id: crate::format::TxId,
         logical_key: &[u8],
         row: IndexRowRef,
+    ) -> Result<()> {
+        self.insert_tx_inner(tx_id, logical_key, row, tx_id != TxId::ZERO, Lsn::new(1))
+    }
+
+    pub(crate) fn insert_recovered_tx(
+        &self,
+        tx_id: crate::format::TxId,
+        logical_key: &[u8],
+        row: IndexRowRef,
+        lsn: Lsn,
+    ) -> Result<()> {
+        self.insert_tx_inner(tx_id, logical_key, row, false, lsn)
+    }
+
+    fn insert_tx_inner(
+        &self,
+        tx_id: crate::format::TxId,
+        logical_key: &[u8],
+        row: IndexRowRef,
+        emit_wal: bool,
+        lsn: Lsn,
     ) -> Result<()> {
         let _structure = self
             .inner
@@ -86,6 +108,8 @@ impl BtreeIndex {
                     row,
                     physical.as_slice().to_vec(),
                     tx_id,
+                    emit_wal,
+                    lsn,
                 )?;
                 return Ok(());
             }
@@ -98,11 +122,25 @@ impl BtreeIndex {
                 header.high_key,
             )?;
             drop(page);
-            // Lane E failpoint: armed before the leaf-write becomes visible
-            // (mark_dirty + record_page_image). A crash here proves the index
-            // entry is either fully reflected post-recovery or absent.
-            crate::fail_point!("index::insert");
-            self.record_page_image(leaf_id, tx_id)?;
+            if emit_wal {
+                // Lane E failpoint: armed before the leaf-write becomes
+                // visible (mark_dirty + WAL append). A crash here proves the
+                // index entry is either fully reflected post-recovery or
+                // absent.
+                crate::fail_point!("index::insert");
+                let end_lsn = self.append_index_delta(
+                    tx_id,
+                    WalPayload::IndexInsert {
+                        tx_id,
+                        index_id: self.descriptor().index_id.0,
+                        logical_key: logical_key.to_vec(),
+                        row,
+                    },
+                )?;
+                guard.mark_dirty(end_lsn)?;
+            } else {
+                guard.mark_dirty(lsn)?;
+            }
             return Ok(());
         }
     }
@@ -125,7 +163,24 @@ impl BtreeIndex {
         logical_key: &[u8],
         row: IndexRowRef,
     ) -> Result<()> {
-        self.delete_mark_tx_inner(tx_id, logical_key, row, None)
+        self.delete_mark_tx_inner(
+            tx_id,
+            logical_key,
+            row,
+            None,
+            tx_id != TxId::ZERO,
+            Lsn::new(1),
+        )
+    }
+
+    pub(crate) fn delete_mark_recovered_tx(
+        &self,
+        tx_id: crate::format::TxId,
+        logical_key: &[u8],
+        row: IndexRowRef,
+        lsn: Lsn,
+    ) -> Result<()> {
+        self.delete_mark_tx_inner(tx_id, logical_key, row, None, false, lsn)
     }
 
     pub fn delete_mark_tx_visible(
@@ -137,7 +192,14 @@ impl BtreeIndex {
         logical_key: &[u8],
         row: IndexRowRef,
     ) -> Result<()> {
-        self.delete_mark_tx_inner(tx_id, logical_key, row, Some((tx_status, snapshot, owner)))
+        self.delete_mark_tx_inner(
+            tx_id,
+            logical_key,
+            row,
+            Some((tx_status, snapshot, owner)),
+            tx_id != TxId::ZERO,
+            Lsn::new(1),
+        )
     }
 
     fn delete_mark_tx_inner(
@@ -146,6 +208,8 @@ impl BtreeIndex {
         logical_key: &[u8],
         row: IndexRowRef,
         visibility: Option<(&ConcurrentTxStatus, &Snapshot, Option<TxId>)>,
+        emit_wal: bool,
+        lsn: Lsn,
     ) -> Result<()> {
         let _structure = self
             .inner
@@ -202,11 +266,25 @@ impl BtreeIndex {
                     header.high_key,
                 )?;
                 drop(page);
-                // Lane E failpoint: armed before the delete-mark becomes durable;
-                // verifies that recovery either restores the entry (if pre-fsync)
-                // or surfaces the tombstone (if post-fsync) but never both.
-                crate::fail_point!("index::delete");
-                self.record_page_image(leaf_id, tx_id)?;
+                if emit_wal {
+                    // Lane E failpoint: armed before the delete-mark becomes
+                    // durable; verifies that recovery either restores the
+                    // entry (if pre-fsync) or surfaces the tombstone (if
+                    // post-fsync) but never both.
+                    crate::fail_point!("index::delete");
+                    let end_lsn = self.append_index_delta(
+                        tx_id,
+                        WalPayload::IndexDelete {
+                            tx_id,
+                            index_id: self.descriptor().index_id.0,
+                            logical_key: logical_key.to_vec(),
+                            row,
+                        },
+                    )?;
+                    guard.mark_dirty(end_lsn)?;
+                } else {
+                    guard.mark_dirty(lsn)?;
+                }
                 return Ok(());
             }
             // No match here. If duplicates of this logical_key may continue on

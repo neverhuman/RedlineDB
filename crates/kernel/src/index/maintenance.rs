@@ -20,6 +20,7 @@ impl BtreeIndex {
         Ok(report)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn split_leaf_and_insert(
         &self,
         ancestors: &[PageId],
@@ -28,6 +29,8 @@ impl BtreeIndex {
         row: IndexRowRef,
         physical: Vec<u8>,
         tx_id: crate::format::TxId,
+        emit_wal: bool,
+        lsn: crate::format::Lsn,
     ) -> Result<()> {
         // Lane E failpoint: armed at the start of leaf split, before any
         // structural change is applied. Crashing here exercises recovery from
@@ -107,8 +110,13 @@ impl BtreeIndex {
                 header.high_key.clone(),
             )
         })?;
-        self.record_page_image(leaf_id, tx_id)?;
-        self.record_page_image(right_guard.page_id(), tx_id)?;
+        if emit_wal {
+            self.record_page_image(leaf_id, tx_id)?;
+            self.record_page_image(right_guard.page_id(), tx_id)?;
+        } else {
+            guard.mark_dirty(lsn)?;
+            right_guard.mark_dirty(lsn)?;
+        }
 
         self.propagate_split(
             ancestors,
@@ -117,10 +125,13 @@ impl BtreeIndex {
             left_high,
             1,
             tx_id,
+            emit_wal,
+            lsn,
         )?;
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn propagate_split(
         &self,
         ancestors: &[PageId],
@@ -129,6 +140,8 @@ impl BtreeIndex {
         separator: Vec<u8>,
         mut left_level: u16,
         tx_id: crate::format::TxId,
+        emit_wal: bool,
+        lsn: crate::format::Lsn,
     ) -> Result<()> {
         let meta = self.meta()?;
         let mut ancestors = ancestors.to_vec();
@@ -167,7 +180,11 @@ impl BtreeIndex {
                             header.high_key.clone(),
                         )
                     })?;
-                    self.record_page_image(parent_id, tx_id)?;
+                    if emit_wal {
+                        self.record_page_image(parent_id, tx_id)?;
+                    } else {
+                        guard.mark_dirty(lsn)?;
+                    }
                     return Ok(());
                 }
 
@@ -216,8 +233,13 @@ impl BtreeIndex {
                         header.high_key.clone(),
                     )
                 })?;
-                self.record_page_image(parent_id, tx_id)?;
-                self.record_page_image(right_guard.page_id(), tx_id)?;
+                if emit_wal {
+                    self.record_page_image(parent_id, tx_id)?;
+                    self.record_page_image(right_guard.page_id(), tx_id)?;
+                } else {
+                    guard.mark_dirty(lsn)?;
+                    right_guard.mark_dirty(lsn)?;
+                }
                 current_left = parent_id;
                 current_right = right_guard.page_id();
                 current_separator = right_separator;
@@ -263,8 +285,13 @@ impl BtreeIndex {
                     Vec::new(),
                 )
             })?;
-            self.record_page_image(root_guard.page_id(), tx_id)?;
-            self.set_meta_root(root_guard.page_id(), left_level, tx_id)?;
+            if emit_wal {
+                self.record_page_image(root_guard.page_id(), tx_id)?;
+                self.set_meta_root(root_guard.page_id(), left_level, tx_id, true, lsn)?;
+            } else {
+                root_guard.mark_dirty(lsn)?;
+                self.set_meta_root(root_guard.page_id(), left_level, tx_id, false, lsn)?;
+            }
             return Ok(());
         }
     }

@@ -37,6 +37,12 @@ pub use value::{Value, ValueRef};
 
 pub use redlinedb_sql::BeginMode;
 
+/// Thread-safe handle to a database image.
+///
+/// `Database` is cheap to clone, `Send + Sync`, and intended to be the
+/// pooling boundary: open one `Database`, then hand out fresh
+/// [`Connection`] values to worker threads as needed. All connections opened
+/// from the same `Database` see the same state.
 pub struct Database {
     inner: Arc<registry::DatabaseEntry>,
 }
@@ -48,6 +54,11 @@ pub struct OwnedStatement {
     _marker: Rc<()>,
 }
 
+/// Per-session connection handle.
+///
+/// `Connection` is `Send` but not `Sync`. Move it between threads if you
+/// need to, but do not share a single handle for concurrent mutation;
+/// create one connection per thread or guard it with external locking.
 pub struct Connection {
     inner: Arc<redlinedb_sql::Connection>,
     read_only: bool,
@@ -61,6 +72,12 @@ pub struct Prepared {
     template: Arc<redlinedb_sql::PreparedTemplate>,
 }
 
+/// Borrowed prepared statement tied to one live [`Connection`].
+///
+/// `Statement` is intentionally not pooled or shared across threads. It
+/// carries a mutable borrow of the parent connection, so keep it on the
+/// thread that owns that connection and drop it before handing the
+/// connection back to a pool.
 pub struct Statement<'conn> {
     inner: OwnedStatement,
     _conn: std::marker::PhantomData<&'conn mut Connection>,
@@ -112,6 +129,32 @@ impl Database {
 
     pub fn open_with_options(path: impl AsRef<Path>, options: OpenOptions) -> Result<Self> {
         let inner = registry::open_database(path, &options, options.create)?;
+        Ok(Self { inner })
+    }
+
+    /// Create a private ephemeral database rooted under `options.temp_dir`
+    /// when provided, otherwise under the system temp directory.
+    ///
+    /// Multiple connections opened from the returned [`Database`] share the
+    /// same transient state. The backing directory disappears when the last
+    /// `Database` owner drops.
+    pub fn create_in_memory(options: OpenOptions) -> Result<Self> {
+        let mut options = options;
+        options.create = true;
+        let inner = registry::create_in_memory_database(&options)?;
+        Ok(Self { inner })
+    }
+
+    /// Create or reopen a process-local ephemeral database identified by
+    /// `session_name`.
+    ///
+    /// Compatible calls with the same `session_name` reuse the same live
+    /// session for as long as at least one [`Database`] handle is still
+    /// alive. When the final owner drops, the owned temp root is removed.
+    pub fn create_ephemeral(session_name: &str, options: OpenOptions) -> Result<Self> {
+        let mut options = options;
+        options.create = true;
+        let inner = registry::create_ephemeral_database(session_name, &options)?;
         Ok(Self { inner })
     }
 
@@ -786,6 +829,7 @@ fn sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
     db.query_memory.work_mem_bytes = options.query_memory.work_mem_bytes;
     db.query_memory.max_spill_bytes = options.query_memory.max_spill_bytes;
     db.query_memory.batch_rows = options.query_memory.batch_rows;
+    db.temp_dir = options.temp_dir.clone();
     db.stats.exact_analyze_row_threshold = options.stats.exact_analyze_row_threshold;
     db.stats.sample_rows = options.stats.sample_rows;
     db.stats.mcv_capacity = options.stats.mcv_capacity;
@@ -797,6 +841,16 @@ fn sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+
+    #[test]
+    fn public_handle_thread_contracts_compile() {
+        assert_send::<Database>();
+        assert_sync::<Database>();
+        assert_send::<Connection>();
+    }
 
     #[test]
     fn owned_and_borrowed_statements_return_the_same_row() {

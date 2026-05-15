@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::config::RunSpec;
 use crate::engine::{BenchConn, BenchEngine, CellValue, EngineSnapshot, apply_durability};
@@ -168,6 +169,16 @@ impl BenchConn for RedlineConn {
 
     fn commit(&mut self) -> Result<()> {
         let _ = self.conn.commit()?;
+        Ok(())
+    }
+
+    fn rollback(&mut self) -> Result<()> {
+        self.conn.rollback()?;
+        Ok(())
+    }
+
+    fn set_busy_timeout(&mut self, timeout: Duration) -> Result<()> {
+        self.conn.set_busy_timeout(timeout);
         Ok(())
     }
 }

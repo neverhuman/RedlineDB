@@ -22,13 +22,22 @@ use crate::strace_capture;
 /// to children, leaving no headroom for the parent's own bookkeeping
 /// and OS jitter.
 pub const RESERVED_CORES: usize = 4;
+pub const MAX_PARALLEL_THREADS_ENV: &str = "REDLINEDB_BENCH_MAX_PARALLEL_THREADS";
 
 /// Decide how many threads we may concurrently dispatch to children.
 ///
 /// Returns at least 1 even on tiny boxes so the scheduler always
 /// makes forward progress.
 pub fn available_cores() -> usize {
-    num_cpus::get().saturating_sub(RESERVED_CORES).max(1)
+    let detected = num_cpus::get().saturating_sub(RESERVED_CORES).max(1);
+    match std::env::var(MAX_PARALLEL_THREADS_ENV)
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+    {
+        Some(cap) => detected.min(cap).max(1),
+        None => detected,
+    }
 }
 
 /// Polling interval for the parallel scheduler's `try_wait` loop.
@@ -47,6 +56,7 @@ pub struct CertificationReport {
 #[derive(Debug, Serialize)]
 pub struct CertificationManifest {
     pub out_dir: PathBuf,
+    pub config_path: PathBuf,
     pub config_hash: String,
     pub runs_jsonl_hash: String,
     pub summary_csv_hash: String,
@@ -138,7 +148,7 @@ pub fn run(config: &CompareConfig, args: &CertifyArgs) -> Result<CertificationRe
     // and stash the result alongside the manifest. The gate is
     // additive — it never replaces or alters the default
     // `evaluate_records` pipeline, so phase-9 lanes stay untouched.
-    if config.workloads.iter().any(is_phase11_oltp_gap_workload) {
+    if is_phase11_oltp_gap_config(args) {
         let phase11_gates = crate::gates::evaluate_phase11_oltp_gap(&runs);
         report::write_json(
             Some(&args.out_dir.join("phase11_oltp_gap_gates.json")),
@@ -161,6 +171,7 @@ pub fn run(config: &CompareConfig, args: &CertifyArgs) -> Result<CertificationRe
 
     let manifest = CertificationManifest {
         out_dir: args.out_dir.clone(),
+        config_path: args.config.clone(),
         config_hash: hash_file(&args.config)?,
         runs_jsonl_hash: hash_file(&runs_jsonl)?,
         summary_csv_hash: hash_file(&summary_csv)?,
@@ -185,7 +196,15 @@ pub fn run(config: &CompareConfig, args: &CertifyArgs) -> Result<CertificationRe
     let manifest_path = args.out_dir.join("manifest.json");
     report::write_json(Some(&manifest_path), &manifest)?;
 
-    Ok(CertificationReport { runs, manifest })
+    let report = CertificationReport { runs, manifest };
+    report::write_json(Some(&args.out_dir.join("report.json")), &report)?;
+
+    if is_phase11_oltp_gap_config(args) {
+        let phase11_gates = crate::gates::evaluate_phase11_oltp_gap(&report.runs);
+        ensure_phase11_gates_pass("phase11-oltp-gap", &phase11_gates)?;
+    }
+
+    Ok(report)
 }
 
 /// A scheduled benchmark child the parallel scheduler will dispatch.
@@ -953,19 +972,78 @@ fn hash_file(path: &Path) -> Result<String> {
     Ok(format!("{digest:x}"))
 }
 
-/// Phase 11 wave 1a: detect whether the certify config exercises any
-/// of the new wave-1a workloads. Used to decide whether to also emit
-/// the phase-11 OLTP gap gate summary alongside the manifest. Kept
-/// in lockstep with the workloads enumerated in
-/// `crates/bench/bench/phase11-oltp-gap.toml`.
-fn is_phase11_oltp_gap_workload(workload: &crate::config::WorkloadKind) -> bool {
-    use crate::config::WorkloadKind;
-    matches!(
-        workload,
-        WorkloadKind::SecondaryIndexCount
-            | WorkloadKind::SecondaryIndexOrderedLimit
-            | WorkloadKind::CoveredRangeCold
-            | WorkloadKind::CoveredRangeWarm
-            | WorkloadKind::HotCounterUpdate
-    )
+/// Phase 11 wave 1a gates are bound to the dedicated certification
+/// config, not to individual workload names. Smoke and phase-9 lanes
+/// intentionally share workloads such as point-read-pk and
+/// writers-disjoint but must keep their older gate semantics.
+fn is_phase11_oltp_gap_config(args: &CertifyArgs) -> bool {
+    args.config
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "phase11-oltp-gap.toml")
+}
+
+fn ensure_phase11_gates_pass(label: &str, gates: &crate::gates::GateSummary) -> Result<()> {
+    let failures: Vec<&crate::gates::GateResult> =
+        gates.gates.iter().filter(|gate| !gate.passed).collect();
+    if failures.is_empty() {
+        return Ok(());
+    }
+    let detail = failures
+        .iter()
+        .map(|gate| format!("{}: {}", gate.name, gate.detail))
+        .collect::<Vec<_>>()
+        .join("; ");
+    bail!("{label} certification failed: {detail}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phase11_gate_failure_bubbles_up() {
+        let gates = crate::gates::GateSummary {
+            gates: vec![
+                crate::gates::GateResult {
+                    name: "ok".to_owned(),
+                    passed: true,
+                    detail: "all good".to_owned(),
+                },
+                crate::gates::GateResult {
+                    name: "phase11_oltp_gap::covered_range_cold::t1".to_owned(),
+                    passed: false,
+                    detail: "covered-range ratio below floor 0.40".to_owned(),
+                },
+            ],
+        };
+        let err = ensure_phase11_gates_pass("phase11-oltp-gap", &gates).unwrap_err();
+        let text = err.to_string();
+        assert!(text.contains("phase11-oltp-gap"));
+        assert!(text.contains("phase11_oltp_gap::covered_range_cold::t1"));
+        assert!(text.contains("below floor"));
+    }
+
+    #[test]
+    fn phase11_gate_activation_is_config_scoped() {
+        let phase11 = CertifyArgs {
+            config: PathBuf::from("crates/bench/bench/phase11-oltp-gap.toml"),
+            out_dir: PathBuf::from("target/bench/phase11-oltp-gap"),
+            seed: 7,
+            repetitions: 3,
+            warmup: 1,
+            with_strace: false,
+        };
+        let smoke = CertifyArgs {
+            config: PathBuf::from("crates/bench/bench/smoke.toml"),
+            out_dir: PathBuf::from("target/bench/certify-smoke"),
+            seed: 7,
+            repetitions: 1,
+            warmup: 0,
+            with_strace: false,
+        };
+
+        assert!(is_phase11_oltp_gap_config(&phase11));
+        assert!(!is_phase11_oltp_gap_config(&smoke));
+    }
 }

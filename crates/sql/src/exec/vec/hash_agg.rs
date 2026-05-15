@@ -8,6 +8,7 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use redlinedb_kernel::catalog::{ValueRef, encode_record};
@@ -206,6 +207,7 @@ pub struct HashAggregator {
     aggs: Arc<[AggKind]>,
     work_mem_bytes: usize,
     max_spill_bytes: usize,
+    spill_root: PathBuf,
     table: HashMap<Vec<u8>, (Vec<SqlValue>, Vec<AccState>)>,
     table_bytes: usize,
     spill: Option<SpillFile>,
@@ -214,11 +216,17 @@ pub struct HashAggregator {
 }
 
 impl HashAggregator {
-    pub fn new(aggs: Vec<AggKind>, work_mem_bytes: usize, max_spill_bytes: usize) -> Self {
+    pub fn new(
+        aggs: Vec<AggKind>,
+        work_mem_bytes: usize,
+        max_spill_bytes: usize,
+        spill_root: PathBuf,
+    ) -> Self {
         Self {
             aggs: Arc::from(aggs.into_boxed_slice()),
             work_mem_bytes,
             max_spill_bytes,
+            spill_root,
             table: HashMap::new(),
             table_bytes: 0,
             spill: None,
@@ -272,7 +280,7 @@ impl HashAggregator {
             return Ok(());
         }
         if self.spill.is_none() {
-            let file = SpillFile::create("hash-agg")?;
+            let file = SpillFile::create_in(&self.spill_root, "hash-agg")?;
             let writer = file.writer()?;
             self.spill = Some(file);
             self.spill_writer = Some(writer);
@@ -423,6 +431,7 @@ impl HashAggregator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     fn key1(v: i64) -> Vec<SqlValue> {
         vec![SqlValue::Integer(v)]
@@ -430,10 +439,12 @@ mod tests {
 
     #[test]
     fn count_and_sum_correctness() {
+        let root = tempdir().expect("tempdir");
         let mut agg = HashAggregator::new(
             vec![AggKind::CountStar, AggKind::Sum],
             16 * 1024,
             1024 * 1024,
+            root.path().to_path_buf(),
         );
         for v in [1, 2, 3, 4, 5] {
             let group = if v % 2 == 0 { 0 } else { 1 };
@@ -452,7 +463,13 @@ mod tests {
 
     #[test]
     fn avg_correctness() {
-        let mut agg = HashAggregator::new(vec![AggKind::Avg], 16 * 1024, 1024 * 1024);
+        let root = tempdir().expect("tempdir");
+        let mut agg = HashAggregator::new(
+            vec![AggKind::Avg],
+            16 * 1024,
+            1024 * 1024,
+            root.path().to_path_buf(),
+        );
         for v in [10, 20, 30] {
             agg.observe(key1(0), &[SqlValue::Integer(v)]).expect("o");
         }
@@ -465,7 +482,13 @@ mod tests {
 
     #[test]
     fn min_max_correctness() {
-        let mut agg = HashAggregator::new(vec![AggKind::Min, AggKind::Max], 16 * 1024, 1024 * 1024);
+        let root = tempdir().expect("tempdir");
+        let mut agg = HashAggregator::new(
+            vec![AggKind::Min, AggKind::Max],
+            16 * 1024,
+            1024 * 1024,
+            root.path().to_path_buf(),
+        );
         for v in [5, 1, 9, 3, 7] {
             agg.observe(key1(0), &[SqlValue::Integer(v), SqlValue::Integer(v)])
                 .expect("o");
@@ -477,7 +500,13 @@ mod tests {
 
     #[test]
     fn count_skips_nulls() {
-        let mut agg = HashAggregator::new(vec![AggKind::Count], 16 * 1024, 1024 * 1024);
+        let root = tempdir().expect("tempdir");
+        let mut agg = HashAggregator::new(
+            vec![AggKind::Count],
+            16 * 1024,
+            1024 * 1024,
+            root.path().to_path_buf(),
+        );
         agg.observe(key1(0), &[SqlValue::Integer(1)]).expect("o");
         agg.observe(key1(0), &[SqlValue::Null]).expect("o");
         agg.observe(key1(0), &[SqlValue::Integer(3)]).expect("o");
@@ -487,7 +516,13 @@ mod tests {
 
     #[test]
     fn spill_triggered_by_tiny_budget_yields_correct_aggregate() {
-        let mut agg = HashAggregator::new(vec![AggKind::Sum], 8, 1024 * 1024);
+        let root = tempdir().expect("tempdir");
+        let mut agg = HashAggregator::new(
+            vec![AggKind::Sum],
+            8,
+            1024 * 1024,
+            root.path().to_path_buf(),
+        );
         for v in 0..200 {
             let group = (v % 4) as i64;
             agg.observe(key1(group), &[SqlValue::Integer(v as i64)])
