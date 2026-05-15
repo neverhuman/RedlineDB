@@ -134,3 +134,15 @@ security-local:
 
 release:
   rtk cargo build --workspace --release --locked
+# jankurai scaffold Justfile
+score:
+	jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md --score-history agent/score-history.jsonl --score-history-csv agent/score-history.csv
+doctor:
+	jankurai doctor --fail-on high
+rust-map:
+	jankurai rust map .
+rust-witness:
+	jankurai rust witness build .
+rust-diagnose:
+	jankurai rust diagnose .
+check: fast score security rust-map rust-witness rust-diagnose

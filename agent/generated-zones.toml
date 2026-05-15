@@ -1,5 +1,11 @@
-generated = [
-  "docs/archive/**",
-  "paper/figs/*.eps",
-  "target/**",
-]
+[[zone]]
+command = "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md"
+path = "agent/repo-score.json"
+read_only = false
+source = "installed jankurai binary"
+
+[[zone]]
+command = "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md"
+path = "agent/repo-score.md"
+read_only = false
+source = "installed jankurai binary"

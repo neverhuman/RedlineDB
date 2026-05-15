@@ -1,154 +1,119 @@
-[fast]
+[[lane]]
+command = "just fast"
+name = "fast"
+purpose = "deterministic local health proof"
+
+[[lane]]
+command = "just score"
+name = "audit"
+purpose = "write jankurai score artifacts"
+
+[[lane]]
+command = "just security"
+name = "security"
+purpose = "secret, dependency, and workflow proof"
+
+[[lane]]
+command = "just check"
+name = "release"
+purpose = "full merge gate"
+
+[phase10-hnsw-recall]
+commands = ["rtk cargo test -p redlinedb-kernel --test hnsw_recall --quiet --locked -- --ignored"]
+
+[phase10-xbabe1-certification]
 commands = [
-  "rtk cargo fmt --check",
-  "./scripts/check_file_sizes.sh",
-  "rtk cargo check --workspace --locked",
-  "rtk cargo test --workspace --quiet --locked",
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/phase10-cert --seed 7 --repetitions 5 --warmup 1",
+    "./scripts/bench/xbabe1_fetch.sh phase10-cert",
 ]
 
-[hygiene]
-commands = [
-  "rtk cargo fmt --check",
-  "./scripts/check_file_sizes.sh",
-]
+[phase11-ephemeral-db]
+commands = ["rtk cargo test -p redlinedb --test phase11_ephemeral --quiet --locked"]
 
-[clippy]
-commands = [
-  "rtk cargo clippy --workspace --all-targets --locked -- -D warnings",
-]
+[phase11-oltp-gap]
+commands = ["rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1"]
 
-[medium]
+[phase11-sql-contracts]
 commands = [
-  "rtk cargo test --workspace --quiet --locked",
-  "rtk cargo run -p redlinedb-cli -- --help",
-  "rtk cargo run -p redlinedb-server -- --help",
+    "rtk cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked",
+    "rtk cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked",
+    "rtk cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked",
 ]
 
 [phase8-smoke]
 commands = [
-  "rtk cargo test --workspace --quiet --locked",
-  "rtk cargo run -p redlinedb-cli -- --help",
-  "rtk cargo run -p redlinedb-server -- --help",
-]
-
-# `compat` test_dir uses the top-level `crates/bench/compat` directory because
-# `compat::run_suite` recurses into subdirs, so both `orm/` and `slt/` cases
-# are discovered automatically without widening the harness.
-[phase9-smoke]
-commands = [
-  "rtk cargo test -p redlinedb-bench --quiet --locked",
-  "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/certify-smoke --seed 7 --repetitions 1 --warmup 0",
-  "rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7",
-]
-
-[phase9-compat-full]
-commands = [
-  "rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/compat-full.json",
+    "rtk cargo test --workspace --quiet --locked",
+    "rtk cargo run -p redlinedb-cli -- --help",
+    "rtk cargo run -p redlinedb-server -- --help",
 ]
 
 [phase9-certification]
-commands = [
-  "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/certify-certification --seed 7 --repetitions 5 --warmup 1",
-]
+commands = ["rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/certify-certification --seed 7 --repetitions 5 --warmup 1"]
 
-[phase9-xbabe1-gap]
-commands = [
-  "./scripts/bench/xbabe1_sync.sh",
-  "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert --seed 7 --repetitions 3 --warmup 1",
-  "./scripts/bench/xbabe1_fetch.sh gap-cert",
-]
-
-[phase9-xbabe1-gap-strace]
-commands = [
-  "./scripts/bench/xbabe1_sync.sh",
-  "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert-strace --seed 7 --repetitions 3 --warmup 1 --with-strace",
-  "./scripts/bench/xbabe1_fetch.sh gap-cert-strace",
-]
+[phase9-compat-full]
+commands = ["rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/compat-full.json"]
 
 [phase9-docker-smoke]
 commands = [
-  "./scripts/bench/xbabe1_sync.sh",
-  "./scripts/bench/xbabe1_run.sh rtk cargo test -p redlinedb-bench --quiet --locked",
-]
-
-[phase9-recovery-matrix]
-commands = [
-  "rtk cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/recovery-matrix.json --seed 7",
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo test -p redlinedb-bench --quiet --locked",
 ]
 
 [phase9-failpoint-matrix]
-commands = [
-  "rtk cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint-matrix.json --seed 7",
-]
+commands = ["rtk cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint-matrix.json --seed 7"]
 
-[phase11-oltp-gap]
-commands = [
-  "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1",
-]
+[phase9-recovery-matrix]
+commands = ["rtk cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/recovery-matrix.json --seed 7"]
 
-[phase11-ephemeral-db]
+[phase9-smoke]
 commands = [
-  "rtk cargo test -p redlinedb --test phase11_ephemeral --quiet --locked",
-]
-
-[phase11-sql-contracts]
-commands = [
-  "rtk cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked",
-  "rtk cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked",
-  "rtk cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked",
-]
-
-[phase10-hnsw-recall]
-commands = [
-  "rtk cargo test -p redlinedb-kernel --test hnsw_recall --quiet --locked -- --ignored",
+    "rtk cargo test -p redlinedb-bench --quiet --locked",
+    "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/certify-smoke --seed 7 --repetitions 1 --warmup 0",
+    "rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7",
 ]
 
 [phase9-xbabe1-certification]
 commands = [
-  "./scripts/bench/xbabe1_sync.sh",
-  "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/certification --seed 7 --repetitions 5 --warmup 1",
-  "./scripts/bench/xbabe1_fetch.sh certification",
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/certification --seed 7 --repetitions 5 --warmup 1",
+    "./scripts/bench/xbabe1_fetch.sh certification",
 ]
 
-# Wave 6 Lane B: strace-instrumented certification. Runs the full
-# certification matrix on the xbabe1 Docker host with `--with-strace`
-# so each per-engine bench child is wrapped in `strace -c` and the
-# manifest captures aggregate syscall counts. Linux-only by design.
 [phase9-xbabe1-certify-with-strace]
 commands = [
-  "./scripts/bench/xbabe1_sync.sh",
-  "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/certify-strace --seed 7 --repetitions 5 --warmup 1 --with-strace",
-  "./scripts/bench/xbabe1_fetch.sh certify-strace",
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/certify-strace --seed 7 --repetitions 5 --warmup 1 --with-strace",
+    "./scripts/bench/xbabe1_fetch.sh certify-strace",
 ]
 
-# Phase 10 closing certification — runs the full matrix on the
-# 128-core xbabe1 host against the phase10-wave2-fused tree (12 lanes
-# fused: SQL-A/B/C, GC, INT, VE, J1, J2, V1, V2, V3, SQL-D). The
-# docker image runs plain cargo (no rtk wrapper, which only exists on
-# the host). Output preserves the `phase10-cert` stamp so it doesn't
-# overwrite phase-9 artifacts.
-[phase10-xbabe1-certification]
+[phase9-xbabe1-gap]
 commands = [
-  "./scripts/bench/xbabe1_sync.sh",
-  "./scripts/bench/xbabe1_run.sh cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/phase10-cert --seed 7 --repetitions 5 --warmup 1",
-  "./scripts/bench/xbabe1_fetch.sh phase10-cert",
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert --seed 7 --repetitions 3 --warmup 1",
+    "./scripts/bench/xbabe1_fetch.sh gap-cert",
 ]
+
+[phase9-xbabe1-gap-strace]
+commands = [
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert-strace --seed 7 --repetitions 3 --warmup 1 --with-strace",
+    "./scripts/bench/xbabe1_fetch.sh gap-cert-strace",
+]
+
+[release]
+commands = ["rtk cargo build --workspace --release --locked"]
 
 [security]
 commands = [
-  "rtk cargo audit",
-  "rtk cargo deny check",
-  "rtk gitleaks detect --source .",
+    "rtk cargo audit",
+    "rtk cargo deny check",
+    "rtk gitleaks detect --source .",
 ]
 
 [security-local]
 commands = [
-  "rtk cargo audit",
-  "rtk cargo deny check",
-  "rtk gitleaks detect --source .",
-]
-
-[release]
-commands = [
-  "rtk cargo build --workspace --release --locked",
+    "rtk cargo audit",
+    "rtk cargo deny check",
+    "rtk gitleaks detect --source .",
 ]

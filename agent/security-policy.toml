@@ -1,0 +1,7 @@
+schema_version = "1.0.0"
+enabled_tools = ["gitleaks", "cargo audit", "npm audit"]
+required_tools = []
+advisory_tools = ["gitleaks", "cargo audit", "npm audit"]
+
+[severity_thresholds]
+fail_lane_on = "high"

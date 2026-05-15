@@ -1,0 +1,8 @@
+outputRoot = "."
+artifactRoot = "target/jankurai/ux-qa"
+readyState = "domcontentloaded"
+timeoutMs = 15000
+screenshotRequired = true
+ariaSnapshotRequired = true
+accessibilityScanRequired = true
+requiredStates = ["loading", "empty", "error", "success", "permission-denied"]

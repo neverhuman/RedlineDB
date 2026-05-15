@@ -1,0 +1,48 @@
+name: jankurai
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install jankurai
+        run: cargo install jankurai --locked
+      - run: jankurai --version
+      - name: jankurai audit
+        run: jankurai audit . --mode advisory --baseline agent/repo-score.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl
+      - name: Proofbind verify
+        run: jankurai proofbind verify . --changed-from origin/main
+      - name: Proofmark rust
+        run: jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+      - name: Rust witness build
+        run: jankurai rust witness build .
+      - name: UX QA smoke
+        run: jankurai ux audit --config agent/ux-qa.toml --out target/jankurai/ux-qa.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: jankurai-adoption-evidence
+          if-no-files-found: ignore
+          path: |
+            target/jankurai/repo-score.json
+            target/jankurai/repo-score.md
+            target/jankurai/jankurai.sarif
+            target/jankurai/repair-queue.jsonl
+            target/jankurai/proofbind/obligations.json
+            target/jankurai/proofbind/surface-witness.json
+            target/jankurai/proofmark/proofmark-receipt.json
+            target/jankurai/proofmark/proof-receipt.json
+            target/jankurai/rust/witness-graph.json
+            target/jankurai/ux-qa.json
+            target/jankurai/security/evidence.json
+            target/jankurai/migration-report.json

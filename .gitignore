@@ -10,3 +10,7 @@
 *.sqlite
 *.db
 *.redline
+# jankurai scaffold .gitignore
+# Keep Jankurai receipts local without hiding the rest of target/.
+target/jankurai/
+.jankurai/

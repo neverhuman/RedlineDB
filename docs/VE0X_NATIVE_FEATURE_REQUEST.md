@@ -6,7 +6,8 @@ instead of local stand-in behavior.
 
 Local phase11 follow-up status: the ephemeral database API, caller-owned temp
 roots, queue contract, and xdoug UPDATE-subquery regression are implemented in
-the workspace tree; this request remains as the external-facing checklist.
+the workspace tree; this page now serves as the upstream-facing compatibility
+summary.
 
 Required work:
 
@@ -44,6 +45,16 @@ Required work:
 6. MSRV resolution.
    - xdoug declares Rust 1.92
    - record the compatibility choice explicitly
+
+Validation follow-up:
+
+- Keep the phase11 proof lanes and test target names in sync with the
+  upstream tree. The working targets are `phase11_ephemeral`,
+  `phase11_veox_queue`, and `phase11_temp_roots`; the older
+  `ephemeral`/`veox_task_queue_contract` names are stale.
+- The Rust 1.92 compatibility choice is recorded in the RedlineDB
+  compatibility docs: the workspace MSRV stays at Rust `1.95`, while xdoug
+  can pin against the 1.92 target it declares.
 
 Acceptance target:
 - the native runtime can depend on RedlineDB without dragging in a Postgres

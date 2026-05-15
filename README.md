@@ -191,6 +191,9 @@ while let redlinedb::Step::Row(row) = stmt.step()? {
 - `Database::create_in_memory` and `Database::create_ephemeral` create
   transient shared sessions that clean up their owned temp root when the last
   database handle drops.
+- Compatibility policy: xdoug currently declares Rust `1.92`, but the
+  RedlineDB workspace MSRV remains Rust `1.95`; the phase11 integration lanes
+  validate that support window without lowering the workspace floor.
 
 ### C ABI
 

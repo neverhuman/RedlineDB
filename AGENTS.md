@@ -16,3 +16,5 @@ Rules:
 - Do not compress away exit codes, failing test names, panic text, spans, advisory IDs, seeds, raw-log paths, or raw-log hashes.
 - Treat `just fast` as the default proof lane, then widen only when the edit crosses contract, security, or concurrency boundaries.
 
+
+<!-- jankurai merge marker: review and merge canonical guidance for AGENTS.md -->
