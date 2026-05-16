@@ -21,6 +21,50 @@
 
 ---
 
+## Install
+
+**Linux & macOS — one command:**
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+```
+
+Installs the CLI binary, native library (`libredlinedb`), and C headers to `/usr/local`. Custom prefix:
+
+```bash
+PREFIX=~/.local curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+```
+
+**Rust projects** — add to `Cargo.toml`:
+
+```toml
+[dependencies]
+redlinedb = "1"
+```
+
+**C/C++ drop-in for SQLite** — link `redlinedb` instead of `sqlite3`, keep your existing `#include <sqlite3.h>`:
+
+```c
+// No source changes needed — sqlite3.h shim re-exports all symbols
+#include <sqlite3.h>
+```
+
+```sh
+cc myapp.c -I/usr/local/include -L/usr/local/lib -lredlinedb -o myapp
+```
+
+**Direct download** — pre-built tarballs for every platform on the [releases page](https://github.com/neverhuman/RedlineDB/releases):
+
+| Platform | File |
+|---|---|
+| Linux x86_64 | `redlinedb-v1.0.0-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `redlinedb-v1.0.0-macos-arm64.tar.gz` |
+| macOS Intel | `redlinedb-v1.0.0-macos-x86_64.tar.gz` |
+
+Each tarball contains: `bin/redlinedb` (CLI), `lib/libredlinedb.{so,dylib,a}`, `include/redlinedb.h`, `include/sqlite3.h`.
+
+---
+
 ## Why RedlineDB
 
 SQLite is the most-deployed database engine on Earth — billions of installs, decades of stability, a public-domain test corpus that runs to roughly 92.6 million lines. It is also a single-writer database. Its WAL design is brilliant for the embedded device that birthed it, and a hard ceiling for the embedded application that has since become a 64-thread service.
