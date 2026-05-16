@@ -134,22 +134,34 @@ fn main() {
         }
     }
 
-    let database = database.unwrap_or_else(|| {
-        eprintln!("missing --database");
-        exit(2);
-    });
-    let listen = listen.unwrap_or_else(|| {
-        eprintln!("missing --listen");
-        exit(2);
-    });
-    let db = Database::open(database).unwrap_or_else(|err| {
-        eprintln!("{err}");
-        exit(1);
-    });
-    let listener = TcpListener::bind(listen).unwrap_or_else(|err| {
-        eprintln!("{err}");
-        exit(1);
-    });
+    let database = match database {
+        Some(v) => v,
+        None => {
+            eprintln!("missing --database");
+            exit(2);
+        }
+    };
+    let listen = match listen {
+        Some(v) => v,
+        None => {
+            eprintln!("missing --listen");
+            exit(2);
+        }
+    };
+    let db = match Database::open(database) {
+        Ok(db) => db,
+        Err(err) => {
+            eprintln!("{err}");
+            exit(1);
+        }
+    };
+    let listener = match TcpListener::bind(listen) {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!("{err}");
+            exit(1);
+        }
+    };
     serve(listener, db);
 }
 

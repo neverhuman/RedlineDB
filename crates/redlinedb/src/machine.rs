@@ -310,9 +310,10 @@ fn resolve_table(snapshot: &SchemaSnapshot, table_ref: TableRef) -> Result<Arc<T
     if snapshot.meta.schema_epoch.0 != table_ref.schema_epoch {
         return Err(Error::new(ErrorCode::Schema, "schema epoch changed"));
     }
-    snapshot
-        .table_by_id(TableId(table_ref.table_id))
-        .ok_or_else(|| Error::new(ErrorCode::NotFound, "table not found"))
+    match snapshot.table_by_id(TableId(table_ref.table_id)) {
+        Some(t) => Ok(t),
+        None => Err(Error::new(ErrorCode::NotFound, "table not found")),
+    }
 }
 
 fn validate_columns(
@@ -337,11 +338,14 @@ fn resolve_column<'a>(
             "column belongs to a different table",
         ));
     }
-    let column = table
+    let column = match table
         .columns
         .iter()
         .find(|column| column.column_id.0 == column_ref.column_id)
-        .ok_or_else(|| Error::new(ErrorCode::NotFound, "column not found"))?;
+    {
+        Some(c) => c,
+        None => return Err(Error::new(ErrorCode::NotFound, "column not found")),
+    };
     Ok(column)
 }
 
