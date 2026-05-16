@@ -1,6 +1,7 @@
 {
   "owners": {
     ".agents/": "agent",
+    ".cargo/": "workspace",
     ".cursor/": "agent",
     ".editorconfig": "agent",
     ".github/": "ops",

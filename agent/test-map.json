@@ -149,6 +149,10 @@
       "command": "just score",
       "purpose": "verify agent workspace markers remain routed"
     },
+    ".cargo/": {
+      "command": "just fast",
+      "purpose": "verify cargo configuration builds successfully"
+    },
     ".cursor/": {
       "command": "just score",
       "purpose": "verify editor workspace markers remain routed"
