@@ -195,6 +195,11 @@ pub(crate) fn column_ordinal_for_table(name: &str, table: &TableDef) -> Option<u
 }
 
 pub(crate) fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue> {
+    if let Expr::Value(v) = expr {
+        if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
+            return crate::parser::bind::resolve_positional(name, bindings);
+        }
+    }
     match expr {
         Expr::Value(v) => Some(match &v.value {
             sqlparser::ast::Value::Null => SqlValue::Null,
@@ -206,16 +211,6 @@ pub(crate) fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Optio
                 .unwrap_or(SqlValue::Null),
             sqlparser::ast::Value::SingleQuotedString(s) => SqlValue::Text(Arc::from(s.as_str())),
             sqlparser::ast::Value::DoubleQuotedString(s) => SqlValue::Text(Arc::from(s.as_str())),
-            sqlparser::ast::Value::Placeholder(name) => {
-                let slot = name
-                    .strip_prefix('?')
-                    .and_then(|slot| slot.parse::<usize>().ok())?;
-                bindings
-                    .get(slot)
-                    .cloned()
-                    .flatten()
-                    .unwrap_or(SqlValue::Null)
-            }
             _ => return None,
         }),
         Expr::Nested(expr) => eval_constant(expr, bindings),

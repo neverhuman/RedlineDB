@@ -34,10 +34,10 @@ pub(crate) fn row_width_value(value: &SqlValue) -> usize {
     }
 }
 
-// Lane VE: the legacy SQL-A in-place row-sort path was replaced by
-// `vec::SpillSort` + top-K heap, so this helper is currently unused
-// outside tests. Marked allow(dead_code) instead of removed to keep
-// the SQL-A surface intact.
+// Lane VE: the pre-VE SQL-A in-place row-sort path was replaced by
+// `vec::SpillSort` + top-K heap, so this helper has no current
+// caller outside tests. Marked allow(dead_code) instead of removed
+// to keep the SQL-A surface intact.
 #[allow(dead_code)]
 pub(crate) fn compare_row_ordering(
     left: &SqlRow,

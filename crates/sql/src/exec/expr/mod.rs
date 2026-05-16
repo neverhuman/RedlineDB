@@ -81,6 +81,11 @@ pub(crate) fn eval_scalar(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
+    if let Expr::Value(v) = expr {
+        if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
+            return resolve_binding(name, bindings);
+        }
+    }
     Ok(match expr {
         Expr::Value(v) => match &v.value {
             Value::Null => SqlValue::Null,
@@ -104,7 +109,6 @@ pub(crate) fn eval_scalar(
             }
             Value::HexStringLiteral(s) => SqlValue::Blob(hex_string_to_bytes(s)?),
             Value::DollarQuotedString(s) => SqlValue::Text(Arc::from(s.value.as_str())),
-            Value::Placeholder(name) => resolve_binding(name, bindings)?,
             other => {
                 return Err(Error::UnsupportedSql(format!(
                     "unsupported SQL literal: {other:?}"

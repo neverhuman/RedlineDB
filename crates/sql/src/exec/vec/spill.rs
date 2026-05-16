@@ -1,9 +1,10 @@
 //! Lane VE: spill-file format and lifecycle.
 //!
 //! Sortable / aggregatable operators that exceed `work_mem_bytes` write
-//! sorted "runs" or partial groups to a temp file. Each run is a sequence of
-//! length-prefixed rows, framed in 64KB blocks for predictable I/O. The file
-//! is deleted on drop so spill never leaks across query failures.
+//! sorted "runs" or partial groups to a scratch file. Each run is a
+//! sequence of length-prefixed rows, framed in 64KB blocks for predictable
+//! I/O. The file is deleted on drop so spill never leaks across query
+//! failures.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};

@@ -5,7 +5,7 @@
 //! can distinguish them from `NULL` propagation. A small per-call cache could
 //! be added later; for now we compile per evaluation, which keeps lifetimes
 //! simple at the cost of a modest overhead. Patterns are typically literal
-//! string constants, so this is acceptable for the SQLite-compat surface.
+//! string constants, so this is acceptable for the SQLite-API surface.
 
 use std::collections::HashMap;
 use std::sync::Mutex;

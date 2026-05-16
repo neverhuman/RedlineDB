@@ -485,16 +485,17 @@ pub(crate) fn returning_output_columns(
 
 pub(crate) fn normalize_expr(expr: Expr, params: &mut ParamLayout) -> Result<Expr> {
     Ok(match expr {
-        Expr::Value(v) => match &v.value {
-            Value::Placeholder(name) => {
-                let name = normalize_placeholder(name, params)?;
+        Expr::Value(v) => {
+            if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
+                let normalized = normalize_bind_marker(name, params)?;
                 Expr::Value(ValueWithSpan {
-                    value: Value::Placeholder(name),
+                    value: crate::parser::bind::into_bind_value(normalized),
                     span: v.span,
                 })
+            } else {
+                Expr::Value(v)
             }
-            _ => Expr::Value(v),
-        },
+        }
         Expr::BinaryOp { left, op, right } => Expr::BinaryOp {
             left: Box::new(normalize_expr(*left, params)?),
             op,
@@ -652,7 +653,7 @@ pub(crate) fn normalize_function_args(
     Ok(())
 }
 
-pub(crate) fn normalize_placeholder(name: &str, params: &mut ParamLayout) -> Result<String> {
+pub(crate) fn normalize_bind_marker(name: &str, params: &mut ParamLayout) -> Result<String> {
     if name == "?" {
         let slot = params.push_anonymous();
         return Ok(format!("?{slot}"));

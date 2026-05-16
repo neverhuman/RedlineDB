@@ -136,9 +136,10 @@ pub(crate) fn convert_table_constraint(
         sqlparser::ast::TableConstraint::ForeignKey(fk) => {
             // Lane SQL-D phase 10: FK declarations parse-only. We synthesize
             // a CHECK(1) so the existing TableConstraintSpec surface accepts
-            // the constraint without altering the kernel API. Enforcement
-            // remains TODO; the declaration text round-trips via the
-            // CREATE TABLE normalized_sql.
+            // the constraint without altering the kernel API. Enforcement is
+            // tracked in `FEATURE_GAPS.md` (foreign-key enforcement);
+            // the declaration text round-trips via the CREATE TABLE
+            // normalized_sql.
             let _ = fk; // referenced metadata kept for future use
             Ok(TableConstraintSpec::Check {
                 name: None,
@@ -268,6 +269,11 @@ pub(crate) fn expr_to_kernel_ast(
 }
 
 pub(crate) fn sql_value_to_kernel_ast(v: &ValueWithSpan) -> Result<ExprAst> {
+    if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
+        return Err(Error::UnsupportedSql(format!(
+            "bind markers are not allowed in DDL expressions: {name}"
+        )));
+    }
     Ok(ExprAst::Const(match &v.value {
         Value::Null => OwnedValue::Null,
         Value::Boolean(v) => OwnedValue::Integer(if *v { 1 } else { 0 }),
@@ -292,11 +298,6 @@ pub(crate) fn sql_value_to_kernel_ast(v: &ValueWithSpan) -> Result<ExprAst> {
             OwnedValue::Blob(Arc::from(s.as_bytes()))
         }
         Value::HexStringLiteral(s) => OwnedValue::Blob(hex_string_to_bytes(s)?),
-        Value::Placeholder(name) => {
-            return Err(Error::UnsupportedSql(format!(
-                "placeholders are not allowed in DDL expressions: {name}"
-            )));
-        }
         other => {
             return Err(Error::UnsupportedSql(format!(
                 "unsupported SQL literal: {other:?}"

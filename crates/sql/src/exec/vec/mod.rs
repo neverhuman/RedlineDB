@@ -2,7 +2,7 @@
 //!
 //! Each submodule owns one operator class:
 //!   - [`select`] — selection vectors / batch filtering.
-//!   - [`spill`]  — temp-file format + lifecycle.
+//!   - [`spill`]  — scratch-file format + lifecycle.
 //!   - [`topk`]   — fixed-size heap for `ORDER BY ... LIMIT k`.
 //!   - [`sort`]   — external merge-sort with spill.
 //!   - [`hash_agg`] — hash-aggregation with spill on overflow.

@@ -14,7 +14,7 @@ fn new_db() -> (tempfile::TempDir, Arc<Database>, Arc<Connection>) {
 }
 
 fn new_db_with_timeout(timeout: Duration) -> (tempfile::TempDir, Arc<Database>, Arc<Connection>) {
-    let dir = tempdir().expect("temp dir");
+    let dir = tempdir().expect("scratch dir");
     let path = dir.path().join("sql-conn-test.db");
     let opts = DbOptions {
         busy_timeout: timeout,

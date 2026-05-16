@@ -413,7 +413,7 @@ pub fn estimate_group_bytes(key: &[SqlValue], aggs_len: usize) -> usize {
 
 /// Encode a group-by tuple into stable bytes suitable for hash lookup.
 ///
-/// Public so the legacy grouped-aggregate path in `exec.rs` can drop its
+/// Public so the scalar grouped-aggregate path in `exec.rs` can drop its
 /// O(n²) linear-find group build and use a real `HashMap`. Mirrors
 /// [`HashAggregator::encode_key`] without exposing the type.
 pub fn encode_group_key_bytes(values: &[SqlValue]) -> Result<Vec<u8>> {
@@ -421,7 +421,7 @@ pub fn encode_group_key_bytes(values: &[SqlValue]) -> Result<Vec<u8>> {
 }
 
 impl HashAggregator {
-    /// Public alias for [`HashAggregator::encode_key`] used by the legacy
+    /// Public alias for [`HashAggregator::encode_key`] used by the scalar
     /// grouped-aggregate path. Keeps the canonical encoding in one place.
     pub fn encode_key_public(values: &[SqlValue]) -> Result<Vec<u8>> {
         Self::encode_key(values)

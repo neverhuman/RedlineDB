@@ -27,6 +27,7 @@ use crate::session::BeginMode;
 use crate::statement::*;
 use crate::value::SqlValue;
 
+pub(crate) mod bind;
 mod helpers;
 #[allow(unused_imports)]
 pub(crate) use helpers::*;
@@ -59,7 +60,7 @@ pub(crate) fn is_pragma_sql(sql: &str) -> bool {
 /// tail pointer must reference into the caller's original buffer.
 ///
 /// The split is "string-aware": semicolons inside `'...'`, `"..."`, or
-/// `[...]` (SQLite legacy bracket quoting) and inside `--` line comments or
+/// `[...]` (SQLite bracket-quoting form) and inside `--` line comments or
 /// `/* ... */` block comments are not considered terminators. Doubled quote
 /// characters inside a string are treated as escapes.
 ///
@@ -84,7 +85,7 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
                 i += 1;
                 continue;
             }
-            // SQLite-style `[...]` legacy bracket quoting closes on `]`.
+            // SQLite-style `[...]` bracket quoting closes on `]`.
             if quote == b'[' && b == b']' {
                 in_string = None;
                 i += 1;

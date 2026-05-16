@@ -27,8 +27,9 @@ pub enum BeginMode {
 #[derive(Debug, Clone)]
 pub struct JournalEntry {
     pub sql: String,
-    /// 1-based bindings (slot 0 unused) matching `Statement::bindings`. Empty
-    /// for statements driven through `Connection::execute(sql)` directly.
+    /// 1-based bindings (slot 0 reserved) matching `Statement::bindings`.
+    /// Empty for statements driven through `Connection::execute(sql)`
+    /// directly.
     pub bindings: Vec<Option<SqlValue>>,
 }
 

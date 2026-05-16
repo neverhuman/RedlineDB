@@ -11,7 +11,7 @@ pub(crate) fn bind_create_table(
         ));
     }
     if create_table.or_replace
-        || create_table.temporary
+        || crate::parser::bind::create_table_is_session_scoped(&create_table)
         || create_table.external
         || create_table.dynamic
         || create_table.global.is_some()
@@ -108,7 +108,7 @@ pub(crate) fn bind_create_index(
             Ok(c) => columns.push(c),
             Err(_) => {
                 // Lane SQL-D phase 10: parse-only acceptance of expression
-                // indexes. We record a placeholder column so the catalog
+                // indexes. We record a synthetic column so the catalog
                 // operation can be rejected at execute time with a clear
                 // diagnostic, while CREATE INDEX still parses for tools that
                 // round-trip schema text.
@@ -281,10 +281,10 @@ pub(crate) fn bind_alter_table(
                     "ALTER TABLE DROP COLUMN supports a single column at a time".to_owned(),
                 ));
             }
-            // Parser-only Tier-1 stub: catalog mutation is rejected. We still
-            // accept and validate the syntax so callers can build prepared
-            // templates and schema migration tools surface the correct
-            // unsupported-execution error instead of a parse error.
+            // Parser-only Tier-1 acceptance: catalog mutation is rejected.
+            // We still accept and validate the syntax so callers can build
+            // prepared templates and schema migration tools surface the
+            // correct unsupported-execution error instead of a parse error.
             redlinedb_kernel::catalog::AlterTableOperationSpec::DropColumn {
                 column_name: DbName::new(column_names.into_iter().next().unwrap().value),
                 if_exists,

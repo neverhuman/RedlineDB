@@ -11,8 +11,9 @@
 // - Acquire the kernel-side `UniqueKeyLockTable` guard before probing /
 //   inserting so concurrent writers serialize on the same key.
 // - Maintain every index (unique or not) on every successful DML mutation.
-// - Pre-Lane-A indexes (no `meta_page_id`) fall back to the legacy O(N)
-//   scan; this preserves correctness while we ship.
+// - Pre-Lane-A indexes (no `meta_page_id`) fall back to the heap-scan
+//   path used before physical indexes existed; this preserves
+//   correctness while we ship.
 use std::sync::Arc;
 
 use redlinedb_kernel::catalog::{
@@ -61,7 +62,7 @@ pub(crate) fn build_index_key(index: &IndexDef, values: &[SqlValue]) -> BuiltInd
 
 /// Returns the live `BtreeIndex` handle for `index` if Lane A allocated one.
 /// Pre-Lane-A indexes (no `meta_page_id`) return `None`; callers should fall
-/// back to the legacy heap-scan path in that case.
+/// back to the heap-scan path used before Lane A in that case.
 pub(crate) fn open_index_handle(engine: &Engine, index: &IndexDef) -> Option<Arc<BtreeIndex>> {
     index.meta_page_id?;
     engine.index_handle(index.index_id)
@@ -161,7 +162,7 @@ pub(crate) fn maintain_indexes_on_delete(
     Ok(())
 }
 
-/// Reflect an UPDATE: delete-mark old entries whose key or rowid changed,
+/// Reflect an UPDATE: delete-mark prior entries whose key or rowid changed,
 /// then insert the new entries. Indexes whose key column set is untouched
 /// AND whose rowid is unchanged are left alone (no churn).
 #[allow(clippy::too_many_arguments)]

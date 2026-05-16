@@ -41,7 +41,7 @@ use super::tail::load_table_row_by_rowid;
 pub(crate) use super::index_batch::OutputColumnSource;
 
 /// Maximum batch size used by the streaming cursor consumer. Matches
-/// the legacy `range_scan_visible` wrapper's chunk size so per-batch
+/// the prior `range_scan_visible` wrapper's chunk size so per-batch
 /// telemetry stays comparable.
 pub(crate) const MAX_BATCH: usize = 256;
 
@@ -238,7 +238,8 @@ pub(crate) fn execute_index_point_lookup(
         // instead the caller falls back to a TableScan. The planner is
         // not supposed to advertise this case (Wave 2 wired
         // `meta_page_id` for every new index), but a paranoid early
-        // return here keeps the executor safe under stale snapshots.
+        // return here keeps the executor safe under outdated catalog
+        // snapshots.
         return Ok(Vec::new());
     };
     let entries =
@@ -726,6 +727,11 @@ fn column_ordinal_for_table(name: &str, table: &TableDef) -> Option<usize> {
 /// predicate as non-indexable.
 fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue> {
     use sqlparser::ast::UnaryOperator;
+    if let Expr::Value(v) = expr {
+        if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
+            return crate::parser::bind::resolve_positional(name, bindings);
+        }
+    }
     match expr {
         Expr::Value(v) => Some(match &v.value {
             Value::Null => SqlValue::Null,
@@ -737,16 +743,6 @@ fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue>
                 .unwrap_or(SqlValue::Null),
             Value::SingleQuotedString(s) => SqlValue::Text(std::sync::Arc::from(s.as_str())),
             Value::DoubleQuotedString(s) => SqlValue::Text(std::sync::Arc::from(s.as_str())),
-            Value::Placeholder(name) => {
-                let slot = name
-                    .strip_prefix('?')
-                    .and_then(|slot| slot.parse::<usize>().ok())?;
-                bindings
-                    .get(slot)
-                    .cloned()
-                    .flatten()
-                    .unwrap_or(SqlValue::Null)
-            }
             _ => return None,
         }),
         Expr::Nested(inner) => eval_constant(inner, bindings),
