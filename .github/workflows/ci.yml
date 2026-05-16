@@ -22,6 +22,8 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install mold linker
+        run: sudo apt-get install -y mold
       - name: Install cargo-nextest
         run: |
           curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin

@@ -101,6 +101,22 @@ check_presence() {
     fi
 }
 
+check_mold() {
+    # mold is required on Linux (see .cargo/config.toml [target.x86_64-unknown-linux-gnu])
+    case "$(uname -s)" in
+      Linux)
+        if command -v mold >/dev/null 2>&1; then
+            pass mold "$(mold --version 2>/dev/null | head -n1)"
+        else
+            fail mold "missing on Linux (install: sudo apt-get install mold)"
+        fi
+        ;;
+      *)
+        pass mold "n/a (not required on $(uname -s))"
+        ;;
+    esac
+}
+
 check_python() {
     if ! command -v python3 >/dev/null 2>&1; then
         fail python3 "missing (expected >=3.10)"
@@ -125,6 +141,7 @@ main() {
     check_nextest
     check_cargo_deny
     check_gitleaks
+    check_mold
     check_presence jq
     check_presence curl
     check_presence just
