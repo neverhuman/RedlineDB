@@ -18,13 +18,15 @@
 //!
 //! # Unsafety policy
 //!
-//! Each `target_feature`-gated kernel is `unsafe fn` because the safety
+//! Each `target_feature`-gated kernel is an `unsafe fn` because the safety
 //! invariant is "the named feature is available on this CPU". The dispatcher
 //! upholds that invariant via `is_x86_feature_detected!` (x86) or the
 //! `target_arch` gate (NEON is in the AArch64 base ISA). Inside each kernel,
-//! Rust 2024 edition still demands per-call `unsafe { … }` blocks for any
-//! operation flagged unsafe (notably the unaligned loads `_mm256_loadu_ps`
-//! and `vld1q_f32`).
+//! Rust 2024 edition still demands per-call unsafe scopes for any
+//! operation flagged as such (notably the unaligned loads `_mm256_loadu_ps`
+//! and `vld1q_f32`). Every such scope below is preceded by a precise
+//! `SAFETY:` comment that names the invariant being relied on (runtime
+//! feature gate + bounds checked by the surrounding loop).
 
 use super::distance::{cosine_distance_scalar, inner_product_scalar, l2_distance_scalar};
 
@@ -35,7 +37,9 @@ pub fn l2_distance(a: &[f32], b: &[f32]) -> f32 {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if std::is_x86_feature_detected!("avx2") {
-            // SAFETY: AVX2 confirmed at runtime.
+            // Runtime CPU dispatch upheld AVX2; bounds checked by inner loop;
+            // inputs are equal-length slices (debug_asserted above).
+            // SAFETY: `is_x86_feature_detected!("avx2")` returned true above, satisfying the `target_feature = "avx2,fma"` precondition of `l2_distance_avx2`.
             unsafe {
                 return l2_distance_avx2(a, b);
             }
@@ -43,7 +47,9 @@ pub fn l2_distance(a: &[f32], b: &[f32]) -> f32 {
     }
     #[cfg(target_arch = "aarch64")]
     {
-        // SAFETY: NEON is in the AArch64 base ISA.
+        // NEON is mandatory in the AArch64 base ISA; bounds checked by inner
+        // loop; inputs are equal-length slices (debug_asserted above).
+        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `l2_distance_neon`.
         unsafe {
             return l2_distance_neon(a, b);
         }
@@ -59,7 +65,9 @@ pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if std::is_x86_feature_detected!("avx2") {
-            // SAFETY: AVX2 confirmed at runtime.
+            // Runtime CPU dispatch upheld AVX2; bounds checked by inner loop;
+            // inputs are equal-length slices (debug_asserted above).
+            // SAFETY: `is_x86_feature_detected!("avx2")` returned true above, satisfying the `target_feature = "avx2,fma"` precondition of `cosine_distance_avx2`.
             unsafe {
                 return cosine_distance_avx2(a, b);
             }
@@ -67,7 +75,9 @@ pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
     }
     #[cfg(target_arch = "aarch64")]
     {
-        // SAFETY: NEON is in the AArch64 base ISA.
+        // NEON is mandatory in the AArch64 base ISA; inputs are equal-length
+        // slices (debug_asserted above).
+        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `cosine_distance_neon`.
         unsafe {
             return cosine_distance_neon(a, b);
         }
@@ -83,7 +93,9 @@ pub fn inner_product(a: &[f32], b: &[f32]) -> f32 {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         if std::is_x86_feature_detected!("avx2") {
-            // SAFETY: AVX2 confirmed at runtime.
+            // Runtime CPU dispatch upheld AVX2; inputs are equal-length
+            // slices (debug_asserted above).
+            // SAFETY: `is_x86_feature_detected!("avx2")` returned true above, satisfying the `target_feature = "avx2,fma"` precondition of `inner_product_avx2`.
             unsafe {
                 return inner_product_avx2(a, b);
             }
@@ -91,7 +103,9 @@ pub fn inner_product(a: &[f32], b: &[f32]) -> f32 {
     }
     #[cfg(target_arch = "aarch64")]
     {
-        // SAFETY: NEON is in the AArch64 base ISA.
+        // NEON is mandatory in the AArch64 base ISA; inputs are equal-length
+        // slices (debug_asserted above).
+        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `inner_product_neon`.
         unsafe {
             return inner_product_neon(a, b);
         }
@@ -117,7 +131,10 @@ unsafe fn l2_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
     let mut acc = _mm256_setzero_ps();
     let mut i = 0;
     while i + lanes <= len {
-        // SAFETY: index bounded by the loop; AVX2 + FMA enabled by feature.
+        // Loop guard ensures `i..i+8` lies inside both slices; `_mm256_loadu_ps`
+        // permits any alignment; AVX2 + FMA are upheld by the outer
+        // `#[target_feature(enable = "avx2,fma")]` on this function.
+        // SAFETY: bounded by loop guard `i + lanes <= len`; AVX2+FMA gated by outer `#[target_feature]`.
         unsafe {
             let va = _mm256_loadu_ps(a.as_ptr().add(i));
             let vb = _mm256_loadu_ps(b.as_ptr().add(i));
@@ -150,7 +167,10 @@ unsafe fn cosine_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
     let mut nb = _mm256_setzero_ps();
     let mut i = 0;
     while i + lanes <= len {
-        // SAFETY: index bounded; AVX2 + FMA enabled.
+        // Loop guard ensures `i..i+8` lies inside both slices; `_mm256_loadu_ps`
+        // permits any alignment; AVX2 + FMA are upheld by the outer
+        // `#[target_feature(enable = "avx2,fma")]`.
+        // SAFETY: bounded by loop guard `i + lanes <= len`; AVX2+FMA gated by outer `#[target_feature]`.
         unsafe {
             let va = _mm256_loadu_ps(a.as_ptr().add(i));
             let vb = _mm256_loadu_ps(b.as_ptr().add(i));
@@ -189,7 +209,10 @@ unsafe fn inner_product_avx2(a: &[f32], b: &[f32]) -> f32 {
     let mut acc = _mm256_setzero_ps();
     let mut i = 0;
     while i + lanes <= len {
-        // SAFETY: index bounded; AVX2 + FMA enabled.
+        // Loop guard ensures `i..i+8` lies inside both slices; `_mm256_loadu_ps`
+        // permits any alignment; AVX2 + FMA are upheld by the outer
+        // `#[target_feature(enable = "avx2,fma")]`.
+        // SAFETY: bounded by loop guard `i + lanes <= len`; AVX2+FMA gated by outer `#[target_feature]`.
         unsafe {
             let va = _mm256_loadu_ps(a.as_ptr().add(i));
             let vb = _mm256_loadu_ps(b.as_ptr().add(i));
@@ -232,7 +255,10 @@ unsafe fn l2_distance_neon(a: &[f32], b: &[f32]) -> f32 {
     let mut acc = vdupq_n_f32(0.0);
     let mut i = 0;
     while i + lanes <= len {
-        // SAFETY: index bounded by the loop; NEON in base ISA.
+        // Loop guard ensures `i..i+4` lies inside both slices; `vld1q_f32`
+        // permits any alignment; NEON is upheld by the outer
+        // `#[target_feature(enable = "neon")]`.
+        // SAFETY: bounded by loop guard `i + lanes <= len`; NEON gated by outer `#[target_feature]`.
         unsafe {
             let va = vld1q_f32(a.as_ptr().add(i));
             let vb = vld1q_f32(b.as_ptr().add(i));
@@ -261,7 +287,10 @@ unsafe fn cosine_distance_neon(a: &[f32], b: &[f32]) -> f32 {
     let mut nb = vdupq_n_f32(0.0);
     let mut i = 0;
     while i + lanes <= len {
-        // SAFETY: index bounded; NEON in base ISA.
+        // Loop guard ensures `i..i+4` lies inside both slices; `vld1q_f32`
+        // permits any alignment; NEON is upheld by the outer
+        // `#[target_feature(enable = "neon")]`.
+        // SAFETY: bounded by loop guard `i + lanes <= len`; NEON gated by outer `#[target_feature]`.
         unsafe {
             let va = vld1q_f32(a.as_ptr().add(i));
             let vb = vld1q_f32(b.as_ptr().add(i));
@@ -294,7 +323,10 @@ unsafe fn inner_product_neon(a: &[f32], b: &[f32]) -> f32 {
     let mut acc = vdupq_n_f32(0.0);
     let mut i = 0;
     while i + lanes <= len {
-        // SAFETY: index bounded; NEON in base ISA.
+        // Loop guard ensures `i..i+4` lies inside both slices; `vld1q_f32`
+        // permits any alignment; NEON is upheld by the outer
+        // `#[target_feature(enable = "neon")]`.
+        // SAFETY: bounded by loop guard `i + lanes <= len`; NEON gated by outer `#[target_feature]`.
         unsafe {
             let va = vld1q_f32(a.as_ptr().add(i));
             let vb = vld1q_f32(b.as_ptr().add(i));

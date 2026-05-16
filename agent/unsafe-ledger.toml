@@ -1,27 +1,14 @@
 # Keep unsafe blocks rare and auditable.
 # Each entry records file, line, owner, invariant, and proof lane.
 # Section D of the jankurai repair plan fills these in per file as
-# SAFETY comments land. Empty entries mean the ledger has not yet
-# been populated for that file — the audit will still flag missing
-# SAFETY comments separately.
+# SAFETY comments land. File-glob entries are placeholders awaiting
+# per-line entries from the matching D sub-section.
 
 [[entries]]
 file = "crates/ffi/src/*.rs"
 owner = "c-abi"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
-invariant = "all unsafe blocks dereference raw pointers obtained from the public C ABI; callers are bound by the contract in docs/exceptions/ffi-c-header.md; ledger populated per-site by Section D1 (see ~/.claude/plans/vast-spinning-seal.md)"
-
-[[entries]]
-file = "crates/kernel/src/vector/simd.rs"
-owner = "phase10-vector-flat-and-simd"
-proof_lane = "rtk cargo test -p redlinedb-kernel --test vector_simd --quiet --locked"
-invariant = "SIMD intrinsics dispatched only when the runtime feature flag is set; ledger populated per-site by Section D2"
-
-[[entries]]
-file = "crates/kernel/src/vector/diskann/sectors.rs"
-owner = "phase10-diskann-index"
-proof_lane = "rtk cargo test -p redlinedb-kernel --test diskann_correctness --quiet --locked"
-invariant = "page sector access guarded by checksum + bounds check; static mut replaced with OnceLock<Mutex<_>> by Section D2"
+invariant = "all unsafe blocks dereference raw pointers obtained from the public C ABI; callers are bound by the contract in docs/exceptions/ffi-c-header.md; ledger populated per-site by Section D1"
 
 [[entries]]
 file = "crates/redlinedb/src/registry.rs"
@@ -41,3 +28,93 @@ owner = "bench-harness"
 proof_lane = "rtk cargo test -p redlinedb-bench --quiet --locked"
 invariant = "libc::rusage initialization via MaybeUninit + getrusage by Section D4"
 
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 43
+owner = "phase10-vector-flat-and-simd"
+invariant = "AVX2 dispatch upheld at runtime via `is_x86_feature_detected!(\"avx2\")`; calling `l2_distance_avx2` only when its `target_feature=\"avx2,fma\"` precondition is satisfied; equal-length slices debug_asserted at entry."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 53
+owner = "phase10-vector-flat-and-simd"
+invariant = "NEON is mandatory in the AArch64 base ISA; `target_feature=\"neon\"` precondition of `l2_distance_neon` always satisfied on aarch64; equal-length slices debug_asserted at entry."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 71
+owner = "phase10-vector-flat-and-simd"
+invariant = "AVX2 dispatch upheld at runtime via `is_x86_feature_detected!(\"avx2\")`; calling `cosine_distance_avx2` only when its `target_feature=\"avx2,fma\"` precondition is satisfied; equal-length slices debug_asserted at entry."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 81
+owner = "phase10-vector-flat-and-simd"
+invariant = "NEON is mandatory in the AArch64 base ISA; `target_feature=\"neon\"` precondition of `cosine_distance_neon` always satisfied on aarch64; equal-length slices debug_asserted at entry."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 99
+owner = "phase10-vector-flat-and-simd"
+invariant = "AVX2 dispatch upheld at runtime via `is_x86_feature_detected!(\"avx2\")`; calling `inner_product_avx2` only when its `target_feature=\"avx2,fma\"` precondition is satisfied; equal-length slices debug_asserted at entry."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 109
+owner = "phase10-vector-flat-and-simd"
+invariant = "NEON is mandatory in the AArch64 base ISA; `target_feature=\"neon\"` precondition of `inner_product_neon` always satisfied on aarch64; equal-length slices debug_asserted at entry."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 138
+owner = "phase10-vector-flat-and-simd"
+invariant = "Loop guard `i + lanes <= len` bounds the 8-lane unaligned load `_mm256_loadu_ps` to `a[i..i+8]` and `b[i..i+8]`; `_mm256_loadu_ps` accepts any alignment; AVX2+FMA upheld by the enclosing function's `#[target_feature(enable=\"avx2,fma\")]`."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 174
+owner = "phase10-vector-flat-and-simd"
+invariant = "Loop guard `i + lanes <= len` bounds the 8-lane unaligned loads to `a[i..i+8]` and `b[i..i+8]`; `_mm256_loadu_ps` accepts any alignment; AVX2+FMA upheld by the enclosing function's `#[target_feature(enable=\"avx2,fma\")]`."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 216
+owner = "phase10-vector-flat-and-simd"
+invariant = "Loop guard `i + lanes <= len` bounds the 8-lane unaligned loads to `a[i..i+8]` and `b[i..i+8]`; `_mm256_loadu_ps` accepts any alignment; AVX2+FMA upheld by the enclosing function's `#[target_feature(enable=\"avx2,fma\")]`."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 262
+owner = "phase10-vector-flat-and-simd"
+invariant = "Loop guard `i + lanes <= len` bounds the 4-lane unaligned load `vld1q_f32` to `a[i..i+4]` and `b[i..i+4]`; `vld1q_f32` accepts any alignment; NEON upheld by the enclosing function's `#[target_feature(enable=\"neon\")]` and AArch64 base ISA."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 294
+owner = "phase10-vector-flat-and-simd"
+invariant = "Loop guard `i + lanes <= len` bounds the 4-lane unaligned loads to `a[i..i+4]` and `b[i..i+4]`; `vld1q_f32` accepts any alignment; NEON upheld by the enclosing function's `#[target_feature(enable=\"neon\")]`."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+line = 330
+owner = "phase10-vector-flat-and-simd"
+invariant = "Loop guard `i + lanes <= len` bounds the 4-lane unaligned loads to `a[i..i+4]` and `b[i..i+4]`; `vld1q_f32` accepts any alignment; NEON upheld by the enclosing function's `#[target_feature(enable=\"neon\")]`."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/vector/diskann/sectors.rs"
+line = 256
+owner = "phase10-diskann-index"
+invariant = "`slice::align_to::<f32>` never dereferences; returns the 4-aligned middle window plus the unaligned head/tail bytes; we check both head and tail are empty so any non-4-aligned input is rejected with `SectorError::LayoutMismatch` before any f32 read. f32 has no validity invariant beyond its 4-byte width (NaN bit patterns are valid f32); lifetime `'a` is preserved because the returned slice borrows from `vector_bytes`, which borrows from `buf: &'a [u8]`."
+proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::diskann::sectors --locked"

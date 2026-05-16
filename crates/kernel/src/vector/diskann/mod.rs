@@ -37,7 +37,9 @@ mod sectors;
 pub use builder::{BuildParams, BuildStats, build};
 pub use prune::robust_prune;
 pub use searcher::{SearchParams, search};
-pub use sectors::{SECTOR_SIZE, SectorLayout, decode_node, encode_node};
+pub use sectors::{
+    SECTOR_SIZE, SectorBufferPool, SectorLayout, decode_node, encode_node, process_sector_pool,
+};
 
 use std::sync::Arc;
 
