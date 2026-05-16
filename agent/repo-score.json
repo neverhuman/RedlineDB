@@ -1,7 +1,7 @@
 {
-  "report_fingerprint": "sha256:3898960680a56db4f0dfc0901fb39552c55c02c0bf3c3c42b5882f5f2f2dd89a",
-  "input_fingerprint": "sha256:6e9d30187c37ab1e6934e8c372a24d6c18a5b0bab2cd62db66c49e94c5455d3a",
-  "policy_fingerprint": "sha256:f0229497d5d7750bcb0694260d279d2ca48824f3b83ca7846c3577ed5026f437",
+  "report_fingerprint": "sha256:4dda2313e867f904d0f68f315589c57f15800dc63a64906fbf3ed83ad7f93509",
+  "input_fingerprint": "sha256:be43855288f8e9c4a8986ebc8f776fe827bc9972677b4c74a8bb152ef64deba4",
+  "policy_fingerprint": "sha256:09ed363ac485d9afd9923469b9feb56457a7635c1a6a64b88a838a3e231a0af6",
   "manifest_fingerprints": {
     "owner_map": "sha256:74f494a6cbc365236d62d3dfc1061a69f5f4c34fa0cc94ba1fb397e3b81db9f6",
     "test_map": "sha256:b9ab67436301f2686ca4b115bfb46eef6e0dd1f5ed3c12ba7260c6de2241e036",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778897206",
+  "generated_at": "1778897427",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -24,13 +24,10 @@
   "observed_conformance_level": "HL2",
   "conformance_decision": "block",
   "conformance_blockers": [
-    "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
-    "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-001-DEAD-MARKER on crates/bench/src/bin/chaos_report.rs",
     "HLT-000-SCORE-DIMENSION:vibe on crates/bench/src/chaos.rs",
     "HLT-022-AUTHZ-ISOLATION-GAP on crates/bench/src/config.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/bench/src/process_metrics.rs",
@@ -43,26 +40,26 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/window.rs"
+    "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/schema.rs"
   ],
   "repo": ".",
-  "run_id": "1778897206",
-  "started_at": "1778897206",
-  "elapsed_ms": 5348,
+  "run_id": "1778897427",
+  "started_at": "1778897427",
+  "elapsed_ms": 5294,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 68,
+  "score": 70,
   "raw_score": 82,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 20,
+    "hard_findings": 17,
     "soft_findings": 4,
     "ratchet": {
-      "baseline_score": 68,
+      "baseline_score": 70,
       "allowed_drop": 0,
       "passed": false,
       "score_delta": 0,
@@ -75,7 +72,7 @@
     }
   },
   "git": {
-    "head": "aa10551",
+    "head": "ee40f3b",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -101,7 +98,6 @@
   },
   "caps_applied": [
     "non-optimal-product-language-found",
-    "vibe-placeholders-in-product-code",
     "fallback-soup-in-product-code",
     "severe-duplication-in-product-code",
     "authz-or-data-isolation-gap",
@@ -322,8 +318,7 @@
         "reference-profile cell `ops` has local AGENTS.md guidance",
         "root `README.md` routes to workspace layout",
         "owner map covers audited paths",
-        "authored code file exceeds 500 LOC",
-        "authored code file exceeds 1000 LOC"
+        "authored code file exceeds 500 LOC"
       ],
       "notes": []
     },
@@ -385,14 +380,12 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 0,
-      "weighted_points": 0.0,
+      "score": 4,
+      "weighted_points": 0.48,
       "evidence": [
-        "largest authored code file: crates/bench/src/bin/chaos_report.rs (1135 LOC)",
+        "largest authored code file: crates/sql/src/exec/expr/scalar.rs (957 LOC)",
         "code file exceeds 500 LOC",
-        "code file exceeds 1000 LOC",
         "duplicate code block marker found",
-        "TODO/stub marker found",
         "fallback soup marker found",
         "rust bad-behavior hard findings: 8",
         "ci bad-behavior advisory signals: 1",
@@ -497,7 +490,10 @@
     "has_rendered_ux_lane": true,
     "missing_categories": [],
     "evidence": {
-      "accessibility": [],
+      "accessibility": [
+        "agent/repo-score.json",
+        "agent/repo-score.md"
+      ],
       "api_mocks": [],
       "artifact_backed_proof": [
         "agent/proof-lanes.toml",
@@ -512,7 +508,9 @@
       ],
       "layout_stability": [],
       "playwright_visual": [],
-      "storybook": [],
+      "storybook": [
+        "agent/repo-score.json"
+      ],
       "visual_review": []
     }
   },
@@ -1346,20 +1344,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 0 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 4 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/bench/src/bin/chaos_report.rs (1135 LOC)",
+        "largest authored code file: crates/sql/src/exec/expr/scalar.rs (957 LOC)",
         "code file exceeds 500 LOC",
-        "code file exceeds 1000 LOC",
-        "duplicate code block marker found"
+        "duplicate code block marker found",
+        "fallback soup marker found"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:3add82c33c022234e0b0d01e6f39147c916923bef966399e49a8bf5b469da643",
+      "fingerprint": "sha256:96c5cad18699d35a30303c6cc08506625dbdf3bd60872140bde1ce5ed22a035d",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -1413,50 +1411,6 @@
       "lane": "fast",
       "docs_url": "docs/testing.md",
       "owner": "workspace"
-    },
-    {
-      "severity": "high",
-      "category": "generated",
-      "path": "agent/generated-zones.toml",
-      "problem": "generated zone file `agent/repo-score.json` is missing",
-      "agent_fix": "regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally",
-      "evidence": [
-        "generated zone integrity violation"
-      ],
-      "check_id": "HLT-002-GENERATED-MUTATION:generated",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "contract-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:da4c97d8849ada8e584127cefd2a38618b2122ac9f5d9918c4996048a2e47b21",
-      "rule_id": "HLT-002-GENERATED-MUTATION",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
-      "owner": "agent",
-      "line": 1
-    },
-    {
-      "severity": "high",
-      "category": "generated",
-      "path": "agent/generated-zones.toml",
-      "problem": "generated zone file `agent/repo-score.md` is missing",
-      "agent_fix": "regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally",
-      "evidence": [
-        "generated zone integrity violation"
-      ],
-      "check_id": "HLT-002-GENERATED-MUTATION:generated",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "contract-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:73f51c07759943db494d8bd45c79b3ea786d6bce0e391f2408f30b6a9de7af8c",
-      "rule_id": "HLT-002-GENERATED-MUTATION",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
-      "owner": "agent",
-      "line": 1
     },
     {
       "severity": "high",
@@ -1541,28 +1495,6 @@
       "lane": "fast",
       "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
       "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/bench/src/bin/chaos_report.rs",
-      "problem": "fallback soup detected in product code",
-      "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
-      "evidence": [
-        "crates/bench/src/bin/chaos_report.rs:82 let version_root = version_root.unwrap_or_else(default_version_root);"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:cf89b17f2859cc77b6dfb4364119b2686105e55365d5ed3a83a48598a41a83ac",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "bench-harness",
-      "line": 82
     },
     {
       "severity": "high",
@@ -1863,24 +1795,24 @@
     {
       "severity": "high",
       "category": "vibe",
-      "path": "crates/sql/src/exec/expr/window.rs",
-      "problem": "product code contains TODO/stub/unimplemented/unreachable placeholder markers",
-      "agent_fix": "replace placeholders with implemented behavior, typed unsupported-state errors, or a tracked exception record with docs",
+      "path": "crates/kernel/src/catalog/schema.rs",
+      "problem": "fallback soup detected in product code",
+      "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
       "evidence": [
-        "crates/sql/src/exec/expr/window.rs:12 /// Returns `Some(Err(...))` with a structured \"not implemented\" error when"
+        "crates/kernel/src/catalog/schema.rs:179 .unwrap_or_else(|| render_create_table(table).into_boxed_str()),"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:4e3debb1552cce60a2deff460e3e4a78f2d8835c84ede146b0d72643a09e5aca",
+      "fingerprint": "sha256:b22de783182da57b8087c5393ba14a322434752d8ee7dc68d3fc82b64f623e2f",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 12
+      "owner": "storage-and-catalog",
+      "line": 179
     },
     {
       "severity": "medium",
@@ -1916,26 +1848,6 @@
       "owner": "bench-harness",
       "task": "add owner/non-owner authorization tests or RLS evidence for the touched data boundary",
       "why": "authorization or data-isolation surface lacks direct negative proof"
-    },
-    {
-      "path": "agent/generated-zones.toml",
-      "priority": "high",
-      "rule_id": "HLT-002-GENERATED-MUTATION",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "owner": "agent",
-      "task": "regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally",
-      "why": "generated zone file `agent/repo-score.json` is missing"
-    },
-    {
-      "path": "agent/generated-zones.toml",
-      "priority": "high",
-      "rule_id": "HLT-002-GENERATED-MUTATION",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "owner": "agent",
-      "task": "regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally",
-      "why": "generated zone file `agent/repo-score.md` is missing"
     },
     {
       "path": "agent/test-map.json",
@@ -1975,16 +1887,6 @@
       "owner": "c-abi",
       "task": "move product runtime behavior to Rust core, TypeScript web, SQL migrations, or generated contracts; Python needs a dated advanced-ML/data exception",
       "why": "runtime code uses a language outside the chosen optimal stack"
-    },
-    {
-      "path": "crates/bench/src/bin/chaos_report.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "bench-harness",
-      "task": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
-      "why": "fallback soup detected in product code"
     },
     {
       "path": "crates/bench/src/chaos.rs",
@@ -2066,14 +1968,14 @@
       "why": "raw ownership conversion needs exact provenance and allocator proof"
     },
     {
-      "path": "crates/sql/src/exec/expr/window.rs",
+      "path": "crates/kernel/src/catalog/schema.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
-      "owner": "sql-parser-planner-executor",
-      "task": "replace placeholders with implemented behavior, typed unsupported-state errors, or a tracked exception record with docs",
-      "why": "product code contains TODO/stub/unimplemented/unreachable placeholder markers"
+      "owner": "storage-and-catalog",
+      "task": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
+      "why": "fallback soup detected in product code"
     },
     {
       "path": ".",
@@ -2083,7 +1985,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 0 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 4 below the standard floor of 85"
     },
     {
       "path": ".github/workflows/jankurai.yml",

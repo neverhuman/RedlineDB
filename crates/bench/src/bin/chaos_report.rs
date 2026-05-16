@@ -123,7 +123,10 @@ fn repo_root() -> PathBuf {
             }
         }
     }
-    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    match env::current_dir() {
+        Ok(dir) => dir,
+        Err(_) => PathBuf::from("."),
+    }
 }
 
 fn repo_git_sha(repo: &Path) -> Result<String, String> {
@@ -178,11 +181,10 @@ fn load_records(stamp_dir: &Path) -> Result<Vec<Value>, String> {
     for p in paths {
         let mut record = read_json_file(&p)?;
         if let Value::Object(ref mut map) = record {
-            let run_name = p
-                .parent()
-                .and_then(Path::file_name)
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            let run_name = match p.parent().and_then(Path::file_name) {
+                Some(name) => name.to_string_lossy().into_owned(),
+                None => String::new(),
+            };
             map.insert(
                 "_path".to_string(),
                 Value::String(p.to_string_lossy().into_owned()),
@@ -418,7 +420,10 @@ struct GroupKey {
 
 fn extract_int(value: &Value) -> Option<i64> {
     match value {
-        Value::Number(n) => n.as_i64().or_else(|| n.as_f64().map(|f| f as i64)),
+        Value::Number(n) => match n.as_i64() {
+            Some(v) => Some(v),
+            None => n.as_f64().map(|f| f as i64),
+        },
         _ => None,
     }
 }
@@ -820,12 +825,14 @@ fn run() -> Result<(), String> {
     source_paths.sort();
     source_paths.dedup();
 
-    let suite_name = manifest
+    let suite_name = match manifest
         .as_ref()
         .and_then(|m| m.get("suite"))
         .and_then(Value::as_str)
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| args.suite.clone());
+    {
+        Some(s) => s.to_string(),
+        None => args.suite.clone(),
+    };
 
     let config_path_value = manifest
         .as_ref()

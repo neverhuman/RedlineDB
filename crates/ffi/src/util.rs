@@ -144,7 +144,12 @@ pub(crate) fn to_hex(bytes: &[u8]) -> CString {
         out.push(HEX[(*byte >> 4) as usize]);
         out.push(HEX[(*byte & 0x0f) as usize]);
     }
-    CString::new(out).unwrap_or_else(|_| CString::new("blob").unwrap())
+    match CString::new(out) {
+        Ok(s) => s,
+        // hex-encoded buffer cannot contain NUL bytes; fall through to a
+        // fixed literal only as a typed last-resort sentinel.
+        Err(_) => CString::new("blob").expect("static literal contains no NUL"),
+    }
 }
 
 pub(crate) fn exec_value(
@@ -265,7 +270,12 @@ pub(crate) fn record_status_with_message(db: *mut rldb, code: c_int, message: &s
         db.last_code.store(code, Ordering::Relaxed);
         if let Ok(mut last_message) = db.last_message.lock() {
             let safe: String = message.replace('\0', "?");
-            *last_message = CString::new(safe).unwrap_or_else(|_| CString::new("error").unwrap());
+            // NUL stripped above, so CString::new never returns Err. Fixed
+            // sentinel only as a typed last-resort guard.
+            *last_message = match CString::new(safe) {
+                Ok(s) => s,
+                Err(_) => CString::new("error").expect("static literal contains no NUL"),
+            };
         }
     });
 }

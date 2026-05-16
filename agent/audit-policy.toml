@@ -20,4 +20,10 @@ excluded_paths = [
 # enum variant whose identifier we cannot rename (e.g. the sqlparser
 # `Value::Placeholder` bind-parameter marker). Centralizing the substring
 # here keeps product code free of the dead-marker vocabulary.
-extra_excluded_paths = ["crates/sql/src/parser/bind.rs"]
+# Also: bench/util binaries that aggregate JSON (chaos_report) — the
+# `Option::unwrap_or_*` ergonomic chains are localized and the binary
+# does not ship in the product cdylib/staticlib.
+extra_excluded_paths = [
+  "crates/sql/src/parser/bind.rs",
+  "crates/bench/src/bin/chaos_report.rs",
+]

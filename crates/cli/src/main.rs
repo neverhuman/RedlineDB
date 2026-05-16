@@ -192,10 +192,10 @@ fn run_stream_wal(args: &[String]) -> Result<(), String> {
     }
     let db = Database::open(&args[1]).map_err(|err| err.to_string())?;
     let slots = db.replication_slots().map_err(|err| err.to_string())?;
-    let slot = slots
-        .into_iter()
-        .find(|slot| slot.name == args[2])
-        .ok_or_else(|| "replication slot not found".to_owned())?;
+    let slot = match slots.into_iter().find(|slot| slot.name == args[2]) {
+        Some(slot) => slot,
+        None => return Err("replication slot not found".to_owned()),
+    };
     let archive = db.archive_stats().map_err(|err| err.to_string())?;
     println!(
         "{}",
@@ -217,10 +217,10 @@ fn run_stream_logical(args: &[String]) -> Result<(), String> {
     let _ndjson = args.iter().any(|arg| arg == "--ndjson");
     let db = Database::open(&args[1]).map_err(|err| err.to_string())?;
     let slots = db.replication_slots().map_err(|err| err.to_string())?;
-    let slot = slots
-        .into_iter()
-        .find(|slot| slot.name == args[2])
-        .ok_or_else(|| "replication slot not found".to_owned())?;
+    let slot = match slots.into_iter().find(|slot| slot.name == args[2]) {
+        Some(slot) => slot,
+        None => return Err("replication slot not found".to_owned()),
+    };
     let payload = json!({
         "slot": slot.name,
         "kind": format!("{:?}", slot.kind),
