@@ -99,17 +99,24 @@ fn parse_kib(value: &str) -> Option<u64> {
 #[cfg(target_os = "macos")]
 pub fn collect_self() -> ProcessMetrics {
     let mut metrics = ProcessMetrics::default();
-    // SAFETY: rusage is plain-old-data and getrusage either fills it in
-    // or returns -1 without writing past its tail. We zero-initialise
-    // before the call so unread fields are still defined.
-    unsafe {
-        let mut usage: libc::rusage = std::mem::zeroed();
-        if libc::getrusage(libc::RUSAGE_SELF, &mut usage) == 0 {
-            // macOS reports `ru_maxrss` in bytes; Linux reports KiB.
-            metrics.rss_peak_bytes = Some(usage.ru_maxrss as u64);
-            metrics.voluntary_ctx_switches = Some(usage.ru_nvcsw as u64);
-            metrics.involuntary_ctx_switches = Some(usage.ru_nivcsw as u64);
-        }
+    let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+    // SAFETY: `libc::getrusage` with `RUSAGE_SELF` cannot fail with
+    // EINVAL (the SELF target is always valid), and on success it
+    // initialises every field of `rusage` in-place. We only consume
+    // `usage` via `assume_init` after observing `rc == 0`, so the
+    // struct is fully initialised at that point. The pointer is a
+    // valid, properly-aligned, writable pointer obtained from
+    // `MaybeUninit::as_mut_ptr`.
+    let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) };
+    if rc == 0 {
+        // SAFETY: `rc == 0` implies the kernel wrote every field of
+        // the `rusage` struct (see `man getrusage(2)`); reading the
+        // populated struct is sound.
+        let usage = unsafe { usage.assume_init() };
+        // macOS reports `ru_maxrss` in bytes; Linux reports KiB.
+        metrics.rss_peak_bytes = Some(usage.ru_maxrss as u64);
+        metrics.voluntary_ctx_switches = Some(usage.ru_nvcsw as u64);
+        metrics.involuntary_ctx_switches = Some(usage.ru_nivcsw as u64);
     }
     metrics
 }
@@ -152,5 +159,24 @@ mod tests {
         assert_eq!(metrics.proc_io_read_bytes, None);
         assert_eq!(metrics.proc_io_write_bytes, None);
         assert_eq!(metrics.write_count, None);
+    }
+
+    /// Asserts the `MaybeUninit::<libc::rusage>` + `getrusage` initializer
+    /// pattern in `collect_self` actually populates the struct: by the time
+    /// the test runs, the process has consumed memory and accumulated
+    /// context switches, so at least the RSS peak must be a non-zero value
+    /// when reported. Guards against a future regression to all-zero
+    /// validity assumptions.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn rusage_populates_after_init() {
+        let metrics = collect_self();
+        let rss = metrics
+            .rss_peak_bytes
+            .expect("rss_peak_bytes must be populated by getrusage on macOS");
+        assert!(
+            rss > 0,
+            "expected getrusage to report a non-zero rss peak, got {rss}"
+        );
     }
 }
