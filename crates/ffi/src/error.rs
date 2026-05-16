@@ -28,7 +28,16 @@ pub extern "C" fn rldb_errmsg(db: *mut rldb) -> *const c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_free(ptr: *mut c_void) {
     if !ptr.is_null() {
-        // SAFETY: matching constructor at crates/ffi/src/util.rs:292 (errmsg_to_c_string / set_errmsg return CString::into_raw); this library is the only producer of pointers handed to rldb_free per redlinedb.h:128; double-free guarded by caller obligation to NULL the handle after free; proof: crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and ::exec_callback_failure_round_trips_errmsg_ownership.
+        // SAFETY: matches the CString constructor at crates/ffi/src/util.rs:316
+        // (errmsg_to_c_string returns CString::new(...).into_raw()), routed
+        // through set_errmsg at crates/ffi/src/util.rs:342; this library is the
+        // sole producer of pointers handed to rldb_free per redlinedb.h:128;
+        // double-free guarded by the caller's obligation to NULL the handle
+        // after rldb_free (redlinedb.h:128); ledgered at
+        // agent/unsafe-ledger.toml (file=crates/ffi/src/error.rs, line=33,
+        // detector=rust.unsafe.raw-parts); proof:
+        // crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and
+        // ::exec_callback_failure_round_trips_errmsg_ownership.
         unsafe {
             drop(CString::from_raw(ptr as *mut c_char));
         }
