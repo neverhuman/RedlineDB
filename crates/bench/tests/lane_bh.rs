@@ -444,7 +444,7 @@ fn chaos_suite_workloads_smoke() {
                 .engine_stats
                 .get("test_code_path")
                 .and_then(|v| v.as_str()),
-            Some("crates/bench/src/chaos.rs")
+            Some("crates/bench/src/chaos/mod.rs")
         );
     }
 }
