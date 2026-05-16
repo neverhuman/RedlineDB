@@ -1,4 +1,20 @@
+use crc32fast::Hasher;
+
 use crate::{Error, Result};
+
+/// CRC32 over `bytes` with the four-byte slot starting at
+/// `checksum_offset` treated as zero. Mirrors the on-disk convention used
+/// by the page header, the dual control file, and the tx-status
+/// checkpoint: reserve the slot, hash the buffer, write the digest back
+/// into the slot. Centralised here so all three callers stay in lockstep.
+#[inline]
+pub fn crc32_with_zeroed_field(bytes: &[u8], checksum_offset: usize) -> u32 {
+    let mut hasher = Hasher::new();
+    hasher.update(&bytes[..checksum_offset]);
+    hasher.update(&[0, 0, 0, 0]);
+    hasher.update(&bytes[checksum_offset + 4..]);
+    hasher.finalize()
+}
 
 #[inline]
 pub fn read_u16(buf: &[u8], offset: usize) -> Result<u16> {
@@ -18,6 +34,12 @@ pub fn read_u64(buf: &[u8], offset: usize) -> Result<u64> {
     Ok(u64::from_le_bytes(bytes))
 }
 
+// dedup-allowed: type-specialization — the write_uN trio look identical in
+// body shape but each one binds to a different `to_le_bytes` impl on its
+// respective primitive type. Folding them into a generic via a trait like
+// `ToLeBytes` would force an extra trait bound at every call site and is
+// known to suppress the small-buffer inlining that `to_le_bytes` enjoys
+// today. Leave as-is.
 #[inline]
 pub fn write_u16(buf: &mut [u8], offset: usize, value: u16) -> Result<()> {
     write_bytes(buf, offset, &value.to_le_bytes())

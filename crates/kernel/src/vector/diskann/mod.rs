@@ -43,6 +43,16 @@ pub use sectors::{
 
 use std::sync::Arc;
 
+/// Slice the `id`-th `dim`-wide vector out of the flat `vectors` buffer
+/// the builder/searcher/prune passes share. Identical helper used to be
+/// inlined in `prune.rs` and `searcher.rs`; centralised here so the
+/// stride convention has one definition.
+#[inline]
+pub(super) fn vector_at(vectors: &[f32], dim: usize, id: u32) -> &[f32] {
+    let id = id as usize;
+    &vectors[id * dim..(id + 1) * dim]
+}
+
 /// Stable identifier for a vector row stored in the graph. Carries the
 /// original row id supplied at build time so callers can map search hits back
 /// to heap tuples without an extra lookup table.

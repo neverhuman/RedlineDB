@@ -40,6 +40,9 @@ impl Ord for Distance {
     }
 }
 
+// dedup-allowed: trait-impl-boilerplate — `Some(self.cmp(other))` is the
+// idiomatic `PartialOrd via Ord` bridge. Same shape appears on
+// `HeapEntry<P>` in `vector::flat` for the same reason.
 impl PartialOrd for Distance {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))

@@ -48,6 +48,11 @@ impl<P> Ord for HeapEntry<P> {
             .unwrap_or(Ordering::Equal)
     }
 }
+// dedup-allowed: trait-impl-boilerplate — the `Some(self.cmp(other))`
+// body is the idiomatic `PartialOrd via Ord` bridge required on every
+// distance-keyed heap entry in the vector subsystem. Folding it into a
+// macro or generic helper makes the trait scaffolding harder to read
+// without saving real lines.
 impl<P> PartialOrd for HeapEntry<P> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))

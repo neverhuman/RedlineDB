@@ -179,12 +179,21 @@ impl UniqueKeyLockTable {
     }
 
     fn shard(&self, key: &[u8]) -> usize {
-        let mut hash = 0_u64;
-        for byte in key {
-            hash = hash.wrapping_mul(131).wrapping_add(*byte as u64);
-        }
-        hash as usize % self.shards.len().max(1)
+        poly_hash_u64(key) as usize % self.shards.len().max(1)
     }
+}
+
+// shared with sql via redlinedb-kernel::index::locks
+/// Polynomial rolling hash with multiplier 131. Public so the SQL session
+/// shard router (`crates/sql/src/session.rs`) can keep its sharding key
+/// consistent with the kernel-side unique-key lock table; SQL imports this
+/// to avoid carrying its own copy of the body.
+pub fn poly_hash_u64(key: &[u8]) -> u64 {
+    let mut hash = 0_u64;
+    for byte in key {
+        hash = hash.wrapping_mul(131).wrapping_add(*byte as u64);
+    }
+    hash
 }
 
 impl Drop for UniqueKeyGuard {

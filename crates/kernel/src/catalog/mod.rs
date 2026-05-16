@@ -1,5 +1,6 @@
 mod affinity;
 mod bootstrap;
+mod codec;
 mod ddl;
 mod expr;
 mod ids;

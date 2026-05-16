@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use super::vector_at;
 use crate::vector::diskann::prune::{Candidate, robust_prune};
 use crate::vector::distance::l2_distance_scalar as l2_squared;
 
@@ -275,12 +276,6 @@ fn permutation(n: usize, seed: u64) -> Vec<usize> {
         out.swap(i, j);
     }
     out
-}
-
-#[inline]
-fn vector_at(flat: &[f32], dim: usize, id: u32) -> &[f32] {
-    let id = id as usize;
-    &flat[id * dim..(id + 1) * dim]
 }
 
 fn flatten(vectors: &[Vec<f32>], dim: usize) -> Vec<f32> {

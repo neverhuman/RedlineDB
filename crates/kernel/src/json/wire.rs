@@ -241,6 +241,11 @@ pub struct ObjectIter<'a> {
 }
 
 impl<'a> ObjectIter<'a> {
+    // dedup-allowed: same-name-different-type — `ObjectIter::new` and
+    // `ArrayIter::new` share a header-decode skeleton but validate
+    // different tags (OBJECT vs ARRAY) and yield different `Item`
+    // shapes. Folding them into one generic over the tag would require
+    // a phantom-tagged Iter that obscures the wire-format contract.
     pub fn new(buf: &'a [u8], offset: usize) -> Result<Self> {
         let t = read_tag(buf, offset)?;
         if t != tag::OBJECT {

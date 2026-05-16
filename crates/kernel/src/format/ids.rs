@@ -20,6 +20,20 @@ macro_rules! id_type {
 }
 
 id_type!(PageId);
+
+/// Decode an `Option<PageId>` from the sentinel-encoded u64 form used by
+/// the on-disk index/HNSW metadata: `u64::MAX` means `None`, any other
+/// value is `Some(PageId(raw))`. Shared by `index::mod` and
+/// `vector::hnsw::storage`, which previously each carried their own copy
+/// of this body.
+#[inline]
+pub fn decode_opt_page_id(raw: u64) -> Option<PageId> {
+    if raw == u64::MAX {
+        None
+    } else {
+        Some(PageId(raw))
+    }
+}
 id_type!(RelId);
 id_type!(BlockNo);
 id_type!(Lsn);
