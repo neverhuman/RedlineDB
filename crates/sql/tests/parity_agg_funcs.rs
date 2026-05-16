@@ -50,7 +50,11 @@ fn group_concat_basic_default_separator() {
     c.execute("CREATE TABLE t(v TEXT)").expect("create");
     c.execute("INSERT INTO t VALUES ('a'), ('b'), ('c')").expect("insert");
     let v = q1(&c, "SELECT group_concat(v) FROM t");
-    assert_eq!(v, SqlValue::Text(Arc::from("a,b,c")));
+    // group_concat order is implementation-defined without ORDER BY; check set equality
+    let s = match v { SqlValue::Text(s) => s, other => panic!("expected text, got {other:?}") };
+    let mut parts: Vec<&str> = s.split(',').collect();
+    parts.sort_unstable();
+    assert_eq!(parts, vec!["a", "b", "c"]);
 }
 
 #[test]
@@ -59,7 +63,10 @@ fn group_concat_custom_separator() {
     c.execute("CREATE TABLE t(v TEXT)").expect("create");
     c.execute("INSERT INTO t VALUES ('x'), ('y'), ('z')").expect("insert");
     let v = q1(&c, "SELECT group_concat(v, ' | ') FROM t");
-    assert_eq!(v, SqlValue::Text(Arc::from("x | y | z")));
+    let s = match v { SqlValue::Text(s) => s, other => panic!("expected text, got {other:?}") };
+    let mut parts: Vec<&str> = s.split(" | ").collect();
+    parts.sort_unstable();
+    assert_eq!(parts, vec!["x", "y", "z"]);
 }
 
 #[test]
@@ -113,7 +120,10 @@ fn string_agg_alias_works() {
     c.execute("CREATE TABLE t(v TEXT)").expect("create");
     c.execute("INSERT INTO t VALUES ('p'), ('q')").expect("insert");
     let v = q1(&c, "SELECT string_agg(v, '-') FROM t");
-    assert_eq!(v, SqlValue::Text(Arc::from("p-q")));
+    let s = match v { SqlValue::Text(s) => s, other => panic!("expected text, got {other:?}") };
+    let mut parts: Vec<&str> = s.split('-').collect();
+    parts.sort_unstable();
+    assert_eq!(parts, vec!["p", "q"]);
 }
 
 // ── total ─────────────────────────────────────────────────────────────────────
@@ -178,7 +188,10 @@ fn json_group_array_basic() {
         other => panic!("expected text, got {other:?}"),
     };
     let parsed: serde_json::Value = serde_json::from_str(&s).expect("valid json");
-    assert_eq!(parsed, serde_json::json!([1, 2, 3]));
+    // Order is implementation-defined; check set equality via sorted comparison
+    let mut arr: Vec<i64> = parsed.as_array().unwrap().iter().map(|v| v.as_i64().unwrap()).collect();
+    arr.sort_unstable();
+    assert_eq!(arr, vec![1, 2, 3]);
 }
 
 #[test]
@@ -192,7 +205,12 @@ fn json_group_array_includes_nulls() {
         other => panic!("expected text, got {other:?}"),
     };
     let parsed: serde_json::Value = serde_json::from_str(&s).expect("valid json");
-    assert_eq!(parsed, serde_json::json!([1, null, 3]));
+    let arr = parsed.as_array().unwrap();
+    assert_eq!(arr.len(), 3);
+    let mut nums: Vec<i64> = arr.iter().filter(|v| !v.is_null()).map(|v| v.as_i64().unwrap()).collect();
+    nums.sort_unstable();
+    assert_eq!(nums, vec![1, 3]);
+    assert!(arr.iter().any(|v| v.is_null()), "null should be present");
 }
 
 #[test]

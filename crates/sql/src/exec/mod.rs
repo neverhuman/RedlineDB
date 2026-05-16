@@ -40,6 +40,7 @@ use tail::*;
 pub(crate) mod vec;
 
 mod agg;
+mod agg_eval;
 use agg::*;
 mod insert;
 use insert::*;

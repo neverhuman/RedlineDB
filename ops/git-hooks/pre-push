@@ -3,4 +3,24 @@
 # developer machine. Mirrors the canonical CI fast lane so a successful
 # push is byte-for-byte the same evidence CI will produce.
 # Audit reference: HLT-042 ci-local-parity.pre-push-hook-missing.
+
+set -euo pipefail
+
+echo "Running Jankurai audit..."
+jankurai audit . --json agent/repo-score.json --md agent/repo-score.md
+
+FINDINGS=$(grep -o '"finding_count":\s*[0-9]*' agent/repo-score.json | awk -F: '{print $2}' | tr -d ' ')
+if [ "$FINDINGS" -gt 0 ]; then
+    echo "ERROR: Jankurai check failed with $FINDINGS issues. Must be 0."
+    exit 1
+fi
+
+CAPS=$(grep -o '"hard_findings":\s*[0-9]*' agent/repo-score.json | awk -F: '{print $2}' | tr -d ' ')
+if [ "$CAPS" -gt 0 ]; then
+    echo "ERROR: Jankurai check failed with $CAPS caps. Must be 0."
+    exit 1
+fi
+
+echo "Jankurai check passed (0 caps, 0 issues)."
+echo "Running local CI parity tests..."
 exec bash "$(git rev-parse --show-toplevel)/ops/ci/fast.sh"

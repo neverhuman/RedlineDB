@@ -1,4 +1,5 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
+export RUSTC_WRAPPER := "sccache"
 
 default: fast
 
@@ -6,7 +7,7 @@ fast:
   rtk cargo fmt --check
   ./scripts/check_file_sizes.sh
   rtk cargo check --workspace --locked
-  rtk cargo test --workspace --quiet --locked
+  rtk cargo nextest run --workspace --locked --no-fail-fast
 
 hygiene:
   rtk cargo fmt --check

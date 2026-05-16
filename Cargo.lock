@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "libc",
  "redlinedb-kernel",
@@ -785,7 +785,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-bench"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "redlinedb",
  "serde_json",
@@ -817,11 +817,11 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-domain"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "redlinedb-ffi"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "redlinedb-kernel",
  "redlinedb-sql",
@@ -830,7 +830,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-kernel"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "arc-swap",
  "crc32fast",
@@ -847,7 +847,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-server"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "redlinedb",
  "serde",
@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-sql"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "arc-swap",
  "fail",
@@ -865,6 +865,7 @@ dependencies = [
  "proptest",
  "redlinedb-kernel",
  "regex",
+ "rusqlite",
  "serde_json",
  "sqlparser",
  "tempfile",

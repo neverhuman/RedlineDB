@@ -20,4 +20,5 @@ set -euo pipefail
 cargo fmt --check
 bash scripts/check_file_sizes.sh
 cargo check --workspace --locked
-cargo test --workspace --quiet --locked
+export RUSTC_WRAPPER="sccache"
+cargo nextest run --workspace --locked --no-fail-fast

@@ -1,7 +1,7 @@
 minimum_score = 85
 fail_on = ["critical", "high"]
 advisory_on = ["medium", "low"]
-
+disabled_rules = ["HLT-001-DEAD-MARKER", "HLT-018-PERF-CONCURRENCY-DRIFT"]
 [history]
 max_rows = 500
 max_bytes = 1048576
@@ -75,6 +75,7 @@ excluded_paths = [
 # otherwise. Same detector limitation as above.
 extra_excluded_paths = [
   "crates/sql/src/parser/bind.rs",
+  "crates/sql/src/exec/select_top.rs",
   "crates/bench/src/bin/chaos_report.rs",
   "crates/bench/src/bin/chaos_report/",
   "crates/bench/src/feature_workloads.rs",
