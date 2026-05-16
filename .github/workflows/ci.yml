@@ -32,3 +32,34 @@ jobs:
       # pre-push gate) run the same four commands. Audit references:
       # HLT-042 ci-local-parity.lib-missing, HLT-034 ci-bad-behavior.
       - run: bash ops/ci/fast.sh
+
+  # The branch ruleset requires checks named build/lint/typecheck/cli.
+  # These relay jobs propagate the test result under those names so the
+  # required status checks are satisfied without duplicating the build.
+  build:
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.test.result }}" = "success"
+
+  lint:
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.test.result }}" = "success"
+
+  typecheck:
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.test.result }}" = "success"
+
+  cli:
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.test.result }}" = "success"
