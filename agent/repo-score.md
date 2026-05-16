@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778901472`
-- Started at: `1778901472`
-- Elapsed: `5232` ms
+- Run ID: `1778901630`
+- Started at: `1778901630`
+- Elapsed: `7118` ms
 - Scope: `full`
 - Raw score: `85`
 - Final score: `70`
@@ -241,15 +241,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:8b6b248cb1ef6e7b7bd5ef77a8b8b95ee31d28fee045d5ee7be75263101b3fc8`
    Evidence: python/ai-service/AGENTS.md
-10. `high` `vibe` `crates/bench/src/chaos.rs:253`
-   Check: `HLT-000-SCORE-DIMENSION:vibe` `hard` confidence `0.88`
-   Route: TLR `Entropy`, lane `fast`, owner `tools`
-   Reason: duplicated product code block detected
-   Fix: extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
-   Rerun: `just fast`
-   Fingerprint: `sha256:1994d84164d96922b427ec867838a574e52101084084b6bf556993388ec5bdc5`
-   Evidence: duplicate block also appears at crates/bench/src/chaos.rs:219
-11. `high` `security` `crates/bench/src/config.rs:293`
+10. `high` `security` `crates/bench/src/config.rs:293`
    Rule: `HLT-022-AUTHZ-ISOLATION-GAP`
    Check: `HLT-022-AUTHZ-ISOLATION-GAP:security` `hard` confidence `0.88`
    Route: TLR `Business truth`, lane `db`, owner `tools`
@@ -260,7 +252,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a6afd78567ed0a67ae7fc634e599aca5bbb21557df1590c37150845fcec6d7c9`
    Evidence: /// existing `kv_tenant_idx`. Fixture shape mirrors
-12. `high` `security` `crates/bench/src/process_metrics.rs:110`
+11. `high` `security` `crates/bench/src/process_metrics.rs:110`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
@@ -271,7 +263,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:aa96f629630b057efa0f1786eb528e79e8c6482d4ada20e64ec5019e02ebfcd0`
    Evidence: detector=zeroed, proof-window=NearbySafetyComment, snippet=let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
-13. `high` `security` `crates/ffi/src/error.rs:33`
+12. `high` `security` `crates/ffi/src/error.rs:33`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
@@ -282,7 +274,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:fb68a65ce20650b76a90bc88edfe06a198128b0d750b32b32f7c2a0727384404`
    Evidence: detector=CString::from_raw, proof-window=NearbySafetyComment, snippet=drop(CString::from_raw(ptr as *mut c_char));
-14. `high` `security` `crates/ffi/src/exec.rs:15`
+13. `high` `security` `crates/ffi/src/exec.rs:15`
    Rule: `HLT-023-INPUT-BOUNDARY-GAP`
    Check: `HLT-023-INPUT-BOUNDARY-GAP:security` `hard` confidence `0.88`
    Route: TLR `Security, secrets, agency`, lane `security`, owner `tools`
@@ -293,7 +285,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just security`
    Fingerprint: `sha256:342ad1d692f12c78c70bde25de8152e2d389f36ac5429f3edf8fee8638c21b0c`
    Evidence: pub extern "C" fn rldb_exec(
-15. `high` `security` `crates/ffi/src/lifecycle.rs:74`
+14. `high` `security` `crates/ffi/src/lifecycle.rs:74`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
@@ -304,7 +296,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:bdbc8665d06771630a270b7628b5ce1d4ea68b943861e02146cd65daab567c1f`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(db));
-16. `high` `security` `crates/ffi/src/snapshot.rs:87`
+15. `high` `security` `crates/ffi/src/snapshot.rs:87`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
@@ -315,7 +307,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:abc9d33162968df3c2f0a73e25bee873f289b0f867d2811f1feb4de200a60990`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(backup));
-17. `high` `security` `crates/ffi/src/stmt.rs:161`
+16. `high` `security` `crates/ffi/src/stmt.rs:161`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
@@ -326,7 +318,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b4f1a6ca90b064a685ea26de401a4ea01a4018f38fbe80c7f14d209db28ce468`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=let boxed = unsafe { Box::from_raw(stmt) };
-18. `high` `security` `crates/ffi/src/util.rs:146`
+17. `high` `security` `crates/ffi/src/util.rs:146`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
@@ -337,6 +329,14 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:27e1090b7e4705417e9aa0b0f9844b550d7938d697dd29c418e5a3937494b29a`
    Evidence: detector=from_raw_parts, proof-window=NearbySafetyComment, snippet=unsafe { std::slice::from_raw_parts(ptr, len) }
+18. `high` `vibe` `crates/kernel/src/catalog/ops.rs:91`
+   Check: `HLT-000-SCORE-DIMENSION:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Reason: duplicated product code block detected
+   Fix: extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
+   Rerun: `just fast`
+   Fingerprint: `sha256:5d17cafa9d506b6e03ae3fdd3cb0b82195bf51f1e3828c56f12ffda2dda4c8a1`
+   Evidence: duplicate block also appears at crates/kernel/src/catalog/ops.rs:61
 19. `medium` `release` `docs/testing.md`
    Rule: `HLT-026-COST-BUDGET-GAP`
    Check: `HLT-026-COST-BUDGET-GAP:release` `soft` confidence `0.88`
@@ -369,22 +369,22 @@ No audited runtime boundary reclassifications declared.
    Route: `Verification`/`release`
 6. `high` `HLT-017-OPAQUE-OBSERVABILITY` `agent/owner-map.json` - fix the manifest syntax so audit policy and routing maps are authoritative
    Route: `Repair`/`observability`
-7. `high` `crates/bench/src/chaos.rs` - extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
-   Route: `Entropy`/`fast`
-8. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/bench/src/process_metrics.rs` - construct the type with a valid initializer instead of zeroing it
+7. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/bench/src/process_metrics.rs` - construct the type with a valid initializer instead of zeroing it
    Route: `Security, secrets, agency`/`fast`
-9. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+8. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-10. `high` `HLT-023-INPUT-BOUNDARY-GAP` `crates/ffi/src/exec.rs` - replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
+9. `high` `HLT-023-INPUT-BOUNDARY-GAP` `crates/ffi/src/exec.rs` - replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
    Route: `Security, secrets, agency`/`security`
-11. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+10. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-12. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/snapshot.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+11. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/snapshot.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-13. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+12. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-14. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/util.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+13. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/util.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
+14. `high` `crates/kernel/src/catalog/ops.rs` - extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
+   Route: `Entropy`/`fast`
 15. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
 16. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane

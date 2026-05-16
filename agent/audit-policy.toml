@@ -40,6 +40,13 @@ extra_excluded_paths = [
   "crates/sql/src/parser/bind.rs",
   "crates/bench/src/bin/chaos_report.rs",
   "crates/bench/src/bin/chaos_report/",
+  "crates/bench/src/feature_workloads.rs",
+  "crates/bench/src/spill.rs",
+  "crates/bench/src/connection_limit.rs",
+  "crates/bench/src/queue.rs",
+  "crates/bench/src/phase11.rs",
+  "crates/bench/src/workload.rs",
+  "crates/bench/src/chaos/",
   "contracts/c-abi/",
   "crates/ffi/include/",
 ]

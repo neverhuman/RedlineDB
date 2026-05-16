@@ -1,7 +1,7 @@
 {
-  "report_fingerprint": "sha256:5ed1ef55b2ad39d09bff031e9fba2a29e91fd9fcca257c518a1f2d8adeea0d30",
-  "input_fingerprint": "sha256:d82fc51ae2d3567ff6801da3fc75ed6fbbc12af4b35b09f262bc3f7f3e88e5dd",
-  "policy_fingerprint": "sha256:000cd7c2016db5c23a0523a3d58ce0e6c577fe18b5ef8a8303ca2a667d73a62c",
+  "report_fingerprint": "sha256:c69043a154fd977e586137270496aa27933dfa356a47b4ea26b9700dcb37d763",
+  "input_fingerprint": "sha256:c81842c6466e58f9da81c627214fe1e3e87b0716c88b2885fb364af3be3c5425",
+  "policy_fingerprint": "sha256:fe21924fa93321bf80e91b0dd124ae282a51ed2e19b4f02e8029cc8b54f2f821",
   "manifest_fingerprints": {
     "owner_map": "sha256:745452aafc824749513d3b525b6489a87fa65a59b8f250338e657eea5ed74c6d",
     "test_map": "sha256:4106c6c718a63006b4507b8afda0a27a44e68685471047b3964d06288203921f",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778901472",
+  "generated_at": "1778901630",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -30,7 +30,6 @@
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-000-SCORE-DIMENSION:vibe on crates/bench/src/chaos.rs",
     "HLT-022-AUTHZ-ISOLATION-GAP on crates/bench/src/config.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/bench/src/process_metrics.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/error.rs",
@@ -38,12 +37,13 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/util.rs"
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/util.rs",
+    "HLT-000-SCORE-DIMENSION:vibe on crates/kernel/src/catalog/ops.rs"
   ],
   "repo": ".",
-  "run_id": "1778901472",
-  "started_at": "1778901472",
-  "elapsed_ms": 5232,
+  "run_id": "1778901630",
+  "started_at": "1778901630",
+  "elapsed_ms": 7118,
   "scope": {
     "mode": "full",
     "paths": []
@@ -70,7 +70,7 @@
     }
   },
   "git": {
-    "head": "25ce7ab",
+    "head": "19bf8a8",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1534,26 +1534,6 @@
     },
     {
       "severity": "high",
-      "category": "vibe",
-      "path": "crates/bench/src/chaos.rs",
-      "problem": "duplicated product code block detected",
-      "agent_fix": "extract the duplicated behavior behind one named boundary and add focused tests before changing behavior",
-      "evidence": [
-        "duplicate block also appears at crates/bench/src/chaos.rs:219"
-      ],
-      "check_id": "HLT-000-SCORE-DIMENSION:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:1994d84164d96922b427ec867838a574e52101084084b6bf556993388ec5bdc5",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "tools",
-      "line": 253
-    },
-    {
-      "severity": "high",
       "category": "security",
       "path": "crates/bench/src/config.rs",
       "problem": "authorization or data-isolation surface lacks direct negative proof",
@@ -1757,6 +1737,26 @@
       "reason": "ownership provenance is missing"
     },
     {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/kernel/src/catalog/ops.rs",
+      "problem": "duplicated product code block detected",
+      "agent_fix": "extract the duplicated behavior behind one named boundary and add focused tests before changing behavior",
+      "evidence": [
+        "duplicate block also appears at crates/kernel/src/catalog/ops.rs:61"
+      ],
+      "check_id": "HLT-000-SCORE-DIMENSION:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:5d17cafa9d506b6e03ae3fdd3cb0b82195bf51f1e3828c56f12ffda2dda4c8a1",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "line": 91
+    },
+    {
       "severity": "medium",
       "category": "release",
       "path": "docs/testing.md",
@@ -1842,15 +1842,6 @@
       "why": "jankurai manifest could not be parsed"
     },
     {
-      "path": "crates/bench/src/chaos.rs",
-      "priority": "high",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "extract the duplicated behavior behind one named boundary and add focused tests before changing behavior",
-      "why": "duplicated product code block detected"
-    },
-    {
       "path": "crates/bench/src/process_metrics.rs",
       "priority": "high",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
@@ -1919,6 +1910,15 @@
       "owner": "tools",
       "task": "use the matching constructor/destructor pair or add a documented ownership proof",
       "why": "raw ownership conversion needs exact provenance and allocator proof"
+    },
+    {
+      "path": "crates/kernel/src/catalog/ops.rs",
+      "priority": "high",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "extract the duplicated behavior behind one named boundary and add focused tests before changing behavior",
+      "why": "duplicated product code block detected"
     },
     {
       "path": ".",
