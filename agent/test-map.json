@@ -137,6 +137,10 @@
       "command": "just score",
       "purpose": "verify manifests remain parseable and authoritative"
     },
+    "benchmark-results/": {
+      "command": "just benchmark-export-existing",
+      "purpose": "verify benchmark-results artifacts export cleanly and stay reproducible"
+    },
     "agent/coverage-sources.toml": {
       "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage evidence source routing and score import"

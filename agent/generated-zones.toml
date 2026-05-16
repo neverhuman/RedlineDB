@@ -12,6 +12,12 @@ source = "installed jankurai binary"
 
 [[zone]]
 command = "hand-authored ABI surface; see docs/exceptions/ffi-c-header.md"
-path = "crates/ffi/include/redlinedb.h"
+path = "contracts/c-abi/redlinedb.h"
 read_only = true
-source = "C ABI surface for the redlinedb sqlite3-compatible API; not product truth"
+source = "C ABI surface for the redlinedb sqlite3-compatible API; relocated from crates/ffi/include/ per docs/exceptions/ffi-c-header.md; not product truth"
+
+[[zone]]
+command = "hand-authored alias shim; see docs/exceptions/ffi-c-header.md"
+path = "crates/ffi/include/sqlite3.h"
+read_only = true
+source = "SQLite-compatible alias shim that re-includes contracts/c-abi/redlinedb.h so existing sqlite3 drivers link without code changes; not product truth"
