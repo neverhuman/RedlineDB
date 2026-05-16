@@ -1,361 +1,12 @@
+#[path = "tail_rows.rs"]
+mod rows;
+#[path = "tail_stats.rs"]
+mod stats;
+
+pub(crate) use rows::*;
+pub(crate) use stats::*;
+
 use super::*;
-
-pub(crate) fn analyze_database(conn: &Connection, plan: &AnalyzePlan) -> Result<()> {
-    let schema = conn.engine().schema_snapshot();
-    let mut tx = conn.engine().begin(Isolation::Snapshot)?;
-    let result = (|| -> Result<()> {
-        let current = conn.stats_snapshot();
-        let mut next = StatsSnapshot::empty(StatsEpoch(current.epoch.0.saturating_add(1)));
-        next.tables = current.tables.clone();
-        next.columns = current.columns.clone();
-        next.indexes = current.indexes.clone();
-
-        let tables = match &plan.table {
-            Some(table) => vec![Arc::clone(table)],
-            None => schema.tables.to_vec(),
-        };
-
-        for table in tables {
-            let rows = collect_table_rows(conn.engine(), &mut tx, &table)?
-                .into_iter()
-                .map(|row| row.values)
-                .collect::<Vec<_>>();
-            let table_stats = build_table_stats(conn, &table, &rows)?;
-            next.tables.insert(table.table_id, table_stats);
-
-            let sample = sample_rows(conn.stats_config(), &rows);
-            for (ordinal, column) in table.columns.iter().enumerate() {
-                let stats = build_column_stats(conn.stats_config(), &sample, ordinal);
-                next.columns
-                    .insert((table.table_id, column.column_id), stats);
-            }
-            for index in &table.indexes {
-                let stats = build_index_stats(conn.stats_config(), &sample, index);
-                next.indexes.insert(index.index_id, stats);
-            }
-        }
-
-        conn.publish_stats(Arc::new(next))
-    })();
-    let _ = conn.engine().rollback(tx);
-    result
-}
-
-pub(crate) fn execute_explain(
-    conn: &Connection,
-    plan: &ExplainPlan,
-    bindings: &[Option<SqlValue>],
-) -> Result<SelectRuntime> {
-    let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
-    let rows = if plan.analyze {
-        let start = Instant::now();
-        let mut result = execute_prepared(conn, &plan.inner, bindings)?;
-        let mut actual_rows = result.affected_rows;
-        let mut loops = 0usize;
-        if let RuntimeState::Select(runtime) = &mut result.runtime {
-            let mut current_row = None;
-            loop {
-                loops += 1;
-                if step_select_runtime(conn, runtime, bindings, &mut current_row)? {
-                    break;
-                }
-                actual_rows += 1;
-            }
-        }
-        let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
-        let (peak_memory_bytes, spill_bytes) = match &result.runtime {
-            RuntimeState::Select(runtime) => {
-                (runtime.memory.used_bytes, runtime.memory.spilled_bytes)
-            }
-            RuntimeState::Done | RuntimeState::Idle => (0, 0),
-        };
-        planner::explain_rows(
-            conn,
-            &plan.inner.kind,
-            bindings,
-            Some(ExplainMetrics {
-                actual_rows: Some(actual_rows),
-                loops: Some(loops),
-                elapsed_ms: Some(elapsed_ms),
-                peak_memory_bytes: Some(peak_memory_bytes),
-                spill_bytes: Some(spill_bytes),
-            }),
-            plan.format,
-        )
-    } else {
-        planner::explain_rows(conn, &plan.inner.kind, bindings, None, plan.format)
-    };
-
-    Ok(SelectRuntime {
-        tx: SelectRuntimeTx::Empty,
-        restore_tx: false,
-        source: SelectRuntimeSource::Batched {
-            node: MaterializeNode::new(rows),
-            ctx: ExecContext::new(
-                conn.query_memory().work_mem_bytes,
-                conn.query_memory().max_spill_bytes,
-                temp_dir.clone(),
-            ),
-            batch: RowBatch::new(Arc::new(RowLayout {
-                columns: Arc::from([]),
-            })),
-            cursor: 0,
-        },
-        selection: None,
-        projection: Vec::new(),
-        limit: usize::MAX,
-        offset: 0,
-        seen: 0,
-        yielded: 0,
-        memory: QueryMemoryBroker::new(
-            conn.query_memory().work_mem_bytes,
-            conn.query_memory().max_spill_bytes,
-            temp_dir.clone(),
-        ),
-    })
-}
-
-pub(crate) fn build_table_stats(
-    conn: &Connection,
-    table: &TableDef,
-    rows: &[Vec<SqlValue>],
-) -> Result<TableStats> {
-    let current = conn.stats_snapshot();
-    let preserved = current.tables.get(&table.table_id).cloned();
-    let row_count = rows.len() as u64;
-    let avg_row_bytes = if rows.is_empty() {
-        0.0
-    } else {
-        rows.iter().map(|row| row_width(row)).sum::<usize>() as f64 / rows.len() as f64
-    };
-    Ok(TableStats {
-        table_id: table.table_id,
-        rel_id: table.relation_id,
-        row_count,
-        live_row_count: row_count,
-        heap_pages: if row_count == 0 {
-            0
-        } else {
-            row_count.div_ceil(64).max(1)
-        },
-        avg_row_bytes,
-        analyzed_at_csn: preserved
-            .as_ref()
-            .map(|stats| stats.analyzed_at_csn)
-            .unwrap_or(redlinedb_kernel::format::Csn::ZERO),
-        data_change_count: preserved.map(|stats| stats.data_change_count).unwrap_or(0),
-    })
-}
-
-pub(crate) fn build_column_stats(
-    cfg: &crate::connection::StatsConfig,
-    rows: &[Vec<SqlValue>],
-    ordinal: usize,
-) -> ColumnStats {
-    if rows.is_empty() {
-        return ColumnStats {
-            null_frac: 1.0,
-            ndv: 0.0,
-            avg_width: 0.0,
-            min: None,
-            max: None,
-            mcv: Vec::new(),
-            histogram: Vec::new(),
-        };
-    }
-    let mut nulls = 0usize;
-    let mut widths = 0usize;
-    let mut min: Option<SqlValue> = None;
-    let mut max: Option<SqlValue> = None;
-    let mut counts: HashMap<String, (usize, SqlValue)> = HashMap::new();
-    let mut non_null_values = Vec::new();
-    for row in rows {
-        let value = row.get(ordinal).cloned().unwrap_or(SqlValue::Null);
-        if matches!(value, SqlValue::Null) {
-            nulls += 1;
-            continue;
-        }
-        widths += row_width_value(&value);
-        if min
-            .as_ref()
-            .map(|current| compare_values(&value, current) == Ordering::Less)
-            .unwrap_or(true)
-        {
-            min = Some(value.clone());
-        }
-        if max
-            .as_ref()
-            .map(|current| compare_values(&value, current) == Ordering::Greater)
-            .unwrap_or(true)
-        {
-            max = Some(value.clone());
-        }
-        non_null_values.push(value.clone());
-        let key = stats_value_key(&value);
-        let entry = counts.entry(key).or_insert((0, value));
-        entry.0 += 1;
-    }
-
-    non_null_values.sort_by(compare_values);
-    let ndv = counts.len() as f64;
-    let mut mcv: Vec<_> = counts
-        .into_iter()
-        .map(|(_, (count, value))| MostCommonValue {
-            value,
-            frequency: count as f64 / rows.len() as f64,
-        })
-        .collect();
-    mcv.sort_by(|left, right| {
-        right
-            .frequency
-            .partial_cmp(&left.frequency)
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| compare_values(&left.value, &right.value))
-    });
-    mcv.truncate(cfg.mcv_capacity);
-
-    let histogram = build_histogram(cfg, &non_null_values, rows.len());
-    ColumnStats {
-        null_frac: nulls as f64 / rows.len() as f64,
-        ndv,
-        avg_width: if non_null_values.is_empty() {
-            0.0
-        } else {
-            widths as f64 / non_null_values.len() as f64
-        },
-        min,
-        max,
-        mcv,
-        histogram,
-    }
-}
-
-pub(crate) fn build_index_stats(
-    _cfg: &crate::connection::StatsConfig,
-    rows: &[Vec<SqlValue>],
-    index: &redlinedb_kernel::catalog::IndexDef,
-) -> IndexStats {
-    let mut distinct_prefix_counts = Vec::new();
-    for prefix_len in 1..=index.keys.len() {
-        let mut seen = std::collections::BTreeSet::new();
-        for row in rows {
-            let mut key = String::new();
-            for key_def in index.keys.iter().take(prefix_len) {
-                let value = row
-                    .get(key_def.ordinal as usize)
-                    .cloned()
-                    .unwrap_or(SqlValue::Null);
-                key.push_str(&stats_value_key(&value));
-                key.push('|');
-            }
-            seen.insert(key);
-        }
-        distinct_prefix_counts.push(seen.len() as f64);
-    }
-    let avg_key_bytes = if rows.is_empty() {
-        0.0
-    } else {
-        let total = rows
-            .iter()
-            .map(|row| {
-                index
-                    .keys
-                    .iter()
-                    .map(|key_def| {
-                        row.get(key_def.ordinal as usize)
-                            .map(row_width_value)
-                            .unwrap_or(0)
-                    })
-                    .sum::<usize>()
-            })
-            .sum::<usize>();
-        total as f64 / rows.len() as f64
-    };
-    IndexStats {
-        index_id: index.index_id,
-        entries: rows.len() as u64,
-        leaf_pages: if rows.is_empty() {
-            0
-        } else {
-            (rows.len() as u64).div_ceil(64).max(1)
-        },
-        height: if rows.is_empty() { 0 } else { 1 },
-        distinct_prefix_counts,
-        avg_key_bytes,
-        clustering_factor: if rows.is_empty() { 0.0 } else { 1.0 },
-    }
-}
-
-pub(crate) fn sample_rows(
-    cfg: &crate::connection::StatsConfig,
-    rows: &[Vec<SqlValue>],
-) -> Vec<Vec<SqlValue>> {
-    if rows.len() <= cfg.exact_analyze_row_threshold {
-        return rows.to_vec();
-    }
-    let mut sample = rows
-        .iter()
-        .cloned()
-        .map(|row| (stable_row_score(&row), row))
-        .collect::<Vec<_>>();
-    sample.sort_by(|left, right| {
-        left.0
-            .cmp(&right.0)
-            .then_with(|| compare_rows(&left.1, &right.1))
-    });
-    sample.truncate(cfg.sample_rows.min(sample.len()));
-    sample.into_iter().map(|(_, row)| row).collect()
-}
-
-pub(crate) fn stable_row_score(row: &[SqlValue]) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    for value in row {
-        stats_value_key(value).hash(&mut hasher);
-    }
-    hasher.finish()
-}
-
-pub(crate) fn build_histogram(
-    cfg: &crate::connection::StatsConfig,
-    values: &[SqlValue],
-    total_rows: usize,
-) -> Vec<HistogramBucket> {
-    if values.is_empty() || cfg.histogram_buckets == 0 {
-        return Vec::new();
-    }
-    let bucket_count = cfg.histogram_buckets.min(values.len()).max(1);
-    let mut buckets = Vec::with_capacity(bucket_count);
-    let chunk = values.len().div_ceil(bucket_count);
-    let mut start = 0usize;
-    while start < values.len() {
-        let end = (start + chunk).min(values.len());
-        buckets.push(HistogramBucket {
-            lower: Some(values[start].clone()),
-            upper: Some(values[end - 1].clone()),
-            frequency: (end - start) as f64 / total_rows as f64,
-        });
-        start = end;
-    }
-    buckets
-}
-
-pub(crate) fn stats_value_key(value: &SqlValue) -> String {
-    match value {
-        SqlValue::Null => "n".to_owned(),
-        SqlValue::Integer(v) => format!("i:{v}"),
-        SqlValue::Real(v) => format!("r:{:016x}", v.to_bits()),
-        SqlValue::Text(v) => format!("t:{v}"),
-        SqlValue::Blob(v) => {
-            let mut out = String::from("b:");
-            for byte in v.iter() {
-                use std::fmt::Write;
-                let _ = write!(&mut out, "{byte:02x}");
-            }
-            out
-        }
-    }
-}
 
 pub(crate) fn execute_update(
     conn: &Connection,
@@ -728,9 +379,9 @@ fn collect_unique_conflicts(
     skip_rowid: Option<RowId>,
 ) -> Result<Vec<UniqueConflict>> {
     // Lane B: the physical-index probe replaces the O(N) heap scan when the
-    // index has been allocated by Lane A. The fallback path (no
-    // `meta_page_id`) preserves the original O(N) behavior so legacy
-    // databases without physical indexes still enforce UNIQUE.
+    // index has been allocated by Lane A. The default path (no
+    // `meta_page_id`) preserves the original O(N) behavior so databases
+    // without physical indexes still enforce UNIQUE.
     //
     // SQLite enforces UNIQUE on every unique index — both inline UNIQUE
     // constraints (which create a backing index AND a Constraint row) and
@@ -739,7 +390,7 @@ fn collect_unique_conflicts(
     // the constraints list to recover the original constraint name when a
     // matching one exists.
     let mut conflicts = Vec::new();
-    let mut legacy_indexes: Vec<&redlinedb_kernel::catalog::IndexDef> = Vec::new();
+    let mut pending_indexes: Vec<&redlinedb_kernel::catalog::IndexDef> = Vec::new();
     for index in &table.indexes {
         if !index.unique && !index.primary {
             continue;
@@ -755,7 +406,7 @@ fn collect_unique_conflicts(
             .or_else(|| Some(Arc::from(index.name.as_ref())));
         // SQLite NULL parity: a NULL anywhere in the unique-key tuple
         // disables the conflict check entirely. We compute this once from
-        // the SQL-side values so both index and legacy paths agree.
+        // the SQL-side values so both index and default paths agree.
         let key_values: Vec<SqlValue> = index
             .keys
             .iter()
@@ -796,24 +447,24 @@ fn collect_unique_conflicts(
             // releases on commit/rollback when that vector is cleared.
             session.kernel_unique_guards.push(kernel_guard);
 
-            // We still take a SQL-side guard so legacy callers that share
+            // We still take a SQL-side guard so callers that share
             // `unique_locks()` continue to serialize against this key. The
-            // dual locking is harmless and matches the legacy fallback
-            // below; the SQL guard is also released on commit/rollback.
+            // dual locking is harmless and matches the default path below;
+            // the SQL guard is also released on commit/rollback.
             let sql_lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &key_values)?;
             let sql_guard = conn.unique_locks().lock(sql_lock_key, tx.id().0)?;
             session.unique_guards.push(sql_guard);
             continue;
         }
-        legacy_indexes.push(index);
+        pending_indexes.push(index);
     }
 
-    // Legacy O(N) heap scan for any indexes Lane A did not allocate yet.
-    if legacy_indexes.is_empty() {
+    // O(N) heap scan for any indexes Lane A did not allocate yet.
+    if pending_indexes.is_empty() {
         return Ok(conflicts);
     }
     let rows = collect_table_rows(conn.engine(), tx, table)?;
-    for index in legacy_indexes {
+    for index in pending_indexes {
         let key_values: Vec<SqlValue> = index
             .keys
             .iter()
@@ -1273,210 +924,5 @@ pub(crate) fn choose_rowid_for_update(
         }
     } else {
         Ok(current_rowid)
-    }
-}
-
-pub(crate) fn collect_table_rows(
-    engine: &Engine,
-    tx: &mut Txn,
-    table: &Arc<TableDef>,
-) -> Result<Vec<TableRow>> {
-    collect_table_rows_with_alias(engine, tx, table, None)
-}
-
-pub(crate) fn collect_table_rows_with_alias(
-    engine: &Engine,
-    tx: &mut Txn,
-    table: &Arc<TableDef>,
-    alias: Option<Arc<str>>,
-) -> Result<Vec<TableRow>> {
-    let mut rows = Vec::new();
-    let rowids = engine.relation_rowids(table.relation_id)?;
-    for rowid in rowids {
-        if let Some(row) = load_table_row_by_rowid(engine, tx, table, rowid)? {
-            let mut row = row;
-            row.alias = alias.clone();
-            rows.push(row);
-        }
-    }
-    Ok(rows)
-}
-
-pub(crate) fn collect_join_rows(
-    engine: &Engine,
-    tx: &mut Txn,
-    tables: &[crate::statement::BoundTable],
-) -> Result<Vec<SqlRow>> {
-    let mut joined: Vec<Vec<JoinedRow>> = vec![Vec::new()];
-    for table in tables {
-        let rows = collect_table_rows_with_alias(engine, tx, &table.table, table.alias.clone())?;
-        let mut next = Vec::new();
-        for prefix in &joined {
-            for row in &rows {
-                let mut combined = prefix.clone();
-                combined.push(joined_row_from_table_row(table, Some(row.clone())));
-                next.push(combined);
-            }
-        }
-        joined = next;
-    }
-    Ok(joined.into_iter().map(SqlRow::Joined).collect())
-}
-
-pub(crate) fn collect_join_source_rows(
-    engine: &Engine,
-    tx: &mut Txn,
-    source: &crate::statement::JoinSource,
-    bindings: &[Option<SqlValue>],
-) -> Result<Vec<SqlRow>> {
-    let base_rows =
-        collect_table_rows_with_alias(engine, tx, &source.base.table, source.base.alias.clone())?;
-    let mut joined: Vec<Vec<JoinedRow>> = base_rows
-        .into_iter()
-        .map(|row| vec![joined_row_from_table_row(&source.base, Some(row))])
-        .collect();
-
-    for step in &source.joins {
-        let right_rows =
-            collect_table_rows_with_alias(engine, tx, &step.right.table, step.right.alias.clone())?;
-        let mut next = Vec::new();
-        for prefix in &joined {
-            let mut matched = false;
-            for row in &right_rows {
-                let mut combined = prefix.clone();
-                combined.push(joined_row_from_table_row(&step.right, Some(row.clone())));
-                if selection_passes(&step.selection, &SqlRow::Joined(combined.clone()), bindings)? {
-                    matched = true;
-                    next.push(combined);
-                }
-            }
-            if !matched && matches!(step.kind, crate::statement::JoinKind::Left) {
-                let mut combined = prefix.clone();
-                combined.push(joined_row_from_table_row(&step.right, None));
-                next.push(combined);
-            }
-        }
-        joined = next;
-    }
-
-    Ok(joined.into_iter().map(SqlRow::Joined).collect())
-}
-
-fn joined_row_from_table_row(
-    table: &crate::statement::BoundTable,
-    row: Option<TableRow>,
-) -> JoinedRow {
-    let alias = table.alias.clone();
-    let row = row.map(|mut row| {
-        row.alias = alias.clone();
-        row
-    });
-    JoinedRow {
-        table: Arc::clone(&table.table),
-        alias,
-        row,
-    }
-}
-
-pub(crate) fn collect_table_rowids(
-    engine: &Engine,
-    tx: &mut Txn,
-    table: &Arc<TableDef>,
-) -> Result<Vec<RowId>> {
-    let mut rowids = Vec::new();
-    let scan = engine.relation_rowids(table.relation_id)?;
-    for rowid in scan {
-        if load_table_row_by_rowid(engine, tx, table, rowid)?.is_some() {
-            rowids.push(rowid);
-        }
-    }
-    Ok(rowids)
-}
-
-pub(crate) fn load_table_row_by_rowid(
-    engine: &Engine,
-    tx: &mut Txn,
-    table: &Arc<TableDef>,
-    rowid: RowId,
-) -> Result<Option<TableRow>> {
-    if let Some(payload) = engine.get_for_relation(tx, table.relation_id, rowid)?
-        && let Some((table_id, values)) = decode_sql_row(&payload)?
-        && table_id == table.table_id.0
-    {
-        let mut values = values;
-        if values.len() < table.columns.len() {
-            values.resize(table.columns.len(), SqlValue::Null);
-            values = build_default_values(table, values)?;
-        }
-        return Ok(Some(TableRow {
-            rowid,
-            values,
-            table: Arc::clone(table),
-            alias: None,
-        }));
-    }
-    Ok(None)
-}
-
-pub(crate) fn selection_rowid_eq(
-    table: &Arc<TableDef>,
-    selection: &Option<Expr>,
-    bindings: &[Option<SqlValue>],
-) -> Result<Option<RowId>> {
-    let Some(expr) = selection else {
-        return Ok(None);
-    };
-    let rowid_col = |name: &str| {
-        name.eq_ignore_ascii_case("rowid")
-            || name.eq_ignore_ascii_case("_rowid_")
-            || name.eq_ignore_ascii_case("oid")
-            || table
-                .rowid_alias_column
-                .and_then(|alias| table.columns.get(alias as usize))
-                .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
-    };
-    let Expr::BinaryOp { left, op, right } = expr else {
-        return Ok(None);
-    };
-    if !matches!(op, BinaryOperator::Eq) {
-        return Ok(None);
-    }
-    let expr_rowid = if let Some(value) = rowid_eq_side(table, left, right, bindings, &rowid_col)? {
-        value
-    } else if let Some(value) = rowid_eq_side(table, right, left, bindings, &rowid_col)? {
-        value
-    } else {
-        return Ok(None);
-    };
-    Ok(Some(expr_rowid))
-}
-
-pub(crate) fn rowid_eq_side(
-    _table: &Arc<TableDef>,
-    ident_side: &Expr,
-    value_side: &Expr,
-    bindings: &[Option<SqlValue>],
-    rowid_col: &impl Fn(&str) -> bool,
-) -> Result<Option<RowId>> {
-    let name = match ident_side {
-        Expr::Identifier(ident) if rowid_col(&ident.value) => Some(ident.value.as_str()),
-        Expr::CompoundIdentifier(parts) => parts.last().and_then(|ident| {
-            if rowid_col(&ident.value) {
-                Some(ident.value.as_str())
-            } else {
-                None
-            }
-        }),
-        _ => None,
-    };
-    if name.is_none() {
-        return Ok(None);
-    }
-    let value = eval_scalar(value_side, &RowContext::Empty, bindings)?;
-    match value {
-        SqlValue::Integer(v) if v >= 0 => Ok(Some(RowId::new(v as u64))),
-        SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => Ok(Some(RowId::new(v as u64))),
-        SqlValue::Null => Ok(None),
-        _ => Err(Error::DatatypeMismatch),
     }
 }

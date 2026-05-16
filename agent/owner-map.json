@@ -1,5 +1,8 @@
 {
   "owners": {
+    ".agents/": "agent",
+    ".cursor/": "agent",
+    ".editorconfig": "agent",
     ".github/": "ops",
     "AGENTS.md": "agent",
     "README.md": "workspace",

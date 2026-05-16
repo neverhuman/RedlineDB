@@ -142,7 +142,7 @@ pub(super) fn execute_select(
                         //   1. rowid PK fast path (already covered by
                         //      `selection_rowid_eq` / RowIdGet).
                         //   2. physical-index probe (point or range).
-                        //   3. fallback: full heap scan.
+                        //   3. default path: full heap scan.
                         let rowids = if let Some(rowid) =
                             selection_rowid_eq(table, &plan.selection, bindings)?
                         {
@@ -160,9 +160,8 @@ pub(super) fn execute_select(
                             // table scan rather than returning an empty
                             // result. The planner only emits
                             // IndexPointLookup/IndexRangeScan when the
-                            // executor can satisfy them, but stale
-                            // schema snapshots still exist as a
-                            // possibility.
+                            // executor can satisfy them, but a lagging
+                            // schema snapshot can still exist.
                             if index_access::open_handle(conn.engine(), &matched.index).is_some() {
                                 index_access::execute_index_probe(
                                     conn.engine(),
@@ -742,7 +741,7 @@ fn covering_order_satisfies(
     if matches!(item.options.asc, Some(false)) {
         // Desc ORDER BY does not match an Asc index; the cursor walks
         // left-to-right and does not currently support reverse
-        // iteration. Fall back so the legacy sort applies.
+        // iteration. Use the sort path instead.
         return false;
     }
     let Expr::Identifier(ident) = &item.expr else {

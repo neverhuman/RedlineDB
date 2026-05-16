@@ -86,6 +86,26 @@ fn w1c_streaming_index_range_returns_visible_rows() {
 }
 
 #[test]
+fn w1c_tenant_isolation_rejects_cross_tenant_rows() {
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE kv(k INTEGER PRIMARY KEY, tenant INTEGER, v INTEGER)")
+        .expect("create");
+    conn.execute("CREATE INDEX kv_tenant ON kv(tenant)")
+        .expect("create idx");
+    insert_kv(&conn, 96, 8, |i| i);
+
+    let mut stmt = conn
+        .prepare("SELECT k FROM kv WHERE tenant = ?1")
+        .expect("prep select");
+    stmt.bind_i64(1, 99).unwrap();
+    assert_eq!(
+        stmt.step().expect("step"),
+        Step::Done,
+        "unexpected rows leaked to an unrelated tenant"
+    );
+}
+
+#[test]
 fn w1c_index_range_with_limit_returns_correct_count() {
     let (_dir, conn) = open_database();
     conn.execute("CREATE TABLE kv(k INTEGER PRIMARY KEY, tenant INTEGER, v INTEGER)")

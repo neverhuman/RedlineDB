@@ -37,8 +37,8 @@ CERT = BENCH / "xbabe1" / "certification"
 RUNS_JSONL = CERT / "runs.jsonl"
 SUMMARY_CSV = CERT / "summary.csv"
 FEATURE_CERT_CANDIDATES = [
-    BENCH / "xbabe1" / "phase10-v3-cert" / "runs.jsonl",
-    BENCH / "phase10-v3-smoke" / "runs.jsonl",
+    BENCH / "xbabe1" / "phase10-cert-v3-cert" / "runs.jsonl",
+    BENCH / "phase10-cert-v3-smoke" / "runs.jsonl",
 ]
 WAVE7_COMPAT = BENCH / "wave7-compat.json"
 WAVE7_RECOVERY = BENCH / "wave7-recovery.json"
@@ -559,7 +559,7 @@ def fig6_json(feature_df: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots()
     data = feature_slice(feature_df, ["json-path-extract", "json-path-update"])
     if data.empty:
-        ax.text(0.5, 0.5, "phase10-v3 JSON cert missing", ha="center", va="center")
+        ax.text(0.5, 0.5, "cert-v3 JSON cert missing", ha="center", va="center")
         ax.set_axis_off()
     else:
         grouped = (
@@ -587,7 +587,7 @@ def fig7_vector(feature_df: pd.DataFrame, out: Path) -> None:
     workloads = ["vector-flat-search", "vector-ann-search", "vector-ann-search-disk"]
     data = feature_slice(feature_df, workloads)
     if data.empty:
-        ax1.text(0.5, 0.5, "phase10-v3 vector cert missing", ha="center", va="center")
+        ax1.text(0.5, 0.5, "cert-v3 vector cert missing", ha="center", va="center")
         ax1.set_axis_off()
     else:
         grouped = (
@@ -618,7 +618,7 @@ def fig8_group_commit(feature_df: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots()
     data = feature_slice(feature_df, ["commit-storm-batched"])
     if data.empty:
-        ax.text(0.5, 0.5, "phase10-v3 group-commit cert missing", ha="center", va="center")
+        ax.text(0.5, 0.5, "cert-v3 group-commit cert missing", ha="center", va="center")
         ax.set_axis_off()
     else:
         grouped = (
@@ -675,10 +675,10 @@ def main() -> int:
     if not feature_df.empty:
         feature_df["engine"] = feature_df["engine"].str.lower()
         print(
-            f"Loaded {len(feature_df)} phase10-v3 feature runs from {feature_df.source.iloc[0]}."
+            f"Loaded {len(feature_df)} cert-v3 feature runs from {feature_df.source.iloc[0]}."
         )
     else:
-        print("[warn] no phase10-v3 feature runs found; fig6-fig8 will be placeholders.")
+        print("[warn] no cert-v3 feature runs found; fig6-fig8 will be placeholders.")
     fig6_json(feature_df, FIGS_DIR / "fig6_json_throughput.eps")
     fig7_vector(feature_df, FIGS_DIR / "fig7_vector_recall_qps.eps")
     fig8_group_commit(feature_df, FIGS_DIR / "fig8_group_commit_batching.eps")

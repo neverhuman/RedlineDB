@@ -1,4 +1,4 @@
-out_dir = "target/bench/xbabe1/phase10-v3-compare"
+out_dir = "target/bench/xbabe1/phase10-cert-v3-compare"
 engines = ["redline", "sqlite"]
 workloads = [
   "json-path-extract",

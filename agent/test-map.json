@@ -141,6 +141,18 @@
       "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage evidence source routing and score import"
     },
+    ".agents/": {
+      "command": "just score",
+      "purpose": "verify agent workspace markers remain routed"
+    },
+    ".cursor/": {
+      "command": "just score",
+      "purpose": "verify editor workspace markers remain routed"
+    },
+    ".editorconfig": {
+      "command": "just score",
+      "purpose": "verify top-level editor policy remains routed"
+    },
     "agent/zyal/": {
       "command": "just score",
       "purpose": "verify canonical ZYAL runbooks stay under agent/zyal and only use the .zyal extension"

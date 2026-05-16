@@ -67,7 +67,7 @@ impl<Fs: FileSystem> PageFile<Fs> {
         Page::from_bytes(bytes)
     }
 
-    /// Lane INT: read the on-disk bytes for a page without invoking
+    /// Read the on-disk bytes for a page without invoking
     /// [`Page::from_bytes`]'s checksum validation. Used by the integrity
     /// checker to recompute expected vs got CRC32 when the regular load
     /// path returns [`crate::Error::InvalidChecksum`].
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn open_preserves_existing_page_file() {
-        let dir = tempdir().expect("temp dir");
+        let dir = tempdir().expect("test dir");
         let path = dir.path().join("pages.redline");
         let page_size = 16 * 1024;
 

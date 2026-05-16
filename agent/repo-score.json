@@ -1,17 +1,17 @@
 {
-  "report_fingerprint": "sha256:79dcb0a8677cdf9f23d99496b021aa0fb25d569925ab8c536431d3dc048666fc",
-  "input_fingerprint": "sha256:0d587d7b21612291df32a5d4c70069519cdbce4064a11093ecd262693d77f3b6",
+  "report_fingerprint": "sha256:372bd6c9386b8bdbb3641b70f02a767d1ce891b41bf15db2415d114f31def357",
+  "input_fingerprint": "sha256:a9338bfaba4bb0b7f73c6ca22205d5ec8cd37716be43fc42c00a2ea5527325ca",
   "policy_fingerprint": "sha256:1344c6682471353eb10a07a55a14e5fdd73676dd9aafd00b9f60dffd43c8b443",
   "manifest_fingerprints": {
-    "owner_map": "sha256:33fb3d111e3d9815b79c60ad3215b620fe0cfa4ca5e3576c6a2e36b165fa20b5",
-    "test_map": "sha256:7133c52ff403b1c5446baa4a3457548abede6cb73fee90061d70ee5a6b2720b2",
+    "owner_map": "sha256:6771292339e3ad524d270c44117aada81e82c823da55eee6274e98701dc95729",
+    "test_map": "sha256:d5b48554272b94342756399ff924668a76f3b28853877b39554e61f83b72d22f",
     "generated_zones": "sha256:5dfe809251017a95ec5a27320d48c17b4abacd36c2b66eee287f4f70fcfb7772",
-    "boundaries": "sha256:441612192807b4437d9dd11275108b76f007606932c6a9a66974759b958db6d4",
+    "boundaries": "sha256:7a7bf640d469152bca6f0a9a4feabb90ae6eb170f3fe33a196871bfefb3936e3",
     "proof_lanes": "sha256:00d647bbe1276d9d055bee237405335168081574e120b33f3953c9bca1b14215",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778879296",
+  "generated_at": "1778892294",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -24,19 +24,6 @@
   "observed_conformance_level": "HL2",
   "conformance_decision": "block",
   "conformance_blockers": [
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/ci.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/ci.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/ci.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/ci.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/ci.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/ci.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml",
-    "HLT-007-HANDWRITTEN-CONTRACT on agent/boundaries.toml",
     "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
     "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
     "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
@@ -57,8 +44,6 @@
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-013-RENDERED-UX-GAP on apps/web",
-    "HLT-013-RENDERED-UX-GAP on apps/web",
     "HLT-001-DEAD-MARKER on crates/bench/src/certify.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/certify.rs",
     "HLT-000-SCORE-DIMENSION:vibe on crates/bench/src/chaos.rs",
@@ -76,6 +61,10 @@
     "HLT-001-DEAD-MARKER on crates/bench/src/config.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/config.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/engine/redline.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/src/feature_workloads.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/src/feature_workloads.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/src/feature_workloads.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/src/feature_workloads.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/lib.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/lib.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/lib.rs",
@@ -83,10 +72,6 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/bench/src/process_metrics.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/report.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/report.rs",
-    "HLT-001-DEAD-MARKER on crates/bench/src/workload.rs",
-    "HLT-001-DEAD-MARKER on crates/bench/src/workload.rs",
-    "HLT-001-DEAD-MARKER on crates/bench/src/workload.rs",
-    "HLT-001-DEAD-MARKER on crates/bench/src/workload.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/workload.rs",
     "HLT-017-OPAQUE-OBSERVABILITY on crates/domain",
     "HLT-000-SCORE-DIMENSION:stack on crates/ffi/include/redlinedb.h",
@@ -125,6 +110,7 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/config.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/error.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/error.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
@@ -186,9 +172,8 @@
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/store.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/store.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/store.rs",
-    "HLT-001-DEAD-MARKER on crates/kernel/src/engine/mod.rs",
-    "HLT-001-DEAD-MARKER on crates/kernel/src/engine/mod.rs",
-    "HLT-001-DEAD-MARKER on crates/kernel/src/engine/page_heap.rs",
+    "HLT-001-DEAD-MARKER on crates/kernel/src/engine/catalog_ops.rs",
+    "HLT-001-DEAD-MARKER on crates/kernel/src/engine/catalog_ops.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor.rs",
@@ -201,7 +186,7 @@
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor.rs",
-    "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor.rs",
+    "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor/raw.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/scan.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/scan.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/scan.rs",
@@ -212,7 +197,6 @@
     "HLT-001-DEAD-MARKER on crates/kernel/src/integrity/page_csum.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/json/simd_key.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/json/simd_key.rs",
-    "HLT-001-DEAD-MARKER on crates/kernel/src/storage/page_file.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/diskann/mod.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/diskann/mod.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/diskann/mod.rs",
@@ -231,7 +215,7 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/kernel/src/vector/simd.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/wal/manager.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/wal/manager.rs",
-    "HLT-001-DEAD-MARKER on crates/kernel/src/wal/manager.rs",
+    "HLT-001-DEAD-MARKER on crates/kernel/src/wal/manager/storage.rs",
     "HLT-001-DEAD-MARKER on crates/redlinedb/src/lib.rs",
     "HLT-001-DEAD-MARKER on crates/redlinedb/src/lib.rs",
     "HLT-001-DEAD-MARKER on crates/redlinedb/src/machine.rs",
@@ -247,15 +231,6 @@
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/index_dml.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/index_dml.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/index_dml.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/select_top.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/select_top.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/select_top.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/tail.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/tail.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/tail.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/tail.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/tail.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/exec/tail.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/vec/hash_agg.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/vec/hash_agg.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/vec/mod.rs",
@@ -269,7 +244,6 @@
     "HLT-001-DEAD-MARKER on crates/sql/src/parser/helpers.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/parser/select.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/parser/select.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/planner.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/planner/helpers.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/regexp.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/session.rs",
@@ -278,21 +252,21 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1778879296",
-  "started_at": "1778879296",
-  "elapsed_ms": 6703,
+  "run_id": "1778892294",
+  "started_at": "1778892294",
+  "elapsed_ms": 5524,
   "scope": {
     "mode": "full",
     "paths": []
   },
   "score": 64,
-  "raw_score": 67,
+  "raw_score": 69,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 252,
-    "soft_findings": 15,
+    "hard_findings": 226,
+    "soft_findings": 14,
     "ratchet": {
       "baseline_score": 64,
       "allowed_drop": 0,
@@ -307,7 +281,7 @@
     }
   },
   "git": {
-    "head": "77ad73b",
+    "head": "0cc565e",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -338,15 +312,12 @@
     "fallback-soup-in-product-code",
     "future-hostile-dead-language-in-product-code",
     "severe-duplication-in-product-code",
-    "missing-web-e2e-lane",
-    "missing-rendered-ux-qa-lane",
     "authz-or-data-isolation-gap",
     "input-boundary-gap",
     "release-readiness-gap",
     "no-agent-friendly-exception-pattern",
     "missing-agent-readable-docs",
     "rust-bad-behavior",
-    "ci-bad-behavior",
     "repo-rot-bad-behavior"
   ],
   "hard_rules": [
@@ -543,8 +514,6 @@
         "owner map present",
         "test/proof routing map present",
         "local `AGENTS.md` file(s)",
-        "reference-profile cell `web` is canonical",
-        "reference-profile cell `web` has local AGENTS.md guidance",
         "reference-profile cell `api` is canonical",
         "reference-profile cell `api` has local AGENTS.md guidance",
         "reference-profile cell `domain` is canonical",
@@ -564,8 +533,7 @@
         "reference-profile cell `ops` is canonical",
         "reference-profile cell `ops` has local AGENTS.md guidance",
         "root `README.md` routes to workspace layout",
-        "authored code file exceeds 500 LOC",
-        "authored code file exceeds 1000 LOC"
+        "authored code file exceeds 500 LOC"
       ],
       "notes": [
         "repo-rot hard findings in active source paths: 6"
@@ -589,8 +557,8 @@
     {
       "name": "Proof lanes and test routing",
       "weight": 12,
-      "score": 80,
-      "weighted_points": 9.6,
+      "score": 100,
+      "weighted_points": 12.0,
       "evidence": [
         "one-command setup/validation lane found",
         "deterministic fast lane found",
@@ -598,13 +566,12 @@
         "GitHub workflow files present",
         "test/proof routing map present",
         "jankurai audit lane found in CI",
+        "web e2e lane present or no web surface",
+        "rendered UX QA lane present or no web surface",
         "DOM geometry UX QA runtime found",
         "Rust property/integration tests present or no Rust surface"
       ],
-      "notes": [
-        "web surface lacks Playwright/Cypress e2e lane",
-        "web surface lacks layered rendered UX QA"
-      ]
+      "notes": []
     },
     {
       "name": "Security and supply-chain posture",
@@ -618,8 +585,8 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior hard findings: 89",
-        "ci bad-behavior hard findings: 12",
+        "rust bad-behavior hard findings: 90",
+        "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
@@ -633,15 +600,14 @@
       "score": 0,
       "weighted_points": 0.0,
       "evidence": [
-        "largest authored code file: crates/bench/src/workload.rs (1947 LOC)",
+        "largest authored code file: crates/sql/src/connection.rs (972 LOC)",
         "code file exceeds 500 LOC",
-        "code file exceeds 1000 LOC",
         "duplicate code block marker found",
         "TODO/stub marker found",
         "fallback soup marker found",
         "future-hostile/dead-language marker found",
-        "rust bad-behavior hard findings: 89",
-        "ci bad-behavior hard findings: 12",
+        "rust bad-behavior hard findings: 90",
+        "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1"
       ],
       "notes": [
@@ -698,14 +664,14 @@
     {
       "name": "Jankurai tool adoption and CI replacement",
       "weight": 7,
-      "score": 35,
-      "weighted_points": 2.45,
+      "score": 31,
+      "weighted_points": 2.17,
       "evidence": [
         "control-plane files present",
-        "applicable=16",
-        "configured=6",
-        "ci_evidence=4",
-        "artifact_verified=4"
+        "applicable=15",
+        "configured=5",
+        "ci_evidence=3",
+        "artifact_verified=3"
       ],
       "notes": [
         "some applicable tools are not configured",
@@ -745,12 +711,9 @@
     }
   ],
   "ux_qa": {
-    "web_surface": true,
-    "has_rendered_ux_lane": false,
-    "missing_categories": [
-      "Playwright screenshot capture",
-      "generated API mocks"
-    ],
+    "web_surface": false,
+    "has_rendered_ux_lane": true,
+    "missing_categories": [],
     "evidence": {
       "accessibility": [
         "agent/repo-score.json",
@@ -764,37 +727,25 @@
         "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json",
         "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json"
       ],
-      "design_tokens": [
-        "agent/repo-score.json",
-        "agent/repo-score.md"
-      ],
+      "design_tokens": [],
       "geometry_runtime": [
-        "agent/repo-score.json",
-        "agent/repo-score.md",
         "agent/ux-qa.toml"
       ],
-      "layout_stability": [
-        "agent/repo-score.json",
-        "agent/repo-score.md"
-      ],
+      "layout_stability": [],
       "playwright_visual": [],
       "storybook": [
-        "agent/repo-score.json",
-        "agent/repo-score.md"
+        "agent/repo-score.json"
       ],
-      "visual_review": [
-        "agent/repo-score.json",
-        "agent/repo-score.md"
-      ]
+      "visual_review": []
     }
   },
   "tool_adoption": {
     "control_plane_present": true,
-    "applicable_count": 16,
-    "configured_count": 6,
-    "ci_evidence_count": 4,
-    "artifact_verified_count": 4,
-    "replaced_count": 4,
+    "applicable_count": 15,
+    "configured_count": 5,
+    "ci_evidence_count": 3,
+    "artifact_verified_count": 3,
+    "replaced_count": 3,
     "items": [
       {
         "id": "audit-ci",
@@ -995,18 +946,15 @@
         "id": "ux-qa",
         "category": "ux",
         "mode": "auto",
-        "applicable": true,
-        "status": "artifact_verified",
+        "applicable": false,
+        "status": "not_applicable",
         "replaced_tools": [
           "playwright",
           "axe-core",
           "visual baselines"
         ],
         "evidence": [
-          "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/ux-qa.json"
+          "mode=auto"
         ],
         "missing": [],
         "local_command": "jankurai ux audit --config agent/ux-qa.toml --out target/jankurai/ux-qa.json",
@@ -1238,7 +1186,7 @@
       }
     ],
     "evidence": {
-      "applicable_count": 16,
+      "applicable_count": 15,
       "applicable_tools": [
         "audit-ci",
         "proof-routing",
@@ -1248,7 +1196,6 @@
         "ci-bad-behavior",
         "git-bad-behavior",
         "release-bad-behavior",
-        "ux-qa",
         "contract-drift",
         "rust-witness",
         "authz-matrix",
@@ -1257,27 +1204,24 @@
         "release-readiness",
         "cost-budget"
       ],
-      "artifact_verified_count": 4,
+      "artifact_verified_count": 3,
       "artifact_verified_tools": [
         "proofbind",
         "proofmark-rust",
-        "ux-qa",
         "rust-witness"
       ],
-      "ci_evidence_count": 4,
+      "ci_evidence_count": 3,
       "ci_evidence_tools": [
         "proofbind",
         "proofmark-rust",
-        "ux-qa",
         "rust-witness"
       ],
       "config_present": true,
-      "configured_count": 6,
+      "configured_count": 5,
       "configured_tools": [
         "audit-ci",
         "proof-routing",
         "security",
-        "ux-qa",
         "contract-drift",
         "rust-witness"
       ],
@@ -1302,7 +1246,7 @@
   "boundaries": {
     "artifact": {
       "path": "agent/boundaries.toml",
-      "content_fingerprint": "sha256:441612192807b4437d9dd11275108b76f007606932c6a9a66974759b958db6d4",
+      "content_fingerprint": "sha256:7a7bf640d469152bca6f0a9a4feabb90ae6eb170f3fe33a196871bfefb3936e3",
       "stack_id": "rust-ts-vite-react-postgres-bounded-python",
       "stack_version": "0.4.0",
       "adapter_path_count": 2,
@@ -1314,29 +1258,27 @@
     "reclassifications": []
   },
   "profile_structure": {
-    "applicable_count": 10,
-    "canonical_count": 10,
+    "applicable_count": 9,
+    "canonical_count": 9,
     "noncanonical_count": 0,
     "guidance_missing_count": 0,
     "cells": [
       {
         "id": "web",
-        "applicable": true,
-        "status": "canonical",
+        "applicable": false,
+        "status": "not_applicable",
         "canonical_path": "apps/web/",
-        "detected_paths": [
-          "apps/web"
-        ],
+        "detected_paths": [],
         "aliases": [
           "frontend/",
           "ui/",
           "packages/web/",
           "packages/ui/"
         ],
-        "guidance_status": "present",
+        "guidance_status": "not_required",
         "owner": "apps/web",
         "proof_lane": "rendered UX / Playwright",
-        "agent_fix": "keep `apps/web/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
+        "agent_fix": "no action"
       },
       {
         "id": "api",
@@ -1511,18 +1453,9 @@
       }
     ],
     "evidence": {
-      "applicable_count": 10,
-      "canonical_count": 10,
+      "applicable_count": 9,
+      "canonical_count": 9,
       "detected_cells": [
-        {
-          "canonical_path": "apps/web/",
-          "detected_paths": [
-            "apps/web"
-          ],
-          "guidance_status": "present",
-          "id": "web",
-          "status": "canonical"
-        },
         {
           "canonical_path": "apps/api/",
           "detected_paths": [
@@ -1620,190 +1553,22 @@
       "problem": "`Code shape and semantic surface` scored 0 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/bench/src/workload.rs (1947 LOC)",
+        "largest authored code file: crates/sql/src/connection.rs (972 LOC)",
         "code file exceeds 500 LOC",
-        "code file exceeds 1000 LOC",
-        "duplicate code block marker found"
+        "duplicate code block marker found",
+        "TODO/stub marker found"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:2ab6b484eeba1b23381241650d4f13326f04a9210ac608363a969823a438ed4b",
+      "fingerprint": "sha256:c5dbc05e9b548067a555090cb830057c11a73f679a3b9e29d2caa0a4d72fae2f",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "tools"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/ci.yml",
-      "problem": "workflow is missing concurrency control",
-      "agent_fix": "add workflow-level concurrency with cancel-in-progress",
-      "evidence": [
-        "detector=ci.concurrency.missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:a24c7b64ee2aa0f92578e8b6ace712044fff20340149eff7469897b474540b86",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.concurrency.missing",
-      "reason": "workflow can run duplicate stale audits for the same ref"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/ci.yml",
-      "problem": "workflow is missing explicit top-level permissions",
-      "agent_fix": "add top-level `permissions: contents: read` and job-specific write scopes only where needed",
-      "evidence": [
-        "detector=ci.permissions.missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:52b26afa574820fca04cfa54170fd1ff6391b7d6c91b18cea6219c7d3d09b855",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.permissions.missing",
-      "reason": "workflow permissions default is not pinned in source"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/ci.yml",
-      "problem": "workflow job is missing timeout-minutes",
-      "agent_fix": "set an explicit timeout-minutes on each job",
-      "evidence": [
-        "detector=ci.timeout.missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:a5cecb437be13c8baefb349ca3cc63121b64e345b0aed9198a65649074c8c87c",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.timeout.missing",
-      "reason": "workflow can run without a checked time bound"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/ci.yml",
-      "problem": "workflow uses an external action not pinned to a full commit SHA",
-      "agent_fix": "pin every external action to a 40-character commit SHA",
-      "evidence": [
-        "detector=ci.action.not-full-sha",
-        "path=.github/workflows/ci.yml",
-        "line=12",
-        "proof_window=None",
-        "snippet=- uses: actions/checkout@v4"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:2018757a4aca4e267546fb4e34e2b794ee474fa67dbe2a5edd09f5003ef2aaa4",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 12,
-      "matched_term": "ci.action.not-full-sha",
-      "reason": "tag or branch refs can change without review"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/ci.yml",
-      "problem": "workflow uses an external action not pinned to a full commit SHA",
-      "agent_fix": "pin every external action to a 40-character commit SHA",
-      "evidence": [
-        "detector=ci.action.not-full-sha",
-        "path=.github/workflows/ci.yml",
-        "line=13",
-        "proof_window=None",
-        "snippet=- uses: swatinem/rust-cache@v2"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:a093f055273f30a21479625cf2f991dbff5b0e055406f1c079d4f33291a69201",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 13,
-      "matched_term": "ci.action.not-full-sha",
-      "reason": "tag or branch refs can change without review"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/ci.yml",
-      "problem": "workflow uses an external action not pinned to a full commit SHA",
-      "agent_fix": "pin every external action to a 40-character commit SHA",
-      "evidence": [
-        "detector=ci.action.not-full-sha",
-        "path=.github/workflows/ci.yml",
-        "line=14",
-        "proof_window=None",
-        "snippet=- uses: dtolnay/rust-toolchain@1.95.0"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:fba61d17bc6d5aebf0560526dd770af7555a2273db103858a24750a559ba0847",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 14,
-      "matched_term": "ci.action.not-full-sha",
-      "reason": "tag or branch refs can change without review"
     },
     {
       "severity": "medium",
@@ -1828,174 +1593,6 @@
       "lane": "security",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "ops"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow is missing concurrency control",
-      "agent_fix": "add workflow-level concurrency with cancel-in-progress",
-      "evidence": [
-        "detector=ci.concurrency.missing",
-        "path=.github/workflows/jankurai.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: jankurai"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:130d79c121d03f9780d3348a86c4a7eac6308bf578a32a416f722babe7df892e",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.concurrency.missing",
-      "reason": "workflow can run duplicate stale audits for the same ref"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow job is missing timeout-minutes",
-      "agent_fix": "set an explicit timeout-minutes on each job",
-      "evidence": [
-        "detector=ci.timeout.missing",
-        "path=.github/workflows/jankurai.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: jankurai"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:9e961161af32933baacaf16de5b2469db25a682f6a9e5e311b8985bcef32daa6",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.timeout.missing",
-      "reason": "workflow can run without a checked time bound"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow uses an external action not pinned to a full commit SHA",
-      "agent_fix": "pin every external action to a 40-character commit SHA",
-      "evidence": [
-        "detector=ci.action.not-full-sha",
-        "path=.github/workflows/jankurai.yml",
-        "line=14",
-        "proof_window=None",
-        "snippet=- uses: actions/checkout@v6"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:9ea25b4546fd02120b2de2ed543993c39a48830bf1c9507e3445bddaf195fe96",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 14,
-      "matched_term": "ci.action.not-full-sha",
-      "reason": "tag or branch refs can change without review"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow uses an external action not pinned to a full commit SHA",
-      "agent_fix": "pin every external action to a 40-character commit SHA",
-      "evidence": [
-        "detector=ci.action.not-full-sha",
-        "path=.github/workflows/jankurai.yml",
-        "line=17",
-        "proof_window=None",
-        "snippet=- uses: dtolnay/rust-toolchain@stable"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:5c8e3c293a011267c5ad0ae48771934d132ce141be69fcaf422f367ebdb02aac",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 17,
-      "matched_term": "ci.action.not-full-sha",
-      "reason": "tag or branch refs can change without review"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow creates SARIF without uploading it",
-      "agent_fix": "upload the SARIF artifact with github/codeql-action/upload-sarif pinned to a full SHA",
-      "evidence": [
-        "detector=ci.sarif.not-uploaded",
-        "path=.github/workflows/jankurai.yml",
-        "line=22",
-        "proof_window=None",
-        "snippet=run: jankurai audit . --mode advisory --baseline agent/repo-score.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:0ca2538a607749dd7399a1d1190f4586b71d5bd7fe239609c9f195890548be23",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 22,
-      "matched_term": "ci.sarif.not-uploaded",
-      "reason": "SARIF evidence is not published to code scanning"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow uses an external action not pinned to a full commit SHA",
-      "agent_fix": "pin every external action to a 40-character commit SHA",
-      "evidence": [
-        "detector=ci.action.not-full-sha",
-        "path=.github/workflows/jankurai.yml",
-        "line=31",
-        "proof_window=None",
-        "snippet=- uses: actions/upload-artifact@v7"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:bfa1d535b6b6657e935ad75b78a5d65ea5c2ff5325b5ffe2b7c9862be5d9c483",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 31,
-      "matched_term": "ci.action.not-full-sha",
-      "reason": "tag or branch refs can change without review"
     },
     {
       "severity": "medium",
@@ -2047,41 +1644,19 @@
     },
     {
       "severity": "high",
-      "category": "boundary",
-      "path": "agent/boundaries.toml",
-      "problem": "event contract path `contracts/events` is missing",
-      "agent_fix": "create `contracts/events` with event schemas, or update `agent/boundaries.toml` if the path was moved",
-      "evidence": [
-        "declared event contract path `contracts/events` does not exist"
-      ],
-      "check_id": "HLT-007-HANDWRITTEN-CONTRACT:boundary",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "contract-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:2c043965779a8cbd99aa86ed626404ea7dc06d1ca21929151861a6b77c53d191",
-      "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "docs_url": "docs/audit-rubric.md#known-vibe-coding-insults",
-      "owner": "agent",
-      "line": 1
-    },
-    {
-      "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.agents/agents.md` has no owner-map route",
+      "problem": "path `.gitignore` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".agents/agents.md"
+        ".gitignore"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:435dbe36fecd4cdddf2aa5a139c9013c4cbb3040e40a7c11cd88adba32b90f3d",
+      "fingerprint": "sha256:73b0d05063e2ba8c1c0cdee444a5be8dda239dbe9748b61427699317c5c33f4b",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2092,17 +1667,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.agents/skills/jankurai/SKILL.md` has no owner-map route",
+      "problem": "path `CHANGELOG.md` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".agents/skills/jankurai/SKILL.md"
+        "CHANGELOG.md"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:3bf7ef9c379850b7ff0018906f17cc213d94329d3853e52f64b59674011985c7",
+      "fingerprint": "sha256:2911a47f9548e75233bc304c284818b5b7fb6c72ecde5d7bc5c97be0635cd18a",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2113,17 +1688,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.agents/workflows/jankurai-audit.md` has no owner-map route",
+      "problem": "path `CLAUDE.md` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-audit.md"
+        "CLAUDE.md"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:d535c972b3319d842c53ba109422df97bfaa3e938edbd0164f59324611f629c2",
+      "fingerprint": "sha256:bd8f4e8361bf13c5d18526bd2f35de9a89447626ad25a0e87883fe1785d17399",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2134,17 +1709,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.agents/workflows/jankurai-context-pack.md` has no owner-map route",
+      "problem": "path `CONTRIBUTING.md` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-context-pack.md"
+        "CONTRIBUTING.md"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:5574c5a22f166bf97666a8e418294eac61503e78e6f164aaae3017bd877cbd3c",
+      "fingerprint": "sha256:53c38db6efc8c868fc6490a7ca739dad4dd43e68ebdf098f88f6e1df99795075",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2155,17 +1730,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.agents/workflows/jankurai-kickoff.md` has no owner-map route",
+      "problem": "path `Cargo.lock` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-kickoff.md"
+        "Cargo.lock"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:1610bad8e92b64731cbab98015db6068f71935ec5b1b4dd23aa19bfc15b449cd",
+      "fingerprint": "sha256:b039e38fe066b0ca37060986515b6a5787a63d246c5dada2a12dc16aec26381a",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2176,17 +1751,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.agents/workflows/jankurai-prove.md` has no owner-map route",
+      "problem": "path `Cargo.toml` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-prove.md"
+        "Cargo.toml"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:55737f2ddd514d5c3f5510b514e3cf462f4fd593664438aa8e5ed5db20e75331",
+      "fingerprint": "sha256:5cee550532ba9f298e31a18ffa4f8b841e75577b203144fda3ac04b25761dd79",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2197,17 +1772,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.agents/workflows/jankurai-repair-plan.md` has no owner-map route",
+      "problem": "path `EXTERNAL_REVIEW_MASTER_PROMPT.md` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-repair-plan.md"
+        "EXTERNAL_REVIEW_MASTER_PROMPT.md"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:2269c2a71d2280880b59c14e1b4b50388c46723a09f9c6faeda6e355d43f85bf",
+      "fingerprint": "sha256:1935ca50ef08cf279640d1c3e0153d2d482a0acb4bca8407c4e3af43234a938c",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2218,17 +1793,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.agents/workflows/jankurai-witness.md` has no owner-map route",
+      "problem": "path `EXTERNAL_REVIEW_SUPERPROMPT.md` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-witness.md"
+        "EXTERNAL_REVIEW_SUPERPROMPT.md"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c9fef1ddf422eff93ede3cd6ed3c4c41b7745a8edb6294743f4e254987a8e049",
+      "fingerprint": "sha256:3f14f6d5231d151e242cc9c7a559075a1d73db88b624698465a3cde4fab6a7be",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2239,17 +1814,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.cursor/rules/jankurai.mdc` has no owner-map route",
+      "problem": "path `FEATURE_GAPS.md` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".cursor/rules/jankurai.mdc"
+        "FEATURE_GAPS.md"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:6db7b7bdcc10b545d5c14abad3da1e7fdf9e89d59ad0389c6e2c0e0d77471a41",
+      "fingerprint": "sha256:2372d1d68ea2f342f127a3533021ca0165f023c2f5e2f5c395fc0c532e58561d",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2260,17 +1835,17 @@
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
-      "problem": "path `.editorconfig` has no owner-map route",
+      "problem": "path `GEMINI.md` has no owner-map route",
       "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
       "evidence": [
-        ".editorconfig"
+        "GEMINI.md"
       ],
       "check_id": "HLT-003-OWNERLESS-PATH:context",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:936f547d2022cb46e506a051db79754e5eea1d12583c77e97ef770589c6ad0a4",
+      "fingerprint": "sha256:271eabd1e2dad2560b72f19c12fb8b519af9a79fabf2b83e29243d4c83ecefed",
       "rule_id": "HLT-003-OWNERLESS-PATH",
       "tlr": "Context/setup",
       "lane": "fast",
@@ -2278,44 +1853,20 @@
       "owner": "agent"
     },
     {
-      "severity": "medium",
-      "category": "proof",
-      "path": "agent/test-map.json",
-      "problem": "`Proof lanes and test routing` scored 80 below the standard floor of 85",
-      "agent_fix": "route each owned path to a deterministic proof command and make the lane executable in CI",
-      "evidence": [
-        "one-command setup/validation lane found",
-        "deterministic fast lane found",
-        "test runner present in automation surface",
-        "GitHub workflow files present"
-      ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:4c32cd60475fd4c803e64a568543f5c081a156b33b97fa688f83b5a578024262",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
-    },
-    {
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.agents/agents.md` has no test-map proof route",
+      "problem": "path `.github/CODEOWNERS` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".agents/agents.md"
+        ".github/CODEOWNERS"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:2dec5e0805437ed64c0bfe389b301252a9dcd2975200d9538b5bd0b3ec636f78",
+      "fingerprint": "sha256:c6facbfbb742d951249284cc037845c1f2ab2a1d5213a03c80b4c687898d6ab3",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2326,17 +1877,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.agents/skills/jankurai/SKILL.md` has no test-map proof route",
+      "problem": "path `.github/PULL_REQUEST_TEMPLATE.md` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".agents/skills/jankurai/SKILL.md"
+        ".github/PULL_REQUEST_TEMPLATE.md"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:4bdd6121175c52d8f76d4075dadae1ef8c4a00c7c5a4a31f5c4cf77b063e8c7e",
+      "fingerprint": "sha256:6be0a2dfcc6bb22c4a24996ced5349c39b8361695babbd981ac6482c1979a121",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2347,17 +1898,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.agents/workflows/jankurai-audit.md` has no test-map proof route",
+      "problem": "path `.github/copilot-instructions.md` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-audit.md"
+        ".github/copilot-instructions.md"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:b8453cb7c1ebb7222f3ec5ff082095a38230ed5ec3c9b0693d134e9b156cddcb",
+      "fingerprint": "sha256:1d8715b91aa1798a04a0f8eb739d2009aa97b0f5e933a34d7e8dc7a97a44bfde",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2368,17 +1919,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.agents/workflows/jankurai-context-pack.md` has no test-map proof route",
+      "problem": "path `.github/instructions/jankurai-rust.instructions.md` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-context-pack.md"
+        ".github/instructions/jankurai-rust.instructions.md"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:439e326dd5d0e37e4d0c0326852a8a8fa3c0c9500b92f3300b69749b0676be61",
+      "fingerprint": "sha256:769147261ab786beb2930c92df19fca83e809443cbdb1387cc3b6f6bda643a89",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2389,17 +1940,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.agents/workflows/jankurai-kickoff.md` has no test-map proof route",
+      "problem": "path `.github/instructions/jankurai-web.instructions.md` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-kickoff.md"
+        ".github/instructions/jankurai-web.instructions.md"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:47ca38122b7604dad102bb225a5cbb62abb723ce12a5a427581a0f85f89d0acc",
+      "fingerprint": "sha256:2e6c740bb8b013b5bcecf365e91d5fc8361c9963155e98596eeb409042f6688c",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2410,17 +1961,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.agents/workflows/jankurai-prove.md` has no test-map proof route",
+      "problem": "path `.github/instructions/jankurai.instructions.md` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-prove.md"
+        ".github/instructions/jankurai.instructions.md"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:0554c8a2e3bd73e0a2d08d31d0b80cdcd62e3631d05c2df20f96995740919713",
+      "fingerprint": "sha256:0af736bb824df4107187600e202e8960d55f3b081501863062f57ea9d3a20e69",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2431,17 +1982,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.agents/workflows/jankurai-repair-plan.md` has no test-map proof route",
+      "problem": "path `.github/workflows/ci.yml` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-repair-plan.md"
+        ".github/workflows/ci.yml"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:805a4ad88a73eff86f1403af70c2e2d227c6ca6a9ff0d79e9d3caaef9dfc8184",
+      "fingerprint": "sha256:e8b9c4d51fd3f1a3ed0e0507f920035cc2c51d1be80cb468f20e9b3d9056c8ed",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2452,17 +2003,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.agents/workflows/jankurai-witness.md` has no test-map proof route",
+      "problem": "path `.github/workflows/jankurai.yml` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".agents/workflows/jankurai-witness.md"
+        ".github/workflows/jankurai.yml"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:2ec7dc8d691549fba05e8f0fea8adf0d9ca7154808e1a209e1f17971eece380a",
+      "fingerprint": "sha256:fbe0f82818625191cd5ba476f315b601a7e78ed1635009d516a469724f230a3e",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2473,17 +2024,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.cursor/rules/jankurai.mdc` has no test-map proof route",
+      "problem": "path `.gitignore` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".cursor/rules/jankurai.mdc"
+        ".gitignore"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:a98197203489943dc38ccac12fda0905d745d06db2c09372df14af1ea82e99c1",
+      "fingerprint": "sha256:8fe7edc74ce7873d59c9b6ccb57a19bca48fe9589c015113fb5028c2cc245992",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2494,64 +2045,22 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.editorconfig` has no test-map proof route",
+      "problem": "path `CHANGELOG.md` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".editorconfig"
+        "CHANGELOG.md"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:b38580132585866dd59e2e9e6f0d3a47275b33c2ed4a905c7db55c0a176f17b7",
+      "fingerprint": "sha256:eaa40b784b5bb02ef321df1133743a622cda79939f89a05728e47c374dc90555",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
       "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
       "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "test",
-      "path": "apps/web",
-      "problem": "web surface lacks a Playwright/Cypress e2e lane",
-      "agent_fix": "add Playwright e2e tests for critical user flows and wire them into the fast or CI proof map",
-      "evidence": [
-        "web surface detected"
-      ],
-      "check_id": "HLT-013-RENDERED-UX-GAP:test",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "ux-proof",
-      "rerun_command": "just ux-qa",
-      "fingerprint": "sha256:baba171f944c5384a440bd31dbe0783c2a295323e516450d3b28505654cb406d",
-      "rule_id": "HLT-013-RENDERED-UX-GAP",
-      "tlr": "Verification and rendered UX",
-      "lane": "web",
-      "docs_url": "docs/testing.md",
-      "owner": "apps"
-    },
-    {
-      "severity": "high",
-      "category": "ux-qa",
-      "path": "apps/web",
-      "problem": "web surface lacks layered rendered UX QA evidence",
-      "agent_fix": "add Storybook state coverage, Playwright screenshots, visual review or `@jankurai/ux-qa`, accessibility scans, CLS checks, generated mocks, and design tokens",
-      "evidence": [
-        "rendered UX QA lane missing"
-      ],
-      "check_id": "HLT-013-RENDERED-UX-GAP:ux-qa",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "ux-proof",
-      "rerun_command": "just ux-qa",
-      "fingerprint": "sha256:571d35c2e730a393b782bac14825b197c0543920bb21967079d264ac602ea5b1",
-      "rule_id": "HLT-013-RENDERED-UX-GAP",
-      "tlr": "Verification and rendered UX",
-      "lane": "web",
-      "docs_url": "docs/testing.md",
-      "owner": "apps"
     },
     {
       "severity": "medium",
@@ -2564,14 +2073,14 @@
         "path=crates/bench/bench/certification-phase10-v3-compare.toml",
         "line=1",
         "proof_window=None",
-        "snippet=out_dir = \"target/bench/xbabe1/phase10-v3-compare\""
+        "snippet=out_dir = \"target/bench/xbabe1/phase10-cert-v3-compare\""
       ],
       "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just score",
-      "fingerprint": "sha256:3165709ee379860aa2edcd87559c4e3e0522e97d9abfed84ec20129c8dcb3b4a",
+      "fingerprint": "sha256:22d5fc685fc8b529830b0f91bf40cc745ed3fb6b7b2a20ce9fe4d8fd1ec92562",
       "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
       "tlr": "Context/setup",
       "lane": "audit",
@@ -2592,14 +2101,14 @@
         "path=crates/bench/bench/certification-phase10-v3-smoke.toml",
         "line=1",
         "proof_window=None",
-        "snippet=out_dir = \"target/bench/phase10-v3-smoke\""
+        "snippet=out_dir = \"target/bench/phase10-cert-v3-smoke\""
       ],
       "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just score",
-      "fingerprint": "sha256:9f3f0e646fe098d367238e1f727af0497e53d6e2c57db384da88de88329dc8bf",
+      "fingerprint": "sha256:307a51211739992f3e48fa484a9b85323518afc2189be1e0929d66c770c0194c",
       "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
       "tlr": "Context/setup",
       "lane": "audit",
@@ -2620,14 +2129,14 @@
         "path=crates/bench/bench/certification-phase10-v3-stress.toml",
         "line=1",
         "proof_window=None",
-        "snippet=out_dir = \"target/bench/xbabe1/phase10-v3-stress\""
+        "snippet=out_dir = \"target/bench/xbabe1/phase10-cert-v3-stress\""
       ],
       "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just score",
-      "fingerprint": "sha256:c5e8667ca42a4c16f66ae6eb089cece6808f1b12b1805342ecc1eb04a9e21dfa",
+      "fingerprint": "sha256:b35841ee76d63fbe95d4c1aa00cbf9d9fe090869149939cbcb4cf6f84829c5e1",
       "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
       "tlr": "Context/setup",
       "lane": "audit",
@@ -2648,14 +2157,14 @@
         "path=crates/bench/bench/certification-phase10-v3.toml",
         "line=1",
         "proof_window=None",
-        "snippet=out_dir = \"target/bench/xbabe1/phase10-v3-cert\""
+        "snippet=out_dir = \"target/bench/xbabe1/phase10-cert-v3-cert\""
       ],
       "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just score",
-      "fingerprint": "sha256:1e322db5d04452f12149ca47efed0b53b7a90ef3b636cde438fec544c72282b2",
+      "fingerprint": "sha256:65b64cd6b8fafcb14aa5bcb22394441d4c2ab33bb00623426d4f83a7d2d89aac",
       "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
       "tlr": "Context/setup",
       "lane": "audit",
@@ -2672,7 +2181,7 @@
       "problem": "future-hostile/dead-language term `placeholder` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/bench/src/certify.rs:590",
+        "crates/bench/src/certify.rs:213",
         "future-hostile/dead-language term `placeholder` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -2680,13 +2189,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:3ae2541b0ad8acf644cd05518d3a6b6eb340c9accc8eee12db6831a800dfd0e7",
+      "fingerprint": "sha256:399beb49d16b534a88a7335e6984c1e83bdee985875a2fcc36adf0120cea0df5",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "bench-harness",
-      "line": 590
+      "line": 213
     },
     {
       "severity": "high",
@@ -2695,20 +2204,20 @@
       "problem": "fallback soup detected in product code",
       "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
       "evidence": [
-        "crates/bench/src/certify.rs:621 let payload = serde_json::to_vec(&record.checksum).unwrap_or_default();"
+        "crates/bench/src/certify.rs:244 let payload = serde_json::to_vec(&record.checksum).unwrap_or_default();"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:21fc5d0d5d027d1065a74e77b0f71fbc5585215cd3387163e5a383e56796e1e9",
+      "fingerprint": "sha256:c7c5bb20208bb49bd7962fd71d37ff2b181e731d8909e525920ffa2659cbc8ba",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "bench-harness",
-      "line": 621
+      "line": 244
     },
     {
       "severity": "high",
@@ -3056,6 +2565,98 @@
     {
       "severity": "high",
       "category": "vibe",
+      "path": "crates/bench/src/feature_workloads.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/src/feature_workloads.rs:86",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:2a69182cba9b904b20c4788f9c19d91e95221e0261c233ffd9b070139d4f6830",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "bench-harness",
+      "line": 86
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/src/feature_workloads.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/src/feature_workloads.rs:87",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:74aeb4328334397b97d21fe27bd4a4d4f0a206e3e5174d5d593bc60a1ec7c6ae",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "bench-harness",
+      "line": 87
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/src/feature_workloads.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/src/feature_workloads.rs:135",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:f66fca02b7be01c8fbcf4e07793f50dac6a440861fe400372aed808d4fcc98b0",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "bench-harness",
+      "line": 135
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/src/feature_workloads.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/src/feature_workloads.rs:136",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:bb09689da959015889681a07730bd5f917e3cc1b210b853df00e42a6afea3da3",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "bench-harness",
+      "line": 136
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
       "path": "crates/bench/src/lib.rs",
       "problem": "future-hostile/dead-language term `compat` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
@@ -3221,102 +2822,10 @@
       "severity": "high",
       "category": "vibe",
       "path": "crates/bench/src/workload.rs",
-      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/bench/src/workload.rs:513",
-        "future-hostile/dead-language term `temp` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:906c4daeb87f86808a45ae231c56653515fce28ba8ed246174db0976b289b71d",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "bench-harness",
-      "line": 513
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/bench/src/workload.rs",
-      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/bench/src/workload.rs:514",
-        "future-hostile/dead-language term `temp` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:3826a5b7fe9aa1812ce2bf6473bb2ffe8ca88c5af0fd3d3edb00c0d67d5f878a",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "bench-harness",
-      "line": 514
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/bench/src/workload.rs",
-      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/bench/src/workload.rs:559",
-        "future-hostile/dead-language term `temp` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:ca486af2f0c9c7c9a504b81e1d087b7f333c5529edad6d6d2354b835dbc34920",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "bench-harness",
-      "line": 559
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/bench/src/workload.rs",
-      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/bench/src/workload.rs:560",
-        "future-hostile/dead-language term `temp` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:cec6a7eda789f93ae73311a2cd01a8f9f6c0946a7cf06955f404a0562b0e274a",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "bench-harness",
-      "line": 560
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/bench/src/workload.rs",
       "problem": "future-hostile/dead-language term `compat` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/bench/src/workload.rs:1851",
+        "crates/bench/src/workload.rs:608",
         "future-hostile/dead-language term `compat` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3324,13 +2833,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:e051d4b89371ad011379c26ffb6a2fd91ad6d6fd6f221fde677031c04bb6d871",
+      "fingerprint": "sha256:d715520fb01d2ed65ff18a50cd10fcb2bbcb04e24bc417a55b4ac01040f0c32a",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "bench-harness",
-      "line": 1851
+      "line": 608
     },
     {
       "severity": "high",
@@ -4412,7 +3921,7 @@
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "c-abi",
-      "line": 48,
+      "line": 72,
       "matched_term": "rust.unsafe.undocumented-block",
       "reason": "no nearby SAFETY comment was found"
     },
@@ -4425,14 +3934,14 @@
       "evidence": [
         "detector=unsafe {",
         "proof-window=NearbySafetyComment",
-        "snippet=unsafe { set_errmsg(errmsg, \"callback returned non-zero\") };"
+        "snippet=unsafe { set_errmsg(errmsg, &msg) };"
       ],
       "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
       "hardness": "hard",
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:d7fc18ba68d899738cf9a0bf71e005b899e677ffe1b30e23604e6c653b5035b1",
+      "fingerprint": "sha256:be510871a320af20bd9aaf07d434e90403fc45e128e5b3654866ff67e32fefe4",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4464,7 +3973,33 @@
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "c-abi",
-      "line": 99,
+      "line": 112,
+      "matched_term": "rust.unsafe.undocumented-block",
+      "reason": "no nearby SAFETY comment was found"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/exec.rs",
+      "problem": "unsafe block lacks a nearby local safety argument",
+      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "evidence": [
+        "detector=unsafe {",
+        "proof-window=NearbySafetyComment",
+        "snippet=unsafe { set_errmsg(errmsg, \"callback returned non-zero\") };"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:d7fc18ba68d899738cf9a0bf71e005b899e677ffe1b30e23604e6c653b5035b1",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 153,
       "matched_term": "rust.unsafe.undocumented-block",
       "reason": "no nearby SAFETY comment was found"
     },
@@ -5861,11 +5396,11 @@
     {
       "severity": "high",
       "category": "vibe",
-      "path": "crates/kernel/src/engine/mod.rs",
+      "path": "crates/kernel/src/engine/catalog_ops.rs",
       "problem": "future-hostile/dead-language term `todo` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/engine/mod.rs:878",
+        "crates/kernel/src/engine/catalog_ops.rs:153",
         "future-hostile/dead-language term `todo` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -5873,22 +5408,22 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:42b5dae7e0f944bdd1298a0a997391ac1aeae63bce20479acfbf307079437921",
+      "fingerprint": "sha256:569c91caaa93ac8667b556ee4084e2dc23c7ae95649ae0dce4449ce688217429",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 878
+      "line": 153
     },
     {
       "severity": "high",
       "category": "vibe",
-      "path": "crates/kernel/src/engine/mod.rs",
+      "path": "crates/kernel/src/engine/catalog_ops.rs",
       "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/engine/mod.rs:1132",
+        "crates/kernel/src/engine/catalog_ops.rs:187",
         "future-hostile/dead-language term `legacy` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -5896,36 +5431,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:f331f3fbe9082c6a41e0375f9e774834d3b015090ef62375e4733cf42f39d002",
+      "fingerprint": "sha256:8699b00a2f715984fbb14d0d234ce8c56efb537d775dd88a4c952817607fbdc2",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 1132
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/kernel/src/engine/page_heap.rs",
-      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/kernel/src/engine/page_heap.rs:806",
-        "future-hostile/dead-language term `legacy` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:3e588bcc7d6c0035d470f74f42627b56c2b9b70713023490e2b2165095b72d49",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "storage-and-catalog",
-      "line": 806
+      "line": 187
     },
     {
       "severity": "high",
@@ -6206,11 +5718,11 @@
     {
       "severity": "high",
       "category": "vibe",
-      "path": "crates/kernel/src/index/cursor.rs",
+      "path": "crates/kernel/src/index/cursor/raw.rs",
       "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/index/cursor.rs:570",
+        "crates/kernel/src/index/cursor/raw.rs:18",
         "future-hostile/dead-language term `legacy` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -6218,13 +5730,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:a760c57e65cc6f5f9a1932ead2fb52e17feb45f545f9e48ba96fa5983178bc42",
+      "fingerprint": "sha256:ee7382d3d4b181cb766efa45f23d2dff50d0b9a5e04c2775ae55f0548bb318a7",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 570
+      "line": 18
     },
     {
       "severity": "high",
@@ -6455,29 +5967,6 @@
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "phase10-jsonb-binary-format",
       "line": 61
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/kernel/src/storage/page_file.rs",
-      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/kernel/src/storage/page_file.rs:148",
-        "future-hostile/dead-language term `temp` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:988c041d0c67a3e14661090547829461a8cb641fc13e325af7054c5029e02a36",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "storage-and-catalog",
-      "line": 148
     },
     {
       "severity": "high",
@@ -6863,7 +6352,7 @@
       "problem": "future-hostile/dead-language term `stub` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/wal/manager.rs:42",
+        "crates/kernel/src/wal/manager.rs:40",
         "future-hostile/dead-language term `stub` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -6871,13 +6360,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:6607fa346779cad20828406e9f695bc9b96813f2ab62895d8c3cc2d47ec791da",
+      "fingerprint": "sha256:31da672d371794badbecd162a509644b51125f8e5d4f043d086d8d9dc7d516d7",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "wal-archive-retention",
-      "line": 42
+      "line": 40
     },
     {
       "severity": "high",
@@ -6886,7 +6375,7 @@
       "problem": "future-hostile/dead-language term `fallback` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/wal/manager.rs:254",
+        "crates/kernel/src/wal/manager.rs:252",
         "future-hostile/dead-language term `fallback` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -6894,22 +6383,22 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:861272c534b78abd224da53010c255579be4b7b2724b07bb7756d1a03e5f4b7f",
+      "fingerprint": "sha256:5a0fed65590837e45fb399bb1e4a5b3b0aac03fdd06bc044fbd19bef214d13a6",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "wal-archive-retention",
-      "line": 254
+      "line": 252
     },
     {
       "severity": "high",
       "category": "vibe",
-      "path": "crates/kernel/src/wal/manager.rs",
+      "path": "crates/kernel/src/wal/manager/storage.rs",
       "problem": "future-hostile/dead-language term `stale` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/wal/manager.rs:310",
+        "crates/kernel/src/wal/manager/storage.rs:32",
         "future-hostile/dead-language term `stale` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -6917,13 +6406,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:b8d38f193d34bcc696e00ebe6bd64e0f0425334ea696f678e0449bef87c169ea",
+      "fingerprint": "sha256:e67ec2a492801a0aa97834aada798ce1bcbcb8d5360e4c52f6f78c5e43564890",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "wal-archive-retention",
-      "line": 310
+      "line": 32
     },
     {
       "severity": "medium",
@@ -7307,213 +6796,6 @@
     {
       "severity": "high",
       "category": "vibe",
-      "path": "crates/sql/src/exec/select_top.rs",
-      "problem": "future-hostile/dead-language term `fallback` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/select_top.rs:145",
-        "future-hostile/dead-language term `fallback` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:29c5b8c98b4d9b4f33a437350071a3beaa0dd85512ac024fa2fc40fa1725b328",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 145
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/exec/select_top.rs",
-      "problem": "future-hostile/dead-language term `stale` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/select_top.rs:163",
-        "future-hostile/dead-language term `stale` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:59a15607849540acd1dd4fcf01ffc8a4d18d88ed01159e55bcabf68edf2be6fe",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 163
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/exec/select_top.rs",
-      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/select_top.rs:745",
-        "future-hostile/dead-language term `legacy` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:a3a41267a21e8f6364dce2a74350eace9b14f1209379e78d700c7ad8304ba217",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 745
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/exec/tail.rs",
-      "problem": "future-hostile/dead-language term `fallback` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/tail.rs:731",
-        "future-hostile/dead-language term `fallback` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:946dcb185e57036fe6d7b12c3e476e5896a7d7cde20cf28af20da94a13713822",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 731
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/exec/tail.rs",
-      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/tail.rs:732",
-        "future-hostile/dead-language term `legacy` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:274ed2507e689a64e5a24de644ea93b5dcf8875ca064581ec99a181da9c41954",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 732
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/exec/tail.rs",
-      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/tail.rs:758",
-        "future-hostile/dead-language term `legacy` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:a9684df78d25ce2cb8bc9019d80781a0beaf9993fe1240705a784c4bc42ab644",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 758
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/exec/tail.rs",
-      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/tail.rs:799",
-        "future-hostile/dead-language term `legacy` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:a9639136ba5993ef82389465d0114ad0f0439eb107144d15e78f1411e7b8abab",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 799
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/exec/tail.rs",
-      "problem": "future-hostile/dead-language term `fallback` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/tail.rs:801",
-        "future-hostile/dead-language term `fallback` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:eee74040e1edbf225f5776464cd2492953afa5cb4f939e7831239d411e841605",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 801
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/exec/tail.rs",
-      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/exec/tail.rs:811",
-        "future-hostile/dead-language term `legacy` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:1308305601c07a898df44b8cd51ee023ff05e705073480135c04f55fdb4fdab7",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 811
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
       "path": "crates/sql/src/exec/vec/hash_agg.rs",
       "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
@@ -7813,29 +7095,6 @@
     {
       "severity": "high",
       "category": "vibe",
-      "path": "crates/sql/src/planner.rs",
-      "problem": "future-hostile/dead-language term `fallback` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/planner.rs:1025",
-        "future-hostile/dead-language term `fallback` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:b203a1abf424a9b999d132f459d4c7668a1aba4bfeaab09e1628e765b5731a65",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 1025
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
       "path": "crates/sql/src/planner/helpers.rs",
       "problem": "future-hostile/dead-language term `placeholder` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
@@ -8096,16 +7355,6 @@
       "why": "`Python containment and polyglot hygiene` scored 0 below the standard floor of 85"
     },
     {
-      "path": "agent/boundaries.toml",
-      "priority": "high",
-      "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "owner": "agent",
-      "task": "create `contracts/events` with event schemas, or update `agent/boundaries.toml` if the path was moved",
-      "why": "event contract path `contracts/events` is missing"
-    },
-    {
       "path": "agent/test-map.json",
       "priority": "high",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
@@ -8113,7 +7362,7 @@
       "lane": "fast",
       "owner": "agent",
       "task": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
-      "why": "path `.agents/agents.md` has no test-map proof route"
+      "why": "path `.github/CODEOWNERS` has no test-map proof route"
     },
     {
       "path": "docs/release.md",
@@ -8134,16 +7383,6 @@
       "owner": "workspace",
       "task": "add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration",
       "why": "`Build speed signals` scored 70 below the standard floor of 85"
-    },
-    {
-      "path": "agent/test-map.json",
-      "priority": "medium",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "route each owned path to a deterministic proof command and make the lane executable in CI",
-      "why": "`Proof lanes and test routing` scored 80 below the standard floor of 85"
     },
     {
       "path": "docs/testing.md",
@@ -8183,7 +7422,7 @@
       "lane": "fast",
       "owner": "agent",
       "task": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "why": "path `.agents/agents.md` has no owner-map route"
+      "why": "path `.gitignore` has no owner-map route"
     },
     {
       "path": "crates/ffi/include/redlinedb.h",
@@ -8274,106 +7513,6 @@
       "why": "agent-readable documentation is incomplete"
     },
     {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "add workflow-level concurrency with cancel-in-progress",
-      "why": "workflow is missing concurrency control"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "add top-level `permissions: contents: read` and job-specific write scopes only where needed",
-      "why": "workflow is missing explicit top-level permissions"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "set an explicit timeout-minutes on each job",
-      "why": "workflow job is missing timeout-minutes"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "pin every external action to a 40-character commit SHA",
-      "why": "workflow uses an external action not pinned to a full commit SHA"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "add workflow-level concurrency with cancel-in-progress",
-      "why": "workflow is missing concurrency control"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "set an explicit timeout-minutes on each job",
-      "why": "workflow job is missing timeout-minutes"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "pin every external action to a 40-character commit SHA",
-      "why": "workflow uses an external action not pinned to a full commit SHA"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "upload the SARIF artifact with github/codeql-action/upload-sarif pinned to a full SHA",
-      "why": "workflow creates SARIF without uploading it"
-    },
-    {
-      "path": "apps/web",
-      "priority": "high",
-      "rule_id": "HLT-013-RENDERED-UX-GAP",
-      "tlr": "Verification and rendered UX",
-      "lane": "web",
-      "owner": "apps",
-      "task": "add Playwright e2e tests for critical user flows and wire them into the fast or CI proof map",
-      "why": "web surface lacks a Playwright/Cypress e2e lane"
-    },
-    {
-      "path": "apps/web",
-      "priority": "high",
-      "rule_id": "HLT-013-RENDERED-UX-GAP",
-      "tlr": "Verification and rendered UX",
-      "lane": "web",
-      "owner": "apps",
-      "task": "add Storybook state coverage, Playwright screenshots, visual review or `@jankurai/ux-qa`, accessibility scans, CLS checks, generated mocks, and design tokens",
-      "why": "web surface lacks layered rendered UX QA evidence"
-    },
-    {
       "path": "crates/bench/src/certify.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -8453,6 +7592,16 @@
       "why": "future-hostile/dead-language term `legacy` appears in product/runtime code"
     },
     {
+      "path": "crates/bench/src/feature_workloads.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "bench-harness",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
       "path": "crates/bench/src/lib.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -8500,7 +7649,7 @@
       "lane": "fast",
       "owner": "bench-harness",
       "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+      "why": "future-hostile/dead-language term `compat` appears in product/runtime code"
     },
     {
       "path": "crates/ffi/include/redlinedb.h",
@@ -8723,7 +7872,7 @@
       "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
     },
     {
-      "path": "crates/kernel/src/engine/mod.rs",
+      "path": "crates/kernel/src/engine/catalog_ops.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
@@ -8733,7 +7882,7 @@
       "why": "future-hostile/dead-language term `todo` appears in product/runtime code"
     },
     {
-      "path": "crates/kernel/src/engine/page_heap.rs",
+      "path": "crates/kernel/src/index/cursor.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
@@ -8743,7 +7892,7 @@
       "why": "future-hostile/dead-language term `legacy` appears in product/runtime code"
     },
     {
-      "path": "crates/kernel/src/index/cursor.rs",
+      "path": "crates/kernel/src/index/cursor/raw.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
@@ -8801,16 +7950,6 @@
       "owner": "phase10-jsonb-binary-format",
       "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "why": "future-hostile/dead-language term `fallback` appears in product/runtime code"
-    },
-    {
-      "path": "crates/kernel/src/storage/page_file.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "storage-and-catalog",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
     },
     {
       "path": "crates/kernel/src/vector/diskann/mod.rs",
@@ -8923,6 +8062,16 @@
       "why": "future-hostile/dead-language term `stub` appears in product/runtime code"
     },
     {
+      "path": "crates/kernel/src/wal/manager/storage.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "wal-archive-retention",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `stale` appears in product/runtime code"
+    },
+    {
       "path": "crates/redlinedb/src/lib.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -9013,26 +8162,6 @@
       "why": "future-hostile/dead-language term `legacy` appears in product/runtime code"
     },
     {
-      "path": "crates/sql/src/exec/select_top.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "sql-parser-planner-executor",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `fallback` appears in product/runtime code"
-    },
-    {
-      "path": "crates/sql/src/exec/tail.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "sql-parser-planner-executor",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `fallback` appears in product/runtime code"
-    },
-    {
       "path": "crates/sql/src/exec/vec/hash_agg.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -9101,16 +8230,6 @@
       "owner": "sql-parser-planner-executor",
       "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "why": "future-hostile/dead-language term `placeholder` appears in product/runtime code"
-    },
-    {
-      "path": "crates/sql/src/planner.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "sql-parser-planner-executor",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `fallback` appears in product/runtime code"
     },
     {
       "path": "crates/sql/src/planner/helpers.rs",

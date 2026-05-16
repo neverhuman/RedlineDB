@@ -43,7 +43,7 @@ fn smoke_compare_config_exists() {
 }
 
 #[test]
-fn phase10_v3_configs_register_feature_workloads() {
+fn cert_v3_configs_register_feature_workloads() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("bench/certification-phase10-v3-smoke.toml");
     let config = CompareConfig::load(&path).expect("load phase10 v3 smoke config");
@@ -58,16 +58,16 @@ fn phase10_v3_configs_register_feature_workloads() {
     ] {
         assert!(
             config.workloads.contains(&workload),
-            "{workload:?} missing from phase10 v3 smoke config"
+            "{workload:?} missing from cert-v3 smoke config"
         );
     }
 }
 
 #[test]
-fn phase10_v3_sqlite_compare_config_filters_ann_workloads() {
+fn cert_v3_sqlite_compare_config_filters_ann_workloads() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("bench/certification-phase10-v3-compare.toml");
-    let config = CompareConfig::load(&path).expect("load phase10 v3 compare config");
+    let config = CompareConfig::load(&path).expect("load cert-v3 compare config");
     assert_eq!(
         config.engines,
         vec![EngineKind::Redline, EngineKind::Sqlite]
@@ -81,7 +81,7 @@ fn phase10_v3_sqlite_compare_config_filters_ann_workloads() {
     ] {
         assert!(
             config.workloads.contains(&workload),
-            "{workload:?} missing from phase10 v3 compare config"
+            "{workload:?} missing from cert-v3 compare config"
         );
     }
     for workload in [

@@ -704,16 +704,16 @@ passthrough + collation in spill` adds:
   subsection wiring fig6/7/8.
 - `paper/scripts/build_figs.py` — fig6/7/8 generators.
 
-Cert-v3 local smoke (`phase10-v3-smoke`):
+Cert-v3 local smoke (`phase10-cert-v3-smoke`):
 - `cargo run -p redlinedb-bench --release -- certify --config
   crates/bench/bench/certification-phase10-v3-smoke.toml --out-dir
-  target/bench/phase10-v3-smoke --seed 7 --repetitions 1 --warmup 0`
+  target/bench/phase10-cert-v3-smoke --seed 7 --repetitions 1 --warmup 0`
   — exit 0
-- `target/bench/phase10-v3-smoke/manifest.json` — `5d3c9df0c524c29edd8b5d2a7af1957a6d03b7d7c9ff9304a3c37be8dd79ae1c`
-- `target/bench/phase10-v3-smoke/runs.jsonl` — `5379ccf7c4906fc6b2fc2e43c4b03bc7309a3b2bd37ffbe5a5ca315c7e043195`
-- `target/bench/phase10-v3-smoke/summary.csv` — `618165672e8dc2959c9dde6bfe07cffc0880437b8097bdf4d713ba35e5eea0b3`
-- `target/bench/phase10-v3-smoke/report.md` — `6efdd3fb51dfdf77cc700f268703a15613451c39c2f4f1fbe22ffbe2086a296b`
-- `target/bench/phase10-v3-smoke/report.json` — `3fca397adfe54be98368f16d7903ccbf5e16093b7db473a342456c1ec5af7d28`
+- `target/bench/phase10-cert-v3-smoke/manifest.json` — `5d3c9df0c524c29edd8b5d2a7af1957a6d03b7d7c9ff9304a3c37be8dd79ae1c`
+- `target/bench/phase10-cert-v3-smoke/runs.jsonl` — `5379ccf7c4906fc6b2fc2e43c4b03bc7309a3b2bd37ffbe5a5ca315c7e043195`
+- `target/bench/phase10-cert-v3-smoke/summary.csv` — `618165672e8dc2959c9dde6bfe07cffc0880437b8097bdf4d713ba35e5eea0b3`
+- `target/bench/phase10-cert-v3-smoke/report.md` — `6efdd3fb51dfdf77cc700f268703a15613451c39c2f4f1fbe22ffbe2086a296b`
+- `target/bench/phase10-cert-v3-smoke/report.json` — `3fca397adfe54be98368f16d7903ccbf5e16093b7db473a342456c1ec5af7d28`
 
 Test count: **694 passing, 2 ignored** (was 691 at the original
 phase10-fusion-green; +3 cert-v3 tests + the unignored collation test).
@@ -723,7 +723,7 @@ phase10-fusion-green; +3 cert-v3 tests + the unignored collation test).
 - xbabe1 cert-v3 full run (only the local smoke has been certified;
   remote run is ready via `cargo run -p redlinedb-bench --release
   -- certify --config crates/bench/bench/certification-phase10-v3.toml
-  --out-dir target/bench/xbabe1/phase10-v3 --seed 7 --repetitions 5
+  --out-dir target/bench/xbabe1/phase10-cert-v3-cert --seed 7 --repetitions 5
   --warmup 1`)
 - DiskANN mmap-resident search (Lane V3 sector layout designed in;
   in-memory today)
@@ -844,15 +844,15 @@ Verified locally:
 3. `rtk cargo test -p redlinedb-bench --locked --quiet` — `46 passed`
 4. `rtk cargo test -p redlinedb-kernel --test group_commit_tests --locked --quiet` — `16 passed`
 5. `rtk cargo test -p redlinedb-sql --test phase10_sqld_collation --locked --quiet` — `4 passed`
-6. `rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-smoke.toml --out-dir target/bench/phase10-v3-smoke --seed 7 --repetitions 1 --warmup 0`
+6. `rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-smoke.toml --out-dir target/bench/phase10-cert-v3-smoke --seed 7 --repetitions 1 --warmup 0`
 7. `rtk python3 paper/scripts/build_figs.py`
 8. `rtk pdflatex ...`, `rtk bibtex ...`, `rtk pdflatex ...`, `rtk pdflatex ...`
 
 Artifacts:
 
-1. `target/bench/phase10-v3-smoke/manifest.json`
-2. `target/bench/phase10-v3-smoke/runs.jsonl`
-3. `target/bench/phase10-v3-smoke/report.md`
+1. `target/bench/phase10-cert-v3-smoke/manifest.json`
+2. `target/bench/phase10-cert-v3-smoke/runs.jsonl`
+3. `target/bench/phase10-cert-v3-smoke/report.md`
 4. `paper/main.pdf` SHA-256: `d19666553419439b04903c2013cda0af1ef18466587dc8ce8f0a8bb9801aa717`
 
 Current workspace re-verification after the phase-11 bench additions:

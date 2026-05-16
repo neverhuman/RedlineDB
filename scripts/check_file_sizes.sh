@@ -7,6 +7,12 @@ status=0
 
 while IFS= read -r file; do
   case "$file" in
+    agent/repo-score.json|agent/repo-score.md)
+      continue
+      ;;
+    agent/score-history.csv|agent/score-history.jsonl)
+      continue
+      ;;
     docs/archive/*|paper/figs/*.eps|target/*)
       continue
       ;;
