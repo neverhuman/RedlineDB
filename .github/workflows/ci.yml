@@ -11,7 +11,12 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # agent-tool-supply: reviewed=ops, runner=ubuntu-22.04, review-date=2026-05-16
+    # HLT-024-AGENT-TOOL-SUPPLY-GAP: runner image pinned to ubuntu-22.04
+    # (immutable major release) instead of mutable ubuntu-latest; review
+    # cadence and trust review tracked in agent/tool-adoption.toml
+    # (agent-tool-supply entry).
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
       contents: read

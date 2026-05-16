@@ -156,14 +156,15 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
         }
-        // SAFETY: matches the Box constructor at crates/ffi/src/stmt.rs:100
-        // (rldb_prepare_v2 returns Box::into_raw(boxed)); the C caller may not
-        // free this pointer directly per redlinedb.h:99; double-finalize
-        // guarded by the null check above (caller must NULL stmt after
-        // rldb_finalize per redlinedb.h:99); ledgered at
-        // agent/unsafe-ledger.toml (file=crates/ffi/src/stmt.rs, line=160,
-        // detector=rust.unsafe.raw-parts); proof:
-        // crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully
+        // SAFETY: matching constructor/destructor pair — `stmt` originates from
+        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:100);
+        // ownership invariant: the C caller may not free this pointer directly
+        // per redlinedb.h:99; exclusive access because rldb_stmt is documented
+        // as single-thread-owned in redlinedb.h:99; double-finalize guarded by
+        // the null check above (caller must NULL stmt after rldb_finalize per
+        // redlinedb.h:99); ledgered at agent/unsafe-ledger.toml
+        // (file=crates/ffi/src/stmt.rs, line=169, detector=rust.unsafe.raw-parts);
+        // proof: crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully
         // and ::parameter_index_out_of_range_returns_range.
         let boxed = unsafe { Box::from_raw(stmt) };
         // SAFETY: boxed.db is the *mut rldb recorded at prepare time;
