@@ -123,14 +123,13 @@ phase9-failpoint-matrix:
   rtk cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint-matrix.json --seed 7
 
 security:
-  rtk cargo audit
-  rtk cargo deny check
-  rtk gitleaks detect --source .
+  bash ops/ci/security.sh
 
-security-local:
-  rtk cargo audit
-  rtk cargo deny check
-  rtk gitleaks detect --source .
+pre-push:
+  bash ops/git-hooks/pre-push
+
+ci-doctor:
+  bash scripts/ci-doctor.sh
 
 release:
   rtk cargo build --workspace --release --locked
