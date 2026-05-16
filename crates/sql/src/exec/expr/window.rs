@@ -9,9 +9,10 @@
 
 use super::*;
 
-/// Returns `Some(Err(...))` with a structured "not implemented" error when
-/// the function call has a window clause. Returns `None` for non-window
-/// calls so the scalar dispatcher can continue.
+/// Returns `Some(Err(...))` with a typed unsupported-feature error when
+/// the function call has a window clause (runtime is reserved for a
+/// follow-on milestone). Returns `None` for non-window calls so the
+/// scalar dispatcher can continue.
 pub(super) fn try_eval_window(func: &sqlparser::ast::Function) -> Option<Result<SqlValue>> {
     if func.over.is_some() {
         Some(Err(Error::UnsupportedSql(format!(

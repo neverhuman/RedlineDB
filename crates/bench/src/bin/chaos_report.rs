@@ -79,8 +79,14 @@ fn parse_args(argv: &[OsString]) -> Result<Args, String> {
         Some(v) => v,
         None => return Err("--input is required".to_string()),
     };
-    let version_root = version_root.unwrap_or_else(default_version_root);
-    let suite = suite.unwrap_or_else(|| DEFAULT_SUITE.to_string());
+    let version_root = match version_root {
+        Some(v) => v,
+        None => default_version_root(),
+    };
+    let suite = match suite {
+        Some(v) => v,
+        None => DEFAULT_SUITE.to_string(),
+    };
     Ok(Args {
         input,
         version_root,

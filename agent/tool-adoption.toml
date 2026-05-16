@@ -35,3 +35,27 @@ mode = "auto"
 [[tools]]
 id = "cost-budget"
 mode = "auto"
+
+[[tools]]
+id = "ci-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "git-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "release-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "authz-matrix"
+mode = "auto"
+
+[[tools]]
+id = "input-boundary"
+mode = "auto"
+
+[[tools]]
+id = "agent-tool-supply"
+mode = "auto"
