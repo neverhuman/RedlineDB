@@ -17,13 +17,15 @@ use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use redlinedb::{
-    rldb, rldb_bind_blob, rldb_bind_double, rldb_bind_int64, rldb_bind_null,
-    rldb_bind_parameter_index, rldb_bind_text, rldb_changes, rldb_checkpoint, rldb_clear_bindings,
-    rldb_close, rldb_close_v2, rldb_column_blob, rldb_column_bytes, rldb_column_count,
-    rldb_column_double, rldb_column_int64, rldb_column_name, rldb_column_text, rldb_column_type,
-    rldb_errcode, rldb_errmsg, rldb_exec, rldb_finalize, rldb_free, rldb_interrupt,
-    rldb_last_insert_rowid, rldb_open, rldb_open_v2, rldb_parameter_count, rldb_prepare_v2,
-    rldb_reset, rldb_stats_json, rldb_step, rldb_stmt, rldb_vacuum,
+    rldb, rldb_backup, rldb_backup_close, rldb_backup_finish, rldb_backup_init,
+    rldb_backup_pagecount, rldb_backup_remaining, rldb_backup_step, rldb_bind_blob,
+    rldb_bind_double, rldb_bind_int64, rldb_bind_null, rldb_bind_parameter_index, rldb_bind_text,
+    rldb_changes, rldb_checkpoint, rldb_clear_bindings, rldb_close, rldb_close_v2,
+    rldb_column_blob, rldb_column_bytes, rldb_column_count, rldb_column_double, rldb_column_int64,
+    rldb_column_name, rldb_column_text, rldb_column_type, rldb_errcode, rldb_errmsg, rldb_exec,
+    rldb_finalize, rldb_free, rldb_interrupt, rldb_last_insert_rowid, rldb_open, rldb_open_v2,
+    rldb_parameter_count, rldb_prepare_v2, rldb_reset, rldb_stats_json, rldb_step, rldb_stmt,
+    rldb_vacuum,
 };
 
 // ---- Result codes (mirror of crates/ffi/include/redlinedb.h) -----------
@@ -33,6 +35,7 @@ const RLDB_ERROR: c_int = 1;
 const RLDB_MISMATCH: c_int = 20;
 const RLDB_MISUSE: c_int = 21;
 const RLDB_RANGE: c_int = 25;
+const RLDB_DONE: c_int = 101;
 
 // ---- Shared test helpers -----------------------------------------------
 
@@ -433,4 +436,44 @@ fn exec_callback_failure_round_trips_errmsg_ownership() {
     rldb_free(errmsg as *mut c_void);
 
     assert_eq!(rldb_close(db), RLDB_OK);
+}
+
+/// `rldb_backup_init` returns a `Box::into_raw` *mut rldb_backup that the
+/// C caller must release via `rldb_backup_close` (Box::from_raw). This
+/// exercises the constructor/destructor pair and is the proof witness for
+/// the SAFETY comment on `rldb_backup_close`'s `Box::from_raw` in
+/// `crates/ffi/src/snapshot.rs`.
+#[test]
+fn backup_init_step_close_round_trips_box_ownership() {
+    let src = open_test_db("backup-rt");
+    // Populate something so the snapshot copy actually does work.
+    let setup = CString::new("CREATE TABLE t(id INTEGER PRIMARY KEY); INSERT INTO t VALUES(1);")
+        .expect("cstr");
+    assert_eq!(
+        rldb_exec(src, setup.as_ptr(), None, ptr::null_mut(), ptr::null_mut()),
+        RLDB_OK
+    );
+
+    let dst_dir = temp_path("backup-rt-dst");
+    let c_dst = CString::new(dst_dir.to_str().expect("utf8")).expect("cstr");
+    let mut backup: *mut rldb_backup = ptr::null_mut();
+    let rc = rldb_backup_init(src, c_dst.as_ptr(), ptr::null(), &mut backup);
+    assert_eq!(rc, RLDB_OK, "backup_init should succeed");
+    assert!(!backup.is_null(), "backup must be a real Box::into_raw ptr");
+
+    // backup_step / remaining / pagecount touch the boxed allocation.
+    assert_eq!(rldb_backup_step(backup, 1), RLDB_DONE);
+    let _ = rldb_backup_remaining(backup);
+    let _ = rldb_backup_pagecount(backup);
+    assert_eq!(rldb_backup_finish(backup), RLDB_OK);
+
+    // The Box::from_raw inside rldb_backup_close pairs with the Box::into_raw
+    // in rldb_backup_init; running under the test harness (and the
+    // address-sanitiser/miri lanes documented in the proof_lane) is what
+    // proves the pair is balanced.
+    assert_eq!(rldb_backup_close(backup), RLDB_OK);
+    // Null after close must be a no-op per the documented C ABI contract.
+    assert_eq!(rldb_backup_close(ptr::null_mut()), RLDB_MISUSE);
+
+    assert_eq!(rldb_close(src), RLDB_OK);
 }

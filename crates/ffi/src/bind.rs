@@ -4,7 +4,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_void};
 
 use crate::types::*;
-use crate::util::{api, flatten_code, sql_result};
+use crate::util::{api, caller_buffer, flatten_code, sql_result};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_bind_null(stmt: *mut rldb_stmt, index: c_int) -> c_int {
@@ -68,10 +68,8 @@ pub extern "C" fn rldb_bind_text(
             // into owned Vec so the borrow does not outlive caller buffer.
             unsafe { CStr::from_ptr(value) }.to_bytes().to_vec()
         } else {
-            // SAFETY: `value` non-null (checked); nbytes is the explicit
-            // byte length of the caller-owned buffer per redlinedb.h:108;
-            // slice copied into owned Vec immediately.
-            unsafe { std::slice::from_raw_parts(value as *const u8, nbytes as usize) }.to_vec()
+            // SAFETY: `value` non-null (checked); nbytes is the explicit byte length of the caller-owned buffer per redlinedb.h:108; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned Vec immediately.
+            unsafe { caller_buffer(value as *const u8, nbytes as usize) }.to_vec()
         };
         let text = String::from_utf8(bytes).map_err(|_| RLDB_MISMATCH)?;
         sql_result(stmt.stmt.bind_text(index as usize, text))?;
@@ -93,10 +91,8 @@ pub extern "C" fn rldb_bind_blob(
         // SAFETY: per redlinedb.h:109 `stmt` non-null from rldb_prepare_v2
         // not yet finalized; single-thread ownership required by C ABI.
         let stmt = unsafe { &mut *stmt };
-        // SAFETY: `value` non-null (checked); nbytes is byte length of the
-        // caller-owned blob buffer per redlinedb.h:109; slice copied into
-        // owned Vec immediately so borrow does not outlive caller buffer.
-        let slice = unsafe { std::slice::from_raw_parts(value as *const u8, nbytes as usize) };
+        // SAFETY: `value` non-null (checked); nbytes is byte length of the caller-owned blob buffer per redlinedb.h:109; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned Vec immediately so the borrow does not outlive caller buffer.
+        let slice = unsafe { caller_buffer(value as *const u8, nbytes as usize) };
         sql_result(stmt.stmt.bind_blob(index as usize, slice.to_vec()))?;
         Ok(RLDB_OK)
     }))

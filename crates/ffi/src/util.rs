@@ -122,6 +122,30 @@ pub(crate) fn with_db<R>(db: *mut rldb, f: impl FnOnce(&rldb) -> R) -> Result<R,
     Ok(f(unsafe { &*db }))
 }
 
+// ---- Caller-owned buffer helper --------------------------------------------
+
+/// Centralised constructor for a `&[u8]` view over a caller-owned byte buffer
+/// crossing the C ABI. All FFI sites that read an explicit-length caller
+/// buffer route through here so the `slice::from_raw_parts` precondition is
+/// documented in exactly one place and the unsafe-ledger has a single owner.
+///
+/// # Safety
+/// Caller MUST guarantee:
+/// 1. `ptr` is a valid, non-null pointer to at least `len` consecutive bytes
+///    the caller owns and will not mutate or free for the returned slice's
+///    lifetime (the C ABI contract in `crates/ffi/include/redlinedb.h`).
+/// 2. `len` does not exceed `isize::MAX`.
+/// 3. The bytes pointed to need not be initialised as anything but bytes; no
+///    character or alignment constraint is imposed.
+///
+/// The returned slice borrows from the caller's allocation; we never retain
+/// it past the immediate `.to_vec()` consumer at each call site, so the C
+/// caller is free to free the buffer immediately on return.
+pub(crate) unsafe fn caller_buffer<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
+    // SAFETY: discharged by the caller via the # Safety contract above (every call site passes a non-null *const u8 from the documented C ABI explicit-length branch with len < isize::MAX); borrow consumed by .to_vec()/from_utf8 at the call site.
+    unsafe { std::slice::from_raw_parts(ptr, len) }
+}
+
 // ---- Statement helpers ------------------------------------------------------
 
 pub(crate) fn refresh_text_cache(stmt: &mut rldb_stmt) -> Result<(), c_int> {

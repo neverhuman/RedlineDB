@@ -9,7 +9,8 @@ use redlinedb_sql::Step;
 
 use crate::types::*;
 use crate::util::{
-    api, flatten_code, map_error, record_status_with_message, refresh_text_cache, sql_result,
+    api, caller_buffer, flatten_code, map_error, record_status_with_message, refresh_text_cache,
+    sql_result,
 };
 
 #[unsafe(no_mangle)]
@@ -35,12 +36,9 @@ pub extern "C" fn rldb_prepare_v2(
         let sql_text = if nbytes < 0 {
             sql_cstr.to_str().map_err(|_| RLDB_MISMATCH)?.to_owned()
         } else {
-            // SAFETY: `sql` non-null (checked); per sqlite3_prepare_v2
-            // contract when nbytes>=0 it is the explicit byte length of the
-            // caller-owned buffer; slice copied into owned String below.
-            let bytes = unsafe {
-                std::slice::from_raw_parts(sql_cstr.as_ptr() as *const u8, nbytes as usize)
-            };
+            // SAFETY: `sql` non-null (checked); per sqlite3_prepare_v2 contract when nbytes>=0 it is the explicit byte length of the caller-owned buffer; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned String below.
+            let bytes =
+                unsafe { caller_buffer(sql_cstr.as_ptr() as *const u8, nbytes as usize) };
             std::str::from_utf8(bytes)
                 .map_err(|_| RLDB_MISMATCH)?
                 .to_owned()
@@ -159,9 +157,7 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
         }
-        // SAFETY: `stmt` non-null (checked); per redlinedb.h:99 it matches
-        // a prior Box::into_raw from rldb_prepare_v2; from_raw reclaims
-        // ownership and drops the rldb_stmt.
+        // SAFETY: matching constructor at crates/ffi/src/stmt.rs:103 (rldb_prepare_v2 returns Box::into_raw(boxed)); the C caller may not free this pointer directly per redlinedb.h:99; double-finalize guarded by the null check above (caller must NULL after finalize); proof: crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully and ::parameter_index_out_of_range_returns_range.
         let boxed = unsafe { Box::from_raw(stmt) };
         // SAFETY: boxed.db is the *mut rldb recorded at prepare time;
         // rldb_close waits for active_statements==0 so the parent db is

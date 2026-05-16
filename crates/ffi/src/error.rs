@@ -28,9 +28,7 @@ pub extern "C" fn rldb_errmsg(db: *mut rldb) -> *const c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_free(ptr: *mut c_void) {
     if !ptr.is_null() {
-        // SAFETY: `ptr` non-null (checked); per redlinedb.h:128 it was
-        // returned by this library via CString::into_raw (rldb_stats_json,
-        // errmsg_to_c_string, set_errmsg); from_raw reclaims ownership.
+        // SAFETY: matching constructor at crates/ffi/src/util.rs:292 (errmsg_to_c_string / set_errmsg return CString::into_raw); this library is the only producer of pointers handed to rldb_free per redlinedb.h:128; double-free guarded by caller obligation to NULL the handle after free; proof: crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and ::exec_callback_failure_round_trips_errmsg_ownership.
         unsafe {
             drop(CString::from_raw(ptr as *mut c_char));
         }

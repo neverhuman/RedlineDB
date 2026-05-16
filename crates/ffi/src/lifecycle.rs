@@ -69,9 +69,7 @@ pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
         if db_ref.active_statements.load(Ordering::Relaxed) != 0 {
             return Err(RLDB_BUSY);
         }
-        // SAFETY: `db` matches a prior Box::into_raw from open_handle;
-        // db_ref borrow ended above; Box::from_raw reclaims ownership and
-        // drops the rldb so the file handle releases.
+        // SAFETY: matching constructor at crates/ffi/src/util.rs:112 (open_handle returns Box::into_raw(handle)); only rldb_close / rldb_close_v2 consume it (caller never frees directly per redlinedb.h:87); double-close guarded by the null check above (caller must NULL the handle after close); proof: crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe.
         unsafe {
             drop(Box::from_raw(db));
         }

@@ -82,9 +82,7 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
-    // SAFETY: per redlinedb.h:141 `backup` was returned by rldb_backup_init
-    // (Box::into_raw) and has not been closed; pairing Box::from_raw with
-    // that prior into_raw reclaims ownership so the allocation drops here.
+    // SAFETY: matching constructor at crates/ffi/src/snapshot.rs:43 (rldb_backup_init returns Box::into_raw(backup)); the C caller may not free this pointer directly per redlinedb.h:141; double-close guarded by the null check above (caller must NULL after close); proof: crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
     unsafe {
         drop(Box::from_raw(backup));
     }
