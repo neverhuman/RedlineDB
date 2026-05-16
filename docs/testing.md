@@ -169,12 +169,16 @@ These five gates fulfill the audit's `release readiness` evidence
 requirement (HLT-025). The release-process steps themselves live
 in `docs/release.md`; this section is the testing-side index.
 
-## Budgets and stop conditions
+## Budgets, quotas, stop conditions, and kill-switches for paid operations
 
 Canonical source: [`agent/cost-budget.toml`](../agent/cost-budget.toml).
 The TOML is machine-readable truth; this section is the agent-facing
 operations index for the gates in that file. Audit reference:
 HLT-026 cost-budget-gap.
+
+**Scope:** every paid or unbounded operation in this repo (benchmarks,
+chaos workloads, CI jobs that fan out matrices) is bounded by an
+explicit budget, a quota, a stop condition, and a kill-switch.
 
 - **Max wall-clock per bench run.** Aggregate CI cap is
   `[bench].max_wall_clock_seconds = 1800` (30 minutes). Per-workload
@@ -199,3 +203,13 @@ HLT-026 cost-budget-gap.
   resulting `kill_receipt.json` confirms the wiring without paying
   the full budget. Always inspect the matching `[[workload]]` block
   in `agent/cost-budget.toml` before launching a longer run.
+- **Quotas (dependency + license).** `[dependencies]` in the budget
+  file pins `max_advisory_count = 0` and a license allowlist; any
+  PR that introduces a new vulnerable or non-allowlisted dependency
+  is rejected by `cargo audit` + `cargo deny` in the security lane.
+- **Paid operations register.** All CI lanes that bill compute time
+  (bench matrices, cross-engine certification, xbabe1 runs) declare
+  a `max_wall_clock_seconds` in their `[[workload]]` block and a
+  kill-switch env var. There are no unbounded paid operations in
+  this repo; if one is added it must register a budget + stop
+  condition here and in `agent/cost-budget.toml` before merging.

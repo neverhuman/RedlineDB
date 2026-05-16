@@ -35,3 +35,9 @@ ci_soft_gate \
 
 # Hard gate: gitleaks must succeed for the lane to pass.
 gitleaks detect --source . --redact --no-banner
+
+# Provenance/SBOM evidence — capture the workspace dependency
+# manifest so the supply-chain lane writes a reviewable artifact
+# alongside the audit/deny/gitleaks outputs. Hard gate: must succeed.
+cargo metadata --format-version 1 --locked \
+    > target/jankurai/security/sbom-cargo-metadata.json
