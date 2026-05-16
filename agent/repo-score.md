@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778901672`
-- Started at: `1778901672`
-- Elapsed: `4972` ms
+- Run ID: `1778901990`
+- Started at: `1778901990`
+- Elapsed: `4984` ms
 - Scope: `full`
 - Raw score: `85`
 - Final score: `70`
@@ -75,7 +75,7 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 78 | 9.36 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 22 | 2.64 | largest authored code file: crates/sql/src/exec/tail.rs (944 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 22 | 2.64 | largest authored code file: crates/redlinedb/src/lib.rs (941 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 95 | 7.60 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -159,8 +159,8 @@ No audited runtime boundary reclassifications declared.
    Reason: `Code shape and semantic surface` scored 22 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:e98334910421fc4ec436bce36607ed136068723e545218e645e458cb20227cd8`
-   Evidence: largest authored code file: crates/sql/src/exec/tail.rs (944 LOC), code file exceeds 500 LOC, duplicate code block marker found, rust bad-behavior hard findings: 6
+   Fingerprint: `sha256:4a573aa46d4f081fdba114abc3980ca3bdf80d9da1f5ae6bfbe11bc62588308c`
+   Evidence: largest authored code file: crates/redlinedb/src/lib.rs (941 LOC), code file exceeds 500 LOC, duplicate code block marker found, rust bad-behavior hard findings: 6
 2. `medium` `security` `.github/workflows/jankurai.yml`
    Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
    Check: `HLT-016-SUPPLY-CHAIN-DRIFT:security` `soft` confidence `0.76`
@@ -307,7 +307,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:abc9d33162968df3c2f0a73e25bee873f289b0f867d2811f1feb4de200a60990`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(backup));
-16. `high` `security` `crates/ffi/src/stmt.rs:161`
+16. `high` `security` `crates/ffi/src/stmt.rs:160`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`

@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:dc4a16c899fd33fe95096e2b2baf8957805f9a3d5ea83622e3c62b51ca6c2fa8",
-  "input_fingerprint": "sha256:f178bf8460bf179f96f75a7506cd4be0381d881485e9b6fe569a29963830c751",
+  "report_fingerprint": "sha256:8fbe6112c3458f25a2aadec43c319d7b5b2b7b48e55ce85cbf6741779f13d53d",
+  "input_fingerprint": "sha256:bc34914a6c303b8aa3f1757d3747a5090b7ff40b706e1e29fba5dddefd626593",
   "policy_fingerprint": "sha256:fe21924fa93321bf80e91b0dd124ae282a51ed2e19b4f02e8029cc8b54f2f821",
   "manifest_fingerprints": {
     "owner_map": "sha256:745452aafc824749513d3b525b6489a87fa65a59b8f250338e657eea5ed74c6d",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": false,
-  "generated_at": "1778901672",
+  "generated_at": "1778901990",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -41,9 +41,9 @@
     "HLT-000-SCORE-DIMENSION:vibe on crates/kernel/src/catalog/ops.rs"
   ],
   "repo": ".",
-  "run_id": "1778901672",
-  "started_at": "1778901672",
-  "elapsed_ms": 4972,
+  "run_id": "1778901990",
+  "started_at": "1778901990",
+  "elapsed_ms": 4984,
   "scope": {
     "mode": "full",
     "paths": []
@@ -70,7 +70,7 @@
     }
   },
   "git": {
-    "head": "e4f5247",
+    "head": "f9a45b6",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -383,7 +383,7 @@
       "score": 22,
       "weighted_points": 2.64,
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/tail.rs (944 LOC)",
+        "largest authored code file: crates/redlinedb/src/lib.rs (941 LOC)",
         "code file exceeds 500 LOC",
         "duplicate code block marker found",
         "rust bad-behavior hard findings: 6",
@@ -1343,7 +1343,7 @@
       "problem": "`Code shape and semantic surface` scored 22 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/tail.rs (944 LOC)",
+        "largest authored code file: crates/redlinedb/src/lib.rs (941 LOC)",
         "code file exceeds 500 LOC",
         "duplicate code block marker found",
         "rust bad-behavior hard findings: 6"
@@ -1353,7 +1353,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:e98334910421fc4ec436bce36607ed136068723e545218e645e458cb20227cd8",
+      "fingerprint": "sha256:4a573aa46d4f081fdba114abc3980ca3bdf80d9da1f5ae6bfbe11bc62588308c",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -1710,7 +1710,7 @@
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "tools",
-      "line": 161,
+      "line": 160,
       "matched_term": "rust.unsafe.raw-parts",
       "reason": "ownership provenance is missing"
     },
