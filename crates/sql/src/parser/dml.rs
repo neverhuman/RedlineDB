@@ -69,10 +69,13 @@ pub(crate) fn bind_insert(
         Some(items) => Some(normalize_select_projection(items, &mut params)?),
         None => None,
     };
-    let output_columns = returning
+    let output_columns = match returning
         .as_ref()
         .map(|items| returning_output_columns(&table, items))
-        .unwrap_or_else(|| Arc::from([]));
+    {
+        Some(cols) => cols,
+        None => Arc::from([]),
+    };
 
     if params.count() == 0 {
         scan_sql_parameters(sql, &mut params);
@@ -143,10 +146,13 @@ pub(crate) fn bind_update(
         Some(items) => Some(normalize_select_projection(items, &mut params)?),
         None => None,
     };
-    let output_columns = returning
+    let output_columns = match returning
         .as_ref()
         .map(|items| returning_output_columns(&table, items))
-        .unwrap_or_else(|| Arc::from([]));
+    {
+        Some(cols) => cols,
+        None => Arc::from([]),
+    };
     if params.count() == 0 {
         scan_sql_parameters(sql, &mut params);
     }
@@ -208,10 +214,13 @@ pub(crate) fn bind_delete(
         Some(items) => Some(normalize_select_projection(items, &mut params)?),
         None => None,
     };
-    let output_columns = returning
+    let output_columns = match returning
         .as_ref()
         .map(|items| returning_output_columns(&table, items))
-        .unwrap_or_else(|| Arc::from([]));
+    {
+        Some(cols) => cols,
+        None => Arc::from([]),
+    };
     Ok(PreparedTemplate {
         sql: Arc::from(sql),
         schema_epoch,

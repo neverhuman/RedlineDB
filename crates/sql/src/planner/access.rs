@@ -86,14 +86,15 @@ pub(crate) fn best_index_for_table(
     order_by: &[OrderByExpr],
     _table_stats: Option<&TableStats>,
 ) -> Option<Arc<IndexDef>> {
-    let candidate_column = selection
+    let candidate_column = match selection
         .as_ref()
         .and_then(|expr| first_indexable_column(expr, table))
-        .or_else(|| {
-            order_by
-                .first()
-                .and_then(|order| order_expr_column(order, table))
-        });
+    {
+        Some(col) => Some(col),
+        None => order_by
+            .first()
+            .and_then(|order| order_expr_column(order, table)),
+    };
     let candidate_column = candidate_column?;
     for index in &table.indexes {
         if index
@@ -118,9 +119,15 @@ pub(crate) fn first_indexable_column(expr: &Expr, table: &TableDef) -> Option<us
                     | BinaryOperator::Lt
                     | BinaryOperator::LtEq
             ) {
-                column_ordinal(left, table).or_else(|| column_ordinal(right, table))
+                match column_ordinal(left, table) {
+                    Some(o) => Some(o),
+                    None => column_ordinal(right, table),
+                }
             } else if matches!(op, BinaryOperator::And | BinaryOperator::Or) {
-                first_indexable_column(left, table).or_else(|| first_indexable_column(right, table))
+                match first_indexable_column(left, table) {
+                    Some(o) => Some(o),
+                    None => first_indexable_column(right, table),
+                }
             } else {
                 None
             }
@@ -243,10 +250,10 @@ pub(crate) fn projected_columns_are_covered(
 }
 
 pub(crate) fn predicates_for_index(selection: &Option<Expr>) -> Vec<String> {
-    selection
-        .as_ref()
-        .map(|expr| vec![expr_to_string(expr)])
-        .unwrap_or_default()
+    match selection.as_ref().map(|expr| vec![expr_to_string(expr)]) {
+        Some(v) => v,
+        None => Vec::new(),
+    }
 }
 
 pub(crate) fn is_range_predicate(selection: &Option<Expr>) -> bool {

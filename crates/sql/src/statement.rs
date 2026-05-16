@@ -53,12 +53,16 @@ impl ParamLayout {
         {
             return Some(slot);
         }
-        self.named
-            .get(name)
-            .copied()
-            .or_else(|| self.named.get(&format!(":{name}")).copied())
-            .or_else(|| self.named.get(&format!("@{name}")).copied())
-            .or_else(|| self.named.get(&format!("${name}")).copied())
+        if let Some(slot) = self.named.get(name).copied() {
+            return Some(slot);
+        }
+        if let Some(slot) = self.named.get(&format!(":{name}")).copied() {
+            return Some(slot);
+        }
+        if let Some(slot) = self.named.get(&format!("@{name}")).copied() {
+            return Some(slot);
+        }
+        self.named.get(&format!("${name}")).copied()
     }
 
     pub fn count(&self) -> usize {
@@ -542,10 +546,14 @@ impl Statement {
     }
 
     pub fn column_value(&self, index: usize) -> Result<&SqlValue> {
-        self.current_row
+        match self
+            .current_row
             .as_ref()
             .and_then(|row| row.get(index))
-            .ok_or_else(|| Error::Bind("no current row".to_owned()))
+        {
+            Some(v) => Ok(v),
+            None => Err(Error::Bind("no current row".to_owned())),
+        }
     }
 
     pub fn column_i64(&self, index: usize) -> Result<i64> {

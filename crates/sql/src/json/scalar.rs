@@ -76,7 +76,11 @@ pub(crate) fn parse_json_arg(value: &SqlValue) -> Result<Option<Value>> {
 
 /// Render a JSON value as TEXT (compact form, no extra whitespace).
 pub(crate) fn render_json(value: &Value) -> SqlValue {
-    SqlValue::Text(serde_json::to_string(value).unwrap_or_default().into())
+    let text = match serde_json::to_string(value) {
+        Ok(s) => s,
+        Err(_) => String::new(),
+    };
+    SqlValue::Text(text.into())
 }
 
 /// Project a JSON value into a SQL value (used by `->>` and `json_extract`
@@ -116,9 +120,10 @@ fn path_error(e: PathError) -> Error {
 // ---------------------------------------------------------------------------
 
 pub fn json_func(values: &[SqlValue]) -> Result<SqlValue> {
-    let arg = values
-        .first()
-        .ok_or_else(|| Error::UnsupportedSql("json() requires 1 argument".into()))?;
+    let arg = match values.first() {
+        Some(v) => v,
+        None => return Err(Error::UnsupportedSql("json() requires 1 argument".into())),
+    };
     match parse_json_arg(arg)? {
         Some(v) => Ok(render_json(&v)),
         None => Ok(SqlValue::Null),
@@ -334,9 +339,14 @@ fn json_type_name(v: &Value) -> &'static str {
 }
 
 pub fn json_valid(values: &[SqlValue]) -> Result<SqlValue> {
-    let arg = values
-        .first()
-        .ok_or_else(|| Error::UnsupportedSql("json_valid requires 1 argument".into()))?;
+    let arg = match values.first() {
+        Some(v) => v,
+        None => {
+            return Err(Error::UnsupportedSql(
+                "json_valid requires 1 argument".into(),
+            ));
+        }
+    };
     let s = match arg {
         SqlValue::Null => return Ok(SqlValue::Null),
         SqlValue::Text(s) => s.to_string(),
@@ -352,9 +362,14 @@ pub fn json_valid(values: &[SqlValue]) -> Result<SqlValue> {
 }
 
 pub fn json_quote(values: &[SqlValue]) -> Result<SqlValue> {
-    let arg = values
-        .first()
-        .ok_or_else(|| Error::UnsupportedSql("json_quote requires 1 argument".into()))?;
+    let arg = match values.first() {
+        Some(v) => v,
+        None => {
+            return Err(Error::UnsupportedSql(
+                "json_quote requires 1 argument".into(),
+            ));
+        }
+    };
     Ok(render_json(&sql_to_json_value(arg)))
 }
 

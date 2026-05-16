@@ -56,9 +56,11 @@ pub(crate) fn join_has_indexable_equality(
     match expr {
         Expr::BinaryOp { left, op, right } => {
             if matches!(op, BinaryOperator::Eq) {
-                if let Some(ordinal) = join_table_column_ordinal(left, table)
-                    .or_else(|| join_table_column_ordinal(right, table))
-                {
+                let ordinal_opt = match join_table_column_ordinal(left, table) {
+                    Some(o) => Some(o),
+                    None => join_table_column_ordinal(right, table),
+                };
+                if let Some(ordinal) = ordinal_opt {
                     return table.indexes.iter().any(|index| {
                         index
                             .keys
@@ -238,11 +240,9 @@ pub(crate) fn wrap_limit(input: PhysicalPlan, plan: &SelectPlan) -> PhysicalPlan
         memory_bytes: 0,
         spill_bytes: 0,
     };
-    node.relation = Some(
-        plan.limit
-            .as_ref()
-            .map(expr_to_string)
-            .unwrap_or_else(|| "LIMIT".to_owned()),
-    );
+    node.relation = Some(match plan.limit.as_ref().map(expr_to_string) {
+        Some(s) => s,
+        None => "LIMIT".to_owned(),
+    });
     node
 }

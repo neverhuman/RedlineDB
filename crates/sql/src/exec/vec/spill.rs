@@ -10,7 +10,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use redlinedb_kernel::catalog::{RecordRef, RecordScratch, ValueRef, encode_record};
 
@@ -25,10 +25,11 @@ pub const SPILL_BLOCK_BYTES: usize = 64 * 1024;
 static SPILL_FILE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn spill_path(root: &Path, label: &str) -> PathBuf {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
+    let stamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(d) => d,
+        Err(_) => Duration::default(),
+    }
+    .as_nanos();
     let seq = SPILL_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
     root.join(format!("redline-ve-{label}-{stamp}-{seq}.spill"))
 }

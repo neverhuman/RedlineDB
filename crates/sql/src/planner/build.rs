@@ -294,13 +294,10 @@ pub(crate) fn build_join_plan(
         .collect();
 
     if scans.len() <= 1 {
-        return scans
-            .into_iter()
-            .next()
-            .map(|(_, plan, _)| plan)
-            .unwrap_or_else(|| {
-                PhysicalPlan::leaf(PhysicalKind::Constant, Some("empty".to_owned()))
-            });
+        return match scans.into_iter().next().map(|(_, plan, _)| plan) {
+            Some(plan) => plan,
+            None => PhysicalPlan::leaf(PhysicalKind::Constant, Some("empty".to_owned())),
+        };
     }
 
     if scans.len() <= optimizer.max_exact_join_tables
@@ -373,10 +370,13 @@ pub(crate) fn plan_join_exact(
                 };
                 join.children = vec![prev.plan.clone(), next_scan];
                 join.estimated_rows = join_rows;
-                join.access_predicates = selection
+                join.access_predicates = match selection
                     .as_ref()
                     .map(|expr| vec![expr_to_string(expr)])
-                    .unwrap_or_default();
+                {
+                    Some(v) => v,
+                    None => Vec::new(),
+                };
                 join.relation = Some(table.name.to_string());
                 join.cost = join_plan_cost;
                 candidates.push(JoinCandidate {
@@ -445,10 +445,13 @@ pub(crate) fn plan_join_greedy(
             memory_bytes: join_cost.memory_bytes,
             spill_bytes: join_cost.spill_bytes,
         };
-        join.access_predicates = selection
+        join.access_predicates = match selection
             .as_ref()
             .map(|expr| vec![expr_to_string(expr)])
-            .unwrap_or_default();
+        {
+            Some(v) => v,
+            None => Vec::new(),
+        };
         join.relation = Some(table.table.name.to_string());
         current = join;
         current_rows = join_cost.rows;

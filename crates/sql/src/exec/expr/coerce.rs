@@ -19,7 +19,10 @@ pub(super) fn eval_binary(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    let collation = collation_from_expr(left).or_else(|| collation_from_expr(right));
+    let collation = match collation_from_expr(left) {
+        Some(c) => Some(c),
+        None => collation_from_expr(right),
+    };
     let left_value = eval_scalar(left, row, bindings)?;
     let right_value = eval_scalar(right, row, bindings)?;
     let compare_with_collation = |a: SqlValue, b: SqlValue, accept: fn(Ordering) -> bool| {
@@ -143,9 +146,10 @@ pub(crate) fn compare_binary_with(
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let ord = collation
-        .and_then(|c| c.compare_values(&left, &right))
-        .unwrap_or_else(|| compare_values(&left, &right));
+    let ord = match collation.and_then(|c| c.compare_values(&left, &right)) {
+        Some(o) => o,
+        None => compare_values(&left, &right),
+    };
     Ok(SqlValue::Integer(if accept(ord) { 1 } else { 0 }))
 }
 

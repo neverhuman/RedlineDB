@@ -10,7 +10,7 @@
 //! `time` for something this narrow. Rounding is by `floor()` for `date()`
 //! components and by truncation for the integer fields, matching SQLite.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::error::{Error, Result};
 
@@ -29,9 +29,10 @@ pub struct DateTime {
 
 impl DateTime {
     pub fn now_utc() -> Self {
-        let dur = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
+        let dur = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(d) => d,
+            Err(_) => Duration::default(),
+        };
         Self::from_unix(dur.as_secs() as i64, dur.subsec_micros())
     }
 
@@ -133,19 +134,25 @@ pub fn parse_timestring(input: &str) -> Result<DateTime> {
     // Date or date+time: split on space or 'T'.
     let (date_part, time_part) = trimmed.split_once(['T', ' ']).unwrap_or((trimmed, ""));
     let mut date_iter = date_part.splitn(3, '-');
-    let year = date_iter
-        .next()
-        .ok_or_else(|| Error::UnsupportedSql(format!("invalid date literal: {input}")))?
+    let year_str = match date_iter.next() {
+        Some(s) => s,
+        None => return Err(Error::UnsupportedSql(format!("invalid date literal: {input}"))),
+    };
+    let year = year_str
         .parse::<i32>()
         .map_err(|_| Error::UnsupportedSql(format!("invalid year: {input}")))?;
-    let month = date_iter
-        .next()
-        .ok_or_else(|| Error::UnsupportedSql(format!("invalid date literal: {input}")))?
+    let month_str = match date_iter.next() {
+        Some(s) => s,
+        None => return Err(Error::UnsupportedSql(format!("invalid date literal: {input}"))),
+    };
+    let month = month_str
         .parse::<u32>()
         .map_err(|_| Error::UnsupportedSql(format!("invalid month: {input}")))?;
-    let day = date_iter
-        .next()
-        .ok_or_else(|| Error::UnsupportedSql(format!("invalid date literal: {input}")))?
+    let day_str = match date_iter.next() {
+        Some(s) => s,
+        None => return Err(Error::UnsupportedSql(format!("invalid date literal: {input}"))),
+    };
+    let day = day_str
         .parse::<u32>()
         .map_err(|_| Error::UnsupportedSql(format!("invalid day: {input}")))?;
     let mut dt = DateTime {
@@ -173,14 +180,18 @@ fn parse_time_of_day(input: &str) -> Result<DateTime> {
     // Strip subsecond part if present.
     let (clock, frac) = input.split_once('.').unwrap_or((input, ""));
     let mut parts = clock.split(':');
-    let hour = parts
-        .next()
-        .ok_or_else(|| Error::UnsupportedSql("invalid time literal".to_owned()))?
+    let hour_str = match parts.next() {
+        Some(s) => s,
+        None => return Err(Error::UnsupportedSql("invalid time literal".to_owned())),
+    };
+    let hour = hour_str
         .parse::<u32>()
         .map_err(|_| Error::UnsupportedSql("invalid hour".to_owned()))?;
-    let minute = parts
-        .next()
-        .ok_or_else(|| Error::UnsupportedSql("invalid time literal".to_owned()))?
+    let minute_str = match parts.next() {
+        Some(s) => s,
+        None => return Err(Error::UnsupportedSql("invalid time literal".to_owned())),
+    };
+    let minute = minute_str
         .parse::<u32>()
         .map_err(|_| Error::UnsupportedSql("invalid minute".to_owned()))?;
     let second = parts

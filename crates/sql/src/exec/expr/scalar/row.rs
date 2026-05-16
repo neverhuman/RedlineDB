@@ -41,9 +41,10 @@ pub(crate) fn compare_row_ordering(
         let collation = collation_from_expr(&order.expr);
         let left_value = eval_scalar(&order.expr, &left.context(), bindings)?;
         let right_value = eval_scalar(&order.expr, &right.context(), bindings)?;
-        let mut ord = collation
-            .and_then(|c| c.compare_values(&left_value, &right_value))
-            .unwrap_or_else(|| compare_values(&left_value, &right_value));
+        let mut ord = match collation.and_then(|c| c.compare_values(&left_value, &right_value)) {
+            Some(o) => o,
+            None => compare_values(&left_value, &right_value),
+        };
         if matches!(order.options.asc, Some(false)) {
             ord = ord.reverse();
         }
@@ -73,7 +74,10 @@ pub(crate) fn lookup_column(row: &RowContext<'_>, name: &str) -> Result<SqlValue
                     found = Some(value);
                 }
             }
-            found.ok_or_else(|| Error::UnknownColumn(name.to_owned()))
+            match found {
+                Some(v) => Ok(v),
+                None => Err(Error::UnknownColumn(name.to_owned())),
+            }
         }
         RowContext::SqliteSchema(row) => match name.to_ascii_lowercase().as_str() {
             "type" => Ok(SqlValue::Text(Arc::from(row.type_name.as_ref()))),
@@ -113,7 +117,10 @@ pub(crate) fn lookup_qualified_column(
                     found = Some(value);
                 }
             }
-            found.ok_or_else(|| Error::UnknownColumn(format!("{qualifier}.{name}")))
+            match found {
+                Some(v) => Ok(v),
+                None => Err(Error::UnknownColumn(format!("{qualifier}.{name}"))),
+            }
         }
         RowContext::Upsert { current, excluded } => {
             if row_matches_qualifier(current, qualifier) {
@@ -168,12 +175,15 @@ fn lookup_table_column(row: &TableRow, name: &str) -> Result<SqlValue> {
     {
         return Ok(SqlValue::Integer(row.rowid.0 as i64));
     }
-    let idx = row
+    let idx = match row
         .table
         .columns
         .iter()
         .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
-        .ok_or_else(|| Error::UnknownColumn(name.to_owned()))?;
+    {
+        Some(i) => i,
+        None => return Err(Error::UnknownColumn(name.to_owned())),
+    };
     Ok(row.values[idx].clone())
 }
 
@@ -187,11 +197,15 @@ fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
             {
                 return Ok(SqlValue::Null);
             }
-            row.table
+            match row
+                .table
                 .columns
                 .iter()
                 .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
-                .ok_or_else(|| Error::UnknownColumn(name.to_owned()))?;
+            {
+                Some(_) => {}
+                None => return Err(Error::UnknownColumn(name.to_owned())),
+            }
             Ok(SqlValue::Null)
         }
     }
@@ -209,11 +223,14 @@ fn lookup_excluded_column(table: &TableDef, excluded: &[SqlValue], name: &str) -
         }
         return Err(Error::UnknownColumn(name.to_owned()));
     }
-    let idx = table
+    let idx = match table
         .columns
         .iter()
         .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
-        .ok_or_else(|| Error::UnknownColumn(name.to_owned()))?;
+    {
+        Some(i) => i,
+        None => return Err(Error::UnknownColumn(name.to_owned())),
+    };
     Ok(excluded.get(idx).cloned().unwrap_or(SqlValue::Null))
 }
 

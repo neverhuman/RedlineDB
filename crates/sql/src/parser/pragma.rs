@@ -15,10 +15,11 @@ pub(crate) fn parse_pragma_template(
     if rest.is_empty() {
         return Err(Error::UnsupportedSql("PRAGMA requires a name".to_owned()));
     }
-    if let Some(after_main) = rest
-        .strip_prefix("main.")
-        .or_else(|| rest.strip_prefix("MAIN."))
-    {
+    let after_main_opt = match rest.strip_prefix("main.") {
+        Some(s) => Some(s),
+        None => rest.strip_prefix("MAIN."),
+    };
+    if let Some(after_main) = after_main_opt {
         rest = after_main.trim_start();
     }
 
@@ -138,9 +139,14 @@ pub(crate) fn parse_pragma_template(
             pragma_redline_full_check_rows(conn)?,
         ),
         "table_info" => {
-            let name = value.ok_or_else(|| {
-                Error::UnsupportedSql("PRAGMA table_info requires a table".to_owned())
-            })?;
+            let name = match value {
+                Some(v) => v,
+                None => {
+                    return Err(Error::UnsupportedSql(
+                        "PRAGMA table_info requires a table".to_owned(),
+                    ));
+                }
+            };
             let table_name = parse_pragma_object_name(&name)?;
             let table = lookup_table(
                 schema,
@@ -164,9 +170,14 @@ pub(crate) fn parse_pragma_template(
             )
         }
         "table_xinfo" => {
-            let name = value.ok_or_else(|| {
-                Error::UnsupportedSql("PRAGMA table_xinfo requires a table".to_owned())
-            })?;
+            let name = match value {
+                Some(v) => v,
+                None => {
+                    return Err(Error::UnsupportedSql(
+                        "PRAGMA table_xinfo requires a table".to_owned(),
+                    ));
+                }
+            };
             let table_name = parse_pragma_object_name(&name)?;
             let table = lookup_table(
                 schema,
@@ -211,9 +222,14 @@ pub(crate) fn parse_pragma_template(
             )
         }
         "index_list" => {
-            let name = value.ok_or_else(|| {
-                Error::UnsupportedSql("PRAGMA index_list requires a table".to_owned())
-            })?;
+            let name = match value {
+                Some(v) => v,
+                None => {
+                    return Err(Error::UnsupportedSql(
+                        "PRAGMA index_list requires a table".to_owned(),
+                    ));
+                }
+            };
             let table_name = parse_pragma_object_name(&name)?;
             let table = lookup_table(
                 schema,
@@ -236,9 +252,14 @@ pub(crate) fn parse_pragma_template(
             )
         }
         "index_info" => {
-            let name = value.ok_or_else(|| {
-                Error::UnsupportedSql("PRAGMA index_info requires an index".to_owned())
-            })?;
+            let name = match value {
+                Some(v) => v,
+                None => {
+                    return Err(Error::UnsupportedSql(
+                        "PRAGMA index_info requires an index".to_owned(),
+                    ));
+                }
+            };
             let index_name = parse_pragma_object_name(&name)?;
             let index = lookup_index(
                 schema,
@@ -259,9 +280,14 @@ pub(crate) fn parse_pragma_template(
             )
         }
         "index_xinfo" => {
-            let name = value.ok_or_else(|| {
-                Error::UnsupportedSql("PRAGMA index_xinfo requires an index".to_owned())
-            })?;
+            let name = match value {
+                Some(v) => v,
+                None => {
+                    return Err(Error::UnsupportedSql(
+                        "PRAGMA index_xinfo requires an index".to_owned(),
+                    ));
+                }
+            };
             let index_name = parse_pragma_object_name(&name)?;
             let index = lookup_index(
                 schema,
@@ -285,9 +311,14 @@ pub(crate) fn parse_pragma_template(
             )
         }
         "foreign_key_list" => {
-            let name = value.ok_or_else(|| {
-                Error::UnsupportedSql("PRAGMA foreign_key_list requires a table".to_owned())
-            })?;
+            let name = match value {
+                Some(v) => v,
+                None => {
+                    return Err(Error::UnsupportedSql(
+                        "PRAGMA foreign_key_list requires a table".to_owned(),
+                    ));
+                }
+            };
             let table_name = parse_pragma_object_name(&name)?;
             let table = lookup_table(
                 schema,
@@ -357,9 +388,14 @@ fn split_pragma_name_value(input: &str) -> Result<(String, Option<String>)> {
         ));
     }
     if let Some(start) = trimmed.find('(') {
-        let end = trimmed
-            .rfind(')')
-            .ok_or_else(|| Error::UnsupportedSql("unterminated PRAGMA argument".to_owned()))?;
+        let end = match trimmed.rfind(')') {
+            Some(e) => e,
+            None => {
+                return Err(Error::UnsupportedSql(
+                    "unterminated PRAGMA argument".to_owned(),
+                ));
+            }
+        };
         let name = trimmed[..start].trim().to_owned();
         let value = trimmed[start + 1..end].trim();
         return Ok((
@@ -375,7 +411,10 @@ fn split_pragma_name_value(input: &str) -> Result<(String, Option<String>)> {
 }
 
 fn parse_pragma_bool(input: &str) -> Result<bool> {
-    let value = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    let value = match unquote_pragma_token(input) {
+        Some(v) => v,
+        None => input.trim().to_owned(),
+    };
     match value.to_ascii_lowercase().as_str() {
         "1" | "on" | "true" => Ok(true),
         "0" | "off" | "false" => Ok(false),
@@ -386,16 +425,25 @@ fn parse_pragma_bool(input: &str) -> Result<bool> {
 }
 
 fn parse_pragma_integer(input: &str) -> Result<i64> {
-    let value = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    let value = match unquote_pragma_token(input) {
+        Some(v) => v,
+        None => input.trim().to_owned(),
+    };
     value
         .parse::<i64>()
         .map_err(|_| Error::UnsupportedSql(format!("invalid integer PRAGMA value: {value}")))
 }
 
 fn parse_pragma_object_name(input: &str) -> Result<String> {
-    let token = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    let token = match unquote_pragma_token(input) {
+        Some(v) => v,
+        None => input.trim().to_owned(),
+    };
     let mut parts = token.splitn(2, '.');
-    let first = parts.next().unwrap_or_default();
+    let first = match parts.next() {
+        Some(s) => s,
+        None => "",
+    };
     if let Some(second) = parts.next() {
         if first.eq_ignore_ascii_case("main") {
             return Ok(second.to_owned());
@@ -515,16 +563,25 @@ fn pragma_index_info_rows(
     schema: &SchemaSnapshot,
     index: &Arc<redlinedb_kernel::catalog::IndexDef>,
 ) -> Result<Vec<Vec<SqlValue>>> {
-    let table = schema
-        .table_by_id(index.table_id)
-        .ok_or_else(|| Error::UnsupportedSql("index references missing table".to_owned()))?;
+    let table = match schema.table_by_id(index.table_id) {
+        Some(t) => t,
+        None => {
+            return Err(Error::UnsupportedSql(
+                "index references missing table".to_owned(),
+            ));
+        }
+    };
     let mut rows = Vec::with_capacity(index.keys.len());
     for (seqno, key) in index.keys.iter().enumerate() {
         let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source;
-        let column = table
-            .columns
-            .get(*attnum as usize)
-            .ok_or_else(|| Error::UnsupportedSql("index references missing column".to_owned()))?;
+        let column = match table.columns.get(*attnum as usize) {
+            Some(c) => c,
+            None => {
+                return Err(Error::UnsupportedSql(
+                    "index references missing column".to_owned(),
+                ));
+            }
+        };
         rows.push(vec![
             SqlValue::Integer(seqno as i64),
             SqlValue::Integer(*attnum as i64),
@@ -538,16 +595,25 @@ fn pragma_index_xinfo_rows(
     schema: &SchemaSnapshot,
     index: &Arc<redlinedb_kernel::catalog::IndexDef>,
 ) -> Result<Vec<Vec<SqlValue>>> {
-    let table = schema
-        .table_by_id(index.table_id)
-        .ok_or_else(|| Error::UnsupportedSql("index references missing table".to_owned()))?;
+    let table = match schema.table_by_id(index.table_id) {
+        Some(t) => t,
+        None => {
+            return Err(Error::UnsupportedSql(
+                "index references missing table".to_owned(),
+            ));
+        }
+    };
     let mut rows = Vec::with_capacity(index.keys.len());
     for (seqno, key) in index.keys.iter().enumerate() {
         let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source;
-        let column = table
-            .columns
-            .get(*attnum as usize)
-            .ok_or_else(|| Error::UnsupportedSql("index references missing column".to_owned()))?;
+        let column = match table.columns.get(*attnum as usize) {
+            Some(c) => c,
+            None => {
+                return Err(Error::UnsupportedSql(
+                    "index references missing column".to_owned(),
+                ));
+            }
+        };
         rows.push(vec![
             SqlValue::Integer(seqno as i64),
             SqlValue::Integer(*attnum as i64),

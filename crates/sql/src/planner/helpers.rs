@@ -61,9 +61,10 @@ pub(crate) fn estimate_table_rows(stats: Option<&TableStats>) -> f64 {
 }
 
 pub(crate) fn estimate_table_width(stats: Option<&TableStats>, table: &Arc<TableDef>) -> f64 {
-    stats
-        .map(|stats| stats.avg_row_bytes.max(1.0))
-        .unwrap_or_else(|| (table.columns.len().max(1) * 16) as f64)
+    match stats.map(|stats| stats.avg_row_bytes.max(1.0)) {
+        Some(v) => v,
+        None => (table.columns.len().max(1) * 16) as f64,
+    }
 }
 
 pub(crate) fn estimate_width_for_schema() -> f64 {

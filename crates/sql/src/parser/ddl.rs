@@ -96,9 +96,14 @@ pub(crate) fn bind_create_index(
             "CREATE INDEX modifiers are not supported".to_owned(),
         ));
     }
-    let name = create_index
-        .name
-        .ok_or_else(|| Error::UnsupportedSql("CREATE INDEX requires a name".to_owned()))?;
+    let name = match create_index.name {
+        Some(n) => n,
+        None => {
+            return Err(Error::UnsupportedSql(
+                "CREATE INDEX requires a name".to_owned(),
+            ));
+        }
+    };
     let (schema, name) = split_name(name)?;
     let table = parse_qualified_name(create_index.table_name)?;
     let mut columns = Vec::with_capacity(create_index.columns.len());

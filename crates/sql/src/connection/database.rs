@@ -44,9 +44,10 @@ impl Database {
         let engine = Engine::create(base, opts.engine)?;
         save_user_version(base, 0)?;
         let stats_store = StatsStore::new(base);
-        let stats = stats_store
-            .load()?
-            .unwrap_or_else(|| Arc::new(StatsSnapshot::default()));
+        let stats = match stats_store.load()? {
+            Some(s) => s,
+            None => Arc::new(StatsSnapshot::default()),
+        };
         let optimizer_hash = hash_optimizer(&opts.optimizer, &opts.query_memory);
         Ok(Arc::new(Self {
             path: Arc::new(base.to_path_buf()),
@@ -69,9 +70,10 @@ impl Database {
         let engine = Engine::open(base, opts.engine)?;
         let user_version = load_user_version(base)?;
         let stats_store = StatsStore::new(base);
-        let stats = stats_store
-            .load()?
-            .unwrap_or_else(|| Arc::new(StatsSnapshot::default()));
+        let stats = match stats_store.load()? {
+            Some(s) => s,
+            None => Arc::new(StatsSnapshot::default()),
+        };
         let optimizer_hash = hash_optimizer(&opts.optimizer, &opts.query_memory);
         Ok(Arc::new(Self {
             path: Arc::new(base.to_path_buf()),
@@ -98,9 +100,10 @@ impl Database {
         let engine = Engine::open_with_recovery_target(base, opts.engine, target)?;
         let user_version = load_user_version(base)?;
         let stats_store = StatsStore::new(base);
-        let stats = stats_store
-            .load()?
-            .unwrap_or_else(|| Arc::new(StatsSnapshot::default()));
+        let stats = match stats_store.load()? {
+            Some(s) => s,
+            None => Arc::new(StatsSnapshot::default()),
+        };
         let optimizer_hash = hash_optimizer(&opts.optimizer, &opts.query_memory);
         Ok(Arc::new(Self {
             path: Arc::new(base.to_path_buf()),

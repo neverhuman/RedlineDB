@@ -254,7 +254,10 @@ pub(crate) fn materialize_prepared_rows(
             if step_select_runtime(conn, &mut runtime, bindings, &mut current)? {
                 break;
             }
-            rows.push(current.take().unwrap_or_default());
+            rows.push(match current.take() {
+                Some(row) => row,
+                None => Vec::new(),
+            });
         }
     }
     Ok(rows)
@@ -433,9 +436,10 @@ pub(crate) fn step_select_runtime(
                 *current_row = None;
                 return Ok(true);
             }
-            let row = batch
-                .row(*cursor)
-                .ok_or_else(|| Error::Bind("batch cursor out of range".to_owned()))?;
+            let row = match batch.row(*cursor) {
+                Some(r) => r,
+                None => return Err(Error::Bind("batch cursor out of range".to_owned())),
+            };
             *current_row = Some(row);
             *cursor += 1;
             runtime.yielded += 1;

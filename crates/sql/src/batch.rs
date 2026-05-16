@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -85,7 +85,10 @@ pub struct QueryMemoryBroker {
 
 impl QueryMemoryBroker {
     pub fn new(work_mem_bytes: usize, max_spill_bytes: usize, temp_dir: Option<PathBuf>) -> Self {
-        let spill_root = temp_dir.unwrap_or_else(std::env::temp_dir);
+        let spill_root = match temp_dir {
+            Some(dir) => dir,
+            None => std::env::temp_dir(),
+        };
         let _ = fs::create_dir_all(&spill_root);
         Self {
             work_mem_bytes,
@@ -125,10 +128,11 @@ impl QueryMemoryBroker {
         if self.spill_path.is_some() {
             return Ok(());
         }
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
+        let stamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(d) => d,
+            Err(_) => Duration::default(),
+        }
+        .as_nanos();
         let seq = QUERY_SPILL_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path =
             crate::exec::vec::spill::spill_path(&self.spill_root, &format!("query-{stamp}-{seq}"));

@@ -169,11 +169,10 @@ pub(crate) fn index_column_name(column: &IndexColumn) -> Result<String> {
     match &column.column.expr {
         Expr::Identifier(ident) => Ok(ident.value.clone()),
         Expr::CompoundIdentifier(parts) if parts.len() == 1 => Ok(parts[0].value.clone()),
-        Expr::CompoundIdentifier(parts) => Ok(parts
-            .last()
-            .ok_or_else(|| Error::UnsupportedSql("empty index column".to_owned()))?
-            .value
-            .clone()),
+        Expr::CompoundIdentifier(parts) => Ok(match parts.last() {
+            Some(p) => p.value.clone(),
+            None => return Err(Error::UnsupportedSql("empty index column".to_owned())),
+        }),
         other => Err(Error::UnsupportedSql(format!(
             "unsupported index column expression: {other:?}"
         ))),
@@ -189,14 +188,15 @@ pub(crate) fn expr_to_kernel_ast(
         Expr::Identifier(ident) => {
             ExprAst::Column(resolve_column_ordinal_name(column_lookup, &ident.value)? as u16)
         }
-        Expr::CompoundIdentifier(parts) => ExprAst::Column(resolve_column_ordinal_name(
-            column_lookup,
-            parts
-                .last()
-                .ok_or_else(|| Error::UnknownColumn("empty identifier".to_owned()))?
-                .value
-                .as_str(),
-        )? as u16),
+        Expr::CompoundIdentifier(parts) => {
+            let last = match parts.last() {
+                Some(p) => p,
+                None => return Err(Error::UnknownColumn("empty identifier".to_owned())),
+            };
+            ExprAst::Column(
+                resolve_column_ordinal_name(column_lookup, last.value.as_str())? as u16,
+            )
+        }
         Expr::Nested(expr) => expr_to_kernel_ast(expr, column_lookup)?,
         Expr::UnaryOp { op, expr } => match op {
             UnaryOperator::Not => ExprAst::Not(Box::new(expr_to_kernel_ast(expr, column_lookup)?)),
@@ -349,21 +349,24 @@ pub(crate) fn resolve_column_ordinal_name(
     column_lookup: &std::collections::HashMap<String, usize>,
     name: &str,
 ) -> Result<usize> {
-    column_lookup
-        .get(&name.to_ascii_lowercase())
-        .copied()
-        .ok_or_else(|| Error::UnknownColumn(name.to_owned()))
+    match column_lookup.get(&name.to_ascii_lowercase()).copied() {
+        Some(v) => Ok(v),
+        None => Err(Error::UnknownColumn(name.to_owned())),
+    }
 }
 
 pub(crate) fn resolve_column_ordinal_in_table(
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
     name: &str,
 ) -> Result<usize> {
-    table
+    match table
         .columns
         .iter()
         .position(|column| column.folded.as_ref().eq_ignore_ascii_case(name))
-        .ok_or_else(|| Error::UnknownColumn(name.to_owned()))
+    {
+        Some(v) => Ok(v),
+        None => Err(Error::UnknownColumn(name.to_owned())),
+    }
 }
 
 pub(crate) fn resolve_column_ordinal_in_object_name(
@@ -396,7 +399,10 @@ pub(crate) fn split_name(name: ObjectName) -> Result<(Option<DbName>, DbName)> {
 pub(crate) fn parse_qualified_name(name: ObjectName) -> Result<QualifiedName> {
     let (schema, name) = split_name(name)?;
     Ok(QualifiedName {
-        schema: schema.unwrap_or_else(|| DbName::new("main")),
+        schema: match schema {
+            Some(s) => s,
+            None => DbName::new("main"),
+        },
         name,
     })
 }
@@ -612,29 +618,32 @@ pub(crate) fn bind_join_constraint(
         JoinConstraint::None => Ok(None),
         JoinConstraint::On(expr) => Ok(Some(normalize_expr(expr, params)?)),
         JoinConstraint::Using(columns) => {
-            let right_name = right
-                .alias
-                .as_ref()
-                .map(|alias| alias.to_string())
-                .unwrap_or_else(|| right.table.name.to_string());
-            let left_name = left
-                .last()
-                .map(|table| {
-                    table
-                        .alias
-                        .as_ref()
-                        .map(|alias| alias.to_string())
-                        .unwrap_or_else(|| table.table.name.to_string())
-                })
-                .ok_or_else(|| Error::UnsupportedSql("USING requires a left table".to_owned()))?;
+            let right_name = match right.alias.as_ref().map(|alias| alias.to_string()) {
+                Some(n) => n,
+                None => right.table.name.to_string(),
+            };
+            let left_name = match left.last().map(|table| {
+                match table.alias.as_ref().map(|alias| alias.to_string()) {
+                    Some(n) => n,
+                    None => table.table.name.to_string(),
+                }
+            }) {
+                Some(n) => n,
+                None => {
+                    return Err(Error::UnsupportedSql(
+                        "USING requires a left table".to_owned(),
+                    ));
+                }
+            };
             let mut expr = None;
             for column in columns {
-                let column_name = object_name_part_to_string(
-                    column
-                        .0
-                        .last()
-                        .ok_or_else(|| Error::UnsupportedSql("empty USING column".to_owned()))?,
-                )?;
+                let column_part = match column.0.last() {
+                    Some(p) => p,
+                    None => {
+                        return Err(Error::UnsupportedSql("empty USING column".to_owned()));
+                    }
+                };
+                let column_name = object_name_part_to_string(column_part)?;
                 let left_col = Expr::CompoundIdentifier(vec![
                     Ident::new(left_name.clone()),
                     Ident::new(column_name.clone()),
@@ -743,10 +752,10 @@ pub(crate) fn push_projection_columns(source: &SelectSource, out: &mut Vec<Strin
 pub(crate) fn render_expr_name(expr: &Expr) -> String {
     match expr {
         Expr::Identifier(ident) => ident.value.clone(),
-        Expr::CompoundIdentifier(parts) => parts
-            .last()
-            .map(|ident| ident.value.clone())
-            .unwrap_or_else(|| expr.to_string()),
+        Expr::CompoundIdentifier(parts) => match parts.last().map(|ident| ident.value.clone()) {
+            Some(name) => name,
+            None => expr.to_string(),
+        },
         _ => expr.to_string(),
     }
 }

@@ -128,9 +128,12 @@ pub(crate) fn execute_delete(
             }
             // Reload the row to make sure we delete-mark the right index
             // entries; the heap state may have moved since plan time.
-            let live = load_table_row_by_rowid(conn.engine(), tx, &plan.table, row.rowid)?
+            let live = match load_table_row_by_rowid(conn.engine(), tx, &plan.table, row.rowid)?
                 .map(|fresh| fresh.values)
-                .unwrap_or_else(|| row.values.clone());
+            {
+                Some(v) => v,
+                None => row.values.clone(),
+            };
             conn.engine()
                 .delete_for_relation(tx, plan.table.relation_id, row.rowid)?;
             crate::exec::index_dml::maintain_indexes_on_delete(
@@ -319,9 +322,10 @@ pub(crate) fn apply_row_affinity(table: &TableDef, values: Vec<SqlValue>) -> Res
 pub(crate) fn apply_constraints(table: &TableDef, values: &[SqlValue]) -> Result<()> {
     let mut scratch = EvalScratch::default();
     for (idx, column) in table.columns.iter().enumerate() {
-        let value = values
-            .get(idx)
-            .ok_or_else(|| Error::UnknownColumn(column.name.to_string()))?;
+        let value = match values.get(idx) {
+            Some(v) => v,
+            None => return Err(Error::UnknownColumn(column.name.to_string())),
+        };
         if column.not_null && matches!(value, SqlValue::Null) {
             return Err(Error::ConstraintViolation(format!(
                 "NOT NULL constraint failed: {}.{}",
@@ -395,7 +399,7 @@ fn collect_unique_conflicts(
         if !index.unique && !index.primary {
             continue;
         }
-        let constraint_name = table
+        let constraint_name = match table
             .constraints
             .iter()
             .find(|c| {
@@ -403,7 +407,10 @@ fn collect_unique_conflicts(
                     && c.index_id == Some(index.index_id)
             })
             .and_then(|c| c.name.as_deref().map(Arc::<str>::from))
-            .or_else(|| Some(Arc::from(index.name.as_ref())));
+        {
+            Some(name) => Some(name),
+            None => Some(Arc::from(index.name.as_ref())),
+        };
         // SQLite NULL parity: a NULL anywhere in the unique-key tuple
         // disables the conflict check entirely. We compute this once from
         // the SQL-side values so both index and default paths agree.
@@ -499,12 +506,15 @@ fn collect_unique_conflicts(
                 })
                 .collect();
             if key_values_equal(&key_values, &other) {
-                let constraint_name = table
+                let constraint_name = match table
                     .constraints
                     .iter()
                     .find(|c| c.index_id == Some(index.index_id))
                     .and_then(|c| c.name.as_deref().map(Arc::<str>::from))
-                    .or_else(|| Some(Arc::from(index.name.as_ref())));
+                {
+                    Some(name) => Some(name),
+                    None => Some(Arc::from(index.name.as_ref())),
+                };
                 conflicts.push(UniqueConflict {
                     rowid: row.rowid,
                     constraint_name,
@@ -537,14 +547,20 @@ fn apply_upsert_update(
     ctx.conn
         .engine()
         .lock_row_for_relation(ctx.tx, ctx.table.relation_id, ctx.conflict.rowid)?;
-    let existing =
-        load_table_row_by_rowid(ctx.conn.engine(), ctx.tx, ctx.table, ctx.conflict.rowid)?
-            .ok_or_else(|| {
-                Error::ConstraintViolation(format!(
-                    "UPSERT conflict row missing for table {}",
-                    ctx.table.name
-                ))
-            })?;
+    let existing = match load_table_row_by_rowid(
+        ctx.conn.engine(),
+        ctx.tx,
+        ctx.table,
+        ctx.conflict.rowid,
+    )? {
+        Some(row) => row,
+        None => {
+            return Err(Error::ConstraintViolation(format!(
+                "UPSERT conflict row missing for table {}",
+                ctx.table.name
+            )));
+        }
+    };
     let upsert_row = RowContext::Upsert {
         current: &existing,
         excluded: ctx.excluded,
