@@ -41,7 +41,15 @@ jobs:
           mkdir -p target/jankurai
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin main --depth=1
-            git show origin/main:agent/baselines/main.repo-score.json > target/jankurai/accepted-baseline.json
+            if git show origin/main:agent/baselines/main.repo-score.json > target/jankurai/accepted-baseline.json 2>/dev/null; then
+              echo "baseline sourced from origin/main"
+            elif [ -f agent/baselines/main.repo-score.json ]; then
+              cp agent/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
+              echo "baseline sourced from local (first-time commit)"
+            else
+              echo "missing accepted baseline agent/baselines/main.repo-score.json" >&2
+              exit 1
+            fi
           elif [ -f agent/baselines/main.repo-score.json ]; then
             cp agent/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
           else

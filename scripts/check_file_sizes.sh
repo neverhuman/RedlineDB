@@ -19,6 +19,9 @@ while IFS= read -r file; do
     benchmark-results/*)
       continue
       ;;
+    agent/baselines/*)
+      continue
+      ;;
   esac
   [[ -f "$file" ]] || continue
   if ! grep -Iq . "$file"; then
