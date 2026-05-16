@@ -59,3 +59,15 @@ mode = "auto"
 [[tools]]
 id = "agent-tool-supply"
 mode = "auto"
+
+[[tools]]
+id = "proofbind"
+mode = "auto"
+
+[[tools]]
+id = "proofmark-rust"
+mode = "auto"
+
+[[tools]]
+id = "copy-code"
+mode = "auto"
