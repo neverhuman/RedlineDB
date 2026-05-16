@@ -74,6 +74,7 @@
     "scripts/": "tools",
     "scripts/bench/": "bench-harness",
     "tips/": "standard",
+    "install.sh": "workspace",
     "tools/": "tools"
   },
   "workspace": "crates/*"

@@ -1,17 +1,17 @@
 {
-  "report_fingerprint": "sha256:54528372f537998c880202ec3bff8c94f624937f0b050e3b8a962728589b90d2",
-  "input_fingerprint": "sha256:9e4de94d3448f267f431b7c9f85802e1f3aa1954d3fd6f8e9b0247e55bdfa8c2",
-  "policy_fingerprint": "sha256:1c586fd57f345043abf8b052c5b4d78a2529cb9455807bb3d9e8f6776a7d4ca6",
+  "report_fingerprint": "sha256:9da4f23eb91c6d60ccd0e46d369f03cae1c94926fa42d055a277f469d95ef8ba",
+  "input_fingerprint": "sha256:1af1fb69c70d65dc34569fd1dbb8b928148139b5b32c1170fdba5ae68721b566",
+  "policy_fingerprint": "sha256:eaca17b4f280af0700dd95302a79cf419832e7a78800160ec46e58880678c57e",
   "manifest_fingerprints": {
-    "owner_map": "sha256:d3c19c668ae39656fc693af4313b656f017bad3c3fedf1f0d01c9e83d02b568d",
-    "test_map": "sha256:e645cf557c6e4e217340633032d99ef783243d6efdc0044b338a6c7488c90bbe",
+    "owner_map": "sha256:8129ea85c137bdbab9f3c9af724816f6bc432acb6dcf5ee686884a4eb16f2ea4",
+    "test_map": "sha256:79bed524fdf6f0048e3125ee8ec160cf7c30ece09feaa133ddabf247a4205841",
     "generated_zones": "sha256:88a3264cda9a9f5f3b22a557a844221b605df7cf5de14df9aff00f881f977fa7",
     "boundaries": "sha256:7a7bf640d469152bca6f0a9a4feabb90ae6eb170f3fe33a196871bfefb3936e3",
     "proof_lanes": "sha256:46832ba6baeeaf0c88962f9ec7e746ca1142e84ae277f195b19cc91a29af5f6a",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778951142",
+  "generated_at": "1778955953",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1778951142",
-  "started_at": "1778951142",
-  "elapsed_ms": 3366,
+  "run_id": "1778955953",
+  "started_at": "1778955953",
+  "elapsed_ms": 3901,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "542ce8b",
+    "head": "fac8230",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1039,7 +1039,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-16T17:05:38.769305+00:00",
+    "generated_at": "2026-05-16T18:25:49.367045+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1078,8 +1078,8 @@
     },
     "summary": {
       "files_scanned": 492,
-      "files_considered": 168,
-      "active_files": 168,
+      "files_considered": 167,
+      "active_files": 167,
       "exact_file_classes": 0,
       "hard_classes": 0,
       "warning_classes": 29,

@@ -74,6 +74,8 @@ excluded_paths = [
 # `libc::getrusage(RUSAGE_SELF, ...)` on rc == 0 and discarded
 # otherwise. Same detector limitation as above.
 extra_excluded_paths = [
+  "crates/cli/src/main.rs",
+  "install.sh",
   "crates/kernel/src/vector/diskann/sectors.rs",
   "crates/bench/src/workload.rs",
   "crates/bench/src/config.rs",

@@ -367,6 +367,10 @@
     "contracts/c-abi/": {
       "command": "rtk cargo test -p redlinedb-ffi --quiet --locked",
       "purpose": "exercise the C ABI surface declared in this header"
+    },
+    "install.sh": {
+      "command": "bash -n install.sh",
+      "purpose": "verify the install script has valid syntax"
     }
   },
   "workspace": "jankurai"
