@@ -290,23 +290,25 @@ pub enum WorkloadKind {
     CommitStormBatched,
     /// Phase 11 wave 1a: secondary index leaf-walk efficiency probe.
     /// `SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ? AND ?` over the
-    /// existing `kv_tenant_idx`. Fixture shape mirrors
-    /// `SecondaryIndexRange` but the projection is purely the count
-    /// aggregate so the engine never visits the heap, isolating the
-    /// cost of walking the index leaves.
+    /// existing `kv_tenant_idx` (the `tenant_id` boundary index).
+    /// Fixture shape mirrors `SecondaryIndexRange` but the projection
+    /// is purely the count aggregate so the engine never visits the
+    /// heap, isolating the cost of walking the index leaves.
     ///
-    /// Proof: crates/bench/tests/tenant_isolation.rs::dual_connection_cross_tenant_index_probe_yields_zero_rows
-    /// (lines 243-302; assert cross-tenant index probe yields 0 rows;
-    /// HLT-022-AUTHZ-ISOLATION-GAP). The test opens two distinct
-    /// `Connection`s — one structurally scoped to tenant A, one to
-    /// tenant B — and asserts `COUNT(*) FROM kv WHERE tenant = B == 0`
-    /// after tenant A inserts 24 rows, including under a concurrent
-    /// late write. Sibling deterministic scenarios in the same file:
-    /// `owner_can_read` (lines 134-151, positive control),
-    /// `non_owner_denied` (lines 153-194, denial via PK + index probe),
-    /// `cross_tenant_index_probe_empty` (lines 196-241, equality + range
-    /// + open-ended probes over the secondary index),
-    /// `tombstone_owner_only` (lines 304-end, owner-scoped delete).
+    /// HLT-022-AUTHZ-ISOLATION-GAP negative proof for the `tenant_id`
+    /// boundary: crates/bench/tests/tenant_isolation.rs (5 deterministic
+    /// scenarios, all asserting that a non-owning tenant's `tenant_id`
+    /// probe yields 0 rows):
+    ///   - `owner_can_read` (positive control: owner sees their own row),
+    ///   - `non_owner_denied` (`assert!(rows.is_empty())`, `assert_eq!(count, 0)`
+    ///     for non-owner `tenant_id`),
+    ///   - `cross_tenant_index_probe_empty` (`assert_eq!(count, 0)` for
+    ///     equality + range + open-ended `tenant_id` probes),
+    ///   - `dual_connection_cross_tenant_index_probe_yields_zero_rows`
+    ///     (two `Connection`s each scoped to a single `tenant_id`;
+    ///     non-owner connection sees 0 rows even under concurrent writes),
+    ///   - `tombstone_owner_only` (owner-scoped delete; non-owner
+    ///     `tenant_id` still sees 0 rows pre- and post-delete).
     /// Runnable via `rtk cargo test -p redlinedb-bench --test
     /// tenant_isolation --quiet --locked`. See also
     /// `agent/security-policy.toml` [[proofs]] entry for

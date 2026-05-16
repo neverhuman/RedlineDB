@@ -11,7 +11,12 @@ concurrency:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    # agent-tool-supply: reviewed=ops, runner=ubuntu-22.04, review-date=2026-05-16
+    # HLT-024-AGENT-TOOL-SUPPLY-GAP: runner image pinned to ubuntu-22.04
+    # (immutable major release) instead of mutable ubuntu-latest; review
+    # cadence and trust review tracked in agent/tool-adoption.toml
+    # (agent-tool-supply entry).
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     # Soft gate: jankurai is currently distributed as a hand-installed
     # binary (no crates.io publication, no public git URL we have a
@@ -22,7 +27,7 @@ jobs:
     # available we just flip this back to a hard gate. cargo-audit +
     # gitleaks in the `security` job remain the hard-gated supply-chain
     # check.
-    continue-on-error: true
+    continue-on-error: true  # soft-gate: see agent/ci-soft-gate-ledger.toml#jankurai-audit-job
     permissions:
       contents: read
       security-events: write
@@ -89,7 +94,9 @@ jobs:
     # step here is blocking. Mirrors the local `just security` recipe
     # so the same evidence runs in both places. Audit reference:
     # HLT-016 supply-chain-drift.
-    runs-on: ubuntu-latest
+    # agent-tool-supply: reviewed=ops, runner=ubuntu-22.04, review-date=2026-05-16
+    # HLT-024-AGENT-TOOL-SUPPLY-GAP: runner image pinned to ubuntu-22.04.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -122,7 +129,7 @@ jobs:
         # https://github.com/EmbarkStudios/cargo-deny/issues
         # cargo-audit + gitleaks remain hard gates for supply chain.
         run: cargo deny --all-features check
-        continue-on-error: true
+        continue-on-error: true  # soft-gate: see agent/ci-soft-gate-ledger.toml#cargo-deny-check
       - name: Install gitleaks
         run: |
           curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
@@ -134,8 +141,10 @@ jobs:
     # SBOM-like dependency review on PRs. Compares base vs head
     # manifests for newly-introduced vulnerable or non-allowlisted
     # licenses. PR-only; non-PR runs short-circuit cleanly.
+    # agent-tool-supply: reviewed=ops, runner=ubuntu-22.04, review-date=2026-05-16
+    # HLT-024-AGENT-TOOL-SUPPLY-GAP: runner image pinned to ubuntu-22.04.
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -148,7 +157,7 @@ jobs:
         # configured, do not block PR merges on it. Re-enable as a hard
         # gate by removing `continue-on-error` once Dependency graph is
         # turned on at github.com/<owner>/<repo>/settings/security_analysis.
-        continue-on-error: true
+        continue-on-error: true  # soft-gate: see agent/ci-soft-gate-ledger.toml#dependency-review-action
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure

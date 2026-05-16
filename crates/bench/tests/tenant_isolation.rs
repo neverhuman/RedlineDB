@@ -168,7 +168,7 @@ fn non_owner_denied() {
     );
     assert!(
         leaked.is_empty(),
-        "tenant B must not see tenant A's row; got {} row(s)",
+        "HLT-022 tenant_id isolation: tenant B must not see tenant A's row; got {} row(s)",
         leaked.len()
     );
 
@@ -180,7 +180,7 @@ fn non_owner_denied() {
     );
     assert!(
         scanned.is_empty(),
-        "tenant B's tenant-index probe must return no rows"
+        "HLT-022 tenant_id isolation: tenant B's tenant_id index probe must return no rows"
     );
 
     // Sanity: tenant A still owns the row.
@@ -212,7 +212,10 @@ fn cross_tenant_index_probe_empty() {
         "SELECT COUNT(*) FROM kv WHERE tenant = ?1",
         &[Value::Integer(TENANT_B)],
     );
-    assert_eq!(count_eq, 0, "tenant B equality probe must be empty");
+    assert_eq!(
+        count_eq, 0,
+        "HLT-022 tenant_id isolation: tenant B equality probe must be empty"
+    );
 
     // Range probe `tenant BETWEEN B AND B+1` — also must miss every
     // tenant-A leaf even though they sit just below the range.
@@ -221,7 +224,10 @@ fn cross_tenant_index_probe_empty() {
         "SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ?1 AND ?2",
         &[Value::Integer(TENANT_B), Value::Integer(TENANT_B + 1)],
     );
-    assert_eq!(count_range, 0, "tenant B range probe must be empty");
+    assert_eq!(
+        count_range, 0,
+        "HLT-022 tenant_id isolation: tenant B range probe must be empty"
+    );
 
     // Open-ended `tenant >= B` — likewise zero.
     let count_ge = fetch_i64(
@@ -229,7 +235,10 @@ fn cross_tenant_index_probe_empty() {
         "SELECT COUNT(*) FROM kv WHERE tenant >= ?1",
         &[Value::Integer(TENANT_B)],
     );
-    assert_eq!(count_ge, 0, "tenant B open-ended probe must be empty");
+    assert_eq!(
+        count_ge, 0,
+        "HLT-022 tenant_id isolation: tenant B open-ended probe must be empty"
+    );
 
     // And just to keep the positive control honest: tenant A sees all 16.
     let count_a = fetch_i64(
@@ -281,8 +290,8 @@ fn dual_connection_cross_tenant_index_probe_yields_zero_rows() {
     assert_eq!(
         b.read_own_count(),
         0,
-        "cross-tenant index probe from tenant B must yield 0 rows; \
-         non-zero indicates a kv_tenant_idx isolation leak"
+        "HLT-022 tenant_id isolation: cross-tenant index probe from tenant B must yield 0 rows; \
+         non-zero indicates a kv_tenant_idx / tenant_id isolation leak"
     );
 
     // And after a write from tenant A while tenant B's connection is
@@ -292,7 +301,7 @@ fn dual_connection_cross_tenant_index_probe_yields_zero_rows() {
     assert_eq!(
         b.read_own_count(),
         0,
-        "tenant B must still see 0 rows after a concurrent tenant A write"
+        "HLT-022 tenant_id isolation: tenant B must still see 0 rows after a concurrent tenant A write"
     );
     assert_eq!(
         a.read_own_count(),
@@ -319,7 +328,10 @@ fn tombstone_owner_only() {
         "SELECT COUNT(*) FROM kv WHERE tenant = ?1",
         &[Value::Integer(TENANT_B)],
     );
-    assert_eq!(pre_b, 0, "tenant B sees nothing before tenant A delete");
+    assert_eq!(
+        pre_b, 0,
+        "HLT-022 tenant_id isolation: tenant B sees nothing before tenant A delete"
+    );
 
     // Tenant A deletes only their own k=100 row.
     let mut conn = db.connect().expect("connect");
@@ -369,6 +381,6 @@ fn tombstone_owner_only() {
     );
     assert_eq!(
         post_b, 0,
-        "tenant B must still see nothing after tenant A's delete"
+        "HLT-022 tenant_id isolation: tenant B must still see nothing after tenant A's delete"
     );
 }
