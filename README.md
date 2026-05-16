@@ -23,32 +23,61 @@
 
 ## Install
 
-**Rust projects** — add to `Cargo.toml`:
+### Rust library
+
+Add to `Cargo.toml`. Use an exact pin for production:
 
 ```toml
 [dependencies]
-redlinedb = "1"
+redlinedb = "=1.0.0"   # exact pin — recommended for production
+# redlinedb = "1"      # any compatible 1.x (fine for libraries)
 ```
 
-**CLI binary** — Linux & macOS:
+`Cargo.lock` locks the resolved version for binary crates. Run `cargo update -p redlinedb` to upgrade on your schedule.
+
+### CLI binary — Linux & macOS
+
+Latest release:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
 ```
 
-Installs the `redlinedb` CLI to `/usr/local/bin`. Custom prefix:
+**Pin to a specific version** (recommended for CI and reproducible environments):
 
 ```bash
-PREFIX=~/.local curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+VERSION=v1.0.0 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
 ```
 
-**Direct download** — pre-built tarballs on the [releases page](https://github.com/neverhuman/RedlineDB/releases):
+Custom install prefix:
+
+```bash
+VERSION=v1.0.0 PREFIX=~/.local curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+```
+
+The script verifies a SHA-256 checksum from the release before installing.
+
+### cargo install (from source, version-pinned)
+
+```bash
+cargo install redlinedb-cli --version 1.0.0 --locked
+# or from a specific git tag:
+cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v1.0.0 --package redlinedb-cli --locked
+```
+
+`--locked` enforces the committed `Cargo.lock` — ensures you get the exact dependency tree that was tested.
+
+### Direct download
+
+Pre-built tarballs on the [releases page](https://github.com/neverhuman/RedlineDB/releases):
 
 | Platform | File |
 |---|---|
 | Linux x86_64 | `redlinedb-v1.0.0-linux-x86_64.tar.gz` |
 | macOS Apple Silicon | `redlinedb-v1.0.0-macos-arm64.tar.gz` |
 | macOS Intel | `redlinedb-v1.0.0-macos-x86_64.tar.gz` |
+
+Each tarball has a matching `.sha256` checksum file.
 
 ---
 
