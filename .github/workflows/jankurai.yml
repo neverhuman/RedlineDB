@@ -13,15 +13,6 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Soft gate: jankurai is not yet published to crates.io. While the
-    # tool is installed locally for the agent loop, CI installs it via
-    # `cargo install jankurai --locked` which fails with "could not find
-    # `jankurai` in registry `crates-io`". Keep the audit job authored
-    # against the canonical tool-adoption manifest commands, but do not
-    # block PR merges on it. Promote back to a hard gate by removing
-    # `continue-on-error` once jankurai publishes to crates.io or once
-    # we switch the install step to `cargo install --git <url>`.
-    continue-on-error: true
     permissions:
       contents: read
       security-events: write
@@ -34,7 +25,9 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - name: Install jankurai
-        run: cargo install jankurai --locked
+        # jankurai is not on crates.io yet; install directly from the
+        # upstream git tree so the audit job stays a hard gate.
+        run: cargo install --git https://github.com/jepsontaylor/jankurai --locked jankurai || cargo install --git https://github.com/anthropics/jankurai --locked jankurai
       - run: jankurai --version
       - name: jankurai audit (advisory)
         # Primary advisory audit. Writes the agent-visible repo score and the
