@@ -908,7 +908,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "libc",
  "redlinedb-kernel",
@@ -921,7 +921,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-bench"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "clap",
  "crossterm",
@@ -957,11 +957,11 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-domain"
-version = "1.0.0"
+version = "1.0.1"
 
 [[package]]
 name = "redlinedb-ffi"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "redlinedb-kernel",
  "redlinedb-sql",
@@ -970,7 +970,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-kernel"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "arc-swap",
  "crc32fast",
@@ -987,7 +987,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-server"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "redlinedb",
  "serde",
@@ -997,7 +997,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-sql"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "arc-swap",
  "fail",
