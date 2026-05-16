@@ -168,3 +168,34 @@ tagged release must satisfy:
 These five gates fulfill the audit's `release readiness` evidence
 requirement (HLT-025). The release-process steps themselves live
 in `docs/release.md`; this section is the testing-side index.
+
+## Budgets and stop conditions
+
+Canonical source: [`agent/cost-budget.toml`](../agent/cost-budget.toml).
+The TOML is machine-readable truth; this section is the agent-facing
+operations index for the gates in that file. Audit reference:
+HLT-026 cost-budget-gap.
+
+- **Max wall-clock per bench run.** Aggregate CI cap is
+  `[bench].max_wall_clock_seconds = 1800` (30 minutes). Per-workload
+  caps live in each `[[workload]]` block as `max_wall_clock_minutes`
+  and bound a single invocation.
+- **Max CI concurrent jobs.** `[bench].max_ci_concurrent_jobs = 4`.
+  CI matrices that fan out wider than this must shard explicitly or
+  serialize behind a job-level `concurrency:` key.
+- **Kill-switch (CTRL-C / timeout).** Set `REDLINEDB_BENCH_KILL=1`
+  before launching (or `export` mid-run) and the bench harness exits
+  at the next workload boundary, flushes in-flight metrics, and
+  writes `kill_receipt.json` next to the run output. The env var
+  name is fixed under `[global].kill_switch_env`. For hard kills
+  use `timeout <seconds> just <lane>` to bound wall-clock from the
+  shell side, or `Ctrl-C` (SIGINT) to interrupt the current
+  workload iteration.
+- **Dry-run a benchmark without exceeding the budget.** Use the
+  lowest-rep certify (e.g. `just phase9-smoke`, or
+  `cargo run -p redlinedb-bench -- certify --config <toml>
+  --seed 7 --repetitions 1 --warmup 0`) with `REDLINEDB_BENCH_KILL=1`
+  pre-exported to force exit at the first iteration boundary; the
+  resulting `kill_receipt.json` confirms the wiring without paying
+  the full budget. Always inspect the matching `[[workload]]` block
+  in `agent/cost-budget.toml` before launching a longer run.

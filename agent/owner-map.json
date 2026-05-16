@@ -56,7 +56,7 @@
     "crates/sql/src/json": "phase10-json1-surface",
     "crates/sql/src/parser/savepoint.rs": "phase10-savepoints",
     "crates/sql/src/regexp.rs": "phase10-regexp",
-<<<<<<< HEAD
+    "contracts/c-abi": "c-abi",
     "db/": "data",
     "deny.toml": "workspace",
     "docs/": "standard",
@@ -74,18 +74,6 @@
     "scripts/bench/": "bench-harness",
     "tips/": "standard",
     "tools/": "tools"
-=======
-    "crates/redlinedb": "public-rust-facade",
-    "crates/ffi": "c-abi",
-    "contracts/c-abi": "c-abi",
-    "crates/cli": "cli-shell",
-    "crates/server": "framed-server",
-    "crates/bench": "bench-harness",
-    "crates/bench/src/checksum.rs": "phase10-real-row-hashes",
-    "crates/cli/src": "cli-backup-restore",
-    "crates/redlinedb/src": "rust-public-api",
-    "crates/server/src": "server-protocol"
->>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
   },
   "workspace": "crates/*"
 }
