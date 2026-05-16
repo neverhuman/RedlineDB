@@ -11,12 +11,7 @@ concurrency:
 
 jobs:
   test:
-    # agent-tool-supply: reviewed=ops, runner=ubuntu-22.04, review-date=2026-05-16
-    # HLT-024-AGENT-TOOL-SUPPLY-GAP: runner image pinned to ubuntu-22.04
-    # (immutable major release) instead of mutable ubuntu-latest; review
-    # cadence and trust review tracked in agent/tool-adoption.toml
-    # (agent-tool-supply entry).
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
@@ -29,6 +24,6 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       # Thin dispatcher: all fast-lane logic lives in ops/ci/fast.sh so
       # CI and local (`scripts/ci-local.sh fast`, `just fast`, the
-      # ops/git-hooks/pre-push hook) run the same four commands. Audit
-      # reference: HLT-038 ci.local-parity.lib-missing.
+      # pre-push gate) run the same four commands. Audit references:
+      # HLT-042 ci-local-parity.lib-missing, HLT-034 ci-bad-behavior.
       - run: bash ops/ci/fast.sh

@@ -1,7 +1,7 @@
 {
-  "report_fingerprint": "sha256:15868bea85c06275aa6607804a8f2ec81cfcb21749021aa1728ac682c39724c8",
-  "input_fingerprint": "sha256:21be7f06c54e12864a45ffac146bf96055e839b25c329b3cf6093bc068230b38",
-  "policy_fingerprint": "sha256:fe21924fa93321bf80e91b0dd124ae282a51ed2e19b4f02e8029cc8b54f2f821",
+  "report_fingerprint": "sha256:c67a8e3365e7f5c341dd679b8bf740a6d02adbcee44f5267f07d579393565fdc",
+  "input_fingerprint": "sha256:4edc19470d0d7fdd143d380d64d6718110b1c6318042c2660781a35b2f2f9fae",
+  "policy_fingerprint": "sha256:2fd14128e843e44b2d8e6b64662218d7ae4770a39ccddbdacbda11a599f8ccf7",
   "manifest_fingerprints": {
     "owner_map": "sha256:745452aafc824749513d3b525b6489a87fa65a59b8f250338e657eea5ed74c6d",
     "test_map": "sha256:4106c6c718a63006b4507b8afda0a27a44e68685471047b3964d06288203921f",
@@ -10,8 +10,8 @@
     "proof_lanes": "sha256:46832ba6baeeaf0c88962f9ec7e746ca1142e84ae277f195b19cc91a29af5f6a",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
-  "dirty_worktree": true,
-  "generated_at": "1778925124",
+  "dirty_worktree": false,
+  "generated_at": "1778930136",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -24,13 +24,6 @@
   "observed_conformance_level": "HL2",
   "conformance_decision": "block",
   "conformance_blockers": [
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/jankurai.yml",
-    "HLT-020-CI-HARDENING-GAP on .github/workflows/jankurai.yml",
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml",
     "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
     "HLT-017-OPAQUE-OBSERVABILITY on agent/owner-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
@@ -38,29 +31,23 @@
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-022-AUTHZ-ISOLATION-GAP on crates/bench/src/config.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/bench/src/process_metrics.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/error.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/util.rs",
     "HLT-043-COPY-PASTE-BAD-BEHAVIOR on crates/sql/src/exec/tail_rows.rs"
   ],
   "repo": ".",
-  "run_id": "1778925124",
-  "started_at": "1778925124",
-  "elapsed_ms": 5075,
+  "run_id": "1778930136",
+  "started_at": "1778930136",
+  "elapsed_ms": 6048,
   "scope": {
     "mode": "full",
     "paths": []
   },
   "score": 70,
-  "raw_score": 86,
+  "raw_score": 82,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 21,
+    "hard_findings": 8,
     "soft_findings": 4,
     "ratchet": {
       "baseline_score": 70,
@@ -76,11 +63,11 @@
     }
   },
   "git": {
-    "head": "96862b2",
+    "head": "f068098",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": true
+    "dirty_worktree": false
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -102,10 +89,7 @@
   },
   "caps_applied": [
     "severe-duplication-in-product-code",
-    "authz-or-data-isolation-gap",
-    "rust-bad-behavior",
-    "ci-bad-behavior",
-    "ci-local-parity"
+    "authz-or-data-isolation-gap"
   ],
   "hard_rules": [
     {
@@ -359,51 +343,44 @@
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
         "DOM geometry UX QA runtime found",
-        "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=3 missing=3 high_or_critical_missing=3 verdict=review"
+        "Rust property/integration tests present or no Rust surface"
       ],
-      "notes": [
-        "proofbind reports 3 unresolved obligation(s)",
-        "proofbind reports 3 missing high/critical semantic proof obligation(s)"
-      ]
+      "notes": []
     },
     {
       "name": "Security and supply-chain posture",
       "weight": 12,
-      "score": 78,
-      "weighted_points": 9.36,
+      "score": 70,
+      "weighted_points": 8.4,
       "evidence": [
         "lockfile present",
         "secret or dependency scan tooling found",
-        "provenance/SBOM tooling found",
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior hard findings: 6",
-        "ci bad-behavior hard findings: 1",
+        "rust bad-behavior advisory signals: 1753",
+        "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
-      "notes": [
-        "rust hard findings are scored through the language-rule catalog"
-      ]
+      "notes": []
     },
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 30,
-      "weighted_points": 3.6,
+      "score": 45,
+      "weighted_points": 5.4,
       "evidence": [
         "largest authored code file: crates/redlinedb/src/lib.rs (941 LOC)",
         "code file exceeds 500 LOC",
         "copy-code inexcusable classes found: 1 (exact file or same-name function copy)",
-        "rust bad-behavior hard findings: 6",
-        "ci bad-behavior hard findings: 1",
-        "gittools bad-behavior advisory signals: 1"
+        "rust bad-behavior advisory signals: 1753",
+        "ci bad-behavior advisory signals: 1",
+        "gittools bad-behavior advisory signals: 1",
+        "no hard bad-behavior findings across detector-backed language families"
       ],
       "notes": [
-        "inexcusable copy-code: exact active-source file copy or same-name unit copy across files",
-        "rust hard behavior is already captured by the language-rule catalog"
+        "inexcusable copy-code: exact active-source file copy or same-name unit copy across files"
       ]
     },
     {
@@ -456,19 +433,22 @@
     {
       "name": "Jankurai tool adoption and CI replacement",
       "weight": 7,
-      "score": 92,
-      "weighted_points": 6.44,
+      "score": 26,
+      "weighted_points": 1.82,
       "evidence": [
         "control-plane files present",
         "applicable=16",
         "configured=13",
-        "ci_evidence=15",
-        "artifact_verified=15"
+        "ci_evidence=0",
+        "artifact_verified=0"
       ],
       "notes": [
         "some applicable tools are not configured",
         "some applicable tools lack CI evidence",
-        "missing CI evidence for `copy-code`"
+        "missing CI evidence for `audit-ci`",
+        "missing CI evidence for `proof-routing`",
+        "missing CI evidence for `proofbind`",
+        "missing CI evidence for `proofmark-rust`"
       ]
     },
     {
@@ -528,27 +508,27 @@
     "control_plane_present": true,
     "applicable_count": 16,
     "configured_count": 13,
-    "ci_evidence_count": 15,
-    "artifact_verified_count": 15,
-    "replaced_count": 15,
+    "ci_evidence_count": 0,
+    "artifact_verified_count": 0,
+    "replaced_count": 0,
     "items": [
       {
         "id": "audit-ci",
         "category": "audit",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "manual repo scoring",
           "ad hoc score gates"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -561,18 +541,18 @@
         "category": "proof",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "ad hoc proof lane selection",
           "manual proof receipts"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: agent/repo-score.json, agent/repo-score.md, target/jankurai/repair-queue.jsonl"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai proof . --changed-from origin/main --out target/jankurai/proof-plan.json --md target/jankurai/proof-plan.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -586,18 +566,17 @@
         "category": "proof",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "missing",
         "replaced_tools": [
           "manual changed-surface routing",
           "ad hoc proof obligation lists"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json"
+          "mode=auto"
         ],
         "missing": [
-          "agent/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
         "local_command": "jankurai proofbind verify . --changed-from origin/main",
         "ci_command": "jankurai proofbind verify . --changed-from origin/main",
@@ -611,18 +590,17 @@
         "category": "proof",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "missing",
         "replaced_tools": [
           "line-only coverage review",
           "manual in-diff mutation review"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json"
+          "mode=auto"
         ],
         "missing": [
-          "agent/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
         "local_command": "jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json",
         "ci_command": "jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json",
@@ -660,7 +638,7 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "gitleaks",
           "dependency review",
@@ -668,11 +646,11 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/security/evidence.json"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai security run . --out target/jankurai/security/evidence.json",
         "ci_command": "jankurai security run . --out target/jankurai/security/evidence.json",
         "artifact_paths": [
@@ -684,7 +662,7 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "mutable workflow refs",
           "secret echo/debug workflow checks",
@@ -692,11 +670,11 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
@@ -708,7 +686,7 @@
         "category": "audit",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "destructive git automation",
           "force-push release scripts",
@@ -716,11 +694,11 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
@@ -732,7 +710,7 @@
         "category": "release",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "manual release checklist",
           "ad hoc tag and artifact review",
@@ -740,11 +718,11 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
@@ -796,18 +774,18 @@
         "category": "contract",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "handwritten contract drift checks",
           "openapi diff"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -820,17 +798,17 @@
         "category": "rust",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "manual witness graphing"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/rust/witness-graph.json"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai rust witness build .",
         "ci_command": "jankurai rust witness build .",
         "artifact_paths": [
@@ -883,17 +861,17 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "manual authz matrix review"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -906,17 +884,17 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "manual unsafe sink review"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -929,17 +907,17 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "manual MCP/tool trust review"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -952,17 +930,17 @@
         "category": "release",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "manual launch checklist"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -975,17 +953,17 @@
         "category": "release",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "configured",
         "replaced_tools": [
           "manual spend review"
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
-          "CI command found in workflow",
-          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
+          "tool-adoption config entry present"
         ],
-        "missing": [],
+        "missing": [
+          "CI command evidence"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -1014,42 +992,10 @@
         "release-readiness",
         "cost-budget"
       ],
-      "artifact_verified_count": 15,
-      "artifact_verified_tools": [
-        "audit-ci",
-        "proof-routing",
-        "proofbind",
-        "proofmark-rust",
-        "security",
-        "ci-bad-behavior",
-        "git-bad-behavior",
-        "release-bad-behavior",
-        "contract-drift",
-        "rust-witness",
-        "authz-matrix",
-        "input-boundary",
-        "agent-tool-supply",
-        "release-readiness",
-        "cost-budget"
-      ],
-      "ci_evidence_count": 15,
-      "ci_evidence_tools": [
-        "audit-ci",
-        "proof-routing",
-        "proofbind",
-        "proofmark-rust",
-        "security",
-        "ci-bad-behavior",
-        "git-bad-behavior",
-        "release-bad-behavior",
-        "contract-drift",
-        "rust-witness",
-        "authz-matrix",
-        "input-boundary",
-        "agent-tool-supply",
-        "release-readiness",
-        "cost-budget"
-      ],
+      "artifact_verified_count": 0,
+      "artifact_verified_tools": [],
+      "ci_evidence_count": 0,
+      "ci_evidence_tools": [],
       "config_present": true,
       "configured_count": 13,
       "configured_tools": [
@@ -1070,7 +1016,22 @@
       "control_plane_present": true
     },
     "missing": [
-      "copy-code"
+      "audit-ci",
+      "proof-routing",
+      "proofbind",
+      "proofmark-rust",
+      "copy-code",
+      "security",
+      "ci-bad-behavior",
+      "git-bad-behavior",
+      "release-bad-behavior",
+      "contract-drift",
+      "rust-witness",
+      "authz-matrix",
+      "input-boundary",
+      "agent-tool-supply",
+      "release-readiness",
+      "cost-budget"
     ]
   },
   "security_evidence": {},
@@ -1091,7 +1052,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-16T09:51:59.619560+00:00",
+    "generated_at": "2026-05-16T11:15:30.557159+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1129,20 +1090,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 506,
-      "files_considered": 194,
-      "active_files": 194,
+      "files_scanned": 508,
+      "files_considered": 188,
+      "active_files": 188,
       "exact_file_classes": 0,
       "hard_classes": 1,
-      "warning_classes": 73,
+      "warning_classes": 70,
       "hard_instances": 2,
-      "warning_instances": 178,
-      "duplicate_lines": 194,
-      "duplicate_tokens": 569,
-      "duplicate_bytes": 5480,
-      "total_redundant_lines": 236,
-      "total_redundant_tokens": 674,
-      "total_redundant_bytes": 6519
+      "warning_instances": 172,
+      "duplicate_lines": 190,
+      "duplicate_tokens": 560,
+      "duplicate_bytes": 5403,
+      "total_redundant_lines": 232,
+      "total_redundant_tokens": 665,
+      "total_redundant_bytes": 6442
     },
     "classes": [
       {
@@ -2503,41 +2464,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-e358d9e3b65ce11c",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 2,
-        "duplicate_tokens": 2,
-        "duplicate_bytes": 31,
-        "instance_count": 2,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 2,
-        "total_redundant_bytes": 31,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "1d267fb4b24e6e2e",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/bench/src/process_metrics.rs",
-            "language": "rust",
-            "start_line": 130,
-            "end_line": 132,
-            "unit_name": "collect_self"
-          },
-          {
-            "path": "crates/bench/src/process_metrics.rs",
-            "language": "rust",
-            "start_line": 135,
-            "end_line": 137,
-            "unit_name": "collect_pid"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-dc1683e0676e5adb",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -2964,41 +2890,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-03af38dbb6be11e0",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 30,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 5,
-        "total_redundant_bytes": 30,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "96aa6f5a7c30437b",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/ffi/src/util.rs",
-            "language": "rust",
-            "start_line": 279,
-            "end_line": 280,
-            "unit_name": "record_status"
-          },
-          {
-            "path": "crates/ffi/src/util.rs",
-            "language": "rust",
-            "start_line": 292,
-            "end_line": 293,
-            "unit_name": "record_status_with_message"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-780416980ae40251",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -3139,13 +3030,84 @@
             "unit_name": "parameter_index"
           }
         ]
+      },
+      {
+        "id": "copy-code-unit-rust-7ab1d65b8c09628c",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "column_name",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 37,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 4,
+        "total_redundant_bytes": 37,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b10f4e5e809ad10c",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/redlinedb/src/lib.rs",
+            "language": "rust",
+            "start_line": 600,
+            "end_line": 601,
+            "unit_name": "column_name"
+          },
+          {
+            "path": "crates/redlinedb/src/lib.rs",
+            "language": "rust",
+            "start_line": 684,
+            "end_line": 685,
+            "unit_name": "column_name"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-7bc8e363d8fb17cb",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 35,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 4,
+        "total_redundant_bytes": 35,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "6ce50e3830228952",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/domain/src/error.rs",
+            "language": "rust",
+            "start_line": 73,
+            "end_line": 74,
+            "unit_name": "new_populates_all_six_fields"
+          },
+          {
+            "path": "crates/domain/src/error.rs",
+            "language": "rust",
+            "start_line": 91,
+            "end_line": 92,
+            "unit_name": "display_formats_purpose_reason_docs_and_repair"
+          }
+        ]
       }
     ],
     "notes": [
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 24 lower-ranked classes"
+      "showing the top 50 classes and omitting 21 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3441,20 +3403,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 30 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 45 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
         "largest authored code file: crates/redlinedb/src/lib.rs (941 LOC)",
         "code file exceeds 500 LOC",
         "copy-code inexcusable classes found: 1 (exact file or same-name function copy)",
-        "rust bad-behavior hard findings: 6"
+        "rust bad-behavior advisory signals: 1753"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:3074708241756c1da7c475805da0022f2ef1bdb66f0149e4e105333e0627e1ea",
+      "fingerprint": "sha256:4986bb9bf937b16efdb14085461746753d070abb0657a44671a09f25b4845f1f",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3462,218 +3424,28 @@
       "owner": "tools"
     },
     {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "ops/git-hooks/pre-push is missing",
-      "agent_fix": "add ops/git-hooks/pre-push that runs `bash ops/ci/quality-gates.sh` and wire it via `git config core.hooksPath ops/git-hooks`",
-      "evidence": [
-        "detector=ci.local-parity.pre-push-hook-missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:6bfbb5bdddc89654f88ac6c8ee166a84a0f6c585adeb94ab8f1e90a0ced148b7",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.pre-push-hook-missing",
-      "reason": "without a mandatory pre-push gate, broken code can be pushed and CI is the first place a failure shows up"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "scripts/ci-doctor.sh is missing",
-      "agent_fix": "add scripts/ci-doctor.sh listing every tool the ops/ci scripts depend on",
-      "evidence": [
-        "detector=ci.local-parity.doctor-missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:beef8b01b8447985b9c3fb008eb50af0e8f2e58cf64fd1be36c44d4eeb46d602",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.doctor-missing",
-      "reason": "without a doctor script, developers cannot confirm their local environment matches CI"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "scripts/ci-local.sh is missing",
-      "agent_fix": "add scripts/ci-local.sh exposing each CI lane locally",
-      "evidence": [
-        "detector=ci.local-parity.runner-missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:65427f2c3aa76a8a34f7a609ea37d0405490203f08708acc06c9374be0e492d9",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.runner-missing",
-      "reason": "scripts/ci-local.sh is the local entry point that delegates to the same ops/ci scripts the workflows call"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "workflow inlines CI commands instead of delegating to ops/ci/*.sh",
-      "agent_fix": "extract the workflow steps into ops/ci/<lane>.sh and call them with `bash ops/ci/<lane>.sh`",
-      "evidence": [
-        "detector=ci.local-parity.workflow-not-thin",
-        "path=.github/workflows/ci.yml",
-        "line=12",
-        "proof_window=None",
-        "snippet=jobs:"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:b12275cad2123ffa4ae92f96ed00e882227f3b2bb688ca8a57b50adf0ffeb9d5",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 12,
-      "matched_term": "ci.local-parity.workflow-not-thin",
-      "reason": "without a single source of truth, local runs drift from CI and breakage is only visible after push"
-    },
-    {
       "severity": "medium",
       "category": "security",
       "path": ".github/workflows/jankurai.yml",
-      "problem": "`Security and supply-chain posture` scored 78 below the standard floor of 85",
+      "problem": "`Security and supply-chain posture` scored 70 below the standard floor of 85",
       "agent_fix": "wire secret, dependency, provenance, and workflow scans into an operational CI lane",
       "evidence": [
         "lockfile present",
         "secret or dependency scan tooling found",
-        "provenance/SBOM tooling found",
-        "security lane present"
+        "security lane present",
+        "canonical security lane wrapper present"
       ],
       "check_id": "HLT-016-SUPPLY-CHAIN-DRIFT:security",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "workflow-command",
       "rerun_command": "just security",
-      "fingerprint": "sha256:d24ab5697e66411af8d5424d1d36ebf888793ebced3685d5fa95bb912e9f12e2",
+      "fingerprint": "sha256:9a1bcfb2380532658b7b977985f45f9847a29fcbe2a9166297d7ba7f558bf3b4",
       "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
       "tlr": "Security, secrets, agency",
       "lane": "security",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "ops"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow inlines CI commands instead of delegating to ops/ci/*.sh",
-      "agent_fix": "extract the workflow steps into ops/ci/<lane>.sh and call them with `bash ops/ci/<lane>.sh`",
-      "evidence": [
-        "detector=ci.local-parity.workflow-not-thin",
-        "path=.github/workflows/jankurai.yml",
-        "line=12",
-        "proof_window=None",
-        "snippet=jobs:"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:ba344f9676c430768708b53b4ec1933119d58e63d9c2e754504cbc03add48853",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 12,
-      "matched_term": "ci.local-parity.workflow-not-thin",
-      "reason": "without a single source of truth, local runs drift from CI and breakage is only visible after push"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "security or proof job is marked nonblocking",
-      "agent_fix": "remove the nonblocking override and let the security or proof job fail so the CI gate actually proves the change",
-      "evidence": [
-        "CI hardening gap detected"
-      ],
-      "check_id": "HLT-020-CI-HARDENING-GAP:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:8dd24ec84d47e9601edfeeb8f71831e6d99a881f0818ff9aa8ca45556c740349",
-      "rule_id": "HLT-020-CI-HARDENING-GAP",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "ops",
-      "line": 197
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "security-related job is configured to continue on error",
-      "agent_fix": "remove the non-blocking override so scan failures stop the pipeline",
-      "evidence": [
-        "detector=ci.security-scan.nonblocking",
-        "path=.github/workflows/jankurai.yml",
-        "line=199",
-        "proof_window=None",
-        "snippet=continue-on-error: true"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:e72c38115f18e5788d0b95babc8183989017cd3823ef4d3e89e3cace26aa7789",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 199,
-      "matched_term": "ci.security-scan.nonblocking",
-      "reason": "security or proof job is explicitly non-blocking"
     },
     {
       "severity": "medium",
@@ -3853,162 +3625,6 @@
     },
     {
       "severity": "high",
-      "category": "security",
-      "path": "crates/bench/src/process_metrics.rs",
-      "problem": "mem::zeroed can fabricate invalid values",
-      "agent_fix": "construct the type with a valid initializer instead of zeroing it",
-      "evidence": [
-        "detector=zeroed",
-        "proof-window=NearbySafetyComment",
-        "snippet=let mut usage: libc::rusage = unsafe { std::mem::zeroed() };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:aa96f629630b057efa0f1786eb528e79e8c6482d4ada20e64ec5019e02ebfcd0",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "tools",
-      "line": 110,
-      "matched_term": "rust.unsafe.zeroed",
-      "reason": "all-zero validity was not proven"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/error.rs",
-      "problem": "raw ownership conversion needs exact provenance and allocator proof",
-      "agent_fix": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "evidence": [
-        "detector=CString::from_raw",
-        "proof-window=NearbySafetyComment",
-        "snippet=drop(CString::from_raw(ptr as *mut c_char));"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:fb68a65ce20650b76a90bc88edfe06a198128b0d750b32b32f7c2a0727384404",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "tools",
-      "line": 33,
-      "matched_term": "rust.unsafe.raw-parts",
-      "reason": "ownership provenance is missing"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/lifecycle.rs",
-      "problem": "raw ownership conversion needs exact provenance and allocator proof",
-      "agent_fix": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "evidence": [
-        "detector=Box::from_raw",
-        "proof-window=NearbySafetyComment",
-        "snippet=drop(Box::from_raw(db));"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:bdbc8665d06771630a270b7628b5ce1d4ea68b943861e02146cd65daab567c1f",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "tools",
-      "line": 74,
-      "matched_term": "rust.unsafe.raw-parts",
-      "reason": "ownership provenance is missing"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/snapshot.rs",
-      "problem": "raw ownership conversion needs exact provenance and allocator proof",
-      "agent_fix": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "evidence": [
-        "detector=Box::from_raw",
-        "proof-window=NearbySafetyComment",
-        "snippet=drop(Box::from_raw(backup));"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:abc9d33162968df3c2f0a73e25bee873f289b0f867d2811f1feb4de200a60990",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "tools",
-      "line": 87,
-      "matched_term": "rust.unsafe.raw-parts",
-      "reason": "ownership provenance is missing"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/stmt.rs",
-      "problem": "raw ownership conversion needs exact provenance and allocator proof",
-      "agent_fix": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "evidence": [
-        "detector=Box::from_raw",
-        "proof-window=NearbySafetyComment",
-        "snippet=let boxed = unsafe { Box::from_raw(stmt) };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:b4f1a6ca90b064a685ea26de401a4ea01a4018f38fbe80c7f14d209db28ce468",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "tools",
-      "line": 160,
-      "matched_term": "rust.unsafe.raw-parts",
-      "reason": "ownership provenance is missing"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/util.rs",
-      "problem": "raw ownership conversion needs exact provenance and allocator proof",
-      "agent_fix": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "evidence": [
-        "detector=from_raw_parts",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe { std::slice::from_raw_parts(ptr, len) }"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:27e1090b7e4705417e9aa0b0f9844b550d7938d697dd29c418e5a3937494b29a",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "tools",
-      "line": 146,
-      "matched_term": "rust.unsafe.raw-parts",
-      "reason": "ownership provenance is missing"
-    },
-    {
-      "severity": "high",
       "category": "copy-code",
       "path": "crates/sql/src/exec/tail_rows.rs",
       "problem": "copy-code hard class `copy-code-unit-rust-d950edc4e3ff9d1f` detected",
@@ -4082,56 +3698,6 @@
       "why": "generated zone file `crates/ffi/include/redlinedb.h` is missing"
     },
     {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "add ops/git-hooks/pre-push that runs `bash ops/ci/quality-gates.sh` and wire it via `git config core.hooksPath ops/git-hooks`",
-      "why": "ops/git-hooks/pre-push is missing"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "add scripts/ci-doctor.sh listing every tool the ops/ci scripts depend on",
-      "why": "scripts/ci-doctor.sh is missing"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "add scripts/ci-local.sh exposing each CI lane locally",
-      "why": "scripts/ci-local.sh is missing"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "extract the workflow steps into ops/ci/<lane>.sh and call them with `bash ops/ci/<lane>.sh`",
-      "why": "workflow inlines CI commands instead of delegating to ops/ci/*.sh"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "extract the workflow steps into ops/ci/<lane>.sh and call them with `bash ops/ci/<lane>.sh`",
-      "why": "workflow inlines CI commands instead of delegating to ops/ci/*.sh"
-    },
-    {
       "path": "agent/test-map.json",
       "priority": "high",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
@@ -4172,86 +3738,6 @@
       "why": "jankurai manifest could not be parsed"
     },
     {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-020-CI-HARDENING-GAP",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "remove the nonblocking override and let the security or proof job fail so the CI gate actually proves the change",
-      "why": "security or proof job is marked nonblocking"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "remove the non-blocking override so scan failures stop the pipeline",
-      "why": "security-related job is configured to continue on error"
-    },
-    {
-      "path": "crates/bench/src/process_metrics.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "construct the type with a valid initializer instead of zeroing it",
-      "why": "mem::zeroed can fabricate invalid values"
-    },
-    {
-      "path": "crates/ffi/src/error.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "why": "raw ownership conversion needs exact provenance and allocator proof"
-    },
-    {
-      "path": "crates/ffi/src/lifecycle.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "why": "raw ownership conversion needs exact provenance and allocator proof"
-    },
-    {
-      "path": "crates/ffi/src/snapshot.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "why": "raw ownership conversion needs exact provenance and allocator proof"
-    },
-    {
-      "path": "crates/ffi/src/stmt.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "why": "raw ownership conversion needs exact provenance and allocator proof"
-    },
-    {
-      "path": "crates/ffi/src/util.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "why": "raw ownership conversion needs exact provenance and allocator proof"
-    },
-    {
       "path": "crates/sql/src/exec/tail_rows.rs",
       "priority": "high",
       "rule_id": "HLT-043-COPY-PASTE-BAD-BEHAVIOR",
@@ -4269,7 +3755,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 30 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 45 below the standard floor of 85"
     },
     {
       "path": ".github/workflows/jankurai.yml",
@@ -4279,7 +3765,7 @@
       "lane": "security",
       "owner": "ops",
       "task": "wire secret, dependency, provenance, and workflow scans into an operational CI lane",
-      "why": "`Security and supply-chain posture` scored 78 below the standard floor of 85"
+      "why": "`Security and supply-chain posture` scored 70 below the standard floor of 85"
     }
   ]
 }

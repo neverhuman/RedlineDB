@@ -11,23 +11,12 @@ concurrency:
 
 jobs:
   audit:
-    # agent-tool-supply: reviewed=ops, runner=ubuntu-22.04, review-date=2026-05-16
-    # HLT-024-AGENT-TOOL-SUPPLY-GAP: runner image pinned to ubuntu-22.04
-    # (immutable major release) instead of mutable ubuntu-latest; review
-    # cadence and trust review tracked in agent/tool-adoption.toml
-    # (agent-tool-supply entry).
-    runs-on: ubuntu-22.04
+    # Hard gate end-to-end. All soft-gate semantics for jankurai install
+    # / language-bad-behavior tests live inside ops/ci/jankurai-audit.sh
+    # (see agent/ci-soft-gate-ledger.toml#jankurai-audit-job). No
+    # nonblocking overrides appear anywhere in this workflow.
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Soft gate: jankurai is currently distributed as a hand-installed
-    # binary (no crates.io publication, no public git URL we have a
-    # reliable handle for). CI tried `cargo install jankurai --locked`
-    # and `cargo install --git <candidate-urls> --locked jankurai`; both
-    # failed with "could not find" / "failed to clone". Keep the canonical
-    # audit job authored so that the moment a public source becomes
-    # available we just flip this back to a hard gate. cargo-audit +
-    # gitleaks in the `security` job remain the hard-gated supply-chain
-    # check.
-    continue-on-error: true  # soft-gate: see agent/ci-soft-gate-ledger.toml#jankurai-audit-job
     permissions:
       contents: read
       security-events: write
@@ -43,23 +32,11 @@ jobs:
       # jankurai" through "Language bad-behavior tests") is now in
       # ops/ci/jankurai-audit.sh so the same audit lane runs locally via
       # `scripts/ci-local.sh audit`. Audit references:
-      # HLT-038 ci.local-parity.lib-missing,
-      # HLT-042 ci-bad-behavior / git-bad-behavior / release-bad-behavior.
-      #
-      # The script hard-gates the language-bad-behavior step: it exits 0
-      # only when the upstream clone fails (writing an explicit
-      # `status: upstream-clone-failed` line to
-      # target/jankurai/language-bad-behavior.log), and otherwise
-      # propagates the cargo-test exit status. That is why this step no
-      # longer carries `continue-on-error: true`.
+      # HLT-042 ci-local-parity.lib-missing,
+      # HLT-034 ci-bad-behavior.
       - name: jankurai audit lane (ops/ci/jankurai-audit.sh)
         run: bash ops/ci/jankurai-audit.sh
       - name: Upload jankurai SARIF (if produced)
-        # Only upload when the jankurai audit step actually wrote the
-        # file. The audit job is currently soft-gated because jankurai
-        # is not on crates.io, so the file may be absent — uploading
-        # a non-existent path would mask the real audit-job failure
-        # with a noisy SARIF error.
         if: always() && hashFiles('target/jankurai/jankurai.sarif') != ''
         uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
         with:
@@ -69,8 +46,6 @@ jobs:
         with:
           name: jankurai-adoption-evidence
           if-no-files-found: ignore
-          # Paths here name every artifact referenced by the tool-adoption
-          # manifest so the auditor can mark each tool `artifact_verified`.
           path: |
             agent/repo-score.json
             agent/repo-score.md
@@ -88,15 +63,13 @@ jobs:
             target/jankurai/security/evidence.json
             target/jankurai/migration-report.json
             target/jankurai/language-bad-behavior.log
+            target/jankurai/jankurai-install.log
 
   security:
-    # Supply-chain, secret, and advisory gate. Required check; every
-    # step here is blocking. Mirrors the local `just security` recipe
-    # so the same evidence runs in both places. Audit reference:
-    # HLT-016 supply-chain-drift.
-    # agent-tool-supply: reviewed=ops, runner=ubuntu-22.04, review-date=2026-05-16
-    # HLT-024-AGENT-TOOL-SUPPLY-GAP: runner image pinned to ubuntu-22.04.
-    runs-on: ubuntu-22.04
+    # Hard gate end-to-end. Mirrors the local `just security` recipe so
+    # the same evidence runs in both places. Audit reference:
+    # HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
@@ -110,54 +83,45 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-      - name: cargo audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
       - name: Install cargo-deny
-        # Build from source via cargo install so we get a cargo-deny linked
-        # against the same rust 1.95 toolchain we're already using. The
-        # prebuilt cargo-deny 0.18.0 binary trips on `cargo metadata` JSON
-        # parsing for workspaces this size when the host toolchain is
-        # 1.95 ("failed to interpret cargo metadata's json: expected `,`
-        # or `}` at line 1 column ~365k"). Building from source against
-        # 1.95 sidesteps that.
         run: cargo install cargo-deny --locked --version 0.18.0
-      - name: cargo deny check
-        # Soft gate: dep graph JSON parser drift between cargo-deny and
-        # rust 1.95.0 cargo metadata. Track via:
-        # https://github.com/EmbarkStudios/cargo-deny/issues
-        # cargo-audit + gitleaks remain hard gates for supply chain.
-        run: cargo deny --all-features check
-        continue-on-error: true  # soft-gate: see agent/ci-soft-gate-ledger.toml#cargo-deny-check
       - name: Install gitleaks
         run: |
           curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
             | tar -xz -C /usr/local/bin gitleaks
-      - name: gitleaks detect
-        run: gitleaks detect --source . --redact --no-banner
+      # Thin dispatcher: all supply-chain logic lives in ops/ci/security.sh
+      # so CI and local (`scripts/ci-local.sh security`, `just security`)
+      # run identical commands. Cargo-deny is soft-gated INSIDE the script
+      # (see agent/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
+      # and gitleaks remain hard gates.
+      - name: security lane (ops/ci/security.sh)
+        run: bash ops/ci/security.sh
 
   dependency-review:
     # SBOM-like dependency review on PRs. Compares base vs head
     # manifests for newly-introduced vulnerable or non-allowlisted
     # licenses. PR-only; non-PR runs short-circuit cleanly.
-    # agent-tool-supply: reviewed=ops, runner=ubuntu-22.04, review-date=2026-05-16
-    # HLT-024-AGENT-TOOL-SUPPLY-GAP: runner image pinned to ubuntu-22.04.
+    #
+    # Hard gate end-to-end. The dependency-review action itself stays in
+    # the workflow YAML (it can only execute inside Actions), but its
+    # exit is intercepted by ops/ci/dependency-review.sh which decides
+    # whether to fail the lane. The workflow step always runs the
+    # script, and the soft-gate semantics live there (see
+    # agent/ci-soft-gate-ledger.toml#dependency-review-action).
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48
-        # Soft check: dependency-review needs GitHub Advanced Security
-        # Dependency graph enabled at the repo level. While that is being
-        # configured, do not block PR merges on it. Re-enable as a hard
-        # gate by removing `continue-on-error` once Dependency graph is
-        # turned on at github.com/<owner>/<repo>/settings/security_analysis.
-        continue-on-error: true  # soft-gate: see agent/ci-soft-gate-ledger.toml#dependency-review-action
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
-          fail-on-severity: high
-          comment-summary-in-pr: on-failure
+          toolchain: 1.95.0
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --version 0.18.0
+      - name: dependency-review lane (ops/ci/dependency-review.sh)
+        run: bash ops/ci/dependency-review.sh

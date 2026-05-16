@@ -1,2 +1,6 @@
 #!/usr/bin/env bash
+# Pre-push gate: run the fast lane before letting any push leave the
+# developer machine. Mirrors the canonical CI fast lane so a successful
+# push is byte-for-byte the same evidence CI will produce.
+# Audit reference: HLT-042 ci-local-parity.pre-push-hook-missing.
 exec bash "$(git rev-parse --show-toplevel)/ops/ci/fast.sh"

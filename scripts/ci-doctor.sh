@@ -3,7 +3,7 @@
 #
 # Mirrors the pinned tool set in ops/ci/lib.sh + rust-toolchain.toml so
 # the operator knows up-front when their local environment will drift
-# from CI. Audit reference: HLT-038 ci.local-parity.lib-missing.
+# from CI. Audit reference: HLT-042 ci-local-parity.doctor-missing.
 #
 # Usage:
 #   bash scripts/ci-doctor.sh
@@ -18,12 +18,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=ops/ci/lib.sh
 . "$ROOT/ops/ci/lib.sh"
 
-# Track overall status without aborting on the first failure so the
-# operator gets a complete report in one run.
 overall=0
 
 emit() {
-    # emit <status> <tool> <detail>
     printf '%-4s %-14s %s\n' "$1" "$2" "$3"
 }
 
@@ -36,7 +33,6 @@ pass() {
     emit PASS "$1" "$2"
 }
 
-# ---- rust toolchain (read pin from rust-toolchain.toml) --------------------
 check_rust() {
     local expected actual
     expected="$(grep -E '^[[:space:]]*channel' "$ROOT/rust-toolchain.toml" \
@@ -54,7 +50,6 @@ check_rust() {
     fi
 }
 
-# ---- cargo-deny pinned to CI_CARGO_DENY_VERSION ----------------------------
 check_cargo_deny() {
     local expected="${CI_CARGO_DENY_VERSION}" actual
     if ! command -v cargo-deny >/dev/null 2>&1; then
@@ -69,17 +64,12 @@ check_cargo_deny() {
     fi
 }
 
-# ---- gitleaks pinned to CI_GITLEAKS_VERSION --------------------------------
 check_gitleaks() {
     local expected="${CI_GITLEAKS_VERSION}" actual
     if ! command -v gitleaks >/dev/null 2>&1; then
         fail gitleaks "missing (expected ${expected})"
         return
     fi
-    # gitleaks version prints lines like:
-    #   8.21.2
-    # or:
-    #   v8.21.2
     actual="$(gitleaks version 2>/dev/null | head -n1 | sed -E 's/^v//')"
     if [ "${actual}" = "${expected}" ]; then
         pass gitleaks "${actual}"
@@ -88,7 +78,6 @@ check_gitleaks() {
     fi
 }
 
-# ---- presence-only checks --------------------------------------------------
 check_presence() {
     local tool="$1"
     if command -v "$tool" >/dev/null 2>&1; then
@@ -98,7 +87,6 @@ check_presence() {
     fi
 }
 
-# ---- python3 >= 3.10 -------------------------------------------------------
 check_python() {
     if ! command -v python3 >/dev/null 2>&1; then
         fail python3 "missing (expected >=3.10)"
