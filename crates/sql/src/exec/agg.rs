@@ -557,7 +557,7 @@ fn eval_group_scalar_with_ctx(
                     Some(v) => Ok(SqlValue::Integer(if !v { 1 } else { 0 })),
                     None => Ok(SqlValue::Null),
                 },
-                UnaryOperator::Minus => negate_value(value),
+                UnaryOperator::Minus => negate(value),
                 UnaryOperator::Plus => Ok(value),
                 _ => Err(Error::UnsupportedSql(format!(
                     "unsupported unary op {op:?}"
@@ -857,14 +857,5 @@ fn eval_group_function(
         _ => Err(Error::UnsupportedSql(format!(
             "unsupported aggregate function: {name}"
         ))),
-    }
-}
-
-fn negate_value(value: SqlValue) -> Result<SqlValue> {
-    match value {
-        SqlValue::Integer(v) => Ok(SqlValue::Integer(-v)),
-        SqlValue::Real(v) => Ok(SqlValue::Real(-v)),
-        SqlValue::Null => Ok(SqlValue::Null),
-        _ => Err(Error::DatatypeMismatch),
     }
 }

@@ -96,32 +96,9 @@ pub(crate) fn random_i64() -> i64 {
     (x as i64).wrapping_abs()
 }
 
-pub(crate) fn hex_string_to_bytes(input: &str) -> Result<Arc<[u8]>> {
-    if !input.len().is_multiple_of(2) {
-        return Err(Error::UnsupportedSql(format!(
-            "invalid hex string literal: {input}"
-        )));
-    }
-    let mut out = Vec::with_capacity(input.len() / 2);
-    for pair in input.as_bytes().chunks_exact(2) {
-        let hi = hex_digit(pair[0])?;
-        let lo = hex_digit(pair[1])?;
-        out.push((hi << 4) | lo);
-    }
-    Ok(Arc::from(out))
-}
-
-fn hex_digit(byte: u8) -> Result<u8> {
-    match byte {
-        b'0'..=b'9' => Ok(byte - b'0'),
-        b'a'..=b'f' => Ok(byte - b'a' + 10),
-        b'A'..=b'F' => Ok(byte - b'A' + 10),
-        _ => Err(Error::UnsupportedSql(format!(
-            "invalid hex digit in blob literal: {}",
-            byte as char
-        ))),
-    }
-}
+// `hex_string_to_bytes` lives in `crate::parser::helpers`; re-exported
+// here so existing `use super::*` glob imports still resolve.
+pub(crate) use crate::parser::hex_string_to_bytes;
 
 pub(crate) fn negate(value: SqlValue) -> Result<SqlValue> {
     match value {
