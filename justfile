@@ -127,10 +127,11 @@ security:
   rtk cargo deny check
   rtk gitleaks detect --source .
 
-security-local:
-  rtk cargo audit
-  rtk cargo deny check
-  rtk gitleaks detect --source .
+pre-push:
+  bash ops/git-hooks/pre-push
+
+ci-doctor:
+  bash scripts/ci-doctor.sh
 
 release:
   rtk cargo build --workspace --release --locked

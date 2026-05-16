@@ -1,0 +1,38 @@
+# CI soft-gate ledger.
+#
+# Every job/step in `.github/workflows/*.yml` that still carries
+# `continue-on-error: true` must have a row here. Anything not on this
+# ledger is, by policy, a hard gate. Audit references:
+# HLT-016 supply-chain-drift, HLT-042 ci-bad-behavior.
+#
+# Schema (per [[entry]] table):
+#   name                — human-readable label (matches the workflow `- name:` where present)
+#   workflow_path       — repo-relative path to the YAML file
+#   line_number         — line of the `continue-on-error: true` directive
+#   rule_waived         — short ID for the rule the soft gate suppresses
+#   unblock_condition   — concrete event that lets us flip the gate to hard
+#   unblock_owner       — who owns the unblock action
+
+[[entry]]
+name              = "jankurai audit job"
+workflow_path     = ".github/workflows/jankurai.yml"
+line_number       = 25
+rule_waived       = "ci-bad-behavior.audit-job-nonblocking"
+unblock_condition = "jankurai source becomes installable via `cargo install --git <pinned-url> --locked jankurai` from GitHub Actions runners (currently both jepsontaylor/jankurai and anthropics/jankurai resolve as unreachable from CI)."
+unblock_owner     = "jepson@veox.ai"
+
+[[entry]]
+name              = "cargo deny check"
+workflow_path     = ".github/workflows/jankurai.yml"
+line_number       = 125
+rule_waived       = "supply-chain-drift.cargo-deny-nonblocking"
+unblock_condition = "cargo-deny upstream fixes the `cargo metadata` JSON parser drift against rust 1.95.0 on a 158-dep workspace (current failure: `expected ',' or '}' at line 1 column ~365k`). Track at https://github.com/EmbarkStudios/cargo-deny/issues. cargo-audit + gitleaks remain hard gates for supply chain."
+unblock_owner     = "jepson@veox.ai"
+
+[[entry]]
+name              = "dependency-review-action"
+workflow_path     = ".github/workflows/jankurai.yml"
+line_number       = 151
+rule_waived       = "supply-chain-drift.dependency-review-nonblocking"
+unblock_condition = "GitHub Advanced Security `Dependency graph` is enabled at the repo level (Settings → Security → Code security and analysis → Dependency graph)."
+unblock_owner     = "jepson@veox.ai"

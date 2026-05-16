@@ -22,7 +22,8 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-      - run: cargo fmt --check
-      - run: bash scripts/check_file_sizes.sh
-      - run: cargo check --workspace --locked
-      - run: cargo test --workspace --quiet --locked
+      # Thin dispatcher: all fast-lane logic lives in ops/ci/fast.sh so
+      # CI and local (`scripts/ci-local.sh fast`, `just fast`, the
+      # ops/git-hooks/pre-push hook) run the same four commands. Audit
+      # reference: HLT-038 ci.local-parity.lib-missing.
+      - run: bash ops/ci/fast.sh
