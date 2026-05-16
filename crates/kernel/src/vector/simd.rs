@@ -5,7 +5,7 @@
 //!
 //! * `x86_64` with AVX2 at runtime → 8-wide AVX2 + FMA path.
 //! * `aarch64` (NEON is mandatory in the AArch64 base ISA) → 4-wide NEON path.
-//! * Everything else → scalar fallback from [`super::distance`].
+//! * Everything else → scalar implementation from [`super::distance`].
 //!
 //! Run-time dispatch is deliberately resolved on every call. For phase-10
 //! Lane V1 the call sites are coarse (one call per scanned row), so the cost

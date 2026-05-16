@@ -11,7 +11,7 @@
 //! * `codec` — wire format used by the SQL layer (varint dim prefix + LE f32).
 //! * `flat` — exact top-K scan over an iterator of stored vectors.
 //!
-//! Quantisation (`f16`, `i8`) is not implemented yet but the codec carries an
+//! Quantisation (`f16`, `i8`) is reserved for a follow-on format; the codec carries an
 //! `ElementKind` byte so future readers can distinguish formats without a
 //! breaking schema change.
 //!

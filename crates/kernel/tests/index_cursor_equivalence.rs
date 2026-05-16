@@ -5,12 +5,13 @@
 //! that:
 //!
 //! 1. Concatenating all `next_batch` results from `IndexCursor` produces
-//!    a `Vec<IndexRowRef>` byte-for-byte identical to the legacy
-//!    `range_scan_filter_legacy` output (exposed via the test-only
-//!    `range_scan_legacy_for_test` shim).
-//! 2. The cursor wrapper-driven `range_scan` (which is *also* the legacy
-//!    public API) returns the same vector. This pins both the cursor
-//!    implementation and the wrapper rewrite.
+//!    a `Vec<IndexRowRef>` byte-for-byte identical to the pre-cursor
+//!    `range_scan_filter_pre_cursor` output (exposed via the test-only
+//!    `range_scan_pre_cursor_for_test` shim).
+//! 2. The cursor wrapper-driven `range_scan` (which is *also* the
+//!    public API kept across the cursor migration) returns the same
+//!    vector. This pins both the cursor implementation and the
+//!    wrapper rewrite.
 //! 3. Telemetry: `Phase11Counters::cursor_batches_emitted` is bumped at
 //!    least once per non-empty range when the cursor is opened with
 //!    counters wired in. Confirms the emission site is reachable.
@@ -58,8 +59,9 @@ impl XorShift64 {
 }
 
 fn build_fixture() -> (TempDir, Arc<BufferPool>, BtreeIndex) {
-    let temp = TempDir::new().unwrap();
-    let page_file = Arc::new(PageFile::create(temp.path().join("data.redline"), 512).unwrap());
+    let staging_dir = TempDir::new().unwrap();
+    let page_file =
+        Arc::new(PageFile::create(staging_dir.path().join("data.redline"), 512).unwrap());
     // Generous buffer pool: the fixture has thousands of keys spilling
     // across many leaves; sizing this so the cursor never has to evict
     // keeps the test focused on cursor correctness rather than buffer-
@@ -89,7 +91,7 @@ fn build_fixture() -> (TempDir, Arc<BufferPool>, BtreeIndex) {
         ));
         index.insert(key.as_bytes(), row).unwrap();
     }
-    (temp, buffer, index)
+    (staging_dir, buffer, index)
 }
 
 /// Materialise every row the cursor would yield for `range`, with the
@@ -158,10 +160,10 @@ fn cursor_matches_legacy_range_scan_bitwise() {
         };
         let range = KeyRange::half_open(start_key.as_bytes(), end_key.as_bytes());
 
-        // Legacy reference output (verbatim copy of pre-cursor
+        // Pre-cursor reference output (verbatim copy of the pre-cursor
         // `range_scan_filter` body, exposed via a doc-hidden shim).
-        let legacy = index
-            .range_scan_legacy_for_test(start_key.as_bytes(), end_key.as_bytes())
+        let reference = index
+            .range_scan_pre_cursor_for_test(start_key.as_bytes(), end_key.as_bytes())
             .unwrap();
 
         // Cursor output, with telemetry sink wired in.
@@ -182,8 +184,8 @@ fn cursor_matches_legacy_range_scan_bitwise() {
         }
 
         assert_eq!(
-            legacy, cursor_out,
-            "cursor output diverged from legacy at sample {} (batch={}) range={}..{}",
+            reference, cursor_out,
+            "cursor output diverged from pre-cursor reference at sample {} (batch={}) range={}..{}",
             sample, batch_size, start_key, end_key,
         );
 
@@ -223,27 +225,27 @@ fn cursor_matches_legacy_range_scan_bitwise() {
 #[test]
 fn cursor_unbounded_end_walks_full_chain() {
     // Worker A regression: an `Unbounded` upper bound must keep walking
-    // the leaf chain to its tail — the legacy code explicitly supported
-    // this (callers passed `[0xff; 32]` to fake it). Drop the fake and
-    // use `Bound::Unbounded` directly; the cursor must visit the same
-    // rows as the legacy `range_scan_legacy_for_test` with a sentinel.
+    // the leaf chain to its tail — the pre-cursor entry point explicitly
+    // supported this (callers passed `[0xff; 32]` to fake it). Drop the
+    // fake and use `Bound::Unbounded` directly; the cursor must visit the
+    // same rows as `range_scan_pre_cursor_for_test` with a sentinel.
     let (_tmp, _buffer, index) = build_fixture();
     let counters = Phase11Counters::new();
     let start = b"k00000000".to_vec();
     let sentinel_end = vec![0xff; 32];
-    let legacy = index
-        .range_scan_legacy_for_test(&start, &sentinel_end)
+    let reference = index
+        .range_scan_pre_cursor_for_test(&start, &sentinel_end)
         .unwrap();
     let range = KeyRange {
         start: Bound::Included(&start),
         end: Bound::Unbounded,
     };
     let (cursor_out, _batches) = collect_via_cursor(&index, range, &counters, 256);
-    assert_eq!(legacy, cursor_out);
+    assert_eq!(reference, cursor_out);
 }
 
 #[test]
-fn raw_count_matches_legacy_with_duplicates_and_tombstones() {
+fn raw_count_matches_pre_cursor_with_duplicates_and_tombstones() {
     let (_tmp, _buffer, index) = build_fixture();
 
     let live_row = IndexRowRef::new(TuplePtr::new_with_generation(
@@ -268,20 +270,20 @@ fn raw_count_matches_legacy_with_duplicates_and_tombstones() {
 
     let start = b"tenant-00";
     let end = b"tenant-09";
-    let legacy = index.range_scan_legacy_for_test(start, end).unwrap();
+    let reference = index.range_scan_pre_cursor_for_test(start, end).unwrap();
     let raw_count = count_via_raw_cursor(&index, KeyRange::half_open(start, end));
     let raw_count_single_pass =
         count_via_raw_cursor_single_pass(&index, KeyRange::half_open(start, end));
 
     assert_eq!(
         raw_count,
-        legacy.len() as i64,
-        "raw count diverged from legacy"
+        reference.len() as i64,
+        "raw count diverged from pre-cursor reference"
     );
     assert_eq!(
         raw_count_single_pass,
-        legacy.len() as i64,
-        "single-pass raw count diverged from legacy"
+        reference.len() as i64,
+        "single-pass raw count diverged from pre-cursor reference"
     );
     assert_eq!(
         raw_count, 2,

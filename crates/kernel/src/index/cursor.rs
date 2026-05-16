@@ -3,7 +3,7 @@
 //! Phase 11 Wave 1a Worker A introduces a batch-yielding cursor that walks
 //! left-to-right across the leaf chain, applying snapshot visibility per
 //! entry and emitting `IndexRowRef` batches up to a caller-supplied cap.
-//! The legacy `range_scan` / `range_scan_visible` materialise-into-`Vec`
+//! The pre-cursor `range_scan` / `range_scan_visible` materialise-into-`Vec`
 //! entry points are preserved as thin wrappers around the cursor; their
 //! observable behavior (ordering, early-exit on out-of-range leaves,
 //! `range_scan_leaves_visited` counter, and visibility filtering) is bit-
@@ -18,11 +18,11 @@
 //! * `SnapshotView<'a>` wraps the existing `(ConcurrentTxStatus, Snapshot,
 //!   Option<TxId>)` triple used by `range_scan_visible`. A second variant
 //!   `SnapshotView::all()` skips the visibility check and matches the
-//!   `range_scan` "physically_live" filter, so both legacy entry points
+//!   `range_scan` "physically_live" filter, so both pre-cursor entry points
 //!   collapse to a single cursor implementation.
 //! * Telemetry: callers may pass `&Phase11Counters` so each entered leaf
 //!   bumps `leaf_visits` and each non-empty `next_batch` bumps
-//!   `cursor_batches_emitted`. The legacy `range_scan_leaves_visited`
+//!   `cursor_batches_emitted`. The pre-cursor `range_scan_leaves_visited`
 //!   counter on the index itself is *also* updated to keep the existing
 //!   `range_scan_terminates_early` test passing.
 //! * Prefetch: when the cursor crosses a leaf boundary it emits an
@@ -33,16 +33,16 @@
 //!   advisory: it never blocks the cursor, never propagates errors,
 //!   and bumps `Phase11Counters::prefetch_hits` (page was already
 //!   resident) or `Phase11Counters::prefetch_misses` (page was cold
-//!   or the shard was contended) honestly. The legacy
-//!   `prefetch_hints_emitted` per-cursor counter is retained for
+//!   or the shard was contended) honestly. The per-cursor
+//!   `prefetch_hints_emitted` counter is retained for
 //!   diagnostics — it counts hints *attempted*, not hits.
 //! * Re-anchoring: the cursor follows the *exact* anchoring contract of
-//!   the legacy `range_scan_filter`: each leaf is pinned before its
+//!   the pre-cursor `range_scan_filter`: each leaf is pinned before its
 //!   right-link is read, so we never observe a torn link, and a split
 //!   that lands a key on a previously-unobserved leaf still ends up in
 //!   the chain we walk. The kernel's `BufferPool::pin` does not surface
 //!   a distinguished "page evicted" error, so a higher-level retry loop
-//!   would have to recover from any pin failure — same as the legacy
+//!   would have to recover from any pin failure — same as the pre-cursor
 //!   path. We therefore propagate any error verbatim and rely on the
 //!   shared anchoring guarantee instead of re-descending mid-scan.
 
@@ -160,7 +160,7 @@ pub struct IndexCursor<'idx> {
     /// `SnapshotView` is `Copy`.
     view: SnapshotView<'idx>,
     /// Optional Phase 11 telemetry sink. `None` keeps the cursor
-    /// allocation-free with respect to engine wiring; legacy callers
+    /// allocation-free with respect to engine wiring; pre-Phase-11 callers
     /// pass `None` so test-only code can opt in.
     counters: Option<&'idx Phase11Counters>,
     /// Page id of the leaf whose entries we are currently iterating.
@@ -290,7 +290,7 @@ impl<'idx> IndexCursor<'idx> {
             // chain is done. `last_logical_key` is set during
             // `load_current_leaf` from the *last* `Entry::Leaf` we
             // saw, regardless of visibility — this keeps the early
-            // exit identical to legacy.
+            // exit identical to the pre-cursor wrapper.
             if self.leaf_chain_past_end() {
                 self.exhausted = true;
                 break;
@@ -445,7 +445,7 @@ impl<'idx> IndexCursor<'idx> {
         self.prefetch_hints_emitted
     }
 
-    /// Advance to `next_id` and load its entries. Mirrors the legacy
+    /// Advance to `next_id` and load its entries. Mirrors the pre-cursor
     /// `range_scan_filter` advance protocol exactly — propagate any
     /// pin/decode failure to the caller; the index crate has no
     /// distinguished "evicted under me" error so a higher layer would
@@ -465,8 +465,8 @@ impl<'idx> IndexCursor<'idx> {
     }
 
     /// Pin the current leaf, decode its entries, and cache the right
-    /// sibling pointer. Bumps the legacy `range_scan_leaves_visited`
-    /// counter on the index so the existing `range_scan_terminates_early`
+    /// sibling pointer. Bumps the per-index `range_scan_leaves_visited`
+    /// counter so the existing `range_scan_terminates_early`
     /// test passes through the wrapper, and (if present) the Phase 11
     /// `leaf_visits` counter.
     fn load_current_leaf(&mut self) -> Result<()> {
@@ -531,8 +531,8 @@ impl<'idx> IndexCursor<'idx> {
             return false;
         };
         match &self.end {
-            // Match the legacy `if last >= end` condition exactly: the
-            // legacy code always uses an exclusive upper bound, so
+            // Match the pre-cursor `if last >= end` condition exactly: the
+            // pre-cursor code always uses an exclusive upper bound, so
             // `last >= end_excluded` <=> "no more matches possible".
             Bound::Excluded(b) => last >= b.as_slice(),
             // Inclusive upper bound: keep walking while `last <= b`;

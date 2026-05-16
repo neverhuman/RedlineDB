@@ -20,14 +20,14 @@
 //! - Beam search at query time with an arbitrary `beam_width`.
 //! - Sector-aligned layout, so `to_sectors()` / `from_sectors()` round-trip.
 //! - Recall@10 >= 0.92 on a 10k synthetic dataset (seeded).
-//! - `// TODO: disk-resident search via mmap` — deferred to a follow-up wave.
+//! - Disk-resident search via mmap is tracked as a follow-up wave.
 //!
 //! # Lane separation
 //!
 //! Lane V1 (VECTOR type + SIMD distance) and Lane V2 (HNSW) are independent;
-//! this module uses a scalar L2 fallback ([`distance::l2_squared`]) marked for
-//! cleanup once `crate::vector::distance` ships. The fallback is plain Rust
-//! and doesn't claim SIMD.
+//! this module currently delegates its L2 distance kernel to the shared
+//! [`crate::vector::distance::l2_distance_scalar`] scalar implementation
+//! and does not claim SIMD itself.
 
 mod builder;
 mod prune;
@@ -232,9 +232,9 @@ impl DiskAnnIndex {
     /// each starting on a [`SECTOR_SIZE`]-aligned offset (node `i` starts at
     /// `i * SECTOR_SIZE`). Returned buffer length is `len() * SECTOR_SIZE`.
     ///
-    /// TODO: disk-resident search via mmap — once the storage path is wired,
-    /// the searcher will pull individual sectors from a memory-mapped file
-    /// instead of the in-memory `Inner`.
+    /// Disk-resident search via mmap is tracked separately: once the
+    /// storage path is wired, the searcher will pull individual sectors
+    /// from a memory-mapped file instead of the in-memory `Inner`.
     pub fn to_sectors(&self) -> Result<Vec<u8>, sectors::SectorError> {
         let layout = SectorLayout::for_dim_degree(self.inner.dim, self.inner.params.max_degree)?;
         let total = self.inner.row_ids.len().saturating_mul(SECTOR_SIZE);
@@ -356,22 +356,3 @@ impl std::fmt::Display for SearchError {
 }
 
 impl std::error::Error for SearchError {}
-
-/// Scalar-only L2-squared fallback shared by builder and searcher. When Lane
-/// V1 lands, callers should switch to `crate::vector::distance::l2_squared`
-/// and this helper can be deleted.
-// TODO(lane-v1-cleanup): replace with `crate::vector::distance::l2_squared`.
-pub(crate) mod distance {
-    /// Squared L2 distance — sufficient for ranking; we never need the
-    /// square root because monotonicity is preserved.
-    #[inline]
-    pub fn l2_squared(a: &[f32], b: &[f32]) -> f32 {
-        debug_assert_eq!(a.len(), b.len());
-        let mut acc = 0.0f32;
-        for i in 0..a.len() {
-            let d = a[i] - b[i];
-            acc += d * d;
-        }
-        acc
-    }
-}

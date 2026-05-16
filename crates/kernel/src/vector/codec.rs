@@ -88,7 +88,7 @@ pub fn decode_vector(bytes: &[u8]) -> VectorResult<Vec<f32>> {
             Ok(out)
         }
         ElementKind::F16 | ElementKind::I8 => Err(VectorError::Decode(format!(
-            "element kind {:?} not implemented (reserved)",
+            "element kind {:?} is reserved; decoder accepts F32 only",
             kind
         ))),
     }

@@ -12,7 +12,7 @@
 
 use std::collections::HashSet;
 
-use crate::vector::diskann::distance::l2_squared;
+use crate::vector::distance::l2_distance_scalar as l2_squared;
 
 /// Search-time configuration.
 #[derive(Clone, Copy, Debug)]

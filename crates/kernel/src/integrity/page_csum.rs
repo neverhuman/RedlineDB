@@ -14,9 +14,9 @@
 //! 2. LSN monotonicity — for each page id we record the page-LSN of the
 //!    first successful read; if a later read in the same sweep observes a
 //!    smaller value (which can only happen if the buffer pool returns a
-//!    stale clone alongside a newer one) we surface a violation. In a
-//!    single-pass walk this is a sanity invariant that should always hold;
-//!    the field exists to harden the API for future concurrent walks.
+//!    pre-checkpoint clone alongside a newer one) we surface a violation.
+//!    In a single-pass walk this is a sanity invariant that should always
+//!    hold; the field exists to harden the API for future concurrent walks.
 
 use std::collections::HashMap;
 
@@ -75,9 +75,10 @@ pub(crate) fn sweep(engine: &crate::engine::Engine, report: &mut IntegrityReport
 }
 
 /// Re-read raw bytes for a page that failed `pin`'s checksum verification
-/// so the report can name the expected vs got CRC32. Falls back to None if
+/// so the report can name the expected vs got CRC32. Returns `None` if
 /// even the raw read fails (e.g. truncated file) — caller emits a
-/// zero-zero placeholder in that case.
+/// zero-zero `PageCsumFailure` in that case so the report still surfaces
+/// the page id.
 fn recompute_failure(engine: &crate::engine::Engine, page_id: PageId) -> Option<PageCsumFailure> {
     let bytes = engine.read_raw_page_bytes_for_integrity(page_id).ok()?;
     if bytes.len() < crate::format::PAGE_HEADER_LEN {

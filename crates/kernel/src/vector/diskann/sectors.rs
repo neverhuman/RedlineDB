@@ -37,7 +37,7 @@ pub const SECTOR_SIZE: usize = 4096;
 const MAGIC: &[u8; 4] = b"VAMA";
 const VERSION: u16 = 1;
 const HEADER_LEN: usize = 24;
-/// Sentinel placed in the neighbour table for unused slots.
+/// Sentinel placed in the neighbour table for unfilled slots.
 const NEIGHBOUR_PAD: u32 = u32::MAX;
 
 /// Errors the sector encoder/decoder can surface. `SectorTooSmall` happens

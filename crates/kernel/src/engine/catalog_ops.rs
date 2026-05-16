@@ -150,9 +150,9 @@ impl Engine {
         // Page reuse: PageBackedHeap currently does not support marking
         // arbitrary index meta/root pages as reusable (it tracks Heap/Undo
         // kinds only). The pages remain allocated until vacuum/checkpoint
-        // reclaims them via a future enhancement. TODO: wire btree page
-        // reclamation through PageBackedHeap once it supports BtreeMeta and
-        // BtreeLeaf reusability.
+        // reclaims them via the dedicated btree-reclamation work item:
+        // wire btree page reclamation through PageBackedHeap once it
+        // supports BtreeMeta and BtreeLeaf reusability.
         if let Some(index_id) = removed_id {
             tx.push_pending_index_handle(PendingIndexHandle::Remove(index_id));
         }
@@ -184,7 +184,7 @@ impl Engine {
 
     /// Reopens every catalog `IndexDef` whose `meta_page_id` is set, stashing
     /// a `BtreeIndex` handle keyed by catalog `IndexId`. Indexes whose
-    /// `meta_page_id` is `None` are legacy/backwards-compat (created before
+    /// `meta_page_id` is `None` are pre-Lane-A entries (created before
     /// Lane A wired physical pages); they are skipped silently because the
     /// SQL exec layer cannot use them yet.
     pub(super) fn rehydrate_index_handles(self: &Arc<Self>) -> Result<()> {

@@ -644,7 +644,7 @@ impl HnswIndex {
         // longer hold all of them. Spill the tail onto a fresh data page
         // chained after `page_id`.
         let spill_pid = allocate_data_page(&self.inner.buffer, self.inner.rel_id)?;
-        // Splice spill_pid into the chain between page_id and its old next.
+        // Splice spill_pid into the chain between page_id and its prior next.
         self.inner
             .buffer
             .pin(page_id)?
@@ -668,7 +668,7 @@ impl HnswIndex {
             node.slot = slot;
             spilled_slot = slot;
         }
-        let _ = spilled_slot; // suppress unused-write warning when residents already fit
+        let _ = spilled_slot; // silence dead-write lint when residents already fit
         // Update last_data_page if we just spilled past the previous tail.
         if state.last_data_page == Some(page_id) {
             state.last_data_page = Some(spill_pid);

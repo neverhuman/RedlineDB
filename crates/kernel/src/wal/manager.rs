@@ -37,7 +37,7 @@ pub struct WalConfig {
     /// `true`, mutations that the WAL coordinator can prove to be
     /// commutative deltas on the same `(rel_id, row_id, column)`
     /// tuple may be merged before fsync. Default `false` — the
-    /// combiner is wired as a stub today (see
+    /// combiner is wired as a no-op today (see
     /// [`crate::wal::combiner`]) and will be enabled once the safety
     /// proof lands; consumers may set the flag without changing
     /// visible behaviour.
@@ -249,7 +249,7 @@ impl WalSyncCountersSnapshot {
                 return 1_u64 << idx;
             }
         }
-        // Fallback: top bucket lower edge.
+        // Quantile beyond the populated tail: report the top bucket's lower edge.
         1_u64 << (GROUP_COMMIT_BUCKET_COUNT - 1)
     }
 

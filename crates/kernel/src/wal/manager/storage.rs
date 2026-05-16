@@ -29,7 +29,7 @@ impl WalManager<StdFileSystem> {
 
         // Lane E failpoint: armed before any WAL segment removal so harnesses
         // can crash between checkpoint completion and prune, observing whether
-        // recovery still succeeds with stale segments on disk.
+        // recovery still succeeds with pre-checkpoint segments on disk.
         crate::fail_point!("wal::prune");
         let mut removed = 0_usize;
         for candidate in self.segment_numbers()? {

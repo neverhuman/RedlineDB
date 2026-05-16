@@ -9,7 +9,7 @@
 //!
 //! This file deliberately avoids platform-specific SIMD intrinsics so the
 //! kernel keeps building on every Rust target. The win versus the scalar
-//! fallback is the elimination of the byte-by-byte loop and the branchless
+//! path is the elimination of the byte-by-byte loop and the branchless
 //! padded compare — modern compilers vectorize these naturally on x86_64
 //! (SSE2) and aarch64 (NEON).
 
@@ -58,8 +58,8 @@ fn eq_padded16(a: &[u8], b: &[u8]) -> bool {
     (a_lo ^ b_lo) | (a_hi ^ b_hi) == 0
 }
 
-/// Reference scalar comparison used for cross-checking and as a fallback for
-/// long keys.
+/// Reference scalar comparison used for cross-checking and as the
+/// long-key path (keys longer than `SIMD_KEY_MAX`).
 #[inline]
 pub fn key_eq_scalar(a: &[u8], b: &[u8]) -> bool {
     a == b

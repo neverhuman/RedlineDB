@@ -14,8 +14,8 @@
 
 use std::collections::HashSet;
 
-use crate::vector::diskann::distance::l2_squared;
 use crate::vector::diskann::prune::{Candidate, robust_prune};
+use crate::vector::distance::l2_distance_scalar as l2_squared;
 
 /// Internal build params (mirrors the public [`super::DiskAnnParams`]).
 #[derive(Clone, Copy, Debug)]

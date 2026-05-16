@@ -1,6 +1,6 @@
 //! Heap/index/page integrity checker for RedlineDB.
 //!
-//! Lane INT lifts the previous "stub returns ok" `PRAGMA integrity_check`
+//! Lane INT lifts the previous always-ok `PRAGMA integrity_check`
 //! into a real cross-validation of the durable state:
 //!
 //! * heap walk: every visible row in every relation,

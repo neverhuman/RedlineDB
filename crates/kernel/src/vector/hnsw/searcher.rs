@@ -27,7 +27,7 @@ use super::Graph;
 
 /// Total-ordered f32 wrapper. HNSW only ever compares distances, which
 /// are non-negative and finite under all metrics we ship; the
-/// `total_cmp` fallback handles the edge case where a query supplies
+/// `total_cmp` path handles the edge case where a query supplies
 /// degenerate input (Inf/NaN) without panicking the heap.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Distance(f32);

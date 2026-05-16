@@ -257,7 +257,7 @@ fn select_neighbors_heuristic(
     // Backfill with the closest *rejected* candidates if the heuristic
     // didn't fill the cap. On high-dim random data the diversifying
     // condition rejects almost everything because distances are
-    // concentrated; the cap-by-distance fallback recovers the recall
+    // concentrated; the cap-by-distance backfill recovers the recall
     // headroom that hnswlib achieves with `ef = M`. The result stays
     // sorted by distance because `overflow` was iterated in sorted
     // order.

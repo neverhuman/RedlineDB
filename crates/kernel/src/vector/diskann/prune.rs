@@ -15,7 +15,7 @@
 //! The pruning is what gives Vamana its low diameter. Higher `alpha` keeps
 //! more "long" edges and improves recall at the cost of out-degree budget.
 
-use crate::vector::diskann::distance::l2_squared;
+use crate::vector::distance::l2_distance_scalar as l2_squared;
 
 /// `(node_id, dist_to_target)` pairs as fed in / returned by RobustPrune.
 pub type Candidate = (u32, f32);

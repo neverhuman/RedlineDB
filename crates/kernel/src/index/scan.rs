@@ -7,18 +7,19 @@ use super::cells::Entry;
 use super::cursor::{CursorYield, IndexCursor, KeyRange, SnapshotView};
 use super::{BtreeIndex, IndexEntry, IndexRowRef, PAGE_INTERNAL_KIND, PAGE_LEAF_KIND};
 
-/// Default batch size for the materialise-into-`Vec` legacy wrappers.
+/// Default batch size for the materialise-into-`Vec` wrappers that
+/// preserve the pre-cursor entry points.
 /// Sized to amortise the per-batch counter bumps without committing to
 /// hold any particular number of pinned pages — the cursor still
 /// releases its leaf guards between batches.
-const LEGACY_WRAPPER_BATCH: usize = 256;
+const VEC_WRAPPER_BATCH: usize = 256;
 
 impl BtreeIndex {
     pub fn range_scan(&self, start: &[u8], end: &[u8]) -> Result<Vec<IndexRowRef>> {
         let range = KeyRange::half_open(start, end);
         let mut out = Vec::new();
         let mut cur = IndexCursor::open(self, range, SnapshotView::all())?;
-        while let CursorYield::Batch(_) = cur.next_batch(&mut out, LEGACY_WRAPPER_BATCH)? {}
+        while let CursorYield::Batch(_) = cur.next_batch(&mut out, VEC_WRAPPER_BATCH)? {}
         Ok(out)
     }
 
@@ -34,22 +35,26 @@ impl BtreeIndex {
         let view = SnapshotView::visible(tx_status, snapshot, owner);
         let mut out = Vec::new();
         let mut cur = IndexCursor::open(self, range, view)?;
-        while let CursorYield::Batch(_) = cur.next_batch(&mut out, LEGACY_WRAPPER_BATCH)? {}
+        while let CursorYield::Batch(_) = cur.next_batch(&mut out, VEC_WRAPPER_BATCH)? {}
         Ok(out)
     }
 
     /// Direct entry-filter range scan. Retained for the equivalence
     /// test (`tests/index_cursor_equivalence.rs`) which asserts the
-    /// cursor reproduces the legacy `Vec` output bit-for-bit. Crate-
+    /// cursor reproduces the pre-cursor `Vec` output bit-for-bit. Crate-
     /// internal so production code goes through the cursor.
     #[doc(hidden)]
-    pub fn range_scan_legacy_for_test(&self, start: &[u8], end: &[u8]) -> Result<Vec<IndexRowRef>> {
-        self.range_scan_filter_legacy(start, end, |entry| entry.physically_live())
+    pub fn range_scan_pre_cursor_for_test(
+        &self,
+        start: &[u8],
+        end: &[u8],
+    ) -> Result<Vec<IndexRowRef>> {
+        self.range_scan_filter_pre_cursor(start, end, |entry| entry.physically_live())
     }
 
-    /// Snapshot-visible variant of [`range_scan_legacy_for_test`].
+    /// Snapshot-visible variant of [`range_scan_pre_cursor_for_test`].
     #[doc(hidden)]
-    pub fn range_scan_visible_legacy_for_test(
+    pub fn range_scan_visible_pre_cursor_for_test(
         &self,
         tx_status: &ConcurrentTxStatus,
         snapshot: &Snapshot,
@@ -57,7 +62,7 @@ impl BtreeIndex {
         start: &[u8],
         end: &[u8],
     ) -> Result<Vec<IndexRowRef>> {
-        self.range_scan_filter_legacy(start, end, |entry| {
+        self.range_scan_filter_pre_cursor(start, end, |entry| {
             super::cells::entry_visible(entry, tx_status, snapshot, owner)
         })
     }
@@ -65,8 +70,8 @@ impl BtreeIndex {
     /// Verbatim copy of the pre-cursor `range_scan_filter` body. The
     /// equivalence test calls this to compare against the cursor
     /// output. Production callers must not use this — go through
-    /// `IndexCursor` (or the legacy `range_scan` wrappers above).
-    fn range_scan_filter_legacy(
+    /// `IndexCursor` (or the `range_scan` wrappers above).
+    fn range_scan_filter_pre_cursor(
         &self,
         start: &[u8],
         end: &[u8],

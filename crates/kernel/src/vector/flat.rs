@@ -10,8 +10,8 @@
 //!
 //! The operator is generic over the payload type, so the SQL layer can return
 //! `RowId`s while a Rust caller could return embeddings, table identifiers, or
-//! whatever else. This is the fallback path used whenever the planner picks
-//! the brute-force strategy (no HNSW/DiskANN index available).
+//! whatever else. This is the brute-force scan path the planner picks
+//! whenever no HNSW/DiskANN index is available.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;

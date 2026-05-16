@@ -48,25 +48,27 @@ impl CatalogStore {
 
     pub fn save_atomic(&self, snapshot: &SchemaSnapshot) -> Result<()> {
         let bytes = encode_snapshot_file(snapshot)?;
-        let tmp = self.path.with_extension("tmp");
+        let staging = self.path.with_extension("tmp");
         {
-            // Lane E failpoint: armed before the temp catalog file is created.
-            // A crash here yields no `.tmp`, so recovery must observe the old
-            // catalog generation untouched.
+            // Lane E failpoint: armed before the staging catalog file is
+            // created. A crash here yields no `.tmp`, so recovery must
+            // observe the prior catalog generation untouched.
             crate::fail_point!("catalog::save::temp_write");
-            let mut file = fs::File::create(&tmp)?;
+            let mut file = fs::File::create(&staging)?;
             file.write_all(&bytes)?;
-            // Lane E failpoint: armed after the temp write but before fsync.
-            // Crashing here lets the OS keep the temp file in page cache only;
-            // recovery must still see the prior atomic snapshot.
+            // Lane E failpoint: armed after the staging write but before
+            // fsync. Crashing here lets the OS keep the staging file in
+            // page cache only; recovery must still see the prior atomic
+            // snapshot.
             crate::fail_point!("catalog::save::fsync");
             file.sync_all()?;
         }
-        // Lane E failpoint: armed before the atomic rename. The temp file is
-        // fully durable on disk; a crash here guarantees the rename never
-        // happened, so the prior schema snapshot remains the canonical one.
+        // Lane E failpoint: armed before the atomic rename. The staging
+        // file is fully durable on disk; a crash here guarantees the
+        // rename never happened, so the prior schema snapshot remains
+        // the canonical one.
         crate::fail_point!("catalog::save::rename");
-        fs::rename(tmp, &self.path)?;
+        fs::rename(staging, &self.path)?;
         if let Some(parent) = self.path.parent() {
             // Lane E failpoint: armed before the parent-directory fsync that
             // makes the rename durable. A crash here may lose the rename even
@@ -482,7 +484,8 @@ fn encode_expr_op(out: &mut Writer, op: &ExprOp) -> Result<()> {
         // Phase-10 Lane V1: `BlobLen` was introduced for vector-dimension
         // CHECK constraints. Older binaries cannot read databases that use
         // it (the unknown-opcode arm in `decode_expr_op` will surface as
-        // catalog corruption), which is the correct forward-compat posture.
+        // catalog corruption), which is the correct forward-compatibility
+        // posture.
         ExprOp::BlobLen => out.u8(11),
     }
     Ok(())

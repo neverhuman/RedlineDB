@@ -71,11 +71,11 @@ fn cross_check_inner(
     let offset = match probe_record_offset(table, index, heap_rows, &durable)? {
         Some(off) => off,
         None => {
-            // No probe row matched in either layout — fall back to a
+            // No probe row matched in either layout — degrade to a
             // row-id-only equivalence so we still catch the "orphan / no
             // matching heap row" and "missing / no matching index row"
-            // shapes. The keys aren't cross-checked under this fallback
-            // because we cannot tell which record column an `attnum`
+            // shapes. The keys aren't cross-checked under this row-id-only
+            // path because we cannot tell which record column an `attnum`
             // refers to with confidence.
             return Ok(row_id_only_check(heap_rows, index_entries));
         }
@@ -101,7 +101,7 @@ fn cross_check_inner(
 /// supported layout offset; return the offset whose derived key matches
 /// the durable entry's bytes. `None` indicates neither layout matches
 /// (which is itself the equivalence failure surfaced by the row_id-only
-/// fallback in `cross_check_inner`).
+/// degraded check in `cross_check_inner`).
 fn probe_record_offset(
     table: &TableDef,
     index: &IndexDef,

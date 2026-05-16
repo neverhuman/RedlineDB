@@ -15,7 +15,7 @@ use super::{
 /// Raw leaf cursor for count / covering scans. It walks the same leaf
 /// chain as [`super::IndexCursor`] but decodes cells in place, avoiding
 /// the per-leaf `Vec<super::cells::LeafEntry>` materialisation that the
-/// general cursor still uses for legacy compatibility.
+/// general cursor still performs for pre-cursor `Vec`-output parity.
 pub struct RawIndexCursor<'idx> {
     index: &'idx BtreeIndex,
     start: Bound<Vec<u8>>,
