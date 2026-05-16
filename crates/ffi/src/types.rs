@@ -86,7 +86,7 @@ pub struct rldb_backup {
     pub(crate) pagecount: i64,
 }
 
-// ---- SQLite-compat type aliases --------------------------------------------
+// ---- SQLite-compatible type aliases ----------------------------------------
 
 #[allow(non_camel_case_types)]
 pub type sqlite3 = rldb;

@@ -255,8 +255,8 @@ pub(crate) fn record_status(db: *mut rldb, code: c_int) {
 
 /// Like `record_status`, but stores `message` (typically an SqlError's
 /// `to_string()`) so `sqlite3_errmsg` returns the actual cause rather than
-/// the generic "error"/"busy" stub. Used by failure paths that have a
-/// human-readable explanation.
+/// the generic "error"/"busy" status text. Used by failure paths that
+/// have a human-readable explanation.
 pub(crate) fn record_status_with_message(db: *mut rldb, code: c_int, message: &str) {
     let _ = with_db(db, |db| {
         db.last_code.store(code, Ordering::Relaxed);

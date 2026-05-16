@@ -612,7 +612,9 @@ mod tests {
             offset: None,
             max_cost: None,
         });
-        let err = db.prepare_query_spec(&spec).expect_err("stale schema");
+        let err = db
+            .prepare_query_spec(&spec)
+            .expect_err("expected outdated schema epoch to be rejected");
         assert_eq!(err.code(), ErrorCode::Schema);
     }
 }

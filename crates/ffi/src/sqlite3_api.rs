@@ -1,9 +1,9 @@
 //! SQLite-compatible C ABI surface.
 //!
-//! These shims preserve the standard `sqlite3_*` symbol names so callers
-//! linked against libsqlite3 can swap in libredlinedb at runtime. They
-//! delegate to the corresponding `rldb_*` implementation, layering on the
-//! status-recording semantics expected by the SQLite ABI.
+//! These entry points preserve the standard `sqlite3_*` symbol names so
+//! callers linked against libsqlite3 can swap in libredlinedb at runtime.
+//! They delegate to the corresponding `rldb_*` implementation, layering on
+//! the status-recording semantics expected by the SQLite ABI.
 
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
@@ -150,9 +150,9 @@ pub extern "C" fn sqlite3_prepare_v2(
 ) -> c_int {
     let rc = rldb_prepare_v2(db, sql, nbytes, out_stmt, tail);
     // Only overwrite last_message on success — on failure, rldb_prepare_v2
-    // has already stashed the enriched parser/binder error string and
-    // overwriting it with the generic "ok"/"error" stub would lose the
-    // actionable detail (`sqlite3_errmsg` consumers rely on it).
+    // has already stashed the enriched parser/binder error string, so
+    // replacing it with the generic "ok"/"error" status text would drop
+    // the actionable detail (`sqlite3_errmsg` consumers rely on it).
     if rc == RLDB_OK {
         record_status(db, rc);
     } else if !db.is_null() {

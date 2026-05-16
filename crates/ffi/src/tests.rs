@@ -1,6 +1,6 @@
-//! Smoke tests for the SQLite-compat surface. The asserts cover lifecycle,
-//! prepare-tail semantics, multi-statement exec, savepoints, and ownership
-//! of the heap-allocated `errmsg` round-trip.
+//! Smoke tests for the SQLite-compatible API surface. The asserts cover
+//! lifecycle, prepare-tail semantics, multi-statement exec, savepoints,
+//! and ownership of the heap-allocated `errmsg` round-trip.
 
 use std::env;
 use std::ffi::{CStr, CString};
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::sqlite3_compat::*;
+use crate::sqlite3_api::*;
 use crate::types::*;
 
 fn temp_path(name: &str) -> PathBuf {

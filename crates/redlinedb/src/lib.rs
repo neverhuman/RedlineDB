@@ -132,8 +132,9 @@ impl Database {
         Ok(Self { inner })
     }
 
-    /// Create a private ephemeral database rooted under `options.temp_dir`
-    /// when provided, otherwise under the system temp directory.
+    /// Create a private ephemeral database rooted under the directory
+    /// named by [`OpenOptions::temp_dir`] when provided, otherwise under
+    /// the directory returned by [`std::env::temp_dir`].
     ///
     /// Multiple connections opened from the returned [`Database`] share the
     /// same transient state. The backing directory disappears when the last
@@ -148,9 +149,10 @@ impl Database {
     /// Create or reopen a process-local ephemeral database identified by
     /// `session_name`.
     ///
-    /// Compatible calls with the same `session_name` reuse the same live
+    /// Subsequent calls with the same `session_name` reuse the same live
     /// session for as long as at least one [`Database`] handle is still
-    /// alive. When the final owner drops, the owned temp root is removed.
+    /// alive. When the final owner drops, the owned ephemeral root is
+    /// removed.
     pub fn create_ephemeral(session_name: &str, options: OpenOptions) -> Result<Self> {
         let mut options = options;
         options.create = true;

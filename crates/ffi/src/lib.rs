@@ -6,15 +6,15 @@
 //!    has its definition (with `#[unsafe(no_mangle)]` and `extern "C"`) in
 //!    one of the per-area submodules below. The cdylib's exported symbols
 //!    must include every `rldb_*` listed in those modules.
-//! 2. **SQLite-compat (`sqlite3_*`)** — drop-in replacement shims defined
-//!    in [`sqlite3_compat`]. Each shim delegates to its `rldb_*`
-//!    counterpart and layers on the status-recording side-effects callers
-//!    of libsqlite3 expect.
+//! 2. **SQLite-compatible (`sqlite3_*`)** — drop-in replacement entry
+//!    points defined in [`sqlite3_api`]. Each entry point delegates to
+//!    its `rldb_*` counterpart and layers on the status-recording
+//!    side-effects callers of libsqlite3 expect.
 //!
 //! Refactor invariant: all `extern "C"` definitions live in submodules, but
 //! the cdylib still exports them because each definition carries
-//! `#[unsafe(no_mangle)]`. The `pub use` re-exports below keep the legacy
-//! flat path (`redlinedb::rldb_open` etc.) for any in-crate consumer
+//! `#[unsafe(no_mangle)]`. The `pub use` re-exports below keep the flat
+//! path (`redlinedb::rldb_open` etc.) for any in-crate consumer
 //! (notably the test module).
 
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
@@ -26,10 +26,16 @@ pub mod config;
 pub mod error;
 pub mod exec;
 pub mod lifecycle;
-pub mod sqlite3_compat;
+pub mod sqlite3_api;
 pub mod stmt;
 pub mod types;
 mod util;
+
+// Backwards-compatible alias so internal Rust callers that referenced the
+// pre-rename module path still resolve. The cdylib's exported C symbols are
+// unaffected: `#[unsafe(no_mangle)]` lives on the definitions inside
+// `sqlite3_api`, not on this alias.
+pub use sqlite3_api as sqlite3_compat;
 
 #[cfg(test)]
 mod tests;
