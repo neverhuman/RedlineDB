@@ -1,9 +1,8 @@
 use std::cell::Cell;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use redlinedb_kernel::catalog::{
     ColumnStats, ConstraintKind, EvalScratch, HistogramBucket, IndexStats, MostCommonValue,
@@ -41,6 +40,7 @@ use tail::*;
 pub(crate) mod vec;
 
 mod agg;
+mod agg_eval;
 use agg::*;
 mod insert;
 use insert::*;

@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use smallvec::SmallVec;
 
 use crate::format::bytes::{read_u16, read_u32, read_u64, write_u16, write_u32, write_u64};
-use crate::format::{Page, PageGeneration, PageId, PageKind, RelId, TuplePtr, TxId};
+use crate::format::{
+    Page, PageGeneration, PageId, PageKind, RelId, TuplePtr, TxId, decode_opt_page_id,
+};
 use crate::storage::BufferPool;
 use crate::wal::{WalCoordinator, WalPayload, WalRecordKind};
 use crate::{Error, Result};
@@ -21,7 +23,7 @@ mod scan;
 use cells::{Entry, InternalCell, LeafCell, LeafEntry};
 
 pub use cursor::{CursorYield, IndexCursor, KeyRange, RawIndexCursor, SnapshotView};
-pub use locks::{UniqueKeyGuard, UniqueKeyLockTable};
+pub use locks::{UniqueKeyGuard, UniqueKeyLockTable, poly_hash_u64};
 
 pub const INDEX_SPECIAL_LEN: usize = 256;
 const INDEX_MAGIC: u32 = 0x5244_4958; // "RDIX"
@@ -655,14 +657,6 @@ impl BtreeIndex {
         special[META_UNIQUENESS_OFF] = meta.uniqueness as u8;
         write_u16(special, META_HIGH_KEY_LEN_OFF, 0)?;
         Ok(())
-    }
-}
-
-fn decode_opt_page_id(raw: u64) -> Option<PageId> {
-    if raw == u64::MAX {
-        None
-    } else {
-        Some(PageId(raw))
     }
 }
 

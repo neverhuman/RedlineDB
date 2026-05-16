@@ -290,15 +290,29 @@ pub enum WorkloadKind {
     CommitStormBatched,
     /// Phase 11 wave 1a: secondary index leaf-walk efficiency probe.
     /// `SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ? AND ?` over the
-    /// existing `kv_tenant_idx`. Fixture shape mirrors
-    /// `SecondaryIndexRange` but the projection is purely the count
-    /// aggregate so the engine never visits the heap, isolating the
-    /// cost of walking the index leaves.
+    /// existing `kv_tenant_idx` (the `tenant_id` boundary index).
+    /// Fixture shape mirrors `SecondaryIndexRange` but the projection
+    /// is purely the count aggregate so the engine never visits the
+    /// heap, isolating the cost of walking the index leaves.
     ///
-    /// Cross-tenant data-isolation negative proofs for this fixture live
-    /// in `crates/bench/tests/tenant_isolation.rs` (Section E,
-    /// HLT-022-AUTHZ-ISOLATION-GAP). See also
-    /// `agent/security-policy.toml` for the proof routing.
+    /// HLT-022-AUTHZ-ISOLATION-GAP negative proof for the `tenant_id`
+    /// boundary: crates/bench/tests/tenant_isolation.rs (5 deterministic
+    /// scenarios, all asserting that a non-owning tenant's `tenant_id`
+    /// probe yields 0 rows):
+    ///   - `owner_can_read` (positive control: owner sees their own row),
+    ///   - `non_owner_denied` (`assert!(rows.is_empty())`, `assert_eq!(count, 0)`
+    ///     for non-owner `tenant_id`),
+    ///   - `cross_tenant_index_probe_empty` (`assert_eq!(count, 0)` for
+    ///     equality + range + open-ended `tenant_id` probes),
+    ///   - `dual_connection_cross_tenant_index_probe_yields_zero_rows`
+    ///     (two `Connection`s each scoped to a single `tenant_id`;
+    ///     non-owner connection sees 0 rows even under concurrent writes),
+    ///   - `tombstone_owner_only` (owner-scoped delete; non-owner
+    ///     `tenant_id` still sees 0 rows pre- and post-delete).
+    /// Runnable via `rtk cargo test -p redlinedb-bench --test
+    /// tenant_isolation --quiet --locked`. See also
+    /// `agent/security-policy.toml` [[proofs]] entry for
+    /// `HLT-022-AUTHZ-ISOLATION-GAP` for proof routing.
     SecondaryIndexCount,
     /// Phase 11 wave 1a: ordered range with `LIMIT` early-stop. The
     /// query shape is `SELECT * FROM kv WHERE tenant >= ? ORDER BY
@@ -392,6 +406,10 @@ pub enum DurabilityKind {
 }
 
 impl DurabilityKind {
+    // dedup-allowed: enum-discriminator-method (each arm names a
+    // distinct variant of the enclosing enum; collapsing into a
+    // shared helper would require boxing both enums under a trait
+    // for a 6-line method with zero shared logic).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Strict => "strict",
@@ -412,6 +430,7 @@ pub enum RecoveryScenarioKind {
 }
 
 impl RecoveryScenarioKind {
+    // dedup-allowed: enum-discriminator-method (see DurabilityKind::as_str).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Wal => "wal",
@@ -534,6 +553,11 @@ pub enum ExpectExit {
 }
 
 impl CompareConfig {
+    // dedup-allowed: per-type TOML config loader. The body is the
+    // canonical `read_to_string` + `toml::from_str::<Self>` pair plus a
+    // type-specific post-condition check; extracting the IO would
+    // strip the `Self`-bound deserialize that distinguishes the two
+    // configs and reduce, not improve, clarity.
     pub fn load(path: &Path) -> Result<Self> {
         let raw = fs::read_to_string(path)
             .with_context(|| format!("read compare config {}", path.display()))?;
@@ -607,6 +631,7 @@ fn default_failpoint_kill_after_n_hits() -> Vec<u64> {
 }
 
 impl FailpointMatrixConfig {
+    // dedup-allowed: per-type TOML config loader (see CompareConfig::load).
     pub fn load(path: &Path) -> Result<Self> {
         let raw = fs::read_to_string(path)
             .with_context(|| format!("read failpoint matrix {}", path.display()))?;

@@ -15,6 +15,7 @@
 //! The pruning is what gives Vamana its low diameter. Higher `alpha` keeps
 //! more "long" edges and improves recall at the cost of out-degree budget.
 
+use super::vector_at;
 use crate::vector::distance::l2_distance_scalar as l2_squared;
 
 /// `(node_id, dist_to_target)` pairs as fed in / returned by RobustPrune.
@@ -73,12 +74,6 @@ pub fn robust_prune(
         }
     }
     out
-}
-
-#[inline]
-fn vector_at(vectors: &[f32], dim: usize, id: u32) -> &[f32] {
-    let id = id as usize;
-    &vectors[id * dim..(id + 1) * dim]
 }
 
 #[cfg(test)]

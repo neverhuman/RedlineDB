@@ -1,4 +1,5 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
+export RUSTC_WRAPPER := "sccache"
 
 default: fast
 
@@ -6,7 +7,7 @@ fast:
   rtk cargo fmt --check
   ./scripts/check_file_sizes.sh
   rtk cargo check --workspace --locked
-  rtk cargo test --workspace --quiet --locked
+  rtk cargo nextest run --workspace --locked --no-fail-fast
 
 hygiene:
   rtk cargo fmt --check
@@ -123,17 +124,35 @@ phase9-failpoint-matrix:
   rtk cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint-matrix.json --seed 7
 
 security:
-  rtk cargo audit
-  rtk cargo deny check
-  rtk gitleaks detect --source .
+  bash ops/ci/security.sh
 
-security-local:
-  rtk cargo audit
-  rtk cargo deny check
-  rtk gitleaks detect --source .
+pre-push:
+  bash ops/git-hooks/pre-push
+
+ci-doctor:
+  bash scripts/ci-doctor.sh
 
 release:
   rtk cargo build --workspace --release --locked
+
+# Targeted iteration recipes for agent loops. Narrow lanes avoid the
+# workspace-wide check + test that dominates `just fast` on cold caches.
+# Audit reference: HLT-018 perf-concurrency-drift.
+cache-warm:
+  rtk cargo build --workspace --tests --locked
+
+fast-nextest:
+  rtk cargo fmt --check
+  ./scripts/check_file_sizes.sh
+  rtk cargo check --workspace --locked
+  rtk cargo nextest run --workspace --locked --no-fail-fast
+
+crate-check crate:
+  rtk cargo check -p {{crate}} --locked
+
+crate-test crate:
+  rtk cargo test -p {{crate}} --locked --quiet
+
 # jankurai scaffold Justfile
 score:
 	jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md --score-history agent/score-history.jsonl --score-history-csv agent/score-history.csv

@@ -458,32 +458,41 @@ pub(crate) fn push_json_kv(out: &mut String, key: &str, value: &str) {
     let _ = write!(out, "\"{}\":\"{}\"", escape_json(key), escape_json(value));
 }
 
-pub(crate) fn push_json_num(out: &mut String, key: &str, value: f64) {
+/// Append `"key":value` to a JSON buffer. Generic over any `Display`
+/// type so `f64`, `usize`, etc. share one implementation.
+pub(crate) fn push_json_scalar<T: std::fmt::Display>(out: &mut String, key: &str, value: T) {
     let _ = write!(out, "\"{}\":{value}", escape_json(key));
+}
+
+pub(crate) fn push_json_num(out: &mut String, key: &str, value: f64) {
+    push_json_scalar(out, key, value);
 }
 
 pub(crate) fn push_json_usize(out: &mut String, key: &str, value: usize) {
-    let _ = write!(out, "\"{}\":{value}", escape_json(key));
+    push_json_scalar(out, key, value);
+}
+
+/// Append `"key":value` or `"key":null` depending on the option.
+pub(crate) fn push_json_opt_scalar<T: std::fmt::Display>(
+    out: &mut String,
+    key: &str,
+    value: Option<T>,
+) {
+    let _ = write!(out, "\"{}\":", escape_json(key));
+    match value {
+        Some(v) => {
+            let _ = write!(out, "{v}");
+        }
+        None => out.push_str("null"),
+    }
 }
 
 pub(crate) fn push_json_opt_usize(out: &mut String, key: &str, value: Option<usize>) {
-    let _ = write!(out, "\"{}\":", escape_json(key));
-    match value {
-        Some(v) => {
-            let _ = write!(out, "{v}");
-        }
-        None => out.push_str("null"),
-    }
+    push_json_opt_scalar(out, key, value);
 }
 
 pub(crate) fn push_json_opt_num(out: &mut String, key: &str, value: Option<f64>) {
-    let _ = write!(out, "\"{}\":", escape_json(key));
-    match value {
-        Some(v) => {
-            let _ = write!(out, "{v}");
-        }
-        None => out.push_str("null"),
-    }
+    push_json_opt_scalar(out, key, value);
 }
 
 pub(crate) fn push_json_array(out: &mut String, key: &str, values: &[String]) {
@@ -516,6 +525,28 @@ pub(crate) fn selection_rowid_eq(
     selection: &Option<Expr>,
     bindings: &[Option<SqlValue>],
 ) -> Result<Option<RowId>> {
+    selection_rowid_eq_with(table, selection, bindings, |expr, bindings| {
+        Ok(eval_constant(expr, bindings).unwrap_or(SqlValue::Null))
+    })
+}
+
+/// Shared implementation of the `rowid = <const>` fast-path detector.
+///
+/// The planner and the executor both need this, but they evaluate the
+/// value side differently: the planner uses the conservative
+/// constant-folder (`eval_constant`) while the executor uses the full
+/// `eval_scalar` (which may surface runtime errors). Take the evaluator
+/// as a closure so we only have one copy of the structural pattern
+/// match.
+pub(crate) fn selection_rowid_eq_with<F>(
+    table: &Arc<TableDef>,
+    selection: &Option<Expr>,
+    bindings: &[Option<SqlValue>],
+    eval_value: F,
+) -> Result<Option<RowId>>
+where
+    F: Fn(&Expr, &[Option<SqlValue>]) -> Result<SqlValue>,
+{
     let Some(expr) = selection else {
         return Ok(None);
     };
@@ -534,23 +565,27 @@ pub(crate) fn selection_rowid_eq(
     if !matches!(op, BinaryOperator::Eq) {
         return Ok(None);
     }
-    let expr_rowid = if let Some(value) = rowid_eq_side(table, left, right, bindings, &rowid_col)? {
-        value
-    } else if let Some(value) = rowid_eq_side(table, right, left, bindings, &rowid_col)? {
-        value
-    } else {
-        return Ok(None);
-    };
+    let expr_rowid =
+        if let Some(value) = rowid_eq_side(left, right, bindings, &rowid_col, &eval_value)? {
+            value
+        } else if let Some(value) = rowid_eq_side(right, left, bindings, &rowid_col, &eval_value)? {
+            value
+        } else {
+            return Ok(None);
+        };
     Ok(Some(expr_rowid))
 }
 
-pub(crate) fn rowid_eq_side(
-    _table: &Arc<TableDef>,
+fn rowid_eq_side<F>(
     ident_side: &Expr,
     value_side: &Expr,
     bindings: &[Option<SqlValue>],
     rowid_col: &impl Fn(&str) -> bool,
-) -> Result<Option<RowId>> {
+    eval_value: &F,
+) -> Result<Option<RowId>>
+where
+    F: Fn(&Expr, &[Option<SqlValue>]) -> Result<SqlValue>,
+{
     let name = match ident_side {
         Expr::Identifier(ident) if rowid_col(&ident.value) => Some(ident.value.as_str()),
         Expr::CompoundIdentifier(parts) => parts.last().and_then(|ident| {
@@ -565,7 +600,7 @@ pub(crate) fn rowid_eq_side(
     if name.is_none() {
         return Ok(None);
     }
-    let value = eval_constant(value_side, bindings).unwrap_or(SqlValue::Null);
+    let value = eval_value(value_side, bindings)?;
     match value {
         SqlValue::Integer(v) if v >= 0 => Ok(Some(RowId::new(v as u64))),
         SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => Ok(Some(RowId::new(v as u64))),

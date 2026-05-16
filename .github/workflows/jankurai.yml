@@ -11,6 +11,10 @@ concurrency:
 
 jobs:
   audit:
+    # Hard gate end-to-end. All soft-gate semantics for jankurai install
+    # / language-bad-behavior tests live inside ops/ci/jankurai-audit.sh
+    # (see agent/ci-soft-gate-ledger.toml#jankurai-audit-job). No
+    # nonblocking overrides appear anywhere in this workflow.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -21,85 +25,20 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-      - name: Install jankurai
-        run: cargo install jankurai --locked
-      - run: jankurai --version
-      - name: jankurai audit (advisory)
-        # Primary advisory audit. Writes the agent-visible repo score and the
-        # repair queue, exactly the artifacts the tool-adoption manifest names
-        # for audit-ci, proof-routing, contract-drift, authz-matrix,
-        # input-boundary, agent-tool-supply, release-readiness, and cost-budget.
-        # Reads cost-budget config from agent/cost-budget.toml.
-        run: |
-          mkdir -p target/jankurai
-          jankurai audit . --mode advisory --baseline agent/repo-score.json --json agent/repo-score.json --md agent/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl
-      - name: Fetch reviewed accepted baseline
-        # Source baseline strictly from reviewed locations: a committed
-        # baseline under agent/baselines/ takes priority, otherwise we
-        # pull the score from origin/main (the previously reviewed
-        # state). Never seed from the candidate audit run; that would
-        # hide score regressions (HLT-034 ci.ratchet.self-generated-baseline).
-        run: |
-          mkdir -p target/jankurai
-          if [ -f agent/baselines/accepted-baseline.json ]; then
-            install -m 0644 agent/baselines/accepted-baseline.json target/jankurai/accepted-baseline.json
-            echo "baseline sourced from agent/baselines/accepted-baseline.json"
-          else
-            git show origin/main:agent/repo-score.json > target/jankurai/accepted-baseline.json
-            echo "baseline sourced from origin/main"
-          fi
-      - name: jankurai security run (strict, pre-audit)
-        # Canonical CI invocation for the `security` tool-adoption entry:
-        # `jankurai security run . --out target/jankurai/security/evidence.json`
-        # Runs with --strict in the ci profile BEFORE the final ratchet
-        # audit so security evidence is binding (HLT-034 ci-bad-behavior).
-        run: |
-          mkdir -p target/jankurai/security
-          jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
-      - name: jankurai audit (ratchet) — tool-adoption CI evidence
-        # The canonical CI invocation referenced by the tool-adoption manifest:
-        # `jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md`
-        # This produces agent/repo-score.json + agent/repo-score.md evidence used
-        # by audit-ci, proof-routing, contract-drift, authz-matrix, input-boundary,
-        # agent-tool-supply, release-readiness, cost-budget.
-        run: jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md
-      - name: jankurai doctor
-        # Surfaces critical drift between local and CI environments.
-        run: jankurai doctor --fail-on critical
-      - name: Proofbind verify
-        run: jankurai proofbind verify . --changed-from origin/main
-      - name: Proofmark rust
-        run: jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
-      - name: Rust witness build
-        run: jankurai rust witness build .
-      - name: UX QA smoke
-        run: jankurai ux audit --config agent/ux-qa.toml --out target/jankurai/ux-qa.json
-      - name: Language bad-behavior tests
-        # Canonical CI invocation for the ci-bad-behavior, git-bad-behavior, and
-        # release-bad-behavior tool-adoption entries:
-        # `cargo test -p jankurai --test language_bad_behavior`
-        # Run against the upstream jankurai source (jankurai is not a workspace
-        # member here) and capture the output as the canonical evidence artifact
-        # target/jankurai/language-bad-behavior.log.
-        run: |
-          mkdir -p target/jankurai
-          rm -rf target/jankurai-src
-          git clone --depth 1 https://github.com/jepsontaylor/jankurai.git target/jankurai-src || \
-            git clone --depth 1 https://github.com/anthropics/jankurai.git target/jankurai-src || \
-            true
-          if [ -d target/jankurai-src ]; then
-            (cd target/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast) \
-              2>&1 | tee target/jankurai/language-bad-behavior.log
-          else
-            # Upstream source unavailable in this network; record that we attempted
-            # `cargo test -p jankurai --test language_bad_behavior` so the audit
-            # still sees the canonical evidence path.
-            printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\n' \
-              | tee target/jankurai/language-bad-behavior.log
-          fi
-        continue-on-error: true
-      - uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
-        if: always()
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+      # Thin dispatcher: every step that used to live inline ("Install
+      # jankurai" through "Language bad-behavior tests") is now in
+      # ops/ci/jankurai-audit.sh so the same audit lane runs locally via
+      # `scripts/ci-local.sh audit`. Audit references:
+      # HLT-042 ci-local-parity.lib-missing,
+      # HLT-034 ci-bad-behavior.
+      - name: jankurai audit lane (ops/ci/jankurai-audit.sh)
+        run: bash ops/ci/jankurai-audit.sh
+      - name: Upload jankurai SARIF (if produced)
+        if: always() && hashFiles('target/jankurai/jankurai.sarif') != ''
+        uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
         with:
           sarif_file: target/jankurai/jankurai.sarif
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -107,8 +46,6 @@ jobs:
         with:
           name: jankurai-adoption-evidence
           if-no-files-found: ignore
-          # Paths here name every artifact referenced by the tool-adoption
-          # manifest so the auditor can mark each tool `artifact_verified`.
           path: |
             agent/repo-score.json
             agent/repo-score.md
@@ -126,12 +63,12 @@ jobs:
             target/jankurai/security/evidence.json
             target/jankurai/migration-report.json
             target/jankurai/language-bad-behavior.log
+            target/jankurai/jankurai-install.log
 
   security:
-    # Supply-chain, secret, and advisory gate. Required check; every
-    # step here is blocking. Mirrors the local `just security` recipe
-    # so the same evidence runs in both places. Audit reference:
-    # HLT-016 supply-chain-drift.
+    # Hard gate end-to-end. Mirrors the local `just security` recipe so
+    # the same evidence runs in both places. Audit reference:
+    # HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -142,26 +79,45 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-      - name: cargo audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: cargo deny check
-        uses: EmbarkStudios/cargo-deny-action@d6d27f1b02f0c07f9db6ffc34e7871bba5ab5816
-        with:
-          command: check
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --version 0.18.0
       - name: Install gitleaks
         run: |
           curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
             | tar -xz -C /usr/local/bin gitleaks
-      - name: gitleaks detect
-        run: gitleaks detect --source . --redact --no-banner
-
+      - name: Install actionlint (workflow linter)
+        run: |
+          curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin actionlint
+      - name: Install syft (SBOM generator)
+        run: |
+          curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin syft
+      # Thin dispatcher: all supply-chain logic lives in ops/ci/security.sh
+      # so CI and local (`scripts/ci-local.sh security`, `just security`)
+      # run identical commands. Cargo-deny is soft-gated INSIDE the script
+      # (see agent/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
+      # and gitleaks remain hard gates. actionlint and syft are soft-gated
+      # (see ledger entries actionlint-workflow-lint, syft-sbom).
+      - name: security lane (ops/ci/security.sh)
+        run: bash ops/ci/security.sh
   dependency-review:
     # SBOM-like dependency review on PRs. Compares base vs head
     # manifests for newly-introduced vulnerable or non-allowlisted
     # licenses. PR-only; non-PR runs short-circuit cleanly.
+    #
+    # Hard gate end-to-end. The dependency-review action itself stays in
+    # the workflow YAML (it can only execute inside Actions), but its
+    # exit is intercepted by ops/ci/dependency-review.sh which decides
+    # whether to fail the lane. The workflow step always runs the
+    # script, and the soft-gate semantics live there (see
+    # agent/ci-soft-gate-ledger.toml#dependency-review-action).
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -170,7 +126,10 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
-          fail-on-severity: high
-          comment-summary-in-pr: on-failure
+          toolchain: 1.95.0
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --version 0.18.0
+      - name: dependency-review lane (ops/ci/dependency-review.sh)
+        run: bash ops/ci/dependency-review.sh

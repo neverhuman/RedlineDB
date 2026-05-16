@@ -144,65 +144,19 @@ pub(crate) fn load_table_row_by_rowid(
     Ok(None)
 }
 
+/// Executor-side wrapper around the planner's shared `selection_rowid_eq`
+/// detector. Uses `eval_scalar` so runtime evaluation errors are
+/// surfaced instead of being silently treated as `NULL` (which is what
+/// the planner's conservative path does at planning time).
 pub(crate) fn selection_rowid_eq(
     table: &Arc<TableDef>,
     selection: &Option<Expr>,
     bindings: &[Option<SqlValue>],
 ) -> Result<Option<RowId>> {
-    let Some(expr) = selection else {
-        return Ok(None);
-    };
-    let rowid_col = |name: &str| {
-        name.eq_ignore_ascii_case("rowid")
-            || name.eq_ignore_ascii_case("_rowid_")
-            || name.eq_ignore_ascii_case("oid")
-            || table
-                .rowid_alias_column
-                .and_then(|alias| table.columns.get(alias as usize))
-                .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
-    };
-    let Expr::BinaryOp { left, op, right } = expr else {
-        return Ok(None);
-    };
-    if !matches!(op, BinaryOperator::Eq) {
-        return Ok(None);
-    }
-    let expr_rowid = if let Some(value) = rowid_eq_side(table, left, right, bindings, &rowid_col)? {
-        value
-    } else if let Some(value) = rowid_eq_side(table, right, left, bindings, &rowid_col)? {
-        value
-    } else {
-        return Ok(None);
-    };
-    Ok(Some(expr_rowid))
-}
-
-pub(crate) fn rowid_eq_side(
-    _table: &Arc<TableDef>,
-    ident_side: &Expr,
-    value_side: &Expr,
-    bindings: &[Option<SqlValue>],
-    rowid_col: &impl Fn(&str) -> bool,
-) -> Result<Option<RowId>> {
-    let name = match ident_side {
-        Expr::Identifier(ident) if rowid_col(&ident.value) => Some(ident.value.as_str()),
-        Expr::CompoundIdentifier(parts) => parts.last().and_then(|ident| {
-            if rowid_col(&ident.value) {
-                Some(ident.value.as_str())
-            } else {
-                None
-            }
-        }),
-        _ => None,
-    };
-    if name.is_none() {
-        return Ok(None);
-    }
-    let value = eval_scalar(value_side, &RowContext::Empty, bindings)?;
-    match value {
-        SqlValue::Integer(v) if v >= 0 => Ok(Some(RowId::new(v as u64))),
-        SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => Ok(Some(RowId::new(v as u64))),
-        SqlValue::Null => Ok(None),
-        _ => Err(Error::DatatypeMismatch),
-    }
+    crate::planner::helpers::selection_rowid_eq_with(
+        table,
+        selection,
+        bindings,
+        |expr, bindings| eval_scalar(expr, &RowContext::Empty, bindings),
+    )
 }

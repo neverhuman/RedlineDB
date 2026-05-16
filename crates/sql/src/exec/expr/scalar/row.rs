@@ -139,22 +139,32 @@ pub(crate) fn lookup_qualified_column(
     }
 }
 
-fn row_matches_qualifier(row: &TableRow, qualifier: &str) -> bool {
-    if let Some(alias) = &row.alias
+/// True if `name` is one of the synthetic rowid aliases SQLite accepts
+/// in expression context (`rowid`, `_rowid_`, `oid`). Centralised so the
+/// table-row, joined-row, and excluded-row lookups stay in sync.
+fn is_rowid_alias_name(name: &str) -> bool {
+    name.eq_ignore_ascii_case("rowid")
+        || name.eq_ignore_ascii_case("_rowid_")
+        || name.eq_ignore_ascii_case("oid")
+}
+
+/// Match a table-source alias (or, falling back, the underlying table
+/// name) against a qualifier from a `qual.col` expression.
+fn matches_table_qualifier(alias: Option<&Arc<str>>, table: &TableDef, qualifier: &str) -> bool {
+    if let Some(alias) = alias
         && alias.as_ref().eq_ignore_ascii_case(qualifier)
     {
         return true;
     }
-    row.table.name.to_string().eq_ignore_ascii_case(qualifier)
+    table.name.to_string().eq_ignore_ascii_case(qualifier)
+}
+
+fn row_matches_qualifier(row: &TableRow, qualifier: &str) -> bool {
+    matches_table_qualifier(row.alias.as_ref(), &row.table, qualifier)
 }
 
 fn row_matches_joined_qualifier(row: &JoinedRow, qualifier: &str) -> bool {
-    if let Some(alias) = &row.alias
-        && alias.as_ref().eq_ignore_ascii_case(qualifier)
-    {
-        return true;
-    }
-    row.table.name.to_string().eq_ignore_ascii_case(qualifier)
+    matches_table_qualifier(row.alias.as_ref(), &row.table, qualifier)
 }
 
 fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
@@ -169,10 +179,7 @@ fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
 }
 
 fn lookup_table_column(row: &TableRow, name: &str) -> Result<SqlValue> {
-    if name.eq_ignore_ascii_case("rowid")
-        || name.eq_ignore_ascii_case("_rowid_")
-        || name.eq_ignore_ascii_case("oid")
-    {
+    if is_rowid_alias_name(name) {
         return Ok(SqlValue::Integer(row.rowid.0 as i64));
     }
     let idx = match row
@@ -191,10 +198,7 @@ fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
     match &row.row {
         Some(present) => lookup_table_column(present, name),
         None => {
-            if name.eq_ignore_ascii_case("rowid")
-                || name.eq_ignore_ascii_case("_rowid_")
-                || name.eq_ignore_ascii_case("oid")
-            {
+            if is_rowid_alias_name(name) {
                 return Ok(SqlValue::Null);
             }
             match row
@@ -212,10 +216,7 @@ fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
 }
 
 fn lookup_excluded_column(table: &TableDef, excluded: &[SqlValue], name: &str) -> Result<SqlValue> {
-    if name.eq_ignore_ascii_case("rowid")
-        || name.eq_ignore_ascii_case("_rowid_")
-        || name.eq_ignore_ascii_case("oid")
-    {
+    if is_rowid_alias_name(name) {
         if let Some(alias) = table.rowid_alias_column
             && let Some(value) = excluded.get(alias as usize)
         {
@@ -347,8 +348,11 @@ impl SqlRow {
             SqlRow::Table(row) => RowContext::Table(row),
             SqlRow::Joined(rows) => RowContext::Joined(rows),
             SqlRow::SqliteSchema(row) => RowContext::SqliteSchema(row),
-            SqlRow::Static(_) => RowContext::Empty,
-            SqlRow::Empty => RowContext::Empty,
+            // `Static` (values-clause) and `Empty` both project into an
+            // empty row context — neither carries column metadata an
+            // identifier could resolve against. Collapsed into a single
+            // arm to keep the dedup detector happy.
+            SqlRow::Static(_) | SqlRow::Empty => RowContext::Empty,
         }
     }
 

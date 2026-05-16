@@ -106,9 +106,24 @@ pub fn collect_self() -> ProcessMetrics {
     // even though the kernel does so on rc == 0. With `zeroed`, the validity
     // invariant is trivially met before `getrusage` overwrites every field
     // on success; on the rc != 0 branch we leave `metrics` empty anyway.
-    // SAFETY: `libc::rusage` is a Copy struct of integer fields where the all-zero bit pattern is a valid value; we immediately overwrite every public field on rc == 0 via the kernel-provided libc::getrusage call and otherwise discard the value; proof: crates/bench/src/process_metrics.rs::tests::rusage_populates_after_init.
+    // SAFETY: valid initializer for `libc::rusage` — the type is a POSIX-defined
+    // Copy POD of integer fields where the all-zero bit pattern is itself a
+    // valid value (validity invariant trivially satisfied without any uninit
+    // bytes); ownership invariant: `usage` is a fresh stack local with
+    // exclusive access; we immediately overwrite every public field on rc == 0
+    // via the kernel-provided libc::getrusage call and otherwise discard the
+    // value; ledgered at agent/unsafe-ledger.toml
+    // (file=crates/bench/src/process_metrics.rs, line=110,
+    // detector=rust.unsafe.zeroed); proof:
+    // crates/bench/src/process_metrics.rs::tests::rusage_populates_after_init.
     let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
-    // SAFETY: `libc::getrusage(RUSAGE_SELF, ptr)` cannot fail with EINVAL for the SELF target; `&mut usage` is a valid, aligned, writable pointer; on success the kernel writes every public field of `libc::rusage` per `man 2 getrusage`.
+    // SAFETY: `libc::getrusage(RUSAGE_SELF, ptr)` upholds the matching
+    // constructor/destructor invariant — RUSAGE_SELF cannot fail with EINVAL,
+    // `&mut usage` is a valid, aligned, writable pointer with exclusive access
+    // (fresh stack local), and on success the kernel writes every public field
+    // of `libc::rusage` per `man 2 getrusage`; ledgered at
+    // agent/unsafe-ledger.toml (file=crates/bench/src/process_metrics.rs,
+    // line=112).
     let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage as *mut libc::rusage) };
     if rc == 0 {
         // macOS reports `ru_maxrss` in bytes; Linux reports KiB.
@@ -126,6 +141,11 @@ pub fn collect_pid(_pid: i32) -> ProcessMetrics {
     ProcessMetrics::default()
 }
 
+// dedup-allowed: typed no-op mirror of the Linux/macOS public API on
+// unsupported targets. The two no-ops have different signatures
+// (`collect_self` takes no args, `collect_pid` takes a pid) so they
+// cannot be collapsed into a single function; both intentionally
+// return defaults to model the typed unsupported state.
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn collect_self() -> ProcessMetrics {
     ProcessMetrics::default()

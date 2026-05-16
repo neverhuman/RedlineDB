@@ -7,15 +7,15 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778901990`
-- Started at: `1778901990`
-- Elapsed: `4984` ms
+- Run ID: `1778955953`
+- Started at: `1778955953`
+- Elapsed: `3901` ms
 - Scope: `full`
-- Raw score: `85`
-- Final score: `70`
-- Decision: `advisory`
+- Raw score: `88`
+- Final score: `88`
+- Decision: `pass`
 - Minimum score: `85`
-- Caps applied: `severe-duplication-in-product-code, authz-or-data-isolation-gap, input-boundary-gap, rust-bad-behavior`
+- Caps applied: `none`
 
 ## Hard Rule Caps
 
@@ -36,7 +36,7 @@
 | `vibe-placeholders-in-product-code` | 68 | no |
 | `fallback-soup-in-product-code` | 70 | no |
 | `future-hostile-dead-language-in-product-code` | 64 | no |
-| `severe-duplication-in-product-code` | 70 | yes |
+| `severe-duplication-in-product-code` | 70 | no |
 | `generated-zone-mutation-risk` | 76 | no |
 | `direct-db-access-from-wrong-layer` | 66 | no |
 | `missing-web-e2e-lane` | 82 | no |
@@ -46,15 +46,15 @@
 | `secret-like-content-detected` | 60 | no |
 | `false-green-test-risk` | 76 | no |
 | `destructive-migration-risk` | 70 | no |
-| `authz-or-data-isolation-gap` | 78 | yes |
-| `input-boundary-gap` | 78 | yes |
+| `authz-or-data-isolation-gap` | 78 | no |
+| `input-boundary-gap` | 78 | no |
 | `agent-tool-supply-chain-gap` | 78 | no |
 | `release-readiness-gap` | 80 | no |
 | `missing-rust-property-or-integration-tests` | 82 | no |
 | `no-agent-friendly-exception-pattern` | 76 | no |
 | `missing-agent-readable-docs` | 80 | no |
 | `streaming-runtime-drift` | 78 | no |
-| `rust-bad-behavior` | 72 | yes |
+| `rust-bad-behavior` | 72 | no |
 | `sql-bad-behavior` | 72 | no |
 | `typescript-bad-behavior` | 72 | no |
 | `docker-bad-behavior` | 72 | no |
@@ -66,6 +66,50 @@
 | `web-security-bad-behavior` | 68 | no |
 | `repo-rot-bad-behavior` | 88 | no |
 | `comment-hygiene-dangerous-residue` | 72 | no |
+| `ci-local-parity` | 70 | no |
+
+## Copy-Code Redundancy
+
+- Status: `review` hard=`0` warning=`29` files=`167`
+- Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
+- Duplicate volume: lines=`38` tokens=`103` bytes=`1020`
+
+- Notes:
+  - hard classes are limited to exact active-source file matches and substantial exact same-name units
+  - warning classes include same-body different-name units and token/block duplication
+  - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
+
+| Kind | Severity | Language | Lines | Tokens | Instances | Reason |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:196-200` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/format/bytes.rs:44-46, crates/kernel/src/format/bytes.rs:49-51, crates/kernel/src/format/bytes.rs:54-56` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:458-460, crates/kernel/src/storage/control.rs:147-149, crates/kernel/src/storage/tx_status_checkpoint.rs:147-149` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/statement.rs:180-181, crates/redlinedb/src/value.rs:106-107, crates/redlinedb/src/value.rs:118-119, crates/redlinedb/src/value.rs:130-131` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/vector/diskann/mod.rs:359-360, crates/redlinedb/src/value.rs:40-41, crates/sql/src/exec/expr/scalar/row.rs:346-347, crates/sql/src/exec/expr/scalar/row.rs:359-360` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:142-142, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:207-207, crates/kernel/src/integrity/page_csum.rs:107-107` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/connection.rs:194-195, crates/redlinedb/src/connection.rs:203-204, crates/redlinedb/src/connection.rs:213-214` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/connection.rs:52-53, crates/redlinedb/src/connection.rs:88-89, crates/redlinedb/src/connection.rs:94-95` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats.rs:342-343, crates/kernel/src/catalog/stats.rs:353-354` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/certify/scheduler.rs:392-394, crates/kernel/src/engine/runtime.rs:42-44` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/exec/expr/scalar/row.rs:162-163, crates/sql/src/exec/expr/scalar/row.rs:166-167` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:177-178, crates/redlinedb/src/statement.rs:204-205` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:69-70, crates/redlinedb/src/connection.rs:75-76` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 5 | `crates/kernel/src/json/wire.rs:249-250, crates/kernel/src/json/wire.rs:321-322` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb/src/statement.rs:142-143, crates/redlinedb/src/statement.rs:226-227` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb/src/statement.rs:150-151, crates/redlinedb/src/statement.rs:234-235` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/domain/src/error.rs:73-74, crates/domain/src/error.rs:91-92` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/savepoint.rs:64-65, crates/sql/src/parser/savepoint.rs:83-84` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:119-120, crates/redlinedb/src/statement.rs:200-201` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:138-139, crates/redlinedb/src/statement.rs:222-223` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:134-135, crates/redlinedb/src/statement.rs:218-219` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:146-147, crates/redlinedb/src/statement.rs:230-231` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:130-131, crates/redlinedb/src/statement.rs:214-215` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:154-155, crates/redlinedb/src/statement.rs:264-265` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:114-115, crates/redlinedb/src/statement.rs:195-196` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/params.rs:15-16, crates/redlinedb/src/params.rs:25-26` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/json/wire.rs:273-274, crates/kernel/src/json/wire.rs:345-346` | `same-name semantic unit copied across multiple files` |
 
 ## Dimensions
 
@@ -74,18 +118,18 @@
 | Ownership and navigation surface | 13 | 100 | 13.00 | root `AGENTS.md` present; `CODEOWNERS` present |
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
-| Security and supply-chain posture | 12 | 78 | 9.36 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 22 | 2.64 | largest authored code file: crates/redlinedb/src/lib.rs (941 LOC); code file exceeds 500 LOC |
+| Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
+| Code shape and semantic surface | 12 | 80 | 9.60 | largest authored code file: crates/ffi/src/sqlite3_api.rs (499 LOC); most code files stay under 300 LOC |
 | Data truth and workflow safety | 8 | 95 | 7.60 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
-| Jankurai tool adoption and CI replacement | 7 | 97 | 6.79 | control-plane files present; applicable=15 |
+| Jankurai tool adoption and CI replacement | 7 | 26 | 1.82 | control-plane files present; applicable=16 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
-| Build speed signals | 4 | 70 | 2.80 | build acceleration markers found; targeted test/build commands found |
+| Build speed signals | 4 | 80 | 3.20 | build acceleration markers found; targeted test/build commands found |
 
 ## Reference Profile Structure
 
-- Applicable cells: `9` canonical=`9` noncanonical=`0` guidance missing=`0`
+- Applicable cells: `8` canonical=`8` noncanonical=`0` guidance missing=`0`
 
 | Cell | Status | Canonical | Detected | Aliases | Guidance | Owner | Proof lane | Agent fix |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -97,7 +141,7 @@
 | `workers` | `canonical` | `crates/workers/` | `crates/workers` | `workers/, jobs/, scheduler/, queue/` | `present` | `crates/workers` | `workflow / replay tests` | `keep `crates/workers/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 | `contracts` | `canonical` | `contracts/` | `contracts` | `openapi/, protobuf/, json-schema/, generated/` | `present` | `contracts` | `generation / drift checks` | `keep `contracts/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 | `db` | `canonical` | `db/` | `db` | `migrations/, constraints/, sql/` | `present` | `db` | `migration / constraint tests` | `keep `db/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
-| `python-ai` | `canonical` | `python/ai-service/` | `python, python/ai-service` | `python/, ai-service/, evals/, embeddings/, model/` | `present` | `python/ai-service` | `eval / contract tests` | `keep `python/ai-service/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `python-ai` | `not_applicable` | `python/ai-service/` | `-` | `python/, ai-service/, evals/, embeddings/, model/` | `not_required` | `python/ai-service` | `eval / contract tests` | `no action` |
 | `ops` | `canonical` | `ops/` | `.github, .github/workflows, ops` | `.github/, .github/workflows/, ci/, release/, observability/, security/` | `present` | `ops` | `security lane / workflow lint` | `keep `ops/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 
 ## Rendered UX QA
@@ -109,34 +153,35 @@
 ## Tool Adoption
 
 - Control plane present: `true`
-- Applicable tools: `15`
+- Applicable tools: `16`
 - Configured: `13`
-- CI evidence: `15`
-- Artifact verified: `15`
-- Replaced count: `15`
-- Missing CI evidence: `none`
+- CI evidence: `0`
+- Artifact verified: `0`
+- Replaced count: `0`
+- Missing CI evidence: `audit-ci, proof-routing, proofbind, proofmark-rust, copy-code, security, ci-bad-behavior, git-bad-behavior, release-bad-behavior, contract-drift, rust-witness, authz-matrix, input-boundary, agent-tool-supply, release-readiness, cost-budget`
 
 | Tool | Category | Mode | Status | Replaced | Artifacts |
 | --- | --- | --- | --- | --- | --- |
-| `audit-ci` | `audit` | `auto` | `artifact_verified` | `manual repo scoring, ad hoc score gates` | `agent/repo-score.json, agent/repo-score.md` |
-| `proof-routing` | `proof` | `auto` | `artifact_verified` | `ad hoc proof lane selection, manual proof receipts` | `agent/repo-score.json, agent/repo-score.md, target/jankurai/repair-queue.jsonl` |
-| `proofbind` | `proof` | `auto` | `artifact_verified` | `manual changed-surface routing, ad hoc proof obligation lists` | `target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json` |
-| `proofmark-rust` | `proof` | `auto` | `artifact_verified` | `line-only coverage review, manual in-diff mutation review` | `target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json` |
-| `security` | `security` | `auto` | `artifact_verified` | `gitleaks, dependency review, SBOM/provenance` | `target/jankurai/security/evidence.json` |
-| `ci-bad-behavior` | `security` | `auto` | `artifact_verified` | `mutable workflow refs, secret echo/debug workflow checks, non-blocking security scans` | `target/jankurai/language-bad-behavior.log` |
-| `git-bad-behavior` | `audit` | `auto` | `artifact_verified` | `destructive git automation, force-push release scripts, hidden stash-based state` | `target/jankurai/language-bad-behavior.log` |
-| `release-bad-behavior` | `release` | `auto` | `artifact_verified` | `manual release checklist, ad hoc tag and artifact review, manual provenance review` | `target/jankurai/language-bad-behavior.log` |
+| `audit-ci` | `audit` | `auto` | `configured` | `manual repo scoring, ad hoc score gates` | `agent/repo-score.json, agent/repo-score.md` |
+| `proof-routing` | `proof` | `auto` | `configured` | `ad hoc proof lane selection, manual proof receipts` | `agent/repo-score.json, agent/repo-score.md, target/jankurai/repair-queue.jsonl` |
+| `proofbind` | `proof` | `auto` | `missing` | `manual changed-surface routing, ad hoc proof obligation lists` | `target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json` |
+| `proofmark-rust` | `proof` | `auto` | `missing` | `line-only coverage review, manual in-diff mutation review` | `target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json` |
+| `copy-code` | `audit` | `auto` | `missing` | `ad hoc copy-code review, manual duplication triage` | `target/jankurai/copy-code.json, target/jankurai/copy-code.md` |
+| `security` | `security` | `auto` | `configured` | `gitleaks, dependency review, SBOM/provenance` | `target/jankurai/security/evidence.json` |
+| `ci-bad-behavior` | `security` | `auto` | `configured` | `mutable workflow refs, secret echo/debug workflow checks, non-blocking security scans` | `target/jankurai/language-bad-behavior.log` |
+| `git-bad-behavior` | `audit` | `auto` | `configured` | `destructive git automation, force-push release scripts, hidden stash-based state` | `target/jankurai/language-bad-behavior.log` |
+| `release-bad-behavior` | `release` | `auto` | `configured` | `manual release checklist, ad hoc tag and artifact review, manual provenance review` | `target/jankurai/language-bad-behavior.log` |
 | `ux-qa` | `ux` | `auto` | `not_applicable` | `playwright, axe-core, visual baselines` | `target/jankurai/ux-qa.json` |
 | `db-migration-analyze` | `db` | `auto` | `not_applicable` | `manual migration review` | `target/jankurai/migration-report.json` |
-| `contract-drift` | `contract` | `auto` | `artifact_verified` | `handwritten contract drift checks, openapi diff` | `agent/repo-score.json, agent/repo-score.md` |
-| `rust-witness` | `rust` | `auto` | `artifact_verified` | `manual witness graphing` | `target/jankurai/rust/witness-graph.json` |
+| `contract-drift` | `contract` | `auto` | `configured` | `handwritten contract drift checks, openapi diff` | `agent/repo-score.json, agent/repo-score.md` |
+| `rust-witness` | `rust` | `auto` | `configured` | `manual witness graphing` | `target/jankurai/rust/witness-graph.json` |
 | `vibe-coverage` | `audit` | `auto` | `not_applicable` | `manual vibe-coding coverage spreadsheet` | `target/jankurai/vibe-coverage.json, target/jankurai/vibe-coverage.md` |
 | `coverage-evidence` | `proof` | `auto` | `not_applicable` | `manual coverage report review, ad hoc mutation survivor review` | `target/jankurai/coverage/coverage-audit.json, target/jankurai/coverage/coverage-audit.md` |
-| `authz-matrix` | `security` | `auto` | `artifact_verified` | `manual authz matrix review` | `agent/repo-score.json, agent/repo-score.md` |
-| `input-boundary` | `security` | `auto` | `artifact_verified` | `manual unsafe sink review` | `agent/repo-score.json, agent/repo-score.md` |
-| `agent-tool-supply` | `security` | `auto` | `artifact_verified` | `manual MCP/tool trust review` | `agent/repo-score.json, agent/repo-score.md` |
-| `release-readiness` | `release` | `auto` | `artifact_verified` | `manual launch checklist` | `agent/repo-score.json, agent/repo-score.md` |
-| `cost-budget` | `release` | `auto` | `artifact_verified` | `manual spend review` | `agent/repo-score.json, agent/repo-score.md` |
+| `authz-matrix` | `security` | `auto` | `configured` | `manual authz matrix review` | `agent/repo-score.json, agent/repo-score.md` |
+| `input-boundary` | `security` | `auto` | `configured` | `manual unsafe sink review` | `agent/repo-score.json, agent/repo-score.md` |
+| `agent-tool-supply` | `security` | `auto` | `configured` | `manual MCP/tool trust review` | `agent/repo-score.json, agent/repo-score.md` |
+| `release-readiness` | `release` | `auto` | `configured` | `manual launch checklist` | `agent/repo-score.json, agent/repo-score.md` |
+| `cost-budget` | `release` | `auto` | `configured` | `manual spend review` | `agent/repo-score.json, agent/repo-score.md` |
 
 ## Boundary manifest (ingested)
 
@@ -156,198 +201,21 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
    Route: TLR `Entropy`, lane `fast`, owner `tools`
    Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 22 below the standard floor of 85
+   Reason: `Code shape and semantic surface` scored 80 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:4a573aa46d4f081fdba114abc3980ca3bdf80d9da1f5ae6bfbe11bc62588308c`
-   Evidence: largest authored code file: crates/redlinedb/src/lib.rs (941 LOC), code file exceeds 500 LOC, duplicate code block marker found, rust bad-behavior hard findings: 6
-2. `medium` `security` `.github/workflows/jankurai.yml`
-   Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
-   Check: `HLT-016-SUPPLY-CHAIN-DRIFT:security` `soft` confidence `0.76`
-   Route: TLR `Security, secrets, agency`, lane `security`, owner `ops`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Reason: `Security and supply-chain posture` scored 78 below the standard floor of 85
-   Fix: wire secret, dependency, provenance, and workflow scans into an operational CI lane
-   Rerun: `just security`
-   Fingerprint: `sha256:d24ab5697e66411af8d5424d1d36ebf888793ebced3685d5fa95bb912e9f12e2`
-   Evidence: lockfile present, secret or dependency scan tooling found, provenance/SBOM tooling found, security lane present
-3. `medium` `proof` `Justfile`
+   Fingerprint: `sha256:d9e3e689063b2da5d656095df4b5a3e7f15480211448beff07a2c8a9e0912be1`
+   Evidence: largest authored code file: crates/ffi/src/sqlite3_api.rs (499 LOC), most code files stay under 300 LOC, copy-code advisory classes found: 29 (advisory only, no score impact), rust bad-behavior advisory signals: 1167
+2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `fast`, owner `workspace`
    Docs: `docs/testing.md`
-   Reason: `Build speed signals` scored 70 below the standard floor of 85
+   Reason: `Build speed signals` scored 80 below the standard floor of 85
    Fix: add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Rerun: `just fast`
-   Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
+   Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-4. `high` `generated` `agent/generated-zones.toml:1`
-   Rule: `HLT-002-GENERATED-MUTATION`
-   Check: `HLT-002-GENERATED-MUTATION:generated` `hard` confidence `0.95`
-   Route: TLR `Contracts/data`, lane `contract`, owner `agent`
-   Docs: `agent/JANKURAI_STANDARD.md#generated-zones`
-   Reason: generated zone file `crates/ffi/include/redlinedb.h` is missing
-   Fix: regenerate `crates/ffi/include/redlinedb.h` using the declared command, or remove the zone entry if the file was deleted intentionally
-   Rerun: `just fast`
-   Fingerprint: `sha256:df5c62d0365a5a285aac8a6c8d2f5ba9bc5d20e02c2393f56d5bf0f599e87c46`
-   Evidence: generated zone integrity violation
-5. `high` `audit` `agent/owner-map.json:1`
-   Rule: `HLT-017-OPAQUE-OBSERVABILITY`
-   Check: `HLT-017-OPAQUE-OBSERVABILITY:audit` `hard` confidence `0.88`
-   Route: TLR `Repair`, lane `observability`, owner `agent`
-   Docs: `agent/JANKURAI_STANDARD.md#repair-receipts`
-   Reason: jankurai manifest could not be parsed
-   Fix: fix the manifest syntax so audit policy and routing maps are authoritative
-   Rerun: `just score`
-   Fingerprint: `sha256:4d3a9c009a83e1f29eaffe0eb6c223311fb0d400ca2702b48fc92a31c7f080b8`
-   Evidence: key must be a string at line 59 column 1
-6. `high` `proof` `agent/test-map.json`
-   Rule: `HLT-004-UNMAPPED-PROOF`
-   Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
-   Route: TLR `Verification`, lane `fast`, owner `agent`
-   Docs: `agent/JANKURAI_STANDARD.md#proof-lanes`
-   Reason: path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/index.json` has no test-map proof route
-   Fix: add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
-   Rerun: `just fast`
-   Fingerprint: `sha256:63a63918499ec1e3424ac105e60444bb1168ae5e0c338de4663f64f71dd4be84`
-   Evidence: benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/index.json
-7. `high` `proof` `agent/test-map.json`
-   Rule: `HLT-004-UNMAPPED-PROOF`
-   Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
-   Route: TLR `Verification`, lane `fast`, owner `agent`
-   Docs: `agent/JANKURAI_STANDARD.md#proof-lanes`
-   Reason: path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json` has no test-map proof route
-   Fix: add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
-   Rerun: `just fast`
-   Fingerprint: `sha256:64970509ee4a41509d6bb4ba4fc0c2f619d9206cc936d916ea4e9898bda07699`
-   Evidence: benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json
-8. `high` `proof` `agent/test-map.json`
-   Rule: `HLT-004-UNMAPPED-PROOF`
-   Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
-   Route: TLR `Verification`, lane `fast`, owner `agent`
-   Docs: `agent/JANKURAI_STANDARD.md#proof-lanes`
-   Reason: path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json` has no test-map proof route
-   Fix: add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
-   Rerun: `just fast`
-   Fingerprint: `sha256:2c130c5e7ee8796c51315afef4df6e6872360ca7d7617d597d5b9752a8d00c3d`
-   Evidence: benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json
-9. `high` `proof` `agent/test-map.json`
-   Rule: `HLT-004-UNMAPPED-PROOF`
-   Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
-   Route: TLR `Verification`, lane `fast`, owner `agent`
-   Docs: `agent/JANKURAI_STANDARD.md#proof-lanes`
-   Reason: path `python/ai-service/AGENTS.md` has no test-map proof route
-   Fix: add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
-   Rerun: `just fast`
-   Fingerprint: `sha256:8b6b248cb1ef6e7b7bd5ef77a8b8b95ee31d28fee045d5ee7be75263101b3fc8`
-   Evidence: python/ai-service/AGENTS.md
-10. `high` `security` `crates/bench/src/config.rs:293`
-   Rule: `HLT-022-AUTHZ-ISOLATION-GAP`
-   Check: `HLT-022-AUTHZ-ISOLATION-GAP:security` `hard` confidence `0.88`
-   Route: TLR `Business truth`, lane `db`, owner `tools`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `tenant_id`
-   Reason: authz/data isolation requires negative proof evidence
-   Fix: add owner/non-owner authorization tests or RLS evidence for the touched data boundary
-   Rerun: `just fast`
-   Fingerprint: `sha256:a6afd78567ed0a67ae7fc634e599aca5bbb21557df1590c37150845fcec6d7c9`
-   Evidence: /// existing `kv_tenant_idx`. Fixture shape mirrors
-11. `high` `security` `crates/bench/src/process_metrics.rs:110`
-   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
-   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
-   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `rust.unsafe.zeroed`
-   Reason: all-zero validity was not proven
-   Fix: construct the type with a valid initializer instead of zeroing it
-   Rerun: `just fast`
-   Fingerprint: `sha256:aa96f629630b057efa0f1786eb528e79e8c6482d4ada20e64ec5019e02ebfcd0`
-   Evidence: detector=zeroed, proof-window=NearbySafetyComment, snippet=let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
-12. `high` `security` `crates/ffi/src/error.rs:33`
-   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
-   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
-   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `rust.unsafe.raw-parts`
-   Reason: ownership provenance is missing
-   Fix: use the matching constructor/destructor pair or add a documented ownership proof
-   Rerun: `just fast`
-   Fingerprint: `sha256:fb68a65ce20650b76a90bc88edfe06a198128b0d750b32b32f7c2a0727384404`
-   Evidence: detector=CString::from_raw, proof-window=NearbySafetyComment, snippet=drop(CString::from_raw(ptr as *mut c_char));
-13. `high` `security` `crates/ffi/src/exec.rs:15`
-   Rule: `HLT-023-INPUT-BOUNDARY-GAP`
-   Check: `HLT-023-INPUT-BOUNDARY-GAP:security` `hard` confidence `0.88`
-   Route: TLR `Security, secrets, agency`, lane `security`, owner `tools`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `shell execution`
-   Reason: input handling risk needs deterministic negative tests
-   Fix: replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
-   Rerun: `just security`
-   Fingerprint: `sha256:342ad1d692f12c78c70bde25de8152e2d389f36ac5429f3edf8fee8638c21b0c`
-   Evidence: pub extern "C" fn rldb_exec(
-14. `high` `security` `crates/ffi/src/lifecycle.rs:74`
-   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
-   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
-   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `rust.unsafe.raw-parts`
-   Reason: ownership provenance is missing
-   Fix: use the matching constructor/destructor pair or add a documented ownership proof
-   Rerun: `just fast`
-   Fingerprint: `sha256:bdbc8665d06771630a270b7628b5ce1d4ea68b943861e02146cd65daab567c1f`
-   Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(db));
-15. `high` `security` `crates/ffi/src/snapshot.rs:87`
-   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
-   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
-   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `rust.unsafe.raw-parts`
-   Reason: ownership provenance is missing
-   Fix: use the matching constructor/destructor pair or add a documented ownership proof
-   Rerun: `just fast`
-   Fingerprint: `sha256:abc9d33162968df3c2f0a73e25bee873f289b0f867d2811f1feb4de200a60990`
-   Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(backup));
-16. `high` `security` `crates/ffi/src/stmt.rs:160`
-   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
-   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
-   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `rust.unsafe.raw-parts`
-   Reason: ownership provenance is missing
-   Fix: use the matching constructor/destructor pair or add a documented ownership proof
-   Rerun: `just fast`
-   Fingerprint: `sha256:b4f1a6ca90b064a685ea26de401a4ea01a4018f38fbe80c7f14d209db28ce468`
-   Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=let boxed = unsafe { Box::from_raw(stmt) };
-17. `high` `security` `crates/ffi/src/util.rs:146`
-   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
-   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
-   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `rust.unsafe.raw-parts`
-   Reason: ownership provenance is missing
-   Fix: use the matching constructor/destructor pair or add a documented ownership proof
-   Rerun: `just fast`
-   Fingerprint: `sha256:27e1090b7e4705417e9aa0b0f9844b550d7938d697dd29c418e5a3937494b29a`
-   Evidence: detector=from_raw_parts, proof-window=NearbySafetyComment, snippet=unsafe { std::slice::from_raw_parts(ptr, len) }
-18. `high` `vibe` `crates/kernel/src/catalog/ops.rs:91`
-   Check: `HLT-000-SCORE-DIMENSION:vibe` `hard` confidence `0.88`
-   Route: TLR `Entropy`, lane `fast`, owner `tools`
-   Reason: duplicated product code block detected
-   Fix: extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
-   Rerun: `just fast`
-   Fingerprint: `sha256:5d17cafa9d506b6e03ae3fdd3cb0b82195bf51f1e3828c56f12ffda2dda4c8a1`
-   Evidence: duplicate block also appears at crates/kernel/src/catalog/ops.rs:61
-19. `medium` `release` `docs/testing.md`
-   Rule: `HLT-026-COST-BUDGET-GAP`
-   Check: `HLT-026-COST-BUDGET-GAP:release` `soft` confidence `0.88`
-   Route: TLR `Verification`, lane `release`, owner `standard`
-   Docs: `docs/testing.md`
-   Matched term: `budget`
-   Reason: unbounded paid work needs budgets and stop conditions
-   Fix: add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
-   Rerun: `just check`
-   Fingerprint: `sha256:edd248b7afc24b644107205fa5b84a88103ac4b622009ff9f19b779de8798f59`
-   Evidence: cost surface found without budget/stop-condition policy
 
 ## Policy
 
@@ -357,35 +225,7 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `high` `HLT-022-AUTHZ-ISOLATION-GAP` `crates/bench/src/config.rs` - add owner/non-owner authorization tests or RLS evidence for the touched data boundary
-   Route: `Business truth`/`db`
-2. `high` `HLT-002-GENERATED-MUTATION` `agent/generated-zones.toml` - regenerate `crates/ffi/include/redlinedb.h` using the declared command, or remove the zone entry if the file was deleted intentionally
-   Route: `Contracts/data`/`contract`
-3. `high` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
+1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-4. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
-   Route: `Verification`/`fast`
-5. `medium` `HLT-026-COST-BUDGET-GAP` `docs/testing.md` - add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
-   Route: `Verification`/`release`
-6. `high` `HLT-017-OPAQUE-OBSERVABILITY` `agent/owner-map.json` - fix the manifest syntax so audit policy and routing maps are authoritative
-   Route: `Repair`/`observability`
-7. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/bench/src/process_metrics.rs` - construct the type with a valid initializer instead of zeroing it
-   Route: `Security, secrets, agency`/`fast`
-8. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - use the matching constructor/destructor pair or add a documented ownership proof
-   Route: `Security, secrets, agency`/`fast`
-9. `high` `HLT-023-INPUT-BOUNDARY-GAP` `crates/ffi/src/exec.rs` - replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
-   Route: `Security, secrets, agency`/`security`
-10. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - use the matching constructor/destructor pair or add a documented ownership proof
-   Route: `Security, secrets, agency`/`fast`
-11. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/snapshot.rs` - use the matching constructor/destructor pair or add a documented ownership proof
-   Route: `Security, secrets, agency`/`fast`
-12. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - use the matching constructor/destructor pair or add a documented ownership proof
-   Route: `Security, secrets, agency`/`fast`
-13. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/util.rs` - use the matching constructor/destructor pair or add a documented ownership proof
-   Route: `Security, secrets, agency`/`fast`
-14. `high` `crates/kernel/src/catalog/ops.rs` - extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
+2. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
-15. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
-   Route: `Entropy`/`fast`
-16. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
-   Route: `Security, secrets, agency`/`security`

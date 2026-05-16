@@ -197,3 +197,28 @@ fn scalar_i64(conn: &mut dyn BenchConn, sql: &str, params: &[CellValue]) -> Resu
         other => Err(anyhow!("expected integer scalar, got {other:?}")),
     }
 }
+
+/// Deterministic seed-derived blob used by per-engine `seed_kv`
+/// helpers. The byte pattern is fixed across engines so cross-engine
+/// checksum comparisons stay stable.
+pub(super) fn seeded_blob(seed: usize) -> Vec<u8> {
+    format!("value-{seed:08}").into_bytes()
+}
+
+/// Single-file byte count helper shared by the SQLite and
+/// single-file Redline adapters. Returns 0 when the path is missing
+/// or unreadable so callers can sum it into reports without special
+/// cases.
+pub(super) fn file_len(path: &Path) -> u64 {
+    std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
+}
+
+/// CLI argument / report token for an `EngineKind`. Used to forward
+/// the engine selection to child processes and to label rows in
+/// generated reports.
+pub(crate) fn engine_name(engine: EngineKind) -> &'static str {
+    match engine {
+        EngineKind::Redline => "redline",
+        EngineKind::Sqlite => "sqlite",
+    }
+}

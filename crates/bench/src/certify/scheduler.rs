@@ -5,7 +5,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
-use crate::config::{CertifyArgs, CompareConfig, EngineKind, RunSpec};
+use crate::config::{CertifyArgs, CompareConfig, RunSpec};
+use crate::engine::engine_name;
 use crate::report::RunRecord;
 
 /// Lane BH P0 #1: cores reserved for the OS / parent harness when
@@ -315,7 +316,7 @@ fn spawn_child(
     let child = command
         .arg("run")
         .arg("--engine")
-        .arg(engine_arg(job.spec.engine))
+        .arg(engine_name(job.spec.engine))
         .arg("--workload")
         .arg(job.spec.workload.as_str())
         .arg("--durability")
@@ -376,13 +377,6 @@ fn finalize_child(mut slot: InFlight) -> Result<ScheduledOutcome> {
         is_warmup: slot.job.is_warmup,
         queue_index: slot.queue_index,
     })
-}
-
-fn engine_arg(engine: EngineKind) -> &'static str {
-    match engine {
-        EngineKind::Redline => "redline",
-        EngineKind::Sqlite => "sqlite",
-    }
 }
 
 #[cfg(target_os = "linux")]

@@ -35,17 +35,7 @@ struct HeapEntry {
     seq: u64,
 }
 
-impl PartialEq for HeapEntry {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-impl Eq for HeapEntry {}
-impl PartialOrd for HeapEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+super::impl_partial_from_ord!(HeapEntry);
 impl Ord for HeapEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         for ((l, r), dir) in self

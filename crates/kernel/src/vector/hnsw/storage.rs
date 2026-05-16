@@ -34,7 +34,9 @@ use std::sync::Arc;
 
 use crate::format::PAGE_HEADER_LEN;
 use crate::format::bytes::{read_u16, read_u32, read_u64, write_u16, write_u32, write_u64};
-use crate::format::{Lsn, PageGeneration, PageId, PageKind, RelId, SLOT_LEN, TuplePtr, TxId};
+use crate::format::{
+    Lsn, PageGeneration, PageId, PageKind, RelId, SLOT_LEN, TuplePtr, TxId, decode_opt_page_id,
+};
 use crate::storage::BufferPool;
 use crate::vector::distance::Metric;
 use crate::wal::{WalCoordinator, WalPayload, WalRecordKind};
@@ -311,14 +313,6 @@ pub(crate) fn read_data_page_next(page: &crate::format::Page) -> Result<Option<P
         return Err(Error::CorruptPage("expected hnsw data page"));
     }
     Ok(decode_opt_page_id(read_u64(special, DATA_NEXT_PAGE_OFF)?))
-}
-
-fn decode_opt_page_id(raw: u64) -> Option<PageId> {
-    if raw == u64::MAX {
-        None
-    } else {
-        Some(PageId(raw))
-    }
 }
 
 /// Body capacity (bytes) on a freshly initialized HNSW data page.

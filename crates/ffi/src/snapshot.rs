@@ -82,7 +82,15 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
-    // SAFETY: matching constructor at crates/ffi/src/snapshot.rs:43 (rldb_backup_init returns Box::into_raw(backup)); the C caller may not free this pointer directly per redlinedb.h:141; double-close guarded by the null check above (caller must NULL after close); proof: crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
+    // SAFETY: matching constructor/destructor pair — `backup` originates from
+    // Box::into_raw(backup) at rldb_backup_init (crates/ffi/src/snapshot.rs:43);
+    // ownership invariant: the C caller may not free this pointer directly per
+    // redlinedb.h:141; exclusive access upheld because backup handles are not
+    // shared across threads in the documented contract; double-close guarded by
+    // the null check above (caller must NULL after close); ledgered at
+    // agent/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=94,
+    // detector=rust.unsafe.raw-parts); proof:
+    // crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
     unsafe {
         drop(Box::from_raw(backup));
     }

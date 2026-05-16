@@ -137,6 +137,10 @@
       "command": "just score",
       "purpose": "verify manifests remain parseable and authoritative"
     },
+    "benchmark-results/": {
+      "command": "just benchmark-export-existing",
+      "purpose": "verify benchmark-results artifacts export cleanly and stay reproducible"
+    },
     "agent/coverage-sources.toml": {
       "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage evidence source routing and score import"
@@ -144,6 +148,10 @@
     ".agents/": {
       "command": "just score",
       "purpose": "verify agent workspace markers remain routed"
+    },
+    ".cargo/": {
+      "command": "just fast",
+      "purpose": "verify cargo configuration builds successfully"
     },
     ".cursor/": {
       "command": "just score",
@@ -327,11 +335,30 @@
     },
     "crates/bench/tests/tenant_isolation.rs": {
       "command": "rtk cargo test -p redlinedb-bench --test tenant_isolation --quiet --locked",
-      "purpose": "prove cross-tenant data isolation under the kv_tenant_idx fixture"
+      "purpose": "prove cross-tenant data isolation under the kv_tenant_idx fixture",
+      "proof_lane": "fast",
+      "rule": "HLT-022-AUTHZ-ISOLATION-GAP",
+      "primary_test": "dual_connection_cross_tenant_index_probe_yields_zero_rows"
+    },
+    "crates/ffi/tests/error_paths.rs": {
+      "command": "rtk cargo test -p redlinedb-ffi --test error_paths --quiet --locked",
+      "purpose": "prove FFI C ABI entry points return documented misuse codes on null/oversize/post-finalize negative paths",
+      "proof_lane": "fast",
+      "rule": "HLT-029-RUST-BAD-BEHAVIOR"
+    },
+    "crates/bench/tests/harness_unit.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test harness_unit --quiet --locked",
+      "purpose": "prove bench harness canonical tokens, manager-state clamping, repetition seeding, and config validation",
+      "proof_lane": "fast"
     },
     "crates/ffi/tests/exec_input_boundary.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked",
       "purpose": "prove FFI rldb_exec rejects malformed and injection-shaped input deterministically"
+    },
+    "crates/sql/tests/parser_proptest.rs": {
+      "command": "rtk cargo test -p redlinedb-sql --test parser_proptest --quiet --locked",
+      "purpose": "property-based parser regressions for literal categories and edge-case no-panic",
+      "proof_lane": "fast"
     },
     "crates/ffi/tests/safety_invariants.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test safety_invariants --quiet --locked",
@@ -340,6 +367,10 @@
     "contracts/c-abi/": {
       "command": "rtk cargo test -p redlinedb-ffi --quiet --locked",
       "purpose": "exercise the C ABI surface declared in this header"
+    },
+    "install.sh": {
+      "command": "bash -n install.sh",
+      "purpose": "verify the install script has valid syntax"
     }
   },
   "workspace": "jankurai"

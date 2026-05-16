@@ -14,3 +14,4 @@
 # Keep Jankurai receipts local without hiding the rest of target/.
 target/jankurai/
 .jankurai/
+:memory:/

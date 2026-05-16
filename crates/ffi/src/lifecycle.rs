@@ -69,7 +69,15 @@ pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
         if db_ref.active_statements.load(Ordering::Relaxed) != 0 {
             return Err(RLDB_BUSY);
         }
-        // SAFETY: matching constructor at crates/ffi/src/util.rs:112 (open_handle returns Box::into_raw(handle)); only rldb_close / rldb_close_v2 consume it (caller never frees directly per redlinedb.h:87); double-close guarded by the null check above (caller must NULL the handle after close); proof: crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe.
+        // SAFETY: matching constructor/destructor pair — `db` originates from
+        // Box::into_raw(handle) at open_handle (crates/ffi/src/util.rs:112);
+        // ownership invariant: only rldb_close / rldb_close_v2 consume it
+        // (caller never frees directly per redlinedb.h:87); exclusive access
+        // upheld by the active_statements==0 check above; double-close guarded
+        // by the null check above (caller must NULL the handle after close);
+        // ledgered at agent/unsafe-ledger.toml (file=crates/ffi/src/lifecycle.rs,
+        // line=81, detector=rust.unsafe.raw-parts); proof:
+        // crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe.
         unsafe {
             drop(Box::from_raw(db));
         }
