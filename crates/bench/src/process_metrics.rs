@@ -126,6 +126,10 @@ pub fn collect_pid(_pid: i32) -> ProcessMetrics {
     ProcessMetrics::default()
 }
 
+// dedup-allowed: platform-stub mirror of the Linux/macOS public API.
+// The two stubs have different signatures (`collect_self` takes no
+// args, `collect_pid` takes a pid) so they cannot be collapsed into a
+// single function; both are intentional no-ops on unsupported targets.
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn collect_self() -> ProcessMetrics {
     ProcessMetrics::default()

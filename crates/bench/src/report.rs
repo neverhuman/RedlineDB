@@ -185,7 +185,7 @@ pub fn collect_environment() -> RunEnvironment {
         git_dirty: match env_git_dirty() {
             Some(dirty) => Some(dirty),
             None => {
-                command_status(["git", "status", "--porcelain"]).map(|output| !output.is_empty())
+                command_output(["git", "status", "--porcelain"]).map(|output| !output.is_empty())
             }
         },
         rustc_version: command_output(["rustc", "-V"]),
@@ -234,17 +234,13 @@ fn hostname() -> String {
     }
 }
 
+/// Run `args[0]` with the remaining args and return the trimmed
+/// stdout when the process exited with a zero status; otherwise
+/// `None`. Used both as a value source (e.g. `rustc -V`) and as a
+/// status probe (e.g. `git status --porcelain`) — callers that only
+/// care whether the command produced output simply check the
+/// emptiness of the returned `String`.
 fn command_output<const N: usize>(args: [&str; N]) -> Option<String> {
-    let (cmd, tail) = args.split_first()?;
-    let output = Command::new(cmd).args(tail).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let text = String::from_utf8(output.stdout).ok()?;
-    Some(text.trim().to_owned())
-}
-
-fn command_status<const N: usize>(args: [&str; N]) -> Option<String> {
     let (cmd, tail) = args.split_first()?;
     let output = Command::new(cmd).args(tail).output().ok()?;
     if !output.status.success() {

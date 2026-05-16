@@ -8,7 +8,7 @@ use rusqlite::types::{Value, ValueRef};
 use rusqlite::{Connection, OpenFlags, params_from_iter};
 
 use crate::config::{DurabilityKind, RunSpec};
-use crate::engine::{BenchConn, BenchEngine, CellValue, EngineSnapshot};
+use crate::engine::{BenchConn, BenchEngine, CellValue, EngineSnapshot, file_len, seeded_blob};
 
 pub struct SqliteEngine {
     path: PathBuf,
@@ -260,12 +260,4 @@ fn to_sqlite_values(params: &[CellValue]) -> Vec<Value> {
             CellValue::Blob(v) => Value::Blob(v.clone()),
         })
         .collect()
-}
-
-fn seeded_blob(seed: usize) -> Vec<u8> {
-    format!("value-{seed:08}").into_bytes()
-}
-
-fn file_len(path: &Path) -> u64 {
-    std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
 }
