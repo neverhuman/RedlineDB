@@ -8,6 +8,8 @@ Start here:
 - `agent/proof-lanes.toml`
 - `agent/generated-zones.toml`
 - `agent/unsafe-ledger.toml`
+- `docs/audit-rubric.md` · `docs/language-bad-behavior.md` · `docs/testing.md`
+- `docs/architecture.md` · `docs/boundaries.md`
 
 Rules:
 - Prefer package-scoped edits over workspace-wide edits.

@@ -1,8 +1,21 @@
 use std::io;
 
+use redlinedb_domain::DomainError;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Common fixes printed in [`DomainError::common_fixes`] when an
+/// [`Error::InvalidChecksum`] is escalated through the domain surface.
+///
+/// Kept as a `const` (rather than constructed per call) so the
+/// `&'static [&'static str]` field on [`DomainError`] points at a
+/// stable rodata slice the next agent can grep for.
+const INVALID_CHECKSUM_FIXES: &[&str] = &[
+    "rerun `integrity::verify` on the affected page file",
+    "check `agent/proof-lanes.toml` for the `phase9-recovery-matrix` lane",
+    "inspect the WAL tail with `cargo run -p redlinedb-cli -- wal-dump`",
+];
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -91,6 +104,36 @@ impl From<crate::vector::VectorError> for Error {
     }
 }
 
+impl Error {
+    /// Escalate this kernel error into a [`DomainError`] carrying agent
+    /// context (purpose, repair hint, docs URL).
+    ///
+    /// Today this is only implemented for [`Error::InvalidChecksum`] —
+    /// the canonical "next agent must run a proof lane" failure — and
+    /// returns `None` for other variants so callers can opportunistically
+    /// upgrade without losing fidelity for kernel-internal handling.
+    ///
+    /// See `docs/audit-rubric.md` for the dimension-to-evidence mapping
+    /// and `crates/domain/src/error.rs` for the typed exception contract.
+    pub fn into_domain(self) -> Option<DomainError> {
+        match self {
+            Error::InvalidChecksum => Some(
+                DomainError::new(
+                    "kernel.storage.invalid_checksum",
+                    "a page or WAL frame failed checksum verification",
+                    INVALID_CHECKSUM_FIXES,
+                    "docs/testing.md#proof-lanes",
+                    "rerun `just fast`; if it persists, run \
+                     the `phase9-recovery-matrix` lane and capture \
+                     the failing page id from `agent/proof-receipt-template.md`",
+                )
+                .with_source(self),
+            ),
+            _ => None,
+        }
+    }
+}
+
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -144,3 +187,36 @@ impl PartialEq for Error {
 }
 
 impl Eq for Error {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error as _;
+
+    #[test]
+    fn invalid_checksum_into_domain_populates_agent_context() {
+        let domain = Error::InvalidChecksum
+            .into_domain()
+            .expect("InvalidChecksum must escalate to DomainError");
+
+        assert_eq!(domain.purpose, "kernel.storage.invalid_checksum");
+        assert_eq!(
+            domain.reason,
+            "a page or WAL frame failed checksum verification"
+        );
+        assert_eq!(domain.common_fixes, INVALID_CHECKSUM_FIXES);
+        assert_eq!(domain.docs_url, "docs/testing.md#proof-lanes");
+        assert!(domain.repair_hint.contains("phase9-recovery-matrix"));
+
+        let source = domain
+            .source()
+            .expect("DomainError must carry the original kernel error as source");
+        assert_eq!(source.to_string(), "invalid checksum");
+    }
+
+    #[test]
+    fn non_escalated_variants_return_none() {
+        assert!(Error::PageFull.into_domain().is_none());
+        assert!(Error::NotVisible.into_domain().is_none());
+    }
+}

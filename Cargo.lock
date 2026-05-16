@@ -816,6 +816,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "redlinedb-domain"
+version = "0.1.0"
+
+[[package]]
 name = "redlinedb-ffi"
 version = "0.1.0"
 dependencies = [
@@ -832,6 +836,7 @@ dependencies = [
  "fail",
  "parking_lot",
  "proptest",
+ "redlinedb-domain",
  "serde",
  "serde_json",
  "smallvec",
