@@ -50,6 +50,20 @@ check_rust() {
     fi
 }
 
+check_nextest() {
+    local expected="0.9.133" actual
+    if ! cargo nextest --version >/dev/null 2>&1; then
+        fail cargo-nextest "missing (expected ${expected}; install: curl -LsSf https://get.nexte.st/${expected}/mac | tar zxf - -C \${CARGO_HOME:-~/.cargo}/bin)"
+        return
+    fi
+    actual="$(cargo nextest --version 2>/dev/null | head -n1 | awk '{print $2}')"
+    if [ "${actual}" = "${expected}" ]; then
+        pass cargo-nextest "${actual}"
+    else
+        fail cargo-nextest "expected=${expected} actual=${actual} (run: cargo install cargo-nextest --locked)"
+    fi
+}
+
 check_cargo_deny() {
     local expected="${CI_CARGO_DENY_VERSION}" actual
     if ! command -v cargo-deny >/dev/null 2>&1; then
@@ -108,6 +122,7 @@ main() {
     printf '%-4s %-14s %s\n' STAT TOOL DETAIL
     printf '%s\n' '----------------------------------------------------------'
     check_rust
+    check_nextest
     check_cargo_deny
     check_gitleaks
     check_presence jq

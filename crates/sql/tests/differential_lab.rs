@@ -163,7 +163,6 @@ fn diff_aggregate_matrix() {
         "SELECT grp, total(v) FROM t GROUP BY grp ORDER BY grp",
         "SELECT grp, min(v), max(v) FROM t GROUP BY grp ORDER BY grp",
         // group_concat/json_group_array: intra-group order is impl-defined; skip differential
-
     ]);
 }
 
