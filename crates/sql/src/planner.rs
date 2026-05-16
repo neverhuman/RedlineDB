@@ -13,7 +13,7 @@ use crate::error::{Error, Result};
 use crate::statement::{BoundTable, ExplainFormat, PreparedKind, SelectPlan, SelectSource};
 use crate::value::SqlValue;
 
-mod helpers;
+pub(crate) mod helpers;
 use helpers::*;
 
 mod access;
@@ -224,10 +224,10 @@ pub struct ExplainMetrics {
 }
 
 #[derive(Debug, Clone)]
-struct FlattenedNode {
-    id: usize,
-    parent: Option<usize>,
-    detail: String,
+pub(crate) struct FlattenedNode {
+    pub(crate) id: usize,
+    pub(crate) parent: Option<usize>,
+    pub(crate) detail: String,
 }
 
 pub(crate) fn explain_rows(

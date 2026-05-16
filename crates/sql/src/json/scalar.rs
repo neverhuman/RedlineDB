@@ -387,25 +387,30 @@ pub fn json_minify(values: &[SqlValue]) -> Result<SqlValue> {
 /// `json -> path`: returns a JSON-typed value (objects/arrays keep their
 /// structure as TEXT, scalars are still rendered as JSON).
 pub fn arrow_json(left: &SqlValue, right: &SqlValue) -> Result<SqlValue> {
-    let Some(doc) = parse_json_arg(left)? else {
-        return Ok(SqlValue::Null);
-    };
-    let path = arrow_path(right)?;
-    Ok(match resolve(&doc, &path) {
-        Some(v) => render_json(v),
-        None => SqlValue::Null,
-    })
+    arrow_impl(left, right, render_json)
 }
 
 /// `json ->> path`: returns the SQL value (scalars unwrap, structures
 /// render as JSON TEXT).
 pub fn arrow_sql(left: &SqlValue, right: &SqlValue) -> Result<SqlValue> {
+    arrow_impl(left, right, json_to_sql)
+}
+
+/// Shared scaffold for the two arrow operators. Parses the JSON
+/// document, resolves the shorthand path, and runs `project` on the
+/// resolved node (returning `NULL` when either the document is `NULL`
+/// or the path does not resolve).
+fn arrow_impl(
+    left: &SqlValue,
+    right: &SqlValue,
+    project: fn(&Value) -> SqlValue,
+) -> Result<SqlValue> {
     let Some(doc) = parse_json_arg(left)? else {
         return Ok(SqlValue::Null);
     };
     let path = arrow_path(right)?;
     Ok(match resolve(&doc, &path) {
-        Some(v) => json_to_sql(v),
+        Some(v) => project(v),
         None => SqlValue::Null,
     })
 }

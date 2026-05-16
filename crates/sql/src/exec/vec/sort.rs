@@ -29,17 +29,7 @@ struct MergeItem {
     tag: u64,
 }
 
-impl PartialEq for MergeItem {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-impl Eq for MergeItem {}
-impl PartialOrd for MergeItem {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+super::impl_partial_from_ord!(MergeItem);
 impl Ord for MergeItem {
     fn cmp(&self, other: &Self) -> Ordering {
         // BinaryHeap is a max-heap; we invert so the smallest tuple wins.

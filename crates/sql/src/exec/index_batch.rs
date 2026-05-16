@@ -429,9 +429,13 @@ fn decode_part(bytes: &[u8]) -> SqlValue {
     }
 }
 
-fn decode_integer_part(bytes: &[u8], dir: SortDir) -> SqlValue {
+/// Pull the leading 8 bytes off an index-key payload, undoing the
+/// per-byte bit-flip if the column is sorted descending. Returns `None`
+/// when there are fewer than 8 bytes available — callers map that to
+/// `SqlValue::Null`.
+fn take_sortable_u64(bytes: &[u8], dir: SortDir) -> Option<u64> {
     if bytes.len() < 8 {
-        return SqlValue::Null;
+        return None;
     }
     let mut arr = [0_u8; 8];
     if dir == SortDir::Desc {
@@ -441,23 +445,21 @@ fn decode_integer_part(bytes: &[u8], dir: SortDir) -> SqlValue {
     } else {
         arr.copy_from_slice(&bytes[..8]);
     }
-    let raw = u64::from_be_bytes(arr) ^ 0x8000_0000_0000_0000;
+    Some(u64::from_be_bytes(arr))
+}
+
+fn decode_integer_part(bytes: &[u8], dir: SortDir) -> SqlValue {
+    let Some(sortable) = take_sortable_u64(bytes, dir) else {
+        return SqlValue::Null;
+    };
+    let raw = sortable ^ 0x8000_0000_0000_0000;
     SqlValue::Integer(raw as i64)
 }
 
 fn decode_real_part(bytes: &[u8], dir: SortDir) -> SqlValue {
-    if bytes.len() < 8 {
+    let Some(sortable) = take_sortable_u64(bytes, dir) else {
         return SqlValue::Null;
-    }
-    let mut arr = [0_u8; 8];
-    if dir == SortDir::Desc {
-        for (slot, byte) in arr.iter_mut().zip(bytes.iter().take(8)) {
-            *slot = !*byte;
-        }
-    } else {
-        arr.copy_from_slice(&bytes[..8]);
-    }
-    let sortable = u64::from_be_bytes(arr);
+    };
     let bits = if sortable & 0x8000_0000_0000_0000 != 0 {
         sortable ^ 0x8000_0000_0000_0000
     } else {
