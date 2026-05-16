@@ -12,6 +12,7 @@
 
 use std::collections::HashSet;
 
+use super::vector_at;
 use crate::vector::distance::l2_distance_scalar as l2_squared;
 
 /// Search-time configuration.
@@ -98,12 +99,6 @@ fn insert_sorted(list: &mut Vec<(u32, f32)>, item: (u32, f32), cap: usize) {
     if list.len() > cap {
         list.truncate(cap);
     }
-}
-
-#[inline]
-fn vector_at(vectors: &[f32], dim: usize, id: u32) -> &[f32] {
-    let id = id as usize;
-    &vectors[id * dim..(id + 1) * dim]
 }
 
 #[cfg(test)]

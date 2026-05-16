@@ -1,7 +1,6 @@
-use crc32fast::Hasher;
-
 use crate::format::bytes::{
-    read_u16, read_u32, read_u64, write_bytes, write_u16, write_u32, write_u64,
+    crc32_with_zeroed_field, read_u16, read_u32, read_u64, write_bytes, write_u16, write_u32,
+    write_u64,
 };
 use crate::format::ids::{Lsn, PageGeneration, PageId, RelId};
 use crate::{Error, Result};
@@ -451,10 +450,11 @@ impl Page {
     }
 }
 
+/// Page CRC32. Public for `integrity::page_csum`, which recomputes the
+/// checksum on raw bytes to report `expected vs got` when `Page::from_bytes`
+/// reports `InvalidChecksum`. Body is a one-line call into the shared
+/// `crc32_with_zeroed_field` helper so this stays in lockstep with the
+/// control / tx-status checksums.
 pub fn checksum_page_bytes(bytes: &[u8]) -> u32 {
-    let mut hasher = Hasher::new();
-    hasher.update(&bytes[..CHECKSUM_OFFSET]);
-    hasher.update(&[0, 0, 0, 0]);
-    hasher.update(&bytes[CHECKSUM_OFFSET + 4..]);
-    hasher.finalize()
+    crc32_with_zeroed_field(bytes, CHECKSUM_OFFSET)
 }

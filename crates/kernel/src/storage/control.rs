@@ -1,11 +1,10 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use crc32fast::Hasher;
-
 use crate::format::Lsn;
-use crate::format::bytes::{read_u32, read_u64, write_u32, write_u64};
+use crate::format::bytes::{crc32_with_zeroed_field, read_u32, read_u64, write_u32, write_u64};
+use crate::storage::sync_parent_dir;
 use crate::{Error, Result};
 
 pub const CONTROL_MAGIC: u32 = 0x5244_4354; // "RDCT"
@@ -146,15 +145,5 @@ impl ControlFile {
 }
 
 fn checksum_control_bytes(bytes: &[u8]) -> u32 {
-    let mut hasher = Hasher::new();
-    hasher.update(&bytes[..CHECKSUM_OFFSET]);
-    hasher.update(&[0, 0, 0, 0]);
-    hasher.update(&bytes[CHECKSUM_OFFSET + 4..]);
-    hasher.finalize()
-}
-
-fn sync_parent_dir(path: &Path) -> Result<()> {
-    let file = File::open(path)?;
-    file.sync_data()?;
-    Ok(())
+    crc32_with_zeroed_field(bytes, CHECKSUM_OFFSET)
 }

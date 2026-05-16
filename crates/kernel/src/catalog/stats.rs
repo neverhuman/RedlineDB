@@ -4,11 +4,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crc32fast::Hasher;
-
 use crate::format::{Csn, RelId};
 use crate::{Error, Result};
 
+use super::codec::{BytesReader, BytesWriter, frame_snapshot, parse_header};
 use super::ids::{ColumnId, IndexId, TableId};
 use super::value::OwnedValue;
 
@@ -128,7 +127,7 @@ impl StatsStore {
 }
 
 pub fn encode_snapshot(snapshot: &StatsSnapshot) -> Result<Vec<u8>> {
-    let mut out = Writer::new();
+    let mut out = BytesWriter::new();
     out.u64(snapshot.epoch.0);
 
     let mut tables: Vec<_> = snapshot.tables.iter().collect();
@@ -158,7 +157,7 @@ pub fn encode_snapshot(snapshot: &StatsSnapshot) -> Result<Vec<u8>> {
 }
 
 pub fn decode_snapshot(bytes: &[u8]) -> Result<StatsSnapshot> {
-    let mut reader = Reader::new(bytes);
+    let mut reader = BytesReader::new(bytes);
     let epoch = StatsEpoch(reader.u64()?);
     let mut snapshot = StatsSnapshot::empty(epoch);
 
@@ -191,45 +190,24 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<StatsSnapshot> {
 
 fn encode_snapshot_file(snapshot: &StatsSnapshot) -> Result<Vec<u8>> {
     let payload = encode_snapshot(snapshot)?;
-    let mut out = Vec::with_capacity(20 + payload.len());
-    out.extend_from_slice(&MAGIC.to_le_bytes());
-    out.extend_from_slice(&VERSION.to_le_bytes());
-    out.extend_from_slice(&0_u16.to_le_bytes());
-    out.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-    let crc = checksum(&payload);
-    out.extend_from_slice(&crc.to_le_bytes());
-    out.extend_from_slice(&payload);
-    Ok(out)
+    Ok(frame_snapshot(MAGIC, VERSION, &payload))
 }
 
 fn decode_snapshot_file(bytes: &[u8]) -> Result<StatsSnapshot> {
-    if bytes.len() < 20 {
-        return Err(Error::CatalogCorrupt("stats snapshot file too small"));
-    }
-    let magic = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
-    if magic != MAGIC {
-        return Err(Error::CatalogCorrupt("stats snapshot magic mismatch"));
-    }
-    let version = u16::from_le_bytes(bytes[4..6].try_into().unwrap());
-    if version != VERSION {
-        return Err(Error::UnsupportedVersion(version));
-    }
-    let payload_len = u64::from_le_bytes(bytes[8..16].try_into().unwrap()) as usize;
-    let crc = u32::from_le_bytes(bytes[16..20].try_into().unwrap());
-    let expected = 20_usize
-        .checked_add(payload_len)
-        .ok_or(Error::CatalogCorrupt("stats snapshot length overflow"))?;
-    if bytes.len() != expected {
-        return Err(Error::CatalogCorrupt("stats snapshot length mismatch"));
-    }
-    let payload = &bytes[20..];
-    if checksum(payload) != crc {
-        return Err(Error::InvalidChecksum);
-    }
-    decode_snapshot(payload)
+    let frame = parse_header(
+        bytes,
+        MAGIC,
+        Error::CatalogCorrupt("stats snapshot file too small"),
+        Error::CatalogCorrupt("stats snapshot magic mismatch"),
+        Error::CatalogCorrupt("stats snapshot length overflow"),
+        Error::CatalogCorrupt("stats snapshot length mismatch"),
+        VERSION,
+        Error::UnsupportedVersion,
+    )?;
+    decode_snapshot(frame.payload)
 }
 
-fn encode_table_stats(out: &mut Writer, table: &TableStats) -> Result<()> {
+fn encode_table_stats(out: &mut BytesWriter, table: &TableStats) -> Result<()> {
     out.u64(table.table_id.0);
     out.u64(table.rel_id.0);
     out.u64(table.row_count);
@@ -241,7 +219,7 @@ fn encode_table_stats(out: &mut Writer, table: &TableStats) -> Result<()> {
     Ok(())
 }
 
-fn decode_table_stats(reader: &mut Reader<'_>) -> Result<TableStats> {
+fn decode_table_stats(reader: &mut BytesReader<'_>) -> Result<TableStats> {
     Ok(TableStats {
         table_id: TableId(reader.u64()?),
         rel_id: RelId(reader.u64()?),
@@ -254,39 +232,37 @@ fn decode_table_stats(reader: &mut Reader<'_>) -> Result<TableStats> {
     })
 }
 
-fn encode_column_stats(out: &mut Writer, column: &ColumnStats) -> Result<()> {
+fn encode_column_stats(out: &mut BytesWriter, column: &ColumnStats) -> Result<()> {
     out.f64(column.null_frac);
     out.f64(column.ndv);
     out.f64(column.avg_width);
-    out.opt_value(column.min.as_ref())?;
-    out.opt_value(column.max.as_ref())?;
+    write_opt_value(out, column.min.as_ref())?;
+    write_opt_value(out, column.max.as_ref())?;
     out.u32(column.mcv.len() as u32);
     for item in &column.mcv {
-        out.value(Some(&item.value))?;
+        write_value(out, Some(&item.value))?;
         out.f64(item.frequency);
     }
     out.u32(column.histogram.len() as u32);
     for bucket in &column.histogram {
-        out.opt_value(bucket.lower.as_ref())?;
-        out.opt_value(bucket.upper.as_ref())?;
+        write_opt_value(out, bucket.lower.as_ref())?;
+        write_opt_value(out, bucket.upper.as_ref())?;
         out.f64(bucket.frequency);
     }
     Ok(())
 }
 
-fn decode_column_stats(reader: &mut Reader<'_>) -> Result<ColumnStats> {
+fn decode_column_stats(reader: &mut BytesReader<'_>) -> Result<ColumnStats> {
     let null_frac = reader.f64()?;
     let ndv = reader.f64()?;
     let avg_width = reader.f64()?;
-    let min = reader.opt_value()?;
-    let max = reader.opt_value()?;
+    let min = read_opt_value(reader)?;
+    let max = read_opt_value(reader)?;
     let mcv_count = reader.u32()? as usize;
     let mut mcv = Vec::with_capacity(mcv_count);
     for _ in 0..mcv_count {
         mcv.push(MostCommonValue {
-            value: reader
-                .value()?
-                .ok_or(Error::CatalogCorrupt("missing most common value"))?,
+            value: read_value(reader)?.ok_or(Error::CatalogCorrupt("missing most common value"))?,
             frequency: reader.f64()?,
         });
     }
@@ -294,8 +270,8 @@ fn decode_column_stats(reader: &mut Reader<'_>) -> Result<ColumnStats> {
     let mut histogram = Vec::with_capacity(histogram_count);
     for _ in 0..histogram_count {
         histogram.push(HistogramBucket {
-            lower: reader.opt_value()?,
-            upper: reader.opt_value()?,
+            lower: read_opt_value(reader)?,
+            upper: read_opt_value(reader)?,
             frequency: reader.f64()?,
         });
     }
@@ -310,7 +286,7 @@ fn decode_column_stats(reader: &mut Reader<'_>) -> Result<ColumnStats> {
     })
 }
 
-fn encode_index_stats(out: &mut Writer, index: &IndexStats) -> Result<()> {
+fn encode_index_stats(out: &mut BytesWriter, index: &IndexStats) -> Result<()> {
     out.u64(index.index_id.0);
     out.u64(index.entries);
     out.u64(index.leaf_pages);
@@ -324,7 +300,7 @@ fn encode_index_stats(out: &mut Writer, index: &IndexStats) -> Result<()> {
     Ok(())
 }
 
-fn decode_index_stats(reader: &mut Reader<'_>) -> Result<IndexStats> {
+fn decode_index_stats(reader: &mut BytesReader<'_>) -> Result<IndexStats> {
     let index_id = IndexId(reader.u64()?);
     let entries = reader.u64()?;
     let leaf_pages = reader.u64()?;
@@ -345,162 +321,85 @@ fn decode_index_stats(reader: &mut Reader<'_>) -> Result<IndexStats> {
     })
 }
 
-fn checksum(bytes: &[u8]) -> u32 {
-    let mut hasher = Hasher::new();
-    hasher.update(bytes);
-    hasher.finalize()
+// Stats wire format helpers for `OwnedValue`. The primitive byte ops live
+// in `super::codec`; these stats-specific helpers encode the tagged
+// nullable-value form used by stats snapshots (tag 0..4, where tag 0 is
+// inline-null rather than the opt-prefix form used by the catalog
+// schema store).
+
+// dedup-allowed: bool-strictness — stats reads must strictly accept only
+// `0` and `1` for the `bool` prefix (legacy on-disk invariant). The
+// shared `BytesReader::bool` would accept any nonzero byte, so stats
+// keeps its own strict bool decoder.
+fn read_strict_bool(reader: &mut BytesReader<'_>) -> Result<bool> {
+    match reader.u8()? {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(Error::CatalogCorrupt("invalid bool encoding")),
+    }
 }
 
-struct Writer {
-    bytes: Vec<u8>,
-}
-
-impl Writer {
-    fn new() -> Self {
-        Self { bytes: Vec::new() }
-    }
-
-    fn finish(self) -> Vec<u8> {
-        self.bytes
-    }
-
-    fn u16(&mut self, value: u16) {
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-    }
-
-    fn u32(&mut self, value: u32) {
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-    }
-
-    fn u64(&mut self, value: u64) {
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-    }
-
-    fn f64(&mut self, value: f64) {
-        self.u64(value.to_bits());
-    }
-
-    fn bool(&mut self, value: bool) {
-        self.bytes.push(u8::from(value));
-    }
-
-    fn bytes(&mut self, value: &[u8]) {
-        self.bytes.extend_from_slice(value);
-    }
-
-    fn opt_value(&mut self, value: Option<&OwnedValue>) -> Result<()> {
-        match value {
-            Some(value) => {
-                self.bool(true);
-                self.value(Some(value))?;
-            }
-            None => self.bool(false),
+fn write_opt_value(out: &mut BytesWriter, value: Option<&OwnedValue>) -> Result<()> {
+    match value {
+        Some(value) => {
+            out.bool(true);
+            write_value(out, Some(value))?;
         }
-        Ok(())
+        None => out.bool(false),
     }
-
-    fn value(&mut self, value: Option<&OwnedValue>) -> Result<()> {
-        match value {
-            Some(OwnedValue::Null) | None => self.bytes.push(0),
-            Some(OwnedValue::Integer(v)) => {
-                self.bytes.push(1);
-                self.u64(*v as u64);
-            }
-            Some(OwnedValue::Real(v)) => {
-                self.bytes.push(2);
-                self.f64(*v);
-            }
-            Some(OwnedValue::Text(v)) => {
-                self.bytes.push(3);
-                self.u32(v.len() as u32);
-                self.bytes(v.as_bytes());
-            }
-            Some(OwnedValue::Blob(v)) => {
-                self.bytes.push(4);
-                self.u32(v.len() as u32);
-                self.bytes(v.as_ref());
-            }
-        }
-        Ok(())
-    }
+    Ok(())
 }
 
-struct Reader<'a> {
-    bytes: &'a [u8],
-    cursor: usize,
+fn write_value(out: &mut BytesWriter, value: Option<&OwnedValue>) -> Result<()> {
+    match value {
+        Some(OwnedValue::Null) | None => out.u8(0),
+        Some(OwnedValue::Integer(v)) => {
+            out.u8(1);
+            out.u64(*v as u64);
+        }
+        Some(OwnedValue::Real(v)) => {
+            out.u8(2);
+            out.f64(*v);
+        }
+        Some(OwnedValue::Text(v)) => {
+            out.u8(3);
+            out.u32(v.len() as u32);
+            out.bytes(v.as_bytes());
+        }
+        Some(OwnedValue::Blob(v)) => {
+            out.u8(4);
+            out.u32(v.len() as u32);
+            out.bytes(v.as_ref());
+        }
+    }
+    Ok(())
 }
 
-impl<'a> Reader<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, cursor: 0 }
-    }
-
-    fn remaining(&self) -> usize {
-        self.bytes.len().saturating_sub(self.cursor)
-    }
-
-    fn u16(&mut self) -> Result<u16> {
-        Ok(u16::from_le_bytes(self.take(2)?.try_into().unwrap()))
-    }
-
-    fn u32(&mut self) -> Result<u32> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
-    }
-
-    fn u64(&mut self) -> Result<u64> {
-        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
-    }
-
-    fn f64(&mut self) -> Result<f64> {
-        Ok(f64::from_bits(self.u64()?))
-    }
-
-    fn bool(&mut self) -> Result<bool> {
-        Ok(match self.take(1)?[0] {
-            0 => false,
-            1 => true,
-            _ => return Err(Error::CatalogCorrupt("invalid bool encoding")),
-        })
-    }
-
-    fn value(&mut self) -> Result<Option<OwnedValue>> {
-        Ok(match self.take(1)?[0] {
-            0 => None,
-            1 => Some(OwnedValue::Integer(self.u64()? as i64)),
-            2 => Some(OwnedValue::Real(self.f64()?)),
-            3 => {
-                let len = self.u32()? as usize;
-                let bytes = self.take(len)?.to_vec();
-                Some(OwnedValue::Text(Arc::from(
-                    String::from_utf8(bytes)
-                        .map_err(|_| Error::CatalogCorrupt("invalid utf8 in stats snapshot"))?,
-                )))
-            }
-            4 => {
-                let len = self.u32()? as usize;
-                Some(OwnedValue::Blob(Arc::from(self.take(len)?.to_vec())))
-            }
-            _ => return Err(Error::CatalogCorrupt("invalid value tag")),
-        })
-    }
-
-    fn opt_value(&mut self) -> Result<Option<OwnedValue>> {
-        if self.bool()? { self.value() } else { Ok(None) }
-    }
-
-    fn take(&mut self, len: usize) -> Result<&'a [u8]> {
-        let end = self
-            .cursor
-            .checked_add(len)
-            .ok_or(Error::CatalogCorrupt("stats snapshot length overflow"))?;
-        if end > self.bytes.len() {
-            return Err(Error::BufferTooSmall {
-                needed: end,
-                actual: self.bytes.len(),
-            });
+fn read_value(reader: &mut BytesReader<'_>) -> Result<Option<OwnedValue>> {
+    Ok(match reader.u8()? {
+        0 => None,
+        1 => Some(OwnedValue::Integer(reader.u64()? as i64)),
+        2 => Some(OwnedValue::Real(reader.f64()?)),
+        3 => {
+            let len = reader.u32()? as usize;
+            let bytes = reader.take(len)?.to_vec();
+            Some(OwnedValue::Text(Arc::from(
+                String::from_utf8(bytes)
+                    .map_err(|_| Error::CatalogCorrupt("invalid utf8 in stats snapshot"))?,
+            )))
         }
-        let slice = &self.bytes[self.cursor..end];
-        self.cursor = end;
-        Ok(slice)
+        4 => {
+            let len = reader.u32()? as usize;
+            Some(OwnedValue::Blob(Arc::from(reader.take(len)?.to_vec())))
+        }
+        _ => return Err(Error::CatalogCorrupt("invalid value tag")),
+    })
+}
+
+fn read_opt_value(reader: &mut BytesReader<'_>) -> Result<Option<OwnedValue>> {
+    if read_strict_bool(reader)? {
+        read_value(reader)
+    } else {
+        Ok(None)
     }
 }

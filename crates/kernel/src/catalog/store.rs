@@ -3,10 +3,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crc32fast::Hasher;
-
 use crate::{Error, Result};
 
+use super::codec::{BytesReader, BytesWriter, frame_snapshot, parse_header};
 use super::ddl::{ConflictAction, IndexOrigin};
 use super::expr::{CompiledExpr, ExprOp};
 use super::ids::SchemaId;
@@ -83,7 +82,7 @@ impl CatalogStore {
 }
 
 pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
-    let mut out = Writer::new();
+    let mut out = BytesWriter::new();
     out.u64(snapshot.meta.format_version);
     out.u64(snapshot.meta.schema_epoch.0);
     out.u64(snapshot.meta.next_object_id.0);
@@ -104,7 +103,7 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 }
 
 pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
-    let mut reader = Reader::new(bytes);
+    let mut reader = BytesReader::new(bytes);
     let format_version = reader.u64()?;
     if format_version > 2 {
         return Err(Error::UnsupportedVersion(format_version as u16));
@@ -114,7 +113,7 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
         schema_epoch: SchemaEpoch(reader.u64()?),
         next_object_id: super::ObjectId(reader.u64()?),
         next_relation_id: RelId(reader.u64()?),
-        database_uuid: reader.array_16()?,
+        database_uuid: reader.take_array()?,
     };
 
     let namespace_count = reader.u32()? as usize;
@@ -138,68 +137,47 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
 
 fn encode_snapshot_file(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
     let payload = encode_snapshot(snapshot)?;
-    let mut out = Vec::with_capacity(20 + payload.len());
-    out.extend_from_slice(&MAGIC.to_le_bytes());
-    out.extend_from_slice(&VERSION.to_le_bytes());
-    out.extend_from_slice(&0_u16.to_le_bytes());
-    out.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-    let crc = checksum(&payload);
-    out.extend_from_slice(&crc.to_le_bytes());
-    out.extend_from_slice(&payload);
-    Ok(out)
+    Ok(frame_snapshot(MAGIC, VERSION, &payload))
 }
 
 fn decode_snapshot_file(bytes: &[u8]) -> Result<Arc<SchemaSnapshot>> {
-    if bytes.len() < 20 {
-        return Err(Error::CatalogCorrupt("catalog snapshot file too small"));
-    }
-    let magic = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
-    if magic != MAGIC {
-        return Err(Error::CatalogCorrupt("catalog snapshot magic mismatch"));
-    }
-    let version = u16::from_le_bytes(bytes[4..6].try_into().unwrap());
-    if version != VERSION {
-        return Err(Error::UnsupportedVersion(version));
-    }
-    let payload_len = u64::from_le_bytes(bytes[8..16].try_into().unwrap()) as usize;
-    let crc = u32::from_le_bytes(bytes[16..20].try_into().unwrap());
-    let expected = 20_usize
-        .checked_add(payload_len)
-        .ok_or(Error::CatalogCorrupt("catalog snapshot length overflow"))?;
-    if bytes.len() != expected {
-        return Err(Error::CatalogCorrupt("catalog snapshot length mismatch"));
-    }
-    let payload = &bytes[20..];
-    if checksum(payload) != crc {
-        return Err(Error::InvalidChecksum);
-    }
-    Ok(Arc::new(decode_snapshot(payload)?))
+    let frame = parse_header(
+        bytes,
+        MAGIC,
+        Error::CatalogCorrupt("catalog snapshot file too small"),
+        Error::CatalogCorrupt("catalog snapshot magic mismatch"),
+        Error::CatalogCorrupt("catalog snapshot length overflow"),
+        Error::CatalogCorrupt("catalog snapshot length mismatch"),
+        VERSION,
+        Error::UnsupportedVersion,
+    )?;
+    Ok(Arc::new(decode_snapshot(frame.payload)?))
 }
 
-fn encode_namespace(out: &mut Writer, namespace: &NamespaceDef) -> Result<()> {
+fn encode_namespace(out: &mut BytesWriter, namespace: &NamespaceDef) -> Result<()> {
     out.u64(namespace.schema_id.0);
-    out.str(&namespace.name);
-    out.str(&namespace.folded);
+    write_str(out, &namespace.name);
+    write_str(out, &namespace.folded);
     Ok(())
 }
 
-fn decode_namespace(reader: &mut Reader<'_>) -> Result<NamespaceDef> {
+fn decode_namespace(reader: &mut BytesReader<'_>) -> Result<NamespaceDef> {
     Ok(NamespaceDef {
         schema_id: SchemaId(reader.u64()?),
-        name: reader.box_str()?,
-        folded: reader.box_str()?,
+        name: read_box_str(reader)?,
+        folded: read_box_str(reader)?,
     })
 }
 
-fn encode_table(out: &mut Writer, table: &TableDef) -> Result<()> {
+fn encode_table(out: &mut BytesWriter, table: &TableDef) -> Result<()> {
     out.u64(table.table_id.0);
     out.u64(table.schema_id.0);
     out.u64(table.relation_id.0);
-    out.str(&table.name);
-    out.str(&table.folded);
+    write_str(out, &table.name);
+    write_str(out, &table.folded);
     out.u64(table.flags);
-    out.opt_u16(table.rowid_alias_column);
-    out.opt_str(table.normalized_sql.as_deref());
+    write_opt_u16(out, table.rowid_alias_column);
+    write_opt_str(out, table.normalized_sql.as_deref());
 
     out.u32(table.columns.len() as u32);
     for column in &table.columns {
@@ -224,15 +202,15 @@ fn encode_table(out: &mut Writer, table: &TableDef) -> Result<()> {
     Ok(())
 }
 
-fn decode_table(reader: &mut Reader<'_>, format_version: u64) -> Result<TableDef> {
+fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<TableDef> {
     let table_id = super::TableId(reader.u64()?);
     let schema_id = SchemaId(reader.u64()?);
     let relation_id = RelId(reader.u64()?);
-    let name = reader.box_str()?;
-    let folded = reader.box_str()?;
+    let name = read_box_str(reader)?;
+    let folded = read_box_str(reader)?;
     let flags = reader.u64()?;
-    let rowid_alias_column = reader.opt_u16()?;
-    let normalized_sql = reader.opt_box_str()?;
+    let rowid_alias_column = read_opt_u16(reader)?;
+    let normalized_sql = read_opt_box_str(reader)?;
 
     let column_count = reader.u32()? as usize;
     let mut columns = Vec::with_capacity(column_count);
@@ -274,26 +252,26 @@ fn decode_table(reader: &mut Reader<'_>, format_version: u64) -> Result<TableDef
     })
 }
 
-fn encode_column(out: &mut Writer, column: &ColumnDef) -> Result<()> {
+fn encode_column(out: &mut BytesWriter, column: &ColumnDef) -> Result<()> {
     out.u64(column.column_id.0);
     out.u16(column.ordinal);
-    out.str(&column.name);
-    out.str(&column.folded);
-    out.opt_str(column.declared_type.as_deref());
+    write_str(out, &column.name);
+    write_str(out, &column.folded);
+    write_opt_str(out, column.declared_type.as_deref());
     out.u8(column.affinity as u8);
     out.bool(column.not_null);
-    out.opt_value(column.default_value.as_ref());
-    out.opt_expr(column.default_expr.as_deref());
+    write_opt_value(out, column.default_value.as_ref());
+    write_opt_expr(out, column.default_expr.as_deref());
     Ok(())
 }
 
-fn decode_column(reader: &mut Reader<'_>) -> Result<ColumnDef> {
+fn decode_column(reader: &mut BytesReader<'_>) -> Result<ColumnDef> {
     Ok(ColumnDef {
         column_id: super::ColumnId(reader.u64()?),
         ordinal: reader.u16()?,
-        name: reader.box_str()?,
-        folded: reader.box_str()?,
-        declared_type: reader.opt_box_str()?,
+        name: read_box_str(reader)?,
+        folded: read_box_str(reader)?,
+        declared_type: read_opt_box_str(reader)?,
         affinity: match reader.u8()? {
             0 => super::Affinity::Blob,
             1 => super::Affinity::Text,
@@ -303,23 +281,23 @@ fn decode_column(reader: &mut Reader<'_>) -> Result<ColumnDef> {
             _ => return Err(Error::CatalogCorrupt("invalid affinity")),
         },
         not_null: reader.bool()?,
-        default_value: reader.opt_value()?,
-        default_expr: reader.opt_expr()?,
+        default_value: read_opt_value(reader)?,
+        default_expr: read_opt_expr(reader)?,
     })
 }
 
-fn encode_index(out: &mut Writer, index: &IndexDef) -> Result<()> {
+fn encode_index(out: &mut BytesWriter, index: &IndexDef) -> Result<()> {
     out.u64(index.index_id.0);
     out.u64(index.table_id.0);
     out.u64(index.relation_id.0);
-    out.opt_u64(index.meta_page_id.map(|value| value.0));
-    out.str(&index.name);
-    out.str(&index.folded);
+    write_opt_u64(out, index.meta_page_id.map(|value| value.0));
+    write_str(out, &index.name);
+    write_str(out, &index.folded);
     out.bool(index.unique);
     out.bool(index.primary);
     out.u8(index.origin as u8);
     out.u64(index.flags);
-    out.opt_str(index.normalized_sql.as_deref());
+    write_opt_str(out, index.normalized_sql.as_deref());
     out.u32(index.keys.len() as u32);
     for key in &index.keys {
         encode_index_key(out, key)?;
@@ -327,17 +305,17 @@ fn encode_index(out: &mut Writer, index: &IndexDef) -> Result<()> {
     Ok(())
 }
 
-fn decode_index(reader: &mut Reader<'_>, format_version: u64) -> Result<IndexDef> {
+fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<IndexDef> {
     let index_id = super::IndexId(reader.u64()?);
     let table_id = super::TableId(reader.u64()?);
     let relation_id = RelId(reader.u64()?);
     let meta_page_id = if format_version >= 2 {
-        reader.opt_u64()?.map(PageId)
+        read_opt_u64(reader)?.map(PageId)
     } else {
         None
     };
-    let name = reader.box_str()?;
-    let folded = reader.box_str()?;
+    let name = read_box_str(reader)?;
+    let folded = read_box_str(reader)?;
     let unique = reader.bool()?;
     let primary = reader.bool()?;
     let origin = match reader.u8()? {
@@ -347,7 +325,7 @@ fn decode_index(reader: &mut Reader<'_>, format_version: u64) -> Result<IndexDef
         _ => return Err(Error::CatalogCorrupt("invalid index origin")),
     };
     let flags = reader.u64()?;
-    let normalized_sql = reader.opt_box_str()?;
+    let normalized_sql = read_opt_box_str(reader)?;
     let key_count = reader.u32()? as usize;
     let mut keys = Vec::with_capacity(key_count);
     for _ in 0..key_count {
@@ -369,7 +347,7 @@ fn decode_index(reader: &mut Reader<'_>, format_version: u64) -> Result<IndexDef
     })
 }
 
-fn encode_index_key(out: &mut Writer, key: &IndexKeyDef) -> Result<()> {
+fn encode_index_key(out: &mut BytesWriter, key: &IndexKeyDef) -> Result<()> {
     out.u16(key.ordinal);
     match key.source {
         IndexKeySource::Column { attnum } => {
@@ -382,7 +360,7 @@ fn encode_index_key(out: &mut Writer, key: &IndexKeyDef) -> Result<()> {
     Ok(())
 }
 
-fn decode_index_key(reader: &mut Reader<'_>) -> Result<IndexKeyDef> {
+fn decode_index_key(reader: &mut BytesReader<'_>) -> Result<IndexKeyDef> {
     let ordinal = reader.u16()?;
     let source = match reader.u8()? {
         0 => IndexKeySource::Column {
@@ -408,23 +386,23 @@ fn decode_index_key(reader: &mut Reader<'_>) -> Result<IndexKeyDef> {
     })
 }
 
-fn encode_constraint(out: &mut Writer, constraint: &ConstraintDef) -> Result<()> {
+fn encode_constraint(out: &mut BytesWriter, constraint: &ConstraintDef) -> Result<()> {
     out.u64(constraint.constraint_id.0);
     out.u64(constraint.table_id.0);
-    out.opt_str(constraint.name.as_deref());
+    write_opt_str(out, constraint.name.as_deref());
     out.u8(constraint.kind as u8);
-    out.opt_u64(constraint.column_id.map(|v| v.0));
-    out.opt_u64(constraint.index_id.map(|v| v.0));
+    write_opt_u64(out, constraint.column_id.map(|v| v.0));
+    write_opt_u64(out, constraint.index_id.map(|v| v.0));
     out.u8(constraint.conflict_action as u8);
-    out.opt_expr(constraint.expr.as_deref());
+    write_opt_expr(out, constraint.expr.as_deref());
     Ok(())
 }
 
-fn decode_constraint(reader: &mut Reader<'_>) -> Result<ConstraintDef> {
+fn decode_constraint(reader: &mut BytesReader<'_>) -> Result<ConstraintDef> {
     Ok(ConstraintDef {
         constraint_id: super::ConstraintId(reader.u64()?),
         table_id: super::TableId(reader.u64()?),
-        name: reader.opt_box_str()?,
+        name: read_opt_box_str(reader)?,
         kind: match reader.u8()? {
             1 => ConstraintKind::PrimaryKey,
             2 => ConstraintKind::Unique,
@@ -433,40 +411,38 @@ fn decode_constraint(reader: &mut Reader<'_>) -> Result<ConstraintDef> {
             5 => ConstraintKind::Default,
             _ => return Err(Error::CatalogCorrupt("invalid constraint kind")),
         },
-        column_id: reader.opt_u64()?.map(super::ColumnId),
-        index_id: reader.opt_u64()?.map(super::IndexId),
+        column_id: read_opt_u64(reader)?.map(super::ColumnId),
+        index_id: read_opt_u64(reader)?.map(super::IndexId),
         conflict_action: match reader.u8()? {
             0 => ConflictAction::Abort,
             1 => ConflictAction::Ignore,
             2 => ConflictAction::Replace,
             _ => return Err(Error::CatalogCorrupt("invalid conflict action")),
         },
-        expr: reader.opt_expr()?,
+        expr: read_opt_expr(reader)?,
     })
 }
 
-fn encode_check(out: &mut Writer, check: &CheckDef) -> Result<()> {
+fn encode_check(out: &mut BytesWriter, check: &CheckDef) -> Result<()> {
     out.u64(check.constraint_id.0);
-    out.opt_str(check.name.as_deref());
-    out.opt_expr(Some(check.expr.as_ref()));
+    write_opt_str(out, check.name.as_deref());
+    write_opt_expr(out, Some(check.expr.as_ref()));
     Ok(())
 }
 
-fn decode_check(reader: &mut Reader<'_>) -> Result<CheckDef> {
+fn decode_check(reader: &mut BytesReader<'_>) -> Result<CheckDef> {
     Ok(CheckDef {
         constraint_id: super::ConstraintId(reader.u64()?),
-        name: reader.opt_box_str()?,
-        expr: reader
-            .opt_expr()?
-            .ok_or(Error::CatalogCorrupt("missing check expression"))?,
+        name: read_opt_box_str(reader)?,
+        expr: read_opt_expr(reader)?.ok_or(Error::CatalogCorrupt("missing check expression"))?,
     })
 }
 
-fn encode_expr_op(out: &mut Writer, op: &ExprOp) -> Result<()> {
+fn encode_expr_op(out: &mut BytesWriter, op: &ExprOp) -> Result<()> {
     match op {
         ExprOp::Const(v) => {
             out.u8(0);
-            out.value(Some(v));
+            write_value(out, v);
         }
         ExprOp::Column(col) => {
             out.u8(1);
@@ -491,12 +467,10 @@ fn encode_expr_op(out: &mut Writer, op: &ExprOp) -> Result<()> {
     Ok(())
 }
 
-fn decode_expr_op(reader: &mut Reader<'_>) -> Result<ExprOp> {
+fn decode_expr_op(reader: &mut BytesReader<'_>) -> Result<ExprOp> {
     Ok(match reader.u8()? {
         0 => ExprOp::Const(
-            reader
-                .opt_value()?
-                .ok_or(Error::CatalogCorrupt("missing expr const"))?,
+            read_opt_value(reader)?.ok_or(Error::CatalogCorrupt("missing expr const"))?,
         ),
         1 => ExprOp::Column(reader.u16()?),
         2 => ExprOp::Not,
@@ -514,12 +488,12 @@ fn decode_expr_op(reader: &mut Reader<'_>) -> Result<ExprOp> {
 }
 
 fn encode_expr_bytes(expr: &CompiledExpr) -> Result<Vec<u8>> {
-    let mut out = Writer::new();
+    let mut out = BytesWriter::new();
     encode_expr_into(&mut out, expr)?;
     Ok(out.finish())
 }
 
-fn encode_expr_into(out: &mut Writer, expr: &CompiledExpr) -> Result<()> {
+fn encode_expr_into(out: &mut BytesWriter, expr: &CompiledExpr) -> Result<()> {
     out.u32(expr.bytecode.len() as u32);
     for op in &expr.bytecode {
         encode_expr_op(out, op)?;
@@ -532,7 +506,7 @@ fn encode_expr_into(out: &mut Writer, expr: &CompiledExpr) -> Result<()> {
 }
 
 fn decode_expr_from_bytes(bytes: &[u8]) -> Result<CompiledExpr> {
-    let mut reader = Reader::new(bytes);
+    let mut reader = BytesReader::new(bytes);
     let expr = decode_expr(&mut reader)?;
     if reader.remaining() != 0 {
         return Err(Error::CatalogCorrupt("expression has trailing bytes"));
@@ -540,7 +514,7 @@ fn decode_expr_from_bytes(bytes: &[u8]) -> Result<CompiledExpr> {
     Ok(expr)
 }
 
-fn decode_expr(reader: &mut Reader<'_>) -> Result<CompiledExpr> {
+fn decode_expr(reader: &mut BytesReader<'_>) -> Result<CompiledExpr> {
     let bytecode_len = reader.u32()? as usize;
     let mut bytecode = Vec::with_capacity(bytecode_len);
     for _ in 0..bytecode_len {
@@ -557,275 +531,152 @@ fn decode_expr(reader: &mut Reader<'_>) -> Result<CompiledExpr> {
     })
 }
 
-fn checksum(bytes: &[u8]) -> u32 {
-    let mut hasher = Hasher::new();
-    hasher.update(bytes);
-    hasher.finalize()
+// Catalog (schema) wire-format helpers. Primitives live in `super::codec`;
+// these helpers add the schema-specific framing: length-prefixed strings,
+// the `bool`-tag + value `opt_*` pattern, and the nested-bytes encoding
+// for compiled expressions.
+
+fn write_str(out: &mut BytesWriter, value: &str) {
+    out.u32(value.len() as u32);
+    out.bytes(value.as_bytes());
 }
 
-struct Writer {
-    bytes: Vec<u8>,
+fn write_opt_str(out: &mut BytesWriter, value: Option<&str>) {
+    match value {
+        Some(value) => {
+            out.bool(true);
+            write_str(out, value);
+        }
+        None => out.bool(false),
+    }
 }
 
-impl Writer {
-    fn new() -> Self {
-        Self { bytes: Vec::new() }
-    }
-
-    fn finish(self) -> Vec<u8> {
-        self.bytes
-    }
-
-    fn u8(&mut self, value: u8) {
-        self.bytes.push(value);
-    }
-
-    fn bool(&mut self, value: bool) {
-        self.u8(u8::from(value));
-    }
-
-    fn u16(&mut self, value: u16) {
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-    }
-
-    fn u32(&mut self, value: u32) {
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-    }
-
-    fn u64(&mut self, value: u64) {
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-    }
-
-    fn bytes(&mut self, value: &[u8]) {
-        self.bytes.extend_from_slice(value);
-    }
-
-    fn str(&mut self, value: &str) {
-        self.u32(value.len() as u32);
-        self.bytes(value.as_bytes());
-    }
-
-    fn opt_str(&mut self, value: Option<&str>) {
-        match value {
-            Some(value) => {
-                self.bool(true);
-                self.str(value);
-            }
-            None => self.bool(false),
+fn write_opt_u16(out: &mut BytesWriter, value: Option<u16>) {
+    match value {
+        Some(value) => {
+            out.bool(true);
+            out.u16(value);
         }
+        None => out.bool(false),
     }
+}
 
-    fn opt_u16(&mut self, value: Option<u16>) {
-        match value {
-            Some(value) => {
-                self.bool(true);
-                self.u16(value);
-            }
-            None => self.bool(false),
+fn write_opt_u64(out: &mut BytesWriter, value: Option<u64>) {
+    match value {
+        Some(value) => {
+            out.bool(true);
+            out.u64(value);
         }
+        None => out.bool(false),
     }
+}
 
-    fn opt_u64(&mut self, value: Option<u64>) {
-        match value {
-            Some(value) => {
-                self.bool(true);
-                self.u64(value);
-            }
-            None => self.bool(false),
+fn write_opt_value(out: &mut BytesWriter, value: Option<&OwnedValue>) {
+    match value {
+        Some(value) => {
+            out.bool(true);
+            write_value(out, value);
         }
+        None => out.bool(false),
     }
+}
 
-    fn opt_value(&mut self, value: Option<&OwnedValue>) {
-        match value {
-            Some(value) => {
-                self.bool(true);
-                self.value(Some(value));
-            }
-            None => self.bool(false),
+fn write_value(out: &mut BytesWriter, value: &OwnedValue) {
+    match value {
+        OwnedValue::Null => out.u8(0),
+        OwnedValue::Integer(v) => {
+            out.u8(1);
+            out.bytes(&v.to_le_bytes());
         }
-    }
-
-    fn value(&mut self, value: Option<&OwnedValue>) {
-        match value.expect("value present") {
-            OwnedValue::Null => self.u8(0),
-            OwnedValue::Integer(v) => {
-                self.u8(1);
-                self.bytes(&v.to_le_bytes());
-            }
-            OwnedValue::Real(v) => {
-                self.u8(2);
-                self.u64(v.to_bits());
-            }
-            OwnedValue::Text(v) => {
-                self.u8(3);
-                self.str(v);
-            }
-            OwnedValue::Blob(v) => {
-                self.u8(4);
-                self.u32(v.len() as u32);
-                self.bytes(v);
-            }
+        OwnedValue::Real(v) => {
+            out.u8(2);
+            out.u64(v.to_bits());
         }
-    }
-
-    fn opt_expr(&mut self, value: Option<&CompiledExpr>) {
-        match value {
-            Some(value) => {
-                self.bool(true);
-                let expr = encode_expr_bytes(value).expect("expr encoding should not fail");
-                self.u32(expr.len() as u32);
-                self.bytes(&expr);
-            }
-            None => self.bool(false),
+        OwnedValue::Text(v) => {
+            out.u8(3);
+            write_str(out, v);
+        }
+        OwnedValue::Blob(v) => {
+            out.u8(4);
+            out.u32(v.len() as u32);
+            out.bytes(v);
         }
     }
 }
 
-struct Reader<'a> {
-    bytes: &'a [u8],
-    pos: usize,
+fn write_opt_expr(out: &mut BytesWriter, value: Option<&CompiledExpr>) {
+    match value {
+        Some(value) => {
+            out.bool(true);
+            let expr = encode_expr_bytes(value).expect("expr encoding should not fail");
+            out.u32(expr.len() as u32);
+            out.bytes(&expr);
+        }
+        None => out.bool(false),
+    }
 }
 
-impl<'a> Reader<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, pos: 0 }
-    }
+fn read_string(reader: &mut BytesReader<'_>) -> Result<String> {
+    let len = reader.u32()? as usize;
+    let bytes = reader.take(len)?;
+    let text = std::str::from_utf8(bytes).map_err(|_| Error::CatalogCorrupt("invalid utf8"))?;
+    Ok(text.to_owned())
+}
 
-    fn remaining(&self) -> usize {
-        self.bytes.len().saturating_sub(self.pos)
-    }
+fn read_box_str(reader: &mut BytesReader<'_>) -> Result<Box<str>> {
+    Ok(read_string(reader)?.into_boxed_str())
+}
 
-    fn u8(&mut self) -> Result<u8> {
-        let byte = *self
-            .bytes
-            .get(self.pos)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot truncated"))?;
-        self.pos += 1;
-        Ok(byte)
+fn read_opt_box_str(reader: &mut BytesReader<'_>) -> Result<Option<Box<str>>> {
+    if reader.bool()? {
+        Ok(Some(read_box_str(reader)?))
+    } else {
+        Ok(None)
     }
+}
 
-    fn bool(&mut self) -> Result<bool> {
-        Ok(self.u8()? != 0)
+fn read_opt_u16(reader: &mut BytesReader<'_>) -> Result<Option<u16>> {
+    if reader.bool()? {
+        Ok(Some(reader.u16()?))
+    } else {
+        Ok(None)
     }
+}
 
-    fn u16(&mut self) -> Result<u16> {
-        Ok(u16::from_le_bytes(self.take_array()?))
+fn read_opt_u64(reader: &mut BytesReader<'_>) -> Result<Option<u64>> {
+    if reader.bool()? {
+        Ok(Some(reader.u64()?))
+    } else {
+        Ok(None)
     }
+}
 
-    fn u32(&mut self) -> Result<u32> {
-        Ok(u32::from_le_bytes(self.take_array()?))
+fn read_opt_value(reader: &mut BytesReader<'_>) -> Result<Option<OwnedValue>> {
+    if !reader.bool()? {
+        return Ok(None);
     }
+    Ok(Some(read_value(reader)?))
+}
 
-    fn u64(&mut self) -> Result<u64> {
-        Ok(u64::from_le_bytes(self.take_array()?))
-    }
-
-    fn array_16(&mut self) -> Result<[u8; 16]> {
-        self.take_array()
-    }
-
-    fn take_array<const N: usize>(&mut self) -> Result<[u8; N]> {
-        let end = self
-            .pos
-            .checked_add(N)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot length overflow"))?;
-        let bytes = self
-            .bytes
-            .get(self.pos..end)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot truncated"))?;
-        self.pos = end;
-        let mut out = [0u8; N];
-        out.copy_from_slice(bytes);
-        Ok(out)
-    }
-
-    fn string(&mut self) -> Result<String> {
-        let len = self.u32()? as usize;
-        let end = self
-            .pos
-            .checked_add(len)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot length overflow"))?;
-        let bytes = self
-            .bytes
-            .get(self.pos..end)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot truncated"))?;
-        self.pos = end;
-        let text = std::str::from_utf8(bytes).map_err(|_| Error::CatalogCorrupt("invalid utf8"))?;
-        Ok(text.to_owned())
-    }
-
-    fn box_str(&mut self) -> Result<Box<str>> {
-        Ok(self.string()?.into_boxed_str())
-    }
-
-    fn opt_box_str(&mut self) -> Result<Option<Box<str>>> {
-        if self.bool()? {
-            Ok(Some(self.box_str()?))
-        } else {
-            Ok(None)
+fn read_value(reader: &mut BytesReader<'_>) -> Result<OwnedValue> {
+    Ok(match reader.u8()? {
+        0 => OwnedValue::Null,
+        1 => OwnedValue::Integer(i64::from_le_bytes(reader.take_array()?)),
+        2 => OwnedValue::Real(f64::from_bits(reader.u64()?)),
+        3 => OwnedValue::Text(Arc::from(read_string(reader)?)),
+        4 => {
+            let len = reader.u32()? as usize;
+            OwnedValue::Blob(Arc::from(reader.take(len)?))
         }
-    }
+        _ => return Err(Error::CatalogCorrupt("invalid value tag")),
+    })
+}
 
-    fn opt_u16(&mut self) -> Result<Option<u16>> {
-        if self.bool()? {
-            Ok(Some(self.u16()?))
-        } else {
-            Ok(None)
-        }
+fn read_opt_expr(reader: &mut BytesReader<'_>) -> Result<Option<Arc<CompiledExpr>>> {
+    if !reader.bool()? {
+        return Ok(None);
     }
-
-    fn opt_u64(&mut self) -> Result<Option<u64>> {
-        if self.bool()? {
-            Ok(Some(self.u64()?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn opt_value(&mut self) -> Result<Option<OwnedValue>> {
-        if !self.bool()? {
-            return Ok(None);
-        }
-        Ok(Some(self.value()?))
-    }
-
-    fn value(&mut self) -> Result<OwnedValue> {
-        Ok(match self.u8()? {
-            0 => OwnedValue::Null,
-            1 => OwnedValue::Integer(i64::from_le_bytes(self.take_array()?)),
-            2 => OwnedValue::Real(f64::from_bits(self.u64()?)),
-            3 => OwnedValue::Text(Arc::from(self.string()?)),
-            4 => {
-                let len = self.u32()? as usize;
-                let end = self
-                    .pos
-                    .checked_add(len)
-                    .ok_or(Error::CatalogCorrupt("catalog snapshot length overflow"))?;
-                let bytes = self
-                    .bytes
-                    .get(self.pos..end)
-                    .ok_or(Error::CatalogCorrupt("catalog snapshot truncated"))?;
-                self.pos = end;
-                OwnedValue::Blob(Arc::from(bytes))
-            }
-            _ => return Err(Error::CatalogCorrupt("invalid value tag")),
-        })
-    }
-
-    fn opt_expr(&mut self) -> Result<Option<Arc<CompiledExpr>>> {
-        if !self.bool()? {
-            return Ok(None);
-        }
-        let len = self.u32()? as usize;
-        let end = self
-            .pos
-            .checked_add(len)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot length overflow"))?;
-        let bytes = self
-            .bytes
-            .get(self.pos..end)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot truncated"))?;
-        self.pos = end;
-        Ok(Some(Arc::new(decode_expr_from_bytes(bytes)?)))
-    }
+    let len = reader.u32()? as usize;
+    let bytes = reader.take(len)?;
+    Ok(Some(Arc::new(decode_expr_from_bytes(bytes)?)))
 }
