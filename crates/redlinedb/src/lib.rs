@@ -509,7 +509,7 @@ impl Connection {
         F: Send + Sync + 'static + Fn(&str, &str) -> Ordering,
     {
         Err(Error::unsupported(
-            "collation hooks are not implemented yet",
+            "collation hooks are reserved for a follow-on milestone",
         ))
     }
 

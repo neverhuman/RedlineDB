@@ -52,22 +52,20 @@ fn parse_args(argv: &[OsString]) -> Result<Args, String> {
             "--version-root" => {
                 let val = match inline_value {
                     Some(v) => v,
-                    None => iter
-                        .next()
-                        .ok_or_else(|| "--version-root requires a value".to_string())?
-                        .to_string_lossy()
-                        .into_owned(),
+                    None => match iter.next() {
+                        Some(v) => v.to_string_lossy().into_owned(),
+                        None => return Err("--version-root requires a value".to_string()),
+                    },
                 };
                 version_root = Some(PathBuf::from(val));
             }
             "--suite" => {
                 let val = match inline_value {
                     Some(v) => v,
-                    None => iter
-                        .next()
-                        .ok_or_else(|| "--suite requires a value".to_string())?
-                        .to_string_lossy()
-                        .into_owned(),
+                    None => match iter.next() {
+                        Some(v) => v.to_string_lossy().into_owned(),
+                        None => return Err("--suite requires a value".to_string()),
+                    },
                 };
                 suite = Some(val);
             }
@@ -77,7 +75,10 @@ fn parse_args(argv: &[OsString]) -> Result<Args, String> {
             other => return Err(format!("unknown argument: {other}")),
         }
     }
-    let input = input.ok_or_else(|| "--input is required".to_string())?;
+    let input = match input {
+        Some(v) => v,
+        None => return Err("--input is required".to_string()),
+    };
     let version_root = version_root.unwrap_or_else(default_version_root);
     let suite = suite.unwrap_or_else(|| DEFAULT_SUITE.to_string());
     Ok(Args {
