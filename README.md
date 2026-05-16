@@ -23,37 +23,53 @@
 
 ## Install
 
-**Linux & macOS — one command:**
+### Rust library
+
+Add to `Cargo.toml`. Use an exact pin for production:
+
+```toml
+[dependencies]
+redlinedb = "=1.0.0"   # exact pin — recommended for production
+# redlinedb = "1"      # any compatible 1.x (fine for libraries)
+```
+
+`Cargo.lock` locks the resolved version for binary crates. Run `cargo update -p redlinedb` to upgrade on your schedule.
+
+### CLI binary — Linux & macOS
+
+Latest release:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
 ```
 
-Installs the CLI binary, native library (`libredlinedb`), and C headers to `/usr/local`. Custom prefix:
+**Pin to a specific version** (recommended for CI and reproducible environments):
 
 ```bash
-PREFIX=~/.local curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+VERSION=v1.0.0 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
 ```
 
-**Rust projects** — add to `Cargo.toml`:
+Custom install prefix:
 
-```toml
-[dependencies]
-redlinedb = "1"
+```bash
+VERSION=v1.0.0 PREFIX=~/.local curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
 ```
 
-**C/C++ drop-in for SQLite** — link `redlinedb` instead of `sqlite3`, keep your existing `#include <sqlite3.h>`:
+The script verifies a SHA-256 checksum from the release before installing.
 
-```c
-// No source changes needed — sqlite3.h shim re-exports all symbols
-#include <sqlite3.h>
+### cargo install (from source, version-pinned)
+
+```bash
+cargo install redlinedb-cli --version 1.0.0 --locked
+# or from a specific git tag:
+cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v1.0.0 --package redlinedb-cli --locked
 ```
 
-```sh
-cc myapp.c -I/usr/local/include -L/usr/local/lib -lredlinedb -o myapp
-```
+`--locked` enforces the committed `Cargo.lock` — ensures you get the exact dependency tree that was tested.
 
-**Direct download** — pre-built tarballs for every platform on the [releases page](https://github.com/neverhuman/RedlineDB/releases):
+### Direct download
+
+Pre-built tarballs on the [releases page](https://github.com/neverhuman/RedlineDB/releases):
 
 | Platform | File |
 |---|---|
@@ -61,7 +77,7 @@ cc myapp.c -I/usr/local/include -L/usr/local/lib -lredlinedb -o myapp
 | macOS Apple Silicon | `redlinedb-v1.0.0-macos-arm64.tar.gz` |
 | macOS Intel | `redlinedb-v1.0.0-macos-x86_64.tar.gz` |
 
-Each tarball contains: `bin/redlinedb` (CLI), `lib/libredlinedb.{so,dylib,a}`, `include/redlinedb.h`, `include/sqlite3.h`.
+Each tarball has a matching `.sha256` checksum file.
 
 ---
 
@@ -73,11 +89,11 @@ RedlineDB is a ground-up rewrite in safe Rust that keeps the SQLite API contract
 
 | | RedlineDB | SQLite |
 |---|---|---|
-| Active source LOC | **34,999 (Rust)** | ~250,000 (C) |
+| Active source LOC | **34,999 (100% Rust)** | ~250,000 (C) |
 | Concurrency model | MVCC, multi-writer | Single-writer WAL |
 | Test count | 243 passing | (separate test corpus) |
-| C ABI compatibility | `rldb_*` + `sqlite3.h` shim path | native |
-| Memory safety | Safe Rust outside `crates/ffi` | Unsafe by language |
+| Ecosystem compat | Rust-native API + `sqlite3_*` symbol shim (Rust FFI crate) | native C API |
+| Memory safety | Safe Rust (unsafe limited to FFI boundary in `crates/ffi`) | Unsafe by language |
 
 ---
 
@@ -157,7 +173,7 @@ The cert harness is reproducible: one CLI invocation rebuilds the Docker image, 
   <img src="assets/architecture.png" alt="RedlineDB architecture" width="95%">
 </p>
 
-RedlineDB is a layered system. From the top: applications link against either `rldb_*` (the native C ABI) or `sqlite3.h` (a drop-in compatibility shim). Both surface a Rust facade (`redlinedb`) that owns the public types — `Database`, `Connection`, `Statement`, `Row`, `OpenOptions`. The SQL engine (`redlinedb-sql`) wraps the kernel via a parser-planner-executor pipeline. The kernel (`redlinedb-kernel`) holds the catalog, the B-tree index, the MVCC engine, the WAL coordinator, and the slotted-page storage layer. Everything below the C ABI is safe Rust modulo a single audited thread-local in the kernel for failpoint thread-arming.
+RedlineDB is 100% Rust, top to bottom. The primary interface is the Rust facade (`redlinedb`) that owns the public types — `Database`, `Connection`, `Statement`, `Row`, `OpenOptions`. For ecosystem compatibility, `crates/ffi` is a Rust crate that exports `extern "C"` symbols (`rldb_*` and `sqlite3_*` shims) so existing SQLite-linked programs can swap in RedlineDB at link time — no C source code is involved. The SQL engine (`redlinedb-sql`) wraps the kernel via a parser-planner-executor pipeline. The kernel (`redlinedb-kernel`) holds the catalog, the B-tree index, the MVCC engine, the WAL coordinator, and the slotted-page storage layer. The entire codebase is safe Rust modulo the necessary `unsafe` at the FFI boundary in `crates/ffi` and a single audited thread-local in the kernel for failpoint thread-arming.
 
 ### Crate layout
 
@@ -166,7 +182,7 @@ RedlineDB is a layered system. From the top: applications link against either `r
 | [`crates/kernel`](crates/kernel) | 12,883 | Slotted-page heap, MVCC version chains, WAL coordinator, B-tree index, catalog snapshot, recovery |
 | [`crates/sql`](crates/sql) | 11,615 | sqlparser-rs SQLite-dialect parser, cost-based planner, vectorized executor, per-tx index undo log |
 | [`crates/redlinedb`](crates/redlinedb) | 2,975 | Public Rust facade — Database, Connection, Statement, Row, OpenOptions, BeginMode |
-| [`crates/ffi`](crates/ffi) | 1,478 | C ABI: `rldb_*` native entrypoints + `sqlite3.h` compatibility header |
+| [`crates/ffi`](crates/ffi) | 1,478 | Rust FFI crate: exports `rldb_*` and `sqlite3_*` C-callable symbols for ecosystem compatibility |
 | [`crates/bench`](crates/bench) | 5,144 | Workload harness, parallel certify scheduler, recovery-matrix, failpoint-matrix, compat suite |
 | [`crates/cli`](crates/cli) | — | One-shot shell for queries, stats, backups |
 | [`crates/server`](crates/server) | — | Optional framed local server |
@@ -254,9 +270,13 @@ while let Step::Row = stmt.step()? {
 
 `Database::create_in_memory()` and `Database::create_ephemeral()` create transient shared sessions that clean up when the last handle drops.
 
-### C ABI
+### Ecosystem compatibility (C ABI shim)
+
+RedlineDB is 100% Rust, but the `crates/ffi` crate exports C-callable symbols so existing SQLite-linked ecosystems (rusqlite, sqlx, Python `sqlite3`, Go `mattn/go-sqlite3`) can swap in RedlineDB at link time without source changes. No C code is involved — `crates/ffi` is a Rust crate that uses `extern "C"` + `#[no_mangle]` to produce a compatible shared library.
 
 ```c
+// Existing C/C++ code links against libredlinedb instead of libsqlite3.
+// The sqlite3.h shim (7 lines, just a redirect) maps sqlite3_* → rldb_*.
 #include "crates/ffi/include/rldb.h"
 
 rldb *db;
@@ -271,7 +291,7 @@ rldb_finalize(stmt);
 rldb_close(db);
 ```
 
-The `crates/ffi/include/sqlite3.h` shim binds `rldb_*` behind `sqlite3_*` symbol names so existing rusqlite / sqlx / Python `sqlite3` / Go `mattn/go-sqlite3` clients link without code changes (full symbol coverage is a planned FFI lane).
+Full `sqlite3_*` symbol coverage is a planned FFI lane. See [Limitations and roadmap](#limitations-and-roadmap).
 
 ### CLI
 
@@ -553,7 +573,7 @@ We try to publish RedlineDB's wins and its trailing edges with equal weight. As 
 - **Single-row hot contention** (e.g., `hot-row-update`) is roughly 5× slower than SQLite. SQLite's WAL writer batches small commits in a way our group-commit path does not yet match. Improving this is a 2026 lane.
 - **Large secondary-index range scans** are the biggest gap. The B-tree range cursor is correct but lacks prefetch and warm-leaf reuse. SQLite wins ~80× at 64 threads on `secondary-index-range`. Range-cursor prefetch is a planned kernel lane.
 - **Single-thread, per-tx overhead** is higher than SQLite's. The MVCC version-chain bookkeeping and durable rowid B-tree pay off as concurrency rises but cost a constant tax at thread count = 1.
-- **`sqlite3_*` ABI shim** is a header (`crates/ffi/include/sqlite3.h`) and a partial native passthrough. The full symbol-level link path (so rusqlite / Python `sqlite3` / Go drivers swap binary-compatibly) is the next FFI lane.
+- **`sqlite3_*` ABI shim** covers the core symbol set but is not yet complete. The full symbol-level coverage (so rusqlite / Python `sqlite3` / Go drivers swap binary-compatibly without stubs) is the next FFI lane. The shim is a Rust crate (`crates/ffi`), not a separate C codebase.
 - **No encryption-at-rest yet.** Pages and WAL are checksummed but not encrypted. Tracked as a Phase 10 deliverable.
 - **Serializable isolation** is not yet supported; we run snapshot isolation. SSI (Cahill-style) is on the future-work list.
 

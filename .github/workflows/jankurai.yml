@@ -5,18 +5,24 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
-  group: jankurai-${{ github.ref }}
+  group: jankurai-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   audit:
-    # Hard gate end-to-end. All soft-gate semantics for jankurai install
-    # / language-bad-behavior tests live inside ops/ci/jankurai-audit.sh
-    # (see agent/ci-soft-gate-ledger.toml#jankurai-audit-job). No
-    # nonblocking overrides appear anywhere in this workflow.
+    # Inline jankurai tool-adoption CI evidence steps. Each `run: jankurai
+    # ...` step is the canonical CI evidence entry for its tool-adoption
+    # manifest row (see agent/tool-adoption.toml). Install is soft-gated:
+    # if jankurai cannot be installed, downstream jankurai steps are
+    # skipped via the `installed` output check; the job still exits 0
+    # without `continue-on-error: true` (HLT-034). Soft-gate reasoning is
+    # recorded in agent/ci-soft-gate-ledger.toml#jankurai-install.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       security-events: write
@@ -28,14 +34,73 @@ jobs:
         with:
           toolchain: 1.95.0
           components: rustfmt, clippy
-      # Thin dispatcher: every step that used to live inline ("Install
-      # jankurai" through "Language bad-behavior tests") is now in
-      # ops/ci/jankurai-audit.sh so the same audit lane runs locally via
-      # `scripts/ci-local.sh audit`. Audit references:
-      # HLT-042 ci-local-parity.lib-missing,
-      # HLT-034 ci-bad-behavior.
-      - name: jankurai audit lane (ops/ci/jankurai-audit.sh)
-        run: bash ops/ci/jankurai-audit.sh
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Prepare accepted baseline
+        run: |
+          set -euo pipefail
+          mkdir -p target/jankurai
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin main --depth=1
+            if git show origin/main:agent/baselines/main.repo-score.json > target/jankurai/accepted-baseline.json 2>/dev/null; then
+              echo "baseline sourced from origin/main"
+            elif [ -f agent/baselines/main.repo-score.json ]; then
+              cp agent/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
+              echo "baseline sourced from local (first-time commit)"
+            else
+              echo "missing accepted baseline agent/baselines/main.repo-score.json" >&2
+              exit 1
+            fi
+          elif [ -f agent/baselines/main.repo-score.json ]; then
+            cp agent/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
+          else
+            echo "missing accepted baseline agent/baselines/main.repo-score.json" >&2
+            exit 1
+          fi
+      - name: Install jankurai
+        id: install-jankurai
+        run: |
+          mkdir -p target/jankurai
+          if cargo install --git https://github.com/jeppsontaylor/Jankurai.git \
+              --tag v0.8.16 --package jankurai --locked 2>target/jankurai/jankurai-install.log \
+              || cargo install jankurai --locked 2>>target/jankurai/jankurai-install.log; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+            printf 'soft-gate=jankurai-install status=soft-failed ledger=agent/ci-soft-gate-ledger.toml\n' \
+              | tee -a target/jankurai/jankurai-install.log
+            echo "::warning::jankurai install failed; tool-adoption CI evidence steps will be skipped"
+          fi
+      - run: jankurai --version
+        if: steps.install-jankurai.outputs.installed == 'true'
+      - name: Proofbind verify
+        if: steps.install-jankurai.outputs.installed == 'true'
+        run: jankurai proofbind verify . --changed-from origin/main
+      - name: Proofmark rust
+        if: steps.install-jankurai.outputs.installed == 'true'
+        run: jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+      - name: Rust witness build
+        if: steps.install-jankurai.outputs.installed == 'true'
+        run: jankurai rust witness build .
+      - name: Security lane
+        if: steps.install-jankurai.outputs.installed == 'true'
+        run: jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
+      - name: Copy-code audit
+        if: steps.install-jankurai.outputs.installed == 'true'
+        run: cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+      - name: Language bad-behavior tests
+        if: steps.install-jankurai.outputs.installed == 'true'
+        run: |
+          rm -rf target/jankurai-src
+          if git clone --depth 1 https://github.com/jeppsontaylor/Jankurai.git target/jankurai-src 2>/dev/null; then
+            ( cd target/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
+              > >(tee target/jankurai/language-bad-behavior.log) 2>&1
+          else
+            printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=agent/ci-soft-gate-ledger.toml\n' \
+              | tee target/jankurai/language-bad-behavior.log
+          fi
+      - name: jankurai audit
+        if: steps.install-jankurai.outputs.installed == 'true'
+        run: jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl
       - name: Upload jankurai SARIF (if produced)
         if: always() && hashFiles('target/jankurai/jankurai.sarif') != ''
         uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
@@ -50,6 +115,7 @@ jobs:
             agent/repo-score.json
             agent/repo-score.md
             agent/cost-budget.toml
+            agent/baselines/main.repo-score.json
             target/jankurai/repo-score.json
             target/jankurai/repo-score.md
             target/jankurai/jankurai.sarif
@@ -59,7 +125,8 @@ jobs:
             target/jankurai/proofmark/proofmark-receipt.json
             target/jankurai/proofmark/proof-receipt.json
             target/jankurai/rust/witness-graph.json
-            target/jankurai/ux-qa.json
+            target/jankurai/copy-code.json
+            target/jankurai/copy-code.md
             target/jankurai/security/evidence.json
             target/jankurai/migration-report.json
             target/jankurai/language-bad-behavior.log
@@ -107,6 +174,7 @@ jobs:
       # (see ledger entries actionlint-workflow-lint, syft-sbom).
       - name: security lane (ops/ci/security.sh)
         run: bash ops/ci/security.sh
+
   dependency-review:
     # SBOM-like dependency review on PRs. Compares base vs head
     # manifests for newly-introduced vulnerable or non-allowlisted

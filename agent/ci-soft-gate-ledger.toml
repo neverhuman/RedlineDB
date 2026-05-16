@@ -23,11 +23,27 @@
 #   unblock_owner     — who owns the unblock action
 
 [[entry]]
+name              = "jankurai-install"
+script_path       = ".github/workflows/jankurai.yml"
+line_number       = 45
+rule_waived       = "ci-bad-behavior.audit-job-nonblocking"
+unblock_condition = "Confirm that `cargo install --git https://github.com/jeppsontaylor/Jankurai.git --tag v0.8.16 --package jankurai --locked` completes successfully from a GitHub Actions ubuntu-latest runner. When confirmed, the install step's soft-gate output check can be removed and all downstream jankurai steps made unconditional."
+unblock_owner     = "jepson@veox.ai"
+
+[[entry]]
 name              = "jankurai-audit-job"
 script_path       = "ops/ci/jankurai-audit.sh"
 line_number       = 165
 rule_waived       = "ci-bad-behavior.audit-job-nonblocking"
-unblock_condition = "jankurai source becomes installable via `cargo install --git <pinned-url> --locked jankurai` from GitHub Actions runners (currently both jepsontaylor/jankurai and anthropics/jankurai resolve as unreachable from CI). When that lands, drop the `ci_soft_gate` wrapper around `step_install_jankurai` inside ops/ci/jankurai-audit.sh and let the install failure propagate."
+unblock_condition = "Local-only script; CI now uses inline steps in .github/workflows/jankurai.yml. This ledger entry covers the ops/ci/jankurai-audit.sh local proof lane path only. Unblock: same as jankurai-install entry above."
+unblock_owner     = "jepson@veox.ai"
+
+[[entry]]
+name              = "jankurai-language-bad-behavior"
+script_path       = ".github/workflows/jankurai.yml"
+line_number       = 75
+rule_waived       = "ci-bad-behavior.language-tests-clone-optional"
+unblock_condition = "Confirm that `git clone --depth 1 https://github.com/jeppsontaylor/Jankurai.git` completes from a GitHub Actions runner. When confirmed, remove the clone-failed soft-gate branch."
 unblock_owner     = "jepson@veox.ai"
 
 [[entry]]

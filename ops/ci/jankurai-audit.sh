@@ -121,12 +121,17 @@ step_rust_witness() {
     jankurai rust witness build .
 }
 
-# ---- 11) UX QA smoke -------------------------------------------------------
+# ---- 11) Copy-code audit ---------------------------------------------------
+step_copy_code() {
+    jankurai copy-code . --json "$LOG_DIR/copy-code.json" --md "$LOG_DIR/copy-code.md"
+}
+
+# ---- 12) UX QA smoke -------------------------------------------------------
 step_ux_qa() {
     jankurai ux audit --config agent/ux-qa.toml --out "$LOG_DIR/ux-qa.json"
 }
 
-# ---- 12) Language bad-behavior tests ---------------------------------------
+# ---- 13) Language bad-behavior tests ---------------------------------------
 # Canonical CI invocation for the ci-bad-behavior, git-bad-behavior, and
 # release-bad-behavior tool-adoption entries:
 #   cargo test -p jankurai --test language_bad_behavior
@@ -190,6 +195,7 @@ main() {
     step_proofbind
     step_proofmark
     step_rust_witness
+    step_copy_code
     step_ux_qa
     step_language_bad_behavior
 }
