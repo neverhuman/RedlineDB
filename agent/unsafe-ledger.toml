@@ -1,4 +1,43 @@
 # Keep unsafe blocks rare and auditable.
-# Each entry should record file, line, owner, invariant, and proof lane.
-entries = []
+# Each entry records file, line, owner, invariant, and proof lane.
+# Section D of the jankurai repair plan fills these in per file as
+# SAFETY comments land. Empty entries mean the ledger has not yet
+# been populated for that file — the audit will still flag missing
+# SAFETY comments separately.
+
+[[entries]]
+file = "crates/ffi/src/*.rs"
+owner = "c-abi"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+invariant = "all unsafe blocks dereference raw pointers obtained from the public C ABI; callers are bound by the contract in docs/exceptions/ffi-c-header.md; ledger populated per-site by Section D1 (see ~/.claude/plans/vast-spinning-seal.md)"
+
+[[entries]]
+file = "crates/kernel/src/vector/simd.rs"
+owner = "phase10-vector-flat-and-simd"
+proof_lane = "rtk cargo test -p redlinedb-kernel --test vector_simd --quiet --locked"
+invariant = "SIMD intrinsics dispatched only when the runtime feature flag is set; ledger populated per-site by Section D2"
+
+[[entries]]
+file = "crates/kernel/src/vector/diskann/sectors.rs"
+owner = "phase10-diskann-index"
+proof_lane = "rtk cargo test -p redlinedb-kernel --test diskann_correctness --quiet --locked"
+invariant = "page sector access guarded by checksum + bounds check; static mut replaced with OnceLock<Mutex<_>> by Section D2"
+
+[[entries]]
+file = "crates/redlinedb/src/registry.rs"
+owner = "public-rust-facade"
+proof_lane = "rtk cargo test -p redlinedb --quiet --locked"
+invariant = "global handle registry replaced with OnceLock<Mutex<_>> by Section D3"
+
+[[entries]]
+file = "crates/sql/src/statement.rs"
+owner = "sql-parser-planner-executor"
+proof_lane = "rtk cargo test -p redlinedb-sql --quiet --locked"
+invariant = "statement handle drop ordering proven by SAFETY comment added in Section D3"
+
+[[entries]]
+file = "crates/bench/src/process_metrics.rs"
+owner = "bench-harness"
+proof_lane = "rtk cargo test -p redlinedb-bench --quiet --locked"
+invariant = "libc::rusage initialization via MaybeUninit + getrusage by Section D4"
 

@@ -153,6 +153,106 @@
       "command": "just score",
       "purpose": "verify top-level editor policy remains routed"
     },
+    ".github/CODEOWNERS": {
+      "command": "just score",
+      "purpose": "verify code-ownership routing stays in sync with owner-map"
+    },
+    ".github/PULL_REQUEST_TEMPLATE.md": {
+      "command": "just score",
+      "purpose": "verify PR template stays routed and visible to the audit"
+    },
+    ".github/copilot-instructions.md": {
+      "command": "just score",
+      "purpose": "verify Copilot IDE adapter stays routed to the agent standard"
+    },
+    ".github/instructions/": {
+      "command": "just score",
+      "purpose": "verify thin IDE/agent adapters stay aligned with agent/JANKURAI_STANDARD.md"
+    },
+    ".github/workflows/": {
+      "command": "just security",
+      "purpose": "verify CI workflows lint clean and the security lane runs"
+    },
+    ".gitignore": {
+      "command": "just score",
+      "purpose": "keep the exclude list aligned with the owner-map"
+    },
+    "assets/": {
+      "command": "just score",
+      "purpose": "ensure paper/figure assets stay routed and indexed"
+    },
+    "CHANGELOG.md": {
+      "command": "just score",
+      "purpose": "verify release log discipline (docs/release.md)"
+    },
+    "CLAUDE.md": {
+      "command": "just score",
+      "purpose": "verify root agent instructions stay short and routed"
+    },
+    "CONTRIBUTING.md": {
+      "command": "just score",
+      "purpose": "verify contributor docs route through the agent standard"
+    },
+    "Cargo.lock": {
+      "command": "just security",
+      "purpose": "verify dependency lock evidence for cargo audit / deny"
+    },
+    "Cargo.toml": {
+      "command": "just fast",
+      "purpose": "verify workspace manifest builds and tests workspace-wide"
+    },
+    "EXTERNAL_REVIEW_MASTER_PROMPT.md": {
+      "command": "just score",
+      "purpose": "verify external-review prompt stays visible to the audit"
+    },
+    "EXTERNAL_REVIEW_SUPERPROMPT.md": {
+      "command": "just score",
+      "purpose": "verify external-review superprompt stays visible to the audit"
+    },
+    "FEATURE_GAPS.md": {
+      "command": "just score",
+      "purpose": "verify gap tracker stays visible to the audit"
+    },
+    "GEMINI.md": {
+      "command": "just score",
+      "purpose": "verify Gemini IDE adapter stays routed to the agent standard"
+    },
+    "LICENSE": {
+      "command": "just score",
+      "purpose": "verify license file stays routed and unchanged accidentally"
+    },
+    "README.md": {
+      "command": "just score",
+      "purpose": "verify root README stays routed and reflects the standard"
+    },
+    "SECURITY.md": {
+      "command": "just security",
+      "purpose": "verify security disclosure policy is observed"
+    },
+    "deny.toml": {
+      "command": "just security",
+      "purpose": "verify cargo-deny policy is honored"
+    },
+    "justfile": {
+      "command": "just fast",
+      "purpose": "verify proof-lane recipes execute"
+    },
+    "paper/": {
+      "command": "just score",
+      "purpose": "verify paper artifacts stay routed and reproducible"
+    },
+    "rust-toolchain.toml": {
+      "command": "just fast",
+      "purpose": "verify pinned toolchain still builds the workspace"
+    },
+    "rustfmt.toml": {
+      "command": "just fast",
+      "purpose": "verify formatting policy is honored"
+    },
+    "scripts/": {
+      "command": "just fast",
+      "purpose": "verify scripts referenced by proof lanes stay executable"
+    },
     "agent/zyal/": {
       "command": "just score",
       "purpose": "verify canonical ZYAL runbooks stay under agent/zyal and only use the .zyal extension"

@@ -1,17 +1,17 @@
 {
-  "report_fingerprint": "sha256:372bd6c9386b8bdbb3641b70f02a767d1ce891b41bf15db2415d114f31def357",
-  "input_fingerprint": "sha256:a9338bfaba4bb0b7f73c6ca22205d5ec8cd37716be43fc42c00a2ea5527325ca",
+  "report_fingerprint": "sha256:ade946696e89a74dfbfc9d5ae70b85eb4cc8b33d300b3c7f16838ef70c57fafb",
+  "input_fingerprint": "sha256:b99ab1f5ed271ba774a041431062e812fe481236f05cd1434cdb9c7b27b9a614",
   "policy_fingerprint": "sha256:1344c6682471353eb10a07a55a14e5fdd73676dd9aafd00b9f60dffd43c8b443",
   "manifest_fingerprints": {
-    "owner_map": "sha256:6771292339e3ad524d270c44117aada81e82c823da55eee6274e98701dc95729",
-    "test_map": "sha256:d5b48554272b94342756399ff924668a76f3b28853877b39554e61f83b72d22f",
-    "generated_zones": "sha256:5dfe809251017a95ec5a27320d48c17b4abacd36c2b66eee287f4f70fcfb7772",
+    "owner_map": "sha256:74f494a6cbc365236d62d3dfc1061a69f5f4c34fa0cc94ba1fb397e3b81db9f6",
+    "test_map": "sha256:b9ab67436301f2686ca4b115bfb46eef6e0dd1f5ed3c12ba7260c6de2241e036",
+    "generated_zones": "sha256:cb6fa44095635bb4d9fc381a548fa2a1f6c94365b36fa49bbd8f55e94b5d4fb6",
     "boundaries": "sha256:7a7bf640d469152bca6f0a9a4feabb90ae6eb170f3fe33a196871bfefb3936e3",
     "proof_lanes": "sha256:00d647bbe1276d9d055bee237405335168081574e120b33f3953c9bca1b14215",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778892294",
+  "generated_at": "1778893956",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -24,22 +24,8 @@
   "observed_conformance_level": "HL2",
   "conformance_decision": "block",
   "conformance_blockers": [
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
-    "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+    "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
+    "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
@@ -252,9 +238,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1778892294",
-  "started_at": "1778892294",
-  "elapsed_ms": 5524,
+  "run_id": "1778893956",
+  "started_at": "1778893956",
+  "elapsed_ms": 5113,
   "scope": {
     "mode": "full",
     "paths": []
@@ -265,7 +251,7 @@
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 226,
+    "hard_findings": 212,
     "soft_findings": 14,
     "ratchet": {
       "baseline_score": 64,
@@ -281,7 +267,7 @@
     }
   },
   "git": {
-    "head": "0cc565e",
+    "head": "0f2a4e7",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -533,6 +519,7 @@
         "reference-profile cell `ops` is canonical",
         "reference-profile cell `ops` has local AGENTS.md guidance",
         "root `README.md` routes to workspace layout",
+        "owner map covers audited paths",
         "authored code file exceeds 500 LOC"
       ],
       "notes": [
@@ -715,10 +702,7 @@
     "has_rendered_ux_lane": true,
     "missing_categories": [],
     "evidence": {
-      "accessibility": [
-        "agent/repo-score.json",
-        "agent/repo-score.md"
-      ],
+      "accessibility": [],
       "api_mocks": [],
       "artifact_backed_proof": [
         "agent/proof-lanes.toml",
@@ -733,9 +717,7 @@
       ],
       "layout_stability": [],
       "playwright_visual": [],
-      "storybook": [
-        "agent/repo-score.json"
-      ],
+      "storybook": [],
       "visual_review": []
     }
   },
@@ -1644,229 +1626,63 @@
     },
     {
       "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `.gitignore` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
+      "category": "generated",
+      "path": "agent/generated-zones.toml",
+      "problem": "generated zone file `agent/repo-score.json` is missing",
+      "agent_fix": "regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally",
       "evidence": [
-        ".gitignore"
+        "generated zone integrity violation"
       ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
+      "check_id": "HLT-002-GENERATED-MUTATION:generated",
       "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
+      "confidence": 0.95,
+      "evidence_kind": "contract-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:73b0d05063e2ba8c1c0cdee444a5be8dda239dbe9748b61427699317c5c33f4b",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
+      "fingerprint": "sha256:da4c97d8849ada8e584127cefd2a38618b2122ac9f5d9918c4996048a2e47b21",
+      "rule_id": "HLT-002-GENERATED-MUTATION",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
+      "owner": "agent",
+      "line": 1
     },
     {
       "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `CHANGELOG.md` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
+      "category": "generated",
+      "path": "agent/generated-zones.toml",
+      "problem": "generated zone file `agent/repo-score.md` is missing",
+      "agent_fix": "regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally",
       "evidence": [
-        "CHANGELOG.md"
+        "generated zone integrity violation"
       ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
+      "check_id": "HLT-002-GENERATED-MUTATION:generated",
       "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
+      "confidence": 0.95,
+      "evidence_kind": "contract-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:2911a47f9548e75233bc304c284818b5b7fb6c72ecde5d7bc5c97be0635cd18a",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `CLAUDE.md` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "evidence": [
-        "CLAUDE.md"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:bd8f4e8361bf13c5d18526bd2f35de9a89447626ad25a0e87883fe1785d17399",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `CONTRIBUTING.md` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "evidence": [
-        "CONTRIBUTING.md"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:53c38db6efc8c868fc6490a7ca739dad4dd43e68ebdf098f88f6e1df99795075",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `Cargo.lock` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "evidence": [
-        "Cargo.lock"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:b039e38fe066b0ca37060986515b6a5787a63d246c5dada2a12dc16aec26381a",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `Cargo.toml` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "evidence": [
-        "Cargo.toml"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:5cee550532ba9f298e31a18ffa4f8b841e75577b203144fda3ac04b25761dd79",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `EXTERNAL_REVIEW_MASTER_PROMPT.md` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "evidence": [
-        "EXTERNAL_REVIEW_MASTER_PROMPT.md"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:1935ca50ef08cf279640d1c3e0153d2d482a0acb4bca8407c4e3af43234a938c",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `EXTERNAL_REVIEW_SUPERPROMPT.md` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "evidence": [
-        "EXTERNAL_REVIEW_SUPERPROMPT.md"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:3f14f6d5231d151e242cc9c7a559075a1d73db88b624698465a3cde4fab6a7be",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `FEATURE_GAPS.md` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "evidence": [
-        "FEATURE_GAPS.md"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:2372d1d68ea2f342f127a3533021ca0165f023c2f5e2f5c395fc0c532e58561d",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "path `GEMINI.md` has no owner-map route",
-      "agent_fix": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "evidence": [
-        "GEMINI.md"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:271eabd1e2dad2560b72f19c12fb8b519af9a79fabf2b83e29243d4c83ecefed",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
+      "fingerprint": "sha256:73f51c07759943db494d8bd45c79b3ea786d6bce0e391f2408f30b6a9de7af8c",
+      "rule_id": "HLT-002-GENERATED-MUTATION",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
+      "owner": "agent",
+      "line": 1
     },
     {
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.github/CODEOWNERS` has no test-map proof route",
+      "problem": "path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/index.json` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".github/CODEOWNERS"
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/index.json"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c6facbfbb742d951249284cc037845c1f2ab2a1d5213a03c80b4c687898d6ab3",
+      "fingerprint": "sha256:63a63918499ec1e3424ac105e60444bb1168ae5e0c338de4663f64f71dd4be84",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -1877,17 +1693,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.github/PULL_REQUEST_TEMPLATE.md` has no test-map proof route",
+      "problem": "path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".github/PULL_REQUEST_TEMPLATE.md"
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:6be0a2dfcc6bb22c4a24996ced5349c39b8361695babbd981ac6482c1979a121",
+      "fingerprint": "sha256:64970509ee4a41509d6bb4ba4fc0c2f619d9206cc936d916ea4e9898bda07699",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -1898,17 +1714,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.github/copilot-instructions.md` has no test-map proof route",
+      "problem": "path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".github/copilot-instructions.md"
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:1d8715b91aa1798a04a0f8eb739d2009aa97b0f5e933a34d7e8dc7a97a44bfde",
+      "fingerprint": "sha256:2c130c5e7ee8796c51315afef4df6e6872360ca7d7617d597d5b9752a8d00c3d",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -1919,143 +1735,17 @@
       "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
-      "problem": "path `.github/instructions/jankurai-rust.instructions.md` has no test-map proof route",
+      "problem": "path `python/ai-service/AGENTS.md` has no test-map proof route",
       "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
       "evidence": [
-        ".github/instructions/jankurai-rust.instructions.md"
+        "python/ai-service/AGENTS.md"
       ],
       "check_id": "HLT-004-UNMAPPED-PROOF:proof",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "policy-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:769147261ab786beb2930c92df19fca83e809443cbdb1387cc3b6f6bda643a89",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "proof",
-      "path": "agent/test-map.json",
-      "problem": "path `.github/instructions/jankurai-web.instructions.md` has no test-map proof route",
-      "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
-      "evidence": [
-        ".github/instructions/jankurai-web.instructions.md"
-      ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:2e6c740bb8b013b5bcecf365e91d5fc8361c9963155e98596eeb409042f6688c",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "proof",
-      "path": "agent/test-map.json",
-      "problem": "path `.github/instructions/jankurai.instructions.md` has no test-map proof route",
-      "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
-      "evidence": [
-        ".github/instructions/jankurai.instructions.md"
-      ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:0af736bb824df4107187600e202e8960d55f3b081501863062f57ea9d3a20e69",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "proof",
-      "path": "agent/test-map.json",
-      "problem": "path `.github/workflows/ci.yml` has no test-map proof route",
-      "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
-      "evidence": [
-        ".github/workflows/ci.yml"
-      ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:e8b9c4d51fd3f1a3ed0e0507f920035cc2c51d1be80cb468f20e9b3d9056c8ed",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "proof",
-      "path": "agent/test-map.json",
-      "problem": "path `.github/workflows/jankurai.yml` has no test-map proof route",
-      "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
-      "evidence": [
-        ".github/workflows/jankurai.yml"
-      ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:fbe0f82818625191cd5ba476f315b601a7e78ed1635009d516a469724f230a3e",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "proof",
-      "path": "agent/test-map.json",
-      "problem": "path `.gitignore` has no test-map proof route",
-      "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
-      "evidence": [
-        ".gitignore"
-      ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:8fe7edc74ce7873d59c9b6ccb57a19bca48fe9589c015113fb5028c2cc245992",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "proof",
-      "path": "agent/test-map.json",
-      "problem": "path `CHANGELOG.md` has no test-map proof route",
-      "agent_fix": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
-      "evidence": [
-        "CHANGELOG.md"
-      ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:eaa40b784b5bb02ef321df1133743a622cda79939f89a05728e47c374dc90555",
+      "fingerprint": "sha256:8b6b248cb1ef6e7b7bd5ef77a8b8b95ee31d28fee045d5ee7be75263101b3fc8",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
       "tlr": "Verification",
       "lane": "fast",
@@ -2905,7 +2595,7 @@
       "lane": "security",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "c-abi",
-      "line": 124,
+      "line": 132,
       "matched_term": "shell execution",
       "reason": "input handling risk needs deterministic negative tests"
     },
@@ -7355,6 +7045,26 @@
       "why": "`Python containment and polyglot hygiene` scored 0 below the standard floor of 85"
     },
     {
+      "path": "agent/generated-zones.toml",
+      "priority": "high",
+      "rule_id": "HLT-002-GENERATED-MUTATION",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "owner": "agent",
+      "task": "regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally",
+      "why": "generated zone file `agent/repo-score.json` is missing"
+    },
+    {
+      "path": "agent/generated-zones.toml",
+      "priority": "high",
+      "rule_id": "HLT-002-GENERATED-MUTATION",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "owner": "agent",
+      "task": "regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally",
+      "why": "generated zone file `agent/repo-score.md` is missing"
+    },
+    {
       "path": "agent/test-map.json",
       "priority": "high",
       "rule_id": "HLT-004-UNMAPPED-PROOF",
@@ -7362,7 +7072,7 @@
       "lane": "fast",
       "owner": "agent",
       "task": "add the narrowest stable prefix and runnable proof command to `agent/test-map.json`",
-      "why": "path `.github/CODEOWNERS` has no test-map proof route"
+      "why": "path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/index.json` has no test-map proof route"
     },
     {
       "path": "docs/release.md",
@@ -7413,16 +7123,6 @@
       "owner": "standard",
       "task": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
       "why": "`Observability and repair evidence` scored 48 below the standard floor of 85"
-    },
-    {
-      "path": "agent/owner-map.json",
-      "priority": "high",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "add the narrowest stable prefix for this path to `agent/owner-map.json`",
-      "why": "path `.gitignore` has no owner-map route"
     },
     {
       "path": "crates/ffi/include/redlinedb.h",

@@ -9,3 +9,9 @@ command = "jankurai audit . --mode advisory --json agent/repo-score.json --md ag
 path = "agent/repo-score.md"
 read_only = false
 source = "installed jankurai binary"
+
+[[zone]]
+command = "hand-authored ABI surface; see docs/exceptions/ffi-c-header.md"
+path = "crates/ffi/include/redlinedb.h"
+read_only = true
+source = "C ABI surface for the redlinedb sqlite3-compatible API; not product truth"
