@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:bea52bdd1ebc16e6361011d7138b102184fb98d4fdae8e7ba411ac8754ada874",
-  "input_fingerprint": "sha256:954451d80624b5924d8d6f1b11801496b8cbab64d7a526101eef7033df04f5e5",
+  "report_fingerprint": "sha256:ad0cb0e3a4554362f47455bd9991f2b554763f6434a7e07ec53f900c7b8cf819",
+  "input_fingerprint": "sha256:5003bde04e57630fb1853945c32f8c09a25c21e03c0baf9c4c7442551ee40f18",
   "policy_fingerprint": "sha256:53cee6bbb7603a44df93e1cedc79a3a9fd7a7bf1e7bcc4b4d348a61eddd03328",
   "manifest_fingerprints": {
     "owner_map": "sha256:66ea210c0e693740865bdfd82620899835a43775cb80d91e3acc4b35a6221f80",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778930591",
+  "generated_at": "1778931808",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "review",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1778930591",
-  "started_at": "1778930591",
-  "elapsed_ms": 6629,
+  "run_id": "1778931808",
+  "started_at": "1778931808",
+  "elapsed_ms": 12505,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "4d4f1e0",
+    "head": "559ef90",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -345,7 +345,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1750",
+        "rust bad-behavior advisory signals: 1749",
         "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -358,10 +358,10 @@
       "score": 55,
       "weighted_points": 6.6,
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/tail.rs (940 LOC)",
+        "largest authored code file: crates/sql/src/parser/helpers.rs (871 LOC)",
         "code file exceeds 500 LOC",
         "copy-code advisory classes found: 42 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1750",
+        "rust bad-behavior advisory signals: 1749",
         "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -449,13 +449,14 @@
     {
       "name": "Build speed signals",
       "weight": 4,
-      "score": 70,
-      "weighted_points": 2.8,
+      "score": 80,
+      "weighted_points": 3.2,
       "evidence": [
         "build acceleration markers found",
         "targeted test/build commands found",
         "locked dependency graph present",
-        "CI cache hint found"
+        "CI cache hint found",
+        "explicit cache marker plus narrow per-package target found"
       ],
       "notes": []
     }
@@ -1037,7 +1038,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-16T11:23:04.962503+00:00",
+    "generated_at": "2026-05-16T11:43:16.382357+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1075,18 +1076,18 @@
       ]
     },
     "summary": {
-      "files_scanned": 516,
-      "files_considered": 193,
-      "active_files": 193,
+      "files_scanned": 517,
+      "files_considered": 194,
+      "active_files": 194,
       "exact_file_classes": 0,
       "hard_classes": 0,
       "warning_classes": 42,
       "hard_instances": 0,
-      "warning_instances": 110,
+      "warning_instances": 109,
       "duplicate_lines": 56,
       "duplicate_tokens": 160,
       "duplicate_bytes": 1486,
-      "total_redundant_lines": 84,
+      "total_redundant_lines": 83,
       "total_redundant_tokens": 216,
       "total_redundant_bytes": 2016
     },
@@ -1246,69 +1247,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-e3b0c44298fc1c14",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 0,
-        "duplicate_bytes": 0,
-        "instance_count": 6,
-        "total_redundant_lines": 5,
-        "total_redundant_tokens": 0,
-        "total_redundant_bytes": 0,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "5900887e2f82e8fa",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/kernel/src/catalog/ddl.rs",
-            "language": "rust",
-            "start_line": 142,
-            "end_line": 142,
-            "unit_name": "_keep_type_use"
-          },
-          {
-            "path": "crates/kernel/src/failpoints/mod.rs",
-            "language": "rust",
-            "start_line": 41,
-            "end_line": 42,
-            "unit_name": "init"
-          },
-          {
-            "path": "crates/kernel/src/integrity/equivalence.rs",
-            "language": "rust",
-            "start_line": 207,
-            "end_line": 207,
-            "unit_name": "_force_error_visibility"
-          },
-          {
-            "path": "crates/kernel/src/integrity/page_csum.rs",
-            "language": "rust",
-            "start_line": 107,
-            "end_line": 107,
-            "unit_name": "_force_use"
-          },
-          {
-            "path": "crates/sql/src/connection/session.rs",
-            "language": "rust",
-            "start_line": 513,
-            "end_line": 513,
-            "unit_name": "_keep_txn_use"
-          },
-          {
-            "path": "crates/sql/src/session.rs",
-            "language": "rust",
-            "start_line": 207,
-            "end_line": 207,
-            "unit_name": "_keep_rowid_use"
-          }
-        ]
-      },
-      {
         "id": "copy-code-unit-rust-d38ffff3c586fd30",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -1338,8 +1276,8 @@
           {
             "path": "crates/sql/src/session.rs",
             "language": "rust",
-            "start_line": 200,
-            "end_line": 204,
+            "start_line": 196,
+            "end_line": 200,
             "unit_name": "drop"
           }
         ]
@@ -1481,6 +1419,62 @@
             "start_line": 147,
             "end_line": 149,
             "unit_name": "checksum_tx_status_bytes"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-e3b0c44298fc1c14",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 0,
+        "duplicate_bytes": 0,
+        "instance_count": 5,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 0,
+        "total_redundant_bytes": 0,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "686990edc922b98e",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/catalog/ddl.rs",
+            "language": "rust",
+            "start_line": 142,
+            "end_line": 142,
+            "unit_name": "_keep_type_use"
+          },
+          {
+            "path": "crates/kernel/src/failpoints/mod.rs",
+            "language": "rust",
+            "start_line": 41,
+            "end_line": 42,
+            "unit_name": "init"
+          },
+          {
+            "path": "crates/kernel/src/integrity/equivalence.rs",
+            "language": "rust",
+            "start_line": 207,
+            "end_line": 207,
+            "unit_name": "_force_error_visibility"
+          },
+          {
+            "path": "crates/kernel/src/integrity/page_csum.rs",
+            "language": "rust",
+            "start_line": 107,
+            "end_line": 107,
+            "unit_name": "_force_use"
+          },
+          {
+            "path": "crates/sql/src/connection/session.rs",
+            "language": "rust",
+            "start_line": 513,
+            "end_line": 513,
+            "unit_name": "_keep_txn_use"
           }
         ]
       },
@@ -3049,17 +3043,17 @@
       "problem": "`Code shape and semantic surface` scored 55 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/tail.rs (940 LOC)",
+        "largest authored code file: crates/sql/src/parser/helpers.rs (871 LOC)",
         "code file exceeds 500 LOC",
         "copy-code advisory classes found: 42 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1750"
+        "rust bad-behavior advisory signals: 1749"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:a95d29a88930f085c1dceab06a978b647b22e22145e8a274ccf5ccda77a02201",
+      "fingerprint": "sha256:ebdb8314fcd3c08dc352813cbc0adc0b2c959e3593d43b8f20f21ceda95a22dc",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3094,7 +3088,7 @@
       "severity": "medium",
       "category": "proof",
       "path": "Justfile",
-      "problem": "`Build speed signals` scored 70 below the standard floor of 85",
+      "problem": "`Build speed signals` scored 80 below the standard floor of 85",
       "agent_fix": "add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration",
       "evidence": [
         "build acceleration markers found",
@@ -3107,7 +3101,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef",
+      "fingerprint": "sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2",
       "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
       "tlr": "Verification",
       "lane": "fast",
@@ -3147,7 +3141,7 @@
       "lane": "fast",
       "owner": "workspace",
       "task": "add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration",
-      "why": "`Build speed signals` scored 70 below the standard floor of 85"
+      "why": "`Build speed signals` scored 80 below the standard floor of 85"
     },
     {
       "path": "docs/testing.md",

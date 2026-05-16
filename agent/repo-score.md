@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778930591`
-- Started at: `1778930591`
-- Elapsed: `6629` ms
+- Run ID: `1778931808`
+- Started at: `1778931808`
+- Elapsed: `12505` ms
 - Scope: `full`
 - Raw score: `83`
 - Final score: `83`
@@ -70,7 +70,7 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`42` files=`193`
+- Status: `review` hard=`0` warning=`42` files=`194`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
 - Duplicate volume: lines=`56` tokens=`160` bytes=`1486`
 
@@ -83,11 +83,11 @@
 | --- | --- | --- | ---: | ---: | --- | --- |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats.rs:342-343, crates/kernel/src/catalog/stats.rs:353-354, crates/kernel/src/catalog/store.rs:544-545, crates/kernel/src/catalog/store.rs:554-555, crates/kernel/src/catalog/store.rs:564-565, crates/kernel/src/catalog/store.rs:574-575, crates/kernel/src/catalog/store.rs:584-585, crates/kernel/src/catalog/store.rs:607-608, crates/sql/src/exec/index_access.rs:694-695` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/config.rs:413-414, crates/bench/src/config.rs:434-435, crates/kernel/src/vector/diskann/mod.rs:359-360, crates/redlinedb/src/value.rs:40-41, crates/sql/src/exec/expr/scalar/row.rs:346-347, crates/sql/src/exec/expr/scalar/row.rs:359-360` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:142-142, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:207-207, crates/kernel/src/integrity/page_csum.rs:107-107, crates/sql/src/connection/session.rs:513-513, crates/sql/src/session.rs:207-207` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:200-204` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:196-200` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/format/bytes.rs:44-46, crates/kernel/src/format/bytes.rs:49-51, crates/kernel/src/format/bytes.rs:54-56` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/config.rs:650-651, crates/redlinedb/src/statement.rs:180-181, crates/redlinedb/src/value.rs:106-107, crates/redlinedb/src/value.rs:118-119, crates/redlinedb/src/value.rs:130-131` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:458-460, crates/kernel/src/storage/control.rs:147-149, crates/kernel/src/storage/tx_status_checkpoint.rs:147-149` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:142-142, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:207-207, crates/kernel/src/integrity/page_csum.rs:107-107, crates/sql/src/connection/session.rs:513-513` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 10 | `crates/sql/src/exec/index_batch.rs:451-454, crates/sql/src/exec/index_batch.rs:459-462` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/sql/src/json/path.rs:543-544, crates/sql/src/json/path.rs:551-552, crates/sql/src/json/path.rs:559-560` | `same body appears under different names across files` |
@@ -132,13 +132,13 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 70 | 8.40 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 55 | 6.60 | largest authored code file: crates/sql/src/exec/tail.rs (940 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 55 | 6.60 | largest authored code file: crates/sql/src/parser/helpers.rs (871 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 95 | 7.60 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
 | Jankurai tool adoption and CI replacement | 7 | 26 | 1.82 | control-plane files present; applicable=16 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
-| Build speed signals | 4 | 70 | 2.80 | build acceleration markers found; targeted test/build commands found |
+| Build speed signals | 4 | 80 | 3.20 | build acceleration markers found; targeted test/build commands found |
 
 ## Reference Profile Structure
 
@@ -217,8 +217,8 @@ No audited runtime boundary reclassifications declared.
    Reason: `Code shape and semantic surface` scored 55 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:a95d29a88930f085c1dceab06a978b647b22e22145e8a274ccf5ccda77a02201`
-   Evidence: largest authored code file: crates/sql/src/exec/tail.rs (940 LOC), code file exceeds 500 LOC, copy-code advisory classes found: 42 (advisory only, no score impact), rust bad-behavior advisory signals: 1750
+   Fingerprint: `sha256:ebdb8314fcd3c08dc352813cbc0adc0b2c959e3593d43b8f20f21ceda95a22dc`
+   Evidence: largest authored code file: crates/sql/src/parser/helpers.rs (871 LOC), code file exceeds 500 LOC, copy-code advisory classes found: 42 (advisory only, no score impact), rust bad-behavior advisory signals: 1749
 2. `medium` `security` `.github/workflows/jankurai.yml`
    Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
    Check: `HLT-016-SUPPLY-CHAIN-DRIFT:security` `soft` confidence `0.76`
@@ -234,10 +234,10 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `fast`, owner `workspace`
    Docs: `docs/testing.md`
-   Reason: `Build speed signals` scored 70 below the standard floor of 85
+   Reason: `Build speed signals` scored 80 below the standard floor of 85
    Fix: add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Rerun: `just fast`
-   Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
+   Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
 4. `medium` `release` `docs/testing.md`
    Rule: `HLT-026-COST-BUDGET-GAP`
