@@ -193,9 +193,7 @@ pub(crate) fn expr_to_kernel_ast(
                 Some(p) => p,
                 None => return Err(Error::UnknownColumn("empty identifier".to_owned())),
             };
-            ExprAst::Column(
-                resolve_column_ordinal_name(column_lookup, last.value.as_str())? as u16,
-            )
+            ExprAst::Column(resolve_column_ordinal_name(column_lookup, last.value.as_str())? as u16)
         }
         Expr::Nested(expr) => expr_to_kernel_ast(expr, column_lookup)?,
         Expr::UnaryOp { op, expr } => match op {

@@ -147,10 +147,7 @@ impl Vector {
     /// pulling in a JSON dependency.
     pub fn from_json_literal(text: &str) -> VectorResult<Self> {
         let trimmed = text.trim();
-        let inner = match trimmed
-            .strip_prefix('[')
-            .and_then(|s| s.strip_suffix(']'))
-        {
+        let inner = match trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
             Some(inner) => inner,
             None => {
                 return Err(VectorError::Invalid(format!(

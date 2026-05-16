@@ -37,8 +37,7 @@ pub extern "C" fn rldb_prepare_v2(
             sql_cstr.to_str().map_err(|_| RLDB_MISMATCH)?.to_owned()
         } else {
             // SAFETY: `sql` non-null (checked); per sqlite3_prepare_v2 contract when nbytes>=0 it is the explicit byte length of the caller-owned buffer; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned String below.
-            let bytes =
-                unsafe { caller_buffer(sql_cstr.as_ptr() as *const u8, nbytes as usize) };
+            let bytes = unsafe { caller_buffer(sql_cstr.as_ptr() as *const u8, nbytes as usize) };
             std::str::from_utf8(bytes)
                 .map_err(|_| RLDB_MISMATCH)?
                 .to_owned()

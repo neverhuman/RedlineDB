@@ -218,11 +218,7 @@ fn metrics_summary(metrics: &Metrics, elapsed: Duration) -> MetricsSummary {
     }
 }
 
-pub(super) fn checksum_query(
-    engine: &dyn BenchEngine,
-    label: &str,
-    sql: &str,
-) -> Result<Checksum> {
+pub(super) fn checksum_query(engine: &dyn BenchEngine, label: &str, sql: &str) -> Result<Checksum> {
     let mut conn = engine.connect(0)?;
     let rows = conn.query_all(sql, &[])?;
     Ok(checksum_from_rows(label, &rows))

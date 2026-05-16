@@ -63,8 +63,6 @@ fn numeric_value_parses_text_and_blob() {
     assert_eq!(numeric_value(&SqlValue::Null).unwrap(), 0.0);
     assert_eq!(numeric_value(&SqlValue::Integer(7)).unwrap(), 7.0);
     assert!((numeric_value(&SqlValue::Real(1.5)).unwrap() - 1.5).abs() < 1e-9);
-    assert!(
-        (numeric_value(&SqlValue::Text(Arc::from(" 2.5 "))).unwrap() - 2.5).abs() < 1e-9
-    );
+    assert!((numeric_value(&SqlValue::Text(Arc::from(" 2.5 "))).unwrap() - 2.5).abs() < 1e-9);
     assert!(numeric_value(&SqlValue::Text(Arc::from("nope"))).is_err());
 }

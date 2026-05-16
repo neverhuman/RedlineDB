@@ -136,21 +136,33 @@ pub fn parse_timestring(input: &str) -> Result<DateTime> {
     let mut date_iter = date_part.splitn(3, '-');
     let year_str = match date_iter.next() {
         Some(s) => s,
-        None => return Err(Error::UnsupportedSql(format!("invalid date literal: {input}"))),
+        None => {
+            return Err(Error::UnsupportedSql(format!(
+                "invalid date literal: {input}"
+            )));
+        }
     };
     let year = year_str
         .parse::<i32>()
         .map_err(|_| Error::UnsupportedSql(format!("invalid year: {input}")))?;
     let month_str = match date_iter.next() {
         Some(s) => s,
-        None => return Err(Error::UnsupportedSql(format!("invalid date literal: {input}"))),
+        None => {
+            return Err(Error::UnsupportedSql(format!(
+                "invalid date literal: {input}"
+            )));
+        }
     };
     let month = month_str
         .parse::<u32>()
         .map_err(|_| Error::UnsupportedSql(format!("invalid month: {input}")))?;
     let day_str = match date_iter.next() {
         Some(s) => s,
-        None => return Err(Error::UnsupportedSql(format!("invalid date literal: {input}"))),
+        None => {
+            return Err(Error::UnsupportedSql(format!(
+                "invalid date literal: {input}"
+            )));
+        }
     };
     let day = day_str
         .parse::<u32>()

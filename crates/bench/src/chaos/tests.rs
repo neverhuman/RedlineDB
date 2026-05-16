@@ -181,8 +181,7 @@ fn lock_convoy_stats_keys_unchanged() {
 fn connection_churn_stats_keys_unchanged() {
     let (spec, dir) = spec_for(WorkloadKind::ChaosConnectionChurn, "connection-churn");
     let bench_engine = build_engine(&spec, &dir);
-    let record =
-        run_connection_churn(bench_engine.as_ref(), &spec).expect("connection_churn runs");
+    let record = run_connection_churn(bench_engine.as_ref(), &spec).expect("connection_churn runs");
     assert_stats_keys(
         &record,
         "connection-churn",

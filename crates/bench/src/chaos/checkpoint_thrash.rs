@@ -17,10 +17,7 @@ use super::helpers::{
     record_chaos_counters, run_chaos_workload, run_threaded_conn_feature, seed_rows,
 };
 
-pub(crate) fn run_checkpoint_thrash(
-    engine: &dyn BenchEngine,
-    spec: &RunSpec,
-) -> Result<RunRecord> {
+pub(crate) fn run_checkpoint_thrash(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
     struct Counters {
         checkpoint_calls: AtomicU64,
         reads: AtomicU64,

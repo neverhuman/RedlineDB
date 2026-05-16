@@ -17,10 +17,7 @@ use super::helpers::{
     run_chaos_workload, run_threaded_conn_feature, seed_rows,
 };
 
-pub(crate) fn run_sort_spill_convoy(
-    engine: &dyn BenchEngine,
-    spec: &RunSpec,
-) -> Result<RunRecord> {
+pub(crate) fn run_sort_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
     struct Counters {
         spill_queries: AtomicU64,
         writes: AtomicU64,

@@ -156,7 +156,10 @@ mod tests {
             "workload": "chaos-lock-convoy",
             "engine_stats": { "test_code_path": "custom/path.rs" }
         });
-        assert_eq!(record_source_paths(&rec), vec!["custom/path.rs".to_string()]);
+        assert_eq!(
+            record_source_paths(&rec),
+            vec!["custom/path.rs".to_string()]
+        );
 
         // Falls back to infer_source_paths when engine_stats path is empty.
         let rec = json!({

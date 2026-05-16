@@ -73,10 +73,7 @@ impl BtreeIndex {
                         None => Vec::new(),
                     }
                 }
-                _ => match right_entries
-                    .first()
-                    .and_then(|entry| entry.logical_key())
-                {
+                _ => match right_entries.first().and_then(|entry| entry.logical_key()) {
                     Some(key) => key.to_vec(),
                     None => Vec::new(),
                 },

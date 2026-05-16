@@ -547,20 +547,16 @@ fn apply_upsert_update(
     ctx.conn
         .engine()
         .lock_row_for_relation(ctx.tx, ctx.table.relation_id, ctx.conflict.rowid)?;
-    let existing = match load_table_row_by_rowid(
-        ctx.conn.engine(),
-        ctx.tx,
-        ctx.table,
-        ctx.conflict.rowid,
-    )? {
-        Some(row) => row,
-        None => {
-            return Err(Error::ConstraintViolation(format!(
-                "UPSERT conflict row missing for table {}",
-                ctx.table.name
-            )));
-        }
-    };
+    let existing =
+        match load_table_row_by_rowid(ctx.conn.engine(), ctx.tx, ctx.table, ctx.conflict.rowid)? {
+            Some(row) => row,
+            None => {
+                return Err(Error::ConstraintViolation(format!(
+                    "UPSERT conflict row missing for table {}",
+                    ctx.table.name
+                )));
+            }
+        };
     let upsert_row = RowContext::Upsert {
         current: &existing,
         excluded: ctx.excluded,

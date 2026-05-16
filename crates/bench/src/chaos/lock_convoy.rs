@@ -73,7 +73,8 @@ pub(crate) fn run_lock_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Resul
             )
         },
         |counters| {
-            let mut stats = chaos_stats("bounded", "lock-convoy", spec.rows.max(1), busy_timeout_ms);
+            let mut stats =
+                chaos_stats("bounded", "lock-convoy", spec.rows.max(1), busy_timeout_ms);
             record_chaos_counters(
                 &mut stats,
                 &[

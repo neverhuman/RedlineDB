@@ -370,13 +370,11 @@ pub(crate) fn plan_join_exact(
                 };
                 join.children = vec![prev.plan.clone(), next_scan];
                 join.estimated_rows = join_rows;
-                join.access_predicates = match selection
-                    .as_ref()
-                    .map(|expr| vec![expr_to_string(expr)])
-                {
-                    Some(v) => v,
-                    None => Vec::new(),
-                };
+                join.access_predicates =
+                    match selection.as_ref().map(|expr| vec![expr_to_string(expr)]) {
+                        Some(v) => v,
+                        None => Vec::new(),
+                    };
                 join.relation = Some(table.name.to_string());
                 join.cost = join_plan_cost;
                 candidates.push(JoinCandidate {
@@ -445,10 +443,7 @@ pub(crate) fn plan_join_greedy(
             memory_bytes: join_cost.memory_bytes,
             spill_bytes: join_cost.spill_bytes,
         };
-        join.access_predicates = match selection
-            .as_ref()
-            .map(|expr| vec![expr_to_string(expr)])
-        {
+        join.access_predicates = match selection.as_ref().map(|expr| vec![expr_to_string(expr)]) {
             Some(v) => v,
             None => Vec::new(),
         };

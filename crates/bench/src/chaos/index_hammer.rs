@@ -13,9 +13,8 @@ use crate::engine::{BenchEngine, CellValue};
 use crate::report::RunRecord;
 
 use super::helpers::{
-    blob_for, chaos_stats, checksum_query, record_chaos_counters, run_chaos_workload,
-    run_chaos_write, run_threaded_conn_feature, seed_rows, tenant_seed_row, ChaosCounters,
-    ChaosOp,
+    ChaosCounters, ChaosOp, blob_for, chaos_stats, checksum_query, record_chaos_counters,
+    run_chaos_workload, run_chaos_write, run_threaded_conn_feature, seed_rows, tenant_seed_row,
 };
 
 pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {

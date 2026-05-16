@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:c69043a154fd977e586137270496aa27933dfa356a47b4ea26b9700dcb37d763",
-  "input_fingerprint": "sha256:c81842c6466e58f9da81c627214fe1e3e87b0716c88b2885fb364af3be3c5425",
+  "report_fingerprint": "sha256:dc4a16c899fd33fe95096e2b2baf8957805f9a3d5ea83622e3c62b51ca6c2fa8",
+  "input_fingerprint": "sha256:f178bf8460bf179f96f75a7506cd4be0381d881485e9b6fe569a29963830c751",
   "policy_fingerprint": "sha256:fe21924fa93321bf80e91b0dd124ae282a51ed2e19b4f02e8029cc8b54f2f821",
   "manifest_fingerprints": {
     "owner_map": "sha256:745452aafc824749513d3b525b6489a87fa65a59b8f250338e657eea5ed74c6d",
@@ -10,8 +10,8 @@
     "proof_lanes": "sha256:46832ba6baeeaf0c88962f9ec7e746ca1142e84ae277f195b19cc91a29af5f6a",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
-  "dirty_worktree": true,
-  "generated_at": "1778901630",
+  "dirty_worktree": false,
+  "generated_at": "1778901672",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -41,9 +41,9 @@
     "HLT-000-SCORE-DIMENSION:vibe on crates/kernel/src/catalog/ops.rs"
   ],
   "repo": ".",
-  "run_id": "1778901630",
-  "started_at": "1778901630",
-  "elapsed_ms": 7118,
+  "run_id": "1778901672",
+  "started_at": "1778901672",
+  "elapsed_ms": 4972,
   "scope": {
     "mode": "full",
     "paths": []
@@ -70,11 +70,11 @@
     }
   },
   "git": {
-    "head": "19bf8a8",
+    "head": "e4f5247",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": true
+    "dirty_worktree": false
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -348,9 +348,13 @@
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
         "DOM geometry UX QA runtime found",
-        "Rust property/integration tests present or no Rust surface"
+        "Rust property/integration tests present or no Rust surface",
+        "proofbind artifact found: surfaces=3 missing=3 high_or_critical_missing=3 verdict=review"
       ],
-      "notes": []
+      "notes": [
+        "proofbind reports 3 unresolved obligation(s)",
+        "proofbind reports 3 missing high/critical semantic proof obligation(s)"
+      ]
     },
     {
       "name": "Security and supply-chain posture",

@@ -546,11 +546,7 @@ impl Statement {
     }
 
     pub fn column_value(&self, index: usize) -> Result<&SqlValue> {
-        match self
-            .current_row
-            .as_ref()
-            .and_then(|row| row.get(index))
-        {
+        match self.current_row.as_ref().and_then(|row| row.get(index)) {
             Some(v) => Ok(v),
             None => Err(Error::Bind("no current row".to_owned())),
         }
