@@ -50,11 +50,10 @@ fn run() -> Result<(), String> {
     fs::create_dir_all(&version_dir)
         .map_err(|e| format!("mkdir -p {}: {}", version_dir.display(), e))?;
 
-    let stamp_name = args
-        .input
-        .file_name()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let stamp_name = match args.input.file_name() {
+        Some(s) => s.to_string_lossy().into_owned(),
+        None => String::new(),
+    };
     println!("stamp: {stamp_name}");
     println!("records: {}", records.len());
     for (key, runs) in &grouped {
