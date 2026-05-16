@@ -111,8 +111,14 @@ jobs:
               | tee target/jankurai/language-bad-behavior.log
           fi
         continue-on-error: true
-      - uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
-        if: always()
+      - name: Upload jankurai SARIF (if produced)
+        # Only upload when the jankurai audit step actually wrote the
+        # file. The audit job is currently soft-gated because jankurai
+        # is not on crates.io, so the file may be absent — uploading
+        # a non-existent path would mask the real audit-job failure
+        # with a noisy SARIF error.
+        if: always() && hashFiles('target/jankurai/jankurai.sarif') != ''
+        uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
         with:
           sarif_file: target/jankurai/jankurai.sarif
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
