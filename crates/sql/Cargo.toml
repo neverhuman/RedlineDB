@@ -17,6 +17,7 @@ redlinedb-kernel = { path = "../kernel" }
 [dev-dependencies]
 tempfile = "3.23"
 fail = { version = "0.5", features = ["failpoints"] }
+proptest = "1.5"
 
 [features]
 default = []
