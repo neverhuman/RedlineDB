@@ -41,3 +41,7 @@ gitleaks detect --source . --redact --no-banner
 # alongside the audit/deny/gitleaks outputs. Hard gate: must succeed.
 cargo metadata --format-version 1 --locked \
     > target/jankurai/security/sbom-cargo-metadata.json
+
+# Provenance attestation — handled by the GitHub Actions step
+# `actions/attest-build-provenance@v2` in the CI workflow.
+# Local `just security` runs skip attestation (requires OIDC token).
