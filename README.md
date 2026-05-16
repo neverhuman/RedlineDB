@@ -16,7 +16,7 @@
   <a href="#crash-and-failpoint-certification"><img src="https://img.shields.io/badge/failpoint-24%2F24%20%E2%9C%93-brightgreen" alt="failpoint"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
-  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.0.1-blue" alt="version">
 </p>
 
 ---
@@ -29,7 +29,7 @@ Add to `Cargo.toml`. Use an exact pin for production:
 
 ```toml
 [dependencies]
-redlinedb = "=1.0.0"   # exact pin — recommended for production
+redlinedb = "=1.0.1"   # exact pin — recommended for production
 # redlinedb = "1"      # any compatible 1.x (fine for libraries)
 ```
 
@@ -46,13 +46,13 @@ curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/i
 **Pin to a specific version** (recommended for CI and reproducible environments):
 
 ```bash
-VERSION=v1.0.0 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+VERSION=v1.0.1 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
 ```
 
 Custom install prefix:
 
 ```bash
-VERSION=v1.0.0 PREFIX=~/.local curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+VERSION=v1.0.1 PREFIX=~/.local curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
 ```
 
 The script verifies a SHA-256 checksum from the release before installing.
@@ -60,9 +60,9 @@ The script verifies a SHA-256 checksum from the release before installing.
 ### cargo install (from source, version-pinned)
 
 ```bash
-cargo install redlinedb-cli --version 1.0.0 --locked
+cargo install redlinedb-cli --version 1.0.1 --locked
 # or from a specific git tag:
-cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v1.0.0 --package redlinedb-cli --locked
+cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v1.0.1 --package redlinedb-cli --locked
 ```
 
 `--locked` enforces the committed `Cargo.lock` — ensures you get the exact dependency tree that was tested.
@@ -73,9 +73,9 @@ Pre-built tarballs on the [releases page](https://github.com/neverhuman/RedlineD
 
 | Platform | File |
 |---|---|
-| Linux x86_64 | `redlinedb-v1.0.0-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `redlinedb-v1.0.0-macos-arm64.tar.gz` |
-| macOS Intel | `redlinedb-v1.0.0-macos-x86_64.tar.gz` |
+| Linux x86_64 | `redlinedb-v1.0.1-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `redlinedb-v1.0.1-macos-arm64.tar.gz` |
+| macOS Intel | `redlinedb-v1.0.1-macos-x86_64.tar.gz` |
 
 Each tarball has a matching `.sha256` checksum file.
 
