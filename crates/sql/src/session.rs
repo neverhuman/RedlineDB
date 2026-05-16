@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use redlinedb_kernel::engine::Txn;
 use redlinedb_kernel::error::Error as KernelError;
-use redlinedb_kernel::format::RowId;
 use redlinedb_kernel::index::UniqueKeyGuard as KernelUniqueKeyGuard;
+use redlinedb_kernel::index::poly_hash_u64;
 
 use crate::value::SqlValue;
 
@@ -188,11 +188,7 @@ impl UniqueLockTable {
     }
 
     fn shard(&self, key: &[u8]) -> usize {
-        let mut hash = 0_u64;
-        for byte in key {
-            hash = hash.wrapping_mul(131).wrapping_add(*byte as u64);
-        }
-        hash as usize % self.shards.len().max(1)
+        poly_hash_u64(key) as usize % self.shards.len().max(1)
     }
 }
 
@@ -202,6 +198,3 @@ impl Drop for UniqueKeyGuard {
             .unlock(self.shard, std::mem::take(&mut self.key), self.owner);
     }
 }
-
-#[allow(dead_code)]
-pub(crate) fn _keep_rowid_use(_: RowId) {}

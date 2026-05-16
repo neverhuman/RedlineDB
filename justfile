@@ -133,6 +133,25 @@ ci-doctor:
 
 release:
   rtk cargo build --workspace --release --locked
+
+# Targeted iteration recipes for agent loops. Narrow lanes avoid the
+# workspace-wide check + test that dominates `just fast` on cold caches.
+# Audit reference: HLT-018 perf-concurrency-drift.
+cache-warm:
+  rtk cargo build --workspace --tests --locked
+
+fast-nextest:
+  rtk cargo fmt --check
+  ./scripts/check_file_sizes.sh
+  rtk cargo check --workspace --locked
+  rtk cargo nextest run --workspace --locked --no-fail-fast
+
+crate-check crate:
+  rtk cargo check -p {{crate}} --locked
+
+crate-test crate:
+  rtk cargo test -p {{crate}} --locked --quiet
+
 # jankurai scaffold Justfile
 score:
 	jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md --score-history agent/score-history.jsonl --score-history-csv agent/score-history.csv
