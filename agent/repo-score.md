@@ -7,6 +7,7 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
+<<<<<<< HEAD
 - Run ID: `1778900232`
 - Started at: `1778900232`
 - Elapsed: `8522` ms
@@ -16,6 +17,17 @@
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `python-direct-product-truth-or-db-ownership, no-jankurai-audit-lane-in-ci, non-optimal-product-language-found, vibe-placeholders-in-product-code, fallback-soup-in-product-code, future-hostile-dead-language-in-product-code, severe-duplication-in-product-code, authz-or-data-isolation-gap, input-boundary-gap, release-readiness-gap, no-agent-friendly-exception-pattern, missing-agent-readable-docs, rust-bad-behavior, ci-bad-behavior, repo-rot-bad-behavior`
+=======
+- Run ID: `1778900976`
+- Started at: `1778900976`
+- Elapsed: `7267` ms
+- Scope: `full`
+- Raw score: `48`
+- Final score: `48`
+- Decision: `advisory`
+- Minimum score: `85`
+- Caps applied: `python-direct-product-truth-or-db-ownership, no-jankurai-audit-lane-in-ci, vibe-placeholders-in-product-code, fallback-soup-in-product-code, future-hostile-dead-language-in-product-code, severe-duplication-in-product-code, authz-or-data-isolation-gap, input-boundary-gap, release-readiness-gap, no-agent-friendly-exception-pattern, missing-agent-readable-docs, rust-bad-behavior, ci-bad-behavior, repo-rot-bad-behavior`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
 
 ## Hard Rule Caps
 
@@ -30,7 +42,11 @@
 | `no-secret-or-dependency-scanning-in-ci` | 78 | no |
 | `no-jankurai-audit-lane-in-ci` | 82 | yes |
 | `jankurai-required-tool-ci-evidence-gap` | 88 | no |
+<<<<<<< HEAD
 | `non-optimal-product-language-found` | 74 | yes |
+=======
+| `non-optimal-product-language-found` | 74 | no |
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
 | `too-much-python-in-product-surface` | 72 | no |
 | `boundary-reclassification-evidence-gap` | 72 | no |
 | `vibe-placeholders-in-product-code` | 68 | yes |
@@ -80,7 +96,11 @@
 | Observability and repair evidence | 8 | 38 | 3.04 | observability libraries or patterns found; repair receipts or raw artifact language found |
 | Context economy and agent instructions | 7 | 63 | 4.41 | root `AGENTS.md` present; root `AGENTS.md` stays short |
 | Jankurai tool adoption and CI replacement | 7 | 10 | 0.70 | control-plane files present; applicable=15 |
+<<<<<<< HEAD
 | Python containment and polyglot hygiene | 4 | 0 | 0.00 | Python appears outside the allowed roots: scripts/bench/dick_head_choas_report.py; non-optimal product language marker: crates/ffi/include/redlinedb.h |
+=======
+| Python containment and polyglot hygiene | 4 | 10 | 0.40 | Python appears outside the allowed roots: scripts/bench/dick_head_choas_report.py |
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
 | Build speed signals | 4 | 70 | 2.80 | build acceleration markers found; targeted test/build commands found |
 
 ## Reference Profile Structure
@@ -496,8 +516,13 @@ No audited runtime boundary reclassifications declared.
    Reason: jankurai manifest could not be parsed
    Fix: fix the manifest syntax so audit policy and routing maps are authoritative
    Rerun: `just score`
+<<<<<<< HEAD
    Fingerprint: `sha256:03d184c6ea2608e79cb6f5c3fff8108b5fba9b444bf406e28c2fcfceb2af3599`
    Evidence: missing field `tests` at line 148 column 1
+=======
+   Fingerprint: `sha256:b2e299cfb87643af17d4747d42b9f7f8f43cddc5f8d597416c1232648b87cdf3`
+   Evidence: missing field `tests` at line 154 column 1
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
 36. `medium` `context` `crates/bench/bench/certification-phase10-v3-compare.toml:1`
    Rule: `HLT-040-REPO-ROT-BAD-BEHAVIOR`
    Check: `HLT-040-REPO-ROT-BAD-BEHAVIOR:context` `soft` confidence `0.88`
@@ -842,6 +867,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:538667a01e35d8e91eae100627364816dd225911862fa2fa1578642af63d4af8`
    Evidence: route repair work to the next agent, opaque failures slow local debugging and reruns, add a typed repair hint; name the common fixes; point at the local docs URL, docs/testing.md
+<<<<<<< HEAD
 70. `high` `stack` `crates/ffi/include/redlinedb.h`
    Check: `HLT-000-SCORE-DIMENSION:stack` `hard` confidence `0.88`
    Route: TLR `Context/setup`, lane `audit`, owner `c-abi`
@@ -862,6 +888,9 @@ No audited runtime boundary reclassifications declared.
    Fingerprint: `sha256:3af2e0fe10b23d7952f3b390713303f0e4bd1abe9eeac34710e611bf7a24e821`
    Evidence: int rldb_exec(rldb *db, const char *sql, rldb_exec_callback callback, void *ctx, char **errmsg);
 72. `medium` `context` `crates/ffi/src/backup.rs:1`
+=======
+70. `medium` `context` `crates/ffi/src/backup.rs:1`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-040-REPO-ROT-BAD-BEHAVIOR`
    Check: `HLT-040-REPO-ROT-BAD-BEHAVIOR:context` `soft` confidence `0.88`
    Route: TLR `Context/setup`, lane `audit`, owner `c-abi`
@@ -872,7 +901,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:d701d215f5368104681623d315b2ba5772d530b0f13a2552c0c15e6333e22f9e`
    Evidence: detector=repo-rot.path.fake-versioned-source, path=crates/ffi/src/backup.rs, line=1, proof_window=None, snippet=//! Backup API: copy a redline database directory to a destination path.
+<<<<<<< HEAD
 73. `high` `security` `crates/ffi/src/backup.rs:22`
+=======
+71. `high` `security` `crates/ffi/src/backup.rs:22`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -883,7 +916,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:97081d05aaa268626d0f5bd1a7c849d75defa51db4309707c73cc153ac49c268`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let src_ref = unsafe { &*src };
+<<<<<<< HEAD
 74. `high` `security` `crates/ffi/src/backup.rs:23`
+=======
+72. `high` `security` `crates/ffi/src/backup.rs:23`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -894,7 +931,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:ba30a4064c79b8d559fadbf35397708dc3dc445dd3d4498f3170a1b6aaec956f`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let dst = unsafe { CStr::from_ptr(dst_path) }
+<<<<<<< HEAD
 75. `high` `security` `crates/ffi/src/backup.rs:34`
+=======
+73. `high` `security` `crates/ffi/src/backup.rs:34`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -905,7 +946,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:9a7efb404d91d896c65028dc46df7c1ade811d52cf4a311bb91f78501c848da0`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 76. `high` `security` `crates/ffi/src/backup.rs:47`
+=======
+74. `high` `security` `crates/ffi/src/backup.rs:47`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -916,7 +961,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:cb6932cda5aeb17ea2cf87f2083457f757df53a8f253a15ec1dc0c75f599a154`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let backup = unsafe { &mut *backup };
+<<<<<<< HEAD
 77. `high` `security` `crates/ffi/src/backup.rs:74`
+=======
+75. `high` `security` `crates/ffi/src/backup.rs:74`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -927,7 +976,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:9a7efb404d91d896c65028dc46df7c1ade811d52cf4a311bb91f78501c848da0`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 78. `high` `security` `crates/ffi/src/backup.rs:75`
+=======
+76. `high` `security` `crates/ffi/src/backup.rs:75`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -938,7 +991,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c7b2bb7521c8ae17506a939d89ccab06523d7cf3ec82b53b3eff53f230306c46`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(backup));
+<<<<<<< HEAD
 79. `high` `security` `crates/ffi/src/backup.rs:85`
+=======
+77. `high` `security` `crates/ffi/src/backup.rs:85`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -949,7 +1006,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:e1cd8d920130e5062c21c9d389e9a261e9d2c102410a4ef8505602bbdc8f441a`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*backup).remaining as c_int }
+<<<<<<< HEAD
 80. `high` `security` `crates/ffi/src/backup.rs:93`
+=======
+78. `high` `security` `crates/ffi/src/backup.rs:93`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -960,7 +1021,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:80c7e594fc340fc960f1aebf905f937198549f0dafe13d4d24a4d00ade3915fa`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*backup).pagecount as c_int }
+<<<<<<< HEAD
 81. `high` `security` `crates/ffi/src/bind.rs:12`
+=======
+79. `high` `security` `crates/ffi/src/bind.rs:12`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -971,7 +1036,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:07dc7f73918296deafb8050a27995b60a31426923d4d8bbf6114e758e5daeac6`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 82. `high` `security` `crates/ffi/src/bind.rs:21`
+=======
+80. `high` `security` `crates/ffi/src/bind.rs:21`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -982,7 +1051,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:07dc7f73918296deafb8050a27995b60a31426923d4d8bbf6114e758e5daeac6`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 83. `high` `security` `crates/ffi/src/bind.rs:30`
+=======
+81. `high` `security` `crates/ffi/src/bind.rs:30`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -993,7 +1066,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:07dc7f73918296deafb8050a27995b60a31426923d4d8bbf6114e758e5daeac6`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 84. `high` `security` `crates/ffi/src/bind.rs:47`
+=======
+82. `high` `security` `crates/ffi/src/bind.rs:47`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1004,7 +1081,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:07dc7f73918296deafb8050a27995b60a31426923d4d8bbf6114e758e5daeac6`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 85. `high` `security` `crates/ffi/src/bind.rs:49`
+=======
+83. `high` `security` `crates/ffi/src/bind.rs:49`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1015,7 +1096,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:464bd0368f1f9ff55ff471455d33ccf7ee1342788111077fc9776306e4443896`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { CStr::from_ptr(value) }.to_bytes().to_vec()
+<<<<<<< HEAD
 86. `high` `security` `crates/ffi/src/bind.rs:51`
+=======
+84. `high` `security` `crates/ffi/src/bind.rs:51`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1026,7 +1111,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:32451cbc7179012e584e97e9fc27ba1585eeed25f2b547942a088968dbde91a8`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { std::slice::from_raw_parts(value as *const u8, nbytes as usize) }.to_vec()
+<<<<<<< HEAD
 87. `high` `security` `crates/ffi/src/bind.rs:70`
+=======
+85. `high` `security` `crates/ffi/src/bind.rs:70`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1037,7 +1126,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:07dc7f73918296deafb8050a27995b60a31426923d4d8bbf6114e758e5daeac6`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 88. `high` `security` `crates/ffi/src/bind.rs:71`
+=======
+86. `high` `security` `crates/ffi/src/bind.rs:71`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1048,7 +1141,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:642fc78690621f3c8fb48e88d79829131065aa8889c9cd742cb4aebcad108aff`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let slice = unsafe { std::slice::from_raw_parts(value as *const u8, nbytes as usize) };
+<<<<<<< HEAD
 89. `high` `security` `crates/ffi/src/bind.rs:82`
+=======
+87. `high` `security` `crates/ffi/src/bind.rs:82`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1059,7 +1156,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:6c3f2b93620cb9ae345dc0adc864737c158d52814606065356b9b1c9273370dd`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*stmt).stmt.parameter_count() as c_int }
+<<<<<<< HEAD
 90. `high` `security` `crates/ffi/src/bind.rs:91`
+=======
+88. `high` `security` `crates/ffi/src/bind.rs:91`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1070,7 +1171,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:07dc7f73918296deafb8050a27995b60a31426923d4d8bbf6114e758e5daeac6`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 91. `high` `security` `crates/ffi/src/bind.rs:92`
+=======
+89. `high` `security` `crates/ffi/src/bind.rs:92`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1081,7 +1186,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f1a119c75b4af04eefd5733c2bf9461c1ae1e8f75ad72243b7c0178cfbc1c107`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let name = unsafe { CStr::from_ptr(name) }
+<<<<<<< HEAD
 92. `high` `security` `crates/ffi/src/column.rs:14`
+=======
+90. `high` `security` `crates/ffi/src/column.rs:14`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1092,7 +1201,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:fdbef8f8a89ce4a326c92b8a8a60ca809b8da5a2771f9cc52c225b23b543703d`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*stmt).stmt.column_count() as c_int }
+<<<<<<< HEAD
 93. `high` `security` `crates/ffi/src/column.rs:22`
+=======
+91. `high` `security` `crates/ffi/src/column.rs:22`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1103,7 +1216,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:bf9f4798cd6b39233163c5e340b378f9dbcc42de97f355ff9ca6bac41e3ccabd`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 94. `high` `security` `crates/ffi/src/column.rs:34`
+=======
+92. `high` `security` `crates/ffi/src/column.rs:34`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1114,7 +1231,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3317a3750875422bfdcdcf98fe123e460ffee613520d966243d2384f57724aa3`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 95. `high` `security` `crates/ffi/src/column.rs:54`
+=======
+93. `high` `security` `crates/ffi/src/column.rs:54`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1125,7 +1246,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:780a1ff9080869e91c0785d28c32344c8f7c998456b16701e27ed365fb127080`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*stmt).stmt.column_i64(index as usize).unwrap_or(0) }
+<<<<<<< HEAD
 96. `high` `security` `crates/ffi/src/column.rs:62`
+=======
+94. `high` `security` `crates/ffi/src/column.rs:62`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1136,7 +1261,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f299fd0ed53f0ad10f6280418e7f85ce8b56ca60fc1ff58ebbc61da17c93a74e`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*stmt).stmt.column_f64(index as usize).unwrap_or(0.0) }
+<<<<<<< HEAD
 97. `high` `security` `crates/ffi/src/column.rs:70`
+=======
+95. `high` `security` `crates/ffi/src/column.rs:70`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1147,7 +1276,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:bf9f4798cd6b39233163c5e340b378f9dbcc42de97f355ff9ca6bac41e3ccabd`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 98. `high` `security` `crates/ffi/src/column.rs:84`
+=======
+96. `high` `security` `crates/ffi/src/column.rs:84`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1158,7 +1291,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:bf9f4798cd6b39233163c5e340b378f9dbcc42de97f355ff9ca6bac41e3ccabd`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 99. `high` `security` `crates/ffi/src/column.rs:95`
+=======
+97. `high` `security` `crates/ffi/src/column.rs:95`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1169,7 +1306,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3317a3750875422bfdcdcf98fe123e460ffee613520d966243d2384f57724aa3`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 100. `high` `security` `crates/ffi/src/config.rs:18`
+=======
+98. `high` `security` `crates/ffi/src/config.rs:18`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1180,7 +1321,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:80e4c1a40327f104962dd55f9762ed6179b2230cf88bcc99f2a191485e503771`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { &*db };
+<<<<<<< HEAD
 101. `high` `security` `crates/ffi/src/config.rs:39`
+=======
+99. `high` `security` `crates/ffi/src/config.rs:39`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1191,7 +1336,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:80e4c1a40327f104962dd55f9762ed6179b2230cf88bcc99f2a191485e503771`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { &*db };
+<<<<<<< HEAD
 102. `high` `security` `crates/ffi/src/config.rs:48`
+=======
+100. `high` `security` `crates/ffi/src/config.rs:48`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1202,7 +1351,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:80e4c1a40327f104962dd55f9762ed6179b2230cf88bcc99f2a191485e503771`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { &*db };
+<<<<<<< HEAD
 103. `high` `security` `crates/ffi/src/config.rs:60`
+=======
+101. `high` `security` `crates/ffi/src/config.rs:60`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1213,7 +1366,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:80e4c1a40327f104962dd55f9762ed6179b2230cf88bcc99f2a191485e503771`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { &*db };
+<<<<<<< HEAD
 104. `high` `security` `crates/ffi/src/config.rs:70`
+=======
+102. `high` `security` `crates/ffi/src/config.rs:70`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1224,7 +1381,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f0982448926681ea56b4ea75da82ad5f0425fd23127ce7d8c09109018a628646`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 105. `high` `security` `crates/ffi/src/error.rs:31`
+=======
+103. `high` `security` `crates/ffi/src/error.rs:31`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1235,7 +1396,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c93da4a982dc672a5605ff73cfe6bcc5cbac5445f7e49deffd735f851846a9a2`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 106. `high` `security` `crates/ffi/src/error.rs:32`
+=======
+104. `high` `security` `crates/ffi/src/error.rs:32`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1246,7 +1411,22 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:fb68a65ce20650b76a90bc88edfe06a198128b0d750b32b32f7c2a0727384404`
    Evidence: detector=CString::from_raw, proof-window=NearbySafetyComment, snippet=drop(CString::from_raw(ptr as *mut c_char));
+<<<<<<< HEAD
 107. `high` `security` `crates/ffi/src/exec.rs:26`
+=======
+105. `high` `security` `crates/ffi/src/exec.rs:15`
+   Rule: `HLT-023-INPUT-BOUNDARY-GAP`
+   Check: `HLT-023-INPUT-BOUNDARY-GAP:security` `hard` confidence `0.88`
+   Route: TLR `Security, secrets, agency`, lane `security`, owner `c-abi`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `shell execution`
+   Reason: input handling risk needs deterministic negative tests
+   Fix: replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
+   Rerun: `just security`
+   Fingerprint: `sha256:342ad1d692f12c78c70bde25de8152e2d389f36ac5429f3edf8fee8638c21b0c`
+   Evidence: pub extern "C" fn rldb_exec(
+106. `high` `security` `crates/ffi/src/exec.rs:26`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1257,7 +1437,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b5fa98c5b94571ddec1a81717bc9b11fdcdc56c3e56033c22e333106861f5621`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 108. `high` `security` `crates/ffi/src/exec.rs:34`
+=======
+107. `high` `security` `crates/ffi/src/exec.rs:34`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1268,7 +1452,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:eebebf64904234e42f02f766fc5a38b66976f6e87f018f13f682a86d2157e436`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db_ref = unsafe { &*db };
+<<<<<<< HEAD
 109. `high` `security` `crates/ffi/src/exec.rs:35`
+=======
+108. `high` `security` `crates/ffi/src/exec.rs:35`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1279,7 +1467,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:5ccc7f149d27197cb5b343ec73a918d3db44e32ddc934f08819d70ad87e681bc`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let sql_text = unsafe { CStr::from_ptr(sql) }
+<<<<<<< HEAD
 110. `high` `security` `crates/ffi/src/exec.rs:48`
+=======
+109. `high` `security` `crates/ffi/src/exec.rs:48`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1290,7 +1482,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:be510871a320af20bd9aaf07d434e90403fc45e128e5b3654866ff67e32fefe4`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { set_errmsg(errmsg, &msg) };
+<<<<<<< HEAD
 111. `high` `security` `crates/ffi/src/exec.rs:90`
+=======
+110. `high` `security` `crates/ffi/src/exec.rs:90`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1301,7 +1497,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:d7fc18ba68d899738cf9a0bf71e005b899e677ffe1b30e23604e6c653b5035b1`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { set_errmsg(errmsg, "callback returned non-zero") };
+<<<<<<< HEAD
 112. `high` `security` `crates/ffi/src/exec.rs:99`
+=======
+111. `high` `security` `crates/ffi/src/exec.rs:99`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1312,7 +1512,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:be510871a320af20bd9aaf07d434e90403fc45e128e5b3654866ff67e32fefe4`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { set_errmsg(errmsg, &msg) };
+<<<<<<< HEAD
 113. `high` `vibe` `crates/ffi/src/lib.rs:9`
+=======
+112. `high` `vibe` `crates/ffi/src/lib.rs:9`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `c-abi`
@@ -1322,7 +1526,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:ff9c1a85b2ba1e2713c57c09d0c7e3f02fc1e955a3d9d1177685cda1fca30d00`
    Evidence: crates/ffi/src/lib.rs:9, future-hostile/dead-language term `compat` appears
+<<<<<<< HEAD
 114. `high` `vibe` `crates/ffi/src/lib.rs:10`
+=======
+113. `high` `vibe` `crates/ffi/src/lib.rs:10`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `c-abi`
@@ -1332,7 +1540,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:d0bd49577f0f8aaba907bab9ad49446433c8cbfe972ac7aee04b011ecca7db9b`
    Evidence: crates/ffi/src/lib.rs:10, future-hostile/dead-language term `shim` appears
+<<<<<<< HEAD
 115. `high` `vibe` `crates/ffi/src/lib.rs:16`
+=======
+114. `high` `vibe` `crates/ffi/src/lib.rs:16`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `c-abi`
@@ -1342,7 +1554,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:fdc57cccef9b91811e958fe417a651926eb47aebdc758d8a461d5f1cd6232032`
    Evidence: crates/ffi/src/lib.rs:16, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 116. `high` `security` `crates/ffi/src/lifecycle.rs:16`
+=======
+115. `high` `security` `crates/ffi/src/lifecycle.rs:16`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1353,7 +1569,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f560f05eaaeb2bf2deb56e19dcd58870abedcf8049e745448e96b206b98f4c2b`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let handle = open_handle(unsafe { CStr::from_ptr(path) }, None, true)?;
+<<<<<<< HEAD
 117. `high` `security` `crates/ffi/src/lifecycle.rs:17`
+=======
+116. `high` `security` `crates/ffi/src/lifecycle.rs:17`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1364,7 +1584,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:0c336bebb472adeb8cd62352f231caf2314357706b37a0c936a91483d23d771a`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 118. `high` `security` `crates/ffi/src/lifecycle.rs:37`
+=======
+117. `high` `security` `crates/ffi/src/lifecycle.rs:37`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1375,7 +1599,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:d34135ddb5e02f0ef323df479e0e3f4a8eb84904cb00fdcf455313596d0eca7c`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=Some(unsafe { &*config })
+<<<<<<< HEAD
 119. `high` `security` `crates/ffi/src/lifecycle.rs:39`
+=======
+118. `high` `security` `crates/ffi/src/lifecycle.rs:39`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1386,7 +1614,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f6a1d9951d9949502cee1462af2ac9c8864b2d007a207bea2f6bb36cb95c352d`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let handle = open_handle(unsafe { CStr::from_ptr(path) }, config, true)?;
+<<<<<<< HEAD
 120. `high` `security` `crates/ffi/src/lifecycle.rs:40`
+=======
+119. `high` `security` `crates/ffi/src/lifecycle.rs:40`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1397,7 +1629,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:0c336bebb472adeb8cd62352f231caf2314357706b37a0c936a91483d23d771a`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 121. `high` `security` `crates/ffi/src/lifecycle.rs:50`
+=======
+120. `high` `security` `crates/ffi/src/lifecycle.rs:50`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1408,7 +1644,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:024945520dede985cb8b0ea84a8e0b96d1b9f21cf93e7634dcbf311c7b29b763`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db_ref = unsafe { &*db };
+<<<<<<< HEAD
 122. `high` `security` `crates/ffi/src/lifecycle.rs:54`
+=======
+121. `high` `security` `crates/ffi/src/lifecycle.rs:54`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1419,7 +1659,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:0c336bebb472adeb8cd62352f231caf2314357706b37a0c936a91483d23d771a`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 123. `high` `security` `crates/ffi/src/lifecycle.rs:55`
+=======
+122. `high` `security` `crates/ffi/src/lifecycle.rs:55`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1430,7 +1674,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:bdbc8665d06771630a270b7628b5ce1d4ea68b943861e02146cd65daab567c1f`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(db));
+<<<<<<< HEAD
 124. `high` `security` `crates/ffi/src/sqlite3_compat.rs:88`
+=======
+123. `high` `security` `crates/ffi/src/sqlite3_compat.rs:88`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1441,7 +1689,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c769570cfa208ecc8045879de56ad144a3dbdd39eb2f2ce4938e2c6cada396a1`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let handle = open_handle(unsafe { CStr::from_ptr(path) }, None, create_if_missing)?;
+<<<<<<< HEAD
 125. `high` `security` `crates/ffi/src/sqlite3_compat.rs:89`
+=======
+124. `high` `security` `crates/ffi/src/sqlite3_compat.rs:89`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1452,7 +1704,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 126. `high` `security` `crates/ffi/src/sqlite3_compat.rs:114`
+=======
+125. `high` `security` `crates/ffi/src/sqlite3_compat.rs:114`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1463,7 +1719,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:30e37337d6316857bce2c00f0da9a890b1fa502f6cddb3a938843bcb5fbec976`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*stmt).stmt.is_readonly() as c_int }
+<<<<<<< HEAD
 127. `high` `security` `crates/ffi/src/sqlite3_compat.rs:122`
+=======
+126. `high` `security` `crates/ffi/src/sqlite3_compat.rs:122`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1474,7 +1734,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f75ead57ab1f7617af074fcda8d5636a724406f01db245441c8163271e184e53`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*stmt).stmt.is_busy() as c_int }
+<<<<<<< HEAD
 128. `high` `security` `crates/ffi/src/sqlite3_compat.rs:130`
+=======
+127. `high` `security` `crates/ffi/src/sqlite3_compat.rs:130`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1485,7 +1749,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3f44e525f8fb3156d8c08be5e041adc599a8a16553ba6c9de92687901cbf79b1`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*stmt).sql_text.as_ptr() }
+<<<<<<< HEAD
 129. `high` `vibe` `crates/ffi/src/sqlite3_compat.rs:154`
+=======
+128. `high` `vibe` `crates/ffi/src/sqlite3_compat.rs:154`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `c-abi`
@@ -1495,7 +1763,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2f42377cf6c45b13e22b7d529883ec0cd03f3f39934a83011fdeedb9499887d7`
    Evidence: crates/ffi/src/sqlite3_compat.rs:154, future-hostile/dead-language term `stub` appears
+<<<<<<< HEAD
 130. `high` `vibe` `crates/ffi/src/sqlite3_compat.rs:154`
+=======
+129. `high` `vibe` `crates/ffi/src/sqlite3_compat.rs:154`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `c-abi`
@@ -1505,7 +1777,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:ea935d50c0f2f0f6717fd2281c8b42b72dabf158f321d59f4ff479c2a8db71d2`
    Evidence: crates/ffi/src/sqlite3_compat.rs:154 // overwriting it with the generic "ok"/"error" stub would lose the
+<<<<<<< HEAD
 131. `high` `security` `crates/ffi/src/sqlite3_compat.rs:160`
+=======
+130. `high` `security` `crates/ffi/src/sqlite3_compat.rs:160`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1516,7 +1792,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 132. `high` `security` `crates/ffi/src/sqlite3_compat.rs:171`
+=======
+131. `high` `security` `crates/ffi/src/sqlite3_compat.rs:171`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1527,7 +1807,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { (*stmt).db };
+<<<<<<< HEAD
 133. `high` `security` `crates/ffi/src/sqlite3_compat.rs:177`
+=======
+132. `high` `security` `crates/ffi/src/sqlite3_compat.rs:177`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1538,7 +1822,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 134. `high` `security` `crates/ffi/src/sqlite3_compat.rs:189`
+=======
+133. `high` `security` `crates/ffi/src/sqlite3_compat.rs:189`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1549,7 +1837,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { (*stmt).db };
+<<<<<<< HEAD
 135. `high` `security` `crates/ffi/src/sqlite3_compat.rs:204`
+=======
+134. `high` `security` `crates/ffi/src/sqlite3_compat.rs:204`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1560,7 +1852,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { (*stmt).db };
+<<<<<<< HEAD
 136. `high` `security` `crates/ffi/src/sqlite3_compat.rs:214`
+=======
+135. `high` `security` `crates/ffi/src/sqlite3_compat.rs:214`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1571,7 +1867,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { (*stmt).db };
+<<<<<<< HEAD
 137. `high` `security` `crates/ffi/src/sqlite3_compat.rs:224`
+=======
+136. `high` `security` `crates/ffi/src/sqlite3_compat.rs:224`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1582,7 +1882,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { (*stmt).db };
+<<<<<<< HEAD
 138. `high` `security` `crates/ffi/src/sqlite3_compat.rs:234`
+=======
+137. `high` `security` `crates/ffi/src/sqlite3_compat.rs:234`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1593,7 +1897,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { (*stmt).db };
+<<<<<<< HEAD
 139. `high` `security` `crates/ffi/src/sqlite3_compat.rs:250`
+=======
+138. `high` `security` `crates/ffi/src/sqlite3_compat.rs:250`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1604,7 +1912,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { (*stmt).db };
+<<<<<<< HEAD
 140. `high` `security` `crates/ffi/src/sqlite3_compat.rs:266`
+=======
+139. `high` `security` `crates/ffi/src/sqlite3_compat.rs:266`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1615,7 +1927,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db = unsafe { (*stmt).db };
+<<<<<<< HEAD
 141. `high` `security` `crates/ffi/src/sqlite3_compat.rs:343`
+=======
+140. `high` `security` `crates/ffi/src/sqlite3_compat.rs:343`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1626,7 +1942,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 142. `high` `security` `crates/ffi/src/sqlite3_compat.rs:420`
+=======
+141. `high` `security` `crates/ffi/src/sqlite3_compat.rs:420`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1637,7 +1957,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:4a6294dd0378f9234ea85ceba1af8e0fe00cb2e1d0b45573e12e13f2c9afec7c`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { (*stmt).db }
+<<<<<<< HEAD
 143. `high` `security` `crates/ffi/src/sqlite3_compat.rs:428`
+=======
+142. `high` `security` `crates/ffi/src/sqlite3_compat.rs:428`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1648,7 +1972,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 144. `high` `security` `crates/ffi/src/stmt.rs:27`
+=======
+143. `high` `security` `crates/ffi/src/stmt.rs:27`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1659,7 +1987,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:eff84d7f9c974413001f8027ffcf76b4e1bbbf6d1e5dc92eaeef88327eac273b`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let db_ref = unsafe { &*db };
+<<<<<<< HEAD
 145. `high` `security` `crates/ffi/src/stmt.rs:28`
+=======
+144. `high` `security` `crates/ffi/src/stmt.rs:28`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1670,7 +2002,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3c49343c9cb9c4c022ab2f422cbba3cc52c5652d874e47d5741d528cb28dabf1`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let sql_cstr = unsafe { CStr::from_ptr(sql) };
+<<<<<<< HEAD
 146. `high` `security` `crates/ffi/src/stmt.rs:32`
+=======
+145. `high` `security` `crates/ffi/src/stmt.rs:32`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1681,7 +2017,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:5e99e46699cc859c8bae8b1d9a7164f675f1316d7625731522f7d3506a16a454`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let bytes = unsafe {
+<<<<<<< HEAD
 147. `high` `security` `crates/ffi/src/stmt.rs:33`
+=======
+146. `high` `security` `crates/ffi/src/stmt.rs:33`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1692,7 +2032,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:ad73071eae3b23a5163b99b7f96873c7bc464c4738a0fda62fa55b62bb81fcaa`
    Evidence: detector=from_raw_parts, proof-window=NearbySafetyComment, snippet=std::slice::from_raw_parts(sql_cstr.as_ptr() as *const u8, nbytes as usize)
+<<<<<<< HEAD
 148. `high` `security` `crates/ffi/src/stmt.rs:54`
+=======
+147. `high` `security` `crates/ffi/src/stmt.rs:54`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1703,7 +2047,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c83fd2709e2acaff2cd37e5df263ea19dc4ce3d5ac86b987b8c64f025094c06f`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 149. `high` `security` `crates/ffi/src/stmt.rs:60`
+=======
+148. `high` `security` `crates/ffi/src/stmt.rs:60`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1714,7 +2062,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c83fd2709e2acaff2cd37e5df263ea19dc4ce3d5ac86b987b8c64f025094c06f`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 150. `high` `security` `crates/ffi/src/stmt.rs:85`
+=======
+149. `high` `security` `crates/ffi/src/stmt.rs:85`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1725,7 +2077,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c83fd2709e2acaff2cd37e5df263ea19dc4ce3d5ac86b987b8c64f025094c06f`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 151. `high` `security` `crates/ffi/src/stmt.rs:95`
+=======
+150. `high` `security` `crates/ffi/src/stmt.rs:95`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1736,7 +2092,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:58e81080a7a41302e367c6b647726f7e62c16bba69d2f9e05835515faf42dc7d`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt_ref = unsafe { &mut *stmt };
+<<<<<<< HEAD
 152. `high` `security` `crates/ffi/src/stmt.rs:97`
+=======
+151. `high` `security` `crates/ffi/src/stmt.rs:97`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1747,7 +2107,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:99b39adcb5ba4f6fe2e318d893288ef98a3bf24c62e3bdb9b76f7944e3bb9ed2`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=if unsafe { (*db).interrupted.load(Ordering::Relaxed) } {
+<<<<<<< HEAD
 153. `high` `security` `crates/ffi/src/stmt.rs:119`
+=======
+152. `high` `security` `crates/ffi/src/stmt.rs:119`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1758,7 +2122,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:7b2df65236d2434b54a9cb7d1437b1360795f48592dbfc0cd96a554028d2bac7`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 154. `high` `security` `crates/ffi/src/stmt.rs:132`
+=======
+153. `high` `security` `crates/ffi/src/stmt.rs:132`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1769,7 +2137,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3324a25d518de85e90bbaf3757c8d3becd1bdbe6037bacdf7d38a4f43c914dce`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let boxed = unsafe { Box::from_raw(stmt) };
+<<<<<<< HEAD
 155. `high` `security` `crates/ffi/src/stmt.rs:133`
+=======
+154. `high` `security` `crates/ffi/src/stmt.rs:133`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1780,7 +2152,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c83fd2709e2acaff2cd37e5df263ea19dc4ce3d5ac86b987b8c64f025094c06f`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 156. `high` `security` `crates/ffi/src/stmt.rs:145`
+=======
+155. `high` `security` `crates/ffi/src/stmt.rs:145`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1791,7 +2167,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:7b2df65236d2434b54a9cb7d1437b1360795f48592dbfc0cd96a554028d2bac7`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let stmt = unsafe { &mut *stmt };
+<<<<<<< HEAD
 157. `high` `vibe` `crates/ffi/src/types.rs:89`
+=======
+156. `high` `vibe` `crates/ffi/src/types.rs:89`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `c-abi`
@@ -1801,7 +2181,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c709ec52dc4ffb4a38bae1b1447fd37b08dc4bfefc0c82d6a7fe206953b95d76`
    Evidence: crates/ffi/src/types.rs:89, future-hostile/dead-language term `compat` appears
+<<<<<<< HEAD
 158. `high` `security` `crates/ffi/src/util.rs:119`
+=======
+157. `high` `security` `crates/ffi/src/util.rs:119`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1812,7 +2196,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:27b07baa9ab9c5391c72380e5ce9457cc357a99260a2154b29ca8b0385c23edc`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=Ok(f(unsafe { &*db }))
+<<<<<<< HEAD
 159. `high` `vibe` `crates/ffi/src/util.rs:258`
+=======
+158. `high` `vibe` `crates/ffi/src/util.rs:258`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `c-abi`
@@ -1822,7 +2210,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:65fe8e26e8b9387410bc6d3e5396660ccfb98cc29051e9ebca31467e490517ba`
    Evidence: crates/ffi/src/util.rs:258, future-hostile/dead-language term `stub` appears
+<<<<<<< HEAD
 160. `high` `security` `crates/ffi/src/util.rs:285`
+=======
+159. `high` `security` `crates/ffi/src/util.rs:285`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1833,7 +2225,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:8bb819c706a5cc56d2f7a1ff3e77b886bd321dcebaa2bc14a0cc629100890022`
    Evidence: detector=pub unsafe fn, proof-window=NearbySafetyDocs, snippet=pub(crate) unsafe fn set_errmsg(errmsg: *mut *mut c_char, msg: &str) {
+<<<<<<< HEAD
 161. `high` `security` `crates/ffi/src/util.rs:289`
+=======
+160. `high` `security` `crates/ffi/src/util.rs:289`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -1844,7 +2240,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:ddf1ee1c568ee92999686341159723c9bd9599833f8e9b7f32e9ca098c6d43e5`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+<<<<<<< HEAD
 162. `high` `vibe` `crates/kernel/src/catalog/store.rs:53`
+=======
+161. `high` `vibe` `crates/kernel/src/catalog/store.rs:53`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1854,7 +2254,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:842ca0bc7e2dda92a81caff2ef1e8f385ddcf3efbe2afa1867475fa1f66f6970`
    Evidence: crates/kernel/src/catalog/store.rs:53, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 163. `high` `vibe` `crates/kernel/src/catalog/store.rs:54`
+=======
+162. `high` `vibe` `crates/kernel/src/catalog/store.rs:54`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1864,7 +2268,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:eca51531363793713ecc5baddffd1b9d85e0e73a627f56f9ef2e76c2e217725b`
    Evidence: crates/kernel/src/catalog/store.rs:54, future-hostile/dead-language term `old` appears
+<<<<<<< HEAD
 164. `high` `vibe` `crates/kernel/src/catalog/store.rs:59`
+=======
+163. `high` `vibe` `crates/kernel/src/catalog/store.rs:59`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1874,7 +2282,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c1c06fb2962e3f3b2e67ca46c5402cf6b6e3ac4259fcc14ddfbb25576a0ee74d`
    Evidence: crates/kernel/src/catalog/store.rs:59, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 165. `high` `vibe` `crates/kernel/src/catalog/store.rs:60`
+=======
+164. `high` `vibe` `crates/kernel/src/catalog/store.rs:60`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1884,7 +2296,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:cf921c872c38372ede4bda3e1b048d703bc11c34c905cfabb4662a303720223c`
    Evidence: crates/kernel/src/catalog/store.rs:60, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 166. `high` `vibe` `crates/kernel/src/catalog/store.rs:65`
+=======
+165. `high` `vibe` `crates/kernel/src/catalog/store.rs:65`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1894,7 +2310,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:275965b1b592e1c47dcddcf0f878496aa2153f9112588f1e4ae52e8363b9c59c`
    Evidence: crates/kernel/src/catalog/store.rs:65, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 167. `high` `vibe` `crates/kernel/src/catalog/store.rs:485`
+=======
+166. `high` `vibe` `crates/kernel/src/catalog/store.rs:485`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1904,7 +2324,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:70bd7425f8902e16e59ecf9860bfb1f4388b506a33c2352665d7ae948b0d9c80`
    Evidence: crates/kernel/src/catalog/store.rs:485, future-hostile/dead-language term `compat` appears
+<<<<<<< HEAD
 168. `high` `vibe` `crates/kernel/src/engine/mod.rs:878`
+=======
+167. `high` `vibe` `crates/kernel/src/engine/mod.rs:878`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1914,7 +2338,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:42b5dae7e0f944bdd1298a0a997391ac1aeae63bce20479acfbf307079437921`
    Evidence: crates/kernel/src/engine/mod.rs:878, future-hostile/dead-language term `todo` appears
+<<<<<<< HEAD
 169. `high` `vibe` `crates/kernel/src/engine/mod.rs:1132`
+=======
+168. `high` `vibe` `crates/kernel/src/engine/mod.rs:1132`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1924,7 +2352,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f331f3fbe9082c6a41e0375f9e774834d3b015090ef62375e4733cf42f39d002`
    Evidence: crates/kernel/src/engine/mod.rs:1132, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 170. `high` `vibe` `crates/kernel/src/engine/page_heap.rs:806`
+=======
+169. `high` `vibe` `crates/kernel/src/engine/page_heap.rs:806`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1934,7 +2366,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3e588bcc7d6c0035d470f74f42627b56c2b9b70713023490e2b2165095b72d49`
    Evidence: crates/kernel/src/engine/page_heap.rs:806, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 171. `high` `vibe` `crates/kernel/src/index/cursor.rs:6`
+=======
+170. `high` `vibe` `crates/kernel/src/index/cursor.rs:6`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1944,7 +2380,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:95f305cbb548b5628c62aa640635a769c097251cc97be40895ff6b719920a3ce`
    Evidence: crates/kernel/src/index/cursor.rs:6, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 172. `high` `vibe` `crates/kernel/src/index/cursor.rs:21`
+=======
+171. `high` `vibe` `crates/kernel/src/index/cursor.rs:21`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1954,7 +2394,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:07b70b673edaa350d163eb8c64e28ab558ec21a0f71ef1db1d7137af1aee882f`
    Evidence: crates/kernel/src/index/cursor.rs:21, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 173. `high` `vibe` `crates/kernel/src/index/cursor.rs:25`
+=======
+172. `high` `vibe` `crates/kernel/src/index/cursor.rs:25`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1964,7 +2408,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:cd66d28fcfaabd6354179c1cc9aa7c7c248ecdc51da5ac49aa10334c9dce72b3`
    Evidence: crates/kernel/src/index/cursor.rs:25, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 174. `high` `vibe` `crates/kernel/src/index/cursor.rs:36`
+=======
+173. `high` `vibe` `crates/kernel/src/index/cursor.rs:36`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1974,7 +2422,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:5524a16e95f3356527f874cfa2d1da00eeb2c9686988c4f69e8ff29884009bef`
    Evidence: crates/kernel/src/index/cursor.rs:36, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 175. `high` `vibe` `crates/kernel/src/index/cursor.rs:40`
+=======
+174. `high` `vibe` `crates/kernel/src/index/cursor.rs:40`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1984,7 +2436,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f36766b758e03e00a4348bf331c74efaae09af15152e47af30b3e5791e99d55e`
    Evidence: crates/kernel/src/index/cursor.rs:40, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 176. `high` `vibe` `crates/kernel/src/index/cursor.rs:45`
+=======
+175. `high` `vibe` `crates/kernel/src/index/cursor.rs:45`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -1994,7 +2450,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c3b59e4c3bca4f66bb0d18c2de10b8b15fbaa8585ee1cdc8ebc8c5cdce80e346`
    Evidence: crates/kernel/src/index/cursor.rs:45, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 177. `high` `vibe` `crates/kernel/src/index/cursor.rs:163`
+=======
+176. `high` `vibe` `crates/kernel/src/index/cursor.rs:163`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2004,7 +2464,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b2604311d273579bae4c1e79c68f16918eac182830cd15fe0466900ee8e385e7`
    Evidence: crates/kernel/src/index/cursor.rs:163, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 178. `high` `vibe` `crates/kernel/src/index/cursor.rs:293`
+=======
+177. `high` `vibe` `crates/kernel/src/index/cursor.rs:293`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2014,7 +2478,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2e904a4cb10b2d0ad0e677a19d09bce5a1c8a11ed5281c54dbe95f120d7e7061`
    Evidence: crates/kernel/src/index/cursor.rs:293, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 179. `high` `vibe` `crates/kernel/src/index/cursor.rs:448`
+=======
+178. `high` `vibe` `crates/kernel/src/index/cursor.rs:448`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2024,7 +2492,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f1a8b9cccb98feefe4cf7037b4d564644d6589cfdc18cf70f423c45abbe8dc87`
    Evidence: crates/kernel/src/index/cursor.rs:448, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 180. `high` `vibe` `crates/kernel/src/index/cursor.rs:468`
+=======
+179. `high` `vibe` `crates/kernel/src/index/cursor.rs:468`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2034,7 +2506,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a9af9e36035a9cb7736df37b41ffc008fe481a9ac62bd784302fd05dffa50d62`
    Evidence: crates/kernel/src/index/cursor.rs:468, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 181. `high` `vibe` `crates/kernel/src/index/cursor.rs:534`
+=======
+180. `high` `vibe` `crates/kernel/src/index/cursor.rs:534`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2044,7 +2520,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:97a65b07af1b3126b7f8de1a872eb611987234af566cb4ac12241efae27ccc5a`
    Evidence: crates/kernel/src/index/cursor.rs:534, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 182. `high` `vibe` `crates/kernel/src/index/cursor.rs:535`
+=======
+181. `high` `vibe` `crates/kernel/src/index/cursor.rs:535`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2054,7 +2534,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:1279b5c89020ae706f51a8291bc9dff34d79c2de3231849af0fa3d87173302e2`
    Evidence: crates/kernel/src/index/cursor.rs:535, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 183. `high` `vibe` `crates/kernel/src/index/cursor.rs:570`
+=======
+182. `high` `vibe` `crates/kernel/src/index/cursor.rs:570`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2064,7 +2548,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a760c57e65cc6f5f9a1932ead2fb52e17feb45f545f9e48ba96fa5983178bc42`
    Evidence: crates/kernel/src/index/cursor.rs:570, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 184. `high` `vibe` `crates/kernel/src/index/scan.rs:10`
+=======
+183. `high` `vibe` `crates/kernel/src/index/scan.rs:10`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2074,7 +2562,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:d0f72fb862a1826b00b0ccff2c50fe02c6772165e1e0764fbeb91ffde81daf51`
    Evidence: crates/kernel/src/index/scan.rs:10, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 185. `high` `vibe` `crates/kernel/src/index/scan.rs:43`
+=======
+184. `high` `vibe` `crates/kernel/src/index/scan.rs:43`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2084,7 +2576,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:684dbe46dc84876b2ede3a5ecaf48826a4f66179c2819c226ecc5953b3b47441`
    Evidence: crates/kernel/src/index/scan.rs:43, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 186. `high` `vibe` `crates/kernel/src/index/scan.rs:68`
+=======
+185. `high` `vibe` `crates/kernel/src/index/scan.rs:68`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2094,7 +2590,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:17fd0b54e3155a058c3be83ab59094e09940acd3ab1ef1cfe14f300ba2ae71e6`
    Evidence: crates/kernel/src/index/scan.rs:68, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 187. `high` `vibe` `crates/kernel/src/integrity/equivalence.rs:77`
+=======
+186. `high` `vibe` `crates/kernel/src/integrity/equivalence.rs:77`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-integrity-checker`
@@ -2104,7 +2604,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2d6b23153c7ed1bdf6f078d200b1d432a6d290d154d5df134446cacd6936ffc4`
    Evidence: crates/kernel/src/integrity/equivalence.rs:77, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 188. `high` `vibe` `crates/kernel/src/integrity/equivalence.rs:104`
+=======
+187. `high` `vibe` `crates/kernel/src/integrity/equivalence.rs:104`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-integrity-checker`
@@ -2114,7 +2618,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:be5765e175f380cc334537171a9dd359bb2cdedd0394763c9c76619a59e47da4`
    Evidence: crates/kernel/src/integrity/equivalence.rs:104, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 189. `high` `vibe` `crates/kernel/src/integrity/mod.rs:3`
+=======
+188. `high` `vibe` `crates/kernel/src/integrity/mod.rs:3`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-integrity-checker`
@@ -2124,7 +2632,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:e8b2fbecaaec7557600619e92469bd12d4f6740584651d752b1f4be2bd0269e2`
    Evidence: crates/kernel/src/integrity/mod.rs:3, future-hostile/dead-language term `stub` appears
+<<<<<<< HEAD
 190. `high` `vibe` `crates/kernel/src/integrity/page_csum.rs:17`
+=======
+189. `high` `vibe` `crates/kernel/src/integrity/page_csum.rs:17`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-integrity-checker`
@@ -2134,7 +2646,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f909a63d259a65cc8fe9beed8727e14686fbe07a78a51496ba95bfbb909330a0`
    Evidence: crates/kernel/src/integrity/page_csum.rs:17, future-hostile/dead-language term `stale` appears
+<<<<<<< HEAD
 191. `high` `vibe` `crates/kernel/src/integrity/page_csum.rs:80`
+=======
+190. `high` `vibe` `crates/kernel/src/integrity/page_csum.rs:80`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-integrity-checker`
@@ -2144,7 +2660,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:e86aa65cda718e342bce02e8a3300a6b686f898b8b6e3a1cdb8bd237c5995a70`
    Evidence: crates/kernel/src/integrity/page_csum.rs:80, future-hostile/dead-language term `placeholder` appears
+<<<<<<< HEAD
 192. `high` `vibe` `crates/kernel/src/json/simd_key.rs:12`
+=======
+191. `high` `vibe` `crates/kernel/src/json/simd_key.rs:12`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-jsonb-binary-format`
@@ -2154,7 +2674,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:40bf3a1eb022afefc7a7ec73734e53daff522aba64909dd49b7b012eb5845e6f`
    Evidence: crates/kernel/src/json/simd_key.rs:12, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 193. `high` `vibe` `crates/kernel/src/json/simd_key.rs:61`
+=======
+192. `high` `vibe` `crates/kernel/src/json/simd_key.rs:61`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-jsonb-binary-format`
@@ -2164,7 +2688,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:79ae42ccd2d1af4ae21805d5b5590955cd6e4f56496a3a576b78a6709db7ed67`
    Evidence: crates/kernel/src/json/simd_key.rs:61, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 194. `high` `vibe` `crates/kernel/src/storage/page_file.rs:148`
+=======
+193. `high` `vibe` `crates/kernel/src/storage/page_file.rs:148`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -2174,7 +2702,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:988c041d0c67a3e14661090547829461a8cb641fc13e325af7054c5029e02a36`
    Evidence: crates/kernel/src/storage/page_file.rs:148, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 195. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:23`
+=======
+194. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:23`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-diskann-index`
@@ -2184,7 +2716,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a97abc5cb119920a45cea705955aa6c77ecdf3e0c709b79d3466355a9d3cf364`
    Evidence: crates/kernel/src/vector/diskann/mod.rs:23, future-hostile/dead-language term `todo` appears
+<<<<<<< HEAD
 196. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:28`
+=======
+195. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:28`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-diskann-index`
@@ -2194,7 +2730,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:461b504fdc9928fec0fd19f7a46d6551a8c91335d99312780f600d5634dd5d28`
    Evidence: crates/kernel/src/vector/diskann/mod.rs:28, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 197. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:29`
+=======
+196. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:29`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-diskann-index`
@@ -2204,7 +2744,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:de1cf9a20a73039d5932569f69a60a064e23d607b99cbf2de337192d18bdd36a`
    Evidence: crates/kernel/src/vector/diskann/mod.rs:29, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 198. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:233`
+=======
+197. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:233`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-diskann-index`
@@ -2214,7 +2758,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:be6cede2f120feac1cef57d25873978941f9bb01b8d4306367b6d374bb970700`
    Evidence: crates/kernel/src/vector/diskann/mod.rs:233, future-hostile/dead-language term `todo` appears
+<<<<<<< HEAD
 199. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:358`
+=======
+198. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:358`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-diskann-index`
@@ -2224,7 +2772,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3b7176e09b125c15ecb452ae65078b9ece7a4ecbbe0c4f663cf7754b0ac6abf1`
    Evidence: crates/kernel/src/vector/diskann/mod.rs:358, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 200. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:361`
+=======
+199. `high` `vibe` `crates/kernel/src/vector/diskann/mod.rs:361`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-diskann-index`
@@ -2234,7 +2786,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:baac9d4443bd09662d11d85bf824fcd059423d6ff9b429e32d0823690be4d3a4`
    Evidence: crates/kernel/src/vector/diskann/mod.rs:361, future-hostile/dead-language term `todo` appears
+<<<<<<< HEAD
 201. `high` `vibe` `crates/kernel/src/vector/diskann/sectors.rs:39`
+=======
+200. `high` `vibe` `crates/kernel/src/vector/diskann/sectors.rs:39`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-diskann-index`
@@ -2244,7 +2800,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:31e68ebd208f53d5f235b67aa01003b27ada33bb839388d88774dd2bfe59c1d6`
    Evidence: crates/kernel/src/vector/diskann/sectors.rs:39, future-hostile/dead-language term `unused` appears
+<<<<<<< HEAD
 202. `high` `security` `crates/kernel/src/vector/diskann/sectors.rs:244`
+=======
+201. `high` `security` `crates/kernel/src/vector/diskann/sectors.rs:244`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `phase10-diskann-index`
@@ -2255,7 +2815,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:4ad715b1adb98962b839ecdd8f5951fa4c9504494fe46fdfcc242cad5a81760d`
    Evidence: detector=static mut, proof-window=NearbySafetyComment, snippet=// copy via a static mutable trick is unsafe. Use a helper that builds a
+<<<<<<< HEAD
 203. `high` `security` `crates/kernel/src/vector/diskann/sectors.rs:248`
+=======
+202. `high` `security` `crates/kernel/src/vector/diskann/sectors.rs:248`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `phase10-diskann-index`
@@ -2266,7 +2830,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:92e065eda38b2e9ea7e3fd662514480ec66a9cbd109de74c0c04c5f7ca752004`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let (head, mid, tail) = unsafe { vector_bytes.align_to::<f32>() };
+<<<<<<< HEAD
 204. `high` `vibe` `crates/kernel/src/vector/flat.rs:13`
+=======
+203. `high` `vibe` `crates/kernel/src/vector/flat.rs:13`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-vector-flat-and-simd`
@@ -2276,7 +2844,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:4e96da1d757c8a89c8f82111a1917bd5b5f58cfa5bbcc739c238fdc58e1f316a`
    Evidence: crates/kernel/src/vector/flat.rs:13, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 205. `high` `vibe` `crates/kernel/src/vector/hnsw/builder.rs:260`
+=======
+204. `high` `vibe` `crates/kernel/src/vector/hnsw/builder.rs:260`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-hnsw-index`
@@ -2286,7 +2858,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:83ef01851ede4e5c5a204a80bbb8fba292b26a31d2feafc522c89f3082b84d54`
    Evidence: crates/kernel/src/vector/hnsw/builder.rs:260, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 206. `high` `vibe` `crates/kernel/src/vector/hnsw/mod.rs:647`
+=======
+205. `high` `vibe` `crates/kernel/src/vector/hnsw/mod.rs:647`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-hnsw-index`
@@ -2296,7 +2872,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:74d6c47a7dc8ad38a437a851a4407a0303a92ef8803b059480f317af8686bd26`
    Evidence: crates/kernel/src/vector/hnsw/mod.rs:647, future-hostile/dead-language term `old` appears
+<<<<<<< HEAD
 207. `high` `vibe` `crates/kernel/src/vector/hnsw/mod.rs:671`
+=======
+206. `high` `vibe` `crates/kernel/src/vector/hnsw/mod.rs:671`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-hnsw-index`
@@ -2306,7 +2886,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c6c9a4487de737c8d8f2edd44d14c0ac95996cd5bbc22907f14405b78b78baa7`
    Evidence: crates/kernel/src/vector/hnsw/mod.rs:671, future-hostile/dead-language term `unused` appears
+<<<<<<< HEAD
 208. `high` `vibe` `crates/kernel/src/vector/hnsw/searcher.rs:30`
+=======
+207. `high` `vibe` `crates/kernel/src/vector/hnsw/searcher.rs:30`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-hnsw-index`
@@ -2316,7 +2900,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:7e9cf7a0f732fb68eddbfc468440988e84a9f85a2a5f590edd83898b4691293c`
    Evidence: crates/kernel/src/vector/hnsw/searcher.rs:30, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 209. `high` `vibe` `crates/kernel/src/vector/simd.rs:8`
+=======
+208. `high` `vibe` `crates/kernel/src/vector/simd.rs:8`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-vector-flat-and-simd`
@@ -2326,7 +2914,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f2d1af2e0be874b1d31ef706c1b336a3c8641e65b43422445c1908dbfef1f871`
    Evidence: crates/kernel/src/vector/simd.rs:8, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 210. `high` `security` `crates/kernel/src/vector/simd.rs:25`
+=======
+209. `high` `security` `crates/kernel/src/vector/simd.rs:25`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `phase10-vector-flat-and-simd`
@@ -2337,7 +2929,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:481de3ae5700b40721479f386d18eec7ee5084ce29f31829ac8064fc14bcb9f2`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=//! Rust 2024 edition still demands per-call `unsafe { … }` blocks for any
+<<<<<<< HEAD
 211. `high` `vibe` `crates/kernel/src/wal/manager.rs:42`
+=======
+210. `high` `vibe` `crates/kernel/src/wal/manager.rs:42`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `wal-archive-retention`
@@ -2347,7 +2943,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:6607fa346779cad20828406e9f695bc9b96813f2ab62895d8c3cc2d47ec791da`
    Evidence: crates/kernel/src/wal/manager.rs:42, future-hostile/dead-language term `stub` appears
+<<<<<<< HEAD
 212. `high` `vibe` `crates/kernel/src/wal/manager.rs:254`
+=======
+211. `high` `vibe` `crates/kernel/src/wal/manager.rs:254`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `wal-archive-retention`
@@ -2357,7 +2957,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:861272c534b78abd224da53010c255579be4b7b2724b07bb7756d1a03e5f4b7f`
    Evidence: crates/kernel/src/wal/manager.rs:254, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 213. `high` `vibe` `crates/kernel/src/wal/manager.rs:310`
+=======
+212. `high` `vibe` `crates/kernel/src/wal/manager.rs:310`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `wal-archive-retention`
@@ -2367,7 +2971,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b8d38f193d34bcc696e00ebe6bd64e0f0425334ea696f678e0449bef87c169ea`
    Evidence: crates/kernel/src/wal/manager.rs:310, future-hostile/dead-language term `stale` appears
+<<<<<<< HEAD
 214. `medium` `context` `crates/redlinedb/src/backup.rs:1`
+=======
+213. `medium` `context` `crates/redlinedb/src/backup.rs:1`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-040-REPO-ROT-BAD-BEHAVIOR`
    Check: `HLT-040-REPO-ROT-BAD-BEHAVIOR:context` `soft` confidence `0.88`
    Route: TLR `Context/setup`, lane `audit`, owner `rust-public-api`
@@ -2378,7 +2986,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:a154920484e6aa526643797bd392c9d762e9f516bfb0a0955596cbf11ee0a125`
    Evidence: detector=repo-rot.path.fake-versioned-source, path=crates/redlinedb/src/backup.rs, line=1, proof_window=None, snippet=use std::fs;
+<<<<<<< HEAD
 215. `high` `vibe` `crates/redlinedb/src/lib.rs:136`
+=======
+214. `high` `vibe` `crates/redlinedb/src/lib.rs:136`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `rust-public-api`
@@ -2388,7 +3000,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:da331db828872a250e1bf54662cbfca67f5736129fcc3f024c7ed0f7dda22114`
    Evidence: crates/redlinedb/src/lib.rs:136, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 216. `high` `vibe` `crates/redlinedb/src/lib.rs:153`
+=======
+215. `high` `vibe` `crates/redlinedb/src/lib.rs:153`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `rust-public-api`
@@ -2398,7 +3014,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c66e880ca27dc89cd211fcbd1367f2e8eda5f993587f838adf4605746e4b00d8`
    Evidence: crates/redlinedb/src/lib.rs:153, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 217. `high` `vibe` `crates/redlinedb/src/machine.rs:615`
+=======
+216. `high` `vibe` `crates/redlinedb/src/machine.rs:615`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `rust-public-api`
@@ -2408,7 +3028,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:5380291b488b97f9623460f97bcea282ce36b7c7d54ad65509a9ac196bbf5251`
    Evidence: crates/redlinedb/src/machine.rs:615, future-hostile/dead-language term `stale` appears
+<<<<<<< HEAD
 218. `high` `security` `crates/redlinedb/src/registry.rs:86`
+=======
+217. `high` `security` `crates/redlinedb/src/registry.rs:86`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `rust-public-api`
@@ -2419,7 +3043,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:6a7c8f4b82a3842611d0e98cdbae334790b29a10627a42ede26a5e2727b8f284`
    Evidence: detector=static mut, proof-window=NearbySafetyComment, snippet=fn registry() -> &'static Mutex<Registry> {
+<<<<<<< HEAD
 219. `high` `security` `crates/redlinedb/src/registry.rs:258`
+=======
+218. `high` `security` `crates/redlinedb/src/registry.rs:258`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `rust-public-api`
@@ -2430,7 +3058,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:721c6e734c00a5655cb8d71a49a0015f5ca5bfc951fc11917ff37b68bfbb1ed3`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+<<<<<<< HEAD
 220. `high` `vibe` `crates/sql/src/connection.rs:886`
+=======
+219. `high` `vibe` `crates/sql/src/connection.rs:886`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2440,7 +3072,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:733787fcbd845e33ab8e8bafb4f15647dd6b33a1bbeaa935c0ddaabf8fdef9cc`
    Evidence: crates/sql/src/connection.rs:886, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 221. `high` `vibe` `crates/sql/src/exec/expr/mod.rs:107`
+=======
+220. `high` `vibe` `crates/sql/src/exec/expr/mod.rs:107`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2450,7 +3086,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c97d98613b7ee1f42d615711847831ce0acf4fc6462d31e80f02aecb445d14e7`
    Evidence: crates/sql/src/exec/expr/mod.rs:107, future-hostile/dead-language term `placeholder` appears
+<<<<<<< HEAD
 222. `high` `vibe` `crates/sql/src/exec/expr/scalar/row.rs:29`
+=======
+221. `high` `vibe` `crates/sql/src/exec/expr/scalar.rs:37`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2458,9 +3098,15 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `legacy` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
+<<<<<<< HEAD
    Fingerprint: `sha256:bb4d3a0e4ad4e52a3870be4e3d456ef505616e2d6c7fbe512985c665e7e41d6a`
    Evidence: crates/sql/src/exec/expr/scalar/row.rs:29, future-hostile/dead-language term `legacy` appears
 223. `high` `vibe` `crates/sql/src/exec/expr/scalar/row.rs:30`
+=======
+   Fingerprint: `sha256:2e98843ff7e322700ee56c1d4296e74eb20d2bc45edbc7c9838224622883abae`
+   Evidence: crates/sql/src/exec/expr/scalar.rs:37, future-hostile/dead-language term `legacy` appears
+222. `high` `vibe` `crates/sql/src/exec/expr/scalar.rs:38`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2468,9 +3114,15 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `unused` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
+<<<<<<< HEAD
    Fingerprint: `sha256:c4e60dcaaf033cef4522ff8254ab30b23698a7db1dcd37d9b94fd6ac1a948b04`
    Evidence: crates/sql/src/exec/expr/scalar/row.rs:30, future-hostile/dead-language term `unused` appears
 224. `high` `vibe` `crates/sql/src/exec/index_access.rs:44`
+=======
+   Fingerprint: `sha256:2c86b677b2614dab15422a79d2321fa184fe2f3686c589e336172afc4b75109b`
+   Evidence: crates/sql/src/exec/expr/scalar.rs:38, future-hostile/dead-language term `unused` appears
+223. `high` `vibe` `crates/sql/src/exec/index_access.rs:44`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2480,7 +3132,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:082486d01f8fa2fce25c8748071b40ec9be765b9675099f16941f844bb0cacac`
    Evidence: crates/sql/src/exec/index_access.rs:44, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 225. `high` `vibe` `crates/sql/src/exec/index_access.rs:241`
+=======
+224. `high` `vibe` `crates/sql/src/exec/index_access.rs:241`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2490,7 +3146,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:57bb3aacb0be0521c45ce116101797f2d69a743f56bb9841d1bdda620e8899a5`
    Evidence: crates/sql/src/exec/index_access.rs:241, future-hostile/dead-language term `stale` appears
+<<<<<<< HEAD
 226. `high` `vibe` `crates/sql/src/exec/index_access.rs:740`
+=======
+225. `high` `vibe` `crates/sql/src/exec/index_access.rs:740`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2500,7 +3160,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:6646ec0360ad31799c1a5197498142ce7cc3e3e5a845a440a07cad962c4a29f0`
    Evidence: crates/sql/src/exec/index_access.rs:740, future-hostile/dead-language term `placeholder` appears
+<<<<<<< HEAD
 227. `high` `vibe` `crates/sql/src/exec/index_dml.rs:14`
+=======
+226. `high` `vibe` `crates/sql/src/exec/index_dml.rs:14`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2510,7 +3174,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:287cce994e12cb772e4c8191b949dbfbada4fd74d2f04023f5e184d7f8cf3f0f`
    Evidence: crates/sql/src/exec/index_dml.rs:14, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 228. `high` `vibe` `crates/sql/src/exec/index_dml.rs:64`
+=======
+227. `high` `vibe` `crates/sql/src/exec/index_dml.rs:64`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2520,7 +3188,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:03e7a0a0dffcb990f33547ba90e91340cc1bb3696f29f7bb7025558ec1193218`
    Evidence: crates/sql/src/exec/index_dml.rs:64, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 229. `high` `vibe` `crates/sql/src/exec/index_dml.rs:164`
+=======
+228. `high` `vibe` `crates/sql/src/exec/index_dml.rs:164`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2530,7 +3202,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:361658907a3609be02ed57834f7fa41731ff24c506b734fe8d84123de7de7f95`
    Evidence: crates/sql/src/exec/index_dml.rs:164, future-hostile/dead-language term `old` appears
+<<<<<<< HEAD
 230. `high` `vibe` `crates/sql/src/exec/select_top.rs:145`
+=======
+229. `high` `vibe` `crates/sql/src/exec/select_top.rs:145`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2540,7 +3216,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:29c5b8c98b4d9b4f33a437350071a3beaa0dd85512ac024fa2fc40fa1725b328`
    Evidence: crates/sql/src/exec/select_top.rs:145, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 231. `high` `vibe` `crates/sql/src/exec/select_top.rs:163`
+=======
+230. `high` `vibe` `crates/sql/src/exec/select_top.rs:163`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2550,7 +3230,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:59a15607849540acd1dd4fcf01ffc8a4d18d88ed01159e55bcabf68edf2be6fe`
    Evidence: crates/sql/src/exec/select_top.rs:163, future-hostile/dead-language term `stale` appears
+<<<<<<< HEAD
 232. `high` `vibe` `crates/sql/src/exec/select_top.rs:745`
+=======
+231. `high` `vibe` `crates/sql/src/exec/select_top.rs:745`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2560,7 +3244,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a3a41267a21e8f6364dce2a74350eace9b14f1209379e78d700c7ad8304ba217`
    Evidence: crates/sql/src/exec/select_top.rs:745, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 233. `high` `vibe` `crates/sql/src/exec/tail.rs:731`
+=======
+232. `high` `vibe` `crates/sql/src/exec/tail.rs:731`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2570,7 +3258,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:946dcb185e57036fe6d7b12c3e476e5896a7d7cde20cf28af20da94a13713822`
    Evidence: crates/sql/src/exec/tail.rs:731, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 234. `high` `vibe` `crates/sql/src/exec/tail.rs:732`
+=======
+233. `high` `vibe` `crates/sql/src/exec/tail.rs:732`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2580,7 +3272,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:274ed2507e689a64e5a24de644ea93b5dcf8875ca064581ec99a181da9c41954`
    Evidence: crates/sql/src/exec/tail.rs:732, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 235. `high` `vibe` `crates/sql/src/exec/tail.rs:758`
+=======
+234. `high` `vibe` `crates/sql/src/exec/tail.rs:758`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2590,7 +3286,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a9684df78d25ce2cb8bc9019d80781a0beaf9993fe1240705a784c4bc42ab644`
    Evidence: crates/sql/src/exec/tail.rs:758, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 236. `high` `vibe` `crates/sql/src/exec/tail.rs:799`
+=======
+235. `high` `vibe` `crates/sql/src/exec/tail.rs:799`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2600,7 +3300,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a9639136ba5993ef82389465d0114ad0f0439eb107144d15e78f1411e7b8abab`
    Evidence: crates/sql/src/exec/tail.rs:799, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 237. `high` `vibe` `crates/sql/src/exec/tail.rs:801`
+=======
+236. `high` `vibe` `crates/sql/src/exec/tail.rs:801`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2610,7 +3314,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:eee74040e1edbf225f5776464cd2492953afa5cb4f939e7831239d411e841605`
    Evidence: crates/sql/src/exec/tail.rs:801, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 238. `high` `vibe` `crates/sql/src/exec/tail.rs:811`
+=======
+237. `high` `vibe` `crates/sql/src/exec/tail.rs:811`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2620,7 +3328,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:1308305601c07a898df44b8cd51ee023ff05e705073480135c04f55fdb4fdab7`
    Evidence: crates/sql/src/exec/tail.rs:811, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 239. `high` `vibe` `crates/sql/src/exec/vec/hash_agg.rs:416`
+=======
+238. `high` `vibe` `crates/sql/src/exec/vec/hash_agg.rs:416`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-vectorized-executor`
@@ -2630,7 +3342,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:ffc3afef3290451f08394fc8df8c7ebb0f4e41058c97f24a5887d9031a991c47`
    Evidence: crates/sql/src/exec/vec/hash_agg.rs:416, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 240. `high` `vibe` `crates/sql/src/exec/vec/hash_agg.rs:424`
+=======
+239. `high` `vibe` `crates/sql/src/exec/vec/hash_agg.rs:424`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-vectorized-executor`
@@ -2640,7 +3356,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:e3ae7d8d7a2dbbc3354e602ec7cfa5bba3ed04554fa4a0035b9a7570efcd1396`
    Evidence: crates/sql/src/exec/vec/hash_agg.rs:424, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 241. `high` `vibe` `crates/sql/src/exec/vec/mod.rs:5`
+=======
+240. `high` `vibe` `crates/sql/src/exec/vec/mod.rs:5`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-vectorized-executor`
@@ -2650,7 +3370,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:5c3d8cab1c135c0918fffe99f56d12c8043c0aa5a706b9b406df732651026eb2`
    Evidence: crates/sql/src/exec/vec/mod.rs:5, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 242. `high` `vibe` `crates/sql/src/exec/vec/spill.rs:4`
+=======
+241. `high` `vibe` `crates/sql/src/exec/vec/spill.rs:4`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-vectorized-executor`
@@ -2660,7 +3384,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:aaec67fcb9e8bb23046f7c2254a1089cc043bc51b77178a90feedf59371d5c71`
    Evidence: crates/sql/src/exec/vec/spill.rs:4, future-hostile/dead-language term `temp` appears
+<<<<<<< HEAD
 243. `high` `vibe` `crates/sql/src/parser.rs:62`
+=======
+242. `high` `vibe` `crates/sql/src/parser.rs:62`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2670,7 +3398,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:31a7a1bdcc861b4a3f476d10154dc5e4f2ea92725d0f72eac2701586bb686978`
    Evidence: crates/sql/src/parser.rs:62, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 244. `high` `vibe` `crates/sql/src/parser.rs:87`
+=======
+243. `high` `vibe` `crates/sql/src/parser.rs:87`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2680,7 +3412,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:214b34047e1eb42b1b22e8a076ca339ec942b1a694b06286f8c2277524017557`
    Evidence: crates/sql/src/parser.rs:87, future-hostile/dead-language term `legacy` appears
+<<<<<<< HEAD
 245. `high` `vibe` `crates/sql/src/parser/ddl.rs:14`
+=======
+244. `high` `vibe` `crates/sql/src/parser/ddl.rs:14`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2690,7 +3426,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:9a90a79746fd11753e6995b5a8c95bfed9af518daa0d42e4cf9f5f883bb49478`
    Evidence: crates/sql/src/parser/ddl.rs:14, future-hostile/dead-language term `temporary` appears
+<<<<<<< HEAD
 246. `high` `vibe` `crates/sql/src/parser/ddl.rs:111`
+=======
+245. `high` `vibe` `crates/sql/src/parser/ddl.rs:111`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2700,7 +3440,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:ed00dd906863db8005d8b5cb38996fc9395bbdc1273d25fad61f9e562b3121c7`
    Evidence: crates/sql/src/parser/ddl.rs:111, future-hostile/dead-language term `placeholder` appears
+<<<<<<< HEAD
 247. `high` `vibe` `crates/sql/src/parser/ddl.rs:284`
+=======
+246. `high` `vibe` `crates/sql/src/parser/ddl.rs:284`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2710,7 +3454,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:37ea80ca268d145ea883d8ef10e44f5228c1598d6352e68b7961e34fdf3687f0`
    Evidence: crates/sql/src/parser/ddl.rs:284, future-hostile/dead-language term `stub` appears
+<<<<<<< HEAD
 248. `high` `vibe` `crates/sql/src/parser/helpers.rs:140`
+=======
+247. `high` `vibe` `crates/sql/src/parser/helpers.rs:140`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2720,7 +3468,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:5204094668a81c790e246c7b687e61700e3bff604bb5b71af6edb33de138a516`
    Evidence: crates/sql/src/parser/helpers.rs:140, future-hostile/dead-language term `todo` appears
+<<<<<<< HEAD
 249. `high` `vibe` `crates/sql/src/parser/helpers.rs:295`
+=======
+248. `high` `vibe` `crates/sql/src/parser/helpers.rs:295`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2730,7 +3482,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:5945114bf5de4708840da79d56df3ef3bc80f034c78495e8257bba9c0afe67ff`
    Evidence: crates/sql/src/parser/helpers.rs:295, future-hostile/dead-language term `placeholder` appears
+<<<<<<< HEAD
 250. `high` `vibe` `crates/sql/src/parser/select.rs:489`
+=======
+249. `high` `vibe` `crates/sql/src/parser/select.rs:489`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2740,7 +3496,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:1df337e3b6d4eacb5dc61ef4e206f7733608fc1298b9ecc3a9f5594c1368c179`
    Evidence: crates/sql/src/parser/select.rs:489, future-hostile/dead-language term `placeholder` appears
+<<<<<<< HEAD
 251. `high` `vibe` `crates/sql/src/parser/select.rs:492`
+=======
+250. `high` `vibe` `crates/sql/src/parser/select.rs:492`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2750,7 +3510,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:d172e1e1bc342b1d4765ee4bfc4a6ebbf8bb99de9c418931fc2114fb0a0ac981`
    Evidence: crates/sql/src/parser/select.rs:492, future-hostile/dead-language term `placeholder` appears
+<<<<<<< HEAD
 252. `high` `vibe` `crates/sql/src/planner.rs:1025`
+=======
+251. `high` `vibe` `crates/sql/src/planner.rs:1025`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2760,7 +3524,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b203a1abf424a9b999d132f459d4c7668a1aba4bfeaab09e1628e765b5731a65`
    Evidence: crates/sql/src/planner.rs:1025, future-hostile/dead-language term `fallback` appears
+<<<<<<< HEAD
 253. `high` `vibe` `crates/sql/src/planner/helpers.rs:209`
+=======
+252. `high` `vibe` `crates/sql/src/planner/helpers.rs:209`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2770,7 +3538,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:481ad1ff936bad8faa24913d4954f75c89d7eaa1acd77db00c5126457adeee84`
    Evidence: crates/sql/src/planner/helpers.rs:209, future-hostile/dead-language term `placeholder` appears
+<<<<<<< HEAD
 254. `high` `vibe` `crates/sql/src/regexp.rs:8`
+=======
+253. `high` `vibe` `crates/sql/src/regexp.rs:8`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `phase10-regexp`
@@ -2780,7 +3552,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3af9234eb7fe90c54addf78cb595c7a7ce443b6a2b81dcdc449238c947eceab9`
    Evidence: crates/sql/src/regexp.rs:8, future-hostile/dead-language term `compat` appears
+<<<<<<< HEAD
 255. `high` `vibe` `crates/sql/src/session.rs:30`
+=======
+254. `high` `vibe` `crates/sql/src/session.rs:30`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2790,7 +3566,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:087648e3b7eeaea4e919f12041aa094cabd55ef3c6572da48e6ca68a7f8d54e4`
    Evidence: crates/sql/src/session.rs:30, future-hostile/dead-language term `unused` appears
+<<<<<<< HEAD
 256. `high` `security` `crates/sql/src/statement.rs:298`
+=======
+255. `high` `security` `crates/sql/src/statement.rs:298`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `sql-parser-planner-executor`
@@ -2801,7 +3581,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:8848cc2a14147743290dea4b1fa0014b8c651522730897474c2bd474631f6663`
    Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let tx = unsafe { ptr.as_mut() };
+<<<<<<< HEAD
 257. `medium` `data` `db/`
+=======
+256. `medium` `data` `db/`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-006-DIRECT-DB-WRONG-LAYER`
    Check: `HLT-006-DIRECT-DB-WRONG-LAYER:data` `soft` confidence `0.76`
    Route: TLR `Contracts/data`, lane `db`, owner `tools`
@@ -2811,7 +3595,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:fa84ba15b06d7072c8e4834fbcb6d4c707eee3e94616a153c0d6113e3b6c8f66`
    Evidence: constraint or RLS language found
+<<<<<<< HEAD
 258. `medium` `docs` `docs/`
+=======
+257. `medium` `docs` `docs/`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Check: `HLT-000-SCORE-DIMENSION:docs` `soft` confidence `0.76`
    Route: TLR `Context/setup`, lane `audit`, owner `standard`
    Reason: agent-readable documentation is incomplete
@@ -2819,7 +3607,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:517269e227b26a69e8747d0d8cdb8a8d03582550b0de9e4c7c2b9287d8cee256`
    Evidence: docs/architecture.md or docs/boundaries.md, docs/testing.md
+<<<<<<< HEAD
 259. `high` `release` `docs/release.md`
+=======
+258. `high` `release` `docs/release.md`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-025-RELEASE-READINESS-GAP`
    Check: `HLT-025-RELEASE-READINESS-GAP:release` `hard` confidence `0.88`
    Route: TLR `Verification`, lane `release`, owner `standard`
@@ -2830,7 +3622,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just check`
    Fingerprint: `sha256:640a623fff7ab3e802c3902adc8139100c4773a9c1de7d85998852f57db765fa`
    Evidence: release structure missing: release process doc
+<<<<<<< HEAD
 260. `medium` `observability` `docs/testing.md`
+=======
+259. `medium` `observability` `docs/testing.md`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-017-OPAQUE-OBSERVABILITY`
    Check: `HLT-017-OPAQUE-OBSERVABILITY:observability` `soft` confidence `0.76`
    Route: TLR `Repair`, lane `observability`, owner `standard`
@@ -2840,7 +3636,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:fdb3a84a21c55960774c72b44aa6af4228427d0ba1a9eeb7d25802508b687411`
    Evidence: observability libraries or patterns found, repair receipts or raw artifact language found, no agent-friendly exception pattern found, free-form logging appears in scope
+<<<<<<< HEAD
 261. `medium` `release` `docs/testing.md`
+=======
+260. `medium` `release` `docs/testing.md`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-026-COST-BUDGET-GAP`
    Check: `HLT-026-COST-BUDGET-GAP:release` `soft` confidence `0.88`
    Route: TLR `Verification`, lane `release`, owner `standard`
@@ -2851,7 +3651,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just check`
    Fingerprint: `sha256:edd248b7afc24b644107205fa5b84a88103ac4b622009ff9f19b779de8798f59`
    Evidence: cost surface found without budget/stop-condition policy
+<<<<<<< HEAD
 262. `medium` `context` `ops/`
+=======
+261. `medium` `context` `ops/`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP`
    Check: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP:context` `soft` confidence `0.88`
    Route: TLR `Context/setup`, lane `fast`, owner `agent`
@@ -2861,7 +3665,11 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:afd6d62dcc0304f7e4872a9edce56c957a74d6c2101cdf6218dce16b4297ba55`
    Evidence: canonical_path=ops/, detected_paths=.github, .github/workflows, guidance_status=missing, owner=ops, proof_lane=security lane / workflow lint
+<<<<<<< HEAD
 263. `high` `python` `python/`
+=======
+262. `high` `python` `python/`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-005-PYTHON-PRODUCT-TRUTH`
    Check: `HLT-005-PYTHON-PRODUCT-TRUTH:python` `hard` confidence `0.88`
    Route: TLR `Business truth`, lane `contract`, owner `tools`
@@ -2871,22 +3679,38 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a9ed62b36b036c9cc50ca8f42844065f4bb44a12c1b6a715d99db7453617b019`
    Evidence: Python must stay away from product truth, repo tooling, proof lanes, backend glue, and production DB ownership
+<<<<<<< HEAD
 264. `medium` `python` `python/ai-service`
+=======
+263. `medium` `python` `python/ai-service`
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Rule: `HLT-005-PYTHON-PRODUCT-TRUTH`
    Check: `HLT-005-PYTHON-PRODUCT-TRUTH:python` `soft` confidence `0.76`
    Route: TLR `Business truth`, lane `contract`, owner `tools`
    Docs: `docs/agent-native-standard.md`
+<<<<<<< HEAD
    Reason: `Python containment and polyglot hygiene` scored 0 below the standard floor of 85
    Fix: remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts
    Rerun: `just fast`
    Fingerprint: `sha256:557d4f169ccef311815c39ae27bafa95b0bc6289f2ec16b7ec886d1991c7ab38`
    Evidence: Python appears outside the allowed roots: scripts/bench/dick_head_choas_report.py, non-optimal product language marker: crates/ffi/include/redlinedb.h, Python leaks into product surface, runtime code should converge to Rust, TypeScript, SQL, generated contracts, and rare advanced-ML/data Python exceptions
+=======
+   Reason: `Python containment and polyglot hygiene` scored 10 below the standard floor of 85
+   Fix: remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts
+   Rerun: `just fast`
+   Fingerprint: `sha256:2c6422b5e3cc33815649e7d2275433242cfbff337dfb0390b7ca4764ed3d25f0`
+   Evidence: Python appears outside the allowed roots: scripts/bench/dick_head_choas_report.py, Python leaks into product surface
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
 
 ## Policy
 
 - Policy file: `./agent/audit-policy.toml`
 - Minimum score: `85`
+<<<<<<< HEAD
 - Fail on: `critical, high`
+=======
+- Fail on: ``
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
 
 ## Agent Fix Queue
 
@@ -2918,6 +3742,7 @@ No audited runtime boundary reclassifications declared.
    Route: `Context/setup`/`audit`
 14. `high` `HLT-003-OWNERLESS-PATH` `agent/owner-map.json` - add the narrowest stable prefix for this path to `agent/owner-map.json`
    Route: `Context/setup`/`fast`
+<<<<<<< HEAD
 15. `high` `crates/ffi/include/redlinedb.h` - move product runtime behavior to Rust core, TypeScript web, SQL migrations, or generated contracts; Python needs a dated advanced-ML/data exception
    Route: `Context/setup`/`audit`
 16. `medium` `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP` `.github` - migrate the detected ops surface to `ops/` or document an alternate profile with owner, proof lane, expiry, and migration plan
@@ -3109,4 +3934,195 @@ No audited runtime boundary reclassifications declared.
 109. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
 110. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
+=======
+15. `medium` `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP` `.github` - migrate the detected ops surface to `ops/` or document an alternate profile with owner, proof lane, expiry, and migration plan
+   Route: `Context/setup`/`fast`
+16. `medium` `HLT-015-CONTEXT-SETUP-GAP` `AGENTS.md` - keep root guidance short and route durable detail through agent-readable manifests and docs
+   Route: `Context/setup`/`fast`
+17. `medium` `HLT-003-OWNERLESS-PATH` `agent/owner-map.json` - tighten owner/test maps and root routing until agents can localize ownership without inference
+   Route: `Context/setup`/`fast`
+18. `medium` `HLT-040-REPO-ROT-BAD-BEHAVIOR` `crates/bench/bench/certification-phase10-v3-compare.toml` - delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan
+   Route: `Context/setup`/`audit`
+19. `medium` `HLT-040-REPO-ROT-BAD-BEHAVIOR` `crates/bench/bench/certification-phase10-v3-smoke.toml` - delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan
+   Route: `Context/setup`/`audit`
+20. `medium` `HLT-040-REPO-ROT-BAD-BEHAVIOR` `crates/bench/bench/certification-phase10-v3-stress.toml` - delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan
+   Route: `Context/setup`/`audit`
+21. `medium` `HLT-040-REPO-ROT-BAD-BEHAVIOR` `crates/bench/bench/certification-phase10-v3.toml` - delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan
+   Route: `Context/setup`/`audit`
+22. `medium` `HLT-040-REPO-ROT-BAD-BEHAVIOR` `crates/ffi/src/backup.rs` - delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan
+   Route: `Context/setup`/`audit`
+23. `medium` `HLT-040-REPO-ROT-BAD-BEHAVIOR` `crates/redlinedb/src/backup.rs` - delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan
+   Route: `Context/setup`/`audit`
+24. `medium` `docs/` - add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`
+   Route: `Context/setup`/`audit`
+25. `medium` `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP` `ops/` - add `ops/AGENTS.md` with owns / forbidden / proof lane guidance
+   Route: `Context/setup`/`fast`
+26. `high` `HLT-034-CI-BAD-BEHAVIOR` `.github/workflows/ci.yml` - add workflow-level concurrency with cancel-in-progress
+   Route: `Security, secrets, agency`/`security`
+27. `high` `HLT-034-CI-BAD-BEHAVIOR` `.github/workflows/ci.yml` - add top-level `permissions: contents: read` and job-specific write scopes only where needed
+   Route: `Security, secrets, agency`/`security`
+28. `high` `HLT-034-CI-BAD-BEHAVIOR` `.github/workflows/ci.yml` - set an explicit timeout-minutes on each job
+   Route: `Security, secrets, agency`/`security`
+29. `high` `HLT-034-CI-BAD-BEHAVIOR` `.github/workflows/ci.yml` - pin every external action to a 40-character commit SHA
+   Route: `Security, secrets, agency`/`security`
+30. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/certify.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+31. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/certify.rs` - collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
+   Route: `Entropy`/`fast`
+32. `high` `crates/bench/src/chaos.rs` - extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
+   Route: `Entropy`/`fast`
+33. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/chaos.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+34. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/checksum.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+35. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/compat.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+36. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/config.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+37. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/engine/redline.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+38. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/lib.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+39. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/process_metrics.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+40. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/bench/src/process_metrics.rs` - construct the type with a valid initializer instead of zeroing it
+   Route: `Security, secrets, agency`/`fast`
+41. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/report.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+42. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/workload.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+43. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/backup.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+44. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/backup.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+   Route: `Security, secrets, agency`/`fast`
+45. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/bind.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+46. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/column.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+47. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/config.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+48. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+49. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+   Route: `Security, secrets, agency`/`fast`
+50. `high` `HLT-023-INPUT-BOUNDARY-GAP` `crates/ffi/src/exec.rs` - replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
+   Route: `Security, secrets, agency`/`security`
+51. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/exec.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+52. `high` `HLT-001-DEAD-MARKER` `crates/ffi/src/lib.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+53. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+54. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+   Route: `Security, secrets, agency`/`fast`
+55. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/sqlite3_compat.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+56. `high` `HLT-001-DEAD-MARKER` `crates/ffi/src/sqlite3_compat.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+57. `high` `HLT-001-DEAD-MARKER` `crates/ffi/src/sqlite3_compat.rs` - replace placeholders with implemented behavior, typed unsupported-state errors, or a tracked exception record with docs
+   Route: `Entropy`/`fast`
+58. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+59. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+   Route: `Security, secrets, agency`/`fast`
+60. `high` `HLT-001-DEAD-MARKER` `crates/ffi/src/types.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+61. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/util.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+62. `high` `HLT-001-DEAD-MARKER` `crates/ffi/src/util.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+63. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/util.rs` - document caller obligations with a `# Safety` section
+   Route: `Security, secrets, agency`/`fast`
+64. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/catalog/store.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+65. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/engine/mod.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+66. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/engine/page_heap.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+67. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/index/cursor.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+68. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/index/scan.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+69. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/integrity/equivalence.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+70. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/integrity/mod.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+71. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/integrity/page_csum.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+72. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/json/simd_key.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+73. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/storage/page_file.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+74. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/vector/diskann/mod.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+75. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/vector/diskann/sectors.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+76. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/kernel/src/vector/diskann/sectors.rs` - replace the mutable static with explicit synchronization or scoped ownership
+   Route: `Security, secrets, agency`/`fast`
+77. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/kernel/src/vector/diskann/sectors.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+78. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/vector/flat.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+79. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/vector/hnsw/builder.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+80. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/vector/hnsw/mod.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+81. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/vector/hnsw/searcher.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+82. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/vector/simd.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+83. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/kernel/src/vector/simd.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+84. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/wal/manager.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+85. `high` `HLT-001-DEAD-MARKER` `crates/redlinedb/src/lib.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+86. `high` `HLT-001-DEAD-MARKER` `crates/redlinedb/src/machine.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+87. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/redlinedb/src/registry.rs` - replace the mutable static with explicit synchronization or scoped ownership
+   Route: `Security, secrets, agency`/`fast`
+88. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/redlinedb/src/registry.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+89. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/connection.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+90. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/expr/mod.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+91. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/expr/scalar.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+92. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/index_access.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+93. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/index_dml.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+94. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/select_top.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+95. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/tail.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+96. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/vec/hash_agg.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+97. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/vec/mod.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+98. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/vec/spill.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+99. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/parser.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+100. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/parser/ddl.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+101. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/parser/helpers.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+102. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/parser/select.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+103. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/planner.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+104. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/planner/helpers.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+105. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/regexp.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+106. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/session.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+107. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/sql/src/statement.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+108. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+   Route: `Entropy`/`fast`
+109. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
    Route: `Security, secrets, agency`/`security`

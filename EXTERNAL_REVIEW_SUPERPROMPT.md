@@ -181,7 +181,7 @@ Public Rust facade:
 C ABI / SQLite compatibility layer:
 
 - `crates/ffi/include/sqlite3.h`
-- `crates/ffi/include/redlinedb.h`
+- `contracts/c-abi/redlinedb.h`
 - `crates/ffi/src/lib.rs`
 
 CLI/server/tooling:
@@ -336,7 +336,7 @@ Look for:
 Study:
 
 - `crates/ffi/include/sqlite3.h`
-- `crates/ffi/include/redlinedb.h`
+- `contracts/c-abi/redlinedb.h`
 - `crates/ffi/src/lib.rs`
 
 Compare against SQLite C API expectations:

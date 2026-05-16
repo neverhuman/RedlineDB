@@ -1,15 +1,28 @@
 {
+<<<<<<< HEAD
   "report_fingerprint": "sha256:7acf2b59643581bc22c931f5ce7081917a87a8fcb8276f568095176444ff8124",
   "input_fingerprint": "sha256:92e654f3cee1dba5ea7cda6a604821d3873cc9dc2d6e7672b94de46c0c29b920",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {
     "owner_map": "sha256:0f77043dba8830fcdd34b845f9807611680429dfff49bef89c97f6f68919247d",
     "test_map": "sha256:39b802db2e01b0f599f5a93e8055cc0e458bb6921a1b87b8fab68f365322e911",
+=======
+  "report_fingerprint": "sha256:d3c398a99ece4593f992b5beda61382789a75419e20251ab74ba1f57625124ed",
+  "input_fingerprint": "sha256:f4f987fd7fe33b5b18ba9bcb206fe4c990bd60e88ca10062f570c37e86ed7593",
+  "policy_fingerprint": "sha256:5d6b4a01b299e14f58295e4186fdab371e515edd612cdbb0d8c1b02d24ef90d2",
+  "manifest_fingerprints": {
+    "owner_map": "sha256:84702ece3f78661093fc7a8e637221b5eb7d76bd007fe5acae0171236f02d4ab",
+    "test_map": "sha256:426f60539adae35f65f6cf0fc3df7323a5ce594ebe21913f5bfe37bc902fba36",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     "generated_zones": "sha256:76ee24b7b4862b31a2d534a2dc8e86407be904e1530ef07bf7b9d034225391d1",
     "proof_lanes": "sha256:91ec7dc939afc8d8f185e269e7b26e062022f1456b504e326876cecd416c191b"
   },
   "dirty_worktree": true,
+<<<<<<< HEAD
   "generated_at": "1778900232",
+=======
+  "generated_at": "1778900976",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -80,8 +93,11 @@
     "HLT-001-DEAD-MARKER on crates/bench/src/workload.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/workload.rs",
     "HLT-017-OPAQUE-OBSERVABILITY on crates/domain",
+<<<<<<< HEAD
     "HLT-000-SCORE-DIMENSION:stack on crates/ffi/include/redlinedb.h",
     "HLT-023-INPUT-BOUNDARY-GAP on crates/ffi/include/redlinedb.h",
+=======
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
@@ -116,6 +132,10 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/config.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/error.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/error.rs",
+<<<<<<< HEAD
+=======
+    "HLT-023-INPUT-BOUNDARY-GAP on crates/ffi/src/exec.rs",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
@@ -230,8 +250,13 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/redlinedb/src/registry.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/connection.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/mod.rs",
+<<<<<<< HEAD
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar/row.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar/row.rs",
+=======
+    "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar.rs",
+    "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar.rs",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/index_access.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/index_access.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/index_access.rs",
@@ -269,23 +294,41 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
+<<<<<<< HEAD
   "run_id": "1778900232",
   "started_at": "1778900232",
   "elapsed_ms": 8522,
+=======
+  "run_id": "1778900976",
+  "started_at": "1778900976",
+  "elapsed_ms": 7267,
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
   "scope": {
     "mode": "full",
     "paths": []
   },
+<<<<<<< HEAD
   "score": 47,
   "raw_score": 47,
+=======
+  "score": 48,
+  "raw_score": 48,
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
+<<<<<<< HEAD
     "hard_findings": 245,
     "soft_findings": 19,
     "ratchet": {
       "baseline_score": 47,
+=======
+    "hard_findings": 0,
+    "soft_findings": 263,
+    "ratchet": {
+      "baseline_score": 48,
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "allowed_drop": 0,
       "passed": false,
       "score_delta": 0,
@@ -307,6 +350,7 @@
   "policy": {
     "path": "./agent/audit-policy.toml",
     "minimum_score": 85,
+<<<<<<< HEAD
     "fail_on": [
       "critical",
       "high"
@@ -315,6 +359,10 @@
       "medium",
       "low"
     ],
+=======
+    "fail_on": [],
+    "advisory_on": [],
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     "mode": "advisory",
     "standard_version": "0.8.0",
     "auditor_version": "0.8.16",
@@ -325,7 +373,10 @@
   "caps_applied": [
     "python-direct-product-truth-or-db-ownership",
     "no-jankurai-audit-lane-in-ci",
+<<<<<<< HEAD
     "non-optimal-product-language-found",
+=======
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     "vibe-placeholders-in-product-code",
     "fallback-soup-in-product-code",
     "future-hostile-dead-language-in-product-code",
@@ -674,6 +725,7 @@
     {
       "name": "Python containment and polyglot hygiene",
       "weight": 4,
+<<<<<<< HEAD
       "score": 0,
       "weighted_points": 0.0,
       "evidence": [
@@ -683,6 +735,15 @@
       "notes": [
         "Python leaks into product surface",
         "runtime code should converge to Rust, TypeScript, SQL, generated contracts, and rare advanced-ML/data Python exceptions"
+=======
+      "score": 10,
+      "weighted_points": 0.4,
+      "evidence": [
+        "Python appears outside the allowed roots: scripts/bench/dick_head_choas_report.py"
+      ],
+      "notes": [
+        "Python leaks into product surface"
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       ]
     },
     {
@@ -2194,14 +2255,22 @@
       "problem": "jankurai manifest could not be parsed",
       "agent_fix": "fix the manifest syntax so audit policy and routing maps are authoritative",
       "evidence": [
+<<<<<<< HEAD
         "missing field `tests` at line 148 column 1"
+=======
+        "missing field `tests` at line 154 column 1"
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       ],
       "check_id": "HLT-017-OPAQUE-OBSERVABILITY:audit",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just score",
+<<<<<<< HEAD
       "fingerprint": "sha256:03d184c6ea2608e79cb6f5c3fff8108b5fba9b444bf406e28c2fcfceb2af3599",
+=======
+      "fingerprint": "sha256:b2e299cfb87643af17d4747d42b9f7f8f43cddc5f8d597416c1232648b87cdf3",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
       "tlr": "Repair",
       "lane": "observability",
@@ -3013,6 +3082,7 @@
       "owner": "tools"
     },
     {
+<<<<<<< HEAD
       "severity": "high",
       "category": "stack",
       "path": "crates/ffi/include/redlinedb.h",
@@ -3057,6 +3127,8 @@
       "reason": "input handling risk needs deterministic negative tests"
     },
     {
+=======
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "severity": "medium",
       "category": "context",
       "path": "crates/ffi/src/backup.rs",
@@ -3972,6 +4044,33 @@
       "severity": "high",
       "category": "security",
       "path": "crates/ffi/src/exec.rs",
+<<<<<<< HEAD
+=======
+      "problem": "unsafe or unvalidated input boundary marker appears in product code",
+      "agent_fix": "replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests",
+      "evidence": [
+        "pub extern \"C\" fn rldb_exec("
+      ],
+      "check_id": "HLT-023-INPUT-BOUNDARY-GAP:security",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just security",
+      "fingerprint": "sha256:342ad1d692f12c78c70bde25de8152e2d389f36ac5429f3edf8fee8638c21b0c",
+      "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+      "tlr": "Security, secrets, agency",
+      "lane": "security",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 15,
+      "matched_term": "shell execution",
+      "reason": "input handling risk needs deterministic negative tests"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/exec.rs",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -6779,11 +6878,19 @@
     {
       "severity": "high",
       "category": "vibe",
+<<<<<<< HEAD
       "path": "crates/sql/src/exec/expr/scalar/row.rs",
       "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
         "crates/sql/src/exec/expr/scalar/row.rs:29",
+=======
+      "path": "crates/sql/src/exec/expr/scalar.rs",
+      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/sql/src/exec/expr/scalar.rs:37",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
         "future-hostile/dead-language term `legacy` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -6791,22 +6898,38 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
+<<<<<<< HEAD
       "fingerprint": "sha256:bb4d3a0e4ad4e52a3870be4e3d456ef505616e2d6c7fbe512985c665e7e41d6a",
+=======
+      "fingerprint": "sha256:2e98843ff7e322700ee56c1d4296e74eb20d2bc45edbc7c9838224622883abae",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
+<<<<<<< HEAD
       "line": 29
+=======
+      "line": 37
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     },
     {
       "severity": "high",
       "category": "vibe",
+<<<<<<< HEAD
       "path": "crates/sql/src/exec/expr/scalar/row.rs",
       "problem": "future-hostile/dead-language term `unused` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
         "crates/sql/src/exec/expr/scalar/row.rs:30",
+=======
+      "path": "crates/sql/src/exec/expr/scalar.rs",
+      "problem": "future-hostile/dead-language term `unused` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/sql/src/exec/expr/scalar.rs:38",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
         "future-hostile/dead-language term `unused` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -6814,13 +6937,21 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
+<<<<<<< HEAD
       "fingerprint": "sha256:c4e60dcaaf033cef4522ff8254ab30b23698a7db1dcd37d9b94fd6ac1a948b04",
+=======
+      "fingerprint": "sha256:2c86b677b2614dab15422a79d2321fa184fe2f3686c589e336172afc4b75109b",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
+<<<<<<< HEAD
       "line": 30
+=======
+      "line": 38
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     },
     {
       "severity": "high",
@@ -7745,6 +7876,7 @@
       "severity": "medium",
       "category": "python",
       "path": "python/ai-service",
+<<<<<<< HEAD
       "problem": "`Python containment and polyglot hygiene` scored 0 below the standard floor of 85",
       "agent_fix": "remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts",
       "evidence": [
@@ -7752,13 +7884,24 @@
         "non-optimal product language marker: crates/ffi/include/redlinedb.h",
         "Python leaks into product surface",
         "runtime code should converge to Rust, TypeScript, SQL, generated contracts, and rare advanced-ML/data Python exceptions"
+=======
+      "problem": "`Python containment and polyglot hygiene` scored 10 below the standard floor of 85",
+      "agent_fix": "remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts",
+      "evidence": [
+        "Python appears outside the allowed roots: scripts/bench/dick_head_choas_report.py",
+        "Python leaks into product surface"
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       ],
       "check_id": "HLT-005-PYTHON-PRODUCT-TRUTH:python",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
+<<<<<<< HEAD
       "fingerprint": "sha256:557d4f169ccef311815c39ae27bafa95b0bc6289f2ec16b7ec886d1991c7ab38",
+=======
+      "fingerprint": "sha256:2c6422b5e3cc33815649e7d2275433242cfbff337dfb0390b7ca4764ed3d25f0",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "rule_id": "HLT-005-PYTHON-PRODUCT-TRUTH",
       "tlr": "Business truth",
       "lane": "contract",
@@ -7795,7 +7938,11 @@
       "lane": "contract",
       "owner": "tools",
       "task": "remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts",
+<<<<<<< HEAD
       "why": "`Python containment and polyglot hygiene` scored 0 below the standard floor of 85"
+=======
+      "why": "`Python containment and polyglot hygiene` scored 10 below the standard floor of 85"
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
     },
     {
       "path": "agent/boundaries.toml",
@@ -7907,6 +8054,7 @@
       "why": "path `.editorconfig` has no owner-map route"
     },
     {
+<<<<<<< HEAD
       "path": "crates/ffi/include/redlinedb.h",
       "priority": "high",
       "tlr": "Context/setup",
@@ -7916,6 +8064,8 @@
       "why": "runtime code uses a language outside the chosen optimal stack"
     },
     {
+=======
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "path": ".github",
       "priority": "medium",
       "rule_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
@@ -8194,6 +8344,7 @@
       "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
     },
     {
+<<<<<<< HEAD
       "path": "crates/ffi/include/redlinedb.h",
       "priority": "high",
       "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
@@ -8204,6 +8355,8 @@
       "why": "unsafe or unvalidated input boundary marker appears in product code"
     },
     {
+=======
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "path": "crates/ffi/src/backup.rs",
       "priority": "high",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
@@ -8276,6 +8429,19 @@
     {
       "path": "crates/ffi/src/exec.rs",
       "priority": "high",
+<<<<<<< HEAD
+=======
+      "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+      "tlr": "Security, secrets, agency",
+      "lane": "security",
+      "owner": "c-abi",
+      "task": "replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests",
+      "why": "unsafe or unvalidated input boundary marker appears in product code"
+    },
+    {
+      "path": "crates/ffi/src/exec.rs",
+      "priority": "high",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -8674,7 +8840,11 @@
       "why": "future-hostile/dead-language term `placeholder` appears in product/runtime code"
     },
     {
+<<<<<<< HEAD
       "path": "crates/sql/src/exec/expr/scalar/row.rs",
+=======
+      "path": "crates/sql/src/exec/expr/scalar.rs",
+>>>>>>> 218d3bd (jankurai/repair-j4: relocate C ABI header to contracts/c-abi)
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",

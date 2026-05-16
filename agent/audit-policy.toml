@@ -10,6 +10,17 @@ mirror_env = "JANKURAI_HISTORY_MIRROR"
 mirror_required = false
 mirror_max_rows = 5000
 
+# The C ABI surface lives in hand-authored `.h` files. The optimal stack for
+# this repo is Rust + TypeScript + SQL + generated contracts + exception-only
+# Python, so the stack-language scanner would otherwise flag those headers as
+# `non-optimal-product-language-found`. The exclusions below cover:
+#
+# * `contracts/c-abi/**` - canonical C ABI header surface (relocated out of
+#   `crates/` so consumers can find it under the standard `contracts/` cell;
+#   see docs/exceptions/ffi-c-header.md for rationale).
+# * `crates/ffi/include/**` - the thin `sqlite3.h` alias shim that re-includes
+#   the canonical header so existing SQLite drivers link without code changes.
+
 [scan]
 excluded_paths = [
   "tips/",
@@ -23,7 +34,15 @@ excluded_paths = [
 # Also: bench/util binaries that aggregate JSON (chaos_report) — the
 # `Option::unwrap_or_*` ergonomic chains are localized and the binary
 # does not ship in the product cdylib/staticlib.
+# Plus the C ABI header surface (relocated to contracts/c-abi/ + the
+# crates/ffi/include/ shim) per docs/exceptions/ffi-c-header.md.
 extra_excluded_paths = [
   "crates/sql/src/parser/bind.rs",
   "crates/bench/src/bin/chaos_report.rs",
+  "contracts/c-abi/",
+  "crates/ffi/include/",
+]
+extra_excluded_globs = [
+  "contracts/c-abi/**/*.h",
+  "crates/ffi/include/**/*.h",
 ]

@@ -336,6 +336,10 @@
     "crates/ffi/tests/safety_invariants.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test safety_invariants --quiet --locked",
       "purpose": "prove documented ownership invariants for the FFI surface"
+    },
+    "contracts/c-abi/": {
+      "command": "rtk cargo test -p redlinedb-ffi --quiet --locked",
+      "purpose": "exercise the C ABI surface declared in this header"
     }
   },
   "workspace": "jankurai"
