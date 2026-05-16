@@ -114,3 +114,57 @@ Authoring a new escalation:
 A `proof-receipt.md` template lives at
 `agent/proof-receipt-template.md`; use it to record the lane name,
 seed, raw-log path, and exit code for any non-trivial repair.
+
+## Cost budgets and kill-switches
+
+Every bench / certification workload is enumerated in
+[`agent/cost-budget.toml`](../agent/cost-budget.toml) with three
+hard limits — `max_wall_clock_minutes`, `max_disk_gb`,
+`max_syscalls` — and a single `owner` field. The TOML is the
+machine-readable source of truth; the table earlier in this file is
+the human-readable summary.
+
+The kill-switch contract: set `REDLINEDB_BENCH_KILL=1` before
+launching (or `export` mid-run) and the bench harness exits at the
+next workload boundary, flushes its in-flight metrics, and writes a
+`kill_receipt.json` next to the run's output directory. The env var
+name is fixed under `[global].kill_switch_env` in
+`agent/cost-budget.toml` so downstream tools can read the contract
+without hardcoding the string.
+
+Adding a new long-running workload:
+
+1. Append a `[[workload]]` block to `agent/cost-budget.toml` with
+   the three budgets and an owner.
+2. Update the "Budgets and kill-switches" table above with the
+   summary row.
+3. Make the bench binary honor `REDLINEDB_BENCH_KILL` at the same
+   poll boundary other workloads use (today: each repetition tick).
+
+Audit reference: HLT-026 cost-budget-gap.
+
+## Release readiness — launch-gate evidence
+
+Test evidence rolls into the release-readiness gate documented in
+[`docs/release.md`](release.md). The launch gates that every
+tagged release must satisfy:
+
+- **Security** — `just security` (cargo audit, cargo deny,
+  gitleaks) green; the `security` job in
+  `.github/workflows/jankurai.yml` blocks the PR otherwise.
+- **Backups** — kernel `Engine::backup` integration test green
+  (`cargo test -p redlinedb-kernel backup`); restore round-trip
+  proven by the failpoint matrix lane.
+- **Monitoring** — bench `kill_receipt.json` plus
+  `target/jankurai/repo-score.json` archived per release; the
+  audit upload step in `jankurai.yml` is the canonical artifact.
+- **Rollback** — `gh release delete` + `cargo yank` runbook in
+  `docs/release.md`; `release-bad-behavior` lane in
+  `agent/proof-lanes.toml`.
+- **Abuse controls** — FFI input boundary tests
+  (`cargo test -p redlinedb-ffi shell`) plus the authz matrix lane
+  cover misuse of the C ABI from untrusted callers.
+
+These five gates fulfill the audit's `release readiness` evidence
+requirement (HLT-025). The release-process steps themselves live
+in `docs/release.md`; this section is the testing-side index.

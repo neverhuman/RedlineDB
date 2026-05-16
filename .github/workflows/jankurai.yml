@@ -56,3 +56,51 @@ jobs:
             target/jankurai/ux-qa.json
             target/jankurai/security/evidence.json
             target/jankurai/migration-report.json
+
+  security:
+    # Supply-chain, secret, and advisory gate. Required check; every
+    # step here is blocking. Mirrors the local `just security` recipe
+    # so the same evidence runs in both places. Audit reference:
+    # HLT-016 supply-chain-drift.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: cargo audit
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: cargo deny check
+        uses: EmbarkStudios/cargo-deny-action@d6d27f1b02f0c07f9db6ffc34e7871bba5ab5816
+        with:
+          command: check
+      - name: Install gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+      - name: gitleaks detect
+        run: gitleaks detect --source . --redact --no-banner
+
+  dependency-review:
+    # SBOM-like dependency review on PRs. Compares base vs head
+    # manifests for newly-introduced vulnerable or non-allowlisted
+    # licenses. PR-only; non-PR runs short-circuit cleanly.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

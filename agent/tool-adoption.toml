@@ -27,3 +27,11 @@ mode = "auto"
 [[tools]]
 id = "rust-witness"
 mode = "auto"
+
+[[tools]]
+id = "release-readiness"
+mode = "auto"
+
+[[tools]]
+id = "cost-budget"
+mode = "auto"

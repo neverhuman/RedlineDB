@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:86c6b52e960f0ab814e688734bdfdcfdfb257142fd1a27868f780b2a16d53253",
-  "input_fingerprint": "sha256:e8884c5527049d413d34e61a3aa57e7f6b229545289f2ad5b0bd988153e9e6bc",
+  "report_fingerprint": "sha256:077df713913bf2d1e6496179b71c5272dcfb55acb6222e6e17f1793f57ba7fdb",
+  "input_fingerprint": "sha256:f828b0af599d37eeb4e5cdbd70e6adb513ed44a61086eb5bb5c737a0ee979b62",
   "policy_fingerprint": "sha256:2244035b9549f2711766fd6931ce21839ea75f579d578ae8da8be2e555cf2d84",
   "manifest_fingerprints": {
     "owner_map": "sha256:74f494a6cbc365236d62d3dfc1061a69f5f4c34fa0cc94ba1fb397e3b81db9f6",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778895932",
+  "generated_at": "1778896682",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -58,7 +58,6 @@
     "HLT-001-DEAD-MARKER on crates/bench/src/report.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/report.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/workload.rs",
-    "HLT-017-OPAQUE-OBSERVABILITY on crates/domain",
     "HLT-000-SCORE-DIMENSION:stack on crates/ffi/include/redlinedb.h",
     "HLT-023-INPUT-BOUNDARY-GAP on crates/ffi/include/redlinedb.h",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/bind.rs",
@@ -94,9 +93,6 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/exec.rs",
-    "HLT-001-DEAD-MARKER on crates/ffi/src/lib.rs",
-    "HLT-001-DEAD-MARKER on crates/ffi/src/lib.rs",
-    "HLT-001-DEAD-MARKER on crates/ffi/src/lib.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
@@ -113,26 +109,24 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-001-DEAD-MARKER on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-001-DEAD-MARKER on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
@@ -146,9 +140,7 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
-    "HLT-001-DEAD-MARKER on crates/ffi/src/types.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/util.rs",
-    "HLT-001-DEAD-MARKER on crates/ffi/src/util.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/util.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/util.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/store.rs",
@@ -157,6 +149,7 @@
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/store.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/store.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/store.rs",
+    "HLT-001-DEAD-MARKER on crates/kernel/src/engine/catalog_ops.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/engine/catalog_ops.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/engine/catalog_ops.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/index/cursor.rs",
@@ -189,23 +182,15 @@
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/diskann/mod.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/diskann/mod.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/diskann/sectors.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/kernel/src/vector/diskann/sectors.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/kernel/src/vector/diskann/sectors.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/flat.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/hnsw/builder.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/hnsw/mod.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/hnsw/mod.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/hnsw/searcher.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/vector/simd.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/kernel/src/vector/simd.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/wal/manager.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/wal/manager.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/wal/manager/storage.rs",
-    "HLT-001-DEAD-MARKER on crates/redlinedb/src/lib.rs",
-    "HLT-001-DEAD-MARKER on crates/redlinedb/src/lib.rs",
-    "HLT-001-DEAD-MARKER on crates/redlinedb/src/machine.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/redlinedb/src/registry.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/redlinedb/src/registry.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/mod.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar.rs",
@@ -230,26 +215,24 @@
     "HLT-001-DEAD-MARKER on crates/sql/src/parser/select.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/planner/helpers.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/regexp.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/session.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/sql/src/statement.rs",
-    "HLT-025-RELEASE-READINESS-GAP on docs/release.md"
+    "HLT-001-DEAD-MARKER on crates/sql/src/session.rs"
   ],
   "repo": ".",
-  "run_id": "1778895932",
-  "started_at": "1778895932",
-  "elapsed_ms": 5847,
+  "run_id": "1778896682",
+  "started_at": "1778896682",
+  "elapsed_ms": 5610,
   "scope": {
     "mode": "full",
     "paths": []
   },
   "score": 64,
-  "raw_score": 73,
+  "raw_score": 77,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 209,
-    "soft_findings": 7,
+    "hard_findings": 192,
+    "soft_findings": 4,
     "ratchet": {
       "baseline_score": 64,
       "allowed_drop": 0,
@@ -264,7 +247,7 @@
     }
   },
   "git": {
-    "head": "5a47128",
+    "head": "0305016",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -296,9 +279,6 @@
     "severe-duplication-in-product-code",
     "authz-or-data-isolation-gap",
     "input-boundary-gap",
-    "release-readiness-gap",
-    "no-agent-friendly-exception-pattern",
-    "missing-agent-readable-docs",
     "rust-bad-behavior"
   ],
   "hard_rules": [
@@ -566,7 +546,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior hard findings: 90",
+        "rust bad-behavior hard findings: 84",
         "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -588,7 +568,7 @@
         "TODO/stub marker found",
         "fallback soup marker found",
         "future-hostile/dead-language marker found",
-        "rust bad-behavior hard findings: 90",
+        "rust bad-behavior hard findings: 84",
         "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1"
       ],
@@ -614,44 +594,45 @@
     {
       "name": "Observability and repair evidence",
       "weight": 8,
-      "score": 48,
-      "weighted_points": 3.84,
+      "score": 88,
+      "weighted_points": 7.04,
       "evidence": [
         "observability libraries or patterns found",
         "ops/observability directory present",
-        "repair receipts or raw artifact language found"
+        "repair receipts or raw artifact language found",
+        "agent-friendly exception pattern found",
+        "repair-hint and receipt convention are documented",
+        "repair receipt guidance is documented"
       ],
       "notes": [
-        "no agent-friendly exception pattern found",
         "free-form logging appears in scope"
       ]
     },
     {
       "name": "Context economy and agent instructions",
       "weight": 7,
-      "score": 81,
-      "weighted_points": 5.67,
+      "score": 100,
+      "weighted_points": 7.0,
       "evidence": [
         "root `AGENTS.md` present",
         "root `AGENTS.md` stays short",
         "machine-readable routing artifacts present",
         "thin IDE/agent adapters are present",
         "local instruction files present",
-        "root README routes to the right docs"
+        "root README routes to the right docs",
+        "core agent-readable docs present"
       ],
-      "notes": [
-        "missing agent-readable docs: docs/architecture.md or docs/boundaries.md, docs/testing.md"
-      ]
+      "notes": []
     },
     {
       "name": "Jankurai tool adoption and CI replacement",
       "weight": 7,
-      "score": 31,
-      "weighted_points": 2.17,
+      "score": 33,
+      "weighted_points": 2.31,
       "evidence": [
         "control-plane files present",
         "applicable=15",
-        "configured=5",
+        "configured=7",
         "ci_evidence=3",
         "artifact_verified=3"
       ],
@@ -723,7 +704,7 @@
   "tool_adoption": {
     "control_plane_present": true,
     "applicable_count": 15,
-    "configured_count": 5,
+    "configured_count": 7,
     "ci_evidence_count": 3,
     "artifact_verified_count": 3,
     "replaced_count": 3,
@@ -1124,15 +1105,15 @@
         "category": "release",
         "mode": "auto",
         "applicable": true,
-        "status": "missing",
+        "status": "configured",
         "replaced_tools": [
           "manual launch checklist"
         ],
         "evidence": [
-          "mode=auto"
+          "mode=auto",
+          "tool-adoption config entry present"
         ],
         "missing": [
-          "agent/tool-adoption.toml entry",
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
@@ -1147,15 +1128,15 @@
         "category": "release",
         "mode": "auto",
         "applicable": true,
-        "status": "missing",
+        "status": "configured",
         "replaced_tools": [
           "manual spend review"
         ],
         "evidence": [
-          "mode=auto"
+          "mode=auto",
+          "tool-adoption config entry present"
         ],
         "missing": [
-          "agent/tool-adoption.toml entry",
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
@@ -1198,13 +1179,15 @@
         "rust-witness"
       ],
       "config_present": true,
-      "configured_count": 5,
+      "configured_count": 7,
       "configured_tools": [
         "audit-ci",
         "proof-routing",
         "security",
         "contract-drift",
-        "rust-witness"
+        "rust-witness",
+        "release-readiness",
+        "cost-budget"
       ],
       "control_plane_present": true
     },
@@ -1574,30 +1557,6 @@
       "lane": "security",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "ops"
-    },
-    {
-      "severity": "medium",
-      "category": "context",
-      "path": "AGENTS.md",
-      "problem": "`Context economy and agent instructions` scored 81 below the standard floor of 85",
-      "agent_fix": "keep root guidance short and route durable detail through agent-readable manifests and docs",
-      "evidence": [
-        "root `AGENTS.md` present",
-        "root `AGENTS.md` stays short",
-        "machine-readable routing artifacts present",
-        "thin IDE/agent adapters are present"
-      ],
-      "check_id": "HLT-015-CONTEXT-SETUP-GAP:context",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:ae7ec2d93126bb6d5f051ba62ace7e1034fc828ae729862f50a5eb22994c4ede",
-      "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "docs/agent-native-standard.md",
-      "owner": "agent"
     },
     {
       "severity": "medium",
@@ -2396,30 +2355,6 @@
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "bench-harness",
       "line": 608
-    },
-    {
-      "severity": "high",
-      "category": "exceptions",
-      "path": "crates/domain",
-      "problem": "no agent-friendly exception/error pattern was detected",
-      "agent_fix": "define a typed exception surface with purpose, reason, common fixes, docs_url, and repair_hint so the next rerun is local",
-      "evidence": [
-        "route repair work to the next agent",
-        "opaque failures slow local debugging and reruns",
-        "add a typed repair hint; name the common fixes; point at the local docs URL",
-        "docs/testing.md"
-      ],
-      "check_id": "HLT-017-OPAQUE-OBSERVABILITY:exceptions",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:538667a01e35d8e91eae100627364816dd225911862fa2fa1578642af63d4af8",
-      "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
-      "tlr": "Repair",
-      "lane": "observability",
-      "docs_url": "agent/JANKURAI_STANDARD.md#repair-receipts",
-      "owner": "tools"
     },
     {
       "severity": "high",
@@ -3325,75 +3260,6 @@
     },
     {
       "severity": "high",
-      "category": "vibe",
-      "path": "crates/ffi/src/lib.rs",
-      "problem": "future-hostile/dead-language term `compat` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/ffi/src/lib.rs:9",
-        "future-hostile/dead-language term `compat` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:ff9c1a85b2ba1e2713c57c09d0c7e3f02fc1e955a3d9d1177685cda1fca30d00",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "c-abi",
-      "line": 9
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/ffi/src/lib.rs",
-      "problem": "future-hostile/dead-language term `shim` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/ffi/src/lib.rs:10",
-        "future-hostile/dead-language term `shim` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:d0bd49577f0f8aaba907bab9ad49446433c8cbfe972ac7aee04b011ecca7db9b",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "c-abi",
-      "line": 10
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/ffi/src/lib.rs",
-      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/ffi/src/lib.rs:16",
-        "future-hostile/dead-language term `legacy` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:fdc57cccef9b91811e958fe417a651926eb47aebdc758d8a461d5f1cd6232032",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "c-abi",
-      "line": 16
-    },
-    {
-      "severity": "high",
       "category": "security",
       "path": "crates/ffi/src/lifecycle.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
@@ -3811,7 +3677,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -3824,7 +3690,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c769570cfa208ecc8045879de56ad144a3dbdd39eb2f2ce4938e2c6cada396a1",
+      "fingerprint": "sha256:8997b7ca12d2643437d631d4a713393482686fa7fda16e9e32eea8a5e4f836b0",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -3837,7 +3703,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -3850,7 +3716,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b",
+      "fingerprint": "sha256:0f8acd0e9bd597838a4d9aae6968c1a0f974a5b6801a45c70d47c8fca045a86c",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -3863,7 +3729,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -3876,7 +3742,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:30e37337d6316857bce2c00f0da9a890b1fa502f6cddb3a938843bcb5fbec976",
+      "fingerprint": "sha256:f97e6080b1bd2afb2c490a36ddc649660b56ce7e479c2351be7719e8267b86ba",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -3889,7 +3755,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -3902,7 +3768,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:f75ead57ab1f7617af074fcda8d5636a724406f01db245441c8163271e184e53",
+      "fingerprint": "sha256:f3bafb1503f70879ae479c4b5d892f9e2e550e54af7fe6ebddd86cbc46e24f59",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -3915,7 +3781,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -3928,7 +3794,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:3f44e525f8fb3156d8c08be5e041adc599a8a16553ba6c9de92687901cbf79b1",
+      "fingerprint": "sha256:233b9c557574f227ffa5452de1dd3d8f380c431a12881efb9f5e369e37148eaf",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -3940,53 +3806,8 @@
     },
     {
       "severity": "high",
-      "category": "vibe",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
-      "problem": "future-hostile/dead-language term `stub` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/ffi/src/sqlite3_compat.rs:154",
-        "future-hostile/dead-language term `stub` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:2f42377cf6c45b13e22b7d529883ec0cd03f3f39934a83011fdeedb9499887d7",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "c-abi",
-      "line": 154
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
-      "problem": "product code contains TODO/stub/unimplemented/unreachable placeholder markers",
-      "agent_fix": "replace placeholders with implemented behavior, typed unsupported-state errors, or a tracked exception record with docs",
-      "evidence": [
-        "crates/ffi/src/sqlite3_compat.rs:154 // overwriting it with the generic \"ok\"/\"error\" stub would lose the"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:ea935d50c0f2f0f6717fd2281c8b42b72dabf158f321d59f4ff479c2a8db71d2",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "c-abi",
-      "line": 154
-    },
-    {
-      "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -3999,7 +3820,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b",
+      "fingerprint": "sha256:0f8acd0e9bd597838a4d9aae6968c1a0f974a5b6801a45c70d47c8fca045a86c",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4012,7 +3833,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4025,7 +3846,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32",
+      "fingerprint": "sha256:e1489b59906a33dea2ffcd763d5064ee310547434bf0f91ced0522733c57e1a3",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4038,7 +3859,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4051,7 +3872,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b",
+      "fingerprint": "sha256:0f8acd0e9bd597838a4d9aae6968c1a0f974a5b6801a45c70d47c8fca045a86c",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4064,7 +3885,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4077,7 +3898,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32",
+      "fingerprint": "sha256:e1489b59906a33dea2ffcd763d5064ee310547434bf0f91ced0522733c57e1a3",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4090,7 +3911,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4103,7 +3924,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32",
+      "fingerprint": "sha256:e1489b59906a33dea2ffcd763d5064ee310547434bf0f91ced0522733c57e1a3",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4116,7 +3937,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4129,7 +3950,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32",
+      "fingerprint": "sha256:e1489b59906a33dea2ffcd763d5064ee310547434bf0f91ced0522733c57e1a3",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4142,7 +3963,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4155,7 +3976,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32",
+      "fingerprint": "sha256:e1489b59906a33dea2ffcd763d5064ee310547434bf0f91ced0522733c57e1a3",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4168,7 +3989,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4181,7 +4002,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32",
+      "fingerprint": "sha256:e1489b59906a33dea2ffcd763d5064ee310547434bf0f91ced0522733c57e1a3",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4194,7 +4015,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4207,7 +4028,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32",
+      "fingerprint": "sha256:e1489b59906a33dea2ffcd763d5064ee310547434bf0f91ced0522733c57e1a3",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4220,7 +4041,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4233,7 +4054,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c21e4382836619c6210d5891fea78711e99a50586bffb2bb7e49e31f6f6a7c32",
+      "fingerprint": "sha256:e1489b59906a33dea2ffcd763d5064ee310547434bf0f91ced0522733c57e1a3",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4246,7 +4067,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4259,7 +4080,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b",
+      "fingerprint": "sha256:0f8acd0e9bd597838a4d9aae6968c1a0f974a5b6801a45c70d47c8fca045a86c",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4272,7 +4093,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4285,7 +4106,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:4a6294dd0378f9234ea85ceba1af8e0fe00cb2e1d0b45573e12e13f2c9afec7c",
+      "fingerprint": "sha256:5d915aab7bb5108c0f81fe4ae64717d60a965f98fb9903584e0fc788916f7adc",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4298,7 +4119,7 @@
     {
       "severity": "high",
       "category": "security",
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
       "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
       "evidence": [
@@ -4311,7 +4132,7 @@
       "confidence": 0.95,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:9be46d182d3069de2b5a8c506c8e72e08702c4906c38589104b6d7c413bc7a6b",
+      "fingerprint": "sha256:0f8acd0e9bd597838a4d9aae6968c1a0f974a5b6801a45c70d47c8fca045a86c",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
       "lane": "fast",
@@ -4661,29 +4482,6 @@
     },
     {
       "severity": "high",
-      "category": "vibe",
-      "path": "crates/ffi/src/types.rs",
-      "problem": "future-hostile/dead-language term `compat` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/ffi/src/types.rs:89",
-        "future-hostile/dead-language term `compat` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:c709ec52dc4ffb4a38bae1b1447fd37b08dc4bfefc0c82d6a7fe206953b95d76",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "c-abi",
-      "line": 89
-    },
-    {
-      "severity": "high",
       "category": "security",
       "path": "crates/ffi/src/util.rs",
       "problem": "unsafe block lacks a nearby local safety argument",
@@ -4707,29 +4505,6 @@
       "line": 119,
       "matched_term": "rust.unsafe.undocumented-block",
       "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/ffi/src/util.rs",
-      "problem": "future-hostile/dead-language term `stub` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/ffi/src/util.rs:258",
-        "future-hostile/dead-language term `stub` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:65fe8e26e8b9387410bc6d3e5396660ccfb98cc29051e9ebca31467e490517ba",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "c-abi",
-      "line": 258
     },
     {
       "severity": "high",
@@ -4937,6 +4712,28 @@
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
       "fingerprint": "sha256:569c91caaa93ac8667b556ee4084e2dc23c7ae95649ae0dce4449ce688217429",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "storage-and-catalog",
+      "line": 153
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/kernel/src/engine/catalog_ops.rs",
+      "problem": "product code contains TODO/stub/unimplemented/unreachable placeholder markers",
+      "agent_fix": "replace placeholders with implemented behavior, typed unsupported-state errors, or a tracked exception record with docs",
+      "evidence": [
+        "crates/kernel/src/engine/catalog_ops.rs:153 // reclaims them via a future enhancement. TODO: wire btree page"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:dbab82d2d0c3d435e3f8f3825faed8d3e4ef041d3e34d9ba29d4ebf49577ba41",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -5572,7 +5369,7 @@
       "problem": "future-hostile/dead-language term `todo` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/vector/diskann/mod.rs:233",
+        "crates/kernel/src/vector/diskann/mod.rs:235",
         "future-hostile/dead-language term `todo` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -5580,13 +5377,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:be6cede2f120feac1cef57d25873978941f9bb01b8d4306367b6d374bb970700",
+      "fingerprint": "sha256:de5e26ef69c2522b58008c25142a70964327afa72c09a69ae59df2226a1ac2e7",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "phase10-diskann-index",
-      "line": 233
+      "line": 235
     },
     {
       "severity": "high",
@@ -5595,7 +5392,7 @@
       "problem": "future-hostile/dead-language term `fallback` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/vector/diskann/mod.rs:358",
+        "crates/kernel/src/vector/diskann/mod.rs:360",
         "future-hostile/dead-language term `fallback` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -5603,13 +5400,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:3b7176e09b125c15ecb452ae65078b9ece7a4ecbbe0c4f663cf7754b0ac6abf1",
+      "fingerprint": "sha256:25bb97585664cd935107ae6421c9ade5673a36e91848d1f7ee623acd3766e372",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "phase10-diskann-index",
-      "line": 358
+      "line": 360
     },
     {
       "severity": "high",
@@ -5618,7 +5415,7 @@
       "problem": "future-hostile/dead-language term `todo` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/vector/diskann/mod.rs:361",
+        "crates/kernel/src/vector/diskann/mod.rs:363",
         "future-hostile/dead-language term `todo` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -5626,13 +5423,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:baac9d4443bd09662d11d85bf824fcd059423d6ff9b429e32d0823690be4d3a4",
+      "fingerprint": "sha256:ae65129fbbdd365a3325469d9a8536c0445fbbb0c21acf73ba10d99b585eda6e",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "phase10-diskann-index",
-      "line": 361
+      "line": 363
     },
     {
       "severity": "high",
@@ -5641,7 +5438,7 @@
       "problem": "future-hostile/dead-language term `unused` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/vector/diskann/sectors.rs:39",
+        "crates/kernel/src/vector/diskann/sectors.rs:40",
         "future-hostile/dead-language term `unused` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -5649,65 +5446,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:31e68ebd208f53d5f235b67aa01003b27ada33bb839388d88774dd2bfe59c1d6",
+      "fingerprint": "sha256:f947a5f7db68587282aabbfdd9c88a9becd769279c9b9b942dd81148f4a57021",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "phase10-diskann-index",
-      "line": 39
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/kernel/src/vector/diskann/sectors.rs",
-      "problem": "static mut exposes unsynchronized global mutation",
-      "agent_fix": "replace the mutable static with explicit synchronization or scoped ownership",
-      "evidence": [
-        "detector=static mut",
-        "proof-window=NearbySafetyComment",
-        "snippet=// copy via a static mutable trick is unsafe. Use a helper that builds a"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:4ad715b1adb98962b839ecdd8f5951fa4c9504494fe46fdfcc242cad5a81760d",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "phase10-diskann-index",
-      "line": 244,
-      "matched_term": "rust.unsafe.static-mut",
-      "reason": "global mutation proof is missing"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/kernel/src/vector/diskann/sectors.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let (head, mid, tail) = unsafe { vector_bytes.align_to::<f32>() };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:92e065eda38b2e9ea7e3fd662514480ec66a9cbd109de74c0c04c5f7ca752004",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "phase10-diskann-index",
-      "line": 248,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
+      "line": 40
     },
     {
       "severity": "high",
@@ -5849,32 +5594,6 @@
     },
     {
       "severity": "high",
-      "category": "security",
-      "path": "crates/kernel/src/vector/simd.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=//! Rust 2024 edition still demands per-call `unsafe { … }` blocks for any"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:481de3ae5700b40721479f386d18eec7ee5084ce29f31829ac8064fc14bcb9f2",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "phase10-vector-flat-and-simd",
-      "line": 25,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
       "category": "vibe",
       "path": "crates/kernel/src/wal/manager.rs",
       "problem": "future-hostile/dead-language term `stub` appears in product/runtime code",
@@ -5941,127 +5660,6 @@
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "wal-archive-retention",
       "line": 32
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/redlinedb/src/lib.rs",
-      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/redlinedb/src/lib.rs:136",
-        "future-hostile/dead-language term `temp` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:da331db828872a250e1bf54662cbfca67f5736129fcc3f024c7ed0f7dda22114",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "rust-public-api",
-      "line": 136
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/redlinedb/src/lib.rs",
-      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/redlinedb/src/lib.rs:153",
-        "future-hostile/dead-language term `temp` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:c66e880ca27dc89cd211fcbd1367f2e8eda5f993587f838adf4605746e4b00d8",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "rust-public-api",
-      "line": 153
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/redlinedb/src/machine.rs",
-      "problem": "future-hostile/dead-language term `stale` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/redlinedb/src/machine.rs:615",
-        "future-hostile/dead-language term `stale` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:5380291b488b97f9623460f97bcea282ce36b7c7d54ad65509a9ac196bbf5251",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "rust-public-api",
-      "line": 615
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/redlinedb/src/registry.rs",
-      "problem": "static mut exposes unsynchronized global mutation",
-      "agent_fix": "replace the mutable static with explicit synchronization or scoped ownership",
-      "evidence": [
-        "detector=static mut",
-        "proof-window=NearbySafetyComment",
-        "snippet=fn registry() -> &'static Mutex<Registry> {"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:6a7c8f4b82a3842611d0e98cdbae334790b29a10627a42ede26a5e2727b8f284",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "rust-public-api",
-      "line": 86,
-      "matched_term": "rust.unsafe.static-mut",
-      "reason": "global mutation proof is missing"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/redlinedb/src/registry.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:721c6e734c00a5655cb8d71a49a0015f5ca5bfc951fc11917ff37b68bfbb1ed3",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "rust-public-api",
-      "line": 258,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
     },
     {
       "severity": "high",
@@ -6639,99 +6237,6 @@
       "line": 30
     },
     {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/sql/src/statement.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let tx = unsafe { ptr.as_mut() };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:8848cc2a14147743290dea4b1fa0014b8c651522730897474c2bd474631f6663",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "sql-parser-planner-executor",
-      "line": 298,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "medium",
-      "category": "docs",
-      "path": "docs/",
-      "problem": "agent-readable documentation is incomplete",
-      "agent_fix": "add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`",
-      "evidence": [
-        "docs/architecture.md or docs/boundaries.md",
-        "docs/testing.md"
-      ],
-      "check_id": "HLT-000-SCORE-DIMENSION:docs",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "documentation",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:517269e227b26a69e8747d0d8cdb8a8d03582550b0de9e4c7c2b9287d8cee256",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "standard"
-    },
-    {
-      "severity": "high",
-      "category": "release",
-      "path": "docs/release.md",
-      "problem": "release management structure is incomplete",
-      "agent_fix": "add a release control surface with version source, changelog, release process docs, CI or script evidence, integrity/provenance evidence, and rollback guidance",
-      "evidence": [
-        "release structure missing: release process doc"
-      ],
-      "check_id": "HLT-025-RELEASE-READINESS-GAP:release",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just check",
-      "fingerprint": "sha256:640a623fff7ab3e802c3902adc8139100c4773a9c1de7d85998852f57db765fa",
-      "rule_id": "HLT-025-RELEASE-READINESS-GAP",
-      "tlr": "Verification",
-      "lane": "release",
-      "docs_url": "docs/testing.md",
-      "owner": "standard",
-      "matched_term": "release structure",
-      "reason": "launch gates need artifact-backed release evidence"
-    },
-    {
-      "severity": "medium",
-      "category": "observability",
-      "path": "docs/testing.md",
-      "problem": "`Observability and repair evidence` scored 48 below the standard floor of 85",
-      "agent_fix": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
-      "evidence": [
-        "observability libraries or patterns found",
-        "ops/observability directory present",
-        "repair receipts or raw artifact language found",
-        "no agent-friendly exception pattern found"
-      ],
-      "check_id": "HLT-017-OPAQUE-OBSERVABILITY:observability",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:f3e82a38d48dbca4e3cec3b0d72c64db7745489a72a65e284a47fe8f7652396e",
-      "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
-      "tlr": "Repair",
-      "lane": "observability",
-      "docs_url": "agent/JANKURAI_STANDARD.md#repair-receipts",
-      "owner": "standard"
-    },
-    {
       "severity": "medium",
       "category": "release",
       "path": "docs/testing.md",
@@ -6777,16 +6282,6 @@
       "why": "path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/index.json` has no test-map proof route"
     },
     {
-      "path": "docs/release.md",
-      "priority": "high",
-      "rule_id": "HLT-025-RELEASE-READINESS-GAP",
-      "tlr": "Verification",
-      "lane": "release",
-      "owner": "standard",
-      "task": "add a release control surface with version source, changelog, release process docs, CI or script evidence, integrity/provenance evidence, and rollback guidance",
-      "why": "release management structure is incomplete"
-    },
-    {
       "path": "Justfile",
       "priority": "medium",
       "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
@@ -6807,26 +6302,6 @@
       "why": "cost or spend-risk surface lacks budget proof"
     },
     {
-      "path": "crates/domain",
-      "priority": "high",
-      "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
-      "tlr": "Repair",
-      "lane": "observability",
-      "owner": "tools",
-      "task": "define a typed exception surface with purpose, reason, common fixes, docs_url, and repair_hint so the next rerun is local",
-      "why": "no agent-friendly exception/error pattern was detected"
-    },
-    {
-      "path": "docs/testing.md",
-      "priority": "medium",
-      "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
-      "tlr": "Repair",
-      "lane": "observability",
-      "owner": "standard",
-      "task": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
-      "why": "`Observability and repair evidence` scored 48 below the standard floor of 85"
-    },
-    {
       "path": "crates/ffi/include/redlinedb.h",
       "priority": "high",
       "tlr": "Context/setup",
@@ -6834,25 +6309,6 @@
       "owner": "c-abi",
       "task": "move product runtime behavior to Rust core, TypeScript web, SQL migrations, or generated contracts; Python needs a dated advanced-ML/data exception",
       "why": "runtime code uses a language outside the chosen optimal stack"
-    },
-    {
-      "path": "AGENTS.md",
-      "priority": "medium",
-      "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "keep root guidance short and route durable detail through agent-readable manifests and docs",
-      "why": "`Context economy and agent instructions` scored 81 below the standard floor of 85"
-    },
-    {
-      "path": "docs/",
-      "priority": "medium",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "standard",
-      "task": "add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`",
-      "why": "agent-readable documentation is incomplete"
     },
     {
       "path": "crates/bench/src/bin/chaos_report.rs",
@@ -7074,16 +6530,6 @@
       "why": "unsafe block lacks a nearby local safety argument"
     },
     {
-      "path": "crates/ffi/src/lib.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `compat` appears in product/runtime code"
-    },
-    {
       "path": "crates/ffi/src/lifecycle.rs",
       "priority": "high",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
@@ -7124,7 +6570,7 @@
       "why": "raw ownership conversion needs exact provenance and allocator proof"
     },
     {
-      "path": "crates/ffi/src/sqlite3_compat.rs",
+      "path": "crates/ffi/src/sqlite3_api.rs",
       "priority": "high",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
@@ -7132,26 +6578,6 @@
       "owner": "c-abi",
       "task": "add a precise `SAFETY:` comment or remove the unsafe block",
       "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
-      "path": "crates/ffi/src/sqlite3_compat.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `stub` appears in product/runtime code"
-    },
-    {
-      "path": "crates/ffi/src/sqlite3_compat.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "replace placeholders with implemented behavior, typed unsupported-state errors, or a tracked exception record with docs",
-      "why": "product code contains TODO/stub/unimplemented/unreachable placeholder markers"
     },
     {
       "path": "crates/ffi/src/stmt.rs",
@@ -7174,16 +6600,6 @@
       "why": "raw ownership conversion needs exact provenance and allocator proof"
     },
     {
-      "path": "crates/ffi/src/types.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `compat` appears in product/runtime code"
-    },
-    {
       "path": "crates/ffi/src/util.rs",
       "priority": "high",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
@@ -7192,16 +6608,6 @@
       "owner": "c-abi",
       "task": "add a precise `SAFETY:` comment or remove the unsafe block",
       "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
-      "path": "crates/ffi/src/util.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `stub` appears in product/runtime code"
     },
     {
       "path": "crates/ffi/src/util.rs",
@@ -7232,6 +6638,16 @@
       "owner": "storage-and-catalog",
       "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "why": "future-hostile/dead-language term `todo` appears in product/runtime code"
+    },
+    {
+      "path": "crates/kernel/src/engine/catalog_ops.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "storage-and-catalog",
+      "task": "replace placeholders with implemented behavior, typed unsupported-state errors, or a tracked exception record with docs",
+      "why": "product code contains TODO/stub/unimplemented/unreachable placeholder markers"
     },
     {
       "path": "crates/kernel/src/index/cursor.rs",
@@ -7324,26 +6740,6 @@
       "why": "future-hostile/dead-language term `unused` appears in product/runtime code"
     },
     {
-      "path": "crates/kernel/src/vector/diskann/sectors.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "phase10-diskann-index",
-      "task": "replace the mutable static with explicit synchronization or scoped ownership",
-      "why": "static mut exposes unsynchronized global mutation"
-    },
-    {
-      "path": "crates/kernel/src/vector/diskann/sectors.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "phase10-diskann-index",
-      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
       "path": "crates/kernel/src/vector/flat.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -7394,16 +6790,6 @@
       "why": "future-hostile/dead-language term `fallback` appears in product/runtime code"
     },
     {
-      "path": "crates/kernel/src/vector/simd.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "phase10-vector-flat-and-simd",
-      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
       "path": "crates/kernel/src/wal/manager.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -7422,46 +6808,6 @@
       "owner": "wal-archive-retention",
       "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "why": "future-hostile/dead-language term `stale` appears in product/runtime code"
-    },
-    {
-      "path": "crates/redlinedb/src/lib.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "rust-public-api",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
-    },
-    {
-      "path": "crates/redlinedb/src/machine.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "rust-public-api",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `stale` appears in product/runtime code"
-    },
-    {
-      "path": "crates/redlinedb/src/registry.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "rust-public-api",
-      "task": "replace the mutable static with explicit synchronization or scoped ownership",
-      "why": "static mut exposes unsynchronized global mutation"
-    },
-    {
-      "path": "crates/redlinedb/src/registry.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "rust-public-api",
-      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "why": "unsafe block lacks a nearby local safety argument"
     },
     {
       "path": "crates/sql/src/exec/expr/mod.rs",
@@ -7602,16 +6948,6 @@
       "owner": "sql-parser-planner-executor",
       "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "why": "future-hostile/dead-language term `unused` appears in product/runtime code"
-    },
-    {
-      "path": "crates/sql/src/statement.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "sql-parser-planner-executor",
-      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "why": "unsafe block lacks a nearby local safety argument"
     },
     {
       "path": ".",

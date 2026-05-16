@@ -1,0 +1,45 @@
+schema_version = "1.0.0"
+
+# Bench / certification budgets and kill-switches.
+# Audit reference: HLT-026 cost-budget-gap.
+# Kill-switch env var: REDLINEDB_BENCH_KILL=1 halts any in-flight bench loop
+# at the next iteration boundary; respected by the bench harness in
+# crates/bench/src/lib.rs.
+
+[global]
+kill_switch_env = "REDLINEDB_BENCH_KILL"
+
+[[workload]]
+name = "phase10-cert"
+max_wall_clock_minutes = 60
+max_disk_gb = 50
+max_syscalls = 50_000_000
+owner = "bench-harness"
+
+[[workload]]
+name = "phase10-cert-smoke"
+max_wall_clock_minutes = 5
+max_disk_gb = 2
+max_syscalls = 5_000_000
+owner = "bench-harness"
+
+[[workload]]
+name = "phase10-cert-stress"
+max_wall_clock_minutes = 240
+max_disk_gb = 200
+max_syscalls = 500_000_000
+owner = "bench-harness"
+
+[[workload]]
+name = "phase11-oltp-gap"
+max_wall_clock_minutes = 30
+max_disk_gb = 20
+max_syscalls = 30_000_000
+owner = "bench-harness"
+
+[[workload]]
+name = "dick-head-choas"
+max_wall_clock_minutes = 120
+max_disk_gb = 50
+max_syscalls = 100_000_000
+owner = "bench-harness"
