@@ -8,6 +8,10 @@ on:
 # published GitHub release as downloadable tarballs. Triggered automatically
 # when a release is published via the GitHub UI or `gh release create`.
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: build (${{ matrix.artifact }})
@@ -40,36 +44,13 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
         with:
           key: ${{ matrix.target }}
-      - name: Build CLI
-        run: cargo build --release --locked --target ${{ matrix.target }} -p redlinedb-cli
-      - name: Build FFI library
-        run: cargo build --release --locked --target ${{ matrix.target }} -p redlinedb-ffi
-      - name: Package
+      - name: Build and Package
         env:
           TAG: ${{ github.event.release.tag_name }}
           ARTIFACT: ${{ matrix.artifact }}
           LIB_NAME: ${{ matrix.lib_name }}
           TARGET: ${{ matrix.target }}
-        run: |
-          PKG="redlinedb-${TAG}-${ARTIFACT}"
-          mkdir -p "${PKG}/bin" "${PKG}/lib" "${PKG}/include"
-
-          cp "target/${TARGET}/release/redlinedb" "${PKG}/bin/redlinedb"
-          cp "target/${TARGET}/release/${LIB_NAME}" "${PKG}/lib/" 2>/dev/null || true
-          cp "target/${TARGET}/release/libredlinedb.a" "${PKG}/lib/"
-          cp "crates/ffi/include/sqlite3.h" "${PKG}/include/"
-          cp "contracts/c-abi/redlinedb.h" "${PKG}/include/"
-
-          tar -czf "${PKG}.tar.gz" "${PKG}/"
-
-          # sha256 — Linux has sha256sum, macOS has shasum
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${PKG}.tar.gz" > "${PKG}.tar.gz.sha256"
-          else
-            shasum -a 256 "${PKG}.tar.gz" > "${PKG}.tar.gz.sha256"
-          fi
-
-          echo "PKG=${PKG}" >> "$GITHUB_ENV"
+        run: bash ops/ci/release-build.sh
 
       - name: Upload to release
         env:
