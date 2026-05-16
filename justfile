@@ -1,5 +1,4 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
-export RUSTC_WRAPPER := "sccache"
 
 default: fast
 
