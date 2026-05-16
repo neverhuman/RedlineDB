@@ -130,7 +130,9 @@ next workload boundary, flushes its in-flight metrics, and writes a
 `kill_receipt.json` next to the run's output directory. The env var
 name is fixed under `[global].kill_switch_env` in
 `agent/cost-budget.toml` so downstream tools can read the contract
-without hardcoding the string.
+without hardcoding the string. Each kill switch and spend cap ceiling
+is defined per-workload in `agent/cost-budget.toml` so the bench
+harness and CI both enforce the same limits.
 
 Adding a new long-running workload:
 
