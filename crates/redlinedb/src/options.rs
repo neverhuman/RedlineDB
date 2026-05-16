@@ -16,64 +16,15 @@ impl Default for MemoryOptions {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct OptimizerOptions {
-    pub enabled: bool,
-    pub max_exact_join_tables: usize,
-    pub max_join_alternatives: usize,
-    pub enable_multi_index_or: bool,
-    pub enable_multi_index_and: bool,
-    pub enable_covering_index: bool,
-}
-
-impl Default for OptimizerOptions {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            max_exact_join_tables: 8,
-            max_join_alternatives: 4,
-            enable_multi_index_or: true,
-            enable_multi_index_and: true,
-            enable_covering_index: true,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct QueryMemoryOptions {
-    pub work_mem_bytes: usize,
-    pub max_spill_bytes: usize,
-    pub batch_rows: usize,
-}
-
-impl Default for QueryMemoryOptions {
-    fn default() -> Self {
-        Self {
-            work_mem_bytes: 8 * 1024 * 1024,
-            max_spill_bytes: 1024 * 1024 * 1024,
-            batch_rows: 1024,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct AnalyzeOptions {
-    pub exact_analyze_row_threshold: usize,
-    pub sample_rows: usize,
-    pub mcv_capacity: usize,
-    pub histogram_buckets: usize,
-}
-
-impl Default for AnalyzeOptions {
-    fn default() -> Self {
-        Self {
-            exact_analyze_row_threshold: 100_000,
-            sample_rows: 32_768,
-            mcv_capacity: 100,
-            histogram_buckets: 100,
-        }
-    }
-}
+// Batch D3: the optimizer / query-memory / analyze option structs are owned by
+// the SQL crate (`redlinedb_sql`). The public `redlinedb` API keeps its
+// historical type names by re-aliasing the canonical definitions so existing
+// call sites (`OptimizerOptions::default()`, struct-literal construction, etc.)
+// continue to compile unchanged while there is now exactly one source of truth
+// for the layout, defaults, and hashing behaviour.
+pub use redlinedb_sql::OptimizerConfig as OptimizerOptions;
+pub use redlinedb_sql::QueryMemoryConfig as QueryMemoryOptions;
+pub use redlinedb_sql::StatsConfig as AnalyzeOptions;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Durability {
