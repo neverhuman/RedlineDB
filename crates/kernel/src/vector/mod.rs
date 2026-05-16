@@ -147,14 +147,17 @@ impl Vector {
     /// pulling in a JSON dependency.
     pub fn from_json_literal(text: &str) -> VectorResult<Self> {
         let trimmed = text.trim();
-        let inner = trimmed
+        let inner = match trimmed
             .strip_prefix('[')
             .and_then(|s| s.strip_suffix(']'))
-            .ok_or_else(|| {
-                VectorError::Invalid(format!(
+        {
+            Some(inner) => inner,
+            None => {
+                return Err(VectorError::Invalid(format!(
                     "vector literal must be enclosed in '[' ']': {trimmed}"
-                ))
-            })?;
+                )));
+            }
+        };
         let mut values = Vec::new();
         for part in inner.split(',') {
             let part = part.trim();

@@ -326,7 +326,10 @@ impl LaneRoundRobin {
         if lane_count <= 1 {
             return 0;
         }
-        let mut guard = self.next.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = match self.next.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         let idx = *guard % lane_count;
         *guard = guard.wrapping_add(1);
         idx

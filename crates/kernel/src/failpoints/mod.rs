@@ -194,9 +194,10 @@ mod tests {
             "yield",
             "delay(5)",
         ] {
-            validate_action(action).unwrap_or_else(|err| {
-                panic!("expected {action:?} to validate: {err}");
-            });
+            match validate_action(action) {
+                Ok(value) => value,
+                Err(err) => panic!("expected {action:?} to validate: {err}"),
+            }
         }
     }
 

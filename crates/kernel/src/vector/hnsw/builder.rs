@@ -189,10 +189,10 @@ fn extend_candidates(
     let cap_ext = cap * 4;
     let originals: Vec<u32> = candidates.iter().map(|(_, id)| *id).collect();
     'outer: for cand_id in originals {
-        let nbrs: Vec<u32> = graph
-            .neighbors_at(cand_id, 0)
-            .map(|s| s.to_vec())
-            .unwrap_or_default();
+        let nbrs: Vec<u32> = match graph.neighbors_at(cand_id, 0) {
+            Ok(slice) => slice.to_vec(),
+            Err(_) => Vec::new(),
+        };
         for nb in nbrs {
             if !seen.insert(nb) {
                 continue;

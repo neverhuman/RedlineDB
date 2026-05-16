@@ -30,9 +30,10 @@ impl Engine {
         let checkpoint = control.load_latest()?;
         let catalog_store = CatalogStore::new(path.as_ref());
         let loaded_catalog = catalog_store.load().ok().flatten();
-        let initial_catalog = loaded_catalog
-            .clone()
-            .unwrap_or_else(|| bootstrap_schema(RelId(10_000)));
+        let initial_catalog = match loaded_catalog.clone() {
+            Some(catalog) => catalog,
+            None => bootstrap_schema(RelId(10_000)),
+        };
         if loaded_catalog.is_none() {
             catalog_store.save_atomic(&initial_catalog)?;
         }
@@ -135,11 +136,10 @@ impl Engine {
         )
         .map_err(|_| Error::CorruptPage("create heap failed"))?;
         let catalog_store = CatalogStore::new(path.as_ref());
-        let initial_catalog = catalog_store
-            .load()
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| bootstrap_schema(RelId(10_000)));
+        let initial_catalog = match catalog_store.load().ok().flatten() {
+            Some(catalog) => catalog,
+            None => bootstrap_schema(RelId(10_000)),
+        };
         let replay_from_lsn = if let Some(checkpoint) = checkpoint {
             let tx_status = tx_status_store.load(checkpoint.generation)?;
             if tx_status.generation != checkpoint.generation {

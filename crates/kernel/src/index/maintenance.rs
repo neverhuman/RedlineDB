@@ -68,16 +68,18 @@ impl BtreeIndex {
                 (Some(last_left), Some(first_right))
                     if last_left.logical_key() == first_right.logical_key() =>
                 {
-                    first_right
-                        .physical()
-                        .map(|p| p.to_vec())
-                        .unwrap_or_default()
+                    match first_right.physical().map(|p| p.to_vec()) {
+                        Some(vec) => vec,
+                        None => Vec::new(),
+                    }
                 }
-                _ => right_entries
+                _ => match right_entries
                     .first()
                     .and_then(|entry| entry.logical_key())
-                    .unwrap_or_default()
-                    .to_vec(),
+                {
+                    Some(key) => key.to_vec(),
+                    None => Vec::new(),
+                },
             };
             let header = Self::read_page_header(page)?;
             Ok((entries, right_entries, left_high, header))
@@ -444,9 +446,10 @@ impl BtreeIndex {
                 // greater than every key on the left sibling but still sorts
                 // before any key with a greater logical value.
                 let first_physical = entries.iter().find_map(|e| e.physical());
-                Ok(first_physical
-                    .map(|p| p.to_vec())
-                    .unwrap_or_else(|| first.to_vec()))
+                Ok(match first_physical {
+                    Some(physical) => physical.to_vec(),
+                    None => first.to_vec(),
+                })
             }
             (Some(first), _) => Ok(first.to_vec()),
             _ => Ok(Vec::new()),

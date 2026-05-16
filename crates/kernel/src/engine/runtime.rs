@@ -225,8 +225,10 @@ impl Engine {
                     let _ = arg;
                     return Ok(CommitOutcome::Committed(csn));
                 }
-                let _detail = arg
-                    .unwrap_or_else(|| "engine::commit::before_publish injected fault".to_string());
+                let _detail = match arg {
+                    Some(detail) => detail,
+                    None => "engine::commit::before_publish injected fault".to_string(),
+                };
                 Ok(CommitOutcome::MaybeCommitted)
             });
             return Ok(CommitOutcome::Committed(csn));
@@ -261,8 +263,10 @@ impl Engine {
                     CommitOutcome::Committed(csn),
                 ));
             }
-            let _detail =
-                arg.unwrap_or_else(|| "engine::commit::before_publish injected fault".to_string());
+            let _detail = match arg {
+                Some(detail) => detail,
+                None => "engine::commit::before_publish injected fault".to_string(),
+            };
             Ok(self.finish_commit(
                 &mut tx,
                 csn,
