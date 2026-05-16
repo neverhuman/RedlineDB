@@ -7,15 +7,15 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778931808`
-- Started at: `1778931808`
-- Elapsed: `12505` ms
+- Run ID: `1778939942`
+- Started at: `1778939942`
+- Elapsed: `4978` ms
 - Scope: `full`
-- Raw score: `83`
-- Final score: `83`
+- Raw score: `82`
+- Final score: `70`
 - Decision: `advisory`
 - Minimum score: `85`
-- Caps applied: `none`
+- Caps applied: `ci-bad-behavior`
 
 ## Hard Rule Caps
 
@@ -59,7 +59,7 @@
 | `typescript-bad-behavior` | 72 | no |
 | `docker-bad-behavior` | 72 | no |
 | `python-bad-behavior` | 72 | no |
-| `ci-bad-behavior` | 70 | no |
+| `ci-bad-behavior` | 70 | yes |
 | `git-bad-behavior` | 70 | no |
 | `gittools-bad-behavior` | 70 | no |
 | `release-bad-behavior` | 70 | no |
@@ -70,7 +70,7 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`42` files=`194`
+- Status: `review` hard=`0` warning=`42` files=`197`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
 - Duplicate volume: lines=`56` tokens=`160` bytes=`1486`
 
@@ -132,7 +132,7 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 70 | 8.40 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 55 | 6.60 | largest authored code file: crates/sql/src/parser/helpers.rs (871 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 40 | 4.80 | largest authored code file: crates/sql/src/exec/agg.rs (981 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 95 | 7.60 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -214,11 +214,11 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
    Route: TLR `Entropy`, lane `fast`, owner `tools`
    Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 55 below the standard floor of 85
+   Reason: `Code shape and semantic surface` scored 40 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:ebdb8314fcd3c08dc352813cbc0adc0b2c959e3593d43b8f20f21ceda95a22dc`
-   Evidence: largest authored code file: crates/sql/src/parser/helpers.rs (871 LOC), code file exceeds 500 LOC, copy-code advisory classes found: 42 (advisory only, no score impact), rust bad-behavior advisory signals: 1749
+   Fingerprint: `sha256:910fc95eef93b7702d489b227ba15387e38a2141d03f49b90ec27e66fbc0ad78`
+   Evidence: largest authored code file: crates/sql/src/exec/agg.rs (981 LOC), code file exceeds 500 LOC, copy-code advisory classes found: 42 (advisory only, no score impact), rust bad-behavior advisory signals: 1774
 2. `medium` `security` `.github/workflows/jankurai.yml`
    Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
    Check: `HLT-016-SUPPLY-CHAIN-DRIFT:security` `soft` confidence `0.76`
@@ -229,7 +229,18 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just security`
    Fingerprint: `sha256:9a1bcfb2380532658b7b977985f45f9847a29fcbe2a9166297d7ba7f558bf3b4`
    Evidence: lockfile present, secret or dependency scan tooling found, security lane present, canonical security lane wrapper present
-3. `medium` `proof` `Justfile`
+3. `high` `security` `.github/workflows/jankurai.yml:104`
+   Rule: `HLT-034-CI-BAD-BEHAVIOR`
+   Check: `HLT-034-CI-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `security`, owner `ops`
+   Docs: `docs/testing.md`
+   Matched term: `ci.action.not-full-sha`
+   Reason: tag or branch refs can change without review
+   Fix: pin every external action to a 40-character commit SHA
+   Rerun: `just security`
+   Fingerprint: `sha256:e8b3a9edc3cd28f8dee01243d2c9ddb3e23d6eb192e79aa40dc6e07c72d96c3b`
+   Evidence: detector=ci.action.not-full-sha, path=.github/workflows/jankurai.yml, line=104, proof_window=None, snippet=uses: actions/attest-build-provenance@v2
+4. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `fast`, owner `workspace`
@@ -239,17 +250,6 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-4. `medium` `release` `docs/testing.md`
-   Rule: `HLT-026-COST-BUDGET-GAP`
-   Check: `HLT-026-COST-BUDGET-GAP:release` `soft` confidence `0.88`
-   Route: TLR `Verification`, lane `release`, owner `standard`
-   Docs: `docs/testing.md`
-   Matched term: `budget`
-   Reason: unbounded paid work needs budgets and stop conditions
-   Fix: add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
-   Rerun: `just check`
-   Fingerprint: `sha256:edd248b7afc24b644107205fa5b84a88103ac4b622009ff9f19b779de8798f59`
-   Evidence: cost surface found without budget/stop-condition policy
 
 ## Policy
 
@@ -261,8 +261,8 @@ No audited runtime boundary reclassifications declared.
 
 1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-2. `medium` `HLT-026-COST-BUDGET-GAP` `docs/testing.md` - add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
-   Route: `Verification`/`release`
+2. `high` `HLT-034-CI-BAD-BEHAVIOR` `.github/workflows/jankurai.yml` - pin every external action to a 40-character commit SHA
+   Route: `Security, secrets, agency`/`security`
 3. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
 4. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane

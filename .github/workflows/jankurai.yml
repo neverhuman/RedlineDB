@@ -74,8 +74,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-      id-token: write
-      attestations: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -100,11 +98,6 @@ jobs:
       # and gitleaks remain hard gates.
       - name: security lane (ops/ci/security.sh)
         run: bash ops/ci/security.sh
-      - name: Generate SLSA provenance attestation
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: target/jankurai/security/sbom-cargo-metadata.json
-
   dependency-review:
     # SBOM-like dependency review on PRs. Compares base vs head
     # manifests for newly-introduced vulnerable or non-allowlisted

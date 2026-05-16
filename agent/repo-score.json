@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:ad0cb0e3a4554362f47455bd9991f2b554763f6434a7e07ec53f900c7b8cf819",
-  "input_fingerprint": "sha256:5003bde04e57630fb1853945c32f8c09a25c21e03c0baf9c4c7442551ee40f18",
+  "report_fingerprint": "sha256:2ecf89de9ed883a07c2ea44abbe359dc72b902e6040c75337463c9c0dde705ed",
+  "input_fingerprint": "sha256:108604eb4ab3dffa29bf8ed5ebd6834890a9baac618c834614c6238c9b4611ba",
   "policy_fingerprint": "sha256:53cee6bbb7603a44df93e1cedc79a3a9fd7a7bf1e7bcc4b4d348a61eddd03328",
   "manifest_fingerprints": {
     "owner_map": "sha256:66ea210c0e693740865bdfd82620899835a43775cb80d91e3acc4b35a6221f80",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778931808",
+  "generated_at": "1778939942",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -22,26 +22,28 @@
   "target_stack": "Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service",
   "claimed_conformance_level": "HL3",
   "observed_conformance_level": "HL2",
-  "conformance_decision": "review",
-  "conformance_blockers": [],
+  "conformance_decision": "block",
+  "conformance_blockers": [
+    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml"
+  ],
   "repo": ".",
-  "run_id": "1778931808",
-  "started_at": "1778931808",
-  "elapsed_ms": 12505,
+  "run_id": "1778939942",
+  "started_at": "1778939942",
+  "elapsed_ms": 4978,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 83,
-  "raw_score": 83,
+  "score": 70,
+  "raw_score": 82,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 0,
-    "soft_findings": 4,
+    "hard_findings": 1,
+    "soft_findings": 3,
     "ratchet": {
-      "baseline_score": 83,
+      "baseline_score": 70,
       "allowed_drop": 0,
       "passed": false,
       "score_delta": 0,
@@ -54,7 +56,7 @@
     }
   },
   "git": {
-    "head": "559ef90",
+    "head": "2a29854",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -78,7 +80,9 @@
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
-  "caps_applied": [],
+  "caps_applied": [
+    "ci-bad-behavior"
+  ],
   "hard_rules": [
     {
       "id": "no-root-agent-instructions",
@@ -345,8 +349,8 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1749",
-        "ci bad-behavior advisory signals: 1",
+        "rust bad-behavior advisory signals: 1774",
+        "ci bad-behavior hard findings: 1",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
@@ -355,16 +359,15 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 55,
-      "weighted_points": 6.6,
+      "score": 40,
+      "weighted_points": 4.8,
       "evidence": [
-        "largest authored code file: crates/sql/src/parser/helpers.rs (871 LOC)",
+        "largest authored code file: crates/sql/src/exec/agg.rs (981 LOC)",
         "code file exceeds 500 LOC",
         "copy-code advisory classes found: 42 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1749",
-        "ci bad-behavior advisory signals: 1",
-        "gittools bad-behavior advisory signals: 1",
-        "no hard bad-behavior findings across detector-backed language families"
+        "rust bad-behavior advisory signals: 1774",
+        "ci bad-behavior hard findings: 1",
+        "gittools bad-behavior advisory signals: 1"
       ],
       "notes": []
     },
@@ -1038,7 +1041,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-16T11:43:16.382357+00:00",
+    "generated_at": "2026-05-16T13:58:57.981645+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1076,9 +1079,9 @@
       ]
     },
     "summary": {
-      "files_scanned": 517,
-      "files_considered": 194,
-      "active_files": 194,
+      "files_scanned": 523,
+      "files_considered": 197,
+      "active_files": 197,
       "exact_file_classes": 0,
       "hard_classes": 0,
       "warning_classes": 42,
@@ -3040,20 +3043,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 55 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 40 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/parser/helpers.rs (871 LOC)",
+        "largest authored code file: crates/sql/src/exec/agg.rs (981 LOC)",
         "code file exceeds 500 LOC",
         "copy-code advisory classes found: 42 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1749"
+        "rust bad-behavior advisory signals: 1774"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:ebdb8314fcd3c08dc352813cbc0adc0b2c959e3593d43b8f20f21ceda95a22dc",
+      "fingerprint": "sha256:910fc95eef93b7702d489b227ba15387e38a2141d03f49b90ec27e66fbc0ad78",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3085,6 +3088,34 @@
       "owner": "ops"
     },
     {
+      "severity": "high",
+      "category": "security",
+      "path": ".github/workflows/jankurai.yml",
+      "problem": "workflow uses an external action not pinned to a full commit SHA",
+      "agent_fix": "pin every external action to a 40-character commit SHA",
+      "evidence": [
+        "detector=ci.action.not-full-sha",
+        "path=.github/workflows/jankurai.yml",
+        "line=104",
+        "proof_window=None",
+        "snippet=uses: actions/attest-build-provenance@v2"
+      ],
+      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "workflow-command",
+      "rerun_command": "just security",
+      "fingerprint": "sha256:e8b3a9edc3cd28f8dee01243d2c9ddb3e23d6eb192e79aa40dc6e07c72d96c3b",
+      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "security",
+      "docs_url": "docs/testing.md",
+      "owner": "ops",
+      "line": 104,
+      "matched_term": "ci.action.not-full-sha",
+      "reason": "tag or branch refs can change without review"
+    },
+    {
       "severity": "medium",
       "category": "proof",
       "path": "Justfile",
@@ -3107,29 +3138,6 @@
       "lane": "fast",
       "docs_url": "docs/testing.md",
       "owner": "workspace"
-    },
-    {
-      "severity": "medium",
-      "category": "release",
-      "path": "docs/testing.md",
-      "problem": "cost or spend-risk surface lacks budget proof",
-      "agent_fix": "add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations",
-      "evidence": [
-        "cost surface found without budget/stop-condition policy"
-      ],
-      "check_id": "HLT-026-COST-BUDGET-GAP:release",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just check",
-      "fingerprint": "sha256:edd248b7afc24b644107205fa5b84a88103ac4b622009ff9f19b779de8798f59",
-      "rule_id": "HLT-026-COST-BUDGET-GAP",
-      "tlr": "Verification",
-      "lane": "release",
-      "docs_url": "docs/testing.md",
-      "owner": "standard",
-      "matched_term": "budget",
-      "reason": "unbounded paid work needs budgets and stop conditions"
     }
   ],
   "agent_fix_queue": [
@@ -3144,14 +3152,14 @@
       "why": "`Build speed signals` scored 80 below the standard floor of 85"
     },
     {
-      "path": "docs/testing.md",
-      "priority": "medium",
-      "rule_id": "HLT-026-COST-BUDGET-GAP",
-      "tlr": "Verification",
-      "lane": "release",
-      "owner": "standard",
-      "task": "add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations",
-      "why": "cost or spend-risk surface lacks budget proof"
+      "path": ".github/workflows/jankurai.yml",
+      "priority": "high",
+      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "security",
+      "owner": "ops",
+      "task": "pin every external action to a 40-character commit SHA",
+      "why": "workflow uses an external action not pinned to a full commit SHA"
     },
     {
       "path": ".",
@@ -3161,7 +3169,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 55 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 40 below the standard floor of 85"
     },
     {
       "path": ".github/workflows/jankurai.yml",
