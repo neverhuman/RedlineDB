@@ -39,6 +39,22 @@ unblock_condition = "cargo-deny upstream fixes the `cargo metadata` JSON parser 
 unblock_owner     = "jepson@veox.ai"
 
 [[entry]]
+name              = "syft-sbom"
+script_path       = "ops/ci/security.sh"
+line_number       = 54
+rule_waived       = "supply-chain-drift.syft-sbom-optional"
+unblock_condition = "syft SBOM generation completes without error in a full CI run and the CycloneDX output is reviewed for accuracy. Promote to hard gate once baseline SBOM is established."
+unblock_owner     = "jepson@veox.ai"
+
+[[entry]]
+name              = "actionlint-workflow-lint"
+script_path       = "ops/ci/security.sh"
+line_number       = 61
+rule_waived       = "supply-chain-drift.actionlint-optional"
+unblock_condition = "actionlint exits 0 on all workflow YAML files in a full CI run. Promote to hard gate once baseline lint is clean."
+unblock_owner     = "jepson@veox.ai"
+
+[[entry]]
 name              = "dependency-review-action"
 script_path       = "ops/ci/dependency-review.sh"
 line_number       = 41

@@ -91,11 +91,20 @@ jobs:
         run: |
           curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
             | tar -xz -C /usr/local/bin gitleaks
+      - name: Install actionlint (workflow linter)
+        run: |
+          curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin actionlint
+      - name: Install syft (SBOM generator)
+        run: |
+          curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin syft
       # Thin dispatcher: all supply-chain logic lives in ops/ci/security.sh
       # so CI and local (`scripts/ci-local.sh security`, `just security`)
       # run identical commands. Cargo-deny is soft-gated INSIDE the script
       # (see agent/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
-      # and gitleaks remain hard gates.
+      # and gitleaks remain hard gates. actionlint and syft are soft-gated
+      # (see ledger entries actionlint-workflow-lint, syft-sbom).
       - name: security lane (ops/ci/security.sh)
         run: bash ops/ci/security.sh
   dependency-review:

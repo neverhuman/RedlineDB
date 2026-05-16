@@ -41,3 +41,21 @@ gitleaks detect --source . --redact --no-banner
 # alongside the audit/deny/gitleaks outputs. Hard gate: must succeed.
 cargo metadata --format-version 1 --locked \
     > target/jankurai/security/sbom-cargo-metadata.json
+
+# SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
+# artifact alongside the cargo-metadata evidence. Requires syft in PATH;
+# installed in CI by the jankurai.yml security job.
+# See ledger: agent/ci-soft-gate-ledger.toml#syft-sbom.
+ci_soft_gate \
+    syft-sbom \
+    target/jankurai/security/syft.log \
+    -- syft . -o cyclonedx-json=target/jankurai/security/sbom-syft.json
+
+# Workflow linting via actionlint — soft-gated; validates CI YAML for
+# schema correctness and security best practices. Requires actionlint
+# in PATH; installed in CI by the jankurai.yml security job.
+# See ledger: agent/ci-soft-gate-ledger.toml#actionlint-workflow-lint.
+ci_soft_gate \
+    actionlint-workflow-lint \
+    target/jankurai/security/actionlint.log \
+    -- actionlint .github/workflows/*.yml

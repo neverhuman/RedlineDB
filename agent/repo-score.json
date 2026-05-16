@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:2ecf89de9ed883a07c2ea44abbe359dc72b902e6040c75337463c9c0dde705ed",
-  "input_fingerprint": "sha256:108604eb4ab3dffa29bf8ed5ebd6834890a9baac618c834614c6238c9b4611ba",
+  "report_fingerprint": "sha256:2a1576b004b2cf1d8a22ebe3c138c82569c8b228f7d0291b98d83bc64b816bb4",
+  "input_fingerprint": "sha256:685e238f3733b720d2e5aa535664443ccb5d1a48e4533c26f5050cfcaa0f369f",
   "policy_fingerprint": "sha256:53cee6bbb7603a44df93e1cedc79a3a9fd7a7bf1e7bcc4b4d348a61eddd03328",
   "manifest_fingerprints": {
     "owner_map": "sha256:66ea210c0e693740865bdfd82620899835a43775cb80d91e3acc4b35a6221f80",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778939942",
+  "generated_at": "1778940631",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -21,31 +21,29 @@
   "target_stack_id": "rust-ts-vite-react-postgres-bounded-python",
   "target_stack": "Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service",
   "claimed_conformance_level": "HL3",
-  "observed_conformance_level": "HL2",
-  "conformance_decision": "block",
-  "conformance_blockers": [
-    "HLT-034-CI-BAD-BEHAVIOR on .github/workflows/jankurai.yml"
-  ],
+  "observed_conformance_level": "HL3",
+  "conformance_decision": "pass",
+  "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1778939942",
-  "started_at": "1778939942",
-  "elapsed_ms": 4978,
+  "run_id": "1778940631",
+  "started_at": "1778940631",
+  "elapsed_ms": 4877,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 70,
-  "raw_score": 82,
+  "score": 85,
+  "raw_score": 85,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 1,
-    "soft_findings": 3,
+    "hard_findings": 0,
+    "soft_findings": 2,
     "ratchet": {
-      "baseline_score": 70,
+      "baseline_score": 85,
       "allowed_drop": 0,
-      "passed": false,
+      "passed": true,
       "score_delta": 0,
       "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -56,7 +54,7 @@
     }
   },
   "git": {
-    "head": "2a29854",
+    "head": "32c2092",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -80,9 +78,7 @@
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
-  "caps_applied": [
-    "ci-bad-behavior"
-  ],
+  "caps_applied": [],
   "hard_rules": [
     {
       "id": "no-root-agent-instructions",
@@ -341,16 +337,18 @@
     {
       "name": "Security and supply-chain posture",
       "weight": 12,
-      "score": 70,
-      "weighted_points": 8.4,
+      "score": 86,
+      "weighted_points": 10.32,
       "evidence": [
         "lockfile present",
         "secret or dependency scan tooling found",
+        "provenance/SBOM tooling found",
+        "workflow linting tooling found",
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1774",
-        "ci bad-behavior hard findings: 1",
+        "rust bad-behavior advisory signals: 1780",
+        "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
@@ -359,15 +357,16 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 40,
-      "weighted_points": 4.8,
+      "score": 55,
+      "weighted_points": 6.6,
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/agg.rs (981 LOC)",
+        "largest authored code file: crates/sql/src/exec/agg.rs (971 LOC)",
         "code file exceeds 500 LOC",
         "copy-code advisory classes found: 42 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1774",
-        "ci bad-behavior hard findings: 1",
-        "gittools bad-behavior advisory signals: 1"
+        "rust bad-behavior advisory signals: 1780",
+        "ci bad-behavior advisory signals: 1",
+        "gittools bad-behavior advisory signals: 1",
+        "no hard bad-behavior findings across detector-backed language families"
       ],
       "notes": []
     },
@@ -1041,7 +1040,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-16T13:58:57.981645+00:00",
+    "generated_at": "2026-05-16T14:10:26.866981+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1079,7 +1078,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 523,
+      "files_scanned": 527,
       "files_considered": 197,
       "active_files": 197,
       "exact_file_classes": 0,
@@ -3043,77 +3042,25 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 40 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 55 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/agg.rs (981 LOC)",
+        "largest authored code file: crates/sql/src/exec/agg.rs (971 LOC)",
         "code file exceeds 500 LOC",
         "copy-code advisory classes found: 42 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1774"
+        "rust bad-behavior advisory signals: 1780"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:910fc95eef93b7702d489b227ba15387e38a2141d03f49b90ec27e66fbc0ad78",
+      "fingerprint": "sha256:ed4447b225e567073c8d20e5210085fdd84f2ee9204027298420dcddcf896e3d",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "tools"
-    },
-    {
-      "severity": "medium",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "`Security and supply-chain posture` scored 70 below the standard floor of 85",
-      "agent_fix": "wire secret, dependency, provenance, and workflow scans into an operational CI lane",
-      "evidence": [
-        "lockfile present",
-        "secret or dependency scan tooling found",
-        "security lane present",
-        "canonical security lane wrapper present"
-      ],
-      "check_id": "HLT-016-SUPPLY-CHAIN-DRIFT:security",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:9a1bcfb2380532658b7b977985f45f9847a29fcbe2a9166297d7ba7f558bf3b4",
-      "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "ops"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow uses an external action not pinned to a full commit SHA",
-      "agent_fix": "pin every external action to a 40-character commit SHA",
-      "evidence": [
-        "detector=ci.action.not-full-sha",
-        "path=.github/workflows/jankurai.yml",
-        "line=104",
-        "proof_window=None",
-        "snippet=uses: actions/attest-build-provenance@v2"
-      ],
-      "check_id": "HLT-034-CI-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:e8b3a9edc3cd28f8dee01243d2c9ddb3e23d6eb192e79aa40dc6e07c72d96c3b",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/testing.md",
-      "owner": "ops",
-      "line": 104,
-      "matched_term": "ci.action.not-full-sha",
-      "reason": "tag or branch refs can change without review"
     },
     {
       "severity": "medium",
@@ -3152,16 +3099,6 @@
       "why": "`Build speed signals` scored 80 below the standard floor of 85"
     },
     {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-034-CI-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "pin every external action to a 40-character commit SHA",
-      "why": "workflow uses an external action not pinned to a full commit SHA"
-    },
-    {
       "path": ".",
       "priority": "medium",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -3169,17 +3106,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 40 below the standard floor of 85"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "medium",
-      "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "wire secret, dependency, provenance, and workflow scans into an operational CI lane",
-      "why": "`Security and supply-chain posture` scored 70 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 55 below the standard floor of 85"
     }
   ]
 }
