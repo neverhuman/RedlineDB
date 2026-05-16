@@ -20,7 +20,7 @@ fail_lane_on = "high"
 [[proofs]]
 rule = "HLT-022-AUTHZ-ISOLATION-GAP"
 cap = "authz-or-data-isolation-gap"
-trigger_site = "crates/bench/src/config.rs:291"
+trigger_site = "crates/bench/src/config.rs:293"
 trigger_term = "tenant_id"
 evidence_test = "crates/bench/tests/tenant_isolation.rs"
 evidence_command = "rtk cargo test -p redlinedb-bench --test tenant_isolation --quiet --locked"
@@ -30,8 +30,10 @@ scenarios = [
   "owner_can_read",
   "non_owner_denied",
   "cross_tenant_index_probe_empty",
+  "dual_connection_cross_tenant_index_probe_yields_zero_rows",
   "tombstone_owner_only",
 ]
+primary_negative_proof = "dual_connection_cross_tenant_index_probe_yields_zero_rows"
 notes = """
 Cross-tenant data isolation negative proofs for the kv / kv_tenant_idx
 fixture used by every secondary-index workload in

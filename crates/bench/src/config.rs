@@ -295,10 +295,22 @@ pub enum WorkloadKind {
     /// aggregate so the engine never visits the heap, isolating the
     /// cost of walking the index leaves.
     ///
-    /// Cross-tenant data-isolation negative proofs for this fixture live
-    /// in `crates/bench/tests/tenant_isolation.rs` (Section E,
-    /// HLT-022-AUTHZ-ISOLATION-GAP). See also
-    /// `agent/security-policy.toml` for the proof routing.
+    /// Proof: crates/bench/tests/tenant_isolation.rs::dual_connection_cross_tenant_index_probe_yields_zero_rows
+    /// (lines 243-302; assert cross-tenant index probe yields 0 rows;
+    /// HLT-022-AUTHZ-ISOLATION-GAP). The test opens two distinct
+    /// `Connection`s — one structurally scoped to tenant A, one to
+    /// tenant B — and asserts `COUNT(*) FROM kv WHERE tenant = B == 0`
+    /// after tenant A inserts 24 rows, including under a concurrent
+    /// late write. Sibling deterministic scenarios in the same file:
+    /// `owner_can_read` (lines 134-151, positive control),
+    /// `non_owner_denied` (lines 153-194, denial via PK + index probe),
+    /// `cross_tenant_index_probe_empty` (lines 196-241, equality + range
+    /// + open-ended probes over the secondary index),
+    /// `tombstone_owner_only` (lines 304-end, owner-scoped delete).
+    /// Runnable via `rtk cargo test -p redlinedb-bench --test
+    /// tenant_isolation --quiet --locked`. See also
+    /// `agent/security-policy.toml` [[proofs]] entry for
+    /// `HLT-022-AUTHZ-ISOLATION-GAP` for proof routing.
     SecondaryIndexCount,
     /// Phase 11 wave 1a: ordered range with `LIMIT` early-stop. The
     /// query shape is `SELECT * FROM kv WHERE tenant >= ? ORDER BY

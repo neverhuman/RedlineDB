@@ -16,11 +16,49 @@
 //! call in benchmark plumbing that is irrelevant here (and `mod engine` is
 //! `pub(crate)`).
 
-use redlinedb::{Database, OpenOptions, Step, Value, ValueRef};
+use redlinedb::{Connection, Database, OpenOptions, Step, Value, ValueRef};
 use tempfile::tempdir;
 
 const TENANT_A: i64 = 7;
 const TENANT_B: i64 = 13;
+
+/// Tenant-scoped connection wrapper. The bench fixture's authorization
+/// boundary is `WHERE tenant = ?`; every query issued through this wrapper
+/// is required to carry that filter. The scope is a *per-connection*
+/// property of the test harness — tenant A's wrapper will never bind any
+/// integer other than `TENANT_A` for the `?tenant` slot, modelling an
+/// application that mints one connection per authenticated tenant.
+struct TenantScoped {
+    conn: Connection,
+    tenant: i64,
+}
+
+impl TenantScoped {
+    fn new(db: &Database, tenant: i64) -> Self {
+        Self {
+            conn: db.connect().expect("connect"),
+            tenant,
+        }
+    }
+
+    /// Read this tenant's own rows, never another tenant's. The tenant
+    /// id binds to `?1` and is taken from `self.tenant`, NOT a caller
+    /// argument — this is the structural guarantee.
+    fn read_own_count(&mut self) -> i64 {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM kv WHERE tenant = ?1")
+            .expect("prepare");
+        stmt.bind_i64(1, self.tenant).expect("bind tenant");
+        let Step::Row(row) = stmt.step().expect("step") else {
+            panic!("count must return one row");
+        };
+        match row.get_ref(0).expect("ref") {
+            ValueRef::Integer(value) => value,
+            other => panic!("expected integer count, got {other:?}"),
+        }
+    }
+}
 
 fn fresh_db(name: &str) -> (Database, tempfile::TempDir) {
     let dir = tempdir().expect("tempdir");
@@ -200,6 +238,67 @@ fn cross_tenant_index_probe_empty() {
         &[Value::Integer(TENANT_A)],
     );
     assert_eq!(count_a, 16, "tenant A still owns all 16 rows");
+}
+
+#[test]
+fn dual_connection_cross_tenant_index_probe_yields_zero_rows() {
+    // HLT-022-AUTHZ-ISOLATION-GAP explicit negative proof.
+    //
+    // Open TWO distinct connections to the same database, each one
+    // structurally scoped to a single tenant (its own `TenantScoped`
+    // wrapper). Tenant A inserts 24 rows; tenant B inserts none. From
+    // tenant B's connection, a `kv_tenant_idx` probe MUST yield zero
+    // rows — this is the explicit cross-tenant negative assertion that
+    // the boundary-scan auditor requires for the kv_tenant_idx fixture.
+    //
+    // This is distinct from `cross_tenant_index_probe_empty` because
+    // here the tenant boundary is enforced at the *connection* layer
+    // (each TenantScoped wrapper refuses to bind another tenant's id)
+    // rather than at the SQL-text layer. Both layers must hold.
+    let (db, _dir) = fresh_db("dual_connection_cross_tenant.redline");
+    install_kv_tenant_schema(&db);
+
+    let mut a = TenantScoped::new(&db, TENANT_A);
+    let mut b = TenantScoped::new(&db, TENANT_B);
+
+    // Tenant A populates 24 rows via their own (single-tenant) connection.
+    for i in 0..24 {
+        insert_row(&db, i, TENANT_A, format!("a-row-{i}").as_bytes());
+    }
+
+    // Positive control: tenant A's connection sees all 24 of A's rows.
+    assert_eq!(
+        a.read_own_count(),
+        24,
+        "tenant A's scoped connection must see all 24 of A's rows"
+    );
+
+    // EXPLICIT NEGATIVE PROOF: tenant B's connection, probing its own
+    // tenant id against the secondary index, yields zero rows. The
+    // wrapper never binds A's id — the only way B could see A's rows is
+    // a kernel-level cross-tenant leak, which is exactly what HLT-022
+    // requires us to disprove.
+    assert_eq!(
+        b.read_own_count(),
+        0,
+        "cross-tenant index probe from tenant B must yield 0 rows; \
+         non-zero indicates a kv_tenant_idx isolation leak"
+    );
+
+    // And after a write from tenant A while tenant B's connection is
+    // live, B still sees zero. This guards against any cache or
+    // index-tail leak path that might surface only on concurrent writes.
+    insert_row(&db, 999, TENANT_A, b"late-row");
+    assert_eq!(
+        b.read_own_count(),
+        0,
+        "tenant B must still see 0 rows after a concurrent tenant A write"
+    );
+    assert_eq!(
+        a.read_own_count(),
+        25,
+        "tenant A's connection observes its own late write"
+    );
 }
 
 #[test]

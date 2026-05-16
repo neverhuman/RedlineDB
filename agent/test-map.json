@@ -327,7 +327,10 @@
     },
     "crates/bench/tests/tenant_isolation.rs": {
       "command": "rtk cargo test -p redlinedb-bench --test tenant_isolation --quiet --locked",
-      "purpose": "prove cross-tenant data isolation under the kv_tenant_idx fixture"
+      "purpose": "prove cross-tenant data isolation under the kv_tenant_idx fixture",
+      "proof_lane": "fast",
+      "rule": "HLT-022-AUTHZ-ISOLATION-GAP",
+      "primary_test": "dual_connection_cross_tenant_index_probe_yields_zero_rows"
     },
     "crates/ffi/tests/exec_input_boundary.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked",
