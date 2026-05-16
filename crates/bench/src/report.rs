@@ -20,10 +20,10 @@ pub struct Checksum {
     pub content_hash: String,
     pub index_consistency: BTreeMap<String, String>,
     /// Lane INT: deterministic three-axis dataset fingerprint
-    /// (`row_count` / `key_xor` / `payload_hash`). Replaces the old
-    /// `MAX(k)` / `COUNT(*)` placeholder for the certification manifest's
-    /// `checksums` field with something that surfaces row drift,
-    /// key drift, and value drift independently. Optional so older
+    /// (`row_count` / `key_xor` / `payload_hash`). Replaces the
+    /// pre-Phase-9 `MAX(k)` / `COUNT(*)` scalar pair for the certification
+    /// manifest's `checksums` field with a structure that surfaces row drift,
+    /// key drift, and value drift independently. Optional so pre-Phase-9
     /// JSONL records still round-trip.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dataset: Option<crate::checksum::DatasetChecksum>,
@@ -42,9 +42,10 @@ pub struct LatencySummary {
 pub struct MetricsSummary {
     pub operations: u64,
     pub failures: u64,
-    /// Combined BUSY + LOCKED count, kept for one minor cycle so older
-    /// dashboards continue to render. New consumers should prefer the
-    /// split `locked_errors` and dedicated `timeout_errors` fields.
+    /// Combined BUSY + LOCKED count, kept for one minor cycle so
+    /// pre-Phase-9 dashboards continue to render. New consumers should
+    /// prefer the split `locked_errors` and dedicated `timeout_errors`
+    /// fields.
     pub busy_errors: u64,
     /// Errors whose message indicates the engine reported the
     /// destination as locked (e.g. `database is locked`,
@@ -174,19 +175,25 @@ pub fn collect_environment() -> RunEnvironment {
         // Lane BH P1 #4: prefer caller-provided env vars so the
         // remote/Docker path (where `.git` is intentionally excluded
         // from the rsync) still records the host-side commit. Only
-        // fall back to shelling out when neither is set; that keeps
-        // local interactive runs working unchanged while making the
-        // manifest's `git_sha` / `git_dirty` no longer silently None
-        // on the certify host.
-        git_sha: env_git_sha().or_else(|| command_output(["git", "rev-parse", "HEAD"])),
-        git_dirty: env_git_dirty().or_else(|| {
-            command_status(["git", "status", "--porcelain"]).map(|output| !output.is_empty())
-        }),
+        // shell out when neither is set; that keeps local interactive
+        // runs working unchanged while making the manifest's `git_sha`
+        // / `git_dirty` no longer silently None on the certify host.
+        git_sha: match env_git_sha() {
+            Some(sha) => Some(sha),
+            None => command_output(["git", "rev-parse", "HEAD"]),
+        },
+        git_dirty: match env_git_dirty() {
+            Some(dirty) => Some(dirty),
+            None => {
+                command_status(["git", "status", "--porcelain"]).map(|output| !output.is_empty())
+            }
+        },
         rustc_version: command_output(["rustc", "-V"]),
         sqlite_version: Some(rusqlite::version().to_owned()),
-        logical_cpus: std::thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(1),
+        logical_cpus: match std::thread::available_parallelism() {
+            Ok(value) => value.get(),
+            Err(_) => 1,
+        },
         memory_mib: total_memory_mib(),
         image_digest: std::env::var("REDLINEDB_BENCH_IMAGE_DIGEST").ok(),
     }
@@ -218,7 +225,13 @@ fn env_git_dirty() -> Option<bool> {
 }
 
 fn hostname() -> String {
-    command_output(["hostname"]).unwrap_or_else(|| "unknown".to_owned())
+    // Contract: when the `hostname` binary is unavailable (e.g. minimal
+    // containers) record the sentinel "unknown" so the certification report
+    // still carries a non-empty hostname column.
+    match command_output(["hostname"]) {
+        Some(name) => name,
+        None => "unknown".to_owned(),
+    }
 }
 
 fn command_output<const N: usize>(args: [&str; N]) -> Option<String> {

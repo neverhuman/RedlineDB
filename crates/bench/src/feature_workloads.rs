@@ -83,8 +83,11 @@ pub(super) fn run_vector_ann_search(engine: &dyn BenchEngine, spec: &RunSpec) ->
     let wall_started = Instant::now();
     let rows = ann_rows(spec);
     let vectors = vector_dataset(rows, HNSW_DIM, spec.seed);
-    let temp = tempfile::TempDir::new()?;
-    let page_file = Arc::new(PageFile::create(temp.path().join("hnsw.redline"), 512)?);
+    let staging_dir = tempfile::TempDir::new()?;
+    let page_file = Arc::new(PageFile::create(
+        staging_dir.path().join("hnsw.redline"),
+        512,
+    )?);
     let buffer = Arc::new(BufferPool::new(Arc::clone(&page_file), 1024)?);
     let mut params = HnswParams::standard(HNSW_DIM);
     params.m = 16;
@@ -132,8 +135,8 @@ pub(super) fn run_vector_ann_search_disk(
     };
     let built = DiskAnnIndex::build(DISKANN_DIM, &vectors, &row_ids, params)?;
     let sectors = built.to_sectors()?;
-    let temp = tempfile::TempDir::new()?;
-    let sector_path = temp.path().join("diskann.sectors");
+    let staging_dir = tempfile::TempDir::new()?;
+    let sector_path = staging_dir.path().join("diskann.sectors");
     std::fs::write(&sector_path, &sectors)?;
     let loaded = std::fs::read(&sector_path)?;
     let index = Arc::new(DiskAnnIndex::from_sectors(

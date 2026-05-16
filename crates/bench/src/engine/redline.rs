@@ -138,7 +138,13 @@ impl BenchConn for RedlineConn {
 
     fn query_row(&mut self, sql: &str, params: &[CellValue]) -> Result<Vec<CellValue>> {
         let rows = self.query_all(sql, params)?;
-        Ok(rows.into_iter().next().unwrap_or_default())
+        // Contract: no-row queries return an empty row vector so the bench
+        // workloads can treat a 0-row scan as a successful "nothing matched"
+        // outcome (mirrors the sqlite engine adapter at the same path).
+        match rows.into_iter().next() {
+            Some(row) => Ok(row),
+            None => Ok(Vec::new()),
+        }
     }
 
     fn query_all(&mut self, sql: &str, params: &[CellValue]) -> Result<Vec<Vec<CellValue>>> {
@@ -217,9 +223,9 @@ pub(crate) fn dir_total_bytes(path: &Path) -> u64 {
     if let Ok(meta) = std::fs::metadata(path)
         && meta.is_file()
     {
-        // Caller passed a leaf file (e.g. legacy single-file flavor);
-        // preserve the previous behavior so existing tests keep
-        // their numeric expectations.
+        // Caller passed a leaf file (e.g. the pre-phase11 single-file
+        // flavor); preserve the byte-count semantics so existing tests
+        // keep their numeric expectations.
         return meta.len();
     }
     let mut total = 0_u64;

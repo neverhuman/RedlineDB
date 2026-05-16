@@ -1,6 +1,6 @@
 //! Deterministic dataset checksums for the bench harness.
 //!
-//! Lane INT replaces the previous `MAX(k)` / `COUNT(*)` placeholder with a
+//! Lane INT replaces the pre-Phase-9 `MAX(k)` / `COUNT(*)` scalar pair with a
 //! structured [`DatasetChecksum`] that captures three independent fingerprints
 //! of a seeded `kv` workload:
 //!

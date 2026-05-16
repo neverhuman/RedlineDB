@@ -4,11 +4,11 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use crate::config::{CompatArgs, DurabilityKind, EngineKind, RunSpec};
+use crate::config::{CrossEngineArgs, DurabilityKind, EngineKind, RunSpec};
 use crate::engine::{self, BenchEngine, CellValue};
 
 #[derive(Debug, Serialize)]
-pub struct CompatReport {
+pub struct CrossEngineReport {
     pub files: usize,
     pub cases: usize,
     pub failures: Vec<String>,
@@ -22,9 +22,9 @@ enum Case {
     },
 }
 
-pub fn run_suite(args: &CompatArgs) -> Result<CompatReport> {
+pub fn run_suite(args: &CrossEngineArgs) -> Result<CrossEngineReport> {
     let files = collect_cases(&args.test_dir)?;
-    let mut report = CompatReport {
+    let mut report = CrossEngineReport {
         files: files.len(),
         cases: 0,
         failures: Vec::new(),
@@ -32,7 +32,7 @@ pub fn run_suite(args: &CompatArgs) -> Result<CompatReport> {
     for (path, cases) in files {
         report.cases += cases.len();
         let actual = run_file(args.engine.expand(), &cases, args.seed)
-            .with_context(|| format!("run compat file {}", path.display()));
+            .with_context(|| format!("run cross-engine file {}", path.display()));
         if let Err(err) = actual {
             report.failures.push(format!("{err:#}"));
         }
@@ -52,7 +52,7 @@ fn run_file(engines: &[EngineKind], cases: &[Case], seed: u64) -> Result<()> {
             duration: std::time::Duration::from_secs(1),
             cache_bytes: 8 * 1024 * 1024,
             seed,
-            base_dir: std::env::temp_dir().join("redlinedb-bench-compat"),
+            base_dir: std::env::temp_dir().join("redlinedb-bench-cross-engine"),
         };
         let db_dir = spec.base_dir.join(format!("{engine_kind:?}-{seed}"));
         let _ = fs::remove_dir_all(&db_dir);
@@ -61,7 +61,7 @@ fn run_file(engines: &[EngineKind], cases: &[Case], seed: u64) -> Result<()> {
         outputs.push(run_cases(engine.as_ref(), cases)?);
     }
     if outputs.windows(2).any(|pair| pair[0] != pair[1]) {
-        bail!("compat output mismatch between engines");
+        bail!("cross-engine output mismatch between engines");
     }
     Ok(())
 }
@@ -128,9 +128,9 @@ fn parse_cases(input: &str) -> Result<Vec<Case>> {
             "statement ok" => cases.push(Case::Statement(lines[1..].join("\n"))),
             "query" => {
                 let joined = lines[1..].join("\n");
-                let (sql, expected) = joined
-                    .split_once("\n----\n")
-                    .ok_or_else(|| anyhow::anyhow!("query case missing `----` separator"))?;
+                let Some((sql, expected)) = joined.split_once("\n----\n") else {
+                    bail!("query case missing `----` separator");
+                };
                 let expected = expected
                     .lines()
                     .filter(|line| !line.trim().is_empty())
@@ -141,7 +141,7 @@ fn parse_cases(input: &str) -> Result<Vec<Case>> {
                     expected,
                 });
             }
-            other => bail!("unknown compat directive `{other}`"),
+            other => bail!("unknown cross-engine directive `{other}`"),
         }
     }
     Ok(cases)
@@ -171,8 +171,8 @@ mod tests {
 
     #[test]
     fn collect_cases_recurses_into_nested_directories() {
-        let tmp = tempfile::tempdir().expect("temp dir");
-        let nested = tmp.path().join("orm");
+        let staging = tempfile::tempdir().expect("staging dir");
+        let nested = staging.path().join("orm");
         fs::create_dir_all(&nested).expect("nested dir");
         fs::write(
             nested.join("migration.sqlt"),
@@ -180,7 +180,7 @@ mod tests {
         )
         .expect("write sqlt");
 
-        let files = collect_cases(tmp.path()).expect("files");
+        let files = collect_cases(staging.path()).expect("files");
         assert_eq!(files.len(), 1);
         assert!(files[0].0.ends_with("migration.sqlt"));
     }

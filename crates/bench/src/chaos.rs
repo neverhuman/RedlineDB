@@ -51,13 +51,7 @@ pub(crate) fn run_lock_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Resul
         std::thread::sleep(Duration::from_micros(
             500 + rng.random_range(0..2000) as u64,
         ));
-        if rng.random_range(0..8) == 0 {
-            rollbacks.fetch_add(1, Ordering::Relaxed);
-            conn.rollback()?;
-        } else {
-            commits.fetch_add(1, Ordering::Relaxed);
-            conn.commit()?;
-        }
+        finish_chaos_txn(conn, rng, 8, Some(&commits), Some(&rollbacks))?;
         Ok(())
     })?;
     let checksum = checksum_query(
@@ -66,13 +60,9 @@ pub(crate) fn run_lock_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Resul
         "SELECT pk, v, payload FROM dick_head_choas_lock_convoy ORDER BY pk",
     )?;
     let mut stats = chaos_stats("bounded", "lock-convoy", spec.rows.max(1), busy_timeout_ms);
-    stats.insert(
-        "chaos_commits".to_owned(),
-        serde_json::json!(commits.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_rollbacks".to_owned(),
-        serde_json::json!(rollbacks.load(Ordering::Relaxed)),
+    record_chaos_counters(
+        &mut stats,
+        &[("commits", &commits), ("rollbacks", &rollbacks)],
     );
     finish_record(engine, spec, measured, checksum, stats, wall_started)
 }
@@ -94,41 +84,33 @@ pub(crate) fn run_connection_churn(engine: &dyn BenchEngine, spec: &RunSpec) -> 
         },
     )?;
     let connection_opens = AtomicU64::new(0);
-    let commits = AtomicU64::new(0);
-    let rollbacks = AtomicU64::new(0);
-    let reads = AtomicU64::new(0);
-    let writes = AtomicU64::new(0);
+    let counters = ChaosCounters::default();
     let measured = run_threaded_engine_feature(engine, spec, |engine, worker, rng| {
         connection_opens.fetch_add(1, Ordering::Relaxed);
         let mut conn = engine.connect(worker)?;
         conn.set_busy_timeout(Duration::from_millis(10))?;
         if rng.random_range(0..100) < 70 {
-            reads.fetch_add(1, Ordering::Relaxed);
+            counters.reads.fetch_add(1, Ordering::Relaxed);
             let key = rng.random_range(0..spec.rows.max(1)) as i64;
             let _ = conn.query_row(
                 "SELECT v FROM dick_head_choas_connection_churn WHERE pk = ?1",
                 &[CellValue::Integer(key)],
             )?;
         } else {
-            writes.fetch_add(1, Ordering::Relaxed);
             let key = rng.random_range(0..spec.rows.max(1)) as i64;
-            conn.begin_immediate()?;
-            conn.execute(
+            let payload_seed = (worker << 20) ^ key as usize ^ rng.random::<u32>() as usize;
+            run_chaos_write(
+                &mut *conn,
+                rng,
+                &counters,
+                ChaosOp::Write,
                 "UPDATE dick_head_choas_connection_churn SET v = v + 1, payload = ?1 WHERE pk = ?2",
                 &[
-                    CellValue::Blob(blob_for(
-                        (worker << 20) ^ key as usize ^ rng.random::<u32>() as usize,
-                    )),
+                    CellValue::Blob(blob_for(payload_seed)),
                     CellValue::Integer(key),
                 ],
+                10,
             )?;
-            if rng.random_range(0..10) == 0 {
-                rollbacks.fetch_add(1, Ordering::Relaxed);
-                conn.rollback()?;
-            } else {
-                commits.fetch_add(1, Ordering::Relaxed);
-                conn.commit()?;
-            }
         }
         Ok(())
     })?;
@@ -138,25 +120,15 @@ pub(crate) fn run_connection_churn(engine: &dyn BenchEngine, spec: &RunSpec) -> 
         "SELECT pk, tenant, v, payload FROM dick_head_choas_connection_churn ORDER BY pk",
     )?;
     let mut stats = chaos_stats("bounded", "connection-churn", spec.rows.max(1), 10);
-    stats.insert(
-        "chaos_connection_opens".to_owned(),
-        serde_json::json!(connection_opens.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_reads".to_owned(),
-        serde_json::json!(reads.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_writes".to_owned(),
-        serde_json::json!(writes.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_commits".to_owned(),
-        serde_json::json!(commits.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_rollbacks".to_owned(),
-        serde_json::json!(rollbacks.load(Ordering::Relaxed)),
+    record_chaos_counters(
+        &mut stats,
+        &[
+            ("connection_opens", &connection_opens),
+            ("reads", &counters.reads),
+            ("writes", &counters.writes),
+            ("commits", &counters.commits),
+            ("rollbacks", &counters.rollbacks),
+        ],
     );
     finish_record(engine, spec, measured, checksum, stats, wall_started)
 }
@@ -209,11 +181,7 @@ pub(crate) fn run_checkpoint_thrash(engine: &dyn BenchEngine, spec: &RunSpec) ->
                     CellValue::Integer(key),
                 ],
             )?;
-            if rng.random_range(0..5) == 0 {
-                conn.rollback()?;
-            } else {
-                conn.commit()?;
-            }
+            finish_chaos_txn(conn, rng, 5, None, None)?;
         }
         Ok(())
     })?;
@@ -223,17 +191,13 @@ pub(crate) fn run_checkpoint_thrash(engine: &dyn BenchEngine, spec: &RunSpec) ->
         "SELECT pk, v, payload FROM dick_head_choas_checkpoint_thrash ORDER BY pk",
     )?;
     let mut stats = chaos_stats("bounded", "checkpoint-thrash", spec.rows.max(1), 15);
-    stats.insert(
-        "chaos_checkpoint_calls".to_owned(),
-        serde_json::json!(checkpoint_calls.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_reads".to_owned(),
-        serde_json::json!(reads.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_writes".to_owned(),
-        serde_json::json!(writes.load(Ordering::Relaxed)),
+    record_chaos_counters(
+        &mut stats,
+        &[
+            ("checkpoint_calls", &checkpoint_calls),
+            ("reads", &reads),
+            ("writes", &writes),
+        ],
     );
     finish_record(engine, spec, measured, checksum, stats, wall_started)
 }
@@ -254,16 +218,12 @@ pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
             ]
         },
     )?;
-    let commits = AtomicU64::new(0);
-    let rollbacks = AtomicU64::new(0);
-    let reads = AtomicU64::new(0);
-    let writes = AtomicU64::new(0);
-    let deletes = AtomicU64::new(0);
+    let counters = ChaosCounters::default();
     let measured = run_threaded_conn_feature(engine, spec, |conn, worker, rng| {
         conn.set_busy_timeout(Duration::from_millis(20))?;
         let choice = rng.random_range(0..100);
         if choice < 35 {
-            reads.fetch_add(1, Ordering::Relaxed);
+            counters.reads.fetch_add(1, Ordering::Relaxed);
             let low = rng.random_range(0..32) as i64;
             let high = (low + 4).min(31);
             let _ = conn.query_row(
@@ -271,41 +231,33 @@ pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
                 &[CellValue::Integer(low), CellValue::Integer(high)],
             )?;
         } else if choice < 70 {
-            writes.fetch_add(1, Ordering::Relaxed);
             let key = rng.random_range(0..spec.rows.max(1)) as i64;
-            conn.begin_immediate()?;
-            conn.execute(
+            let tenant = rng.random_range(0..32) as i64;
+            let payload_seed = (worker << 18) ^ key as usize ^ rng.random::<u32>() as usize;
+            run_chaos_write(
+                conn,
+                rng,
+                &counters,
+                ChaosOp::Write,
                 "UPDATE dick_head_choas_index_hammer SET tenant = ?1, v = ?2, version = version + 1 WHERE pk = ?3",
                 &[
-                    CellValue::Integer(rng.random_range(0..32) as i64),
-                    CellValue::Blob(blob_for(
-                        (worker << 18) ^ key as usize ^ rng.random::<u32>() as usize,
-                    )),
+                    CellValue::Integer(tenant),
+                    CellValue::Blob(blob_for(payload_seed)),
                     CellValue::Integer(key),
                 ],
+                7,
             )?;
-            if rng.random_range(0..7) == 0 {
-                rollbacks.fetch_add(1, Ordering::Relaxed);
-                conn.rollback()?;
-            } else {
-                commits.fetch_add(1, Ordering::Relaxed);
-                conn.commit()?;
-            }
         } else {
-            deletes.fetch_add(1, Ordering::Relaxed);
             let key = rng.random_range(0..spec.rows.max(1)) as i64;
-            conn.begin_immediate()?;
-            conn.execute(
+            run_chaos_write(
+                conn,
+                rng,
+                &counters,
+                ChaosOp::Delete,
                 "DELETE FROM dick_head_choas_index_hammer WHERE pk = ?1",
                 &[CellValue::Integer(key)],
+                6,
             )?;
-            if rng.random_range(0..6) == 0 {
-                rollbacks.fetch_add(1, Ordering::Relaxed);
-                conn.rollback()?;
-            } else {
-                commits.fetch_add(1, Ordering::Relaxed);
-                conn.commit()?;
-            }
         }
         Ok(())
     })?;
@@ -315,36 +267,26 @@ pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
         "SELECT pk, tenant, v, version FROM dick_head_choas_index_hammer ORDER BY pk",
     )?;
     let mut stats = chaos_stats("bounded", "index-hammer", spec.rows.max(1), 20);
-    stats.insert(
-        "chaos_reads".to_owned(),
-        serde_json::json!(reads.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_writes".to_owned(),
-        serde_json::json!(writes.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_deletes".to_owned(),
-        serde_json::json!(deletes.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_commits".to_owned(),
-        serde_json::json!(commits.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_rollbacks".to_owned(),
-        serde_json::json!(rollbacks.load(Ordering::Relaxed)),
+    record_chaos_counters(
+        &mut stats,
+        &[
+            ("reads", &counters.reads),
+            ("writes", &counters.writes),
+            ("deletes", &counters.deletes),
+            ("commits", &counters.commits),
+            ("rollbacks", &counters.rollbacks),
+        ],
     );
     finish_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
-pub(crate) fn run_temp_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
+pub(crate) fn run_sort_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<RunRecord> {
     let wall_started = Instant::now();
     seed_rows(
         engine,
-        "CREATE TABLE IF NOT EXISTS dick_head_choas_temp_spill_convoy(pk INTEGER PRIMARY KEY, score INTEGER, payload BLOB, version INTEGER)",
-        "DELETE FROM dick_head_choas_temp_spill_convoy",
-        "INSERT INTO dick_head_choas_temp_spill_convoy(pk, score, payload, version) VALUES (?1, ?2, ?3, 1)",
+        "CREATE TABLE IF NOT EXISTS dick_head_choas_sort_spill_convoy(pk INTEGER PRIMARY KEY, score INTEGER, payload BLOB, version INTEGER)",
+        "DELETE FROM dick_head_choas_sort_spill_convoy",
+        "INSERT INTO dick_head_choas_sort_spill_convoy(pk, score, payload, version) VALUES (?1, ?2, ?3, 1)",
         spec.rows.max(1),
         |idx| {
             vec![
@@ -362,7 +304,7 @@ pub(crate) fn run_temp_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) ->
             spill_queries.fetch_add(1, Ordering::Relaxed);
             let threshold = rng.random_range(0..1024) as i64;
             let _ = conn.query_all(
-                "SELECT pk, score FROM dick_head_choas_temp_spill_convoy WHERE score >= ?1 ORDER BY payload DESC LIMIT 128",
+                "SELECT pk, score FROM dick_head_choas_sort_spill_convoy WHERE score >= ?1 ORDER BY payload DESC LIMIT 128",
                 &[CellValue::Integer(threshold)],
             )?;
         } else {
@@ -370,7 +312,7 @@ pub(crate) fn run_temp_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) ->
             let key = rng.random_range(0..spec.rows.max(1)) as i64;
             conn.begin_immediate()?;
             conn.execute(
-                "UPDATE dick_head_choas_temp_spill_convoy SET score = score + 1, payload = ?1, version = version + 1 WHERE pk = ?2",
+                "UPDATE dick_head_choas_sort_spill_convoy SET score = score + 1, payload = ?1, version = version + 1 WHERE pk = ?2",
                 &[
                     CellValue::Blob(large_blob(
                         (worker << 14) ^ key as usize ^ rng.random::<u32>() as usize,
@@ -378,27 +320,19 @@ pub(crate) fn run_temp_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) ->
                     CellValue::Integer(key),
                 ],
             )?;
-            if rng.random_range(0..4) == 0 {
-                conn.rollback()?;
-            } else {
-                conn.commit()?;
-            }
+            finish_chaos_txn(conn, rng, 4, None, None)?;
         }
         Ok(())
     })?;
     let checksum = checksum_query(
         engine,
-        "dick-head-choas-temp-spill-convoy",
-        "SELECT pk, score, payload, version FROM dick_head_choas_temp_spill_convoy ORDER BY pk",
+        "dick-head-choas-sort-spill-convoy",
+        "SELECT pk, score, payload, version FROM dick_head_choas_sort_spill_convoy ORDER BY pk",
     )?;
-    let mut stats = chaos_stats("bounded", "temp-spill-convoy", spec.rows.max(1), 20);
-    stats.insert(
-        "chaos_spill_queries".to_owned(),
-        serde_json::json!(spill_queries.load(Ordering::Relaxed)),
-    );
-    stats.insert(
-        "chaos_writes".to_owned(),
-        serde_json::json!(writes.load(Ordering::Relaxed)),
+    let mut stats = chaos_stats("bounded", "sort-spill-convoy", spec.rows.max(1), 20);
+    record_chaos_counters(
+        &mut stats,
+        &[("spill_queries", &spill_queries), ("writes", &writes)],
     );
     finish_record(engine, spec, measured, checksum, stats, wall_started)
 }
@@ -433,10 +367,7 @@ pub(crate) fn run_schema_storm(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
         ]],
     );
     let mut stats = chaos_stats("extreme", "schema-storm", 0, 5);
-    stats.insert(
-        "chaos_ddl_ops".to_owned(),
-        serde_json::json!(ddl_count.load(Ordering::Relaxed)),
-    );
+    record_chaos_counters(&mut stats, &[("ddl_ops", &ddl_count)]);
     finish_record(engine, spec, measured, checksum, stats, wall_started)
 }
 
@@ -673,6 +604,105 @@ where
     Ok(())
 }
 
+/// The standard chaos counter set: how many reads, writes, deletes, commits,
+/// and rollbacks the workload observed. Created via `Default::default()` so
+/// every workload constructs the same shape and the duplicate-block detector
+/// sees a single declaration site instead of one per workload function.
+#[derive(Default)]
+struct ChaosCounters {
+    reads: AtomicU64,
+    writes: AtomicU64,
+    deletes: AtomicU64,
+    commits: AtomicU64,
+    rollbacks: AtomicU64,
+}
+
+/// Distinguishes which counter field [`run_chaos_write`] should bump for a
+/// given operation. Mapped 1:1 onto [`ChaosCounters`] so every workload uses
+/// the same set of well-known op names instead of indexing the struct fields
+/// from each call site.
+#[derive(Clone, Copy)]
+enum ChaosOp {
+    Write,
+    Delete,
+}
+
+/// Execute one chaos transaction end-to-end: bump the [`ChaosOp`] counter,
+/// open an `IMMEDIATE` transaction, run the parameterised SQL, then commit or
+/// roll back via [`finish_chaos_txn`]. Extracting this keeps the per-workload
+/// `if choice` arms from drifting apart and gives the duplicate-block detector
+/// exactly one site to fingerprint if the schema ever changes.
+fn run_chaos_write(
+    conn: &mut dyn BenchConn,
+    rng: &mut ChaCha8Rng,
+    counters: &ChaosCounters,
+    op: ChaosOp,
+    sql: &str,
+    params: &[CellValue],
+    rollback_one_in: u32,
+) -> Result<()> {
+    let op_counter = match op {
+        ChaosOp::Write => &counters.writes,
+        ChaosOp::Delete => &counters.deletes,
+    };
+    op_counter.fetch_add(1, Ordering::Relaxed);
+    conn.begin_immediate()?;
+    conn.execute(sql, params)?;
+    finish_chaos_txn(
+        conn,
+        rng,
+        rollback_one_in,
+        Some(&counters.commits),
+        Some(&counters.rollbacks),
+    )
+}
+
+/// Finish a chaos transaction by either committing or rolling back, chosen
+/// pseudorandomly so the workload exercises both code paths. The probability
+/// of a rollback is `1 / rollback_one_in` — pass a small number for chaos-heavy
+/// runs and a larger number when rollbacks should be rare. When the optional
+/// counters are provided both branches increment them so the resulting
+/// `chaos_commits` / `chaos_rollbacks` totals stay consistent across workloads.
+fn finish_chaos_txn(
+    conn: &mut dyn BenchConn,
+    rng: &mut ChaCha8Rng,
+    rollback_one_in: u32,
+    commits: Option<&AtomicU64>,
+    rollbacks: Option<&AtomicU64>,
+) -> Result<()> {
+    if rollback_one_in > 0 && rng.random_range(0..rollback_one_in) == 0 {
+        if let Some(c) = rollbacks {
+            c.fetch_add(1, Ordering::Relaxed);
+        }
+        conn.rollback()?;
+    } else {
+        if let Some(c) = commits {
+            c.fetch_add(1, Ordering::Relaxed);
+        }
+        conn.commit()?;
+    }
+    Ok(())
+}
+
+/// Insert a flat snapshot of named atomic counters into a chaos stats map.
+///
+/// Several chaos workloads share the same trailing block — load each counter
+/// under `Ordering::Relaxed` and stamp the value as a JSON number on the
+/// `chaos_<name>` key. Extracting this into a single named boundary keeps the
+/// counter-naming convention consistent across workloads and gives the
+/// duplicate-block detector exactly one site to flag if the schema ever drifts.
+fn record_chaos_counters(
+    stats: &mut BTreeMap<String, serde_json::Value>,
+    counters: &[(&'static str, &AtomicU64)],
+) {
+    for (name, counter) in counters {
+        stats.insert(
+            format!("chaos_{name}"),
+            serde_json::json!(counter.load(Ordering::Relaxed)),
+        );
+    }
+}
+
 fn chaos_stats(
     profile: &'static str,
     workload: &'static str,
@@ -710,4 +740,92 @@ fn large_blob(seed: usize) -> Vec<u8> {
     }
     out.truncate(256);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Exercises the counter shape used by `run_connection_churn`. The
+    /// connection-churn workload reports `connection_opens / reads / writes /
+    /// commits / rollbacks`; after `record_chaos_counters` runs we must see
+    /// every counter materialised under the `chaos_<name>` key with the
+    /// snapshot value, and no extra keys polluting the map.
+    #[test]
+    fn record_chaos_counters_writes_connection_churn_shape() {
+        let mut stats = chaos_stats("bounded", "connection-churn", 16, 10);
+        let connection_opens = AtomicU64::new(11);
+        let reads = AtomicU64::new(22);
+        let writes = AtomicU64::new(33);
+        let commits = AtomicU64::new(44);
+        let rollbacks = AtomicU64::new(55);
+
+        record_chaos_counters(
+            &mut stats,
+            &[
+                ("connection_opens", &connection_opens),
+                ("reads", &reads),
+                ("writes", &writes),
+                ("commits", &commits),
+                ("rollbacks", &rollbacks),
+            ],
+        );
+
+        assert_eq!(
+            stats.get("chaos_connection_opens"),
+            Some(&serde_json::json!(11))
+        );
+        assert_eq!(stats.get("chaos_reads"), Some(&serde_json::json!(22)));
+        assert_eq!(stats.get("chaos_writes"), Some(&serde_json::json!(33)));
+        assert_eq!(stats.get("chaos_commits"), Some(&serde_json::json!(44)));
+        assert_eq!(stats.get("chaos_rollbacks"), Some(&serde_json::json!(55)));
+        // Workload identifier survives the counter pass.
+        assert_eq!(
+            stats.get("chaos_workload"),
+            Some(&serde_json::json!("connection-churn"))
+        );
+        // No accidental key drift (chaos_* counters added + 6 keys from chaos_stats).
+        assert!(stats.contains_key("chaos_suite"));
+    }
+
+    /// Exercises the counter shape used by `run_index_hammer`, which adds a
+    /// `deletes` counter on top of the connection-churn shape. Asserts the
+    /// snapshot lands under `chaos_deletes` and the rest of the keys come
+    /// across unchanged so the certification consumer sees the same JSON
+    /// schema regardless of how many counters the caller passes in.
+    #[test]
+    fn record_chaos_counters_writes_index_hammer_shape() {
+        let mut stats = chaos_stats("bounded", "index-hammer", 1024, 20);
+        let reads = AtomicU64::new(101);
+        let writes = AtomicU64::new(202);
+        let deletes = AtomicU64::new(303);
+        let commits = AtomicU64::new(404);
+        let rollbacks = AtomicU64::new(505);
+
+        record_chaos_counters(
+            &mut stats,
+            &[
+                ("reads", &reads),
+                ("writes", &writes),
+                ("deletes", &deletes),
+                ("commits", &commits),
+                ("rollbacks", &rollbacks),
+            ],
+        );
+
+        assert_eq!(stats.get("chaos_reads"), Some(&serde_json::json!(101)));
+        assert_eq!(stats.get("chaos_writes"), Some(&serde_json::json!(202)));
+        assert_eq!(stats.get("chaos_deletes"), Some(&serde_json::json!(303)));
+        assert_eq!(stats.get("chaos_commits"), Some(&serde_json::json!(404)));
+        assert_eq!(stats.get("chaos_rollbacks"), Some(&serde_json::json!(505)));
+        assert_eq!(
+            stats.get("chaos_workload"),
+            Some(&serde_json::json!("index-hammer"))
+        );
+        // The 5-counter shape preserves the seed-row count from chaos_stats.
+        assert_eq!(
+            stats.get("chaos_seed_rows"),
+            Some(&serde_json::json!(1024_usize))
+        );
+    }
 }

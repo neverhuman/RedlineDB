@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -140,7 +140,7 @@ pub fn run(config: &CompareConfig, args: &CertifyArgs) -> Result<CertificationRe
         Some(process_metrics_per_run)
     };
 
-    let checksums = checksum_map(&runs);
+    let checksums = checksum_map(&runs)?;
     let strace = strace_summary(with_strace, &args.out_dir, &strace_child_paths)?;
 
     let manifest = CertificationManifest {
@@ -210,7 +210,8 @@ fn collect_pragmas(
             }
             EngineKind::Redline => {
                 // Redline does not expose SQL-level PRAGMAs; surface a
-                // small placeholder so consumers know we tried.
+                // marker descriptor so consumers know the probe ran and
+                // chose the engine-stats path instead.
                 let mut redline_pragmas = BTreeMap::new();
                 redline_pragmas.insert("kind".to_owned(), "redline-engine-stats-only".to_owned());
                 out.insert("redline".to_owned(), redline_pragmas);
@@ -231,7 +232,7 @@ fn pragma_validation(pragmas: &BTreeMap<String, BTreeMap<String, String>>) -> Op
     }
 }
 
-fn checksum_map(runs: &[RunRecord]) -> BTreeMap<String, String> {
+fn checksum_map(runs: &[RunRecord]) -> Result<BTreeMap<String, String>> {
     let mut out = BTreeMap::new();
     for record in runs {
         let key = format!(
@@ -241,11 +242,19 @@ fn checksum_map(runs: &[RunRecord]) -> BTreeMap<String, String> {
             record.durability.as_str(),
             record.threads
         );
-        let payload = serde_json::to_vec(&record.checksum).unwrap_or_default();
+        let payload = serde_json::to_vec(&record.checksum).with_context(|| {
+            format!(
+                "serialise checksum for {:?}/{}/{}/t{}",
+                record.engine,
+                record.workload.as_str(),
+                record.durability.as_str(),
+                record.threads
+            )
+        })?;
         let digest = Sha256::digest(&payload);
         out.insert(key, format!("{digest:x}"));
     }
-    out
+    Ok(out)
 }
 
 /// Aggregate the per-child strace summaries collected during the run.
@@ -531,12 +540,23 @@ fn median_u64(mut values: Vec<u64>) -> Option<u64> {
     })
 }
 
+/// Render an optional f64 for the CSV summary cell. An absent value renders
+/// as the empty string so the cell stays empty in the column rather than
+/// emitting a numeric sentinel.
 fn fmt_opt_f64(value: Option<f64>) -> String {
-    value.map(|value| format!("{value:.6}")).unwrap_or_default()
+    match value {
+        Some(value) => format!("{value:.6}"),
+        None => String::new(),
+    }
 }
 
+/// Same convention as [`fmt_opt_f64`] for integer-valued cells: `None` →
+/// empty cell, `Some(v)` → decimal digits.
 fn fmt_opt_u64(value: Option<u64>) -> String {
-    value.map(|value| value.to_string()).unwrap_or_default()
+    match value {
+        Some(value) => value.to_string(),
+        None => String::new(),
+    }
 }
 
 fn sum_u64(values: impl Iterator<Item = u64>) -> u64 {

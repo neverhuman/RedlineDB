@@ -66,7 +66,7 @@ pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
             | WorkloadKind::ChaosConnectionChurn
             | WorkloadKind::ChaosCheckpointThrash
             | WorkloadKind::ChaosIndexHammer
-            | WorkloadKind::ChaosTempSpillConvoy
+            | WorkloadKind::ChaosSortSpillConvoy
             | WorkloadKind::ChaosSchemaStorm
     ) {
         engine.seed_kv(spec.rows)?;
@@ -129,8 +129,8 @@ pub fn run_once(spec: &RunSpec) -> Result<RunRecord> {
     if matches!(spec.workload, WorkloadKind::ChaosIndexHammer) {
         return chaos::run_index_hammer(engine.as_ref(), spec);
     }
-    if matches!(spec.workload, WorkloadKind::ChaosTempSpillConvoy) {
-        return chaos::run_temp_spill_convoy(engine.as_ref(), spec);
+    if matches!(spec.workload, WorkloadKind::ChaosSortSpillConvoy) {
+        return chaos::run_sort_spill_convoy(engine.as_ref(), spec);
     }
     if matches!(spec.workload, WorkloadKind::ChaosSchemaStorm) {
         return chaos::run_schema_storm(engine.as_ref(), spec);
@@ -260,7 +260,7 @@ fn run_workload(engine: &dyn BenchEngine, spec: &RunSpec) -> Result<MeasuredMetr
                         | WorkloadKind::ChaosConnectionChurn
                         | WorkloadKind::ChaosCheckpointThrash
                         | WorkloadKind::ChaosIndexHammer
-                        | WorkloadKind::ChaosTempSpillConvoy
+                        | WorkloadKind::ChaosSortSpillConvoy
                         | WorkloadKind::ChaosSchemaStorm => {
                             unreachable!("phase-11 wave-1a workloads are self-managed")
                         }
@@ -605,9 +605,9 @@ fn metrics_summary(metrics: &Metrics, elapsed: Duration) -> MetricsSummary {
     MetricsSummary {
         operations: metrics.operations(),
         failures: metrics.failures(),
-        // Backward-compat: surfaces the original (busy + locked)
-        // count for one minor cycle while consumers migrate to the
-        // split fields below.
+        // Aggregate the BUSY + LOCKED count under the original field so
+        // dashboards that have not yet migrated to the split fields below
+        // continue to render during the one-minor-cycle migration window.
         busy_errors: metrics.busy_errors() + metrics.locked_errors(),
         locked_errors: metrics.locked_errors(),
         timeout_errors: metrics.timeout_errors(),

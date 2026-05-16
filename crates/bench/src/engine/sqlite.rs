@@ -56,8 +56,13 @@ impl SqliteEngine {
             "foreign_keys",
             "page_size",
         ] {
-            let value =
-                read_pragma_value(&conn, name).unwrap_or_else(|err| format!("<error: {err}>"));
+            // Pragma probe: on success record the value verbatim, on failure
+            // record a structured `<error: …>` sentinel so the certification
+            // report still reflects what went wrong without aborting the run.
+            let value = match read_pragma_value(&conn, name) {
+                Ok(value) => value,
+                Err(err) => format!("<error: {err}>"),
+            };
             out.insert(name.to_owned(), value);
         }
         out
@@ -165,7 +170,13 @@ impl BenchConn for SqliteConn {
 
     fn query_row(&mut self, sql: &str, params: &[CellValue]) -> Result<Vec<CellValue>> {
         let rows = self.query_all(sql, params)?;
-        Ok(rows.into_iter().next().unwrap_or_default())
+        // Contract: no-row queries return an empty row vector so the bench
+        // workloads can treat a 0-row scan as a successful "nothing matched"
+        // outcome (mirrors the redline engine adapter at the same path).
+        match rows.into_iter().next() {
+            Some(row) => Ok(row),
+            None => Ok(Vec::new()),
+        }
     }
 
     fn query_all(&mut self, sql: &str, params: &[CellValue]) -> Result<Vec<Vec<CellValue>>> {

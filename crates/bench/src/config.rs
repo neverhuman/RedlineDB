@@ -19,7 +19,9 @@ pub enum Command {
     Run(RunArgs),
     Compare(CompareArgs),
     Certify(CertifyArgs),
-    Compat(CompatArgs),
+    // Cross-engine replay suite: walks a `.sqlt` corpus against every engine
+    // and asserts byte-identical outputs.
+    CrossEngine(CrossEngineArgs),
     Recover(RecoverArgs),
     RecoverMatrix(RecoverMatrixArgs),
     FailpointMatrix(FailpointMatrixArgs),
@@ -115,7 +117,7 @@ impl CertifyArgs {
 }
 
 #[derive(Debug, Clone, Args)]
-pub struct CompatArgs {
+pub struct CrossEngineArgs {
     #[arg(long, value_enum, default_value = "both")]
     pub engine: EngineSet,
     #[arg(long)]
@@ -327,7 +329,7 @@ pub enum WorkloadKind {
     /// Chaos suite: mixed inserts, deletes, and indexed scans.
     ChaosIndexHammer,
     /// Chaos suite: sort/spill convoys under concurrent writes.
-    ChaosTempSpillConvoy,
+    ChaosSortSpillConvoy,
     /// Chaos suite: extreme-only DDL / schema churn.
     ChaosSchemaStorm,
 }
@@ -368,7 +370,7 @@ impl WorkloadKind {
             Self::ChaosConnectionChurn => "chaos-connection-churn",
             Self::ChaosCheckpointThrash => "chaos-checkpoint-thrash",
             Self::ChaosIndexHammer => "chaos-index-hammer",
-            Self::ChaosTempSpillConvoy => "chaos-temp-spill-convoy",
+            Self::ChaosSortSpillConvoy => "chaos-sort-spill-convoy",
             Self::ChaosSchemaStorm => "chaos-schema-storm",
         }
     }
@@ -514,9 +516,9 @@ pub struct FailpointMatrixCase {
 ///   returns from the workload cleanly. The `wal-fsync-skipped` case
 ///   is the canonical example: `return` makes `wal::flush` skip the
 ///   fsync but the workload otherwise completes normally.
-/// - `Any` — opt-out for legacy / experimental cases. Avoid in new
-///   cases; the whole point of lane-fp is to remove the previous
-///   trivial-pass behaviour.
+/// - `Any` — opt-out for pre-phase11 or in-flight experimental cases.
+///   Avoid in new cases; the whole point of lane-fp is to remove the
+///   trivial-pass behaviour that this opt-out preserves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExpectExit {
@@ -646,7 +648,7 @@ impl FromStr for WorkloadKind {
             "chaos-connection-churn" => Ok(Self::ChaosConnectionChurn),
             "chaos-checkpoint-thrash" => Ok(Self::ChaosCheckpointThrash),
             "chaos-index-hammer" => Ok(Self::ChaosIndexHammer),
-            "chaos-temp-spill-convoy" => Ok(Self::ChaosTempSpillConvoy),
+            "chaos-sort-spill-convoy" => Ok(Self::ChaosSortSpillConvoy),
             "chaos-schema-storm" => Ok(Self::ChaosSchemaStorm),
             _ => bail!("unknown workload {value}"),
         }

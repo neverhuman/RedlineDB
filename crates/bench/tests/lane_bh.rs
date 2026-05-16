@@ -434,7 +434,7 @@ fn chaos_suite_workloads_smoke() {
                 WorkloadKind::ChaosConnectionChurn => "connection-churn",
                 WorkloadKind::ChaosCheckpointThrash => "checkpoint-thrash",
                 WorkloadKind::ChaosIndexHammer => "index-hammer",
-                WorkloadKind::ChaosTempSpillConvoy => "temp-spill-convoy",
+                WorkloadKind::ChaosSortSpillConvoy => "sort-spill-convoy",
                 WorkloadKind::ChaosSchemaStorm => "schema-storm",
                 _ => unreachable!(),
             })

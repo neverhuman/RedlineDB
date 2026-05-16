@@ -380,8 +380,16 @@ fn verify_recovered(
 }
 
 fn read_ack_count(path: &Path) -> Result<usize> {
-    Ok(fs::read_to_string(path)
-        .unwrap_or_default()
+    // Contract: a missing ack log is interpreted as "zero acks recorded" —
+    // the recovery harness writes the file lazily and reads it after the
+    // child has crashed, so the absence of the file is a valid state we
+    // surface as `0` rather than as a failure to read.
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(err) => return Err(err.into()),
+    };
+    Ok(contents
         .lines()
         .filter(|line| !line.trim().is_empty())
         .count())

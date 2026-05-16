@@ -4,7 +4,7 @@ workloads = [
   "chaos-connection-churn",
   "chaos-checkpoint-thrash",
   "chaos-index-hammer",
-  "chaos-temp-spill-convoy",
+  "chaos-sort-spill-convoy",
   "chaos-schema-storm",
 ]
 durabilities = ["strict", "normal"]

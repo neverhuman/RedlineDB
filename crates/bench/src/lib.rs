@@ -1,8 +1,8 @@
 pub mod certify;
 mod chaos;
 pub mod checksum;
-mod compat;
 pub mod config;
+mod cross_engine;
 mod engine;
 pub mod failpoint_matrix;
 mod gates;
@@ -35,8 +35,8 @@ pub fn run(cli: Cli) -> Result<()> {
             let config = config::CompareConfig::load(&args.config)?;
             let _ = certify::run(&config, &args)?;
         }
-        config::Command::Compat(args) => {
-            let report = compat::run_suite(&args)?;
+        config::Command::CrossEngine(args) => {
+            let report = cross_engine::run_suite(&args)?;
             report::write_json(args.out.as_deref(), &report)?;
         }
         config::Command::Recover(args) => {
