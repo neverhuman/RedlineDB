@@ -295,6 +295,15 @@ impl SelectRuntimeTx {
         match self {
             Self::Owned(tx) => Some(tx),
             Self::Borrowed(ptr) => {
+                // `ptr` is a `*mut Txn` borrowed from `Connection::txn` and is
+                // guaranteed to outlive this `SelectRuntime` because the
+                // runtime is dropped before the connection's transaction slot
+                // is cleared (enforced by `Statement::reset` / `Drop for
+                // Statement` calling `finalize_runtime`). Exclusive access is
+                // held: the outer `with_current_connection` re-entrancy guard
+                // prevents any other code path from acquiring `&mut Txn` while
+                // this borrow is live.
+                // SAFETY: ptr outlives runtime; re-entrancy guard enforces exclusivity.
                 let tx = unsafe { ptr.as_mut() };
                 debug_assert!(tx.is_some(), "borrowed transaction pointer must be valid");
                 tx
@@ -434,7 +443,14 @@ impl Statement {
         // Hoist `&Connection` out so the closure body retains exclusive
         // access to `self` for runtime mutation.
         let conn_ptr: *const Connection = self.conn.as_ref();
-        // SAFETY: conn lives for as long as Self via Arc<Connection>.
+        // `conn_ptr` is derived from `self.conn.as_ref()`, where `self.conn`
+        // is an `Arc<Connection>` owned by `self`. The `Arc` keeps the
+        // `Connection` allocation alive for the duration of this method (and
+        // longer, since this borrow is bounded by the closure passed to
+        // `with_current_connection`). No `&mut Connection` exists anywhere
+        // because `Connection` only exposes `&self` methods, so aliasing is
+        // sound. The pointer is non-null because it comes from a reference.
+        // SAFETY: Arc keeps Connection alive; only &self methods exposed.
         let conn: &Connection = unsafe { &*conn_ptr };
         crate::exec::with_current_connection(conn, || {
             if matches!(self.runtime, RuntimeState::Idle) {

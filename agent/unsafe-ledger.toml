@@ -11,18 +11,6 @@ proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 invariant = "all unsafe blocks dereference raw pointers obtained from the public C ABI; callers are bound by the contract in docs/exceptions/ffi-c-header.md; ledger populated per-site by Section D1"
 
 [[entries]]
-file = "crates/redlinedb/src/registry.rs"
-owner = "public-rust-facade"
-proof_lane = "rtk cargo test -p redlinedb --quiet --locked"
-invariant = "global handle registry replaced with OnceLock<Mutex<_>> by Section D3"
-
-[[entries]]
-file = "crates/sql/src/statement.rs"
-owner = "sql-parser-planner-executor"
-proof_lane = "rtk cargo test -p redlinedb-sql --quiet --locked"
-invariant = "statement handle drop ordering proven by SAFETY comment added in Section D3"
-
-[[entries]]
 file = "crates/bench/src/process_metrics.rs"
 owner = "bench-harness"
 proof_lane = "rtk cargo test -p redlinedb-bench --quiet --locked"
@@ -118,3 +106,35 @@ line = 256
 owner = "phase10-diskann-index"
 invariant = "`slice::align_to::<f32>` never dereferences; returns the 4-aligned middle window plus the unaligned head/tail bytes; we check both head and tail are empty so any non-4-aligned input is rejected with `SectorError::LayoutMismatch` before any f32 read. f32 has no validity invariant beyond its 4-byte width (NaN bit patterns are valid f32); lifetime `'a` is preserved because the returned slice borrows from `vector_bytes`, which borrows from `buf: &'a [u8]`."
 proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::diskann::sectors --locked"
+
+[[entries]]
+file = "crates/redlinedb/src/registry.rs"
+line = 88
+owner = "rust-public-api"
+invariant = "REGISTRY is OnceLock<Mutex<Registry>>; not raw global mutation. All registry mutation is serialised by the Mutex guard returned from `registry().lock()`. No raw global aliasing is possible."
+proof_lane = "just fast"
+test = "crates/redlinedb/src/registry.rs::tests::registry_concurrent_open_returns_shared_handles"
+
+[[entries]]
+file = "crates/redlinedb/src/registry.rs"
+line = 280
+owner = "rust-public-api"
+invariant = "libc::flock called with a valid open fd borrowed from `&File` for the call's duration; LOCK_NB ensures non-blocking advisory lock. The descriptor cannot be closed concurrently because we hold a `&File`."
+proof_lane = "just fast"
+test = "crates/redlinedb/tests/* (integration: process_owner_lock paths)"
+
+[[entries]]
+file = "crates/sql/src/statement.rs"
+line = 307
+owner = "sql-parser-planner-executor"
+invariant = "`*mut Txn` is borrowed from `Connection::txn` and lives at least as long as the enclosing `Statement` (finalize_runtime is called on Drop). Exclusive access is enforced by the `with_current_connection` re-entrancy guard so no other code can hold `&mut Txn` concurrently."
+proof_lane = "just fast"
+test = "crates/sql/tests/* (integration: select runtime exercises borrowed transactions)"
+
+[[entries]]
+file = "crates/sql/src/statement.rs"
+line = 454
+owner = "sql-parser-planner-executor"
+invariant = "`conn_ptr` is derived from an `Arc<Connection>` field on `self`, so the allocation is kept alive for the duration of the dereferenced `&Connection`. `Connection` exposes only `&self` methods so no aliasing UB is possible."
+proof_lane = "just fast"
+test = "crates/sql/tests/* (integration: every statement.step call exercises this)"
