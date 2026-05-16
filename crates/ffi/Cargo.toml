@@ -7,11 +7,16 @@ rust-version.workspace = true
 
 [lib]
 name = "redlinedb"
-# `rlib` is required so integration tests under `tests/` can link against
-# the FFI surface (the safety_invariants suite calls `rldb_*` functions
-# directly via Rust paths). `cdylib` + `staticlib` keep the C ABI surface.
+# `rlib` joins `cdylib`/`staticlib` so integration tests under `tests/`
+# (Section D1 `safety_invariants.rs` + Section E `exec_input_boundary.rs`)
+# can link the public `rldb_*` / `sqlite3_*` symbols as a normal Rust
+# dependency. The cdylib/staticlib symbol set is unchanged — `rlib` is
+# purely an additional output format used by `cargo test --test`.
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 redlinedb-kernel = { path = "../kernel" }
 redlinedb-sql = { path = "../sql" }
+
+[dev-dependencies]
+tempfile = "3"

@@ -324,6 +324,18 @@
     "tools/": {
       "command": "just fast",
       "purpose": "verify Rust behavior and audit checks"
+    },
+    "crates/bench/tests/tenant_isolation.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test tenant_isolation --quiet --locked",
+      "purpose": "prove cross-tenant data isolation under the kv_tenant_idx fixture"
+    },
+    "crates/ffi/tests/exec_input_boundary.rs": {
+      "command": "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked",
+      "purpose": "prove FFI rldb_exec rejects malformed and injection-shaped input deterministically"
+    },
+    "crates/ffi/tests/safety_invariants.rs": {
+      "command": "rtk cargo test -p redlinedb-ffi --test safety_invariants --quiet --locked",
+      "purpose": "prove documented ownership invariants for the FFI surface"
     }
   },
   "workspace": "jankurai"

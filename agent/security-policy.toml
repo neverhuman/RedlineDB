@@ -1,7 +1,77 @@
 schema_version = "1.0.0"
+schema = "1"
 enabled_tools = ["gitleaks", "cargo audit", "npm audit"]
 required_tools = []
 advisory_tools = ["gitleaks", "cargo audit", "npm audit"]
 
 [severity_thresholds]
 fail_lane_on = "high"
+
+# Section E (jankurai-repair) cross-references for HLT-022 / HLT-023.
+#
+# This file pins the proof routing for the two security-class caps that
+# Section E lifted. Each entry names: the rule, the source-file site where
+# the auditor first matched the trigger term, and the integration test that
+# now constitutes the deterministic negative proof. Auditors that follow
+# the `[[proofs]]` convention (security-policy entries) can resolve the
+# `evidence_test` path to the live test file and treat it as the proof
+# window the rule requires.
+
+[[proofs]]
+rule = "HLT-022-AUTHZ-ISOLATION-GAP"
+cap = "authz-or-data-isolation-gap"
+trigger_site = "crates/bench/src/config.rs:291"
+trigger_term = "tenant_id"
+evidence_test = "crates/bench/tests/tenant_isolation.rs"
+evidence_command = "rtk cargo test -p redlinedb-bench --test tenant_isolation --quiet --locked"
+proof_lane = "fast"
+owner = "bench-harness"
+scenarios = [
+  "owner_can_read",
+  "non_owner_denied",
+  "cross_tenant_index_probe_empty",
+  "tombstone_owner_only",
+]
+notes = """
+Cross-tenant data isolation negative proofs for the kv / kv_tenant_idx
+fixture used by every secondary-index workload in
+crates/bench/src/workload.rs. The four scenarios cover the positive
+control (owner reads back their own row), the denial (non-owner gets
+zero rows), the index-probe leak (range and equality probes against the
+tenant index return empty for a non-owning tenant), and the
+delete-scoping property (an owner's delete does not affect another
+tenant's rows nor leak ghosts to other tenants).
+"""
+
+[[proofs]]
+rule = "HLT-023-INPUT-BOUNDARY-GAP"
+cap = "input-boundary-gap"
+trigger_site = "crates/ffi/include/redlinedb.h:124"
+trigger_term = "shell execution"
+evidence_test = "crates/ffi/tests/exec_input_boundary.rs"
+evidence_command = "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked"
+proof_lane = "fast"
+owner = "c-abi"
+scenarios = [
+  "sql_injection_classic_quote_escape",
+  "sql_injection_stacked_statement_executes_per_documented_contract",
+  "multi_byte_utf8_handled",
+  "null_byte_in_bound_parameter",
+]
+related_evidence_tests = [
+  # Section D1 covers the complementary boundary scenarios (NUL mid-
+  # string truncation, non-UTF-8 SQL, oversize SQL, null pointers).
+  "crates/ffi/tests/safety_invariants.rs",
+]
+notes = """
+Deterministic negative tests for the rldb_exec input surface. The four
+scenarios cover parameterized-input safety (classic quote-escape
+injection becomes a literal string lookup), multi-statement contract
+(stacked statements execute sequentially and surface the failing
+statement's status code per the documented FFI contract — observed:
+RLDB_NOTADB for a DROP against a missing table), multi-byte UTF-8
+round-trip safety (string literals containing 2-, 3-, and 4-byte
+codepoints round-trip byte-exact), and the blob-vs-text NUL contract
+(blobs are length-prefixed; NUL bytes mid-blob must round-trip without
+truncation).
+"""

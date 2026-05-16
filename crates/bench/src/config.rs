@@ -294,6 +294,11 @@ pub enum WorkloadKind {
     /// `SecondaryIndexRange` but the projection is purely the count
     /// aggregate so the engine never visits the heap, isolating the
     /// cost of walking the index leaves.
+    ///
+    /// Cross-tenant data-isolation negative proofs for this fixture live
+    /// in `crates/bench/tests/tenant_isolation.rs` (Section E,
+    /// HLT-022-AUTHZ-ISOLATION-GAP). See also
+    /// `agent/security-policy.toml` for the proof routing.
     SecondaryIndexCount,
     /// Phase 11 wave 1a: ordered range with `LIMIT` early-stop. The
     /// query shape is `SELECT * FROM kv WHERE tenant >= ? ORDER BY
