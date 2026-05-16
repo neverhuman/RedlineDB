@@ -351,6 +351,11 @@
       "command": "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked",
       "purpose": "prove FFI rldb_exec rejects malformed and injection-shaped input deterministically"
     },
+    "crates/sql/tests/parser_proptest.rs": {
+      "command": "rtk cargo test -p redlinedb-sql --test parser_proptest --quiet --locked",
+      "purpose": "property-based parser regressions for literal categories and edge-case no-panic",
+      "proof_lane": "fast"
+    },
     "crates/ffi/tests/safety_invariants.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test safety_invariants --quiet --locked",
       "purpose": "prove documented ownership invariants for the FFI surface"

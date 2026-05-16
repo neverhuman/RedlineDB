@@ -862,6 +862,7 @@ dependencies = [
  "arc-swap",
  "fail",
  "parking_lot",
+ "proptest",
  "redlinedb-kernel",
  "regex",
  "serde_json",
