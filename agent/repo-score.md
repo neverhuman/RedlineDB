@@ -7,15 +7,15 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778930378`
-- Started at: `1778930378`
-- Elapsed: `6092` ms
+- Run ID: `1778930591`
+- Started at: `1778930591`
+- Elapsed: `6629` ms
 - Scope: `full`
 - Raw score: `83`
-- Final score: `78`
+- Final score: `83`
 - Decision: `advisory`
 - Minimum score: `85`
-- Caps applied: `authz-or-data-isolation-gap`
+- Caps applied: `none`
 
 ## Hard Rule Caps
 
@@ -46,7 +46,7 @@
 | `secret-like-content-detected` | 60 | no |
 | `false-green-test-risk` | 76 | no |
 | `destructive-migration-risk` | 70 | no |
-| `authz-or-data-isolation-gap` | 78 | yes |
+| `authz-or-data-isolation-gap` | 78 | no |
 | `input-boundary-gap` | 78 | no |
 | `agent-tool-supply-chain-gap` | 78 | no |
 | `release-readiness-gap` | 80 | no |
@@ -239,18 +239,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-4. `high` `security` `crates/bench/src/config.rs:293`
-   Rule: `HLT-022-AUTHZ-ISOLATION-GAP`
-   Check: `HLT-022-AUTHZ-ISOLATION-GAP:security` `hard` confidence `0.88`
-   Route: TLR `Business truth`, lane `db`, owner `bench-harness`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `tenant_id`
-   Reason: authz/data isolation requires negative proof evidence
-   Fix: add owner/non-owner authorization tests or RLS evidence for the touched data boundary
-   Rerun: `just fast`
-   Fingerprint: `sha256:45fb0f690e6cfdde2272c9127b724d5697484f08b1025815b11d01aa22ce9af5`
-   Evidence: /// existing `kv_tenant_idx` (the `tenant_id` boundary index).
-5. `medium` `release` `docs/testing.md`
+4. `medium` `release` `docs/testing.md`
    Rule: `HLT-026-COST-BUDGET-GAP`
    Check: `HLT-026-COST-BUDGET-GAP:release` `soft` confidence `0.88`
    Route: TLR `Verification`, lane `release`, owner `standard`
@@ -270,13 +259,11 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `high` `HLT-022-AUTHZ-ISOLATION-GAP` `crates/bench/src/config.rs` - add owner/non-owner authorization tests or RLS evidence for the touched data boundary
-   Route: `Business truth`/`db`
-2. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-3. `medium` `HLT-026-COST-BUDGET-GAP` `docs/testing.md` - add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
+2. `medium` `HLT-026-COST-BUDGET-GAP` `docs/testing.md` - add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
    Route: `Verification`/`release`
-4. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+3. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
-5. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
+4. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
    Route: `Security, secrets, agency`/`security`

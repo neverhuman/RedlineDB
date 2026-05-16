@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:f0dcc52c83dbd04c9a929dbceb344c5a3dbd2374fef0e5f637c7fdab7e608283",
-  "input_fingerprint": "sha256:be2a02e921899649637aa068fc20acce506caa833f2499fe5ef0d2a658c1065e",
+  "report_fingerprint": "sha256:bea52bdd1ebc16e6361011d7138b102184fb98d4fdae8e7ba411ac8754ada874",
+  "input_fingerprint": "sha256:954451d80624b5924d8d6f1b11801496b8cbab64d7a526101eef7033df04f5e5",
   "policy_fingerprint": "sha256:53cee6bbb7603a44df93e1cedc79a3a9fd7a7bf1e7bcc4b4d348a61eddd03328",
   "manifest_fingerprints": {
     "owner_map": "sha256:66ea210c0e693740865bdfd82620899835a43775cb80d91e3acc4b35a6221f80",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778930378",
+  "generated_at": "1778930591",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -22,28 +22,26 @@
   "target_stack": "Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service",
   "claimed_conformance_level": "HL3",
   "observed_conformance_level": "HL2",
-  "conformance_decision": "block",
-  "conformance_blockers": [
-    "HLT-022-AUTHZ-ISOLATION-GAP on crates/bench/src/config.rs"
-  ],
+  "conformance_decision": "review",
+  "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1778930378",
-  "started_at": "1778930378",
-  "elapsed_ms": 6092,
+  "run_id": "1778930591",
+  "started_at": "1778930591",
+  "elapsed_ms": 6629,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 78,
+  "score": 83,
   "raw_score": 83,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 1,
+    "hard_findings": 0,
     "soft_findings": 4,
     "ratchet": {
-      "baseline_score": 78,
+      "baseline_score": 83,
       "allowed_drop": 0,
       "passed": false,
       "score_delta": 0,
@@ -56,7 +54,7 @@
     }
   },
   "git": {
-    "head": "894f18d",
+    "head": "4d4f1e0",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -80,9 +78,7 @@
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
-  "caps_applied": [
-    "authz-or-data-isolation-gap"
-  ],
+  "caps_applied": [],
   "hard_rules": [
     {
       "id": "no-root-agent-instructions",
@@ -476,10 +472,10 @@
       "api_mocks": [],
       "artifact_backed_proof": [
         "agent/proof-lanes.toml",
+        "agent/repo-score.json",
         "agent/test-map.json",
         "agent/ux-qa.toml",
-        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json",
-        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json"
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json"
       ],
       "design_tokens": [],
       "geometry_runtime": [
@@ -1041,7 +1037,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-16T11:19:32.498941+00:00",
+    "generated_at": "2026-05-16T11:23:04.962503+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -3119,30 +3115,6 @@
       "owner": "workspace"
     },
     {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/bench/src/config.rs",
-      "problem": "authorization or data-isolation surface lacks direct negative proof",
-      "agent_fix": "add owner/non-owner authorization tests or RLS evidence for the touched data boundary",
-      "evidence": [
-        "/// existing `kv_tenant_idx` (the `tenant_id` boundary index)."
-      ],
-      "check_id": "HLT-022-AUTHZ-ISOLATION-GAP:security",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "boundary-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:45fb0f690e6cfdde2272c9127b724d5697484f08b1025815b11d01aa22ce9af5",
-      "rule_id": "HLT-022-AUTHZ-ISOLATION-GAP",
-      "tlr": "Business truth",
-      "lane": "db",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "bench-harness",
-      "line": 293,
-      "matched_term": "tenant_id",
-      "reason": "authz/data isolation requires negative proof evidence"
-    },
-    {
       "severity": "medium",
       "category": "release",
       "path": "docs/testing.md",
@@ -3167,16 +3139,6 @@
     }
   ],
   "agent_fix_queue": [
-    {
-      "path": "crates/bench/src/config.rs",
-      "priority": "high",
-      "rule_id": "HLT-022-AUTHZ-ISOLATION-GAP",
-      "tlr": "Business truth",
-      "lane": "db",
-      "owner": "bench-harness",
-      "task": "add owner/non-owner authorization tests or RLS evidence for the touched data boundary",
-      "why": "authorization or data-isolation surface lacks direct negative proof"
-    },
     {
       "path": "Justfile",
       "priority": "medium",
