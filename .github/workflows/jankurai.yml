@@ -177,6 +177,12 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48
+        # Soft check: dependency-review needs GitHub Advanced Security
+        # Dependency graph enabled at the repo level. While that is being
+        # configured, do not block PR merges on it. Re-enable as a hard
+        # gate by removing `continue-on-error` once Dependency graph is
+        # turned on at github.com/<owner>/<repo>/settings/security_analysis.
+        continue-on-error: true
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
