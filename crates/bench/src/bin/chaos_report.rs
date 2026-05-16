@@ -42,11 +42,10 @@ fn parse_args(argv: &[OsString]) -> Result<Args, String> {
             "--input" => {
                 let val = match inline_value {
                     Some(v) => v,
-                    None => iter
-                        .next()
-                        .ok_or_else(|| "--input requires a value".to_string())?
-                        .to_string_lossy()
-                        .into_owned(),
+                    None => match iter.next() {
+                        Some(v) => v.to_string_lossy().into_owned(),
+                        None => return Err("--input requires a value".to_string()),
+                    },
                 };
                 input = Some(PathBuf::from(val));
             }
@@ -248,7 +247,7 @@ fn infer_source_paths(workload: &str) -> Vec<String> {
         "chaos-connection-churn",
         "chaos-checkpoint-thrash",
         "chaos-index-hammer",
-        "chaos-temp-spill-convoy",
+        "chaos-sort-spill-convoy",
         "chaos-schema-storm",
     ];
     let index_batch = ["secondary-index-range", "secondary-index-count"];

@@ -12,14 +12,14 @@ invariant = "all unsafe blocks dereference raw pointers obtained from the public
 
 [[entries]]
 file = "crates/bench/src/process_metrics.rs"
-line = 110
+line = 109
 owner = "bench-harness"
 invariant = "libc::getrusage(RUSAGE_SELF, _) cannot fail with EINVAL for SELF; on success it initialises every field of rusage; we assume_init only after rc == 0."
 proof_lane = "rtk cargo test -p redlinedb-bench process_metrics --quiet --locked"
 
 [[entries]]
 file = "crates/bench/src/process_metrics.rs"
-line = 115
+line = 116
 owner = "bench-harness"
 invariant = "MaybeUninit::<libc::rusage>::assume_init() called only on the rc == 0 branch where the kernel guarantees every field of rusage has been written; sound to consume."
 proof_lane = "rtk cargo test -p redlinedb-bench process_metrics --quiet --locked"

@@ -100,18 +100,19 @@ fn parse_kib(value: &str) -> Option<u64> {
 pub fn collect_self() -> ProcessMetrics {
     let mut metrics = ProcessMetrics::default();
     let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
-    // SAFETY: `libc::getrusage` with `RUSAGE_SELF` cannot fail with
-    // EINVAL (the SELF target is always valid), and on success it
-    // initialises every field of `rusage` in-place. We only consume
-    // `usage` via `assume_init` after observing `rc == 0`, so the
-    // struct is fully initialised at that point. The pointer is a
-    // valid, properly-aligned, writable pointer obtained from
-    // `MaybeUninit::as_mut_ptr`.
+    // `libc::getrusage` with `RUSAGE_SELF` cannot fail with EINVAL (the SELF
+    // target is always valid) and on success initialises every field of
+    // `rusage` in-place. The pointer is a valid, properly-aligned, writable
+    // pointer obtained from `MaybeUninit::as_mut_ptr`.
+    // SAFETY: valid SELF target, valid writable rusage pointer; kernel
+    // initialises the struct in-place on rc == 0.
     let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) };
     if rc == 0 {
-        // SAFETY: `rc == 0` implies the kernel wrote every field of
-        // the `rusage` struct (see `man getrusage(2)`); reading the
-        // populated struct is sound.
+        // `rc == 0` is the kernel's contract that every field of `rusage`
+        // has been initialized in-place (see `man getrusage(2)`); the
+        // `MaybeUninit` proof obligation that every field be initialized
+        // before `assume_init` is therefore discharged on this branch.
+        // SAFETY: every field of `rusage` initialized by `getrusage` because rc == 0; `MaybeUninit::assume_init` precondition is satisfied; reading each field is sound.
         let usage = unsafe { usage.assume_init() };
         // macOS reports `ru_maxrss` in bytes; Linux reports KiB.
         metrics.rss_peak_bytes = Some(usage.ru_maxrss as u64);

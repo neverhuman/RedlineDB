@@ -500,7 +500,7 @@ impl Connection {
         F: Send + Sync + 'static + Fn(&[ValueRef<'_>]) -> Result<Value>,
     {
         Err(Error::unsupported(
-            "scalar function hooks are not implemented yet",
+            "scalar function hooks are reserved for a follow-on milestone",
         ))
     }
 
