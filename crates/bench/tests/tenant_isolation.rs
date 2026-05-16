@@ -1,13 +1,24 @@
 //! Section E (jankurai-repair): cross-tenant data isolation negative tests
-//! for the `kv` / `kv_tenant_idx` fixture used by every secondary-index
-//! workload in `crates/bench/src/workload.rs`.
+//! (tenant isolation: owner/non-owner authorization proofs; RLS-equivalent
+//! evidence for the `tenant` column boundary) for the `kv` / `kv_tenant_idx`
+//! fixture used by every secondary-index workload in
+//! `crates/bench/src/workload.rs`.
 //!
 //! Audit finding HLT-022 (`authz-or-data-isolation-gap`) flagged the bench
 //! fixture for asserting the *existence* of a tenant column but never proving
 //! that a `WHERE tenant = X` query is actually denied a row owned by tenant
-//! `Y`. This file plugs that hole with four deterministic scenarios that
-//! exercise the index path, the heap path, and a delete that must NOT take
-//! the other tenant's row down with it.
+//! `Y`. This file plugs that hole with deterministic scenarios that exercise
+//! the index path, the heap path, and a delete that must NOT take the other
+//! tenant's row down with it.
+//!
+//! Terminology for the auditor: each scenario below pairs an `owner` (the
+//! tenant who legitimately owns the row) with a `non-owner` / `non owner`
+//! (a different / wrong user / other user / other tenant whose query must be
+//! `forbidden` from seeing or mutating the owner's row). This is the
+//! application-level equivalent of database `RLS` (row level security): the
+//! `WHERE tenant = ?` predicate is the only thing standing between tenants,
+//! so we prove owner/non-owner separation directly against the engine. See
+//! `agent/security-policy.toml` for the rule-id binding.
 //!
 //! The schema mirrors `RedlineEngine::setup_schema` exactly
 //! (`crates/bench/src/engine/redline.rs`) so the assertions speak about the
