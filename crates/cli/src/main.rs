@@ -11,7 +11,12 @@ use redlinedb::{
 use serde_json::json;
 
 #[derive(Parser, Debug)]
-#[command(name = "redlinedb", about = "RedlineDB CLI (SQLite Drop-in)", disable_help_flag = true, disable_version_flag = true)]
+#[command(
+    name = "redlinedb",
+    about = "RedlineDB CLI (SQLite Drop-in)",
+    disable_help_flag = true,
+    disable_version_flag = true
+)]
 struct Cli {
     #[arg(long = "help")]
     help: bool,
@@ -134,23 +139,29 @@ fn main() {
         Some(f) => f,
         None => ":memory:".to_string(),
     };
-    
+
     // Determine output mode
     let mut mode = OutputMode::List;
-    if cli.csv { mode = OutputMode::Csv; }
-    else if cli.json { mode = OutputMode::Json; }
-    else if cli.line { mode = OutputMode::Line; }
-    else if cli.markdown { mode = OutputMode::Markdown; }
-    else if cli.quote { mode = OutputMode::Quote; }
-    else if cli.table { mode = OutputMode::Table; }
-    else if cli.tabs { mode = OutputMode::Tabs; }
+    if cli.csv {
+        mode = OutputMode::Csv;
+    } else if cli.json {
+        mode = OutputMode::Json;
+    } else if cli.line {
+        mode = OutputMode::Line;
+    } else if cli.markdown {
+        mode = OutputMode::Markdown;
+    } else if cli.quote {
+        mode = OutputMode::Quote;
+    } else if cli.table {
+        mode = OutputMode::Table;
+    } else if cli.tabs {
+        mode = OutputMode::Tabs;
+    }
 
-    let separator = cli.separator.unwrap_or_else(|| {
-        match mode {
-            OutputMode::Tabs => "\t".to_string(),
-            OutputMode::Csv => ",".to_string(),
-            _ => "|".to_string(),
-        }
+    let separator = cli.separator.unwrap_or_else(|| match mode {
+        OutputMode::Tabs => "\t".to_string(),
+        OutputMode::Csv => ",".to_string(),
+        _ => "|".to_string(),
     });
 
     let show_header = cli.header && !cli.noheader;
@@ -167,7 +178,9 @@ fn main() {
     if let Some(cmd) = cli.cmd {
         if let Err(e) = run_query_sqlite(&db, &cmd, &mode, &separator, show_header) {
             eprintln!("Error: {}", e);
-            if cli.bail { exit(1); }
+            if cli.bail {
+                exit(1);
+            }
         }
     }
 
@@ -200,7 +213,9 @@ fn main() {
                 }
                 if let Err(e) = run_query_sqlite(&db, &buffer, &mode, &separator, show_header) {
                     eprintln!("Error: {}", e);
-                    if cli.bail { exit(1); }
+                    if cli.bail {
+                        exit(1);
+                    }
                 }
                 buffer.clear();
             }
@@ -208,7 +223,9 @@ fn main() {
         if !buffer.trim().is_empty() {
             if let Err(e) = run_query_sqlite(&db, &buffer, &mode, &separator, show_header) {
                 eprintln!("Error: {}", e);
-                if cli.bail { exit(1); }
+                if cli.bail {
+                    exit(1);
+                }
             }
         }
     } else {
@@ -217,39 +234,47 @@ fn main() {
         println!("Enter \".help\" for usage hints.");
         println!("Connected to a transient in-memory database.");
         println!("Use \".open FILENAME\" to reopen on a persistent database.");
-        
+
         let mut rl = rustyline::DefaultEditor::new().unwrap();
         let mut buffer = String::new();
         loop {
-            let prompt = if buffer.is_empty() { "sqlite> " } else { "   ...> " };
+            let prompt = if buffer.is_empty() {
+                "sqlite> "
+            } else {
+                "   ...> "
+            };
             let readline = rl.readline(prompt);
             match readline {
                 Ok(line) => {
                     let line = line.trim();
-                    if line.is_empty() { continue; }
-                    
+                    if line.is_empty() {
+                        continue;
+                    }
+
                     if buffer.is_empty() && line.starts_with('.') {
                         handle_dot_command(line);
                         continue;
                     }
-                    
+
                     rl.add_history_entry(line).unwrap();
                     buffer.push_str(line);
                     buffer.push('\n');
-                    
+
                     if line.ends_with(';') {
-                        if let Err(e) = run_query_sqlite(&db, &buffer, &mode, &separator, show_header) {
+                        if let Err(e) =
+                            run_query_sqlite(&db, &buffer, &mode, &separator, show_header)
+                        {
                             eprintln!("Error: {}", e);
                         }
                         buffer.clear();
                     }
-                },
+                }
                 Err(rustyline::error::ReadlineError::Interrupted) => {
                     buffer.clear();
-                },
+                }
                 Err(rustyline::error::ReadlineError::Eof) => {
                     break;
-                },
+                }
                 Err(err) => {
                     eprintln!("Error: {:?}", err);
                     break;
@@ -267,7 +292,10 @@ fn handle_dot_command(cmd: &str) {
         println!(".help                  Show this message");
         println!(".quit                  Exit this program");
     } else {
-        println!("Error: unknown command or invalid arguments: \"{}\". Enter \".help\" for help", cmd.split_whitespace().next().unwrap_or(""));
+        println!(
+            "Error: unknown command or invalid arguments: \"{}\". Enter \".help\" for help",
+            cmd.split_whitespace().next().unwrap_or("")
+        );
     }
 }
 
@@ -288,12 +316,19 @@ fn print_sqlite_help() {
     println!("   -version             show SQLite version");
 }
 
-fn run_query_sqlite(db: &Database, sql: &str, mode: &OutputMode, separator: &str, _show_header: bool) -> Result<(), String> {
+fn run_query_sqlite(
+    db: &Database,
+    sql: &str,
+    mode: &OutputMode,
+    separator: &str,
+    _show_header: bool,
+) -> Result<(), String> {
     let mut conn = db.connect().map_err(|err| err.to_string())?;
 
     // Split the input into individual statements separated by ';'
     // This matches sqlite3 behavior where multiple statements can be piped on one line.
-    let statements: Vec<&str> = sql.split(';')
+    let statements: Vec<&str> = sql
+        .split(';')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .collect();
@@ -333,7 +368,10 @@ fn run_query_sqlite(db: &Database, sql: &str, mode: &OutputMode, separator: &str
                         ValueRef::Text(value) => {
                             if *mode == OutputMode::Csv {
                                 let escaped = value.replace("\"", "\"\"");
-                                if escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n") {
+                                if escaped.contains(",")
+                                    || escaped.contains("\"")
+                                    || escaped.contains("\n")
+                                {
                                     print!("\"{}\"", escaped);
                                 } else {
                                     print!("{}", escaped);
@@ -341,7 +379,7 @@ fn run_query_sqlite(db: &Database, sql: &str, mode: &OutputMode, separator: &str
                             } else {
                                 print!("{value}");
                             }
-                        },
+                        }
                         ValueRef::Blob(value) => print!("<blob:{}>", value.len()),
                     }
                 }
@@ -350,7 +388,10 @@ fn run_query_sqlite(db: &Database, sql: &str, mode: &OutputMode, separator: &str
         }
 
         if *mode == OutputMode::Json && !json_results.is_empty() {
-            println!("{}", serde_json::to_string_pretty(&json_results).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json_results).unwrap_or_default()
+            );
         }
     }
 
