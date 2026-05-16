@@ -45,8 +45,8 @@ fn smoke_compare_config_exists() {
 #[test]
 fn cert_v3_configs_register_feature_workloads() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("bench/certification-phase10-v3-smoke.toml");
-    let config = CompareConfig::load(&path).expect("load phase10 v3 smoke config");
+        .join("bench/certification-phase10-smoke.toml");
+    let config = CompareConfig::load(&path).expect("load phase10 smoke config");
     for workload in [
         WorkloadKind::JsonPathExtract,
         WorkloadKind::JsonPathUpdate,
@@ -58,7 +58,7 @@ fn cert_v3_configs_register_feature_workloads() {
     ] {
         assert!(
             config.workloads.contains(&workload),
-            "{workload:?} missing from cert-v3 smoke config"
+            "{workload:?} missing from phase10 smoke config"
         );
     }
 }
@@ -66,8 +66,8 @@ fn cert_v3_configs_register_feature_workloads() {
 #[test]
 fn cert_v3_sqlite_compare_config_filters_ann_workloads() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("bench/certification-phase10-v3-compare.toml");
-    let config = CompareConfig::load(&path).expect("load cert-v3 compare config");
+        .join("bench/certification-phase10-compare.toml");
+    let config = CompareConfig::load(&path).expect("load phase10 compare config");
     assert_eq!(
         config.engines,
         vec![EngineKind::Redline, EngineKind::Sqlite]

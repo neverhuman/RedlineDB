@@ -1,10 +1,10 @@
-mod backup;
 mod error;
 mod machine;
 mod options;
 mod params;
 mod phase8;
 mod registry;
+mod snapshot;
 mod value;
 
 use std::cell::Cell;
@@ -294,7 +294,7 @@ impl Database {
         dst: impl AsRef<Path>,
         options: BackupOptions,
     ) -> Result<BackupStats> {
-        backup::backup_to_path(self, dst, options)
+        snapshot::backup_to_path(self, dst, options)
     }
 
     pub fn backup_physical_to_path(

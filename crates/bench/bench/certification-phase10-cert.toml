@@ -1,4 +1,4 @@
-out_dir = "target/bench/xbabe1/phase10-cert-v3-stress"
+out_dir = "target/bench/xbabe1/phase10-cert"
 engines = ["redline"]
 workloads = [
   "json-path-extract",
@@ -10,7 +10,7 @@ workloads = [
   "large-sort-spill",
 ]
 durabilities = ["strict", "normal"]
-threads = [32, 64, 96, 128]
-rows = 250000
-seconds = 30
-cache_mib = 8192
+threads = [1, 2, 4, 8, 16, 32, 64, 96, 128]
+rows = 100000
+seconds = 10
+cache_mib = 1024

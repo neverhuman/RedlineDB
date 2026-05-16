@@ -1,4 +1,4 @@
-//! Backup API: copy a redline database directory to a destination path.
+//! Copy the redlinedb data directory to a destination path for snapshot use.
 
 use std::ffi::CStr;
 use std::fs;

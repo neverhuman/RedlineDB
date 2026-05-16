@@ -1,7 +1,7 @@
 {
-  "report_fingerprint": "sha256:ade946696e89a74dfbfc9d5ae70b85eb4cc8b33d300b3c7f16838ef70c57fafb",
-  "input_fingerprint": "sha256:b99ab1f5ed271ba774a041431062e812fe481236f05cd1434cdb9c7b27b9a614",
-  "policy_fingerprint": "sha256:1344c6682471353eb10a07a55a14e5fdd73676dd9aafd00b9f60dffd43c8b443",
+  "report_fingerprint": "sha256:86c6b52e960f0ab814e688734bdfdcfdfb257142fd1a27868f780b2a16d53253",
+  "input_fingerprint": "sha256:e8884c5527049d413d34e61a3aa57e7f6b229545289f2ad5b0bd988153e9e6bc",
+  "policy_fingerprint": "sha256:2244035b9549f2711766fd6931ce21839ea75f579d578ae8da8be2e555cf2d84",
   "manifest_fingerprints": {
     "owner_map": "sha256:74f494a6cbc365236d62d3dfc1061a69f5f4c34fa0cc94ba1fb397e3b81db9f6",
     "test_map": "sha256:b9ab67436301f2686ca4b115bfb46eef6e0dd1f5ed3c12ba7260c6de2241e036",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778893956",
+  "generated_at": "1778895932",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -24,13 +24,12 @@
   "observed_conformance_level": "HL2",
   "conformance_decision": "block",
   "conformance_blockers": [
-    "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
-    "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
-    "HLT-001-DEAD-MARKER on crates/bench/src/certify.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/src/bin/chaos_report.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/src/bin/chaos_report.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/certify.rs",
     "HLT-000-SCORE-DIMENSION:vibe on crates/bench/src/chaos.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/chaos.rs",
@@ -62,14 +61,6 @@
     "HLT-017-OPAQUE-OBSERVABILITY on crates/domain",
     "HLT-000-SCORE-DIMENSION:stack on crates/ffi/include/redlinedb.h",
     "HLT-023-INPUT-BOUNDARY-GAP on crates/ffi/include/redlinedb.h",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/backup.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/bind.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/bind.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/bind.rs",
@@ -114,6 +105,14 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_compat.rs",
@@ -207,7 +206,6 @@
     "HLT-001-DEAD-MARKER on crates/redlinedb/src/machine.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/redlinedb/src/registry.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/redlinedb/src/registry.rs",
-    "HLT-001-DEAD-MARKER on crates/sql/src/connection.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/mod.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar.rs",
@@ -234,25 +232,24 @@
     "HLT-001-DEAD-MARKER on crates/sql/src/regexp.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/session.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/sql/src/statement.rs",
-    "HLT-025-RELEASE-READINESS-GAP on docs/release.md",
-    "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
+    "HLT-025-RELEASE-READINESS-GAP on docs/release.md"
   ],
   "repo": ".",
-  "run_id": "1778893956",
-  "started_at": "1778893956",
-  "elapsed_ms": 5113,
+  "run_id": "1778895932",
+  "started_at": "1778895932",
+  "elapsed_ms": 5847,
   "scope": {
     "mode": "full",
     "paths": []
   },
   "score": 64,
-  "raw_score": 69,
+  "raw_score": 73,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 212,
-    "soft_findings": 14,
+    "hard_findings": 209,
+    "soft_findings": 7,
     "ratchet": {
       "baseline_score": 64,
       "allowed_drop": 0,
@@ -267,7 +264,7 @@
     }
   },
   "git": {
-    "head": "0f2a4e7",
+    "head": "5a47128",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -292,7 +289,6 @@
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
   "caps_applied": [
-    "python-direct-product-truth-or-db-ownership",
     "non-optimal-product-language-found",
     "vibe-placeholders-in-product-code",
     "fallback-soup-in-product-code",
@@ -303,8 +299,7 @@
     "release-readiness-gap",
     "no-agent-friendly-exception-pattern",
     "missing-agent-readable-docs",
-    "rust-bad-behavior",
-    "repo-rot-bad-behavior"
+    "rust-bad-behavior"
   ],
   "hard_rules": [
     {
@@ -520,11 +515,10 @@
         "reference-profile cell `ops` has local AGENTS.md guidance",
         "root `README.md` routes to workspace layout",
         "owner map covers audited paths",
-        "authored code file exceeds 500 LOC"
+        "authored code file exceeds 500 LOC",
+        "authored code file exceeds 1000 LOC"
       ],
-      "notes": [
-        "repo-rot hard findings in active source paths: 6"
-      ]
+      "notes": []
     },
     {
       "name": "Contract and boundary integrity",
@@ -587,8 +581,9 @@
       "score": 0,
       "weighted_points": 0.0,
       "evidence": [
-        "largest authored code file: crates/sql/src/connection.rs (972 LOC)",
+        "largest authored code file: crates/bench/src/bin/chaos_report.rs (1135 LOC)",
         "code file exceeds 500 LOC",
+        "code file exceeds 1000 LOC",
         "duplicate code block marker found",
         "TODO/stub marker found",
         "fallback soup marker found",
@@ -672,14 +667,13 @@
     {
       "name": "Python containment and polyglot hygiene",
       "weight": 4,
-      "score": 0,
-      "weighted_points": 0.0,
+      "score": 90,
+      "weighted_points": 3.6,
       "evidence": [
-        "Python appears outside the allowed roots: scripts/bench/dick_head_choas_report.py",
-        "non-optimal product language marker: crates/ffi/include/redlinedb.h"
+        "no Python files in scope",
+        "non-optimal product language marker"
       ],
       "notes": [
-        "Python leaks into product surface",
         "runtime code should converge to Rust, TypeScript, SQL, generated contracts, and rare advanced-ML/data Python exceptions"
       ]
     },
@@ -702,7 +696,10 @@
     "has_rendered_ux_lane": true,
     "missing_categories": [],
     "evidence": {
-      "accessibility": [],
+      "accessibility": [
+        "agent/repo-score.json",
+        "agent/repo-score.md"
+      ],
       "api_mocks": [],
       "artifact_backed_proof": [
         "agent/proof-lanes.toml",
@@ -717,7 +714,9 @@
       ],
       "layout_stability": [],
       "playwright_visual": [],
-      "storybook": [],
+      "storybook": [
+        "agent/repo-score.json"
+      ],
       "visual_review": []
     }
   },
@@ -1535,17 +1534,17 @@
       "problem": "`Code shape and semantic surface` scored 0 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/connection.rs (972 LOC)",
+        "largest authored code file: crates/bench/src/bin/chaos_report.rs (1135 LOC)",
         "code file exceeds 500 LOC",
-        "duplicate code block marker found",
-        "TODO/stub marker found"
+        "code file exceeds 1000 LOC",
+        "duplicate code block marker found"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:c5dbc05e9b548067a555090cb830057c11a73f679a3b9e29d2caa0a4d72fae2f",
+      "fingerprint": "sha256:3add82c33c022234e0b0d01e6f39147c916923bef966399e49a8bf5b469da643",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -1623,50 +1622,6 @@
       "lane": "fast",
       "docs_url": "docs/testing.md",
       "owner": "workspace"
-    },
-    {
-      "severity": "high",
-      "category": "generated",
-      "path": "agent/generated-zones.toml",
-      "problem": "generated zone file `agent/repo-score.json` is missing",
-      "agent_fix": "regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally",
-      "evidence": [
-        "generated zone integrity violation"
-      ],
-      "check_id": "HLT-002-GENERATED-MUTATION:generated",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "contract-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:da4c97d8849ada8e584127cefd2a38618b2122ac9f5d9918c4996048a2e47b21",
-      "rule_id": "HLT-002-GENERATED-MUTATION",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
-      "owner": "agent",
-      "line": 1
-    },
-    {
-      "severity": "high",
-      "category": "generated",
-      "path": "agent/generated-zones.toml",
-      "problem": "generated zone file `agent/repo-score.md` is missing",
-      "agent_fix": "regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally",
-      "evidence": [
-        "generated zone integrity violation"
-      ],
-      "check_id": "HLT-002-GENERATED-MUTATION:generated",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "contract-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:73f51c07759943db494d8bd45c79b3ea786d6bce0e391f2408f30b6a9de7af8c",
-      "rule_id": "HLT-002-GENERATED-MUTATION",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
-      "owner": "agent",
-      "line": 1
     },
     {
       "severity": "high",
@@ -1753,116 +1708,49 @@
       "owner": "agent"
     },
     {
-      "severity": "medium",
-      "category": "context",
-      "path": "crates/bench/bench/certification-phase10-v3-compare.toml",
-      "problem": "active source path looks like an old, backup, copied, or parked implementation",
-      "agent_fix": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/src/bin/chaos_report.rs",
+      "problem": "fallback soup detected in product code",
+      "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
       "evidence": [
-        "detector=repo-rot.path.fake-versioned-source",
-        "path=crates/bench/bench/certification-phase10-v3-compare.toml",
-        "line=1",
-        "proof_window=None",
-        "snippet=out_dir = \"target/bench/xbabe1/phase10-cert-v3-compare\""
+        "crates/bench/src/bin/chaos_report.rs:47 .ok_or_else(|| \"--input requires a value\".to_string())?"
       ],
-      "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
-      "hardness": "soft",
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:22d5fc685fc8b529830b0f91bf40cc745ed3fb6b7b2a20ce9fe4d8fd1ec92562",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "docs_url": "docs/language-bad-behavior.md#web-security-and-repo-rot-detectors",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:44106e8acdab6643c062548cba6dda6832d3cb4f15a3e74179c53a437e32e8ef",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "bench-harness",
-      "line": 1,
-      "matched_term": "repo-rot.path.fake-versioned-source",
-      "reason": "ambiguous old-looking active source makes agents and reviewers guess whether code is live"
+      "line": 47
     },
     {
-      "severity": "medium",
-      "category": "context",
-      "path": "crates/bench/bench/certification-phase10-v3-smoke.toml",
-      "problem": "active source path looks like an old, backup, copied, or parked implementation",
-      "agent_fix": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/src/bin/chaos_report.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "detector=repo-rot.path.fake-versioned-source",
-        "path=crates/bench/bench/certification-phase10-v3-smoke.toml",
-        "line=1",
-        "proof_window=None",
-        "snippet=out_dir = \"target/bench/phase10-cert-v3-smoke\""
+        "crates/bench/src/bin/chaos_report.rs:251",
+        "future-hostile/dead-language term `temp` appears"
       ],
-      "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
-      "hardness": "soft",
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:307a51211739992f3e48fa484a9b85323518afc2189be1e0929d66c770c0194c",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "docs_url": "docs/language-bad-behavior.md#web-security-and-repo-rot-detectors",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:f204275e1d545c239e2a9ddd74408bc7a6ad51ca7e1d56d3a61839b51e79152c",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "bench-harness",
-      "line": 1,
-      "matched_term": "repo-rot.path.fake-versioned-source",
-      "reason": "ambiguous old-looking active source makes agents and reviewers guess whether code is live"
-    },
-    {
-      "severity": "medium",
-      "category": "context",
-      "path": "crates/bench/bench/certification-phase10-v3-stress.toml",
-      "problem": "active source path looks like an old, backup, copied, or parked implementation",
-      "agent_fix": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "evidence": [
-        "detector=repo-rot.path.fake-versioned-source",
-        "path=crates/bench/bench/certification-phase10-v3-stress.toml",
-        "line=1",
-        "proof_window=None",
-        "snippet=out_dir = \"target/bench/xbabe1/phase10-cert-v3-stress\""
-      ],
-      "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:b35841ee76d63fbe95d4c1aa00cbf9d9fe090869149939cbcb4cf6f84829c5e1",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "docs_url": "docs/language-bad-behavior.md#web-security-and-repo-rot-detectors",
-      "owner": "bench-harness",
-      "line": 1,
-      "matched_term": "repo-rot.path.fake-versioned-source",
-      "reason": "ambiguous old-looking active source makes agents and reviewers guess whether code is live"
-    },
-    {
-      "severity": "medium",
-      "category": "context",
-      "path": "crates/bench/bench/certification-phase10-v3.toml",
-      "problem": "active source path looks like an old, backup, copied, or parked implementation",
-      "agent_fix": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "evidence": [
-        "detector=repo-rot.path.fake-versioned-source",
-        "path=crates/bench/bench/certification-phase10-v3.toml",
-        "line=1",
-        "proof_window=None",
-        "snippet=out_dir = \"target/bench/xbabe1/phase10-cert-v3-cert\""
-      ],
-      "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:65b64cd6b8fafcb14aa5bcb22394441d4c2ab33bb00623426d4f83a7d2d89aac",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "docs_url": "docs/language-bad-behavior.md#web-security-and-repo-rot-detectors",
-      "owner": "bench-harness",
-      "line": 1,
-      "matched_term": "repo-rot.path.fake-versioned-source",
-      "reason": "ambiguous old-looking active source makes agents and reviewers guess whether code is live"
+      "line": 251
     },
     {
       "severity": "high",
@@ -1886,28 +1774,6 @@
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "bench-harness",
       "line": 213
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/bench/src/certify.rs",
-      "problem": "fallback soup detected in product code",
-      "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
-      "evidence": [
-        "crates/bench/src/certify.rs:244 let payload = serde_json::to_vec(&record.checksum).unwrap_or_default();"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:c7c5bb20208bb49bd7962fd71d37ff2b181e731d8909e525920ffa2659cbc8ba",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "bench-harness",
-      "line": 244
     },
     {
       "severity": "high",
@@ -2598,242 +2464,6 @@
       "line": 132,
       "matched_term": "shell execution",
       "reason": "input handling risk needs deterministic negative tests"
-    },
-    {
-      "severity": "medium",
-      "category": "context",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "active source path looks like an old, backup, copied, or parked implementation",
-      "agent_fix": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "evidence": [
-        "detector=repo-rot.path.fake-versioned-source",
-        "path=crates/ffi/src/backup.rs",
-        "line=1",
-        "proof_window=None",
-        "snippet=//! Backup API: copy a redline database directory to a destination path."
-      ],
-      "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:d701d215f5368104681623d315b2ba5772d530b0f13a2552c0c15e6333e22f9e",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "docs_url": "docs/language-bad-behavior.md#web-security-and-repo-rot-detectors",
-      "owner": "c-abi",
-      "line": 1,
-      "matched_term": "repo-rot.path.fake-versioned-source",
-      "reason": "ambiguous old-looking active source makes agents and reviewers guess whether code is live"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let src_ref = unsafe { &*src };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:97081d05aaa268626d0f5bd1a7c849d75defa51db4309707c73cc153ac49c268",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 22,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let dst = unsafe { CStr::from_ptr(dst_path) }"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:ba30a4064c79b8d559fadbf35397708dc3dc445dd3d4498f3170a1b6aaec956f",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 23,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe {"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:9a7efb404d91d896c65028dc46df7c1ade811d52cf4a311bb91f78501c848da0",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 34,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let backup = unsafe { &mut *backup };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:cb6932cda5aeb17ea2cf87f2083457f757df53a8f253a15ec1dc0c75f599a154",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 47,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe {"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:9a7efb404d91d896c65028dc46df7c1ade811d52cf4a311bb91f78501c848da0",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 74,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "raw ownership conversion needs exact provenance and allocator proof",
-      "agent_fix": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "evidence": [
-        "detector=Box::from_raw",
-        "proof-window=NearbySafetyComment",
-        "snippet=drop(Box::from_raw(backup));"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:c7b2bb7521c8ae17506a939d89ccab06523d7cf3ec82b53b3eff53f230306c46",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 75,
-      "matched_term": "rust.unsafe.raw-parts",
-      "reason": "ownership provenance is missing"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe { (*backup).remaining as c_int }"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:e1cd8d920130e5062c21c9d389e9a261e9d2c102410a4ef8505602bbdc8f441a",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 85,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/backup.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe { (*backup).pagecount as c_int }"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:80c7e594fc340fc960f1aebf905f937198549f0dafe13d4d24a4d00ade3915fa",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 93,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
     },
     {
       "severity": "high",
@@ -3969,6 +3599,214 @@
       "line": 55,
       "matched_term": "rust.unsafe.raw-parts",
       "reason": "ownership provenance is missing"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/snapshot.rs",
+      "problem": "unsafe block lacks a nearby local safety argument",
+      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "evidence": [
+        "detector=unsafe {",
+        "proof-window=NearbySafetyComment",
+        "snippet=let src_ref = unsafe { &*src };"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:d9ecbcf3d90c6f3cb7cbafcd144ecc85aca4ba85ed9370a096e9c5098483a3af",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 22,
+      "matched_term": "rust.unsafe.undocumented-block",
+      "reason": "no nearby SAFETY comment was found"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/snapshot.rs",
+      "problem": "unsafe block lacks a nearby local safety argument",
+      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "evidence": [
+        "detector=unsafe {",
+        "proof-window=NearbySafetyComment",
+        "snippet=let dst = unsafe { CStr::from_ptr(dst_path) }"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:48f6024c15b0c6faf824f045c2d2765389fa7b1f820f4d9118df379c0c42a069",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 23,
+      "matched_term": "rust.unsafe.undocumented-block",
+      "reason": "no nearby SAFETY comment was found"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/snapshot.rs",
+      "problem": "unsafe block lacks a nearby local safety argument",
+      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "evidence": [
+        "detector=unsafe {",
+        "proof-window=NearbySafetyComment",
+        "snippet=unsafe {"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:b347036fe1a347edd74341c921e2d343b3f975cbae79807321ed1d8b66412c39",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 34,
+      "matched_term": "rust.unsafe.undocumented-block",
+      "reason": "no nearby SAFETY comment was found"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/snapshot.rs",
+      "problem": "unsafe block lacks a nearby local safety argument",
+      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "evidence": [
+        "detector=unsafe {",
+        "proof-window=NearbySafetyComment",
+        "snippet=let backup = unsafe { &mut *backup };"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:3cc18f76cd5dda4bc864eaea01a95c0d88738c041c3c5c06b771ee020d6dd54d",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 47,
+      "matched_term": "rust.unsafe.undocumented-block",
+      "reason": "no nearby SAFETY comment was found"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/snapshot.rs",
+      "problem": "unsafe block lacks a nearby local safety argument",
+      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "evidence": [
+        "detector=unsafe {",
+        "proof-window=NearbySafetyComment",
+        "snippet=unsafe {"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:b347036fe1a347edd74341c921e2d343b3f975cbae79807321ed1d8b66412c39",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 74,
+      "matched_term": "rust.unsafe.undocumented-block",
+      "reason": "no nearby SAFETY comment was found"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/snapshot.rs",
+      "problem": "raw ownership conversion needs exact provenance and allocator proof",
+      "agent_fix": "use the matching constructor/destructor pair or add a documented ownership proof",
+      "evidence": [
+        "detector=Box::from_raw",
+        "proof-window=NearbySafetyComment",
+        "snippet=drop(Box::from_raw(backup));"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:abc9d33162968df3c2f0a73e25bee873f289b0f867d2811f1feb4de200a60990",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 75,
+      "matched_term": "rust.unsafe.raw-parts",
+      "reason": "ownership provenance is missing"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/snapshot.rs",
+      "problem": "unsafe block lacks a nearby local safety argument",
+      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "evidence": [
+        "detector=unsafe {",
+        "proof-window=NearbySafetyComment",
+        "snippet=unsafe { (*backup).remaining as c_int }"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:f8e5deb2b1c70eb962141eafea4b32a9741b5fbd0c5c93164a6e6d4c46fa36fb",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 85,
+      "matched_term": "rust.unsafe.undocumented-block",
+      "reason": "no nearby SAFETY comment was found"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/ffi/src/snapshot.rs",
+      "problem": "unsafe block lacks a nearby local safety argument",
+      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "evidence": [
+        "detector=unsafe {",
+        "proof-window=NearbySafetyComment",
+        "snippet=unsafe { (*backup).pagecount as c_int }"
+      ],
+      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:a89469631db6ea2db32b0143e18fa96c29875d30fa7cd2365b922dfeb9bffddc",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "c-abi",
+      "line": 93,
+      "matched_term": "rust.unsafe.undocumented-block",
+      "reason": "no nearby SAFETY comment was found"
     },
     {
       "severity": "high",
@@ -6105,34 +5943,6 @@
       "line": 32
     },
     {
-      "severity": "medium",
-      "category": "context",
-      "path": "crates/redlinedb/src/backup.rs",
-      "problem": "active source path looks like an old, backup, copied, or parked implementation",
-      "agent_fix": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "evidence": [
-        "detector=repo-rot.path.fake-versioned-source",
-        "path=crates/redlinedb/src/backup.rs",
-        "line=1",
-        "proof_window=None",
-        "snippet=use std::fs;"
-      ],
-      "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:a154920484e6aa526643797bd392c9d762e9f516bfb0a0955596cbf11ee0a125",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "docs_url": "docs/language-bad-behavior.md#web-security-and-repo-rot-detectors",
-      "owner": "rust-public-api",
-      "line": 1,
-      "matched_term": "repo-rot.path.fake-versioned-source",
-      "reason": "ambiguous old-looking active source makes agents and reviewers guess whether code is live"
-    },
-    {
       "severity": "high",
       "category": "vibe",
       "path": "crates/redlinedb/src/lib.rs",
@@ -6252,29 +6062,6 @@
       "line": 258,
       "matched_term": "rust.unsafe.undocumented-block",
       "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/connection.rs",
-      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/connection.rs:886",
-        "future-hostile/dead-language term `temp` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:733787fcbd845e33ab8e8bafb4f15647dd6b33a1bbeaa935c0ddaabf8fdef9cc",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 886
     },
     {
       "severity": "high",
@@ -6966,51 +6753,6 @@
       "owner": "standard",
       "matched_term": "budget",
       "reason": "unbounded paid work needs budgets and stop conditions"
-    },
-    {
-      "severity": "high",
-      "category": "python",
-      "path": "python/",
-      "problem": "Python appears without a rare advanced-ML/data exception or owns product truth",
-      "agent_fix": "remove Python or box it under `python/ai-service` only when a dated advanced-ML/data exception exists; otherwise migrate it to Rust",
-      "evidence": [
-        "Python must stay away from product truth, repo tooling, proof lanes, backend glue, and production DB ownership"
-      ],
-      "check_id": "HLT-005-PYTHON-PRODUCT-TRUTH:python",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:a9ed62b36b036c9cc50ca8f42844065f4bb44a12c1b6a715d99db7453617b019",
-      "rule_id": "HLT-005-PYTHON-PRODUCT-TRUTH",
-      "tlr": "Business truth",
-      "lane": "contract",
-      "docs_url": "docs/agent-native-standard.md",
-      "owner": "tools"
-    },
-    {
-      "severity": "medium",
-      "category": "python",
-      "path": "python/ai-service",
-      "problem": "`Python containment and polyglot hygiene` scored 0 below the standard floor of 85",
-      "agent_fix": "remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts",
-      "evidence": [
-        "Python appears outside the allowed roots: scripts/bench/dick_head_choas_report.py",
-        "non-optimal product language marker: crates/ffi/include/redlinedb.h",
-        "Python leaks into product surface",
-        "runtime code should converge to Rust, TypeScript, SQL, generated contracts, and rare advanced-ML/data Python exceptions"
-      ],
-      "check_id": "HLT-005-PYTHON-PRODUCT-TRUTH:python",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:557d4f169ccef311815c39ae27bafa95b0bc6289f2ec16b7ec886d1991c7ab38",
-      "rule_id": "HLT-005-PYTHON-PRODUCT-TRUTH",
-      "tlr": "Business truth",
-      "lane": "contract",
-      "docs_url": "docs/agent-native-standard.md",
-      "owner": "tools"
     }
   ],
   "agent_fix_queue": [
@@ -7023,46 +6765,6 @@
       "owner": "bench-harness",
       "task": "add owner/non-owner authorization tests or RLS evidence for the touched data boundary",
       "why": "authorization or data-isolation surface lacks direct negative proof"
-    },
-    {
-      "path": "python/",
-      "priority": "high",
-      "rule_id": "HLT-005-PYTHON-PRODUCT-TRUTH",
-      "tlr": "Business truth",
-      "lane": "contract",
-      "owner": "tools",
-      "task": "remove Python or box it under `python/ai-service` only when a dated advanced-ML/data exception exists; otherwise migrate it to Rust",
-      "why": "Python appears without a rare advanced-ML/data exception or owns product truth"
-    },
-    {
-      "path": "python/ai-service",
-      "priority": "medium",
-      "rule_id": "HLT-005-PYTHON-PRODUCT-TRUTH",
-      "tlr": "Business truth",
-      "lane": "contract",
-      "owner": "tools",
-      "task": "remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts",
-      "why": "`Python containment and polyglot hygiene` scored 0 below the standard floor of 85"
-    },
-    {
-      "path": "agent/generated-zones.toml",
-      "priority": "high",
-      "rule_id": "HLT-002-GENERATED-MUTATION",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "owner": "agent",
-      "task": "regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally",
-      "why": "generated zone file `agent/repo-score.json` is missing"
-    },
-    {
-      "path": "agent/generated-zones.toml",
-      "priority": "high",
-      "rule_id": "HLT-002-GENERATED-MUTATION",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "owner": "agent",
-      "task": "regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally",
-      "why": "generated zone file `agent/repo-score.md` is missing"
     },
     {
       "path": "agent/test-map.json",
@@ -7144,66 +6846,6 @@
       "why": "`Context economy and agent instructions` scored 81 below the standard floor of 85"
     },
     {
-      "path": "crates/bench/bench/certification-phase10-v3-compare.toml",
-      "priority": "medium",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "bench-harness",
-      "task": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "why": "active source path looks like an old, backup, copied, or parked implementation"
-    },
-    {
-      "path": "crates/bench/bench/certification-phase10-v3-smoke.toml",
-      "priority": "medium",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "bench-harness",
-      "task": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "why": "active source path looks like an old, backup, copied, or parked implementation"
-    },
-    {
-      "path": "crates/bench/bench/certification-phase10-v3-stress.toml",
-      "priority": "medium",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "bench-harness",
-      "task": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "why": "active source path looks like an old, backup, copied, or parked implementation"
-    },
-    {
-      "path": "crates/bench/bench/certification-phase10-v3.toml",
-      "priority": "medium",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "bench-harness",
-      "task": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "why": "active source path looks like an old, backup, copied, or parked implementation"
-    },
-    {
-      "path": "crates/ffi/src/backup.rs",
-      "priority": "medium",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "c-abi",
-      "task": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "why": "active source path looks like an old, backup, copied, or parked implementation"
-    },
-    {
-      "path": "crates/redlinedb/src/backup.rs",
-      "priority": "medium",
-      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "rust-public-api",
-      "task": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
-      "why": "active source path looks like an old, backup, copied, or parked implementation"
-    },
-    {
       "path": "docs/",
       "priority": "medium",
       "tlr": "Context/setup",
@@ -7211,6 +6853,26 @@
       "owner": "standard",
       "task": "add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`",
       "why": "agent-readable documentation is incomplete"
+    },
+    {
+      "path": "crates/bench/src/bin/chaos_report.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "bench-harness",
+      "task": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
+      "why": "fallback soup detected in product code"
+    },
+    {
+      "path": "crates/bench/src/bin/chaos_report.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "bench-harness",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
     },
     {
       "path": "crates/bench/src/certify.rs",
@@ -7221,16 +6883,6 @@
       "owner": "bench-harness",
       "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "why": "future-hostile/dead-language term `placeholder` appears in product/runtime code"
-    },
-    {
-      "path": "crates/bench/src/certify.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "bench-harness",
-      "task": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
-      "why": "fallback soup detected in product code"
     },
     {
       "path": "crates/bench/src/chaos.rs",
@@ -7362,26 +7014,6 @@
       "why": "unsafe or unvalidated input boundary marker appears in product code"
     },
     {
-      "path": "crates/ffi/src/backup.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
-      "path": "crates/ffi/src/backup.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "use the matching constructor/destructor pair or add a documented ownership proof",
-      "why": "raw ownership conversion needs exact provenance and allocator proof"
-    },
-    {
       "path": "crates/ffi/src/bind.rs",
       "priority": "high",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
@@ -7463,6 +7095,26 @@
     },
     {
       "path": "crates/ffi/src/lifecycle.rs",
+      "priority": "high",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "owner": "c-abi",
+      "task": "use the matching constructor/destructor pair or add a documented ownership proof",
+      "why": "raw ownership conversion needs exact provenance and allocator proof"
+    },
+    {
+      "path": "crates/ffi/src/snapshot.rs",
+      "priority": "high",
+      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
+      "tlr": "Security, secrets, agency",
+      "lane": "fast",
+      "owner": "c-abi",
+      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
+      "why": "unsafe block lacks a nearby local safety argument"
+    },
+    {
+      "path": "crates/ffi/src/snapshot.rs",
       "priority": "high",
       "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
       "tlr": "Security, secrets, agency",
@@ -7810,16 +7462,6 @@
       "owner": "rust-public-api",
       "task": "add a precise `SAFETY:` comment or remove the unsafe block",
       "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
-      "path": "crates/sql/src/connection.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "sql-parser-planner-executor",
-      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
     },
     {
       "path": "crates/sql/src/exec/expr/mod.rs",

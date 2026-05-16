@@ -11,4 +11,8 @@ mirror_required = false
 mirror_max_rows = 5000
 
 [scan]
-excluded_paths = ["tips/"]
+excluded_paths = [
+  "tips/",
+  "paper/scripts/",
+  "scripts/bench/export_benchmark_results.py",
+]

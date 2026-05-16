@@ -79,17 +79,17 @@ connection-fixed-high:
 queue-mixed-highload:
   rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/queue-mixed-highload.toml --out-dir target/bench/xbabe1/queue-mixed-highload --seed 7 --repetitions 3 --warmup 1
 
-phase10-cert-v3-smoke:
-  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-smoke.toml --out-dir target/bench/phase10-cert-v3-smoke --seed 7 --repetitions 1 --warmup 0
+phase10-cert-smoke:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-smoke.toml --out-dir target/bench/phase10-cert-smoke --seed 7 --repetitions 1 --warmup 0
 
-phase10-cert-v3-cert:
-  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3.toml --out-dir target/bench/xbabe1/phase10-cert-v3-cert --seed 7 --repetitions 5 --warmup 1
+phase10-cert-cert:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-cert.toml --out-dir target/bench/xbabe1/phase10-cert --seed 7 --repetitions 5 --warmup 1
 
-phase10-cert-v3-compare:
-  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-compare.toml --out-dir target/bench/xbabe1/phase10-cert-v3-compare --seed 7 --repetitions 5 --warmup 1
+phase10-cert-compare:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-compare.toml --out-dir target/bench/xbabe1/phase10-cert-compare --seed 7 --repetitions 5 --warmup 1
 
-phase10-cert-v3-stress:
-  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-stress.toml --out-dir target/bench/xbabe1/phase10-cert-v3-stress --seed 7 --repetitions 5 --warmup 1
+phase10-cert-stress:
+  rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-stress.toml --out-dir target/bench/xbabe1/phase10-cert-stress --seed 7 --repetitions 5 --warmup 1
 
 benchmark-export-existing:
   python3 scripts/bench/export_benchmark_results.py
@@ -101,10 +101,10 @@ benchmark-xbabe1-all:
   just phase9-xbabe1-gap-strace
   just phase9-xbabe1-certification
   just phase9-xbabe1-certify-with-strace
-  just phase10-cert-v3-smoke
-  just phase10-cert-v3-cert
-  just phase10-cert-v3-compare
-  just phase10-cert-v3-stress
+  just phase10-cert-smoke
+  just phase10-cert-cert
+  just phase10-cert-compare
+  just phase10-cert-stress
   just phase11-oltp-gap
   just dick-head-choas
   just connection-limit-256

@@ -33,6 +33,10 @@ toml = "0.8"
 # control files, and the wal segment fan-out (not just one file).
 walkdir = "2"
 
+[[bin]]
+name = "chaos_report"
+path = "src/bin/chaos_report.rs"
+
 [dev-dependencies]
 # Lane F6: integration tests in `tests/failpoint_matrix.rs` drive
 # the `fail` crate directly to assert that a `return` action takes

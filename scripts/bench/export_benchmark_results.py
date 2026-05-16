@@ -172,13 +172,13 @@ SUITES: list[SuiteSpec] = [
         ],
     ),
     SuiteSpec(
-        suite_id="phase10-cert-v3-smoke",
+        suite_id="phase10-cert-smoke",
         kind="certify",
-        input_path=DEFAULT_INPUT_ROOT / "phase10-cert-v3-smoke",
+        input_path=DEFAULT_INPUT_ROOT / "phase10-cert-smoke",
         command=[
-            "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-smoke.toml --out-dir target/bench/phase10-cert-v3-smoke --seed 7 --repetitions 1 --warmup 0",
+            "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-smoke.toml --out-dir target/bench/phase10-cert-smoke --seed 7 --repetitions 1 --warmup 0",
         ],
-        config_path="crates/bench/bench/certification-phase10-v3-smoke.toml",
+        config_path="crates/bench/bench/certification-phase10-smoke.toml",
         source_files=[
             "crates/bench/src/certify.rs",
             "crates/bench/src/workload.rs",
@@ -190,13 +190,13 @@ SUITES: list[SuiteSpec] = [
         ],
     ),
     SuiteSpec(
-        suite_id="phase10-cert-v3-cert",
+        suite_id="phase10-cert-cert",
         kind="certify",
-        input_path=DEFAULT_INPUT_ROOT / "xbabe1" / "phase10-cert-v3-cert",
+        input_path=DEFAULT_INPUT_ROOT / "xbabe1" / "phase10-cert",
         command=[
-            "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3.toml --out-dir target/bench/xbabe1/phase10-cert-v3-cert --seed 7 --repetitions 5 --warmup 1",
+            "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-cert.toml --out-dir target/bench/xbabe1/phase10-cert --seed 7 --repetitions 5 --warmup 1",
         ],
-        config_path="crates/bench/bench/certification-phase10-v3.toml",
+        config_path="crates/bench/bench/certification-phase10-cert.toml",
         source_files=[
             "crates/bench/src/certify.rs",
             "crates/bench/src/workload.rs",
@@ -208,13 +208,13 @@ SUITES: list[SuiteSpec] = [
         ],
     ),
     SuiteSpec(
-        suite_id="phase10-cert-v3-compare",
+        suite_id="phase10-cert-compare",
         kind="certify",
-        input_path=DEFAULT_INPUT_ROOT / "xbabe1" / "phase10-cert-v3-compare",
+        input_path=DEFAULT_INPUT_ROOT / "xbabe1" / "phase10-cert-compare",
         command=[
-            "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-compare.toml --out-dir target/bench/xbabe1/phase10-cert-v3-compare --seed 7 --repetitions 5 --warmup 1",
+            "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-compare.toml --out-dir target/bench/xbabe1/phase10-cert-compare --seed 7 --repetitions 5 --warmup 1",
         ],
-        config_path="crates/bench/bench/certification-phase10-v3-compare.toml",
+        config_path="crates/bench/bench/certification-phase10-compare.toml",
         source_files=[
             "crates/bench/src/certify.rs",
             "crates/bench/src/workload.rs",
@@ -226,13 +226,13 @@ SUITES: list[SuiteSpec] = [
         ],
     ),
     SuiteSpec(
-        suite_id="phase10-cert-v3-stress",
+        suite_id="phase10-cert-stress",
         kind="certify",
-        input_path=DEFAULT_INPUT_ROOT / "xbabe1" / "phase10-cert-v3-stress",
+        input_path=DEFAULT_INPUT_ROOT / "xbabe1" / "phase10-cert-stress",
         command=[
-            "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-v3-stress.toml --out-dir target/bench/xbabe1/phase10-cert-v3-stress --seed 7 --repetitions 5 --warmup 1",
+            "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-stress.toml --out-dir target/bench/xbabe1/phase10-cert-stress --seed 7 --repetitions 5 --warmup 1",
         ],
-        config_path="crates/bench/bench/certification-phase10-v3-stress.toml",
+        config_path="crates/bench/bench/certification-phase10-stress.toml",
         source_files=[
             "crates/bench/src/certify.rs",
             "crates/bench/src/workload.rs",

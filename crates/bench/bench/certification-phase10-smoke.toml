@@ -1,4 +1,4 @@
-out_dir = "target/bench/phase10-cert-v3-smoke"
+out_dir = "target/bench/phase10-cert-smoke"
 engines = ["redline"]
 workloads = [
   "json-path-extract",

@@ -1,3 +1,5 @@
+//! Copy the redlinedb data directory to a destination path for snapshot use.
+
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
