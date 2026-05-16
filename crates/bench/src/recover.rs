@@ -12,7 +12,7 @@ use crate::config::{
     DurabilityKind, EngineKind, RecoverArgs, RecoverChildArgs, RecoverMatrixArgs,
     RecoveryMatrixCase, RecoveryMatrixConfig, RecoveryScenarioKind, RunSpec, WorkloadKind,
 };
-use crate::engine::{self, CellValue};
+use crate::engine::{self, CellValue, engine_name};
 
 #[derive(Debug, Serialize)]
 pub struct RecoveryReport {
@@ -401,13 +401,6 @@ fn scalar_i64(conn: &mut dyn engine::BenchConn, sql: &str) -> Result<i64> {
         Some(CellValue::Integer(value)) => Ok(*value),
         Some(CellValue::Null) | None => Ok(0),
         other => bail!("expected integer scalar, got {other:?}"),
-    }
-}
-
-fn engine_name(engine: EngineKind) -> &'static str {
-    match engine {
-        EngineKind::Redline => "redline",
-        EngineKind::Sqlite => "sqlite",
     }
 }
 

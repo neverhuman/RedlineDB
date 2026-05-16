@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::config::RunSpec;
-use crate::engine::{BenchConn, BenchEngine, CellValue, EngineSnapshot, apply_durability};
+use crate::engine::{
+    BenchConn, BenchEngine, CellValue, EngineSnapshot, apply_durability, seeded_blob,
+};
 use anyhow::{Result, anyhow};
 
 pub struct RedlineEngine {
@@ -200,15 +202,6 @@ fn values(params: &[CellValue]) -> Vec<redlinedb::Value> {
             CellValue::Blob(v) => redlinedb::Value::Blob(v.clone().into()),
         })
         .collect()
-}
-
-fn seeded_blob(seed: usize) -> Vec<u8> {
-    format!("value-{seed:08}").into_bytes()
-}
-
-#[allow(dead_code)]
-fn file_len(path: &Path) -> u64 {
-    std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
 }
 
 /// Recursively sum the size of every regular file under `path`.

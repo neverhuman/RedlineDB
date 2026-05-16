@@ -404,6 +404,10 @@ pub enum DurabilityKind {
 }
 
 impl DurabilityKind {
+    // dedup-allowed: enum-discriminator-method (each arm names a
+    // distinct variant of the enclosing enum; collapsing into a
+    // shared helper would require boxing both enums under a trait
+    // for a 6-line method with zero shared logic).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Strict => "strict",
@@ -424,6 +428,7 @@ pub enum RecoveryScenarioKind {
 }
 
 impl RecoveryScenarioKind {
+    // dedup-allowed: enum-discriminator-method (see DurabilityKind::as_str).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Wal => "wal",
@@ -546,6 +551,11 @@ pub enum ExpectExit {
 }
 
 impl CompareConfig {
+    // dedup-allowed: per-type TOML config loader. The body is the
+    // canonical `read_to_string` + `toml::from_str::<Self>` pair plus a
+    // type-specific post-condition check; extracting the IO would
+    // strip the `Self`-bound deserialize that distinguishes the two
+    // configs and reduce, not improve, clarity.
     pub fn load(path: &Path) -> Result<Self> {
         let raw = fs::read_to_string(path)
             .with_context(|| format!("read compare config {}", path.display()))?;
@@ -619,6 +629,7 @@ fn default_failpoint_kill_after_n_hits() -> Vec<u64> {
 }
 
 impl FailpointMatrixConfig {
+    // dedup-allowed: per-type TOML config loader (see CompareConfig::load).
     pub fn load(path: &Path) -> Result<Self> {
         let raw = fs::read_to_string(path)
             .with_context(|| format!("read failpoint matrix {}", path.display()))?;

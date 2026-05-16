@@ -31,6 +31,7 @@ use crate::config::{
     DurabilityKind, EngineKind, ExpectExit, FailpointChildArgs, FailpointMatrixArgs,
     FailpointMatrixCase, FailpointMatrixConfig,
 };
+use crate::engine::engine_name;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FailpointMatrixReport {
@@ -519,13 +520,6 @@ fn read_ack_count(path: &Path) -> Result<usize> {
         }
     }
     Ok(count)
-}
-
-fn engine_name(engine: EngineKind) -> &'static str {
-    match engine {
-        EngineKind::Redline => "redline",
-        EngineKind::Sqlite => "sqlite",
-    }
 }
 
 /// Open the ack log used by the failpoint-matrix child to record
