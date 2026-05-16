@@ -82,9 +82,12 @@ fn group_concat_custom_separator() {
 fn group_concat_skips_nulls() {
     let (_d, c) = open();
     setup_words(&c);
-    // grp=1 has: alpha, beta, NULL — NULL should be skipped
+    // grp=1 has: alpha, beta, NULL — NULL should be skipped; order is impl-defined
     let v = q1(&c, "SELECT group_concat(w) FROM words WHERE grp = 1");
-    assert_eq!(v, SqlValue::Text(Arc::from("alpha,beta")));
+    let s = match v { SqlValue::Text(s) => s, other => panic!("expected text, got {other:?}") };
+    let mut parts: Vec<&str> = s.split(',').collect();
+    parts.sort_unstable();
+    assert_eq!(parts, vec!["alpha", "beta"]);
 }
 
 #[test]
