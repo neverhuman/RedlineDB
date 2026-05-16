@@ -1,17 +1,17 @@
 {
-  "report_fingerprint": "sha256:4dda2313e867f904d0f68f315589c57f15800dc63a64906fbf3ed83ad7f93509",
-  "input_fingerprint": "sha256:be43855288f8e9c4a8986ebc8f776fe827bc9972677b4c74a8bb152ef64deba4",
+  "report_fingerprint": "sha256:07c619eaf350025a10a90128355a924ec4826829e3f0eb71760d190f89ac90ff",
+  "input_fingerprint": "sha256:2d735f44f54a134a8d030b8e9bf9440a0f3aea5d9205358594841b5025189818",
   "policy_fingerprint": "sha256:09ed363ac485d9afd9923469b9feb56457a7635c1a6a64b88a838a3e231a0af6",
   "manifest_fingerprints": {
     "owner_map": "sha256:74f494a6cbc365236d62d3dfc1061a69f5f4c34fa0cc94ba1fb397e3b81db9f6",
-    "test_map": "sha256:b9ab67436301f2686ca4b115bfb46eef6e0dd1f5ed3c12ba7260c6de2241e036",
+    "test_map": "sha256:c612b022346a58b3a32c0224038da09f930021f8544eca085893b6d726ade98a",
     "generated_zones": "sha256:cb6fa44095635bb4d9fc381a548fa2a1f6c94365b36fa49bbd8f55e94b5d4fb6",
     "boundaries": "sha256:7a7bf640d469152bca6f0a9a4feabb90ae6eb170f3fe33a196871bfefb3936e3",
     "proof_lanes": "sha256:46832ba6baeeaf0c88962f9ec7e746ca1142e84ae277f195b19cc91a29af5f6a",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778897427",
+  "generated_at": "1778898126",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -40,12 +40,12 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
-    "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/schema.rs"
+    "HLT-001-DEAD-MARKER on crates/kernel/src/engine/recovery.rs"
   ],
   "repo": ".",
-  "run_id": "1778897427",
-  "started_at": "1778897427",
-  "elapsed_ms": 5294,
+  "run_id": "1778898126",
+  "started_at": "1778898126",
+  "elapsed_ms": 7240,
   "scope": {
     "mode": "full",
     "paths": []
@@ -72,7 +72,7 @@
     }
   },
   "git": {
-    "head": "ee40f3b",
+    "head": "2c1d2af",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1606,7 +1606,7 @@
       "lane": "security",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "c-abi",
-      "line": 132,
+      "line": 138,
       "matched_term": "shell execution",
       "reason": "input handling risk needs deterministic negative tests"
     },
@@ -1795,24 +1795,24 @@
     {
       "severity": "high",
       "category": "vibe",
-      "path": "crates/kernel/src/catalog/schema.rs",
+      "path": "crates/kernel/src/engine/recovery.rs",
       "problem": "fallback soup detected in product code",
       "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
       "evidence": [
-        "crates/kernel/src/catalog/schema.rs:179 .unwrap_or_else(|| render_create_table(table).into_boxed_str()),"
+        "crates/kernel/src/engine/recovery.rs:35 .unwrap_or_else(|| bootstrap_schema(RelId(10_000)));"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:b22de783182da57b8087c5393ba14a322434752d8ee7dc68d3fc82b64f623e2f",
+      "fingerprint": "sha256:b399fbf67f16771967fdfbc26c8c3213403e8f48e57ac007e3d7d790a468e4bc",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 179
+      "line": 35
     },
     {
       "severity": "medium",
@@ -1968,7 +1968,7 @@
       "why": "raw ownership conversion needs exact provenance and allocator proof"
     },
     {
-      "path": "crates/kernel/src/catalog/schema.rs",
+      "path": "crates/kernel/src/engine/recovery.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",

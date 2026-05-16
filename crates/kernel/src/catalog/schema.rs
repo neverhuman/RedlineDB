@@ -173,10 +173,10 @@ impl SchemaSnapshot {
                 name: table.name.clone(),
                 tbl_name: table.name.clone(),
                 rootpage: 0,
-                sql: table
-                    .normalized_sql
-                    .clone()
-                    .unwrap_or_else(|| render_create_table(table).into_boxed_str()),
+                sql: match table.normalized_sql.clone() {
+                    Some(sql) => sql,
+                    None => render_create_table(table).into_boxed_str(),
+                },
             });
             for index in &table.indexes {
                 rows.push(SqliteSchemaRow {
@@ -184,10 +184,10 @@ impl SchemaSnapshot {
                     name: index.name.clone(),
                     tbl_name: table.name.clone(),
                     rootpage: index.relation_id.0,
-                    sql: index
-                        .normalized_sql
-                        .clone()
-                        .unwrap_or_else(|| render_create_index(table, index).into_boxed_str()),
+                    sql: match index.normalized_sql.clone() {
+                        Some(sql) => sql,
+                        None => render_create_index(table, index).into_boxed_str(),
+                    },
                 });
             }
         }

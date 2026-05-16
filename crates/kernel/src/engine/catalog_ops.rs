@@ -178,8 +178,10 @@ impl Engine {
     }
 
     fn catalog_snapshot_for_tx(&self, tx: &Txn) -> Arc<crate::catalog::SchemaSnapshot> {
-        tx.pending_schema_snapshot()
-            .unwrap_or_else(|| self.catalog.current())
+        match tx.pending_schema_snapshot() {
+            Some(snap) => snap,
+            None => self.catalog.current(),
+        }
     }
 
     /// Reopens every catalog `IndexDef` whose `meta_page_id` is set, stashing

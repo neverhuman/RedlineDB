@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778897427`
-- Started at: `1778897427`
-- Elapsed: `5294` ms
+- Run ID: `1778898126`
+- Started at: `1778898126`
+- Elapsed: `7240` ms
 - Scope: `full`
 - Raw score: `82`
 - Final score: `70`
@@ -259,7 +259,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:7789f9e4b1aac10caf5e262e4eea1642b7862f83b21d46c4820f2c1dc6f8da77`
    Evidence: crates/ffi/include/redlinedb.h uses `.h`, Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service
-12. `high` `security` `crates/ffi/include/redlinedb.h:132`
+12. `high` `security` `crates/ffi/include/redlinedb.h:138`
    Rule: `HLT-023-INPUT-BOUNDARY-GAP`
    Check: `HLT-023-INPUT-BOUNDARY-GAP:security` `hard` confidence `0.88`
    Route: TLR `Security, secrets, agency`, lane `security`, owner `c-abi`
@@ -347,7 +347,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b4f1a6ca90b064a685ea26de401a4ea01a4018f38fbe80c7f14d209db28ce468`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=let boxed = unsafe { Box::from_raw(stmt) };
-20. `high` `vibe` `crates/kernel/src/catalog/schema.rs:179`
+20. `high` `vibe` `crates/kernel/src/engine/recovery.rs:35`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -355,8 +355,8 @@ No audited runtime boundary reclassifications declared.
    Reason: fallback soup detected in product code
    Fix: collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
    Rerun: `just fast`
-   Fingerprint: `sha256:b22de783182da57b8087c5393ba14a322434752d8ee7dc68d3fc82b64f623e2f`
-   Evidence: crates/kernel/src/catalog/schema.rs:179 .unwrap_or_else(|| render_create_table(table).into_boxed_str()),
+   Fingerprint: `sha256:b399fbf67f16771967fdfbc26c8c3213403e8f48e57ac007e3d7d790a468e4bc`
+   Evidence: crates/kernel/src/engine/recovery.rs:35 .unwrap_or_else(|| bootstrap_schema(RelId(10_000)));
 21. `medium` `release` `docs/testing.md`
    Rule: `HLT-026-COST-BUDGET-GAP`
    Check: `HLT-026-COST-BUDGET-GAP:release` `soft` confidence `0.88`
@@ -403,7 +403,7 @@ No audited runtime boundary reclassifications declared.
    Route: `Security, secrets, agency`/`fast`
 13. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-14. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/catalog/schema.rs` - collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
+14. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/engine/recovery.rs` - collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
    Route: `Entropy`/`fast`
 15. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
