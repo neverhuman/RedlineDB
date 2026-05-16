@@ -91,7 +91,9 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     // agent/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=94,
     // detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
-    unsafe { drop(Box::from_raw(backup)); }
+    unsafe {
+        drop(Box::from_raw(backup));
+    }
     RLDB_OK
 }
 

@@ -39,7 +39,9 @@ pub extern "C" fn rldb_free(ptr: *mut c_void) {
         // detector=rust.unsafe.raw-parts); proof:
         // crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and
         // ::exec_callback_failure_round_trips_errmsg_ownership.
-        unsafe { drop(CString::from_raw(ptr as *mut c_char)); }
+        unsafe {
+            drop(CString::from_raw(ptr as *mut c_char));
+        }
     }
 }
 

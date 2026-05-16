@@ -328,9 +328,9 @@ fn decode_index_stats(reader: &mut BytesReader<'_>) -> Result<IndexStats> {
 // schema store).
 
 // dedup-allowed: bool-strictness — stats reads must strictly accept only
-// `0` and `1` for the `bool` prefix (legacy on-disk invariant). The
-// shared `BytesReader::bool` would accept any nonzero byte, so stats
-// keeps its own strict bool decoder.
+// `0` and `1` for the `bool` prefix (on-disk invariant predating
+// `BytesReader::bool`, which would accept any nonzero byte). The strict
+// decoder below preserves the encoded shape.
 fn read_strict_bool(reader: &mut BytesReader<'_>) -> Result<bool> {
     match reader.u8()? {
         0 => Ok(false),

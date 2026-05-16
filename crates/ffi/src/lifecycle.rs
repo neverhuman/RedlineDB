@@ -78,7 +78,9 @@ pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
         // ledgered at agent/unsafe-ledger.toml (file=crates/ffi/src/lifecycle.rs,
         // line=81, detector=rust.unsafe.raw-parts); proof:
         // crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe.
-        unsafe { drop(Box::from_raw(db)); }
+        unsafe {
+            drop(Box::from_raw(db));
+        }
         Ok(RLDB_OK)
     }))
 }

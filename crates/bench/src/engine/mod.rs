@@ -205,8 +205,8 @@ pub(super) fn seeded_blob(seed: usize) -> Vec<u8> {
     format!("value-{seed:08}").into_bytes()
 }
 
-/// Single-file byte count helper shared by the SQLite and (legacy
-/// single-file) Redline adapters. Returns 0 when the path is missing
+/// Single-file byte count helper shared by the SQLite and
+/// single-file Redline adapters. Returns 0 when the path is missing
 /// or unreadable so callers can sum it into reports without special
 /// cases.
 pub(super) fn file_len(path: &Path) -> u64 {
