@@ -1,7 +1,8 @@
-//! Window function execution stubs.
+//! Window function execution entry points.
 //!
-//! Lane SQL-D phase 10 Tier-3: window functions parse but no runtime
-//! pipeline yet. The dispatcher in `super::json_dispatch::eval_function`
+//! Lane SQL-D phase 10 Tier-3: window functions parse, but the runtime
+//! pipeline is reserved for a follow-on milestone. The dispatcher in
+//! `super::json_dispatch::eval_function`
 //! delegates here when a function call carries an `OVER (...)` clause so
 //! that the planner work can pick it up cleanly later without touching
 //! scalar evaluation.
