@@ -1,14 +1,13 @@
 # Keep unsafe blocks rare and auditable.
 # Each entry records file, line, owner, invariant, and proof lane.
-# Section D of the jankurai repair plan fills these in per file as
-# SAFETY comments land. File-glob entries are placeholders awaiting
-# per-line entries from the matching D sub-section.
-
-[[entries]]
-file = "crates/ffi/src/*.rs"
-owner = "c-abi"
-proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
-invariant = "all unsafe blocks dereference raw pointers obtained from the public C ABI; callers are bound by the contract in docs/exceptions/ffi-c-header.md; ledger populated per-site by Section D1"
+#
+# Section D1 (jankurai-repair) populated the FFI C ABI surface. Every
+# `unsafe { ... }` block in `crates/ffi/src/*.rs` carries a `SAFETY:`
+# comment naming the invariant; this ledger mirrors those per-site so the
+# auditor links each `SAFETY:` comment to a ledgered owner + proof lane.
+# Line numbers reflect the state after section D1 completes; they are not
+# pinned by a fixture and may drift if the files are reformatted.
+# Per-site FFI entries (Section D1) follow the kernel/sql/bench entries below.
 
 [[entries]]
 file = "crates/bench/src/process_metrics.rs"
@@ -146,3 +145,556 @@ owner = "sql-parser-planner-executor"
 invariant = "`conn_ptr` is derived from an `Arc<Connection>` field on `self`, so the allocation is kept alive for the duration of the dereferenced `&Connection`. `Connection` exposes only `&self` methods so no aliasing UB is possible."
 proof_lane = "just fast"
 test = "crates/sql/tests/* (integration: every statement.step call exercises this)"
+
+[[entries]]
+file = "crates/ffi/src/snapshot.rs"
+line = 25
+owner = "c-abi"
+invariant = "src is a non-null *mut rldb from rldb_open/rldb_open_v2 not yet closed (redlinedb.h:138)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/snapshot.rs"
+line = 29
+owner = "c-abi"
+invariant = "dst_path is non-null NUL-terminated C string per redlinedb.h:138"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/snapshot.rs"
+line = 42
+owner = "c-abi"
+invariant = "out is non-null writable rldb_backup**; Box::into_raw transfers ownership to C caller (paired with rldb_backup_close)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/snapshot.rs"
+line = 58
+owner = "c-abi"
+invariant = "backup is non-null *mut rldb_backup from rldb_backup_init not yet closed; caller serializes access"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/snapshot.rs"
+line = 88
+owner = "c-abi"
+invariant = "Box::from_raw pairs with Box::into_raw in rldb_backup_init; backup is non-null and not previously closed"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/snapshot.rs"
+line = 101
+owner = "c-abi"
+invariant = "backup non-null *mut rldb_backup; only reads a Copy integer field"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/snapshot.rs"
+line = 111
+owner = "c-abi"
+invariant = "backup non-null *mut rldb_backup; only reads a Copy integer field"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 17
+owner = "c-abi"
+invariant = "stmt non-null *mut rldb_stmt from rldb_prepare_v2 not yet finalized (C ABI single-thread ownership)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 31
+owner = "c-abi"
+invariant = "stmt non-null *mut rldb_stmt from rldb_prepare_v2 not yet finalized"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 45
+owner = "c-abi"
+invariant = "stmt non-null *mut rldb_stmt from rldb_prepare_v2 not yet finalized"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 64
+owner = "c-abi"
+invariant = "stmt non-null *mut rldb_stmt; value confirmed non-null"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 69
+owner = "c-abi"
+invariant = "value non-null NUL-terminated C string (nbytes<0 branch per redlinedb.h:108)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 74
+owner = "c-abi"
+invariant = "value non-null buffer of nbytes bytes (explicit-length branch per redlinedb.h:108); slice immediately copied to owned Vec"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 95
+owner = "c-abi"
+invariant = "stmt non-null; value confirmed non-null"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 99
+owner = "c-abi"
+invariant = "value non-null blob buffer of nbytes bytes per redlinedb.h:109; slice immediately copied to owned Vec"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 110
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; only reads a Copy integer"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 121
+owner = "c-abi"
+invariant = "stmt non-null *mut rldb_stmt from rldb_prepare_v2 not yet finalized"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/bind.rs"
+line = 126
+owner = "c-abi"
+invariant = "name non-null NUL-terminated C string per redlinedb.h:112"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/column.rs"
+line = 16
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; only reads a Copy integer"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/column.rs"
+line = 27
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; returned pointer into rldb_stmt.column_names valid for statement lifetime"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/column.rs"
+line = 44
+owner = "c-abi"
+invariant = "stmt non-null *mut rldb_stmt from rldb_prepare_v2 not yet finalized"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/column.rs"
+line = 66
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy integer return value only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/column.rs"
+line = 76
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy f64 return value only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/column.rs"
+line = 87
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; returned pointer into rldb_stmt.text_cache valid until next step/reset/finalize"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/column.rs"
+line = 104
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; blob pointer owned by column slot, valid until next step/reset/finalize"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/column.rs"
+line = 120
+owner = "c-abi"
+invariant = "stmt non-null *mut rldb_stmt from rldb_prepare_v2 not yet finalized"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/config.rs"
+line = 20
+owner = "c-abi"
+invariant = "db confirmed non-null above; shared borrow scoped to api() closure"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/config.rs"
+line = 46
+owner = "c-abi"
+invariant = "db is *mut rldb from rldb_open per redlinedb.h:134; caller-serialized with close"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/config.rs"
+line = 60
+owner = "c-abi"
+invariant = "db is *mut rldb from rldb_open per redlinedb.h:135; caller-serialized with close"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/config.rs"
+line = 74
+owner = "c-abi"
+invariant = "db is *mut rldb from rldb_open per redlinedb.h:136; out_json confirmed non-null"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/config.rs"
+line = 86
+owner = "c-abi"
+invariant = "out_json confirmed non-null; CString::into_raw transfers ownership to C caller (paired with rldb_free)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/error.rs"
+line = 34
+owner = "c-abi"
+invariant = "ptr confirmed non-null; CString::from_raw pairs with prior CString::into_raw from this library (rldb_stats_json, errmsg_to_c_string, set_errmsg)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/exec.rs"
+line = 29
+owner = "c-abi"
+invariant = "errmsg confirmed non-null; writing NULL sentinel per sqlite3_exec contract"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/exec.rs"
+line = 39
+owner = "c-abi"
+invariant = "db non-null *mut rldb from rldb_open per redlinedb.h:124"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/exec.rs"
+line = 42
+owner = "c-abi"
+invariant = "sql non-null NUL-terminated C string per redlinedb.h:124"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/exec.rs"
+line = 82
+owner = "c-abi"
+invariant = "set_errmsg internal null-check (prepare_statement helper); ownership of returned CString transfers to caller (paired with rldb_free)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/exec.rs"
+line = 103
+owner = "c-abi"
+invariant = "set_errmsg internal null-check (run_statement_to_completion helper); ownership of returned CString transfers to caller (paired with rldb_free)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/exec.rs"
+line = 128
+owner = "c-abi"
+invariant = "set_errmsg internal null-check (run_statement_with_callback helper); ownership of returned CString transfers to caller (paired with rldb_free)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/exec.rs"
+line = 172
+owner = "c-abi"
+invariant = "set_errmsg internal null-check (invoke_exec_callback helper, callback returned non-zero); ownership of returned CString transfers to caller (paired with rldb_free)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/lifecycle.rs"
+line = 18
+owner = "c-abi"
+invariant = "path confirmed non-null NUL-terminated C string per redlinedb.h:85"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/lifecycle.rs"
+line = 22
+owner = "c-abi"
+invariant = "out_db confirmed non-null; Box::into_raw transfers ownership to C caller (paired with rldb_close)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/lifecycle.rs"
+line = 45
+owner = "c-abi"
+invariant = "config confirmed non-null; caller owns rldb_config for the duration of this call"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/lifecycle.rs"
+line = 49
+owner = "c-abi"
+invariant = "path confirmed non-null NUL-terminated C string per redlinedb.h:86"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/lifecycle.rs"
+line = 53
+owner = "c-abi"
+invariant = "out_db confirmed non-null; Box::into_raw transfers ownership to C caller (paired with rldb_close)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/lifecycle.rs"
+line = 68
+owner = "c-abi"
+invariant = "db confirmed non-null above; only reads active_statements count"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/lifecycle.rs"
+line = 75
+owner = "c-abi"
+invariant = "Box::from_raw pairs with Box::into_raw from open_handle in util.rs"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 90
+owner = "c-abi"
+invariant = "path confirmed non-null NUL-terminated C string per redlinedb.h:147"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 94
+owner = "c-abi"
+invariant = "out_db confirmed non-null; Box::into_raw transfers ownership to C caller (paired with sqlite3_close)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 121
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy bool return only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 131
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy bool return only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 141
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; returned pointer into rldb_stmt.sql_text valid for statement lifetime"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 175
+owner = "c-abi"
+invariant = "db confirmed non-null above; touches atomic last_code only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 187
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 195
+owner = "c-abi"
+invariant = "db confirmed non-null; lives as long as the statement (active_statements gates close); touches atomic last_code only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 209
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 226
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 237
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 248
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 259
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 277
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 294
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 363
+owner = "c-abi"
+invariant = "db confirmed non-null above; touches atomic last_code only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 432
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; reads Copy db field only"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api.rs"
+line = 446
+owner = "c-abi"
+invariant = "db and name confirmed non-null above; returned pointer into db.path_text valid for connection life"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 30
+owner = "c-abi"
+invariant = "db confirmed non-null above; shared borrow scoped to api() closure; active_statements blocks racing close"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 34
+owner = "c-abi"
+invariant = "sql confirmed non-null above; NUL-terminated C string per redlinedb.h:95"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 41
+owner = "c-abi"
+invariant = "sql confirmed non-null above; nbytes is explicit length of caller-owned buffer per sqlite3_prepare_v2 contract"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 66
+owner = "c-abi"
+invariant = "tail may be NULL; when non-null, caller guarantees a writable *const c_char and in-allocation pointer arithmetic"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 74
+owner = "c-abi"
+invariant = "out_stmt confirmed non-null; storing NULL for empty/comment-only input"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 102
+owner = "c-abi"
+invariant = "out_stmt confirmed non-null; Box::into_raw transfers ownership to C caller (paired with rldb_finalize)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 117
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; single-thread ownership per C ABI"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 122
+owner = "c-abi"
+invariant = "stmt_ref.db recorded at prepare time and lives at least as long as the statement (active_statements gates close)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 149
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; single-thread ownership per C ABI"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 165
+owner = "c-abi"
+invariant = "Box::from_raw pairs with Box::into_raw from rldb_prepare_v2"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 169
+owner = "c-abi"
+invariant = "boxed.db recorded at prepare time; rldb_close waits for active_statements==0 so parent db is alive here"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/stmt.rs"
+line = 184
+owner = "c-abi"
+invariant = "stmt confirmed non-null above; single-thread ownership per C ABI"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/util.rs"
+line = 122
+owner = "c-abi"
+invariant = "db confirmed non-null above; shared borrow scoped to f() which runs synchronously"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/util.rs"
+line = 300
+owner = "c-abi"
+invariant = "set_errmsg: pub(crate) unsafe fn with documented # Safety contract (errmsg null-check, ownership transfer to caller via rldb_free)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/util.rs"
+line = 307
+owner = "c-abi"
+invariant = "errmsg confirmed non-null; writing CString::into_raw whose ownership transfers to caller (paired with rldb_free)"
+proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"

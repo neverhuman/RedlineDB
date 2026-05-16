@@ -23,6 +23,9 @@ pub extern "C" fn rldb_exec(
 ) -> c_int {
     // Initialize errmsg to NULL up-front (sqlite3_exec contract).
     if !errmsg.is_null() {
+        // SAFETY: `errmsg` non-null (checked); per redlinedb.h:124 it is a
+        // writable char** out-pointer; we write NULL so failed paths cannot
+        // leave an uninitialized pointer.
         unsafe {
             *errmsg = ptr::null_mut();
         }
@@ -31,13 +34,17 @@ pub extern "C" fn rldb_exec(
         if db.is_null() || sql.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // SAFETY: `db` non-null (checked); per redlinedb.h:124 from
+        // rldb_open not yet closed; shared borrow scoped to api() closure.
         let db_ref = unsafe { &*db };
+        // SAFETY: `sql` non-null (checked); per redlinedb.h:124 it is a
+        // NUL-terminated C string; &str borrow stays inside this closure.
         let sql_text = unsafe { CStr::from_ptr(sql) }
             .to_str()
             .map_err(|_| RLDB_MISMATCH)?;
         let mut rest = sql_text;
         // Walk the multi-statement input one statement at a time. SQLite's
-        // sqlite3_exec stops at the first failing statement and reports its
+        // sqlite3_exec halts at the first failing statement and reports its
         // error via errmsg; later statements are not executed.
         loop {
             let (stmt_opt, tail) = match prepare_statement(db_ref, rest, errmsg, db) {
@@ -69,6 +76,9 @@ fn prepare_statement<'a>(
     db_ref.conn.clone().prepare_v2(sql).map_err(|err| {
         let msg = err.to_string();
         let code = map_error(err);
+        // SAFETY: set_errmsg's documented contract null-checks internally;
+        // non-null writes transfer ownership to the caller (paired with
+        // rldb_free / sqlite3_free).
         unsafe { set_errmsg(errmsg, &msg) };
         record_status_with_message(db, code, &msg);
         code
@@ -87,6 +97,9 @@ fn run_statement_to_completion(
             Err(err) => {
                 let msg = err.to_string();
                 let code = map_error(err);
+                // SAFETY: set_errmsg's documented contract null-checks
+                // internally; non-null writes transfer ownership to the
+                // caller (paired with rldb_free / sqlite3_free).
                 unsafe { set_errmsg(errmsg, &msg) };
                 record_status_with_message(db, code, &msg);
                 return Err(code);
@@ -109,6 +122,9 @@ fn run_statement_with_callback(
             Err(err) => {
                 let msg = err.to_string();
                 let code = map_error(err);
+                // SAFETY: set_errmsg's documented contract null-checks
+                // internally; non-null writes transfer ownership to the
+                // caller (paired with rldb_free / sqlite3_free).
                 unsafe { set_errmsg(errmsg, &msg) };
                 record_status_with_message(db, code, &msg);
                 return Err(code);
@@ -150,6 +166,9 @@ fn invoke_exec_callback(
         colnames.as_mut_ptr(),
     );
     if rc != 0 {
+        // SAFETY: set_errmsg's documented contract null-checks internally;
+        // non-null writes transfer ownership to the caller (paired with
+        // rldb_free / sqlite3_free).
         unsafe { set_errmsg(errmsg, "callback returned non-zero") };
         return Err(RLDB_ERROR);
     }

@@ -7,7 +7,10 @@ rust-version.workspace = true
 
 [lib]
 name = "redlinedb"
-crate-type = ["cdylib", "staticlib"]
+# `rlib` is required so integration tests under `tests/` can link against
+# the FFI surface (the safety_invariants suite calls `rldb_*` functions
+# directly via Rust paths). `cdylib` + `staticlib` keep the C ABI surface.
+crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 redlinedb-kernel = { path = "../kernel" }

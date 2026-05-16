@@ -28,6 +28,9 @@ pub extern "C" fn rldb_errmsg(db: *mut rldb) -> *const c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_free(ptr: *mut c_void) {
     if !ptr.is_null() {
+        // SAFETY: `ptr` non-null (checked); per redlinedb.h:128 it was
+        // returned by this library via CString::into_raw (rldb_stats_json,
+        // errmsg_to_c_string, set_errmsg); from_raw reclaims ownership.
         unsafe {
             drop(CString::from_raw(ptr as *mut c_char));
         }

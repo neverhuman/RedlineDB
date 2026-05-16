@@ -85,7 +85,12 @@ pub extern "C" fn sqlite3_open_v2(
             return Err(RLDB_MISUSE);
         }
         let create_if_missing = flags & SQLITE_OPEN_CREATE != 0;
+        // SAFETY: `path` non-null (checked); per redlinedb.h:147 it is a
+        // NUL-terminated C string; open_handle copies it into owned PathBuf.
         let handle = open_handle(unsafe { CStr::from_ptr(path) }, None, create_if_missing)?;
+        // SAFETY: `out_db` non-null (checked); per redlinedb.h:147 it is a
+        // writable sqlite3**; open_handle returned a Box::into_raw pointer
+        // whose ownership transfers to the C caller (paired with sqlite3_close).
         unsafe {
             *out_db = handle;
         }
@@ -111,6 +116,8 @@ pub extern "C" fn sqlite3_stmt_readonly(stmt: *mut sqlite3_stmt) -> c_int {
     if stmt.is_null() {
         return 0;
     }
+    // SAFETY: `stmt` non-null (checked); per redlinedb.h:101 from
+    // sqlite3_prepare_v2 not yet finalized; reads Copy bool only.
     unsafe { (*stmt).stmt.is_readonly() as c_int }
 }
 
@@ -119,6 +126,8 @@ pub extern "C" fn sqlite3_stmt_busy(stmt: *mut sqlite3_stmt) -> c_int {
     if stmt.is_null() {
         return 0;
     }
+    // SAFETY: `stmt` non-null (checked); per redlinedb.h:102 from
+    // sqlite3_prepare_v2 not yet finalized; reads Copy bool only.
     unsafe { (*stmt).stmt.is_busy() as c_int }
 }
 
@@ -127,6 +136,9 @@ pub extern "C" fn sqlite3_sql(stmt: *mut sqlite3_stmt) -> *const c_char {
     if stmt.is_null() {
         return ptr::null();
     }
+    // SAFETY: `stmt` non-null (checked); per redlinedb.h:103 from
+    // sqlite3_prepare_v2; returned pointer is into rldb_stmt.sql_text,
+    // valid until sqlite3_finalize.
     unsafe { (*stmt).sql_text.as_ptr() }
 }
 
@@ -156,7 +168,8 @@ pub extern "C" fn sqlite3_prepare_v2(
     if rc == RLDB_OK {
         record_status(db, rc);
     } else if !db.is_null() {
-        // Still record the code so `sqlite3_errcode` is consistent.
+        // SAFETY: `db` non-null (checked); per redlinedb.h:151 from
+        // sqlite3_open not yet closed; touches atomic last_code only.
         unsafe {
             (*db).last_code.store(rc, Ordering::Relaxed);
         }
@@ -168,12 +181,17 @@ pub extern "C" fn sqlite3_prepare_v2(
 pub extern "C" fn sqlite3_step(stmt: *mut sqlite3_stmt) -> c_int {
     let rc = rldb_step(stmt);
     if !stmt.is_null() {
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:152 from
+        // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
         let db = unsafe { (*stmt).db };
         // rldb_step already recorded an enriched error message on failure;
         // only update the generic "ok" message on success/row/done.
         if rc == RLDB_OK || rc == RLDB_ROW || rc == RLDB_DONE {
             record_status(db, rc);
         } else if !db.is_null() {
+            // SAFETY: `db` non-null (checked); recorded at prepare time and
+            // lives at least as long as the statement (active_statements
+            // gates close); touches atomic last_code only.
             unsafe {
                 (*db).last_code.store(rc, Ordering::Relaxed);
             }
@@ -186,6 +204,8 @@ pub extern "C" fn sqlite3_step(stmt: *mut sqlite3_stmt) -> c_int {
 pub extern "C" fn sqlite3_reset(stmt: *mut sqlite3_stmt) -> c_int {
     let rc = rldb_reset(stmt);
     if !stmt.is_null() {
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:153 from
+        // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
         let db = unsafe { (*stmt).db };
         record_status(db, rc);
     }
@@ -201,6 +221,8 @@ pub extern "C" fn sqlite3_finalize(stmt: *mut sqlite3_stmt) -> c_int {
 pub extern "C" fn sqlite3_clear_bindings(stmt: *mut sqlite3_stmt) -> c_int {
     let rc = rldb_clear_bindings(stmt);
     if !stmt.is_null() {
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:155 from
+        // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
         let db = unsafe { (*stmt).db };
         record_status(db, rc);
     }
@@ -211,6 +233,8 @@ pub extern "C" fn sqlite3_clear_bindings(stmt: *mut sqlite3_stmt) -> c_int {
 pub extern "C" fn sqlite3_bind_null(stmt: *mut sqlite3_stmt, index: c_int) -> c_int {
     let rc = rldb_bind_null(stmt, index);
     if !stmt.is_null() {
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:157 from
+        // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
         let db = unsafe { (*stmt).db };
         record_status(db, rc);
     }
@@ -221,6 +245,8 @@ pub extern "C" fn sqlite3_bind_null(stmt: *mut sqlite3_stmt, index: c_int) -> c_
 pub extern "C" fn sqlite3_bind_int64(stmt: *mut sqlite3_stmt, index: c_int, value: i64) -> c_int {
     let rc = rldb_bind_int64(stmt, index, value);
     if !stmt.is_null() {
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:158 from
+        // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
         let db = unsafe { (*stmt).db };
         record_status(db, rc);
     }
@@ -231,6 +257,8 @@ pub extern "C" fn sqlite3_bind_int64(stmt: *mut sqlite3_stmt, index: c_int, valu
 pub extern "C" fn sqlite3_bind_double(stmt: *mut sqlite3_stmt, index: c_int, value: f64) -> c_int {
     let rc = rldb_bind_double(stmt, index, value);
     if !stmt.is_null() {
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:159 from
+        // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
         let db = unsafe { (*stmt).db };
         record_status(db, rc);
     }
@@ -247,6 +275,8 @@ pub extern "C" fn sqlite3_bind_text(
 ) -> c_int {
     let rc = rldb_bind_text(stmt, index, value, nbytes);
     if !stmt.is_null() {
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:160 from
+        // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
         let db = unsafe { (*stmt).db };
         record_status(db, rc);
     }
@@ -263,6 +293,8 @@ pub extern "C" fn sqlite3_bind_blob(
 ) -> c_int {
     let rc = rldb_bind_blob(stmt, index, value, nbytes);
     if !stmt.is_null() {
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:161 from
+        // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
         let db = unsafe { (*stmt).db };
         record_status(db, rc);
     }
@@ -338,8 +370,9 @@ pub extern "C" fn sqlite3_exec(
     } else if !db.is_null() {
         // Mirror the errmsg into last_message so sqlite3_errmsg(db) returns
         // the same explanation. We cannot read from `errmsg` (it's a caller
-        // out-pointer) so duplicate the message via the success path of
-        // rldb_exec — for now record the generic code only.
+        // out-pointer); for now record the generic code only.
+        // SAFETY: `db` non-null (checked); per redlinedb.h:175 from
+        // sqlite3_open not yet closed; touches atomic last_code only.
         unsafe {
             (*db).last_code.store(rc, Ordering::Relaxed);
         }
@@ -417,6 +450,8 @@ pub extern "C" fn sqlite3_db_handle(stmt: *mut sqlite3_stmt) -> *mut sqlite3 {
     if stmt.is_null() {
         return ptr::null_mut();
     }
+    // SAFETY: `stmt` non-null (checked); per redlinedb.h:189 from
+    // sqlite3_prepare_v2 not yet finalized; reads Copy db field only.
     unsafe { (*stmt).db }
 }
 
@@ -425,6 +460,9 @@ pub extern "C" fn sqlite3_db_filename(db: *mut sqlite3, name: *const c_char) -> 
     if db.is_null() || name.is_null() {
         return ptr::null();
     }
+    // SAFETY: both `db` and `name` non-null (checked); per redlinedb.h:190
+    // `db` from sqlite3_open not yet closed, `name` NUL-terminated C
+    // string; returned pointer into db.path_text, valid for connection life.
     unsafe {
         if CStr::from_ptr(name).to_bytes() == b"main" {
             (*db).path_text.as_ptr()

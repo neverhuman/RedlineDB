@@ -15,6 +15,8 @@ pub extern "C" fn rldb_busy_timeout(db: *mut rldb, milliseconds: c_int) -> c_int
         if db.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // SAFETY: `db` non-null (checked); per redlinedb.h:130 from
+        // rldb_open not yet closed; shared borrow scoped to api() closure.
         let db = unsafe { &*db };
         let timeout = Duration::from_millis(milliseconds.max(0) as u64);
         db.db.set_busy_timeout(timeout);
@@ -36,6 +38,11 @@ pub extern "C" fn rldb_last_insert_rowid(db: *mut rldb) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_checkpoint(db: *mut rldb) -> c_int {
     flatten_code(api(|| {
+        if db.is_null() {
+            return Err(RLDB_MISUSE);
+        }
+        // SAFETY: `db` non-null (checked); per redlinedb.h:134 from
+        // rldb_open not yet closed; shared borrow scoped to api() closure.
         let db = unsafe { &*db };
         sql_result(db.db.checkpoint())?;
         Ok(RLDB_OK)
@@ -45,6 +52,11 @@ pub extern "C" fn rldb_checkpoint(db: *mut rldb) -> c_int {
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_vacuum(db: *mut rldb) -> c_int {
     flatten_code(api(|| {
+        if db.is_null() {
+            return Err(RLDB_MISUSE);
+        }
+        // SAFETY: `db` non-null (checked); per redlinedb.h:135 from
+        // rldb_open not yet closed; shared borrow scoped to api() closure.
         let db = unsafe { &*db };
         sql_result(db.db.vacuum())?;
         Ok(RLDB_OK)
@@ -54,9 +66,11 @@ pub extern "C" fn rldb_vacuum(db: *mut rldb) -> c_int {
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_stats_json(db: *mut rldb, out_json: *mut *mut c_char) -> c_int {
     flatten_code(api(|| {
-        if out_json.is_null() {
+        if db.is_null() || out_json.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // SAFETY: `db` non-null (checked); per redlinedb.h:136 from
+        // rldb_open not yet closed; shared borrow scoped to api() closure.
         let db = unsafe { &*db };
         let stats = sql_result(db.db.stats())?;
         let json = format!(
@@ -67,6 +81,8 @@ pub extern "C" fn rldb_stats_json(db: *mut rldb, out_json: *mut *mut c_char) -> 
             stats.wal_durable_lsn.0
         );
         let c = CString::new(json).unwrap();
+        // SAFETY: `out_json` non-null (checked); CString::into_raw transfers
+        // ownership to C caller (paired with rldb_free's CString::from_raw).
         unsafe {
             *out_json = c.into_raw();
         }

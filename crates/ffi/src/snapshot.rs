@@ -19,7 +19,13 @@ pub extern "C" fn rldb_backup_init(
         if src.is_null() || dst_path.is_null() || out.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // SAFETY: per redlinedb.h:138 `src` is a non-null *mut rldb from
+        // rldb_open not yet closed; the borrow lives only in this closure
+        // which the C ABI forbids racing with destruction.
         let src_ref = unsafe { &*src };
+        // SAFETY: per redlinedb.h:138 `dst_path` is non-null NUL-terminated
+        // C string; the CStr borrow is copied into an owned String before
+        // returning so it does not outlive the caller buffer.
         let dst = unsafe { CStr::from_ptr(dst_path) }
             .to_str()
             .map_err(|_| RLDB_MISMATCH)?
@@ -31,6 +37,8 @@ pub extern "C" fn rldb_backup_init(
             remaining: 1,
             pagecount: 1,
         });
+        // SAFETY: `out` non-null (checked); Box::into_raw transfers ownership
+        // to the C caller (paired with rldb_backup_close's Box::from_raw).
         unsafe {
             *out = Box::into_raw(backup);
         }
@@ -44,6 +52,9 @@ pub extern "C" fn rldb_backup_step(backup: *mut rldb_backup, _batches: c_int) ->
         if backup.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // SAFETY: per redlinedb.h:139 `backup` is a non-null *mut rldb_backup
+        // from rldb_backup_init not yet closed; C ABI requires single-thread
+        // ownership so the &mut borrow (scoped to this closure) cannot alias.
         let backup = unsafe { &mut *backup };
         if !backup.done {
             if backup.dst_path.exists() {
@@ -71,6 +82,9 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
+    // SAFETY: per redlinedb.h:141 `backup` was returned by rldb_backup_init
+    // (Box::into_raw) and has not been closed; pairing Box::from_raw with
+    // that prior into_raw reclaims ownership so the allocation drops here.
     unsafe {
         drop(Box::from_raw(backup));
     }
@@ -82,6 +96,8 @@ pub extern "C" fn rldb_backup_remaining(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
+    // SAFETY: per redlinedb.h:142 `backup` non-null from rldb_backup_init
+    // not yet closed; only reads a Copy integer, no borrow escapes.
     unsafe { (*backup).remaining as c_int }
 }
 
@@ -90,5 +106,7 @@ pub extern "C" fn rldb_backup_pagecount(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
+    // SAFETY: per redlinedb.h:143 `backup` non-null from rldb_backup_init
+    // not yet closed; only reads a Copy integer, no borrow escapes.
     unsafe { (*backup).pagecount as c_int }
 }

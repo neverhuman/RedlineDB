@@ -116,6 +116,9 @@ pub(crate) fn with_db<R>(db: *mut rldb, f: impl FnOnce(&rldb) -> R) -> Result<R,
     if db.is_null() {
         return Err(RLDB_MISUSE);
     }
+    // SAFETY: `db` non-null (checked); per C ABI in redlinedb.h every rldb_*
+    // function that accepts *mut rldb requires rldb_open + not yet closed;
+    // shared borrow lives only for f() which runs synchronously here.
     Ok(f(unsafe { &*db }))
 }
 
@@ -282,10 +285,25 @@ pub(crate) fn errmsg_to_c_string(msg: &str) -> *mut c_char {
 }
 
 /// Write `msg` to `*errmsg` if `errmsg` is non-null. Caller must own & free.
+///
+/// # Safety
+/// Caller MUST guarantee:
+/// 1. `errmsg` is NULL (no-op) or a writable, aligned `*mut c_char` the
+///    caller owns exclusively for this call (no concurrent writer). See
+///    `char **errmsg` slot in crates/ffi/include/redlinedb.h on
+///    `rldb_exec`/`sqlite3_exec`.
+/// 2. The slot at `*errmsg` receives a `CString::into_raw` pointer whose
+///    ownership transfers to the caller; release ONLY via `rldb_free` /
+///    `sqlite3_free` (paired with `CString::from_raw`). Any other free is UB.
+/// 3. Any prior value at `*errmsg` was already freed (this function
+///    unconditionally overwrites without freeing).
 pub(crate) unsafe fn set_errmsg(errmsg: *mut *mut c_char, msg: &str) {
     if errmsg.is_null() {
         return;
     }
+    // SAFETY: `errmsg` non-null (checked); caller obligations 1, 2, 4 from
+    // the # Safety block ensure ownership of the slot for this call and the
+    // CString::into_raw ownership transfer (paired with rldb_free).
     unsafe {
         *errmsg = errmsg_to_c_string(msg);
     }

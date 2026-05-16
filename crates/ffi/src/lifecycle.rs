@@ -13,7 +13,12 @@ pub extern "C" fn rldb_open(path: *const c_char, out_db: *mut *mut rldb) -> c_in
         if path.is_null() || out_db.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // SAFETY: `path` non-null (checked); per redlinedb.h:85 it is a
+        // NUL-terminated C string; open_handle copies it into owned PathBuf.
         let handle = open_handle(unsafe { CStr::from_ptr(path) }, None, true)?;
+        // SAFETY: `out_db` non-null (checked); per redlinedb.h:85 it is a
+        // writable rldb**; open_handle returned a Box::into_raw pointer
+        // whose ownership transfers to the C caller (paired with rldb_close).
         unsafe {
             *out_db = handle;
         }
@@ -34,9 +39,17 @@ pub extern "C" fn rldb_open_v2(
         let config = if config.is_null() {
             None
         } else {
+            // SAFETY: `config` non-null (just checked); per redlinedb.h:86
+            // caller owns rldb_config for this call; borrow consumed inside
+            // open_handle which copies fields into owned DbOptions.
             Some(unsafe { &*config })
         };
+        // SAFETY: `path` non-null (checked); per redlinedb.h:86 it is a
+        // NUL-terminated C string; open_handle copies it into owned PathBuf.
         let handle = open_handle(unsafe { CStr::from_ptr(path) }, config, true)?;
+        // SAFETY: `out_db` non-null (checked); per redlinedb.h:86 it is a
+        // writable rldb**; open_handle returned a Box::into_raw pointer
+        // whose ownership transfers to the C caller (paired with rldb_close).
         unsafe {
             *out_db = handle;
         }
@@ -47,10 +60,18 @@ pub extern "C" fn rldb_open_v2(
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
     flatten_code(api(|| {
+        if db.is_null() {
+            return Err(RLDB_MISUSE);
+        }
+        // SAFETY: `db` non-null (just checked); per redlinedb.h:87 from
+        // rldb_open not yet closed; only reads active_statements count.
         let db_ref = unsafe { &*db };
         if db_ref.active_statements.load(Ordering::Relaxed) != 0 {
             return Err(RLDB_BUSY);
         }
+        // SAFETY: `db` matches a prior Box::into_raw from open_handle;
+        // db_ref borrow ended above; Box::from_raw reclaims ownership and
+        // drops the rldb so the file handle releases.
         unsafe {
             drop(Box::from_raw(db));
         }

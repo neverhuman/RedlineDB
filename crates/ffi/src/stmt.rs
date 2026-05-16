@@ -24,11 +24,20 @@ pub extern "C" fn rldb_prepare_v2(
         if db.is_null() || sql.is_null() || out_stmt.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // SAFETY: `db` non-null (checked); per redlinedb.h:95 from rldb_open
+        // not yet closed; shared borrow scoped to api() closure (we bump
+        // active_statements below which gates close).
         let db_ref = unsafe { &*db };
+        // SAFETY: `sql` non-null (checked); per redlinedb.h:95 it is a
+        // NUL-terminated C string (nbytes<0) or byte buffer (nbytes>=0);
+        // CStr only reads leading bytes, we copy what we need below.
         let sql_cstr = unsafe { CStr::from_ptr(sql) };
         let sql_text = if nbytes < 0 {
             sql_cstr.to_str().map_err(|_| RLDB_MISMATCH)?.to_owned()
         } else {
+            // SAFETY: `sql` non-null (checked); per sqlite3_prepare_v2
+            // contract when nbytes>=0 it is the explicit byte length of the
+            // caller-owned buffer; slice copied into owned String below.
             let bytes = unsafe {
                 std::slice::from_raw_parts(sql_cstr.as_ptr() as *const u8, nbytes as usize)
             };
@@ -38,8 +47,8 @@ pub extern "C" fn rldb_prepare_v2(
         };
         // sqlite3_prepare_v2 contract: parse only the FIRST statement in
         // `sql`, set `tail` to the byte after that statement (or to the NUL
-        // terminator if it was the last). We achieve this by routing through
-        // `Connection::prepare_v2` which returns the unconsumed remainder.
+        // terminator if it was the last). We route through
+        // Connection::prepare_v2 which returns the unconsumed remainder.
         let (stmt_opt, remainder) = match db_ref.conn.clone().prepare_v2(&sql_text) {
             Ok(pair) => pair,
             Err(err) => {
@@ -51,12 +60,17 @@ pub extern "C" fn rldb_prepare_v2(
         };
         let consumed_bytes = sql_text.len() - remainder.len();
         // Set out_stmt: NULL if input was blank/comment-only (per SQLite).
+        // SAFETY: `tail` may be NULL (optional per C ABI); when non-null,
+        // caller guarantees writable *const c_char and the pointer
+        // arithmetic stays in-allocation (sql_cstr.as_ptr() + in-range).
         unsafe {
             if !tail.is_null() {
                 *tail = sql_cstr.as_ptr().wrapping_add(consumed_bytes);
             }
         }
         let Some(stmt) = stmt_opt else {
+            // SAFETY: `out_stmt` non-null (checked at top); per C ABI it is
+            // a writable rldb_stmt**; storing NULL for empty/comment-only.
             unsafe {
                 *out_stmt = ptr::null_mut();
             }
@@ -82,6 +96,9 @@ pub extern "C" fn rldb_prepare_v2(
             .text_cache
             .resize_with(boxed.stmt.column_count(), || CString::new("").unwrap());
         db_ref.active_statements.fetch_add(1, Ordering::Relaxed);
+        // SAFETY: `out_stmt` non-null (checked at top); per C ABI it is a
+        // writable rldb_stmt**; Box::into_raw transfers ownership to caller
+        // (paired with rldb_finalize's Box::from_raw).
         unsafe {
             *out_stmt = Box::into_raw(boxed);
         }
@@ -92,8 +109,16 @@ pub extern "C" fn rldb_prepare_v2(
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
     flatten_code(api(|| {
+        if stmt.is_null() {
+            return Err(RLDB_MISUSE);
+        }
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:97 from
+        // rldb_prepare_v2 not yet finalized; single-thread ownership.
         let stmt_ref = unsafe { &mut *stmt };
         let db = stmt_ref.db;
+        // SAFETY: stmt_ref.db recorded at prepare time and lives at least
+        // as long as the statement (prepare bumped active_statements which
+        // blocks rldb_close until finalize); reads atomic flag only.
         if unsafe { (*db).interrupted.load(Ordering::Relaxed) } {
             return Err(RLDB_INTERRUPT);
         }
@@ -116,6 +141,11 @@ pub extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_reset(stmt: *mut rldb_stmt) -> c_int {
     flatten_code(api(|| {
+        if stmt.is_null() {
+            return Err(RLDB_MISUSE);
+        }
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:98 from
+        // rldb_prepare_v2 not yet finalized; single-thread ownership.
         let stmt = unsafe { &mut *stmt };
         sql_result(stmt.stmt.reset())?;
         stmt.text_cache.clear();
@@ -129,7 +159,13 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:99 it matches
+        // a prior Box::into_raw from rldb_prepare_v2; from_raw reclaims
+        // ownership and drops the rldb_stmt.
         let boxed = unsafe { Box::from_raw(stmt) };
+        // SAFETY: boxed.db is the *mut rldb recorded at prepare time;
+        // rldb_close waits for active_statements==0 so the parent db is
+        // still alive when we decrement here.
         unsafe {
             (*boxed.db)
                 .active_statements
@@ -142,6 +178,11 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_clear_bindings(stmt: *mut rldb_stmt) -> c_int {
     flatten_code(api(|| {
+        if stmt.is_null() {
+            return Err(RLDB_MISUSE);
+        }
+        // SAFETY: `stmt` non-null (checked); per redlinedb.h:100 from
+        // rldb_prepare_v2 not yet finalized; single-thread ownership.
         let stmt = unsafe { &mut *stmt };
         stmt.stmt.clear_bindings();
         Ok(RLDB_OK)
