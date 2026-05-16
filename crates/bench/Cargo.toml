@@ -35,7 +35,7 @@ walkdir = "2"
 
 [[bin]]
 name = "chaos_report"
-path = "src/bin/chaos_report.rs"
+path = "src/bin/chaos_report/main.rs"
 
 [dev-dependencies]
 # Lane F6: integration tests in `tests/failpoint_matrix.rs` drive

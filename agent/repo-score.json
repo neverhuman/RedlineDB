@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:07c619eaf350025a10a90128355a924ec4826829e3f0eb71760d190f89ac90ff",
-  "input_fingerprint": "sha256:2d735f44f54a134a8d030b8e9bf9440a0f3aea5d9205358594841b5025189818",
+  "report_fingerprint": "sha256:cca1cfc3f76661512828d1363cb70a0c67913d3318d1a8b26ee3872d6be4002e",
+  "input_fingerprint": "sha256:06e066667e1be67390cca797559da8e4515528516caad8afaa05f0da15918f7d",
   "policy_fingerprint": "sha256:09ed363ac485d9afd9923469b9feb56457a7635c1a6a64b88a838a3e231a0af6",
   "manifest_fingerprints": {
     "owner_map": "sha256:74f494a6cbc365236d62d3dfc1061a69f5f4c34fa0cc94ba1fb397e3b81db9f6",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778898126",
+  "generated_at": "1778899854",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -24,10 +24,13 @@
   "observed_conformance_level": "HL2",
   "conformance_decision": "block",
   "conformance_blockers": [
+    "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
+    "HLT-002-GENERATED-MUTATION on agent/generated-zones.toml",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+    "HLT-001-DEAD-MARKER on crates/bench/src/bin/chaos_report/main.rs",
     "HLT-000-SCORE-DIMENSION:vibe on crates/bench/src/chaos.rs",
     "HLT-022-AUTHZ-ISOLATION-GAP on crates/bench/src/config.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/bench/src/process_metrics.rs",
@@ -39,13 +42,12 @@
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/lifecycle.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/snapshot.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs",
-    "HLT-001-DEAD-MARKER on crates/kernel/src/engine/recovery.rs"
+    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/stmt.rs"
   ],
   "repo": ".",
-  "run_id": "1778898126",
-  "started_at": "1778898126",
-  "elapsed_ms": 7240,
+  "run_id": "1778899854",
+  "started_at": "1778899854",
+  "elapsed_ms": 7423,
   "scope": {
     "mode": "full",
     "paths": []
@@ -56,7 +58,7 @@
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 17,
+    "hard_findings": 19,
     "soft_findings": 4,
     "ratchet": {
       "baseline_score": 70,
@@ -72,7 +74,7 @@
     }
   },
   "git": {
-    "head": "2c1d2af",
+    "head": "de5b0d2",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -490,10 +492,7 @@
     "has_rendered_ux_lane": true,
     "missing_categories": [],
     "evidence": {
-      "accessibility": [
-        "agent/repo-score.json",
-        "agent/repo-score.md"
-      ],
+      "accessibility": [],
       "api_mocks": [],
       "artifact_backed_proof": [
         "agent/proof-lanes.toml",
@@ -508,9 +507,7 @@
       ],
       "layout_stability": [],
       "playwright_visual": [],
-      "storybook": [
-        "agent/repo-score.json"
-      ],
+      "storybook": [],
       "visual_review": []
     }
   },
@@ -1414,6 +1411,50 @@
     },
     {
       "severity": "high",
+      "category": "generated",
+      "path": "agent/generated-zones.toml",
+      "problem": "generated zone file `agent/repo-score.json` is missing",
+      "agent_fix": "regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally",
+      "evidence": [
+        "generated zone integrity violation"
+      ],
+      "check_id": "HLT-002-GENERATED-MUTATION:generated",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "contract-manifest",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:da4c97d8849ada8e584127cefd2a38618b2122ac9f5d9918c4996048a2e47b21",
+      "rule_id": "HLT-002-GENERATED-MUTATION",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
+      "owner": "agent",
+      "line": 1
+    },
+    {
+      "severity": "high",
+      "category": "generated",
+      "path": "agent/generated-zones.toml",
+      "problem": "generated zone file `agent/repo-score.md` is missing",
+      "agent_fix": "regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally",
+      "evidence": [
+        "generated zone integrity violation"
+      ],
+      "check_id": "HLT-002-GENERATED-MUTATION:generated",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "contract-manifest",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:73f51c07759943db494d8bd45c79b3ea786d6bce0e391f2408f30b6a9de7af8c",
+      "rule_id": "HLT-002-GENERATED-MUTATION",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
+      "owner": "agent",
+      "line": 1
+    },
+    {
+      "severity": "high",
       "category": "proof",
       "path": "agent/test-map.json",
       "problem": "path `benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/index.json` has no test-map proof route",
@@ -1495,6 +1536,28 @@
       "lane": "fast",
       "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
       "owner": "agent"
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/src/bin/chaos_report/main.rs",
+      "problem": "fallback soup detected in product code",
+      "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
+      "evidence": [
+        "crates/bench/src/bin/chaos_report/main.rs:57 .unwrap_or_default();"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:ba7702e2d4d20da46a82316821375955189c1cff43ab665582a57e99340bb7c4",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "bench-harness",
+      "line": 57
     },
     {
       "severity": "high",
@@ -1793,28 +1856,6 @@
       "reason": "ownership provenance is missing"
     },
     {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/kernel/src/engine/recovery.rs",
-      "problem": "fallback soup detected in product code",
-      "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
-      "evidence": [
-        "crates/kernel/src/engine/recovery.rs:35 .unwrap_or_else(|| bootstrap_schema(RelId(10_000)));"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:b399fbf67f16771967fdfbc26c8c3213403e8f48e57ac007e3d7d790a468e4bc",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "storage-and-catalog",
-      "line": 35
-    },
-    {
       "severity": "medium",
       "category": "release",
       "path": "docs/testing.md",
@@ -1848,6 +1889,26 @@
       "owner": "bench-harness",
       "task": "add owner/non-owner authorization tests or RLS evidence for the touched data boundary",
       "why": "authorization or data-isolation surface lacks direct negative proof"
+    },
+    {
+      "path": "agent/generated-zones.toml",
+      "priority": "high",
+      "rule_id": "HLT-002-GENERATED-MUTATION",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "owner": "agent",
+      "task": "regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally",
+      "why": "generated zone file `agent/repo-score.json` is missing"
+    },
+    {
+      "path": "agent/generated-zones.toml",
+      "priority": "high",
+      "rule_id": "HLT-002-GENERATED-MUTATION",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "owner": "agent",
+      "task": "regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally",
+      "why": "generated zone file `agent/repo-score.md` is missing"
     },
     {
       "path": "agent/test-map.json",
@@ -1887,6 +1948,16 @@
       "owner": "c-abi",
       "task": "move product runtime behavior to Rust core, TypeScript web, SQL migrations, or generated contracts; Python needs a dated advanced-ML/data exception",
       "why": "runtime code uses a language outside the chosen optimal stack"
+    },
+    {
+      "path": "crates/bench/src/bin/chaos_report/main.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "bench-harness",
+      "task": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
+      "why": "fallback soup detected in product code"
     },
     {
       "path": "crates/bench/src/chaos.rs",
@@ -1966,16 +2037,6 @@
       "owner": "c-abi",
       "task": "use the matching constructor/destructor pair or add a documented ownership proof",
       "why": "raw ownership conversion needs exact provenance and allocator proof"
-    },
-    {
-      "path": "crates/kernel/src/engine/recovery.rs",
-      "priority": "high",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "owner": "storage-and-catalog",
-      "task": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
-      "why": "fallback soup detected in product code"
     },
     {
       "path": ".",

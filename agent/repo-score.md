@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778898126`
-- Started at: `1778898126`
-- Elapsed: `7240` ms
+- Run ID: `1778899854`
+- Started at: `1778899854`
+- Elapsed: `7423` ms
 - Scope: `full`
 - Raw score: `82`
 - Final score: `70`
@@ -181,7 +181,27 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-4. `high` `proof` `agent/test-map.json`
+4. `high` `generated` `agent/generated-zones.toml:1`
+   Rule: `HLT-002-GENERATED-MUTATION`
+   Check: `HLT-002-GENERATED-MUTATION:generated` `hard` confidence `0.95`
+   Route: TLR `Contracts/data`, lane `contract`, owner `agent`
+   Docs: `agent/JANKURAI_STANDARD.md#generated-zones`
+   Reason: generated zone file `agent/repo-score.json` is missing
+   Fix: regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally
+   Rerun: `just fast`
+   Fingerprint: `sha256:da4c97d8849ada8e584127cefd2a38618b2122ac9f5d9918c4996048a2e47b21`
+   Evidence: generated zone integrity violation
+5. `high` `generated` `agent/generated-zones.toml:1`
+   Rule: `HLT-002-GENERATED-MUTATION`
+   Check: `HLT-002-GENERATED-MUTATION:generated` `hard` confidence `0.95`
+   Route: TLR `Contracts/data`, lane `contract`, owner `agent`
+   Docs: `agent/JANKURAI_STANDARD.md#generated-zones`
+   Reason: generated zone file `agent/repo-score.md` is missing
+   Fix: regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally
+   Rerun: `just fast`
+   Fingerprint: `sha256:73f51c07759943db494d8bd45c79b3ea786d6bce0e391f2408f30b6a9de7af8c`
+   Evidence: generated zone integrity violation
+6. `high` `proof` `agent/test-map.json`
    Rule: `HLT-004-UNMAPPED-PROOF`
    Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
    Route: TLR `Verification`, lane `fast`, owner `agent`
@@ -191,7 +211,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:63a63918499ec1e3424ac105e60444bb1168ae5e0c338de4663f64f71dd4be84`
    Evidence: benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/index.json
-5. `high` `proof` `agent/test-map.json`
+7. `high` `proof` `agent/test-map.json`
    Rule: `HLT-004-UNMAPPED-PROOF`
    Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
    Route: TLR `Verification`, lane `fast`, owner `agent`
@@ -201,7 +221,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:64970509ee4a41509d6bb4ba4fc0c2f619d9206cc936d916ea4e9898bda07699`
    Evidence: benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json
-6. `high` `proof` `agent/test-map.json`
+8. `high` `proof` `agent/test-map.json`
    Rule: `HLT-004-UNMAPPED-PROOF`
    Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
    Route: TLR `Verification`, lane `fast`, owner `agent`
@@ -211,7 +231,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2c130c5e7ee8796c51315afef4df6e6872360ca7d7617d597d5b9752a8d00c3d`
    Evidence: benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json
-7. `high` `proof` `agent/test-map.json`
+9. `high` `proof` `agent/test-map.json`
    Rule: `HLT-004-UNMAPPED-PROOF`
    Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
    Route: TLR `Verification`, lane `fast`, owner `agent`
@@ -221,7 +241,17 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:8b6b248cb1ef6e7b7bd5ef77a8b8b95ee31d28fee045d5ee7be75263101b3fc8`
    Evidence: python/ai-service/AGENTS.md
-8. `high` `vibe` `crates/bench/src/chaos.rs:253`
+10. `high` `vibe` `crates/bench/src/bin/chaos_report/main.rs:57`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `bench-harness`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: fallback soup detected in product code
+   Fix: collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
+   Rerun: `just fast`
+   Fingerprint: `sha256:ba7702e2d4d20da46a82316821375955189c1cff43ab665582a57e99340bb7c4`
+   Evidence: crates/bench/src/bin/chaos_report/main.rs:57 .unwrap_or_default();
+11. `high` `vibe` `crates/bench/src/chaos.rs:253`
    Check: `HLT-000-SCORE-DIMENSION:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `bench-harness`
    Reason: duplicated product code block detected
@@ -229,7 +259,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:1994d84164d96922b427ec867838a574e52101084084b6bf556993388ec5bdc5`
    Evidence: duplicate block also appears at crates/bench/src/chaos.rs:219
-9. `high` `security` `crates/bench/src/config.rs:293`
+12. `high` `security` `crates/bench/src/config.rs:293`
    Rule: `HLT-022-AUTHZ-ISOLATION-GAP`
    Check: `HLT-022-AUTHZ-ISOLATION-GAP:security` `hard` confidence `0.88`
    Route: TLR `Business truth`, lane `db`, owner `bench-harness`
@@ -240,7 +270,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a6afd78567ed0a67ae7fc634e599aca5bbb21557df1590c37150845fcec6d7c9`
    Evidence: /// existing `kv_tenant_idx`. Fixture shape mirrors
-10. `high` `security` `crates/bench/src/process_metrics.rs:116`
+13. `high` `security` `crates/bench/src/process_metrics.rs:116`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `bench-harness`
@@ -251,7 +281,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:70e0e67c25585db1bf6cad349a2af0fdaec6bc15e636a829a913dc3356e45918`
    Evidence: detector=assume_init, proof-window=NearbySafetyComment, snippet=let usage = unsafe { usage.assume_init() };
-11. `high` `stack` `crates/ffi/include/redlinedb.h`
+14. `high` `stack` `crates/ffi/include/redlinedb.h`
    Check: `HLT-000-SCORE-DIMENSION:stack` `hard` confidence `0.88`
    Route: TLR `Context/setup`, lane `audit`, owner `c-abi`
    Reason: runtime code uses a language outside the chosen optimal stack
@@ -259,7 +289,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:7789f9e4b1aac10caf5e262e4eea1642b7862f83b21d46c4820f2c1dc6f8da77`
    Evidence: crates/ffi/include/redlinedb.h uses `.h`, Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service
-12. `high` `security` `crates/ffi/include/redlinedb.h:138`
+15. `high` `security` `crates/ffi/include/redlinedb.h:138`
    Rule: `HLT-023-INPUT-BOUNDARY-GAP`
    Check: `HLT-023-INPUT-BOUNDARY-GAP:security` `hard` confidence `0.88`
    Route: TLR `Security, secrets, agency`, lane `security`, owner `c-abi`
@@ -270,7 +300,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just security`
    Fingerprint: `sha256:3af2e0fe10b23d7952f3b390713303f0e4bd1abe9eeac34710e611bf7a24e821`
    Evidence: int rldb_exec(rldb *db, const char *sql, rldb_exec_callback callback, void *ctx, char **errmsg);
-13. `high` `security` `crates/ffi/src/bind.rs:74`
+16. `high` `security` `crates/ffi/src/bind.rs:74`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -281,7 +311,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:4b2b530b8f9d4ab452ef5a0cdfb6608a8a860f7b7b2083def38ae21649014fef`
    Evidence: detector=from_raw_parts, proof-window=NearbySafetyComment, snippet=unsafe { std::slice::from_raw_parts(value as *const u8, nbytes as usize) }.to_vec()
-14. `high` `security` `crates/ffi/src/bind.rs:99`
+17. `high` `security` `crates/ffi/src/bind.rs:99`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -292,7 +322,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:6dd44eabd0e3893a2b0dad45f3608617d44786596799d68e78b89cae1cfd9034`
    Evidence: detector=from_raw_parts, proof-window=NearbySafetyComment, snippet=let slice = unsafe { std::slice::from_raw_parts(value as *const u8, nbytes as usize) };
-15. `high` `security` `crates/ffi/src/error.rs:35`
+18. `high` `security` `crates/ffi/src/error.rs:35`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -303,7 +333,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:fb68a65ce20650b76a90bc88edfe06a198128b0d750b32b32f7c2a0727384404`
    Evidence: detector=CString::from_raw, proof-window=NearbySafetyComment, snippet=drop(CString::from_raw(ptr as *mut c_char));
-16. `high` `security` `crates/ffi/src/lifecycle.rs:76`
+19. `high` `security` `crates/ffi/src/lifecycle.rs:76`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -314,7 +344,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:bdbc8665d06771630a270b7628b5ce1d4ea68b943861e02146cd65daab567c1f`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(db));
-17. `high` `security` `crates/ffi/src/snapshot.rs:89`
+20. `high` `security` `crates/ffi/src/snapshot.rs:89`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -325,7 +355,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:abc9d33162968df3c2f0a73e25bee873f289b0f867d2811f1feb4de200a60990`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(backup));
-18. `high` `security` `crates/ffi/src/stmt.rs:42`
+21. `high` `security` `crates/ffi/src/stmt.rs:42`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -336,7 +366,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:ad73071eae3b23a5163b99b7f96873c7bc464c4738a0fda62fa55b62bb81fcaa`
    Evidence: detector=from_raw_parts, proof-window=NearbySafetyComment, snippet=std::slice::from_raw_parts(sql_cstr.as_ptr() as *const u8, nbytes as usize)
-19. `high` `security` `crates/ffi/src/stmt.rs:165`
+22. `high` `security` `crates/ffi/src/stmt.rs:165`
    Rule: `HLT-029-RUST-BAD-BEHAVIOR`
    Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
    Route: TLR `Security, secrets, agency`, lane `fast`, owner `c-abi`
@@ -347,17 +377,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b4f1a6ca90b064a685ea26de401a4ea01a4018f38fbe80c7f14d209db28ce468`
    Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=let boxed = unsafe { Box::from_raw(stmt) };
-20. `high` `vibe` `crates/kernel/src/engine/recovery.rs:35`
-   Rule: `HLT-001-DEAD-MARKER`
-   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
-   Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
-   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: fallback soup detected in product code
-   Fix: collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
-   Rerun: `just fast`
-   Fingerprint: `sha256:b399fbf67f16771967fdfbc26c8c3213403e8f48e57ac007e3d7d790a468e4bc`
-   Evidence: crates/kernel/src/engine/recovery.rs:35 .unwrap_or_else(|| bootstrap_schema(RelId(10_000)));
-21. `medium` `release` `docs/testing.md`
+23. `medium` `release` `docs/testing.md`
    Rule: `HLT-026-COST-BUDGET-GAP`
    Check: `HLT-026-COST-BUDGET-GAP:release` `soft` confidence `0.88`
    Route: TLR `Verification`, lane `release`, owner `standard`
@@ -379,33 +399,37 @@ No audited runtime boundary reclassifications declared.
 
 1. `high` `HLT-022-AUTHZ-ISOLATION-GAP` `crates/bench/src/config.rs` - add owner/non-owner authorization tests or RLS evidence for the touched data boundary
    Route: `Business truth`/`db`
-2. `high` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
+2. `high` `HLT-002-GENERATED-MUTATION` `agent/generated-zones.toml` - regenerate `agent/repo-score.json` using the declared command, or remove the zone entry if the file was deleted intentionally
+   Route: `Contracts/data`/`contract`
+3. `high` `HLT-002-GENERATED-MUTATION` `agent/generated-zones.toml` - regenerate `agent/repo-score.md` using the declared command, or remove the zone entry if the file was deleted intentionally
+   Route: `Contracts/data`/`contract`
+4. `high` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
    Route: `Verification`/`fast`
-3. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+5. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-4. `medium` `HLT-026-COST-BUDGET-GAP` `docs/testing.md` - add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
+6. `medium` `HLT-026-COST-BUDGET-GAP` `docs/testing.md` - add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
    Route: `Verification`/`release`
-5. `high` `crates/ffi/include/redlinedb.h` - move product runtime behavior to Rust core, TypeScript web, SQL migrations, or generated contracts; Python needs a dated advanced-ML/data exception
+7. `high` `crates/ffi/include/redlinedb.h` - move product runtime behavior to Rust core, TypeScript web, SQL migrations, or generated contracts; Python needs a dated advanced-ML/data exception
    Route: `Context/setup`/`audit`
-6. `high` `crates/bench/src/chaos.rs` - extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
+8. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/bin/chaos_report/main.rs` - collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
    Route: `Entropy`/`fast`
-7. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/bench/src/process_metrics.rs` - initialize every field before converting from MaybeUninit
+9. `high` `crates/bench/src/chaos.rs` - extract the duplicated behavior behind one named boundary and add focused tests before changing behavior
+   Route: `Entropy`/`fast`
+10. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/bench/src/process_metrics.rs` - initialize every field before converting from MaybeUninit
    Route: `Security, secrets, agency`/`fast`
-8. `high` `HLT-023-INPUT-BOUNDARY-GAP` `crates/ffi/include/redlinedb.h` - replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
+11. `high` `HLT-023-INPUT-BOUNDARY-GAP` `crates/ffi/include/redlinedb.h` - replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
    Route: `Security, secrets, agency`/`security`
-9. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/bind.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+12. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/bind.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-10. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+13. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-11. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+14. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-12. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/snapshot.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+15. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/snapshot.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-13. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+16. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - use the matching constructor/destructor pair or add a documented ownership proof
    Route: `Security, secrets, agency`/`fast`
-14. `high` `HLT-001-DEAD-MARKER` `crates/kernel/src/engine/recovery.rs` - collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
+17. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
-15. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
-   Route: `Entropy`/`fast`
-16. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
+18. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
    Route: `Security, secrets, agency`/`security`
