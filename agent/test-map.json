@@ -342,6 +342,11 @@
       "proof_lane": "fast",
       "rule": "HLT-029-RUST-BAD-BEHAVIOR"
     },
+    "crates/bench/tests/harness_unit.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test harness_unit --quiet --locked",
+      "purpose": "prove bench harness canonical tokens, manager-state clamping, repetition seeding, and config validation",
+      "proof_lane": "fast"
+    },
     "crates/ffi/tests/exec_input_boundary.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked",
       "purpose": "prove FFI rldb_exec rejects malformed and injection-shaped input deterministically"
