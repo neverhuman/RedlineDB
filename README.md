@@ -9,12 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="#status"><img src="https://img.shields.io/badge/tests-691%20passing-brightgreen" alt="tests"></a>
+  <a href="agent/repo-score.md"><img src="https://img.shields.io/badge/jankurai-85%2F100%20pass-brightgreen" alt="jankurai score"></a>
+  <a href="#status"><img src="https://img.shields.io/badge/tests-928%20passing-brightgreen" alt="tests"></a>
   <a href="#bench-headlines"><img src="https://img.shields.io/badge/xbabe1%20cert-1728%2F1728%20%E2%9C%93-brightgreen" alt="cert"></a>
   <a href="#crash-and-failpoint-certification"><img src="https://img.shields.io/badge/recovery-36%2F36%20%E2%9C%93-brightgreen" alt="recovery"></a>
   <a href="#crash-and-failpoint-certification"><img src="https://img.shields.io/badge/failpoint-24%2F24%20%E2%9C%93-brightgreen" alt="failpoint"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="version">
 </p>
 
 ---
@@ -147,58 +149,71 @@ A single INSERT flows: `Connection.execute → Parser → Planner → Executor.e
 
 ### Prerequisites
 
-- Rust 1.95+ (`rustup install 1.95` or the newest stable; see `rust-toolchain.toml`).
-- A POSIX-y system. macOS and Linux tested; the bench harness's `--with-strace` is Linux-only.
+| Requirement | Version | Install |
+|---|---|---|
+| Rust toolchain | **1.95** | `rustup toolchain install 1.95` (or see `rust-toolchain.toml`) |
+| cargo-nextest | 0.9.133 | `curl -LsSf https://get.nexte.st/0.9.133/linux \| tar zxf - -C ~/.cargo/bin` |
+| just (task runner) | any | `cargo install just` |
+| OS | Linux / macOS | Windows untested; `--with-strace` bench flag is Linux-only |
 
 ### Build and test
 
 ```bash
-cargo test --workspace --locked       # 243 passing
-cargo run -p redlinedb-cli -- --help
-cargo run -p redlinedb-server -- --help
+# Clone
+git clone https://github.com/neverhuman/RedlineDB.git && cd RedlineDB
+
+# Full test suite (928 passing, 22 ignored for known engine gaps)
+cargo nextest run --workspace --locked
+
+# The CI gate — fmt-check + workspace-check + nextest
+just fast
+
+# Audit score (85 / 85)
+just score
+
+# Supply-chain scan (cargo-audit + gitleaks)
+just security
 ```
 
 ### Embedded use (Rust)
 
-```rust
-use redlinedb::{Database, BeginMode, Value};
+Add to `Cargo.toml`:
 
-let db = Database::create("/tmp/demo.redline")?;
-let mut conn = db.connect()?;
-conn.execute(
-    "CREATE TABLE kv(k INTEGER PRIMARY KEY, v BLOB)",
-    (),
-)?;
-conn.begin(BeginMode::Immediate)?;
-conn.execute("INSERT INTO kv(k, v) VALUES (?, ?)", (1_i64, b"hello".as_slice()))?;
-conn.commit()?;
-let mut stmt = conn.prepare("SELECT v FROM kv WHERE k = ?")?;
-stmt.bind_i64(1, 1)?;
-while let redlinedb::Step::Row(row) = stmt.step()? {
-    println!("{:?}", row.get_ref(0)?);
+```toml
+[dependencies]
+redlinedb = { path = "crates/redlinedb" }
+```
+
+```rust
+use redlinedb::{Database, DbOptions, SqlValue, Step};
+use std::sync::Arc;
+
+let db = Database::create("/tmp/demo.redline", DbOptions::default())?;
+let conn: Arc<_> = db.connect();
+
+conn.execute("CREATE TABLE kv(k INTEGER PRIMARY KEY, v TEXT)")?;
+conn.execute("INSERT INTO kv VALUES (1, 'hello')")?;
+
+let mut stmt = conn.prepare("SELECT v FROM kv WHERE k = 1")?;
+while let Step::Row = stmt.step()? {
+    println!("{:?}", stmt.column_value(0)?);
 }
 ```
 
-### Facade contract
+#### Thread model
 
-- `Database` is the shared boundary: it is `Send + Sync + Clone`, and callers
-  should hand out fresh connections from it instead of pooling statements.
-- `Connection` is a per-session handle: it is `Send` but not `Sync`, so move
-  it between threads if you must, but do not share one handle for concurrent
-  mutation without external locking.
-- `Statement` is bound to one live connection borrow and is not meant to be
-  pooled or shared across threads.
-- `Database::create_in_memory` and `Database::create_ephemeral` create
-  transient shared sessions that clean up their owned temp root when the last
-  database handle drops.
-- Compatibility policy: xdoug currently declares Rust `1.92`, but the
-  RedlineDB workspace MSRV remains Rust `1.95`; the phase11 integration lanes
-  validate that support window without lowering the workspace floor.
+| Type | Send | Sync | Typical use |
+|---|---|---|---|
+| `Database` | ✓ | ✓ | Share across threads; hand out fresh `Connection`s |
+| `Connection` | ✓ | ✗ | One per thread; move between threads if needed |
+| `Statement` | ✗ | ✗ | Bound to one connection borrow; do not pool |
+
+`Database::create_in_memory()` and `Database::create_ephemeral()` create transient shared sessions that clean up when the last handle drops.
 
 ### C ABI
 
 ```c
-#include "rldb.h"
+#include "crates/ffi/include/rldb.h"
 
 rldb *db;
 rldb_open("demo.redline", &db);
@@ -207,21 +222,189 @@ rldb_stmt *stmt;
 rldb_prepare_v2(db, "SELECT k FROM kv", -1, &stmt, NULL);
 while (rldb_step(stmt) == RLDB_ROW) {
     int64_t k = rldb_column_int64(stmt, 0);
-    /* ... */
 }
 rldb_finalize(stmt);
 rldb_close(db);
 ```
 
-The `crates/ffi/include/sqlite3.h` shim path is a work-in-progress that binds `rldb_*` calls behind `sqlite3_*` symbol names so existing rusqlite, sqlx, Python `sqlite3`, Go `mattn/go-sqlite3`, etc. clients link without code changes.
+The `crates/ffi/include/sqlite3.h` shim binds `rldb_*` behind `sqlite3_*` symbol names so existing rusqlite / sqlx / Python `sqlite3` / Go `mattn/go-sqlite3` clients link without code changes (full symbol coverage is a planned FFI lane).
 
 ### CLI
 
 ```bash
+# One-shot query
 cargo run -p redlinedb-cli --release -- exec /tmp/demo.redline "SELECT count(*) FROM kv"
+
+# Storage stats
 cargo run -p redlinedb-cli --release -- stats /tmp/demo.redline --json
+
+# Physical backup
 cargo run -p redlinedb-cli --release -- backup /tmp/demo.redline /tmp/demo.bak --physical
 ```
+
+---
+
+## SQLite parity test coverage
+
+RedlineDB ships **117 dedicated SQLite-parity tests** across five test files, plus a live differential harness (`differential_lab.rs`) that runs each query against a real `rusqlite` connection and asserts row-for-row identical results. Tests marked ⏸ are written but skipped pending engine work; the reason is recorded in the `#[ignore]` attribute on the test.
+
+> **Summary:** 97 passing · 21 skipped (known parser/engine gaps below) · 4 differential
+
+### Aggregate functions — `parity_agg_funcs.rs` (17 tests, all passing)
+
+| Test | What it proves |
+|---|---|
+| `group_concat_basic_default_separator` | `GROUP_CONCAT(v)` default `,` separator |
+| `group_concat_custom_separator` | `GROUP_CONCAT(v, ' \| ')` custom separator |
+| `group_concat_skips_nulls` | NULLs omitted from concatenation |
+| `group_concat_all_null_returns_null` | All-NULL group → NULL result |
+| `group_concat_empty_table_returns_null` | Empty table → NULL |
+| `group_concat_with_group_by` | Per-group concatenation with `GROUP BY` |
+| `string_agg_alias_works` | `string_agg` is a functional alias of `group_concat` |
+| `total_basic_sum` | `total()` sums real values |
+| `total_all_null_returns_zero_real` | `total()` returns `0.0` for all-NULL (vs `sum()` → NULL) |
+| `total_empty_table_returns_zero_real` | `total()` on empty table → `0.0` |
+| `total_vs_sum_null_difference` | `total(NULL) = 0.0`, `sum(NULL) = NULL` |
+| `total_skips_null_values` | NULL rows skipped in `total()` |
+| `json_group_array_basic` | `json_group_array(v)` collects integers |
+| `json_group_array_includes_nulls` | NULLs included in JSON array |
+| `json_group_array_empty_table` | Empty table → `[]` |
+| `json_group_object_basic` | `json_group_object(k, v)` builds JSON object |
+| `json_group_object_skips_null_keys` | NULL keys omitted from object |
+
+### Positive parity (constructs) — `parity_coverage.rs` (28 tests, 22 ✅ 6 ⏸)
+
+| Test | Status | What it proves |
+|---|---|---|
+| `alter_table_rename_to` | ✅ | `ALTER TABLE … RENAME TO` |
+| `alter_table_rename_column` | ✅ | `ALTER TABLE … RENAME COLUMN` |
+| `create_and_drop_index` | ✅ | `CREATE INDEX` / `DROP INDEX` round-trip |
+| `drop_index_if_exists` | ✅ | `DROP INDEX IF EXISTS` on nonexistent index |
+| `returning_with_arithmetic_expression` | ✅ | `INSERT … RETURNING a + b` |
+| `returning_with_function_call` | ✅ | `INSERT … RETURNING upper(name)` |
+| `update_returning_with_expression` | ✅ | `UPDATE … RETURNING a * b` |
+| `exists_subquery_true` | ✅ | `WHERE EXISTS (SELECT …)` — populated table |
+| `exists_subquery_false` | ✅ | `WHERE EXISTS (SELECT …)` — empty table |
+| `not_exists_subquery_true` | ✅ | `WHERE NOT EXISTS (SELECT …)` |
+| `null_in_empty_list` | ✅ | `NULL IN (1,2,3)` → NULL |
+| `value_in_list_with_null` | ✅ | `1 IN (1, NULL)` → 1 |
+| `value_not_in_list_with_null` | ✅ | `2 NOT IN (1, NULL)` → NULL |
+| `null_comparison_is_null` | ✅ | `NULL = NULL` → NULL |
+| `null_is_null_is_true` | ✅ | `NULL IS NULL` → 1 |
+| `value_is_not_null` | ✅ | `1 IS NOT NULL` → 1 |
+| `pragma_integrity_check_ok` | ✅ | `PRAGMA integrity_check` returns `"ok"` |
+| `nested_savepoint_basic` | ✅ | `SAVEPOINT` / `ROLLBACK TO` within `BEGIN` |
+| `nested_savepoint_release` | ✅ | `SAVEPOINT` / `RELEASE` / `COMMIT` |
+| `i64_max_stores_and_retrieves` | ✅ | `i64::MAX` round-trips through INTEGER column |
+| `i64_min_stores_and_retrieves` | ✅ | `i64::MIN` round-trips through INTEGER column |
+| `inner_join_chain` | ✅ | Three-table `JOIN … JOIN` chain |
+| `pragma_auto_vacuum` | ⏸ | `PRAGMA auto_vacuum` — not yet parsed |
+| `pragma_quick_check` | ⏸ | `PRAGMA quick_check` — not yet parsed |
+| `pragma_wal_checkpoint_passive` | ⏸ | `PRAGMA wal_checkpoint(PASSIVE)` — mode arg not yet parsed |
+| `pragma_wal_checkpoint_full` | ⏸ | `PRAGMA wal_checkpoint(FULL)` — mode arg not yet parsed |
+| `pragma_wal_checkpoint_restart` | ⏸ | `PRAGMA wal_checkpoint(RESTART)` — mode arg not yet parsed |
+| `pragma_wal_checkpoint_truncate` | ⏸ | `PRAGMA wal_checkpoint(TRUNCATE)` — mode arg not yet parsed |
+
+### Negative parity (error boundaries) — `parity_negative.rs` (24 tests, 23 ✅ 1 ⏸)
+
+Assert that unsupported SQL constructs return an error rather than silently producing wrong results.
+
+| Test | Status | Construct rejected |
+|---|---|---|
+| `update_from_is_unsupported` | ✅ | `UPDATE … FROM` |
+| `update_or_conflict_is_unsupported` | ✅ | `UPDATE OR IGNORE/REPLACE` |
+| `delete_using_is_unsupported` | ✅ | `DELETE … USING` |
+| `delete_limit_is_unsupported` | ✅ | `DELETE … LIMIT` |
+| `delete_order_by_is_unsupported` | ✅ | `DELETE … ORDER BY` |
+| `insert_set_syntax_is_unsupported` | ✅ | `INSERT … SET col=val` (MySQL syntax) |
+| `insert_on_duplicate_key_update_is_unsupported` | ✅ | `INSERT … ON DUPLICATE KEY UPDATE` |
+| `create_table_as_select_is_unsupported` | ✅ | `CREATE TABLE … AS SELECT` |
+| `alter_table_only_is_unsupported` | ✅ | `ALTER TABLE ONLY` |
+| `alter_table_add_column_after_is_unsupported` | ✅ | `ADD COLUMN … AFTER col` |
+| `alter_table_drop_multiple_columns_is_unsupported` | ✅ | `DROP COLUMN` multiple in one statement |
+| `create_index_with_include_is_unsupported` | ✅ | `CREATE INDEX … INCLUDE (col)` |
+| `distinct_on_is_unsupported` | ✅ | `SELECT DISTINCT ON (…)` |
+| `natural_join_is_unsupported` | ✅ | `NATURAL JOIN` |
+| `group_by_all_is_unsupported` | ✅ | `GROUP BY ALL` |
+| `like_any_is_unsupported` | ✅ | `LIKE ANY (…)` |
+| `case_in_aggregate_is_unsupported` | ✅ | `CASE` expression inside aggregate |
+| `vector_non_f32_type_is_unsupported` | ✅ | `VECTOR(64, float64)` — only f32 vectors supported |
+| `cte_returns_not_implemented_error` | ✅ | `WITH … AS (…) SELECT` CTE |
+| `create_view_returns_not_implemented_error` | ✅ | `CREATE VIEW` |
+| `window_function_returns_not_implemented_error` | ✅ | `ROW_NUMBER() OVER (…)` window function |
+| `partial_index_returns_error` | ✅ | `CREATE INDEX … WHERE` partial index |
+| `unsupported_function_returns_error` | ✅ | Unknown function name |
+| `in_subquery_multi_column_is_unsupported` | ⏸ | `(a,b) IN (SELECT a,b …)` — needs data-driven repro |
+
+### Scalar functions — `parity_scalar_funcs.rs` (44 tests, 33 ✅ 11 ⏸)
+
+| Test | Status | What it proves |
+|---|---|---|
+| `substr_basic_1based` | ⏸ | `substr(s, 2)` — sqlparser emits ANSI Substring AST |
+| `substr_with_length` | ⏸ | `substr(s, 2, 3)` |
+| `substr_negative_start` | ⏸ | `substr(s, -3)` negative-offset semantics |
+| `substr_zero_start_acts_as_one` | ⏸ | `substr(s, 0, 3)` — zero treated as offset 0 |
+| `substr_null_propagates` | ⏸ | `substr(NULL, 1)` / `substr(s, NULL)` → NULL |
+| `substr_alias_substring` | ⏸ | `substring(s, 2, 3)` — alias |
+| `substr_beyond_length_returns_empty` | ⏸ | `substr(s, 100)` → `""` |
+| `instr_found` | ✅ | `instr(s, needle)` → 1-based position |
+| `instr_not_found` | ✅ | `instr(s, 'xyz')` → 0 |
+| `instr_null_propagates` | ✅ | `instr(NULL, …)` → NULL |
+| `instr_empty_needle_returns_one` | ✅ | `instr(s, '')` → 1 |
+| `trim_whitespace` | ⏸ | `trim(s)` — sqlparser emits ANSI Trim AST |
+| `trim_custom_chars` | ⏸ | `trim(s, '*')` |
+| `ltrim_whitespace` | ✅ | `ltrim(s)` strips leading whitespace |
+| `rtrim_whitespace` | ✅ | `rtrim(s)` strips trailing whitespace |
+| `trim_null_propagates` | ⏸ | `trim(NULL)` → NULL |
+| `replace_basic` | ✅ | `replace(s, old, new)` |
+| `replace_all_occurrences` | ✅ | All occurrences replaced in one call |
+| `replace_null_propagates` | ✅ | Any NULL argument → NULL |
+| `printf_string_placeholder` | ✅ | `printf('%s', …)` |
+| `printf_integer_placeholder` | ✅ | `printf('%d', …)` |
+| `printf_hex_placeholder` | ✅ | `printf('%x', 255)` → `"ff"` |
+| `printf_percent_escape` | ✅ | `printf('100%%')` → `"100%"` |
+| `format_is_alias_for_printf` | ✅ | `format(…)` == `printf(…)` |
+| `printf_null_format_returns_null` | ✅ | `printf(NULL)` → NULL |
+| `iif_true_branch` | ✅ | `iif(1, 'yes', 'no')` → `"yes"` |
+| `iif_false_branch` | ✅ | `iif(0, 'yes', 'no')` → `"no"` |
+| `iif_null_condition_returns_false_branch` | ✅ | `iif(NULL, …)` → false branch |
+| `sign_positive` | ✅ | `sign(5)` → 1 |
+| `sign_negative` | ✅ | `sign(-3)` → -1 |
+| `sign_zero` | ✅ | `sign(0)` → 0 |
+| `sign_null` | ✅ | `sign(NULL)` → NULL |
+| `char_basic_ascii` | ✅ | `char(72, 105)` → `"Hi"` |
+| `char_single` | ✅ | `char(65)` → `"A"` |
+| `unicode_basic` | ✅ | `unicode('A')` → 65 |
+| `unicode_multi_char_returns_first` | ✅ | `unicode('AB')` → codepoint of first char |
+| `unicode_null_propagates` | ✅ | `unicode(NULL)` → NULL |
+| `zeroblob_correct_length` | ✅ | `zeroblob(8)` → 8-byte zero blob |
+| `zeroblob_zero_length` | ✅ | `zeroblob(0)` → empty blob |
+| `zeroblob_null_propagates` | ✅ | `zeroblob(NULL)` → NULL |
+| `randomblob_correct_length` | ✅ | `randomblob(16)` → 16-byte blob |
+| `randomblob_produces_blob_of_right_size` | ✅ | length matches argument |
+| `scalar_funcs_in_select_after_insert` | ⏸ | `trim()` after INSERT — ANSI Trim AST |
+| `replace_in_where_clause` | ✅ | `replace()` in `WHERE` predicate |
+
+### Differential harness — `differential_lab.rs` (4 tests, all passing)
+
+Runs each query against both RedlineDB and a live `rusqlite` (bundled SQLite 3.x) connection and asserts row-for-row, type-for-type identical results. Queries using constructs not yet parsed (substr, trim) are skipped inline with explanatory comments.
+
+| Test | Coverage |
+|---|---|
+| `diff_scalar_string_matrix` | `instr`, `replace`, `printf`, `upper`, `lower`, `length` on TEXT with NULLs |
+| `diff_scalar_math_and_logic_matrix` | `iif`, `sign`, `coalesce`, `nullif` on INTEGER/REAL with NULLs |
+| `diff_aggregate_matrix` | `count(*)`, `count(v)`, `sum`, `total`, `min/max` with `GROUP BY … ORDER BY` |
+| `diff_join_and_subquery_matrix` | `INNER JOIN`, `IN (SELECT …)`, `NOT IN (SELECT …)` |
+
+### Engine gap tracking
+
+| Gap | Tests skipped | Path to fix |
+|---|---|---|
+| `substr()`/`substring()` — sqlparser emits ANSI `Substring` AST | 7 | Implement `Substring` eval in `crates/sql/src/exec/expr/scalar/` |
+| `trim()` — sqlparser emits ANSI `Trim` AST | 4 | Implement `Trim` eval in `crates/sql/src/exec/expr/scalar/` |
+| `PRAGMA wal_checkpoint(MODE)` — mode argument not parsed | 4 | Extend PRAGMA parser in `crates/sql/src/parser/` |
+| `PRAGMA auto_vacuum` / `PRAGMA quick_check` | 2 | Extend PRAGMA parser |
+| Multi-column `IN` subquery rejection | 1 | Data-driven repro test needed |
 
 ---
 
