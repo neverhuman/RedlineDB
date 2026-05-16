@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778942820`
-- Started at: `1778942820`
-- Elapsed: `5122` ms
+- Run ID: `1778942897`
+- Started at: `1778942897`
+- Elapsed: `4957` ms
 - Scope: `full`
 - Raw score: `85`
 - Final score: `85`
@@ -70,7 +70,7 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`42` files=`197`
+- Status: `review` hard=`0` warning=`42` files=`196`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
 - Duplicate volume: lines=`56` tokens=`160` bytes=`1486`
 
@@ -132,7 +132,7 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 55 | 6.60 | largest authored code file: crates/sql/src/parser/select.rs (780 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 55 | 6.60 | largest authored code file: crates/sql/src/exec/index_access.rs (763 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 95 | 7.60 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -217,8 +217,8 @@ No audited runtime boundary reclassifications declared.
    Reason: `Code shape and semantic surface` scored 55 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:e1ea7d4cd05c2170a0774efbed5b6a9f3c840cf65ca5126f10d92b9c6ae752a7`
-   Evidence: largest authored code file: crates/sql/src/parser/select.rs (780 LOC), code file exceeds 500 LOC, copy-code advisory classes found: 42 (advisory only, no score impact), rust bad-behavior advisory signals: 1744
+   Fingerprint: `sha256:d8be5bf533ae47ecfa272e9831374dbe35c8f32c6d40b6b5c9b4bc8b12486ff3`
+   Evidence: largest authored code file: crates/sql/src/exec/index_access.rs (763 LOC), code file exceeds 500 LOC, copy-code advisory classes found: 42 (advisory only, no score impact), rust bad-behavior advisory signals: 1732
 2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`

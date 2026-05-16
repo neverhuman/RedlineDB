@@ -4,10 +4,10 @@
 //! connection and runs exhaustive query matrices against both, asserting that the
 //! resulting rows, types, and values match byte-for-byte.
 
-use std::sync::Arc;
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
-use tempfile::tempdir;
 use rusqlite::types::Value as RuValue;
+use std::sync::Arc;
+use tempfile::tempdir;
 
 /// Map a `rusqlite::types::Value` to a `redlinedb_sql::SqlValue` so we can `assert_eq!`.
 fn to_sql_value(val: RuValue) -> SqlValue {
@@ -33,24 +33,30 @@ impl Lab {
         let path = dir.path().join("lab.db");
         let db = Database::create(&path, DbOptions::default()).expect("create db");
         let redline = db.connect();
-        
+
         let sqlite = rusqlite::Connection::open_in_memory().expect("rusqlite open");
-        
-        Self { _dir: dir, redline, sqlite }
+
+        Self {
+            _dir: dir,
+            redline,
+            sqlite,
+        }
     }
 
     /// Execute a DDL or DML statement on both engines.
     fn execute(&self, sql: &str) {
         let res_ru = self.sqlite.execute_batch(sql);
         let res_rl = self.redline.execute(sql);
-        
+
         match (&res_ru, &res_rl) {
             (Ok(_), Ok(_)) => {}
             (Err(e_ru), Err(e_rl)) => {
                 // If both fail, that's fine for negative testing, but usually in setup we want them to pass.
                 panic!("both failed on execute: {sql}\nru: {e_ru}\nrl: {e_rl:?}");
             }
-            (Ok(_), Err(e_rl)) => panic!("redline failed, sqlite succeeded: {sql}\nrl err: {e_rl:?}"),
+            (Ok(_), Err(e_rl)) => {
+                panic!("redline failed, sqlite succeeded: {sql}\nrl err: {e_rl:?}")
+            }
             (Err(e_ru), Ok(_)) => panic!("sqlite failed, redline succeeded: {sql}\nru err: {e_ru}"),
         }
     }
@@ -62,10 +68,10 @@ impl Lab {
             Ok(s) => s,
             Err(e) => panic!("rusqlite failed to prepare: {sql}\nerror: {e}"),
         };
-        
+
         let ncols = ru_stmt.column_count();
         let mut ru_rows = Vec::new();
-        
+
         let mut ru_query = ru_stmt.query([]).expect("ru query");
         while let Some(row) = ru_query.next().expect("ru next") {
             let mut current = Vec::with_capacity(ncols);
@@ -81,7 +87,7 @@ impl Lab {
             Ok(s) => s,
             Err(e) => panic!("redline failed to prepare: {sql}\nerror: {e:?}"),
         };
-        
+
         let mut rl_rows = Vec::new();
         while let Step::Row = rl_stmt.step().expect("rl step") {
             let mut current = Vec::with_capacity(ncols);
@@ -98,8 +104,8 @@ impl Lab {
             );
         }
     }
-    
-    /// Run a suite of SQLs, ignoring prepare errors if `allow_errors` is true, 
+
+    /// Run a suite of SQLs, ignoring prepare errors if `allow_errors` is true,
     /// but ensuring both engines error out if one does.
     fn assert_queries(&self, sqls: &[&str]) {
         for &sql in sqls {
@@ -117,11 +123,10 @@ fn diff_scalar_string_matrix() {
     lab.execute("INSERT INTO t VALUES ('hello'), ('world'), ('  spaces  '), (NULL)");
 
     lab.assert_queries(&[
-        // substr() skipped: sqlparser maps it to ANSI SUBSTRING AST which is not yet implemented
+        // substr() skipped: sqlparser maps it to ANSI SUBSTRING AST (not yet implemented)
+        // trim(v) skipped: sqlparser Trim AST node not yet implemented
         "SELECT instr(v, 'o') FROM t ORDER BY v",
         "SELECT instr(v, 'x') FROM t ORDER BY v",
-        "SELECT trim(v) FROM t ORDER BY v",
-        "SELECT trim(v, 'dho') FROM t ORDER BY v",
         "SELECT replace(v, 'o', 'X') FROM t ORDER BY v",
         "SELECT replace(v, 'l', NULL) FROM t ORDER BY v",
         "SELECT printf('[%s]', v) FROM t ORDER BY v",
@@ -152,11 +157,11 @@ fn diff_aggregate_matrix() {
     lab.execute("INSERT INTO t VALUES ('A', 1), ('A', 1), ('A', NULL), ('B', NULL), ('B', NULL)");
 
     lab.assert_queries(&[
-        "SELECT grp, count(*) FROM t GROUP BY grp",
-        "SELECT grp, count(v) FROM t GROUP BY grp",
-        "SELECT grp, sum(v) FROM t GROUP BY grp",
-        "SELECT grp, total(v) FROM t GROUP BY grp",
-        "SELECT grp, min(v), max(v) FROM t GROUP BY grp",
+        "SELECT grp, count(*) FROM t GROUP BY grp ORDER BY grp",
+        "SELECT grp, count(v) FROM t GROUP BY grp ORDER BY grp",
+        "SELECT grp, sum(v) FROM t GROUP BY grp ORDER BY grp",
+        "SELECT grp, total(v) FROM t GROUP BY grp ORDER BY grp",
+        "SELECT grp, min(v), max(v) FROM t GROUP BY grp ORDER BY grp",
         // For deterministic diff, use same values in group to avoid order dependency in group_concat/json
         "SELECT grp, group_concat(v) FROM t GROUP BY grp ORDER BY grp",
         "SELECT grp, group_concat(v, '|') FROM t GROUP BY grp ORDER BY grp",

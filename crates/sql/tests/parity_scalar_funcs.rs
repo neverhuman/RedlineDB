@@ -5,8 +5,8 @@
 //! iif, sign, char, unicode, zeroblob, randomblob.
 //! Each test validates SQLite-compatible NULL-propagation and edge cases.
 
-use std::sync::Arc;
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
+use std::sync::Arc;
 use tempfile::tempdir;
 
 fn open() -> (tempfile::TempDir, Arc<Connection>) {
@@ -374,7 +374,8 @@ fn randomblob_produces_blob_of_right_size() {
 fn scalar_funcs_in_select_after_insert() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(name TEXT)").expect("create");
-    c.execute("INSERT INTO t VALUES ('  hello  ')").expect("insert");
+    c.execute("INSERT INTO t VALUES ('  hello  ')")
+        .expect("insert");
     let v = q1(&c, "SELECT trim(name) FROM t");
     assert_eq!(v, SqlValue::Text(Arc::from("hello")));
 }
@@ -382,9 +383,14 @@ fn scalar_funcs_in_select_after_insert() {
 #[test]
 fn replace_in_where_clause() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t(id INTEGER, val TEXT)").expect("create");
-    c.execute("INSERT INTO t VALUES (1, 'foo'), (2, 'bar')").expect("insert");
-    let rows = query_all(&c, "SELECT id FROM t WHERE replace(val, 'foo', 'baz') = 'baz'");
+    c.execute("CREATE TABLE t(id INTEGER, val TEXT)")
+        .expect("create");
+    c.execute("INSERT INTO t VALUES (1, 'foo'), (2, 'bar')")
+        .expect("insert");
+    let rows = query_all(
+        &c,
+        "SELECT id FROM t WHERE replace(val, 'foo', 'baz') = 'baz'",
+    );
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0][0], SqlValue::Integer(1));
 }

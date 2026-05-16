@@ -1,5 +1,5 @@
-use super::*;
 use super::agg_eval::*;
+use super::*;
 
 pub(super) fn select_requires_aggregation(plan: &crate::statement::SelectPlan) -> bool {
     !plan.group_by.is_empty()
@@ -435,4 +435,3 @@ fn eval_group_key(
     }
     Ok(out)
 }
-

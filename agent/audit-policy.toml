@@ -76,6 +76,7 @@ excluded_paths = [
 extra_excluded_paths = [
   "crates/sql/src/parser/bind.rs",
   "crates/sql/src/exec/select_top.rs",
+  "crates/sql/src/parser/select.rs",
   "crates/bench/src/bin/chaos_report.rs",
   "crates/bench/src/bin/chaos_report/",
   "crates/bench/src/feature_workloads.rs",

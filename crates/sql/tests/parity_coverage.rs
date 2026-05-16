@@ -6,8 +6,8 @@
 //! NULL semantics, PRAGMA integrity_check, WAL checkpoint modes,
 //! nested SAVEPOINTs, and NULL IN/NOT IN edge cases.
 
-use std::sync::Arc;
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
+use std::sync::Arc;
 use tempfile::tempdir;
 
 fn open() -> (tempfile::TempDir, Arc<Connection>) {
@@ -43,9 +43,12 @@ fn q1(conn: &Arc<Connection>, sql: &str) -> SqlValue {
 #[test]
 fn alter_table_rename_to() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE old_name(id INTEGER)").expect("create");
-    c.execute("INSERT INTO old_name VALUES (42)").expect("insert");
-    c.execute("ALTER TABLE old_name RENAME TO new_name").expect("rename");
+    c.execute("CREATE TABLE old_name(id INTEGER)")
+        .expect("create");
+    c.execute("INSERT INTO old_name VALUES (42)")
+        .expect("insert");
+    c.execute("ALTER TABLE old_name RENAME TO new_name")
+        .expect("rename");
     let v = q1(&c, "SELECT id FROM new_name");
     assert_eq!(v, SqlValue::Integer(42));
 }
@@ -53,9 +56,11 @@ fn alter_table_rename_to() {
 #[test]
 fn alter_table_rename_column() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t(old_col INTEGER)").expect("create");
+    c.execute("CREATE TABLE t(old_col INTEGER)")
+        .expect("create");
     c.execute("INSERT INTO t VALUES (7)").expect("insert");
-    c.execute("ALTER TABLE t RENAME COLUMN old_col TO new_col").expect("rename column");
+    c.execute("ALTER TABLE t RENAME COLUMN old_col TO new_col")
+        .expect("rename column");
     let v = q1(&c, "SELECT new_col FROM t");
     assert_eq!(v, SqlValue::Integer(7));
 }
@@ -66,10 +71,12 @@ fn alter_table_rename_column() {
 fn create_and_drop_index() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
-    c.execute("CREATE INDEX idx_a ON t(a)").expect("create index");
+    c.execute("CREATE INDEX idx_a ON t(a)")
+        .expect("create index");
     c.execute("DROP INDEX idx_a").expect("drop index");
     // Verify the index is gone by re-creating it with the same name (would fail if it still existed)
-    c.execute("CREATE INDEX idx_a ON t(a)").expect("re-create after drop");
+    c.execute("CREATE INDEX idx_a ON t(a)")
+        .expect("re-create after drop");
 }
 
 #[test]
@@ -77,7 +84,8 @@ fn drop_index_if_exists() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
     // Should not error when the index does not exist
-    c.execute("DROP INDEX IF EXISTS idx_nonexistent").expect("drop if exists");
+    c.execute("DROP INDEX IF EXISTS idx_nonexistent")
+        .expect("drop if exists");
 }
 
 // ── RETURNING with expressions ────────────────────────────────────────────────
@@ -85,7 +93,8 @@ fn drop_index_if_exists() {
 #[test]
 fn returning_with_arithmetic_expression() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t(a INTEGER, b INTEGER)").expect("create");
+    c.execute("CREATE TABLE t(a INTEGER, b INTEGER)")
+        .expect("create");
     let rows = query_all(&c, "INSERT INTO t VALUES (3, 4) RETURNING a + b");
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0][0], SqlValue::Integer(7));
@@ -103,7 +112,8 @@ fn returning_with_function_call() {
 #[test]
 fn update_returning_with_expression() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t(a INTEGER, b INTEGER)").expect("create");
+    c.execute("CREATE TABLE t(a INTEGER, b INTEGER)")
+        .expect("create");
     c.execute("INSERT INTO t VALUES (10, 3)").expect("insert");
     let rows = query_all(&c, "UPDATE t SET a = a + 1 RETURNING a * b");
     assert_eq!(rows.len(), 1);
@@ -211,7 +221,9 @@ fn pragma_wal_checkpoint_passive() {
     let (_d, c) = open();
     c.execute("PRAGMA journal_mode=WAL").expect("wal");
     // Should not error; checkpoint returns row(s) with counts
-    let mut stmt = c.prepare("PRAGMA wal_checkpoint(PASSIVE)").expect("prepare");
+    let mut stmt = c
+        .prepare("PRAGMA wal_checkpoint(PASSIVE)")
+        .expect("prepare");
     while let Step::Row = stmt.step().unwrap() {}
 }
 
@@ -227,7 +239,9 @@ fn pragma_wal_checkpoint_full() {
 fn pragma_wal_checkpoint_restart() {
     let (_d, c) = open();
     c.execute("PRAGMA journal_mode=WAL").expect("wal");
-    let mut stmt = c.prepare("PRAGMA wal_checkpoint(RESTART)").expect("prepare");
+    let mut stmt = c
+        .prepare("PRAGMA wal_checkpoint(RESTART)")
+        .expect("prepare");
     while let Step::Row = stmt.step().unwrap() {}
 }
 
@@ -235,7 +249,9 @@ fn pragma_wal_checkpoint_restart() {
 fn pragma_wal_checkpoint_truncate() {
     let (_d, c) = open();
     c.execute("PRAGMA journal_mode=WAL").expect("wal");
-    let mut stmt = c.prepare("PRAGMA wal_checkpoint(TRUNCATE)").expect("prepare");
+    let mut stmt = c
+        .prepare("PRAGMA wal_checkpoint(TRUNCATE)")
+        .expect("prepare");
     while let Step::Row = stmt.step().unwrap() {}
 }
 
@@ -298,7 +314,8 @@ fn pragma_quick_check() {
 fn i64_max_stores_and_retrieves() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(v INTEGER)").expect("create");
-    c.execute(&format!("INSERT INTO t VALUES ({})", i64::MAX)).expect("insert");
+    c.execute(&format!("INSERT INTO t VALUES ({})", i64::MAX))
+        .expect("insert");
     let v = q1(&c, "SELECT v FROM t");
     assert_eq!(v, SqlValue::Integer(i64::MAX));
 }
@@ -307,7 +324,8 @@ fn i64_max_stores_and_retrieves() {
 fn i64_min_stores_and_retrieves() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(v INTEGER)").expect("create");
-    c.execute(&format!("INSERT INTO t VALUES ({})", i64::MIN)).expect("insert");
+    c.execute(&format!("INSERT INTO t VALUES ({})", i64::MIN))
+        .expect("insert");
     let v = q1(&c, "SELECT v FROM t");
     assert_eq!(v, SqlValue::Integer(i64::MIN));
 }
@@ -317,13 +335,22 @@ fn i64_min_stores_and_retrieves() {
 #[test]
 fn inner_join_chain() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE a(id INTEGER, name TEXT)").expect("create a");
-    c.execute("CREATE TABLE b(aid INTEGER, val TEXT)").expect("create b");
-    c.execute("CREATE TABLE bb(bid INTEGER, extra TEXT)").expect("create bb");
-    c.execute("INSERT INTO a VALUES (1, 'alice')").expect("ins a");
-    c.execute("INSERT INTO b VALUES (1, 'beta')").expect("ins b");
-    c.execute("INSERT INTO bb VALUES (1, 'extra')").expect("ins bb");
-    let rows = query_all(&c, "SELECT a.name, b.val, bb.extra FROM a JOIN b ON a.id = b.aid JOIN bb ON b.aid = bb.bid");
+    c.execute("CREATE TABLE a(id INTEGER, name TEXT)")
+        .expect("create a");
+    c.execute("CREATE TABLE b(aid INTEGER, val TEXT)")
+        .expect("create b");
+    c.execute("CREATE TABLE bb(bid INTEGER, extra TEXT)")
+        .expect("create bb");
+    c.execute("INSERT INTO a VALUES (1, 'alice')")
+        .expect("ins a");
+    c.execute("INSERT INTO b VALUES (1, 'beta')")
+        .expect("ins b");
+    c.execute("INSERT INTO bb VALUES (1, 'extra')")
+        .expect("ins bb");
+    let rows = query_all(
+        &c,
+        "SELECT a.name, b.val, bb.extra FROM a JOIN b ON a.id = b.aid JOIN bb ON b.aid = bb.bid",
+    );
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0][0], SqlValue::Text(Arc::from("alice")));
     assert_eq!(rows[0][1], SqlValue::Text(Arc::from("beta")));
