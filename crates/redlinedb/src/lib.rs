@@ -130,6 +130,68 @@ mod tests {
     }
 
     #[test]
+    fn row_get_dispatches_to_typed_from_value_impls() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("fromvalue.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute(
+            "CREATE TABLE t(\
+                bool_col INTEGER, i8_col INTEGER, i16_col INTEGER, i32_col INTEGER,\
+                u8_col INTEGER, u16_col INTEGER, u32_col INTEGER, u64_col INTEGER,\
+                f32_col REAL, blob_col BLOB, null_text TEXT)",
+            (),
+        )
+        .expect("create");
+        conn.execute(
+            "INSERT INTO t VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+            params![
+                1_i64, 7_i64, 1234_i64, 200_000_i64, 200_i64, 50_000_i64, 3_000_000_i64,
+                5_000_000_i64, 1.5_f64, vec![9_u8, 8, 7]
+            ],
+        )
+        .expect("insert");
+
+        let mut stmt = conn.prepare("SELECT * FROM t").expect("prep");
+        match stmt.step().expect("step") {
+            Step::Row(row) => {
+                assert!(row.get::<bool>(0).expect("bool"));
+                assert_eq!(row.get::<i8>(1).expect("i8"), 7);
+                assert_eq!(row.get::<i16>(2).expect("i16"), 1234);
+                assert_eq!(row.get::<i32>(3).expect("i32"), 200_000);
+                assert_eq!(row.get::<u8>(4).expect("u8"), 200);
+                assert_eq!(row.get::<u16>(5).expect("u16"), 50_000);
+                assert_eq!(row.get::<u32>(6).expect("u32"), 3_000_000);
+                assert_eq!(row.get::<u64>(7).expect("u64"), 5_000_000);
+                assert!((row.get::<f32>(8).expect("f32") - 1.5).abs() < 1e-6);
+                assert_eq!(row.get::<Vec<u8>>(9).expect("blob"), vec![9_u8, 8, 7]);
+                assert_eq!(row.get::<Option<String>>(10).expect("none"), None);
+            }
+            Step::Done => panic!("expected row"),
+        }
+    }
+
+    #[test]
+    fn from_value_narrowing_overflow_returns_mismatch() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("overflow.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute("CREATE TABLE t(big INTEGER)", ()).expect("create");
+        conn.execute("INSERT INTO t VALUES (?)", params![i64::MAX])
+            .expect("insert");
+
+        let mut stmt = conn.prepare("SELECT big FROM t").expect("prep");
+        match stmt.step().expect("step") {
+            Step::Row(row) => {
+                let err = row.get::<i32>(0).expect_err("should overflow");
+                assert_eq!(err.code(), ErrorCode::Mismatch);
+            }
+            Step::Done => panic!("expected row"),
+        }
+    }
+
+    #[test]
     fn connection_set_busy_timeout_applies_to_future_lock_conflicts() {
         let dir = tempfile::tempdir().expect("tempdir");
         let db = Database::create(dir.path().join("timeout.redline")).expect("db");
