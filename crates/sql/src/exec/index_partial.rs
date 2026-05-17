@@ -7,6 +7,15 @@
 //! base case. Richer implication (e.g. `a > 5` implies `a > 0`) is a
 //! follow-up; the safety floor is "never advertise a partial index when
 //! the row may have been filtered out at write time".
+//!
+//! Helpers in this module are referenced through future planner / index-DML
+//! work; the partial-index parity tests
+//! (`crates/sql/tests/parity_partial_index.rs`) currently exercise the
+//! enforcement via the existing maintenance layer rather than these
+//! helpers directly. `#[allow(dead_code)]` keeps the scaffolding warning-free
+//! while the wiring lands.
+
+#![allow(dead_code)]
 
 use redlinedb_kernel::catalog::IndexDef;
 use sqlparser::ast::Expr;

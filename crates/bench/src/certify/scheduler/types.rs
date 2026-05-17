@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::process::Child;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::report::RunRecord;
 

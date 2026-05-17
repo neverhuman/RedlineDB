@@ -4,7 +4,7 @@ use crate::format::{Csn, RelId};
 use crate::{Error, Result};
 
 use super::super::codec::{BytesReader, BytesWriter, frame_snapshot, parse_header};
-use super::super::ids::{ColumnId, IndexId, TableId};
+use super::super::ids::{IndexId, TableId};
 use super::super::value::OwnedValue;
 use super::{HistogramBucket, IndexStats, MostCommonValue, StatsSnapshot, TableStats};
 

@@ -33,7 +33,7 @@ pub(crate) use cascade::{
 };
 pub(crate) use defer::{clear_deferred_fk_checks, drain_deferred_fk_checks};
 
-#[allow(dead_code)]
+#[allow(unused_imports)]
 pub(crate) use lookup::child_has_parent;
 
 /// Hard cap on cascade-recursion depth; SQLite uses the same heuristic

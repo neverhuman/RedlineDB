@@ -11,9 +11,6 @@ use crate::config::{
 };
 use crate::engine::{self, CellValue, engine_name};
 
-use super::units::{
-    commit_recovery_unit, recovery_catalog_unit, recovery_checkpoint_unit, recovery_wal_unit,
-};
 use super::{RecoveryMatrixRun, RecoveryRun};
 
 pub fn run_single_recovery(

@@ -1,8 +1,5 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::Path;
-use std::process::{Child, Command, Stdio};
-use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -10,9 +7,9 @@ use serde::Serialize;
 
 use crate::config::{
     DurabilityKind, EngineKind, RecoverArgs, RecoverChildArgs, RecoverMatrixArgs,
-    RecoveryMatrixCase, RecoveryMatrixConfig, RecoveryScenarioKind, RunSpec, WorkloadKind,
+    RecoveryMatrixConfig, RecoveryScenarioKind, RunSpec, WorkloadKind,
 };
-use crate::engine::{self, CellValue, engine_name};
+use crate::engine;
 
 #[path = "recover/harness.rs"]
 mod harness;

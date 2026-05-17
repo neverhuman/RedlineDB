@@ -1,5 +1,5 @@
 use std::ffi::CStr;
-use std::os::raw::{c_char, c_int, c_void};
+use std::os::raw::{c_char, c_int};
 
 use crate::types::{
     RLDB_MISUSE, RLDB_OK, RLDB_READONLY, SQLITE_OPEN_CREATE, SQLITE_OPEN_READONLY,
