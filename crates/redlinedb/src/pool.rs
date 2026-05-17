@@ -18,11 +18,12 @@
 
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::connection::Connection;
 use crate::error::{Error, ErrorCode, Result};
 use crate::handle::Database;
+use crate::metrics::{MetricResult, Metrics, NoopMetrics};
 
 const DEFAULT_MAX_CONNECTIONS: usize = 16;
 
@@ -31,6 +32,7 @@ pub struct PoolBuilder {
     db: Database,
     max_connections: usize,
     busy_timeout: Option<Duration>,
+    metrics: Arc<dyn Metrics>,
 }
 
 impl PoolBuilder {
@@ -39,6 +41,7 @@ impl PoolBuilder {
             db,
             max_connections: DEFAULT_MAX_CONNECTIONS,
             busy_timeout: None,
+            metrics: Arc::new(NoopMetrics),
         }
     }
 
@@ -54,6 +57,15 @@ impl PoolBuilder {
         self
     }
 
+    /// Attach a [`Metrics`] sink. Defaults to [`NoopMetrics`] (zero
+    /// overhead). All pool acquires fire `on_pool_acquire`; future
+    /// connection-level events will share the same sink.
+    #[must_use]
+    pub fn metrics(mut self, metrics: Arc<dyn Metrics>) -> Self {
+        self.metrics = metrics;
+        self
+    }
+
     pub fn build(self) -> Result<Pool> {
         Ok(Pool {
             inner: Arc::new(PoolInner {
@@ -65,6 +77,7 @@ impl PoolBuilder {
                 cond: Condvar::new(),
                 max_connections: self.max_connections,
                 busy_timeout: self.busy_timeout,
+                metrics: self.metrics,
             }),
         })
     }
@@ -83,6 +96,7 @@ struct PoolInner {
     cond: Condvar,
     max_connections: usize,
     busy_timeout: Option<Duration>,
+    metrics: Arc<dyn Metrics>,
 }
 
 struct PoolState {
@@ -99,6 +113,19 @@ impl Pool {
     /// the pool is at capacity. Returns a guard that returns the connection
     /// to the pool on drop.
     pub fn get(&self) -> Result<PooledConnection> {
+        let start = Instant::now();
+        let result = self.get_inner();
+        let metric_result = match &result {
+            Ok(_) => MetricResult::Ok,
+            Err(_) => MetricResult::Err,
+        };
+        self.inner
+            .metrics
+            .on_pool_acquire(start.elapsed(), metric_result);
+        result
+    }
+
+    fn get_inner(&self) -> Result<PooledConnection> {
         let mut state = self
             .inner
             .state
