@@ -27,31 +27,33 @@ fn assert_parser_only(res: Result<usize, redlinedb_sql::Error>) {
 }
 
 #[test]
-fn cte_with_simple_select_is_parser_only() {
+fn cte_with_simple_select_executes() {
+    // CTE execution is now implemented; see `parity_cte.rs` for
+    // differential coverage.
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
     conn.execute("INSERT INTO t VALUES (1)").expect("insert");
-    let res = conn.execute("WITH cte AS (SELECT a FROM t) SELECT * FROM cte");
-    assert_parser_only(res);
+    conn.execute("WITH cte AS (SELECT a FROM t) SELECT * FROM cte")
+        .expect("CTE should execute");
 }
 
 #[test]
-fn cte_recursive_is_parser_only() {
+fn cte_recursive_executes() {
     let (_dir, conn) = open();
-    let res = conn.execute(
+    conn.execute(
         "WITH RECURSIVE counter(n) AS (\
             SELECT 1 UNION ALL SELECT n + 1 FROM counter WHERE n < 5\
          ) SELECT n FROM counter",
-    );
-    assert_parser_only(res);
+    )
+    .expect("recursive CTE should execute");
 }
 
 #[test]
-fn cte_multiple_bindings_is_parser_only() {
+fn cte_multiple_bindings_executes() {
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
-    let res = conn.execute("WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a, b");
-    assert_parser_only(res);
+    conn.execute("WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a, b")
+        .expect("multi-CTE should execute");
 }
 
 #[test]
@@ -121,21 +123,22 @@ fn generated_column_recovery_round_trip() {
 }
 
 #[test]
-fn window_function_row_number_is_parser_only() {
+fn window_function_row_number_executes() {
+    // Window-function execution is now implemented; see `parity_window.rs`.
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
     conn.execute("INSERT INTO t VALUES (1), (2), (3)")
         .expect("insert");
-    let res = conn.execute("SELECT row_number() OVER (ORDER BY a) FROM t");
-    assert_parser_only(res);
+    conn.execute("SELECT row_number() OVER (ORDER BY a) FROM t")
+        .expect("ROW_NUMBER OVER should execute");
 }
 
 #[test]
-fn window_function_rank_is_parser_only() {
+fn window_function_rank_executes() {
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
     conn.execute("INSERT INTO t VALUES (1), (2)")
         .expect("insert");
-    let res = conn.execute("SELECT rank() OVER (PARTITION BY a ORDER BY a DESC) FROM t");
-    assert_parser_only(res);
+    conn.execute("SELECT rank() OVER (PARTITION BY a ORDER BY a DESC) FROM t")
+        .expect("RANK OVER should execute");
 }
