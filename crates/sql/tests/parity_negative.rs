@@ -252,14 +252,8 @@ fn window_function_now_executes() {
         .expect("OVER should execute");
 }
 
-#[test]
-fn partial_index_returns_error() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(a INTEGER, b TEXT)")
-        .expect("create");
-    let res = c.execute("CREATE INDEX idx ON t(a) WHERE a > 0");
-    assert_errors(res);
-}
+// A6 SQL-D: partial indexes are now supported (see parity_partial_index.rs).
+// Stale "returns-error" assertion removed when the feature landed.
 
 #[test]
 fn unsupported_function_returns_error() {

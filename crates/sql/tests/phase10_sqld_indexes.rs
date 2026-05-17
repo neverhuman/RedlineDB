@@ -15,25 +15,26 @@ fn open() -> (tempfile::TempDir, Arc<Connection>) {
     (dir, db.connect())
 }
 
+// A6 SQL-D: partial and expression indexes now execute end-to-end via the
+// v7 catalog. The old "parser-only" assertions were removed when the
+// feature landed; see parity_partial_index.rs + parity_expr_index.rs for
+// the differential-rusqlite coverage.
+
 #[test]
-fn partial_index_predicate_is_parser_only() {
+fn partial_index_now_executes() {
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER, b INTEGER)")
         .expect("create");
-    let res = conn.execute("CREATE INDEX i_pos ON t(a) WHERE a > 0");
-    assert!(res.is_err(), "partial index should be parser-only");
-    let msg = format!("{:?}", res.unwrap_err()).to_ascii_lowercase();
-    assert!(msg.contains("partial") || msg.contains("not yet"));
+    conn.execute("CREATE INDEX i_pos ON t(a) WHERE a > 0")
+        .expect("partial index should execute");
 }
 
 #[test]
-fn expression_index_is_parser_only() {
+fn expression_index_now_executes() {
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
-    let res = conn.execute("CREATE INDEX i_expr ON t(abs(a))");
-    assert!(res.is_err(), "expression index should be parser-only");
-    let msg = format!("{:?}", res.unwrap_err()).to_ascii_lowercase();
-    assert!(msg.contains("expression") || msg.contains("not yet"));
+    conn.execute("CREATE INDEX i_expr ON t(abs(a))")
+        .expect("expression index should execute");
 }
 
 #[test]
