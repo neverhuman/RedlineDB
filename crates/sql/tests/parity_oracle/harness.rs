@@ -20,6 +20,7 @@ mod run;
 mod types;
 
 pub use run::{run_oracle, run_redline};
+#[allow(unused_imports)]
 pub use types::{ErrorClass, OracleResult, classify_err};
 
 use normalize::rows_equal;
