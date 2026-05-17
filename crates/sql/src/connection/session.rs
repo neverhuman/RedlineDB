@@ -21,6 +21,10 @@ pub struct Connection {
     pub(super) db: Arc<Database>,
     pub(super) session: Mutex<SessionState>,
     pub(super) local_cache: StatementCache,
+    /// Per-connection ATTACH/DETACH alias map. Populated by
+    /// `crate::exec::attach::apply_attach_plan` when the executor runs
+    /// `PreparedKind::Attach`.
+    pub(super) attach_map: crate::exec::attach::AttachMap,
 }
 
 impl Connection {
@@ -446,6 +450,10 @@ impl Connection {
 
     pub(crate) fn engine(&self) -> &Arc<Engine> {
         &self.db.engine
+    }
+
+    pub(crate) fn attach_map(&self) -> &crate::exec::attach::AttachMap {
+        &self.attach_map
     }
 
     /// Read-only access to the underlying kernel engine. Exposed for SQL

@@ -100,51 +100,7 @@ pub(super) fn eval_function(
         "likelihood" => Ok(values.into_iter().next().unwrap_or(SqlValue::Null)),
         // SQLite substr(X, Y) / substr(X, Y, Z) — 1-based, negative Y counts
         // from the end, negative Z is an error in SQLite but we clamp to 0.
-        "substr" | "substring" => {
-            if values.is_empty() {
-                return Ok(SqlValue::Null);
-            }
-            if matches!(values[0], SqlValue::Null) {
-                return Ok(SqlValue::Null);
-            }
-            let s = value_to_string(&values[0]);
-            let chars: Vec<char> = s.chars().collect();
-            let len = chars.len() as i64;
-            let start_1based = match values.get(1) {
-                None | Some(SqlValue::Null) => return Ok(SqlValue::Null),
-                Some(v) => match v {
-                    SqlValue::Integer(n) => *n,
-                    other => value_to_string(other).trim().parse::<i64>().unwrap_or(0),
-                },
-            };
-            // SQLite: Y=0 treated as Y=1.
-            let start_0based = if start_1based >= 1 {
-                (start_1based - 1) as usize
-            } else if start_1based == 0 {
-                0usize
-            } else {
-                // negative: count from end
-                let from_end = (-start_1based) as usize;
-                if from_end > len as usize {
-                    0
-                } else {
-                    len as usize - from_end
-                }
-            };
-            let take = match values.get(2) {
-                None => usize::MAX,
-                Some(SqlValue::Null) => return Ok(SqlValue::Null),
-                Some(v) => {
-                    let n = match v {
-                        SqlValue::Integer(n) => *n,
-                        other => value_to_string(other).trim().parse::<i64>().unwrap_or(0),
-                    };
-                    if n < 0 { 0 } else { n as usize }
-                }
-            };
-            let result: String = chars.iter().skip(start_0based).take(take).collect();
-            Ok(SqlValue::Text(Arc::from(result)))
-        }
+        "substr" | "substring" => sqlite_substr_function(&values),
         // SQLite instr(X, Y) — 1-based position of first occurrence of Y in X,
         // 0 if not found, NULL if either arg is NULL.
         "instr" => {
@@ -168,54 +124,9 @@ pub(super) fn eval_function(
             Ok(SqlValue::Integer(pos))
         }
         // SQLite trim / ltrim / rtrim — strip specified chars (or whitespace).
-        "trim" => {
-            if values.is_empty() || matches!(values[0], SqlValue::Null) {
-                return Ok(SqlValue::Null);
-            }
-            let s = value_to_string(&values[0]);
-            let result = if let Some(chars_val) = values.get(1) {
-                if matches!(chars_val, SqlValue::Null) {
-                    return Ok(SqlValue::Null);
-                }
-                let strip: Vec<char> = value_to_string(chars_val).chars().collect();
-                s.trim_matches(strip.as_slice()).to_owned()
-            } else {
-                s.trim().to_owned()
-            };
-            Ok(SqlValue::Text(Arc::from(result)))
-        }
-        "ltrim" => {
-            if values.is_empty() || matches!(values[0], SqlValue::Null) {
-                return Ok(SqlValue::Null);
-            }
-            let s = value_to_string(&values[0]);
-            let result = if let Some(chars_val) = values.get(1) {
-                if matches!(chars_val, SqlValue::Null) {
-                    return Ok(SqlValue::Null);
-                }
-                let strip: Vec<char> = value_to_string(chars_val).chars().collect();
-                s.trim_start_matches(strip.as_slice()).to_owned()
-            } else {
-                s.trim_start().to_owned()
-            };
-            Ok(SqlValue::Text(Arc::from(result)))
-        }
-        "rtrim" => {
-            if values.is_empty() || matches!(values[0], SqlValue::Null) {
-                return Ok(SqlValue::Null);
-            }
-            let s = value_to_string(&values[0]);
-            let result = if let Some(chars_val) = values.get(1) {
-                if matches!(chars_val, SqlValue::Null) {
-                    return Ok(SqlValue::Null);
-                }
-                let strip: Vec<char> = value_to_string(chars_val).chars().collect();
-                s.trim_end_matches(strip.as_slice()).to_owned()
-            } else {
-                s.trim_end().to_owned()
-            };
-            Ok(SqlValue::Text(Arc::from(result)))
-        }
+        "trim" => sqlite_trim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
+        "ltrim" => sqlite_ltrim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
+        "rtrim" => sqlite_rtrim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
         // SQLite replace(X, Y, Z) — replace all occurrences of Y in X with Z.
         "replace" => {
             if values.len() < 3 {

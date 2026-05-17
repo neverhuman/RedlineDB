@@ -37,7 +37,7 @@ pub(crate) use ddl::*;
 mod dml;
 #[allow(unused_imports)]
 pub(crate) use dml::*;
-mod pragma;
+pub(crate) mod pragma;
 #[allow(unused_imports)]
 pub(crate) use pragma::*;
 pub(crate) mod savepoint;
@@ -243,6 +243,10 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
         return Ok(template);
     }
 
+    if let Some(template) = parse_detach_template(trimmed, schema_epoch) {
+        return Ok(template);
+    }
+
     let dialect = SQLiteDialect {};
     let mut statements = Parser::parse_sql(&dialect, sql)?;
     if statements.len() != 1 {
@@ -308,6 +312,11 @@ fn bind_statement(
         SqlStatement::ExplainTable { .. } => Err(Error::UnsupportedSql(
             "EXPLAIN TABLE is not supported".to_owned(),
         )),
+        SqlStatement::AttachDatabase {
+            schema_name,
+            database_file_name,
+            ..
+        } => bind_attach(sql, schema_epoch, schema_name, database_file_name),
         SqlStatement::CreateView(_) => Err(Error::UnsupportedSql(
             "CREATE VIEW is parsed-only; execution not yet implemented".to_owned(),
         )),
@@ -336,4 +345,73 @@ fn template(
         readonly,
         kind,
     }
+}
+
+/// Build a `PreparedTemplate` for `ATTACH DATABASE 'path' AS alias`.
+/// Only literal string paths are supported (no expression evaluation at
+/// prepare time).
+fn bind_attach(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    schema_name: Ident,
+    file_name: Expr,
+) -> Result<PreparedTemplate> {
+    let path = match file_name {
+        Expr::Value(ValueWithSpan { value, .. }) => match value {
+            Value::SingleQuotedString(s)
+            | Value::DoubleQuotedString(s)
+            | Value::EscapedStringLiteral(s) => s,
+            other => {
+                return Err(Error::UnsupportedSql(format!(
+                    "ATTACH expects a string literal path, got {other:?}"
+                )));
+            }
+        },
+        other => {
+            return Err(Error::UnsupportedSql(format!(
+                "ATTACH expects a string literal path, got {other:?}"
+            )));
+        }
+    };
+    Ok(template(
+        sql,
+        schema_epoch,
+        false,
+        PreparedKind::Attach(crate::exec::attach::AttachPlan::Attach {
+            path: std::path::PathBuf::from(path),
+            alias: Arc::from(schema_name.value),
+        }),
+    ))
+}
+
+/// Detect a `DETACH [DATABASE] alias` statement before handing the SQL to
+/// sqlparser (which does not recognise the SQLite DETACH form). Returns
+/// `Some(template)` if the input matches the grammar, `None` otherwise.
+pub(crate) fn parse_detach_template(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+) -> Option<PreparedTemplate> {
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let rest = if let Some(rest) = lower.strip_prefix("detach database ") {
+        rest
+    } else if let Some(rest) = lower.strip_prefix("detach ") {
+        rest
+    } else {
+        return None;
+    };
+    let alias = rest.trim();
+    if alias.is_empty() {
+        return None;
+    }
+    // Reach back into the original (non-lowercased) text to preserve case.
+    let alias_orig = trimmed[trimmed.len() - alias.len()..].to_owned();
+    Some(template(
+        trimmed,
+        schema_epoch,
+        false,
+        PreparedKind::Attach(crate::exec::attach::AttachPlan::Detach {
+            alias: Arc::from(alias_orig),
+        }),
+    ))
 }

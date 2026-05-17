@@ -173,7 +173,7 @@ The cert harness is reproducible: one CLI invocation rebuilds the Docker image, 
   <img src="assets/architecture.png" alt="RedlineDB architecture" width="95%">
 </p>
 
-RedlineDB is 100% Rust, top to bottom. The primary interface is the Rust facade (`redlinedb`) that owns the public types — `Database`, `Connection`, `Statement`, `Row`, `OpenOptions`. For ecosystem compatibility, `crates/ffi` is a Rust crate that exports `extern "C"` symbols (`rldb_*` and `sqlite3_*` shims) so existing SQLite-linked programs can swap in RedlineDB at link time — no C source code is involved. The SQL engine (`redlinedb-sql`) wraps the kernel via a parser-planner-executor pipeline. The kernel (`redlinedb-kernel`) holds the catalog, the B-tree index, the MVCC engine, the WAL coordinator, and the slotted-page storage layer. The entire codebase is safe Rust modulo the necessary `unsafe` at the FFI boundary in `crates/ffi` and a single audited thread-local in the kernel for failpoint thread-arming.
+RedlineDB is 100% Rust, top to bottom. The primary interface is the Rust facade (`redlinedb`) that owns the public types — `Database`, `Connection`, `Statement`, `Row`, `OpenOptions`. For compatibility testing and incremental integration, `crates/ffi` exports `extern "C"` symbols (`rldb_*` plus the documented `sqlite3_*` aliases) for the covered ABI surface; no C source code is involved. The SQL engine (`redlinedb-sql`) wraps the kernel via a parser-planner-executor pipeline. The kernel (`redlinedb-kernel`) holds the catalog, the B-tree index, the MVCC engine, the WAL coordinator, and the slotted-page storage layer. The entire codebase is safe Rust modulo the necessary `unsafe` at the FFI boundary in `crates/ffi` and a single audited thread-local in the kernel for failpoint thread-arming.
 
 ### Crate layout
 
@@ -182,7 +182,7 @@ RedlineDB is 100% Rust, top to bottom. The primary interface is the Rust facade 
 | [`crates/kernel`](crates/kernel) | 12,883 | Slotted-page heap, MVCC version chains, WAL coordinator, B-tree index, catalog snapshot, recovery |
 | [`crates/sql`](crates/sql) | 11,615 | sqlparser-rs SQLite-dialect parser, cost-based planner, vectorized executor, per-tx index undo log |
 | [`crates/redlinedb`](crates/redlinedb) | 2,975 | Public Rust facade — Database, Connection, Statement, Row, OpenOptions, BeginMode |
-| [`crates/ffi`](crates/ffi) | 1,478 | Rust FFI crate: exports `rldb_*` and `sqlite3_*` C-callable symbols for ecosystem compatibility |
+| [`crates/ffi`](crates/ffi) | 1,478 | Rust FFI crate: exports `rldb_*` and documented `sqlite3_*` aliases for compatibility testing |
 | [`crates/bench`](crates/bench) | 5,144 | Workload harness, parallel certify scheduler, recovery-matrix, failpoint-matrix, compat suite |
 | [`crates/cli`](crates/cli) | — | One-shot shell for queries, stats, backups |
 | [`crates/server`](crates/server) | — | Optional framed local server |
@@ -268,11 +268,11 @@ while let Step::Row = stmt.step()? {
 | `Connection` | ✓ | ✗ | One per thread; move between threads if needed |
 | `Statement` | ✗ | ✗ | Bound to one connection borrow; do not pool |
 
-`Database::create_in_memory()` and `Database::create_ephemeral()` create transient shared sessions that clean up when the last handle drops.
+`Database::create_in_memory()` and `Database::create_ephemeral()` create transient shared sessions that clean up when the last handle drops. From async code, keep `Database` in shared state, open one `Connection` per blocking worker, and run synchronous SQL work inside `tokio::task::spawn_blocking` or an equivalent worker pool.
 
 ### Ecosystem compatibility (C ABI shim)
 
-RedlineDB is 100% Rust, but the `crates/ffi` crate exports C-callable symbols so existing SQLite-linked ecosystems (rusqlite, sqlx, Python `sqlite3`, Go `mattn/go-sqlite3`) can swap in RedlineDB at link time without source changes. No C code is involved — `crates/ffi` is a Rust crate that uses `extern "C"` + `#[no_mangle]` to produce a compatible shared library.
+RedlineDB is 100% Rust, but the `crates/ffi` crate exports C-callable symbols so SQLite-linked ecosystems can exercise the documented compatibility surface where it matches their needs. No C code is involved — `crates/ffi` is a Rust crate that uses `extern "C"` + `#[no_mangle]` to produce a compatible shared library.
 
 ```c
 // Existing C/C++ code links against libredlinedb instead of libsqlite3.
@@ -310,165 +310,22 @@ cargo run -p redlinedb-cli --release -- backup /tmp/demo.redline /tmp/demo.bak -
 
 ## SQLite parity test coverage
 
-RedlineDB ships **117 dedicated SQLite-parity tests** across five test files, plus a live differential harness (`differential_lab.rs`) that runs each query against a real `rusqlite` connection and asserts row-for-row identical results. Tests marked ⏸ are written but skipped pending engine work; the reason is recorded in the `#[ignore]` attribute on the test.
+The default SQLite-visible contract is documented in [docs/sqlite-parity.md](docs/sqlite-parity.md).
 
-> **Summary:** 97 passing · 21 skipped (known parser/engine gaps below) · 4 differential
+RedlineDB currently ships **121 SQL-focused SQLite parity tests** across six suites. The high-level status is:
 
-### Aggregate functions — `parity_agg_funcs.rs` (17 tests, all passing)
+| Suite | Tests | Role |
+|---|---:|---|
+| `crates/sql/tests/parity_agg_funcs.rs` | 17 | SQLite aggregate and JSON aggregate behavior |
+| `crates/sql/tests/parity_coverage.rs` | 29 | Positive SQL constructs: ALTER, DROP INDEX, RETURNING, subqueries, NULL behavior, PRAGMAs, savepoints, joins |
+| `crates/sql/tests/parity_negative.rs` | 24 | Explicit error boundaries for unsupported SQL so gaps do not silently mis-execute |
+| `crates/sql/tests/parity_scalar_funcs.rs` | 44 | SQLite scalar functions including `substr`, `trim`, `instr`, `replace`, `printf`, `iif`, `char`, `unicode`, blobs |
+| `crates/sql/tests/differential_lab.rs` | 4 | Live row-for-row differential checks against bundled `rusqlite` |
+| `crates/sql/tests/sqlite_full_parity.rs` | 3 | Reference-build metadata, representative differential coverage, and known full-parity gap assertions |
 
-| Test | What it proves |
-|---|---|
-| `group_concat_basic_default_separator` | `GROUP_CONCAT(v)` default `,` separator |
-| `group_concat_custom_separator` | `GROUP_CONCAT(v, ' \| ')` custom separator |
-| `group_concat_skips_nulls` | NULLs omitted from concatenation |
-| `group_concat_all_null_returns_null` | All-NULL group → NULL result |
-| `group_concat_empty_table_returns_null` | Empty table → NULL |
-| `group_concat_with_group_by` | Per-group concatenation with `GROUP BY` |
-| `string_agg_alias_works` | `string_agg` is a functional alias of `group_concat` |
-| `total_basic_sum` | `total()` sums real values |
-| `total_all_null_returns_zero_real` | `total()` returns `0.0` for all-NULL (vs `sum()` → NULL) |
-| `total_empty_table_returns_zero_real` | `total()` on empty table → `0.0` |
-| `total_vs_sum_null_difference` | `total(NULL) = 0.0`, `sum(NULL) = NULL` |
-| `total_skips_null_values` | NULL rows skipped in `total()` |
-| `json_group_array_basic` | `json_group_array(v)` collects integers |
-| `json_group_array_includes_nulls` | NULLs included in JSON array |
-| `json_group_array_empty_table` | Empty table → `[]` |
-| `json_group_object_basic` | `json_group_object(k, v)` builds JSON object |
-| `json_group_object_skips_null_keys` | NULL keys omitted from object |
+> **Current local proof:** `rtk cargo test -p redlinedb-sql --test parity_agg_funcs --test parity_coverage --test parity_negative --test parity_scalar_funcs --test differential_lab --test sqlite_full_parity --quiet --locked`
 
-### Positive parity (constructs) — `parity_coverage.rs` (28 tests, 22 ✅ 6 ⏸)
-
-| Test | Status | What it proves |
-|---|---|---|
-| `alter_table_rename_to` | ✅ | `ALTER TABLE … RENAME TO` |
-| `alter_table_rename_column` | ✅ | `ALTER TABLE … RENAME COLUMN` |
-| `create_and_drop_index` | ✅ | `CREATE INDEX` / `DROP INDEX` round-trip |
-| `drop_index_if_exists` | ✅ | `DROP INDEX IF EXISTS` on nonexistent index |
-| `returning_with_arithmetic_expression` | ✅ | `INSERT … RETURNING a + b` |
-| `returning_with_function_call` | ✅ | `INSERT … RETURNING upper(name)` |
-| `update_returning_with_expression` | ✅ | `UPDATE … RETURNING a * b` |
-| `exists_subquery_true` | ✅ | `WHERE EXISTS (SELECT …)` — populated table |
-| `exists_subquery_false` | ✅ | `WHERE EXISTS (SELECT …)` — empty table |
-| `not_exists_subquery_true` | ✅ | `WHERE NOT EXISTS (SELECT …)` |
-| `null_in_empty_list` | ✅ | `NULL IN (1,2,3)` → NULL |
-| `value_in_list_with_null` | ✅ | `1 IN (1, NULL)` → 1 |
-| `value_not_in_list_with_null` | ✅ | `2 NOT IN (1, NULL)` → NULL |
-| `null_comparison_is_null` | ✅ | `NULL = NULL` → NULL |
-| `null_is_null_is_true` | ✅ | `NULL IS NULL` → 1 |
-| `value_is_not_null` | ✅ | `1 IS NOT NULL` → 1 |
-| `pragma_integrity_check_ok` | ✅ | `PRAGMA integrity_check` returns `"ok"` |
-| `nested_savepoint_basic` | ✅ | `SAVEPOINT` / `ROLLBACK TO` within `BEGIN` |
-| `nested_savepoint_release` | ✅ | `SAVEPOINT` / `RELEASE` / `COMMIT` |
-| `i64_max_stores_and_retrieves` | ✅ | `i64::MAX` round-trips through INTEGER column |
-| `i64_min_stores_and_retrieves` | ✅ | `i64::MIN` round-trips through INTEGER column |
-| `inner_join_chain` | ✅ | Three-table `JOIN … JOIN` chain |
-| `pragma_auto_vacuum` | ⏸ | `PRAGMA auto_vacuum` — not yet parsed |
-| `pragma_quick_check` | ⏸ | `PRAGMA quick_check` — not yet parsed |
-| `pragma_wal_checkpoint_passive` | ⏸ | `PRAGMA wal_checkpoint(PASSIVE)` — mode arg not yet parsed |
-| `pragma_wal_checkpoint_full` | ⏸ | `PRAGMA wal_checkpoint(FULL)` — mode arg not yet parsed |
-| `pragma_wal_checkpoint_restart` | ⏸ | `PRAGMA wal_checkpoint(RESTART)` — mode arg not yet parsed |
-| `pragma_wal_checkpoint_truncate` | ⏸ | `PRAGMA wal_checkpoint(TRUNCATE)` — mode arg not yet parsed |
-
-### Negative parity (error boundaries) — `parity_negative.rs` (24 tests, 23 ✅ 1 ⏸)
-
-Assert that unsupported SQL constructs return an error rather than silently producing wrong results.
-
-| Test | Status | Construct rejected |
-|---|---|---|
-| `update_from_is_unsupported` | ✅ | `UPDATE … FROM` |
-| `update_or_conflict_is_unsupported` | ✅ | `UPDATE OR IGNORE/REPLACE` |
-| `delete_using_is_unsupported` | ✅ | `DELETE … USING` |
-| `delete_limit_is_unsupported` | ✅ | `DELETE … LIMIT` |
-| `delete_order_by_is_unsupported` | ✅ | `DELETE … ORDER BY` |
-| `insert_set_syntax_is_unsupported` | ✅ | `INSERT … SET col=val` (MySQL syntax) |
-| `insert_on_duplicate_key_update_is_unsupported` | ✅ | `INSERT … ON DUPLICATE KEY UPDATE` |
-| `create_table_as_select_is_unsupported` | ✅ | `CREATE TABLE … AS SELECT` |
-| `alter_table_only_is_unsupported` | ✅ | `ALTER TABLE ONLY` |
-| `alter_table_add_column_after_is_unsupported` | ✅ | `ADD COLUMN … AFTER col` |
-| `alter_table_drop_multiple_columns_is_unsupported` | ✅ | `DROP COLUMN` multiple in one statement |
-| `create_index_with_include_is_unsupported` | ✅ | `CREATE INDEX … INCLUDE (col)` |
-| `distinct_on_is_unsupported` | ✅ | `SELECT DISTINCT ON (…)` |
-| `natural_join_is_unsupported` | ✅ | `NATURAL JOIN` |
-| `group_by_all_is_unsupported` | ✅ | `GROUP BY ALL` |
-| `like_any_is_unsupported` | ✅ | `LIKE ANY (…)` |
-| `case_in_aggregate_is_unsupported` | ✅ | `CASE` expression inside aggregate |
-| `vector_non_f32_type_is_unsupported` | ✅ | `VECTOR(64, float64)` — only f32 vectors supported |
-| `cte_returns_not_implemented_error` | ✅ | `WITH … AS (…) SELECT` CTE |
-| `create_view_returns_not_implemented_error` | ✅ | `CREATE VIEW` |
-| `window_function_returns_not_implemented_error` | ✅ | `ROW_NUMBER() OVER (…)` window function |
-| `partial_index_returns_error` | ✅ | `CREATE INDEX … WHERE` partial index |
-| `unsupported_function_returns_error` | ✅ | Unknown function name |
-| `in_subquery_multi_column_is_unsupported` | ⏸ | `(a,b) IN (SELECT a,b …)` — needs data-driven repro |
-
-### Scalar functions — `parity_scalar_funcs.rs` (44 tests, 33 ✅ 11 ⏸)
-
-| Test | Status | What it proves |
-|---|---|---|
-| `substr_basic_1based` | ⏸ | `substr(s, 2)` — sqlparser emits ANSI Substring AST |
-| `substr_with_length` | ⏸ | `substr(s, 2, 3)` |
-| `substr_negative_start` | ⏸ | `substr(s, -3)` negative-offset semantics |
-| `substr_zero_start_acts_as_one` | ⏸ | `substr(s, 0, 3)` — zero treated as offset 0 |
-| `substr_null_propagates` | ⏸ | `substr(NULL, 1)` / `substr(s, NULL)` → NULL |
-| `substr_alias_substring` | ⏸ | `substring(s, 2, 3)` — alias |
-| `substr_beyond_length_returns_empty` | ⏸ | `substr(s, 100)` → `""` |
-| `instr_found` | ✅ | `instr(s, needle)` → 1-based position |
-| `instr_not_found` | ✅ | `instr(s, 'xyz')` → 0 |
-| `instr_null_propagates` | ✅ | `instr(NULL, …)` → NULL |
-| `instr_empty_needle_returns_one` | ✅ | `instr(s, '')` → 1 |
-| `trim_whitespace` | ⏸ | `trim(s)` — sqlparser emits ANSI Trim AST |
-| `trim_custom_chars` | ⏸ | `trim(s, '*')` |
-| `ltrim_whitespace` | ✅ | `ltrim(s)` strips leading whitespace |
-| `rtrim_whitespace` | ✅ | `rtrim(s)` strips trailing whitespace |
-| `trim_null_propagates` | ⏸ | `trim(NULL)` → NULL |
-| `replace_basic` | ✅ | `replace(s, old, new)` |
-| `replace_all_occurrences` | ✅ | All occurrences replaced in one call |
-| `replace_null_propagates` | ✅ | Any NULL argument → NULL |
-| `printf_string_placeholder` | ✅ | `printf('%s', …)` |
-| `printf_integer_placeholder` | ✅ | `printf('%d', …)` |
-| `printf_hex_placeholder` | ✅ | `printf('%x', 255)` → `"ff"` |
-| `printf_percent_escape` | ✅ | `printf('100%%')` → `"100%"` |
-| `format_is_alias_for_printf` | ✅ | `format(…)` == `printf(…)` |
-| `printf_null_format_returns_null` | ✅ | `printf(NULL)` → NULL |
-| `iif_true_branch` | ✅ | `iif(1, 'yes', 'no')` → `"yes"` |
-| `iif_false_branch` | ✅ | `iif(0, 'yes', 'no')` → `"no"` |
-| `iif_null_condition_returns_false_branch` | ✅ | `iif(NULL, …)` → false branch |
-| `sign_positive` | ✅ | `sign(5)` → 1 |
-| `sign_negative` | ✅ | `sign(-3)` → -1 |
-| `sign_zero` | ✅ | `sign(0)` → 0 |
-| `sign_null` | ✅ | `sign(NULL)` → NULL |
-| `char_basic_ascii` | ✅ | `char(72, 105)` → `"Hi"` |
-| `char_single` | ✅ | `char(65)` → `"A"` |
-| `unicode_basic` | ✅ | `unicode('A')` → 65 |
-| `unicode_multi_char_returns_first` | ✅ | `unicode('AB')` → codepoint of first char |
-| `unicode_null_propagates` | ✅ | `unicode(NULL)` → NULL |
-| `zeroblob_correct_length` | ✅ | `zeroblob(8)` → 8-byte zero blob |
-| `zeroblob_zero_length` | ✅ | `zeroblob(0)` → empty blob |
-| `zeroblob_null_propagates` | ✅ | `zeroblob(NULL)` → NULL |
-| `randomblob_correct_length` | ✅ | `randomblob(16)` → 16-byte blob |
-| `randomblob_produces_blob_of_right_size` | ✅ | length matches argument |
-| `scalar_funcs_in_select_after_insert` | ⏸ | `trim()` after INSERT — ANSI Trim AST |
-| `replace_in_where_clause` | ✅ | `replace()` in `WHERE` predicate |
-
-### Differential harness — `differential_lab.rs` (4 tests, all passing)
-
-Runs each query against both RedlineDB and a live `rusqlite` (bundled SQLite 3.x) connection and asserts row-for-row, type-for-type identical results. Queries using constructs not yet parsed (substr, trim) are skipped inline with explanatory comments.
-
-| Test | Coverage |
-|---|---|
-| `diff_scalar_string_matrix` | `instr`, `replace`, `printf`, `upper`, `lower`, `length` on TEXT with NULLs |
-| `diff_scalar_math_and_logic_matrix` | `iif`, `sign`, `coalesce`, `nullif` on INTEGER/REAL with NULLs |
-| `diff_aggregate_matrix` | `count(*)`, `count(v)`, `sum`, `total`, `min/max` with `GROUP BY … ORDER BY` |
-| `diff_join_and_subquery_matrix` | `INNER JOIN`, `IN (SELECT …)`, `NOT IN (SELECT …)` |
-
-### Engine gap tracking
-
-| Gap | Tests skipped | Path to fix |
-|---|---|---|
-| `substr()`/`substring()` — sqlparser emits ANSI `Substring` AST | 7 | Implement `Substring` eval in `crates/sql/src/exec/expr/scalar/` |
-| `trim()` — sqlparser emits ANSI `Trim` AST | 4 | Implement `Trim` eval in `crates/sql/src/exec/expr/scalar/` |
-| `PRAGMA wal_checkpoint(MODE)` — mode argument not parsed | 4 | Extend PRAGMA parser in `crates/sql/src/parser/` |
-| `PRAGMA auto_vacuum` / `PRAGMA quick_check` | 2 | Extend PRAGMA parser |
-| Multi-column `IN` subquery rejection | 1 | Data-driven repro test needed |
+The parity suites have **0 ignored tests**. RedlineDB is still **not full SQLite**: file-format compatibility, the broad `sqlite3_*` C API, views, triggers, CTE execution, window functions, generated columns, partial/expression indexes, and many PRAGMAs/functions remain tracked as `fail` or `not-started` in [docs/sqlite-parity.md](docs/sqlite-parity.md).
 
 ---
 

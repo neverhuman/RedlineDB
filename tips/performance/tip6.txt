@@ -1,0 +1,982 @@
+According to the RedlineDB engineering spec uploaded on **2026-05-16**, the best high-leverage design upgrade is the **B-tree index write path**: replace the current global `structure_lock` with a **page-latched B-link tree** implementation. This is the section most likely to improve RedlineDB’s ability to beat SQLite under high write concurrency, especially queue-like workloads with many producers/consumers touching the same table but different rows or key ranges. 
+
+I did not run the benchmark suite in this session; this recommendation is based on the uploaded engineering spec plus the live GitHub repository/README/source pages.
+
+# Recommendation
+
+## Upgrade: `BtreeIndex` → page-latched B-link tree
+
+**Current bottleneck:** RedlineDB has row-level multi-writer MVCC, but the index layer still serializes all B-tree structural modifications through a single global mutex. The uploaded spec says `structure_lock` is acquired for tree descent, leaf modification, and split cascade, and explicitly notes that two writers inserting into different leaf pages still serialize.  The live source confirms this: `BtreeIndex::insert_tx_inner` and `delete_mark_tx_inner` acquire `self.inner.structure_lock`, and `IndexInner` stores `structure_lock: Mutex<()>`. ([GitHub][1])
+
+**Proposed fix:** Keep the current physical-key format, MVCC entry visibility, WAL durability model, and high-key/right-sibling page metadata, but change concurrency control from:
+
+```text
+one global B-tree mutex per index
+```
+
+to:
+
+```text
+per-page read/write latches + B-link right-move protocol + root/meta latch only for root changes
+```
+
+This is a direct fit because RedlineDB already stores `left_sibling`, `right_sibling`, and `high_key` in Btree leaf/internal pages, which are the exact structural fields needed for a B-link tree.  PostgreSQL’s B-tree implementation describes the same core idea: Lehman-Yao adds a right-link pointer and a high key, allowing searchers to detect concurrent splits and move right until the correct page is found. ([GitHub][2])
+
+# Why this is the right section to upgrade
+
+SQLite WAL mode allows readers and a writer to run concurrently, but official SQLite documentation still says that because there is only one WAL file, “there can only be one writer at a time.” ([SQLite][3]) RedlineDB’s main differentiator is escaping that single-writer ceiling with MVCC, row locks, and group commit; the README positions the engine exactly this way, as a SQLite-compatible embedded engine without the concurrency cliff. ([GitHub][4])
+
+The current RedlineDB numbers already show large wins in concurrent-write workloads: `writers-disjoint` at 64 threads is listed at **1,256 qps vs SQLite 79 qps**, and the mixed OLTP workloads show roughly **14.7×–15.2×** wins.  But the same spec identifies the B-tree `structure_lock` as a known limitation: all insertions serialize at the leaf modification point, even for logically disjoint keys on different leaf pages; it also names the Lehman-Yao B-link protocol as the mitigation. 
+
+That means RedlineDB is currently winning despite an avoidable index bottleneck. Removing it should improve the exact workloads where RedlineDB wants to be famous: queue claiming, concurrent inserts, concurrent updates that touch secondary indexes, and high-connection embedded services.
+
+# Engineering Spec: B-link Tree Concurrency Upgrade
+
+## 1. Project name
+
+**Lane BLI: B-link Index Concurrency Upgrade**
+
+Internal feature flag during development:
+
+```rust
+#[cfg(feature = "index_blink_latches")]
+```
+
+Final production state:
+
+```rust
+// No user-visible flag.
+// B-link behavior becomes the default BtreeIndex implementation.
+```
+
+## 2. Goals
+
+### Primary goals
+
+1. Remove `BtreeIndex.inner.structure_lock` from normal insert/delete/update index mutation paths.
+2. Allow concurrent writers to mutate different leaf pages of the same B-tree index.
+3. Preserve current SQLite-compatible SQL behavior and FFI behavior.
+4. Preserve MVCC semantics: `create_tx` / `delete_tx` visibility remains unchanged.
+5. Preserve unique-index correctness via `UniqueKeyLockTable`.
+6. Preserve crash-recovery guarantees: zero lost acknowledged commits must remain true.
+7. Preserve range-scan correctness under concurrent splits.
+8. Keep memory overhead small and predictable.
+
+### Non-goals
+
+1. Do not implement SSI/serializable isolation in this lane.
+2. Do not redesign WAL into parallel WAL inserters in this lane.
+3. Do not implement range-scan prefetch in this lane, although the new latch model should make it easier later.
+4. Do not change SQL planner behavior.
+5. Do not change the public Rust API, C ABI, or SQLite symbol shim.
+
+# 3. Current-state diagnosis
+
+## 3.1 Current write path
+
+For `INSERT` / `UPDATE` / `DELETE`, the transaction lifecycle applies heap mutation, then index mutation, then appends WAL records. 
+
+Current index behavior:
+
+```text
+insert_tx_inner
+  acquire global structure_lock
+  descend root → leaf
+  modify leaf
+  split if needed
+  maybe cascade split upward
+  append index WAL delta
+  mark dirty
+  release global structure_lock
+```
+
+The uploaded spec explicitly says all structural modifications are protected by `structure_lock: Mutex<()>` and that two writers inserting into different leaf pages still serialize. 
+
+## 3.2 Why this matters for queue workloads
+
+A queue table usually has secondary indexes like:
+
+```sql
+CREATE INDEX queue_claim_idx
+ON queue(status, priority, visible_at, id);
+```
+
+A scalable embedded queue workload does many small transactions:
+
+```sql
+UPDATE queue
+SET status = 'claimed', claimed_by = ?
+WHERE id = (
+  SELECT id
+  FROM queue
+  WHERE status = 'ready'
+  ORDER BY priority DESC, visible_at ASC
+  LIMIT 1
+)
+RETURNING *;
+```
+
+Even if different workers claim different rows, each claim changes index entries. Under the current design, those index changes contend on the same global B-tree mutex. Row-level locks prevent same-row conflicts, but the global index lock still serializes disjoint writers at the index layer. The spec’s own conflict table notes that same B-tree path conflicts serialize at `structure_lock`, while disjoint row writes otherwise proceed in parallel. 
+
+# 4. Proposed architecture
+
+## 4.1 New high-level model
+
+Replace this:
+
+```rust
+pub(super) structure_lock: Mutex<()>,
+```
+
+with:
+
+```rust
+pub(super) root_latch: RwLock<RootState>;        // only root/meta changes
+pub(super) split_epoch: AtomicU64;               // observability + stale-path detection
+pub(super) stats: IndexConcurrencyStats;
+```
+
+Move page-level synchronization into the buffer/frame layer:
+
+```rust
+pub(crate) struct Frame {
+    page: Option<Page>,
+    pin_count: AtomicUsize,
+    dirty_lsn: AtomicU64,
+    page_latch: RwLock<()>,       // new: protects physical page contents
+    // existing fields...
+}
+```
+
+`page_latch` is in-memory only. It does **not** change the page format, file format, WAL format, or SQLite ABI.
+
+## 4.2 Why frame-level latches
+
+Use one latch per resident frame rather than a global lock or a heap-allocated per-page lock table.
+
+Benefits:
+
+| Choice                            | Result                                                |
+| --------------------------------- | ----------------------------------------------------- |
+| Frame-level `RwLock<()>`          | Minimal extra allocation                              |
+| Latch lifetime tied to buffer pin | Avoids use-after-evict                                |
+| No on-disk format change          | Backward-compatible with existing `INDEX_VERSION = 2` |
+| Works for heap/index pages        | Could later help heap page compaction too             |
+
+Memory cost target:
+
+```text
+one std::sync::RwLock<()> per buffer frame
+```
+
+That is a fixed buffer-pool overhead, not an index-size-proportional overhead.
+
+## 4.3 Keep current physical key format
+
+Do **not** change `KeyBuf`.
+
+Current physical key:
+
+```text
+logical_key || row_id || page_id || slot || generation
+```
+
+This should remain because it already guarantees physical uniqueness even for non-unique indexes, which is necessary for unambiguous split points and duplicate-key runs.  PostgreSQL’s B-tree README similarly notes that B-tree keys need uniqueness at the level where separators are used, with heap TID acting as a tiebreaker. ([GitHub][2])
+
+# 5. B-link invariants
+
+Every B-tree page must satisfy these invariants:
+
+## 5.1 Page keyspace invariant
+
+For any page `P`:
+
+```text
+low_key(P) <= all keys in P < high_key(P)
+```
+
+For rightmost pages:
+
+```text
+high_key(P) = empty / infinity
+```
+
+## 5.2 Right-link invariant
+
+If `P.right = R`, then:
+
+```text
+high_key(P) <= low_key(R)
+```
+
+and a search for key `K` that lands on `P` must move right when:
+
+```rust
+!P.high_key.is_empty() && K >= P.high_key
+```
+
+The existing code already has this defensive “move right” concept in `find_leaf_path` and insert retry logic. The upgrade makes this the core concurrency protocol instead of a global-lock fallback. ([GitHub][5])
+
+## 5.3 Split publication invariant
+
+A split is searchable before the parent is updated.
+
+After splitting leaf `L` into `L` and `R`, it is valid for the parent to temporarily lack a downlink to `R` as long as:
+
+```text
+L.right = R
+L.high_key = separator
+R.high_key = old L.high_key
+R.right = old L.right
+```
+
+Searchers that descend through the old parent into `L` will move right to `R`.
+
+## 5.4 Logical visibility invariant
+
+Tree shape is structural and non-transactional.
+
+Index entries are logical and transactional:
+
+```text
+create_tx controls visibility of inserted entries
+delete_tx controls visibility of tombstoned entries
+```
+
+This is critical. If an uncommitted transaction causes a page split and then aborts, the split may remain, but the inserted entry is not visible. This avoids needing to undo tree structure.
+
+# 6. Latch protocol
+
+## 6.1 Latch types
+
+```rust
+enum PageLatchMode {
+    Read,
+    Write,
+}
+```
+
+Rules:
+
+| Operation              | Latch behavior                                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| Point lookup           | read latch one page at a time                                                                            |
+| Range scan             | read latch current leaf, copy entries + next link, release                                               |
+| Insert fast path       | write latch target leaf only                                                                             |
+| Delete mark fast path  | write latch target leaf only                                                                             |
+| Leaf split             | write latch old leaf, initialize new leaf, optionally write latch old right sibling for left-link update |
+| Parent insert          | re-descend, write latch target internal page                                                             |
+| Root split/meta update | acquire `root_latch.write()`                                                                             |
+
+## 6.2 Deadlock prevention
+
+Use strict latch ordering:
+
+1. Descent is top-down.
+2. Writers do not hold parent latches while waiting for child latches in the fast path.
+3. Moving right is allowed while holding current-page latch only if the next page ID is greater in logical key order.
+4. For sibling left-link repair, acquire in this order:
+
+```text
+old_leaf → new_right → old_right
+```
+
+Only if all required latches are immediately available. If `old_right` cannot be latched without waiting, skip left-link repair and leave it to a maintenance pass. Forward scans only require right links.
+
+5. For parent downlink insertion, release leaf latch after publishing right-link/high-key, then re-descend to the parent level. This avoids holding child and parent latches while waiting upward.
+
+## 6.3 Retry rules
+
+Operations retry when:
+
+```text
+page high_key says key belongs to the right
+page generation changed during optimistic validation
+target page no longer has enough free space after latch acquisition
+parent downlink already exists due to racing split completion
+root level changed during descent
+```
+
+Retry budget:
+
+```rust
+const INDEX_MOVE_RIGHT_MAX: usize = 64;
+const INDEX_INSERT_RETRY_MAX: usize = 128;
+```
+
+If exceeded, return an internal `Error::WriteConflict` or `Error::CorruptPage("blink retry budget exceeded")` depending on observed invariant state. In tests, this should be hard-failed, not silently retried forever.
+
+# 7. Insert algorithm
+
+## 7.1 Fast path: no split
+
+```rust
+pub fn insert_tx_inner_blink(
+    &self,
+    tx_id: TxId,
+    logical_key: &[u8],
+    row: IndexRowRef,
+    emit_wal: bool,
+    lsn: Lsn,
+) -> Result<()> {
+    let physical = encode_physical_key(logical_key, row);
+
+    loop {
+        let leaf_id = self.find_leaf_blink(physical.as_slice())?;
+
+        let guard = self.inner.buffer.pin(leaf_id)?;
+        let write_latch = guard.write_latch()?;
+
+        let page = guard.page_mut()?;
+        let header = Self::read_page_header(page)?;
+
+        if key_belongs_right(&header, physical.as_slice()) {
+            drop(write_latch);
+            continue;
+        }
+
+        let mut entries = self.read_entries(page)?;
+        let candidate = Entry::Leaf {
+            logical_key: logical_key.to_vec(),
+            row,
+            physical: physical.as_slice().to_vec(),
+            create_tx: tx_id,
+            delete_tx: TxId::ZERO,
+        };
+
+        let insert_pos = entries.binary_search_by(|e| e.compare(&candidate));
+        validate_unique_policy(insert_pos, self.meta()?.uniqueness)?;
+
+        entries.insert(insert_pos.unwrap_or_else(|p| p), candidate);
+
+        if Self::encoded_entries_len(&entries) <= leaf_body_capacity(page) {
+            Self::rewrite_leaf(page, self.descriptor().index_id, &entries, header.left, header.right, header.high_key)?;
+
+            let end_lsn = if emit_wal {
+                self.append_index_delta(tx_id, WalPayload::IndexInsert { ... })?
+            } else {
+                lsn
+            };
+
+            guard.mark_dirty(end_lsn)?;
+            return Ok(());
+        }
+
+        drop(write_latch);
+        self.split_leaf_blink_and_retry_insert(...)?;
+    }
+}
+```
+
+Fast-path target:
+
+```text
+one root-to-leaf descent
+one leaf write latch
+zero global locks
+zero parent latches
+one WAL index delta
+```
+
+## 7.2 Split path
+
+When the leaf lacks capacity:
+
+```text
+1. Re-latch old leaf in write mode.
+2. Validate key still belongs to this leaf.
+3. Read entries + candidate.
+4. Split by byte size, not item count.
+5. Allocate new right leaf.
+6. Initialize new right leaf:
+   - left = old_leaf
+   - right = old_leaf.right
+   - high_key = old_leaf.high_key
+   - entries = upper half
+7. Rewrite old leaf:
+   - right = new_right
+   - high_key = separator
+   - entries = lower half
+8. WAL-log structural page images for old leaf and new right leaf.
+9. Mark both pages dirty with structural LSN.
+10. Release old leaf latch.
+11. Insert parent downlink using re-descent.
+12. If parent overflows, recursively split internal page.
+13. If root overflows, acquire root_latch.write() and install new root.
+```
+
+Important: steps 6–9 make the split searchable **before** step 11. This is the B-link property that removes the need for a global structure mutex.
+
+## 7.3 Structural WAL rule
+
+Tree shape changes should be logged as structural WAL, not as user-transaction-only WAL.
+
+Recommended implementation:
+
+```rust
+enum WalPayload {
+    // existing
+    IndexInsert { tx_id, index_id, logical_key, row },
+    IndexDelete { tx_id, index_id, logical_key, row },
+    PageImage { page_id, page_lsn, page_bytes },
+
+    // new optional compact form, phase 2
+    IndexStructuralSplit {
+        index_id: u64,
+        left: PageId,
+        right: PageId,
+        separator: Vec<u8>,
+        level: u16,
+    },
+}
+```
+
+Phase 1 should use existing `PageImage` for safety. Phase 2 can add compact split WAL only after certification passes.
+
+Structural split records should use:
+
+```rust
+tx_id = TxId::ZERO
+```
+
+or a dedicated structural transaction ID, so recovery replays tree-shape changes even if the user transaction that triggered the split later aborts. The logical index entry remains controlled by `create_tx` and `delete_tx`.
+
+# 8. Delete-mark algorithm
+
+Do not physically remove entries in normal delete/update.
+
+Current RedlineDB already marks entries with `delete_tx`, which matches MVCC visibility and rollback needs. Keep that behavior.
+
+Fast path:
+
+```text
+1. Build physical probe key.
+2. find_leaf_blink(probe)
+3. write-latch leaf
+4. if key belongs right, release and move right
+5. find matching physical entry
+6. set delete_tx = tx_id
+7. WAL IndexDelete logical delta
+8. mark dirty
+```
+
+Physical pruning remains maintenance/vacuum work. This avoids merging pages in the first B-link lane. Page merge/deletion is more dangerous for concurrent scans than split and should remain out of scope until the split path is certified.
+
+# 9. Range scan algorithm
+
+Range scans must remain correct under concurrent splits.
+
+Recommended algorithm:
+
+```text
+1. Descend to start leaf.
+2. Read-latch leaf.
+3. Copy all visible matching entries from this leaf into local batch.
+4. Copy leaf.right as next_page_at_scan_time.
+5. Copy leaf.high_key.
+6. Release read latch.
+7. Return copied entries.
+8. Continue from next_page_at_scan_time.
+```
+
+This is important. If the page splits after step 6, the scan has already copied all entries that were present at scan time. Following the old right-link avoids duplicate reads of entries moved into a new sibling after the scan copied them.
+
+For forward scans, this is enough. Backward scans should not be added in this lane unless they already exist; left-link repair can be opportunistic.
+
+# 10. Root split protocol
+
+Root splits are rare and may keep a small latch.
+
+```rust
+struct RootState {
+    root_page_id: PageId,
+    root_level: u16,
+    epoch: u64,
+}
+```
+
+Root split steps:
+
+```text
+1. Acquire root_latch.write().
+2. Re-read meta page.
+3. Confirm root is still the page that overflowed or locate current root.
+4. Allocate new root.
+5. Install downlinks to left and right children.
+6. WAL PageImage for old root, new sibling, new root, meta page.
+7. Update meta root pointer.
+8. Increment root epoch.
+9. Release root_latch.
+```
+
+Searchers use:
+
+```text
+read meta/root without holding root_latch for full descent
+if root epoch changes and descent fails validation, retry
+```
+
+This keeps root changes safe without serializing normal leaf mutations.
+
+# 11. Unique index behavior
+
+Keep `UniqueKeyLockTable` unchanged.
+
+The current table prevents the classic TOCTOU race where two writers both observe no duplicate and insert the same unique key.  The B-link upgrade must not weaken this.
+
+For unique indexes:
+
+```text
+1. Acquire unique-key guard.
+2. Perform visible point lookup using B-link descent.
+3. If committed visible duplicate exists, return constraint/write conflict.
+4. Insert physical key.
+5. Hold unique guard until commit/rollback.
+```
+
+This means page-level latches handle physical structure, while unique-key locks handle semantic uniqueness.
+
+# 12. WAL and crash recovery requirements
+
+## 12.1 Existing durability bar
+
+The uploaded spec says crash certification currently passes **36/36** recovery cases and **24/24** failpoint cases with zero lost acknowledged commits.  The B-link lane must not merge until those exact gates still pass.
+
+## 12.2 WAL safety principles
+
+The new implementation must follow these rules:
+
+1. **WAL before dirty-page eligibility.** Any page whose structural contents change must have a durable WAL representation before it can be flushed.
+2. **Structural changes survive abort.** Splits are not rolled back; only logical entries are hidden/removed by MVCC.
+3. **Parent downlink can lag.** Recovery must tolerate a state where the right-link/high-key path exists before the parent downlink.
+4. **Redo is idempotent.** Replaying a split twice must not duplicate entries or corrupt sibling links.
+5. **Commit record remains the user-visible durability boundary.** A user row/index entry is visible only after its transaction commits; the split shape may exist earlier.
+
+## 12.3 New failpoints
+
+Add failpoints:
+
+```text
+index::blink::split::after_alloc_right
+index::blink::split::after_init_right
+index::blink::split::after_publish_left_highkey
+index::blink::split::before_parent_insert
+index::blink::split::after_parent_insert
+index::blink::split::before_root_meta_update
+index::blink::insert::after_leaf_rewrite_before_wal
+index::blink::delete::after_tombstone_before_wal
+```
+
+Each failpoint must be covered by a recovery test that checks:
+
+```text
+PRAGMA integrity_check = ok
+all acked rows recovered
+no duplicate physical keys
+all visible heap rows have expected index entries
+all visible index entries point to visible heap rows
+right-link chain is sorted
+high_key bounds are valid
+```
+
+# 13. API and module changes
+
+## 13.1 New files
+
+```text
+crates/kernel/src/index/
+  latch.rs          // Page latch helpers over BufferPool frame guards
+  blink.rs          // B-link descent, move-right, retry helpers
+  split.rs          // Leaf/internal/root split protocol
+  invariants.rs     // debug validation and integrity checker helpers
+```
+
+## 13.2 Modify existing files
+
+```text
+crates/kernel/src/index/mod.rs
+  - remove normal-path use of structure_lock
+  - add root_latch, split_epoch, concurrency stats
+
+crates/kernel/src/index/mutate.rs
+  - replace insert_tx_inner and delete_mark_tx_inner lock protocol
+  - keep old implementation under test-only fallback until lane is stable
+
+crates/kernel/src/index/lookup.rs
+  - use find_leaf_blink
+
+crates/kernel/src/index/cursor.rs
+  - range scan copies batch under read latch
+  - follows right link captured at scan time
+
+crates/kernel/src/storage/buffer.rs
+  - add frame read/write latch accessors
+  - enforce latch + pin ordering
+
+crates/kernel/src/integrity/
+  - add B-link invariant validation
+```
+
+## 13.3 New telemetry
+
+```rust
+pub struct IndexConcurrencyStats {
+    pub leaf_read_latch_wait_ns: AtomicU64,
+    pub leaf_write_latch_wait_ns: AtomicU64,
+    pub internal_write_latch_wait_ns: AtomicU64,
+    pub move_right_count: AtomicU64,
+    pub stale_path_retries: AtomicU64,
+    pub leaf_split_count: AtomicU64,
+    pub internal_split_count: AtomicU64,
+    pub root_split_count: AtomicU64,
+    pub parent_downlink_race_count: AtomicU64,
+    pub skipped_left_link_repairs: AtomicU64,
+}
+```
+
+Expose in:
+
+```rust
+rldb_stats_json()
+Database::stats()
+bench report metrics
+```
+
+# 14. Test plan
+
+## 14.1 Unit tests
+
+Add tests:
+
+```text
+blink_find_leaf_moves_right_after_split
+blink_insert_disjoint_leaves_no_global_serialization
+blink_duplicate_key_split_preserves_physical_order
+blink_parent_downlink_insert_is_idempotent
+blink_root_split_searchers_retry_correctly
+blink_range_scan_no_missing_no_duplicates_during_split
+blink_unique_key_guard_still_blocks_duplicate_insert
+blink_delete_mark_visible_rules_unchanged
+blink_left_link_repair_optional_forward_scan_safe
+```
+
+## 14.2 Property/invariant tests
+
+For random operation sequences:
+
+```text
+insert random key
+delete random key
+update random key
+force split every N inserts
+randomly interleave readers/writers
+run integrity check after each phase
+compare logical results with HashMap model
+```
+
+Model invariants:
+
+```text
+sorted physical keys
+no duplicate physical keys
+every visible index entry maps to visible heap tuple
+every visible heap tuple has required index entries
+right-link chain covers all leaves once
+high_key strictly increases across right-link chain
+no page reachable from root violates key bounds
+```
+
+## 14.3 Crash tests
+
+Extend failpoint matrix with B-link split windows.
+
+Must pass:
+
+```text
+cargo nextest run --workspace --locked
+cargo run -p redlinedb-bench --release -- recover-matrix ...
+cargo run -p redlinedb-bench --release -- failpoint-matrix ...
+cargo run -p redlinedb-bench --release -- compat --engine both ...
+```
+
+Existing hard gate remains:
+
+```text
+lost_acked_commits == 0
+```
+
+The uploaded spec’s synced-ack durability protocol is exactly the right proof mechanism and should be reused unchanged. 
+
+## 14.4 New benchmark workloads
+
+Add:
+
+```text
+IndexDisjointInsert64
+IndexDisjointInsert128
+IndexDisjointInsert256
+IndexMonotonicInsertHotRightEdge
+QueueClaimReady64
+QueueClaimReady128
+QueueClaimReady256
+SecondaryIndexUpdateDisjoint
+SplitStormDuplicateKeys
+SplitStormRandomKeys
+```
+
+Metrics:
+
+```text
+qps
+p50 / p95 / p99 latency
+leaf latch wait ns
+root latch wait ns
+move-right count
+split count
+WAL pwrite count
+WAL fdatasync count
+RSS
+context switches
+```
+
+# 15. Expected outcomes
+
+These are engineering targets, not measured results from this session.
+
+## 15.1 Writers-disjoint
+
+Current certified result:
+
+```text
+RedlineDB: 1,256 qps
+SQLite:       79 qps
+Ratio:     15.89×
+```
+
+The target after B-link page latching:
+
+```text
+2×–6× RedlineDB improvement on writers-disjoint at 64T+
+```
+
+Reason: the current workload wins despite global index serialization; removing the global B-tree mutex should let independent leaf-page writers proceed until the next bottleneck becomes WAL append, storage sync, buffer-pool contention, or CPU cache coherence. 
+
+## 15.2 Queue claim throughput
+
+Expected improvement:
+
+```text
+3×–8× on multi-worker queue claim workloads when claims touch different rows/key ranges
+```
+
+Reason: queue claims often update secondary indexes. Today, row locks allow disjoint row updates, but index mutations still serialize under the B-tree mutex. With B-link latches, only workers touching the same leaf or same unique key should block.
+
+## 15.3 Tail latency
+
+Expected improvement:
+
+```text
+30%–60% lower p99 for disjoint index-write workloads at 64T+
+```
+
+Reason: global mutex convoying creates long tail latency under bursts. Page latches localize contention to hot leaves.
+
+## 15.4 Secondary index point reads
+
+Expected result:
+
+```text
+small improvement or no material change
+```
+
+Reason: point reads already mostly read-latch pages and are not the main global-lock pain. The bigger read-side gap is large secondary-index range scans; the README identifies range cursor prefetch/warm-leaf reuse as a separate planned lane. ([GitHub][4])
+
+## 15.5 Single-thread overhead
+
+Acceptance target:
+
+```text
+≤ 5% regression at 1 thread
+```
+
+Reason: replacing one global mutex with one or more page latches can add overhead. The fast path must remain tight: one descent, one leaf write latch, one WAL delta.
+
+# 16. Why this should not regress other tests
+
+## 16.1 SQL compatibility tests
+
+No SQL grammar, parser, planner, result type, or FFI API changes are required. The SQLite compatibility suite should see identical logical results because the B-link upgrade changes physical concurrency control only.
+
+## 16.2 MVCC visibility
+
+Entry visibility remains the same:
+
+```rust
+create_tx visible?
+delete_tx visible?
+```
+
+No change to `Snapshot`, `TxStatusTable`, `create_tx`, `delete_tx`, `begin_csn`, or `end_csn` semantics. This means existing rollback, update, delete, and read-snapshot tests should still pass.
+
+## 16.3 Unique constraints
+
+`UniqueKeyLockTable` remains the semantic uniqueness guard. The page-latch layer only protects physical page contents; it does not decide whether a unique key is legal. Therefore duplicate-prevention behavior should remain unchanged.
+
+## 16.4 Crash recovery
+
+The current recovery contract is not weakened because:
+
+```text
+logical entry visibility still depends on committed tx_id
+tree-shape WAL is structural and idempotent
+commit WAL still gates user-visible durability
+failpoint matrix is expanded, not reduced
+```
+
+The current certification bar is already explicit: recovery/failpoint cases must preserve zero lost acked commits. 
+
+## 16.5 Memory usage
+
+The design adds one latch per buffer frame, not per key or per row. No unbounded in-memory lock table is required. Compared with row locks, statement caches, and WAL queues, this is a controlled fixed overhead.
+
+## 16.6 On-disk compatibility
+
+Phase 1 does not require changing page format. RedlineDB already has:
+
+```text
+left_sibling
+right_sibling
+high_key
+physical key suffix
+page_lsn
+```
+
+Those fields are sufficient for B-link search and split publication. 
+
+# 17. Rollout plan
+
+## Phase A — instrumentation first
+
+Add metrics around current `structure_lock`:
+
+```text
+lock wait ns
+lock hold ns
+operation type
+leaf page id
+split count
+thread count
+```
+
+Acceptance:
+
+```text
+stats JSON exposes global B-tree lock wait
+bench artifacts include lock wait histograms
+```
+
+## Phase B — frame/page latches
+
+Add buffer-frame read/write latches without changing index logic.
+
+Acceptance:
+
+```text
+all existing tests pass
+no measurable single-thread regression above 2%
+```
+
+## Phase C — B-link lookup/read path
+
+Change `find_leaf_path` to formal B-link movement:
+
+```text
+descend
+check high_key
+move right if needed
+retry on generation/root epoch mismatch
+```
+
+Acceptance:
+
+```text
+point lookup and range scan parity unchanged
+integrity checker validates right-chain/high-key invariants
+```
+
+## Phase D — leaf insert fast path
+
+Remove global lock for no-split leaf inserts.
+
+Acceptance:
+
+```text
+concurrent disjoint leaf insert test proves overlap
+no duplicate/missing entries
+no unique-index regression
+```
+
+## Phase E — split path
+
+Implement leaf split publication via right-link/high-key before parent insertion.
+
+Acceptance:
+
+```text
+split storm tests pass
+recovery failpoints pass
+integrity checker passes after every forced split
+```
+
+## Phase F — internal/root splits
+
+Implement parent/internal/root split without global structure lock.
+
+Acceptance:
+
+```text
+deep tree random insert passes
+root split failpoints pass
+range scans remain correct during root split
+```
+
+## Phase G — remove fallback
+
+Delete old global-lock path after full certification.
+
+Acceptance:
+
+```text
+full 1,728-child certification matrix passes
+failpoint matrix passes
+recovery matrix passes
+SQLite compatibility suite unchanged
+benchmark report shows improved concurrent index writes
+```
+
+# 18. Risk register
+
+| Risk                                   |   Impact | Mitigation                                                                                                  |
+| -------------------------------------- | -------: | ----------------------------------------------------------------------------------------------------------- |
+| Missed rows in range scan during split | Critical | Copy page entries and right-link under read latch; follow captured link                                     |
+| Duplicate rows in range scan           |     High | Same captured-link rule; never rescan new sibling after already scanning old page                           |
+| Parent downlink race                   |     High | Parent insert is idempotent by child page ID                                                                |
+| Root split race                        |     High | Use root/meta latch only for root replacement                                                               |
+| Uncommitted split corrupts recovery    | Critical | Treat tree shape as structural WAL independent of user tx; logical entries remain transactional             |
+| Left-link inconsistency                |   Medium | Forward correctness depends on right links; repair left links opportunistically and validate in maintenance |
+| Single-thread regression               |   Medium | Keep fast path one write latch; benchmark 1T hard gate                                                      |
+| Higher memory                          |      Low | One latch per buffer frame only                                                                             |
+| WAL amplification                      |   Medium | Phase 1 uses safe PageImage; compact structural WAL can be Phase 2                                          |
+
+# 19. Final assessment
+
+The **B-tree `structure_lock` is the right design upgrade** because it is the clearest remaining contradiction in the architecture: RedlineDB advertises and implements multi-writer MVCC, but its index mutation path still serializes disjoint writers through a global B-tree mutex. The current design already has the hard parts needed for B-link trees — physical unique keys, right links, high keys, WAL page LSNs, and MVCC entry visibility — so this is a focused concurrency upgrade rather than a full storage rewrite.
+
+The expected outcome is materially better write scalability on indexed tables and queue-like workloads, while preserving SQLite parity, crash safety, and existing MVCC semantics. The upgrade should not be merged on benchmark claims alone; it should be gated by the same proof discipline RedlineDB already uses: compatibility suite, failpoint matrix, recovery matrix, integrity checker, and deterministic certification artifacts.
+
+[1]: https://raw.githubusercontent.com/neverhuman/RedlineDB/main/crates/kernel/src/index/mutate.rs "raw.githubusercontent.com"
+[2]: https://raw.githubusercontent.com/postgres/postgres/master/src/backend/access/nbtree/README "raw.githubusercontent.com"
+[3]: https://sqlite.org/wal.html "Write-Ahead Logging"
+[4]: https://raw.githubusercontent.com/neverhuman/RedlineDB/main/README.md "raw.githubusercontent.com"
+[5]: https://raw.githubusercontent.com/neverhuman/RedlineDB/main/crates/kernel/src/index/mod.rs "raw.githubusercontent.com"
+

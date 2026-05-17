@@ -182,6 +182,22 @@
       "command": "just fast",
       "purpose": "verify proof-lane recipes execute"
     },
+    "Justfile": {
+      "command": "just fast",
+      "purpose": "verify root proof-lane routing stays executable"
+    },
+    "just/lanes.just": {
+      "command": "just fast",
+      "purpose": "verify split lane definitions stay executable"
+    },
+    "crates/kernel/src/index/cursor/raw.rs": {
+      "command": "just kernel-cursor",
+      "purpose": "verify the split raw cursor implementation and equivalence tests"
+    },
+    "crates/kernel/src/index/cursor/raw/": {
+      "command": "just kernel-cursor",
+      "purpose": "verify the split raw cursor implementation and equivalence tests"
+    },
     "paper/": {
       "command": "just score",
       "purpose": "verify paper artifacts stay routed and reproducible"

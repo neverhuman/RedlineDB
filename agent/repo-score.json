@@ -1,17 +1,17 @@
 {
-  "report_fingerprint": "sha256:7d7934bbd44b361c248d3e9bde79fa65df983832978ae6be0e8ba6506209d758",
-  "input_fingerprint": "sha256:c070ae8a306d1cc5461b0b09131d08ece31b681d7c388bbfe59069d395c1d4c0",
+  "report_fingerprint": "sha256:faab7659a8255b27d12b873f5396a2fe3c4c2cbc0f0aac8fe188c6292404794a",
+  "input_fingerprint": "sha256:9e48bfd7c9c16d30309f4790f96fe2f6f2876e135e7395ebbfbc4fcfb415c24d",
   "policy_fingerprint": "sha256:eaca17b4f280af0700dd95302a79cf419832e7a78800160ec46e58880678c57e",
   "manifest_fingerprints": {
-    "owner_map": "sha256:8129ea85c137bdbab9f3c9af724816f6bc432acb6dcf5ee686884a4eb16f2ea4",
-    "test_map": "sha256:ea003af462d02ba4214931589cc70eaccd97f7365b6ef9b9fa9eef134707da83",
+    "owner_map": "sha256:afbce369c2fce0c4f3a4666226d711343218c50f609e4fe0bcb4f05bf17f53e6",
+    "test_map": "sha256:ec9fbb30a8c93717b15eb968abc207d31c2d6d47dab729e90feff8523ae2bec2",
     "generated_zones": "sha256:88a3264cda9a9f5f3b22a557a844221b605df7cf5de14df9aff00f881f977fa7",
     "boundaries": "sha256:7a7bf640d469152bca6f0a9a4feabb90ae6eb170f3fe33a196871bfefb3936e3",
-    "proof_lanes": "sha256:46832ba6baeeaf0c88962f9ec7e746ca1142e84ae277f195b19cc91a29af5f6a",
+    "proof_lanes": "sha256:025f75fdc93b45396fa998bf82b8796077f4fec378a08fd307e55306ece34888",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1778958810",
+  "generated_at": "1779000238",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -21,29 +21,36 @@
   "target_stack_id": "rust-ts-vite-react-postgres-bounded-python",
   "target_stack": "Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service",
   "claimed_conformance_level": "HL3",
-  "observed_conformance_level": "HL3",
-  "conformance_decision": "pass",
-  "conformance_blockers": [],
+  "observed_conformance_level": "HL2",
+  "conformance_decision": "block",
+  "conformance_blockers": [
+    "HLT-023-INPUT-BOUNDARY-GAP on crates/cli/src/dot/io_cmd.rs",
+    "HLT-001-DEAD-MARKER on crates/cli/src/dot/mod.rs",
+    "HLT-001-DEAD-MARKER on crates/sql/src/exec/attach.rs",
+    "HLT-001-DEAD-MARKER on crates/sql/src/exec/attach.rs",
+    "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/scalar/row/lookup.rs",
+    "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/window.rs"
+  ],
   "repo": ".",
-  "run_id": "1778958810",
-  "started_at": "1778958810",
-  "elapsed_ms": 3468,
+  "run_id": "1779000238",
+  "started_at": "1779000238",
+  "elapsed_ms": 3471,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 91,
-  "raw_score": 91,
+  "score": 64,
+  "raw_score": 84,
   "decision": {
-    "status": "pass",
+    "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 0,
+    "hard_findings": 6,
     "soft_findings": 2,
     "ratchet": {
-      "baseline_score": 91,
+      "baseline_score": 64,
       "allowed_drop": 0,
-      "passed": true,
+      "passed": false,
       "score_delta": 0,
       "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -54,7 +61,7 @@
     }
   },
   "git": {
-    "head": "7bbea40",
+    "head": "2417a40",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -71,14 +78,18 @@
       "medium",
       "low"
     ],
-    "mode": "standard",
+    "mode": "advisory",
     "standard_version": "0.9.0",
     "auditor_version": "1.4.1",
     "schema_version": "1.9.0",
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
-  "caps_applied": [],
+  "caps_applied": [
+    "fallback-soup-in-product-code",
+    "future-hostile-dead-language-in-product-code",
+    "input-boundary-gap"
+  ],
   "hard_rules": [
     {
       "id": "no-root-agent-instructions",
@@ -295,7 +306,8 @@
         "reference-profile cell `ops` has local AGENTS.md guidance",
         "root `README.md` routes to workspace layout",
         "owner map covers audited paths",
-        "test map covers audited paths"
+        "test map covers audited paths",
+        "authored code file exceeds 500 LOC"
       ],
       "notes": []
     },
@@ -346,7 +358,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1167",
+        "rust bad-behavior advisory signals: 1265",
         "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -356,18 +368,23 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 80,
-      "weighted_points": 9.6,
+      "score": 23,
+      "weighted_points": 2.76,
       "evidence": [
-        "largest authored code file: crates/ffi/src/sqlite3_api.rs (499 LOC)",
+        "largest authored code file: crates/sql/src/exec/cte.rs (689 LOC)",
+        "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 29 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1167",
+        "copy-code advisory classes found: 33 (advisory only, no score impact)",
+        "fallback soup marker found",
+        "future-hostile/dead-language marker found",
+        "rust bad-behavior advisory signals: 1265",
         "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
       ],
-      "notes": []
+      "notes": [
+        "product/runtime code contains future-hostile or dead-language terms"
+      ]
     },
     {
       "name": "Data truth and workflow safety",
@@ -1034,23 +1051,7 @@
       "cost-budget"
     ]
   },
-  "security_evidence": {
-    "artifact": {
-      "path": "target/jankurai/security/evidence.json",
-      "envelope_exit_code": 0,
-      "elapsed_ms": 45837,
-      "wrapper_strict": true,
-      "profile": "ci",
-      "commands_ran": 1,
-      "commands_skipped": 0,
-      "commands_failed": 0,
-      "required_commands_skipped": 0,
-      "required_commands_failed": 0,
-      "blocking_commands": [],
-      "generated_at": "1778957800",
-      "git_head": "7bbea409be5a08276141f8b9c35a84593efefcee"
-    }
-  },
+  "security_evidence": {},
   "boundaries": {
     "artifact": {
       "path": "agent/boundaries.toml",
@@ -1068,7 +1069,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-16T19:13:27.282964+00:00",
+    "generated_at": "2026-05-17T06:43:55.134733+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1106,22 +1107,94 @@
       ]
     },
     "summary": {
-      "files_scanned": 493,
-      "files_considered": 167,
-      "active_files": 167,
+      "files_scanned": 673,
+      "files_considered": 268,
+      "active_files": 268,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 29,
+      "warning_classes": 33,
       "hard_instances": 0,
-      "warning_instances": 69,
-      "duplicate_lines": 38,
-      "duplicate_tokens": 103,
-      "duplicate_bytes": 1020,
-      "total_redundant_lines": 51,
-      "total_redundant_tokens": 126,
-      "total_redundant_bytes": 1284
+      "warning_instances": 77,
+      "duplicate_lines": 59,
+      "duplicate_tokens": 169,
+      "duplicate_bytes": 1656,
+      "total_redundant_lines": 72,
+      "total_redundant_tokens": 192,
+      "total_redundant_bytes": 1920
     },
     "classes": [
+      {
+        "id": "copy-code-unit-rust-af4480328cf37d85",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "days_in_month",
+        "duplicate_lines": 10,
+        "duplicate_tokens": 34,
+        "duplicate_bytes": 259,
+        "instance_count": 2,
+        "total_redundant_lines": 10,
+        "total_redundant_tokens": 34,
+        "total_redundant_bytes": 259,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "3962ba4d33b36a4b",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/datetime/format.rs",
+            "language": "rust",
+            "start_line": 60,
+            "end_line": 70,
+            "unit_name": "days_in_month"
+          },
+          {
+            "path": "crates/sql/src/datetime/modifiers.rs",
+            "language": "rust",
+            "start_line": 104,
+            "end_line": 114,
+            "unit_name": "days_in_month"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-97e7f29fa03574a9",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "select_item_contains_aggregate",
+        "duplicate_lines": 6,
+        "duplicate_tokens": 20,
+        "duplicate_bytes": 257,
+        "instance_count": 2,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 20,
+        "total_redundant_bytes": 257,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b1b224ee599ed2f1",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/agg/select.rs",
+            "language": "rust",
+            "start_line": 9,
+            "end_line": 15,
+            "unit_name": "select_item_contains_aggregate"
+          },
+          {
+            "path": "crates/sql/src/planner/access/projection.rs",
+            "language": "rust",
+            "start_line": 94,
+            "end_line": 100,
+            "unit_name": "select_item_contains_aggregate"
+          }
+        ]
+      },
       {
         "id": "copy-code-unit-rust-d38ffff3c586fd30",
         "kind": "exact_unit_same_name",
@@ -1201,6 +1274,41 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-d228f55623ca68a4",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 4,
+        "duplicate_tokens": 9,
+        "duplicate_bytes": 86,
+        "instance_count": 2,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 9,
+        "total_redundant_bytes": 86,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b0e374cbf5bf8732",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+            "language": "rust",
+            "start_line": 54,
+            "end_line": 58,
+            "unit_name": "lookup_qualified_column_local"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+            "language": "rust",
+            "start_line": 115,
+            "end_line": 119,
+            "unit_name": "lookup_qualified_column"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-8bd94ae20fc58e41",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -1222,8 +1330,8 @@
           {
             "path": "crates/kernel/src/format/page.rs",
             "language": "rust",
-            "start_line": 458,
-            "end_line": 460,
+            "start_line": 102,
+            "end_line": 104,
             "unit_name": "checksum_page_bytes"
           },
           {
@@ -1306,17 +1414,10 @@
         "total_redundant_bytes": 60,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "ee3653be569c7cc8",
+        "fingerprint": "c9f766d8c297d940",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
-          {
-            "path": "crates/kernel/src/vector/diskann/mod.rs",
-            "language": "rust",
-            "start_line": 359,
-            "end_line": 360,
-            "unit_name": "fmt"
-          },
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
@@ -1325,17 +1426,24 @@
             "unit_name": "as_ref"
           },
           {
-            "path": "crates/sql/src/exec/expr/scalar/row.rs",
+            "path": "crates/sql/src/exec/expr/scalar/row/model.rs",
             "language": "rust",
-            "start_line": 346,
-            "end_line": 347,
+            "start_line": 64,
+            "end_line": 65,
+            "unit_name": "to_owned_row"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/model.rs",
+            "language": "rust",
+            "start_line": 77,
+            "end_line": 78,
             "unit_name": "context"
           },
           {
-            "path": "crates/sql/src/exec/expr/scalar/row.rs",
+            "path": "crates/sql/src/exec/expr/scalar/row/model.rs",
             "language": "rust",
-            "start_line": 359,
-            "end_line": 360,
+            "start_line": 87,
+            "end_line": 88,
             "unit_name": "values"
           }
         ]
@@ -1524,7 +1632,7 @@
         "total_redundant_bytes": 34,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "c4e65966a167b4e9",
+        "fingerprint": "a2bda48ddf0028db",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
@@ -1536,17 +1644,17 @@
             "unit_name": "serial_type"
           },
           {
-            "path": "crates/kernel/src/catalog/stats.rs",
+            "path": "crates/kernel/src/catalog/stats/wire.rs",
             "language": "rust",
-            "start_line": 342,
-            "end_line": 343,
+            "start_line": 162,
+            "end_line": 163,
             "unit_name": "write_opt_value"
           },
           {
-            "path": "crates/kernel/src/catalog/stats.rs",
+            "path": "crates/kernel/src/catalog/stats/wire.rs",
             "language": "rust",
-            "start_line": 353,
-            "end_line": 354,
+            "start_line": 173,
+            "end_line": 174,
             "unit_name": "write_value"
           }
         ]
@@ -1601,22 +1709,22 @@
         "total_redundant_bytes": 11,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "ecc14a2b7f790867",
+        "fingerprint": "8dfc6ea7da0abb1d",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
           {
-            "path": "crates/bench/src/certify/scheduler.rs",
+            "path": "crates/bench/src/certify/scheduler/dispatch.rs",
             "language": "rust",
-            "start_line": 392,
-            "end_line": 394,
+            "start_line": 197,
+            "end_line": 199,
             "unit_name": "which_strace"
           },
           {
-            "path": "crates/kernel/src/engine/runtime.rs",
+            "path": "crates/kernel/src/engine/runtime/commit.rs",
             "language": "rust",
-            "start_line": 42,
-            "end_line": 44,
+            "start_line": 30,
+            "end_line": 32,
             "unit_name": "commit_failure_armed_for_thread"
           }
         ]
@@ -1636,22 +1744,22 @@
         "total_redundant_bytes": 70,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "b669ec9f483b8c1a",
+        "fingerprint": "03841e8500759e3b",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
           {
-            "path": "crates/sql/src/exec/expr/scalar/row.rs",
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
             "language": "rust",
-            "start_line": 162,
-            "end_line": 163,
+            "start_line": 159,
+            "end_line": 160,
             "unit_name": "row_matches_qualifier"
           },
           {
-            "path": "crates/sql/src/exec/expr/scalar/row.rs",
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
             "language": "rust",
-            "start_line": 166,
-            "end_line": 167,
+            "start_line": 163,
+            "end_line": 164,
             "unit_name": "row_matches_joined_qualifier"
           }
         ]
@@ -1742,22 +1850,22 @@
         "total_redundant_bytes": 39,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "f95452102883661c",
+        "fingerprint": "76d7b982dc2f5f03",
         "reason": "same-name semantic unit copied across multiple files",
         "recommended_action": "keep the named unit in one owner and call it from the other sites",
         "instances": [
           {
-            "path": "crates/kernel/src/json/wire.rs",
+            "path": "crates/kernel/src/json/wire/iter.rs",
             "language": "rust",
-            "start_line": 249,
-            "end_line": 250,
+            "start_line": 20,
+            "end_line": 21,
             "unit_name": "new"
           },
           {
-            "path": "crates/kernel/src/json/wire.rs",
+            "path": "crates/kernel/src/json/wire/iter.rs",
             "language": "rust",
-            "start_line": 321,
-            "end_line": 322,
+            "start_line": 91,
+            "end_line": 92,
             "unit_name": "new"
           }
         ]
@@ -1973,6 +2081,41 @@
             "start_line": 222,
             "end_line": 223,
             "unit_name": "parameter_count"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-0323ced296fc0c26",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 3,
+        "duplicate_bytes": 34,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 3,
+        "total_redundant_bytes": 34,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "03841e8500759e3b",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+            "language": "rust",
+            "start_line": 178,
+            "end_line": 179,
+            "unit_name": "lookup_table_column"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+            "language": "rust",
+            "start_line": 215,
+            "end_line": 216,
+            "unit_name": "lookup_excluded_column"
           }
         ]
       },
@@ -2208,22 +2351,22 @@
         "total_redundant_bytes": 22,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "f95452102883661c",
+        "fingerprint": "76d7b982dc2f5f03",
         "reason": "same-name semantic unit copied across multiple files",
         "recommended_action": "keep the named unit in one owner and call it from the other sites",
         "instances": [
           {
-            "path": "crates/kernel/src/json/wire.rs",
+            "path": "crates/kernel/src/json/wire/iter.rs",
             "language": "rust",
-            "start_line": 273,
-            "end_line": 274,
+            "start_line": 44,
+            "end_line": 45,
             "unit_name": "child_count"
           },
           {
-            "path": "crates/kernel/src/json/wire.rs",
+            "path": "crates/kernel/src/json/wire/iter.rs",
             "language": "rust",
-            "start_line": 345,
-            "end_line": 346,
+            "start_line": 115,
+            "end_line": 116,
             "unit_name": "child_count"
           }
         ]
@@ -2515,20 +2658,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 80 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 23 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/ffi/src/sqlite3_api.rs (499 LOC)",
+        "largest authored code file: crates/sql/src/exec/cte.rs (689 LOC)",
+        "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 29 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1167"
+        "copy-code advisory classes found: 33 (advisory only, no score impact)"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:d9e3e689063b2da5d656095df4b5a3e7f15480211448beff07a2c8a9e0912be1",
+      "fingerprint": "sha256:a7b1e825c6f42f23dfe2440e8cf18d96b5ebc94c5e8646a3d8d43f3dfd736d26",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -2558,6 +2701,144 @@
       "lane": "fast",
       "docs_url": "docs/testing.md",
       "owner": "workspace"
+    },
+    {
+      "severity": "high",
+      "category": "security",
+      "path": "crates/cli/src/dot/io_cmd.rs",
+      "problem": "unsafe or unvalidated input boundary marker appears in product code",
+      "agent_fix": "replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests",
+      "evidence": [
+        "let select_sql = format!(\"SELECT * FROM {}\", quote_ident(table));"
+      ],
+      "check_id": "HLT-023-INPUT-BOUNDARY-GAP:security",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just security",
+      "fingerprint": "sha256:c3ec80535ebc33353514e0fd11d0d9b935aa728240f4b4439f05efc8c0643838",
+      "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+      "tlr": "Security, secrets, agency",
+      "lane": "security",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "cli-shell",
+      "line": 200,
+      "matched_term": "string sql",
+      "reason": "input handling risk needs deterministic negative tests"
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/cli/src/dot/mod.rs",
+      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/cli/src/dot/mod.rs:19",
+        "future-hostile/dead-language term `legacy` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:eb251b166b5847d01230b905e49cf98384d67017bbeb1205353d316b53546fbd",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "cli-shell",
+      "line": 19
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/sql/src/exec/attach.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/sql/src/exec/attach.rs:47",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:176eada490c2949ca3bf6116071a1d80801157772845c2ad3f37980e3ce8cd3f",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "sql-parser-planner-executor",
+      "line": 47
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/sql/src/exec/attach.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/sql/src/exec/attach.rs:67",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:e0b94a2d3c55b109cbe686cc4ffb14bdd98878f7cac1a4b4cb2177497c7a6c57",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "sql-parser-planner-executor",
+      "line": 67
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+      "problem": "fallback soup detected in product code",
+      "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
+      "evidence": [
+        "crates/sql/src/exec/expr/scalar/row/lookup.rs:48 .ok_or_else(|| Error::UnknownColumn(name.to_owned())),"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:27c1877485c40b292df549fb62880d0ec4e3fa9cee6dda43dd7c746f849a5e08",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "sql-parser-planner-executor",
+      "line": 48
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/sql/src/exec/expr/window.rs",
+      "problem": "future-hostile/dead-language term `shim` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/sql/src/exec/expr/window.rs:5",
+        "future-hostile/dead-language term `shim` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:29891aecd9ac62d787f7372b476ccaec7fe5bbb07b6902361b46d6de98001538",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "sql-parser-planner-executor",
+      "line": 5
     }
   ],
   "agent_fix_queue": [
@@ -2572,6 +2853,56 @@
       "why": "`Build speed signals` scored 80 below the standard floor of 85"
     },
     {
+      "path": "crates/cli/src/dot/io_cmd.rs",
+      "priority": "high",
+      "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+      "tlr": "Security, secrets, agency",
+      "lane": "security",
+      "owner": "cli-shell",
+      "task": "replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests",
+      "why": "unsafe or unvalidated input boundary marker appears in product code"
+    },
+    {
+      "path": "crates/cli/src/dot/mod.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "cli-shell",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `legacy` appears in product/runtime code"
+    },
+    {
+      "path": "crates/sql/src/exec/attach.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "sql-parser-planner-executor",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "sql-parser-planner-executor",
+      "task": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
+      "why": "fallback soup detected in product code"
+    },
+    {
+      "path": "crates/sql/src/exec/expr/window.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "sql-parser-planner-executor",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `shim` appears in product/runtime code"
+    },
+    {
       "path": ".",
       "priority": "medium",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -2579,7 +2910,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 80 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 23 below the standard floor of 85"
     }
   ]
 }

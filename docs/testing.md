@@ -11,11 +11,30 @@ readable repair receipts.
 
 | Lane                                 | Proves                                                                                                |
 |--------------------------------------|--------------------------------------------------------------------------------------------------------|
-| `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Default for edits. |
+| `setup`                              | Prime the workspace build cache before a wider proof run.                                             |
+| `check`                              | Root validation gate: fast, score, security, rust-map, rust-witness, and rust-diagnose.              |
+| `test`                               | Fast workspace test proof.                                                                            |
+| `verify`                             | Alias for the root validation gate.                                                                   |
+| `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Default for edits. |
+| `fast-check`                         | Workspace compile proof for the default health lane.                                                  |
+| `fast-test`                          | Workspace test proof for the default health lane.                                                     |
 | `hygiene`                            | Format and file-size only; cheapest pre-commit gate.                                                  |
 | `clippy`                             | `cargo clippy --workspace --all-targets -- -D warnings`.                                              |
 | `medium`                             | `fast` plus `--help` smoke for `cli` and `server`.                                                    |
 | `phase8-smoke`                       | Same as `medium`; pinned for phase-8 regression triage.                                               |
+| `kernel-cursor`                      | Cursor-specific kernel regression tests without the full workspace sweep.                             |
+| `cache-warm`                         | Prime the workspace build cache before a wider proof run.                                             |
+| `sql-parity`                         | Focused SQLite parity tests for SQL planner/executor changes.                                         |
+| `ffi-abi`                            | C ABI compatibility tests for the SQLite shim surface.                                                |
+| `cli-shell`                          | CLI compatibility tests for the shell/batch front end.                                                |
+| `kernel-check`                       | Targeted `redlinedb-kernel` compile proof.                                                            |
+| `kernel-test`                        | Targeted `redlinedb-kernel` test proof.                                                                |
+| `sql-check`                          | Targeted `redlinedb-sql` compile proof.                                                               |
+| `sql-test`                           | Targeted `redlinedb-sql` test proof.                                                                   |
+| `ffi-check`                          | Targeted `redlinedb-ffi` compile proof.                                                               |
+| `ffi-test`                           | Targeted `redlinedb-ffi` test proof.                                                                   |
+| `cli-check`                          | Targeted `redlinedb-cli` compile proof.                                                               |
+| `cli-test`                           | Targeted `redlinedb-cli` test proof.                                                                   |
 | `phase9-smoke`                       | Bench harness unit tests plus a one-rep certify and a compat sweep.                                   |
 | `phase9-compat-full`                 | Full `compat --engine both` matrix against `crates/bench/compat/`.                                    |
 | `phase9-certification`               | 5-rep + 1-warmup certify against `crates/bench/bench/certification.toml`.                             |
@@ -42,6 +61,8 @@ rtk just <lane-name>
 ```
 
 (or invoke the command list from the TOML directly).
+
+For narrow repair loops, prefer the package-scoped lanes above over `fast` when the touched surface is already known. They stay deterministic without forcing a workspace-wide run.
 
 ## Budgets and kill-switches
 
