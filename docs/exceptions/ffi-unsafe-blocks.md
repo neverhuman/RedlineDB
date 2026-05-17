@@ -31,6 +31,19 @@ New files added in B1-B5:
   (`sqlite3_create_function{,_v2,16}`).
 - `crates/ffi/src/sqlite3_api/value.rs` — B1 value family
   (`sqlite3_value_{type,int,int64,double,text,blob,bytes}`).
+- `crates/ffi/src/sqlite3_api/bind.rs` — B1 bind surface adapter
+  (`sqlite3_bind_*`) — reads `*mut sqlite3_stmt` to obtain the owning
+  `*mut sqlite3` handle for status mirroring.
+- `crates/ffi/src/sqlite3_api/core.rs` — B5 open / close family
+  (`sqlite3_open*`, `sqlite3_close*`, `sqlite3_db_filename`,
+  `sqlite3_libversion`, `sqlite3_sourceid`).
+- `crates/ffi/src/sqlite3_api/exec.rs` — `sqlite3_exec` SQLite-style
+  one-shot batch executor with callback dispatch.
+- `crates/ffi/src/sqlite3_api/meta.rs` — `sqlite3_total_changes*`,
+  `sqlite3_get_autocommit`, and the connection-level meta accessors.
+- `crates/ffi/src/sqlite3_api/stmt.rs` — `sqlite3_stmt_readonly`,
+  `sqlite3_stmt_busy`, `sqlite3_sql`, `sqlite3_stmt_status`, and the
+  remaining stmt-side aliases that read `*mut sqlite3_stmt`.
 
 ## Why this exception is allowed
 
