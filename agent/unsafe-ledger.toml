@@ -750,3 +750,71 @@ line = 307
 owner = "c-abi"
 invariant = "errmsg confirmed non-null; writing CString::into_raw whose ownership transfers to caller (paired with rldb_free)"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
+
+# ---- SQLite-full-parity B1-B4: value/result/context/UDF/collation/blob/hooks
+# Each pub unsafe extern "C" fn carries a `# Safety` doc comment declaring
+# the caller obligations the FFI ABI imposes; the ledger groups by file with
+# line numbers matching the post-B5 state. Proof: per-file integration tests
+# in crates/ffi/tests/{value_result,udf_register,collation_register,blob_io,hooks}.rs.
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api/value.rs"
+line = 67
+owner = "c-abi"
+detector = "rust.unsafe.extern-fn"
+invariant = "sqlite3_value_* family: caller MUST pass *mut RldbValue produced by Box::into_raw in this crate; we null-check first and only borrow shared for the call duration. Validated by crates/ffi/tests/value_result.rs::null_pointers_to_value_accessors_are_safe."
+proof_lane = "rtk cargo test -p redlinedb-ffi --test value_result --quiet --locked"
+proof_test = "redlinedb-ffi::value_result::null_pointers_to_value_accessors_are_safe"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api/result.rs"
+line = 17
+owner = "c-abi"
+detector = "rust.unsafe.extern-fn"
+invariant = "sqlite3_result_* family: caller MUST pass *mut RldbContext produced by the UDF dispatcher (or a test); we null-check first. The text/blob variants additionally require valid byte buffers per documented # Safety contracts and route through caller_buffer for the explicit-length branch."
+proof_lane = "rtk cargo test -p redlinedb-ffi --test value_result --quiet --locked"
+proof_test = "redlinedb-ffi::value_result::null_pointers_to_result_setters_are_no_op"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api/context.rs"
+line = 72
+owner = "c-abi"
+detector = "rust.unsafe.extern-fn"
+invariant = "sqlite3_context_db_handle / sqlite3_user_data: caller MUST pass *mut RldbContext produced by the UDF dispatcher (or a test); we null-check first and only borrow shared for the call duration. Validated by crates/ffi/tests/value_result.rs."
+proof_lane = "rtk cargo test -p redlinedb-ffi --test value_result --quiet --locked"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api/udf.rs"
+line = 153
+owner = "c-abi"
+detector = "rust.unsafe.extern-fn"
+invariant = "sqlite3_create_function* family: caller MUST pass NUL-terminated name and a valid (db, callback, user_data) triple per the SQLite ABI; we null-check db/name and store the callback in a global Mutex-guarded registry keyed by (connection_id, name, arity). Validated by crates/ffi/tests/udf_register.rs."
+proof_lane = "rtk cargo test -p redlinedb-ffi --test udf_register --quiet --locked"
+proof_test = "redlinedb-ffi::udf_register::times_two_scalar_udf_invoked_from_select"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api/collation.rs"
+line = 126
+owner = "c-abi"
+detector = "rust.unsafe.extern-fn"
+invariant = "sqlite3_create_collation* / sqlite3_collation_needed: caller MUST pass NUL-terminated name and either NULL or a valid C-callback per the SQLite ABI; we null-check db/name and store in a global Mutex-guarded registry. Validated by crates/ffi/tests/collation_register.rs."
+proof_lane = "rtk cargo test -p redlinedb-ffi --test collation_register --quiet --locked"
+proof_test = "redlinedb-ffi::collation_register::reverse_nocase_orders_descending"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api/blob.rs"
+line = 98
+owner = "c-abi"
+detector = "rust.unsafe.extern-fn"
+invariant = "sqlite3_blob_* family: caller MUST pass NUL-terminated database/table/column strings; reads/writes route through caller_buffer with explicit length checks bounded by the cell's current byte count (SQLite blob API never resizes). Validated by crates/ffi/tests/blob_io.rs."
+proof_lane = "rtk cargo test -p redlinedb-ffi --test blob_io --quiet --locked"
+proof_test = "redlinedb-ffi::blob_io::open_read_write_close_round_trip"
+
+[[entries]]
+file = "crates/ffi/src/sqlite3_api/hooks.rs"
+line = 82
+owner = "c-abi"
+detector = "rust.unsafe.extern-fn"
+invariant = "sqlite3_*_hook / sqlite3_trace / sqlite3_profile / sqlite3_busy_handler / sqlite3_set_authorizer: caller MUST pass non-NULL db and either NULL (unregister) or a valid C callback; we null-check db, store callbacks per-connection in Mutex-guarded HookSlots, and only invoke them from the FFI shim at well-defined sites (exec walk, blob write). Validated by crates/ffi/tests/hooks.rs."
+proof_lane = "rtk cargo test -p redlinedb-ffi --test hooks --quiet --locked"
+proof_test = "redlinedb-ffi::hooks::commit_hook_fires_and_can_veto"

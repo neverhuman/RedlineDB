@@ -288,8 +288,15 @@ pub(super) fn eval_function(
             }
             crate::exec::expr::regexp_result(values[1].clone(), values[0].clone(), false)
         }
-        _ => Err(Error::UnsupportedSql(format!(
-            "unsupported function {name}"
-        ))),
+        _ => {
+            let db = crate::udf::current_db();
+            match crate::udf::call_registered_scalar(db, &name, &values) {
+                Some(Ok(v)) => Ok(v),
+                Some(Err(msg)) => Err(Error::UnsupportedSql(msg)),
+                None => Err(Error::UnsupportedSql(format!(
+                    "unsupported function {name}"
+                ))),
+            }
+        }
     }
 }

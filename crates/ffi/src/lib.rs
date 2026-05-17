@@ -68,3 +68,19 @@ pub use snapshot::{
 };
 pub use stmt::{rldb_clear_bindings, rldb_finalize, rldb_prepare_v2, rldb_reset, rldb_step};
 pub use types::{rldb, rldb_backup, rldb_config, rldb_stmt, sqlite3, sqlite3_backup, sqlite3_stmt};
+
+// New (B1–B4) C ABI surface re-exports for in-crate Rust callers (tests).
+pub use sqlite3_api::blob::{
+    RldbBlob, sqlite3_blob_bytes, sqlite3_blob_close, sqlite3_blob_open, sqlite3_blob_read,
+    sqlite3_blob_reopen, sqlite3_blob_write,
+};
+pub use sqlite3_api::collation::{
+    sqlite3_collation_needed, sqlite3_create_collation, sqlite3_create_collation_v2,
+};
+pub use sqlite3_api::hooks::{
+    sqlite3_busy_handler, sqlite3_commit_hook, sqlite3_profile, sqlite3_rollback_hook,
+    sqlite3_set_authorizer, sqlite3_trace, sqlite3_update_hook,
+};
+pub use sqlite3_api::udf::{
+    sqlite3_create_function, sqlite3_create_function16, sqlite3_create_function_v2,
+};
