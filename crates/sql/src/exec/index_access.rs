@@ -130,6 +130,14 @@ pub(crate) fn try_match_index_access(
         if index.meta_page_id.is_none() || engine.index_handle(index.index_id).is_none() {
             continue;
         }
+        // A6 SQL-D: partial indexes only contain rows matching their
+        // WHERE predicate; the planner may use one only when the query
+        // WHERE provably implies the index WHERE (today: exact match).
+        // Otherwise we risk missing rows that exist in the heap but
+        // were never inserted into the partial index.
+        if !crate::exec::index_partial::query_implies_index_predicate(selection, index) {
+            continue;
+        }
         let Some(first_key) = index.keys.first() else {
             continue;
         };
