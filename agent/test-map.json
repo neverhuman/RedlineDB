@@ -317,6 +317,16 @@
       "command": "rtk cargo test -p redlinedb-ffi --test safety_invariants --quiet --locked",
       "purpose": "prove documented ownership invariants for the FFI surface"
     },
+    "crates/ffi/tests/symbol_diff.rs": {
+      "command": "rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked -- --ignored",
+      "purpose": "D6 FFI symbol-diff against libsqlite3 public surface (allowlisted exclusions in crates/ffi/tests/symbol_allowlist.toml)",
+      "proof_lane": "ffi-symbol-diff"
+    },
+    "crates/bench/tests/fuzz_parity.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test fuzz_parity --quiet --locked -- --test-threads=1",
+      "purpose": "D7 differential SQL fuzz parity gate (rate-monotone baseline at target/proof/sqlite-full-parity/fuzz-divergence.txt)",
+      "proof_lane": "fuzz-parity"
+    },
     "contracts/c-abi/": {
       "command": "rtk cargo test -p redlinedb-ffi --quiet --locked",
       "purpose": "exercise the C ABI surface declared in this header"

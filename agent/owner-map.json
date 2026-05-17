@@ -30,6 +30,10 @@
     "crates/": "tools",
     "crates/bench": "bench-harness",
     "crates/bench/src/checksum.rs": "phase10-real-row-hashes",
+    "crates/bench/src/fuzz/": "sqlite-parity-fuzz-d7",
+    "crates/bench/tests/fuzz_parity.rs": "sqlite-parity-fuzz-d7",
+    "crates/ffi/tests/symbol_diff.rs": "sqlite-parity-symbol-diff-d6",
+    "crates/ffi/tests/symbol_allowlist.toml": "sqlite-parity-symbol-diff-d6",
     "crates/cli": "cli-shell",
     "crates/cli/src": "cli-backup-restore",
     "crates/cli/src/dot/": "cli-shell",
@@ -82,6 +86,7 @@
     "schemas/coverage-*.schema.json": "agent",
     "scripts/": "tools",
     "scripts/bench/": "bench-harness",
+    "scripts/parity/": "sqlite-parity-symbol-diff-d6",
     "tips/": "standard",
     "install.sh": "workspace",
     "tools/": "tools"
