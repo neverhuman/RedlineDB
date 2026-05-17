@@ -395,6 +395,10 @@ pub(in crate::exec) fn insert_row_with_resolution(
             values,
             rowid,
         )?;
+        // A6 SQLite parity: verify every declared FK against its parent.
+        // Deferred constraints are queued for COMMIT; immediate ones must
+        // resolve right now.
+        crate::exec::fk::enforce_fk_on_insert(conn, session, tx, table, values, rowid)?;
         session.last_insert_rowid = Some(rowid.0 as i64);
         return Ok(InsertOutcome::Inserted {
             rowid,

@@ -227,11 +227,16 @@ fn cte_now_executes() {
 }
 
 #[test]
-fn create_view_returns_not_implemented_error() {
+fn create_view_now_executes() {
+    // Views are implemented (Lane A5-views); this test confirms the
+    // regression boundary. Differential coverage lives in
+    // `parity_view.rs`.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
-    let res = c.execute("CREATE VIEW v AS SELECT a FROM t");
-    assert_unsupported(res, "not yet implemented");
+    c.execute("INSERT INTO t VALUES (1)").expect("insert");
+    c.execute("CREATE VIEW v AS SELECT a FROM t")
+        .expect("CREATE VIEW should execute");
+    c.execute("SELECT a FROM v").expect("SELECT FROM view should execute");
 }
 
 #[test]

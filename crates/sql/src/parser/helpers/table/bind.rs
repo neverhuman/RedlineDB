@@ -20,6 +20,11 @@ pub(crate) fn bind_table_name(
     schema: &SchemaSnapshot,
     name: &ObjectName,
 ) -> Result<Arc<redlinedb_kernel::catalog::TableDef>> {
+    // View resolution: if the name resolves to a persisted view, materialize
+    // its body and return a synthetic TableDef backed by row storage.
+    if let Some(bound) = crate::exec::view::try_resolve_view_bound_table(schema, name, None)? {
+        return Ok(bound.table);
+    }
     let qualified = parse_qualified_name(name.clone())?;
     Ok(lookup_table(schema, &qualified)?)
 }

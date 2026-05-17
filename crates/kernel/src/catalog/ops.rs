@@ -4,16 +4,16 @@ use std::sync::Arc;
 use super::affinity::derive_affinity;
 use super::ddl::{
     AlterTableOperationSpec, AlterTableSpec, ColumnConstraintSpec, ConflictAction, CreateIndexSpec,
-    CreateTableSpec, DropIndexSpec, DropTableSpec, IndexColumnSpec, IndexOrigin,
-    TableConstraintSpec,
+    CreateTableSpec, CreateViewSpec, DropIndexSpec, DropTableSpec, DropViewSpec, IndexColumnSpec,
+    IndexOrigin, TableConstraintSpec,
 };
 use super::expr::{ExprAst, compile_expr};
 use super::ids::{ColumnId, ConstraintId, IndexId, ObjectId, SchemaId, TableId};
 use super::key::{IndexKeyDef, IndexKeySource, NullOrder};
 use super::names::{DbName, QualifiedName};
 use super::schema::{
-    CheckDef, ColumnDef, ConstraintDef, ConstraintKind, IndexDef, SchemaEpoch, SchemaSnapshot,
-    TableDef,
+    CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef, SchemaEpoch,
+    SchemaSnapshot, TableDef, ViewDef,
 };
 use super::value::OwnedValue;
 use crate::format::{PageId, RelId};
@@ -76,6 +76,7 @@ pub fn apply_create_table(
     let mut constraints = Vec::new();
     let mut checks = Vec::new();
     let mut indexes = Vec::new();
+    let mut foreign_keys: Vec<ForeignKeyDef> = Vec::new();
     let mut rowid_alias_column = None;
 
     for (ordinal, column) in spec.columns.iter().enumerate() {
@@ -302,6 +303,39 @@ pub fn apply_create_table(
                     expr: compile_expr(expr),
                 });
             }
+            TableConstraintSpec::ForeignKey {
+                name,
+                columns: fk_columns,
+                parent_table,
+                parent_columns,
+                on_delete,
+                on_update,
+                deferred,
+            } => {
+                let constraint_id = ConstraintId(next_object_id.0);
+                next_object_id.0 += 1;
+                let mut ordinals = Vec::with_capacity(fk_columns.len());
+                for col in fk_columns {
+                    let folded = col.folded().to_owned().into_boxed_str();
+                    match column_lookup.get(&folded) {
+                        Some(idx) => ordinals.push(*idx),
+                        None => return Err(Error::ObjectNotFound),
+                    }
+                }
+                foreign_keys.push(ForeignKeyDef {
+                    constraint_id,
+                    name: name.as_ref().map(|n| n.original().into()),
+                    columns: ordinals,
+                    parent_table: parent_table.original().into(),
+                    parent_columns: parent_columns
+                        .iter()
+                        .map(|n| n.original().into())
+                        .collect(),
+                    on_delete: *on_delete,
+                    on_update: *on_update,
+                    deferred: *deferred,
+                });
+            }
         }
     }
 
@@ -315,6 +349,7 @@ pub fn apply_create_table(
         indexes,
         constraints,
         checks,
+        foreign_keys,
         rowid_alias_column,
         flags: u64::from(spec.strict),
         normalized_sql: spec.normalized_sql.map(|sql| sql.into_boxed_str()),

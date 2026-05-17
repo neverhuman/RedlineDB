@@ -14,13 +14,14 @@ mod stats;
 mod store;
 mod system;
 mod value;
+mod views;
 
 pub use affinity::{Affinity, CoerceError, apply_affinity, derive_affinity};
 pub use bootstrap::bootstrap_schema;
 pub use ddl::{
     AlterTableOperationSpec, AlterTableSpec, ColumnConstraintSpec, ColumnSpec, ConflictAction,
-    CreateIndexSpec, CreateTableSpec, DropIndexSpec, DropTableSpec, IndexColumnSpec, IndexOrigin,
-    TableConstraintSpec,
+    CreateIndexSpec, CreateTableSpec, CreateViewSpec, DropIndexSpec, DropTableSpec, DropViewSpec,
+    FkAction, IndexColumnSpec, IndexOrigin, TableConstraintSpec,
 };
 pub use expr::{
     CompiledExpr, EvalScratch, ExprAst, ExprError, ExprOp, RowValueSource, compile_expr, eval_expr,
@@ -36,10 +37,12 @@ pub use ops::{
     apply_alter_table, apply_create_index, apply_create_table, apply_drop_index, apply_drop_table,
     apply_set_index_meta_page_id, lookup_index, lookup_table, resolve_schema_id,
 };
+pub use views::{apply_create_view, apply_drop_view, lookup_view};
 pub use record::{RecordRef, RecordScratch, encode_record};
 pub use schema::{
     CatalogError, CatalogMeta, CheckDef, ClassKind, ColumnDef, ConstraintDef, ConstraintKind,
-    IndexDef, NamespaceDef, SchemaEpoch, SchemaSnapshot, SqliteSchemaRow, TableDef,
+    ForeignKeyDef, IndexDef, NamespaceDef, SchemaEpoch, SchemaSnapshot, SqliteSchemaRow, TableDef,
+    ViewDef,
 };
 pub use stats::{
     ColumnStats, HistogramBucket, IndexStats, MostCommonValue, StatsEpoch, StatsSnapshot,

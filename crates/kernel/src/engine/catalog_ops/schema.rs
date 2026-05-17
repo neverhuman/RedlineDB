@@ -63,4 +63,36 @@ impl Engine {
         tx.set_pending_schema_snapshot(Arc::new(next));
         Ok(())
     }
+
+    pub fn create_view(
+        &self,
+        tx: &mut Txn,
+        spec: crate::catalog::CreateViewSpec,
+    ) -> Result<Arc<crate::catalog::ViewDef>> {
+        tx.ensure_open()?;
+        let _ddl = self.catalog.lock_ddl();
+        let next = crate::catalog::apply_create_view(
+            (*self.catalog_snapshot_for_tx(tx)).clone(),
+            spec,
+        )?;
+        let next = Arc::new(next);
+        let view = next
+            .views
+            .last()
+            .cloned()
+            .ok_or(Error::CatalogCorrupt("created view missing from snapshot"))?;
+        tx.set_pending_schema_snapshot(Arc::clone(&next));
+        Ok(view)
+    }
+
+    pub fn drop_view(&self, tx: &mut Txn, spec: crate::catalog::DropViewSpec) -> Result<()> {
+        tx.ensure_open()?;
+        let _ddl = self.catalog.lock_ddl();
+        let next = crate::catalog::apply_drop_view(
+            (*self.catalog_snapshot_for_tx(tx)).clone(),
+            spec,
+        )?;
+        tx.set_pending_schema_snapshot(Arc::new(next));
+        Ok(())
+    }
 }

@@ -11,6 +11,19 @@ pub enum ConflictAction {
     Replace,
 }
 
+/// Referential action attached to a foreign-key declaration's `ON DELETE`
+/// or `ON UPDATE` clause. Mirrors `sqlparser::ast::ReferentialAction` and
+/// SQLite's documented semantics; `NoAction` is SQLite's default when no
+/// clause is supplied.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum FkAction {
+    NoAction,
+    Restrict,
+    SetNull,
+    SetDefault,
+    Cascade,
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum IndexOrigin {
     User,
@@ -58,6 +71,28 @@ pub struct AlterTableSpec {
     pub name: QualifiedName,
     pub if_exists: bool,
     pub operation: AlterTableOperationSpec,
+}
+
+/// Create a persisted view. `body_sql` is the verbatim SELECT text that
+/// the binder re-parses at expansion time; `columns`, when non-empty,
+/// renames the body's output columns.
+#[derive(Debug, Clone)]
+pub struct CreateViewSpec {
+    pub schema: Option<DbName>,
+    pub name: DbName,
+    pub if_not_exists: bool,
+    /// SQLite `TEMP`/`TEMPORARY` modifier — session-scoped view.
+    pub session_scoped: bool,
+    pub columns: Vec<DbName>,
+    pub body_sql: String,
+    pub normalized_sql: Option<String>,
+}
+
+/// Drop a view by qualified name.
+#[derive(Debug, Clone)]
+pub struct DropViewSpec {
+    pub name: QualifiedName,
+    pub if_exists: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -128,6 +163,22 @@ pub enum TableConstraintSpec {
         name: Option<DbName>,
         expr: ExprAst,
         normalized_sql: String,
+    },
+    /// Declared FOREIGN KEY. Stored verbatim so the executor can verify
+    /// referenced rows exist on INSERT/UPDATE and apply ON DELETE/UPDATE
+    /// actions when the parent row is mutated.
+    ForeignKey {
+        name: Option<DbName>,
+        /// Child-table columns participating in the FK.
+        columns: Vec<DbName>,
+        /// Parent table name (optionally qualified with schema).
+        parent_table: DbName,
+        /// Parent-table columns. Empty when omitted — caller fills with
+        /// the parent's PK at validation time.
+        parent_columns: Vec<DbName>,
+        on_delete: FkAction,
+        on_update: FkAction,
+        deferred: bool,
     },
 }
 

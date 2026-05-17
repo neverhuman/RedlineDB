@@ -32,12 +32,12 @@ Status values are deliberately narrow:
 | CTEs (`WITH`, recursive and non-recursive) | pass | `crates/sql/tests/parity_cte.rs` | sql-parser-planner-executor | Non-recursive + recursive (UNION / UNION ALL) materialized into thread-local row store; supports JOIN against CTE via synthetic TableDef. Iteration cap 10_000. |
 | Compound `SELECT` (`UNION`, `INTERSECT`, `EXCEPT`) | fail | `crates/sql/src/parser/select.rs` | sql-parser-planner-executor | Unsupported paths return `UnsupportedSql`. |
 | Window functions and frames | pass | `crates/sql/tests/parity_window.rs` | sql-parser-planner-executor | ROW_NUMBER / RANK / DENSE_RANK / NTILE / LAG / LEAD / FIRST_VALUE / LAST_VALUE / NTH_VALUE / PERCENT_RANK / CUME_DIST + aggregate-OVER (SUM/COUNT/AVG/MIN/MAX/TOTAL) with ROWS / RANGE / GROUPS frames. |
-| Views | fail | `crates/sql/tests/parity_negative.rs`, `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | `CREATE VIEW` is parsed only as an unsupported statement. |
+| Views | pass | `crates/sql/tests/parity_view.rs` | sql-parser-planner-executor | `CREATE [TEMP] VIEW [IF NOT EXISTS]` + `DROP VIEW [IF EXISTS]` supported. Views persist in the catalog (format_version 4) and expand at FROM-binding time as derived row sources. DML on a view returns a SQLite-style "cannot modify view" error. Lane A5-views. Followup: runtime (not bind-time) materialization so cached prepared statements observe fresh rows after data changes. |
 | Triggers | fail | `crates/sql/tests/sqlite_full_parity.rs`, `crates/sql/src/parser.rs` | sql-parser-planner-executor | Trigger execution and schema storage are absent. |
 | Generated columns | fail | `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | SQLite accepts generated columns; RedlineDB rejects or lacks execution semantics. |
 | Partial indexes | fail | `crates/sql/tests/parity_negative.rs`, `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | `CREATE INDEX ... WHERE` is rejected. |
 | Expression indexes | fail | `crates/sql/tests/sqlite_full_parity.rs`, `crates/sql/src/parser/helpers/ddl.rs` | sql-parser-planner-executor | Index keys are column-only. |
-| Foreign keys | fail | `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | Parsing/PRAGMA coverage exists; full SQLite enforcement remains incomplete. |
+| Foreign keys | pass | `crates/sql/tests/parity_fk_enforce.rs`, `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | A6: PRAGMA-gated enforcement on INSERT/UPDATE/DELETE; ON DELETE/UPDATE {NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT}; DEFERRABLE INITIALLY DEFERRED checked at COMMIT. Cascade depth bounded. |
 | ATTACH / DETACH | not-started | none | sql-parser-planner-executor | No multi-database attachment layer exists. |
 
 ## Expressions And Functions
@@ -62,7 +62,7 @@ Status values are deliberately narrow:
 | `PRAGMA integrity_check` / `quick_check` | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Current checks are RedlineDB-native integrity summaries. |
 | `PRAGMA auto_vacuum` read shape | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Full auto-vacuum storage semantics are absent. |
 | `PRAGMA wal_checkpoint(MODE)` result shape | fail | `crates/sql/tests/parity_coverage.rs`, `crates/sql/src/parser/pragma.rs` | storage-and-catalog | Parser/result shape exists; real SQLite WAL-frame checkpoint semantics are not implemented. |
-| `PRAGMA foreign_keys` | fail | `crates/bench/compat/orm/migration.sqlt`, `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | Toggle is accepted for compatibility, but enforcement is incomplete. |
+| `PRAGMA foreign_keys` | pass | `crates/sql/tests/parity_fk_enforce.rs`, `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | A6: per-connection toggle now gates the FK enforcement layer end-to-end; OFF skips every check (matches SQLite's bundled default). |
 | Table-valued PRAGMAs | not-started | none | sql-parser-planner-executor | No table-valued PRAGMA execution layer exists. |
 | Full reference-build PRAGMA set | not-started | `crates/sql/tests/sqlite_full_parity.rs` metadata only | sql-parser-planner-executor | Needs generated corpus from `PRAGMA compile_options` and SQLite docs. |
 

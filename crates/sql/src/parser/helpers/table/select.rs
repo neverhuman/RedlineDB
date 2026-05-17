@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use redlinedb_kernel::catalog::SchemaSnapshot;
 use sqlparser::ast::{
-    BinaryOperator, Expr, Ident, JoinConstraint, JoinOperator, ObjectName, TableFactor,
-    TableWithJoins,
+    BinaryOperator, Expr, Ident, JoinConstraint, JoinOperator, ObjectName, ObjectNamePart,
+    TableAlias, TableFactor, TableWithJoins,
 };
 
 use crate::error::{Error, Result};
@@ -14,7 +15,7 @@ use super::bind::{bind_table_name, object_name_part_to_string};
 pub(crate) fn bind_select_from(
     conn: &crate::connection::Connection,
     schema: &SchemaSnapshot,
-    from: Vec<TableWithJoins>,
+    mut from: Vec<TableWithJoins>,
     params: &mut ParamLayout,
 ) -> Result<(SelectSource, Option<Expr>)> {
     if from.is_empty() {
@@ -34,6 +35,14 @@ pub(crate) fn bind_select_from(
         {
             return Ok((source, None));
         }
+        // View-aware single-source fast path. Mirror the CTE handling so
+        // `SELECT * FROM view_name` runs the view body as a derived row
+        // source without round-tripping through the catalog table lookup.
+        if let Some(source) =
+            crate::exec::view::try_resolve_view_source(schema, name, alias_arc.as_ref(), params)?
+        {
+            return Ok((source, None));
+        }
     }
 
     // Table-valued function fast path. `pragma_table_info(t)` and friends
@@ -47,6 +56,41 @@ pub(crate) fn bind_select_from(
     {
         return Ok((source, None));
     }
+
+    // TVFs inside JOINs / multi-source FROM lists: materialise each TVF
+    // up front, push a transient CTE scope so the regular table-binder
+    // resolves the rewritten bare-name reference, and rewrite the
+    // `TableFactor` to a CTE-style reference. The scope is popped before
+    // returning so it does not leak into nested binds; the row payload
+    // persists in `CTE_ROWS_TL` for the prepared statement's lifetime
+    // (the synthetic `relation_id` keeps it reachable).
+    let tvf_scope = materialize_tvfs_in_from(conn, schema, &mut from)?;
+    let pushed_tvf_scope = if !tvf_scope.is_empty() {
+        crate::exec::cte::push_scope(tvf_scope);
+        true
+    } else {
+        false
+    };
+    let result = bind_select_from_after_tvf(conn, schema, from, params);
+    if pushed_tvf_scope {
+        crate::exec::cte::pop_scope();
+    }
+    result
+}
+
+/// Body of [`bind_select_from`] after the TVF pre-pass has materialised
+/// any `name(args)` calls into the active CTE scope and rewritten the
+/// `from` list so those calls are bare-name references.
+fn bind_select_from_after_tvf(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+    from: Vec<TableWithJoins>,
+    params: &mut ParamLayout,
+) -> Result<(SelectSource, Option<Expr>)> {
+    // After the rewrite, the single-source TVF case has already been
+    // handled by the fast path above. Anything that still has Some(args)
+    // here is either a not-yet-registered TVF or a real syntax error.
+    let _ = conn;
 
     if from.len() == 1 && !from[0].joins.is_empty() {
         if let TableFactor::Table { name, .. } = &from[0].relation
@@ -212,6 +256,16 @@ pub(crate) fn bind_select_table_factor(
             {
                 return Ok(bound);
             }
+            // View-name resolution: if the name matches a persisted
+            // view, materialize its body and return a synthetic
+            // BoundTable backed by row storage.
+            if let Some(bound) = crate::exec::view::try_resolve_view_bound_table(
+                schema,
+                &name,
+                alias_arc.as_ref(),
+            )? {
+                return Ok(bound);
+            }
             Ok(BoundTable {
                 table: bind_table_name(schema, &name)?,
                 alias: alias.map(|alias| Arc::from(alias.name.value)),
@@ -317,6 +371,90 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
         }
         _ => false,
     }
+}
+
+/// Pre-pass for [`bind_select_from`]: walk the FROM list, materialise
+/// every registered table-valued function call, register the rows under
+/// a synthetic CTE-style relation, and rewrite the `TableFactor` so the
+/// regular table-binder treats it as a bare-name reference into that
+/// CTE.
+///
+/// Returns the freshly-built scope (caller pushes it onto the CTE stack
+/// before binding and pops it afterward). When no rewrites happen, the
+/// returned scope is empty.
+fn materialize_tvfs_in_from(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+    from: &mut [TableWithJoins],
+) -> Result<HashMap<String, crate::exec::cte::CteDef>> {
+    let mut scope: HashMap<String, crate::exec::cte::CteDef> = HashMap::new();
+    let mut counter: usize = 0;
+    for entry in from.iter_mut() {
+        try_rewrite_tvf_factor(conn, schema, &mut entry.relation, &mut counter, &mut scope)?;
+        for join in entry.joins.iter_mut() {
+            try_rewrite_tvf_factor(conn, schema, &mut join.relation, &mut counter, &mut scope)?;
+        }
+    }
+    Ok(scope)
+}
+
+/// Inspect one `TableFactor`; if it's a registered TVF, materialise the
+/// rows, push a `CteDef` into `scope`, and rewrite the factor's `name`
+/// to a unique sentinel that the regular binder can resolve via the CTE
+/// path. Leaves non-TVF factors untouched.
+fn try_rewrite_tvf_factor(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+    factor: &mut TableFactor,
+    counter: &mut usize,
+    scope: &mut HashMap<String, crate::exec::cte::CteDef>,
+) -> Result<()> {
+    let TableFactor::Table { name, alias, args, .. } = factor else {
+        return Ok(());
+    };
+    let Some(call_args) = args.as_ref() else {
+        return Ok(());
+    };
+    let func_name = match name.0.as_slice() {
+        [part] => match object_name_part_to_string(part) {
+            Ok(s) => s,
+            Err(_) => return Ok(()),
+        },
+        _ => return Ok(()),
+    };
+    let Some(func) = crate::exec::table_valued::lookup(&func_name) else {
+        return Ok(());
+    };
+    let lowered = crate::exec::table_valued::lower_args(call_args)?;
+    let result = func.eval(conn, schema, &lowered)?;
+    let sentinel = format!("__rldb_tvf_{}_", *counter);
+    *counter += 1;
+    // Build the CteDef under the sentinel key so the binder finds it via
+    // the rewritten name. The synthetic TableDef's stored name is also
+    // the sentinel; SQL column resolution uses the alias (preserved or
+    // synthesised below) instead of the underlying table name.
+    let def = crate::exec::cte::build_cte_def_from_rows(
+        &sentinel,
+        result.columns,
+        result.rows,
+    );
+    scope.insert(sentinel.clone(), def);
+    // Rewrite: drop args, point name at the sentinel, and ensure an
+    // alias is present so column refs in the SELECT stay sensible. If
+    // the user supplied `AS j`, we keep `j`; otherwise we synthesise an
+    // alias equal to the original function name so qualified refs like
+    // `json_each.value` continue to bind.
+    *args = None;
+    name.0.clear();
+    name.0.push(ObjectNamePart::Identifier(Ident::new(sentinel)));
+    if alias.is_none() {
+        *alias = Some(TableAlias {
+            explicit: false,
+            name: Ident::new(func.name()),
+            columns: Vec::new(),
+        });
+    }
+    Ok(())
 }
 
 /// If `name(args)` resolves to a registered table-valued function, evaluate

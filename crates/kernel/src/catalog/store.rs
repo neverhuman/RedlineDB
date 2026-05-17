@@ -6,13 +6,13 @@ use std::sync::Arc;
 use crate::{Error, Result};
 
 use super::codec::{BytesReader, BytesWriter, frame_snapshot, parse_header};
-use super::ddl::{ConflictAction, IndexOrigin};
+use super::ddl::{ConflictAction, FkAction, IndexOrigin};
 use super::expr::{CompiledExpr, ExprOp};
 use super::ids::SchemaId;
 use super::key::{IndexKeyDef, IndexKeySource, NullOrder, SortDir};
 use super::schema::{
-    CatalogMeta, CheckDef, ColumnDef, ConstraintDef, ConstraintKind, IndexDef, NamespaceDef,
-    SchemaEpoch, SchemaSnapshot, TableDef,
+    CatalogMeta, CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef,
+    NamespaceDef, SchemaEpoch, SchemaSnapshot, TableDef, ViewDef,
 };
 use super::value::OwnedValue;
 use crate::format::{PageId, RelId};
@@ -96,7 +96,15 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 
     out.u32(snapshot.tables.len() as u32);
     for table in &snapshot.tables {
-        encode_table(&mut out, table)?;
+        encode_table(&mut out, table, snapshot.meta.format_version)?;
+    }
+
+    // Lane A5-views: view section was introduced at format_version 4. Always
+    // emit a length even when empty so decoders pinned at v4 can treat the
+    // counter as authoritative.
+    out.u32(snapshot.views.len() as u32);
+    for view in &snapshot.views {
+        encode_view(&mut out, view)?;
     }
 
     Ok(out.finish())
@@ -105,7 +113,7 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
     let mut reader = BytesReader::new(bytes);
     let format_version = reader.u64()?;
-    if format_version > 2 {
+    if format_version > 5 {
         return Err(Error::UnsupportedVersion(format_version as u16));
     }
     let meta = CatalogMeta {
@@ -127,6 +135,12 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
         snapshot
             .tables
             .push(Arc::new(decode_table(&mut reader, format_version)?));
+    }
+    if format_version >= 4 {
+        let view_count = reader.u32()? as usize;
+        for _ in 0..view_count {
+            snapshot.views.push(Arc::new(decode_view(&mut reader)?));
+        }
     }
     snapshot.rebuild_indexes();
     if reader.remaining() != 0 {
@@ -169,7 +183,7 @@ fn decode_namespace(reader: &mut BytesReader<'_>) -> Result<NamespaceDef> {
     })
 }
 
-fn encode_table(out: &mut BytesWriter, table: &TableDef) -> Result<()> {
+fn encode_table(out: &mut BytesWriter, table: &TableDef, format_version: u64) -> Result<()> {
     out.u64(table.table_id.0);
     out.u64(table.schema_id.0);
     out.u64(table.relation_id.0);
@@ -197,6 +211,13 @@ fn encode_table(out: &mut BytesWriter, table: &TableDef) -> Result<()> {
     out.u32(table.checks.len() as u32);
     for check in &table.checks {
         encode_check(out, check)?;
+    }
+
+    if format_version >= 5 {
+        out.u32(table.foreign_keys.len() as u32);
+        for fk in &table.foreign_keys {
+            encode_foreign_key(out, fk)?;
+        }
     }
 
     Ok(())
@@ -236,6 +257,17 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
         checks.push(decode_check(reader)?);
     }
 
+    let foreign_keys = if format_version >= 5 {
+        let fk_count = reader.u32()? as usize;
+        let mut fks = Vec::with_capacity(fk_count);
+        for _ in 0..fk_count {
+            fks.push(decode_foreign_key(reader)?);
+        }
+        fks
+    } else {
+        Vec::new()
+    };
+
     Ok(TableDef {
         table_id,
         schema_id,
@@ -246,6 +278,7 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
         indexes,
         constraints,
         checks,
+        foreign_keys,
         rowid_alias_column,
         flags,
         normalized_sql,
@@ -435,6 +468,114 @@ fn decode_check(reader: &mut BytesReader<'_>) -> Result<CheckDef> {
         constraint_id: super::ConstraintId(reader.u64()?),
         name: read_opt_box_str(reader)?,
         expr: read_opt_expr(reader)?.ok_or(Error::CatalogCorrupt("missing check expression"))?,
+    })
+}
+
+fn fk_action_tag(action: FkAction) -> u8 {
+    match action {
+        FkAction::NoAction => 0,
+        FkAction::Restrict => 1,
+        FkAction::SetNull => 2,
+        FkAction::SetDefault => 3,
+        FkAction::Cascade => 4,
+    }
+}
+
+fn fk_action_from_tag(tag: u8) -> Result<FkAction> {
+    Ok(match tag {
+        0 => FkAction::NoAction,
+        1 => FkAction::Restrict,
+        2 => FkAction::SetNull,
+        3 => FkAction::SetDefault,
+        4 => FkAction::Cascade,
+        _ => return Err(Error::CatalogCorrupt("invalid FK action tag")),
+    })
+}
+
+fn encode_foreign_key(out: &mut BytesWriter, fk: &ForeignKeyDef) -> Result<()> {
+    out.u64(fk.constraint_id.0);
+    write_opt_str(out, fk.name.as_deref());
+    out.u32(fk.columns.len() as u32);
+    for ord in &fk.columns {
+        out.u16(*ord);
+    }
+    write_str(out, &fk.parent_table);
+    out.u32(fk.parent_columns.len() as u32);
+    for name in &fk.parent_columns {
+        write_str(out, name);
+    }
+    out.u8(fk_action_tag(fk.on_delete));
+    out.u8(fk_action_tag(fk.on_update));
+    out.bool(fk.deferred);
+    Ok(())
+}
+
+fn decode_foreign_key(reader: &mut BytesReader<'_>) -> Result<ForeignKeyDef> {
+    let constraint_id = super::ConstraintId(reader.u64()?);
+    let name = read_opt_box_str(reader)?;
+    let column_count = reader.u32()? as usize;
+    let mut columns = Vec::with_capacity(column_count);
+    for _ in 0..column_count {
+        columns.push(reader.u16()?);
+    }
+    let parent_table = read_box_str(reader)?;
+    let parent_count = reader.u32()? as usize;
+    let mut parent_columns = Vec::with_capacity(parent_count);
+    for _ in 0..parent_count {
+        parent_columns.push(read_box_str(reader)?);
+    }
+    let on_delete = fk_action_from_tag(reader.u8()?)?;
+    let on_update = fk_action_from_tag(reader.u8()?)?;
+    let deferred = reader.bool()?;
+    Ok(ForeignKeyDef {
+        constraint_id,
+        name,
+        columns,
+        parent_table,
+        parent_columns,
+        on_delete,
+        on_update,
+        deferred,
+    })
+}
+
+fn encode_view(out: &mut BytesWriter, view: &ViewDef) -> Result<()> {
+    out.u64(view.view_id.0);
+    out.u64(view.schema_id.0);
+    write_str(out, &view.name);
+    write_str(out, &view.folded);
+    out.bool(view.session_scoped);
+    write_str(out, &view.body_sql);
+    out.u32(view.columns.len() as u32);
+    for col in &view.columns {
+        write_str(out, col);
+    }
+    write_opt_str(out, view.normalized_sql.as_deref());
+    Ok(())
+}
+
+fn decode_view(reader: &mut BytesReader<'_>) -> Result<ViewDef> {
+    let view_id = super::ObjectId(reader.u64()?);
+    let schema_id = SchemaId(reader.u64()?);
+    let name = read_box_str(reader)?;
+    let folded = read_box_str(reader)?;
+    let session_scoped = reader.bool()?;
+    let body_sql = read_box_str(reader)?;
+    let column_count = reader.u32()? as usize;
+    let mut columns = Vec::with_capacity(column_count);
+    for _ in 0..column_count {
+        columns.push(read_box_str(reader)?);
+    }
+    let normalized_sql = read_opt_box_str(reader)?;
+    Ok(ViewDef {
+        view_id,
+        schema_id,
+        name,
+        folded,
+        columns,
+        body_sql,
+        session_scoped,
+        normalized_sql,
     })
 }
 

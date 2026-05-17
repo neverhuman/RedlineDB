@@ -57,11 +57,15 @@ fn cte_multiple_bindings_executes() {
 }
 
 #[test]
-fn create_view_is_parser_only() {
+fn create_view_now_executes() {
+    // Views are implemented (Lane A5-views). Differential coverage
+    // lives in `parity_view.rs`; this test confirms the regression
+    // boundary.
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
-    let res = conn.execute("CREATE VIEW v AS SELECT a FROM t");
-    assert_parser_only(res);
+    conn.execute("INSERT INTO t VALUES (1)").expect("insert");
+    conn.execute("CREATE VIEW v AS SELECT a FROM t")
+        .expect("CREATE VIEW should execute");
 }
 
 #[test]

@@ -47,9 +47,12 @@ use insert::*;
 mod select_top;
 use select_top::*;
 pub(crate) mod cte;
+pub(crate) mod fk;
+pub(crate) mod json_tv;
 pub(crate) mod pragma_tv;
 pub(crate) mod set_ops;
 pub(crate) mod table_valued;
+pub(crate) mod view;
 pub(crate) mod window;
 pub(crate) mod attach;
 
@@ -208,6 +211,30 @@ pub fn execute_prepared(
         PreparedKind::DropIndex(spec) => {
             with_write_tx(conn, |session, tx| {
                 conn.engine().drop_index(tx, spec.clone())?;
+                session.changes += 1;
+                session.total_changes += 1;
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 1,
+            })
+        }
+        PreparedKind::CreateView(spec) => {
+            with_write_tx(conn, |session, tx| {
+                conn.engine().create_view(tx, spec.clone())?;
+                session.changes += 1;
+                session.total_changes += 1;
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 1,
+            })
+        }
+        PreparedKind::DropView(spec) => {
+            with_write_tx(conn, |session, tx| {
+                conn.engine().drop_view(tx, spec.clone())?;
                 session.changes += 1;
                 session.total_changes += 1;
                 Ok(())
@@ -382,26 +409,42 @@ fn with_write_tx<T>(
                     f(session, tx_ref)
                 });
                 match result {
-                    Ok(value) => match conn.engine().commit(tx) {
-                        Ok(CommitOutcome::Committed(_)) => {
+                    Ok(value) => {
+                        // A6 SQLite parity: drain deferred FK checks
+                        // before this autocommit slice closes. If any
+                        // entry violates referential integrity we roll
+                        // the tx back and surface the violation.
+                        let drain_result = with_current_tx(tx_ptr, || {
+                            let tx_ref = unsafe { &mut *tx_ptr };
+                            crate::exec::fk::drain_deferred_fk_checks(conn, session, tx_ref)
+                        });
+                        if let Err(err) = drain_result {
+                            let _ = conn.engine().rollback(tx);
                             session.kernel_unique_guards.clear();
                             session.unique_guards.clear();
-                            return Ok(value);
+                            return Err(err);
                         }
-                        Ok(CommitOutcome::MaybeCommitted) => {
-                            session.kernel_unique_guards.clear();
-                            session.unique_guards.clear();
-                            return Err(Error::CommitMaybeCommitted);
-                        }
-                        Ok(CommitOutcome::RolledBack) => {
-                            session.kernel_unique_guards.clear();
-                            session.unique_guards.clear();
-                            return Err(Error::TransactionState("transaction rolled back"));
-                        }
-                        Err(err) => {
-                            session.kernel_unique_guards.clear();
-                            session.unique_guards.clear();
-                            return Err(err.into());
+                        match conn.engine().commit(tx) {
+                            Ok(CommitOutcome::Committed(_)) => {
+                                session.kernel_unique_guards.clear();
+                                session.unique_guards.clear();
+                                return Ok(value);
+                            }
+                            Ok(CommitOutcome::MaybeCommitted) => {
+                                session.kernel_unique_guards.clear();
+                                session.unique_guards.clear();
+                                return Err(Error::CommitMaybeCommitted);
+                            }
+                            Ok(CommitOutcome::RolledBack) => {
+                                session.kernel_unique_guards.clear();
+                                session.unique_guards.clear();
+                                return Err(Error::TransactionState("transaction rolled back"));
+                            }
+                            Err(err) => {
+                                session.kernel_unique_guards.clear();
+                                session.unique_guards.clear();
+                                return Err(err.into());
+                            }
                         }
                     },
                     Err(err)

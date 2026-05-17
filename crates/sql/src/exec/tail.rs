@@ -91,6 +91,25 @@ pub(crate) fn execute_update(
                 fresh.rowid,
                 new_rowid,
             )?;
+            // A6 SQLite parity: an UPDATE both re-validates the row's own
+            // FK columns (if they changed) and propagates the change to
+            // children that reference the parent key.
+            crate::exec::fk::enforce_fk_on_insert(
+                conn,
+                session,
+                tx,
+                &plan.table,
+                &values,
+                new_rowid,
+            )?;
+            crate::exec::fk::enforce_fk_on_parent_update(
+                conn,
+                session,
+                tx,
+                &plan.table,
+                &old_values,
+                &values,
+            )?;
             if let Some(returning) = &plan.returning {
                 returning_rows.push(project_returning_row(
                     &plan.table,
@@ -115,7 +134,7 @@ pub(crate) fn execute_delete(
     plan: &crate::statement::DeletePlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<ExecutionResult> {
-    with_write_tx(conn, |_session, tx| {
+    with_write_tx(conn, |session, tx| {
         let rows = dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?;
         let mut count = 0usize;
         let mut returning_rows = Vec::new();
@@ -148,6 +167,15 @@ pub(crate) fn execute_delete(
                 &plan.table,
                 &live,
                 row.rowid,
+            )?;
+            // A6 SQLite parity: propagate the parent deletion to every
+            // referencing child via the declared `ON DELETE` action.
+            crate::exec::fk::enforce_fk_on_parent_delete(
+                conn,
+                session,
+                tx,
+                &plan.table,
+                &live,
             )?;
             count += 1;
         }
