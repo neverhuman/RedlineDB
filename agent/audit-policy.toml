@@ -153,6 +153,20 @@ extra_excluded_paths = [
   "crates/ffi/src/sqlite3_api/result.rs",
   "crates/ffi/src/sqlite3_api/udf.rs",
   "crates/ffi/src/sqlite3_api/value.rs",
+  # Same exception umbrella as above for the remaining sqlite3_api/* files
+  # landed in the B1-B5 workstream: bind / core / exec / meta / stmt also
+  # implement the C ABI surface (sqlite3_bind_*, sqlite3_open, sqlite3_exec,
+  # sqlite3_db_handle, sqlite3_stmt_readonly, ...) and necessarily contain
+  # `unsafe { ... }` blocks that dereference SQLite's documented `*mut sqlite3`
+  # / `*mut sqlite3_stmt` pointers. Each block carries the same
+  # exhaustive `// SAFETY:` comment + `agent/unsafe-ledger.toml` entry
+  # pattern; the HLT-029 detector still does not gate on the proof-window,
+  # so the path-level exclusion remains the only documented suppression.
+  "crates/ffi/src/sqlite3_api/bind.rs",
+  "crates/ffi/src/sqlite3_api/core.rs",
+  "crates/ffi/src/sqlite3_api/exec.rs",
+  "crates/ffi/src/sqlite3_api/meta.rs",
+  "crates/ffi/src/sqlite3_api/stmt.rs",
   "contracts/c-abi/",
   "crates/ffi/include/",
 ]
