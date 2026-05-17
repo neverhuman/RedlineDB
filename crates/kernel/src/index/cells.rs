@@ -261,15 +261,24 @@ pub(super) fn entry_visible(
     else {
         return false;
     };
-    if *create_tx != TxId::ZERO && !tx_status.is_tx_visible(*create_tx, snapshot, owner) {
+    let create_check = *create_tx != TxId::ZERO
+        && !tx_status.is_tx_visible(*create_tx, snapshot, owner);
+    if create_check {
+        eprintln!(
+            "ENTRY_VISIBLE: reject create_tx={:?} owner={:?} snapshot is_tx_visible=false",
+            create_tx, owner
+        );
         return false;
     }
     if *delete_tx == NON_TRANSACTIONAL_DELETE_TX {
+        eprintln!("ENTRY_VISIBLE: reject non-transactional delete");
         return false;
     }
     if *delete_tx != TxId::ZERO && tx_status.is_tx_visible(*delete_tx, snapshot, owner) {
+        eprintln!("ENTRY_VISIBLE: reject delete_tx={:?} visible", delete_tx);
         return false;
     }
+    eprintln!("ENTRY_VISIBLE: accept create_tx={:?} delete_tx={:?}", create_tx, delete_tx);
     true
 }
 
