@@ -119,7 +119,10 @@ pub extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
         if unsafe { (*db).interrupted.load(Ordering::Relaxed) } {
             return Err(RLDB_INTERRUPT);
         }
-        match stmt_ref.stmt.step() {
+        // Scope the udf/collation dispatcher to this connection for the
+        // duration of step() so registered C callbacks can be looked up by
+        // their `*mut sqlite3` connection identity.
+        redlinedb_sql::udf::with_db(db as usize, || match stmt_ref.stmt.step() {
             Ok(Step::Row) => {
                 refresh_text_cache(stmt_ref)?;
                 Ok(RLDB_ROW)
@@ -131,7 +134,7 @@ pub extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
                 record_status_with_message(db, code, &msg);
                 Err(code)
             }
-        }
+        })
     }))
 }
 

@@ -108,6 +108,7 @@ pub(crate) fn open_handle(
         last_message: Mutex::new(CString::new("").unwrap()),
         interrupted: AtomicBool::new(false),
         active_statements: AtomicUsize::new(0),
+        hooks: crate::sqlite3_api::hooks::HookSlots::default(),
     });
     Ok(Box::into_raw(handle))
 }

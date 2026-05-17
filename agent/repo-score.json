@@ -363,7 +363,9 @@
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
-      "notes": []
+      "notes": [
+        "rust hard findings are scored through the language-rule catalog"
+      ]
     },
     {
       "name": "Code shape and semantic surface",
@@ -379,8 +381,7 @@
         "future-hostile/dead-language marker found",
         "rust bad-behavior advisory signals: 1265",
         "ci bad-behavior advisory signals: 1",
-        "gittools bad-behavior advisory signals: 1",
-        "no hard bad-behavior findings across detector-backed language families"
+        "gittools bad-behavior advisory signals: 1"
       ],
       "notes": [
         "product/runtime code contains future-hostile or dead-language terms"
@@ -494,7 +495,7 @@
         "agent/proof-lanes.toml",
         "agent/repo-score.json",
         "agent/test-map.json",
-        "agent/ux-qa.toml"
+        "agent/unsafe-ledger.toml"
       ],
       "design_tokens": [],
       "geometry_runtime": [
@@ -1445,6 +1446,42 @@
             "start_line": 87,
             "end_line": 88,
             "unit_name": "values"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-e37f347c33ed3453",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "validate_db",
+        "duplicate_lines": 3,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 48,
+        "instance_count": 2,
+        "total_redundant_lines": 3,
+        "total_redundant_tokens": 5,
+        "total_redundant_bytes": 48,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "ca2db8bdda40fd00",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/ffi/src/sqlite3_api/hooks.rs",
+            "language": "rust",
+            "start_line": 66,
+            "end_line": 69,
+            "unit_name": "validate_db"
+          },
+          {
+            "path": "crates/ffi/src/sqlite3_api/hooks_fire.rs",
+            "language": "rust",
+            "start_line": 15,
+            "end_line": 18,
+            "unit_name": "validate_db"
           }
         ]
       },

@@ -54,7 +54,7 @@
 | `no-agent-friendly-exception-pattern` | 76 | no |
 | `missing-agent-readable-docs` | 80 | no |
 | `streaming-runtime-drift` | 78 | no |
-| `rust-bad-behavior` | 72 | no |
+| `rust-bad-behavior` | 72 | yes |
 | `sql-bad-behavior` | 72 | no |
 | `typescript-bad-behavior` | 72 | no |
 | `docker-bad-behavior` | 72 | no |

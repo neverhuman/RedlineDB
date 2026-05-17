@@ -34,6 +34,21 @@ pub extern "C" fn rldb_exec(
         if db.is_null() || sql.is_null() {
             return Err(RLDB_MISUSE);
         }
+        // Scope the UDF/collation dispatcher to this connection for the
+        // duration of the exec walk.
+        redlinedb_sql::udf::with_db(db as usize, || rldb_exec_inner(db, sql, callback, ctx, errmsg))
+    }))
+}
+
+fn rldb_exec_inner(
+    db: *mut rldb,
+    sql: *const c_char,
+    callback: Option<
+        extern "C" fn(*mut c_void, c_int, *mut *mut c_char, *mut *mut c_char) -> c_int,
+    >,
+    ctx: *mut c_void,
+    errmsg: *mut *mut c_char,
+) -> Result<c_int, c_int> {
         // SAFETY: `db` non-null (checked); per redlinedb.h:124 from
         // rldb_open not yet closed; shared borrow scoped to api() closure.
         let db_ref = unsafe { &*db };
@@ -47,10 +62,16 @@ pub extern "C" fn rldb_exec(
         // sqlite3_exec halts at the first failing statement and reports its
         // error via errmsg; later statements are not executed.
         loop {
+            // Fire trace hook before preparing each statement.
+            crate::sqlite3_api::hooks_fire::fire_trace(db, rest);
+            let start = std::time::Instant::now();
             let (stmt_opt, tail) = match prepare_statement(db_ref, rest, errmsg, db) {
                 Ok(pair) => pair,
                 Err(code) => return Err(code),
             };
+            // Capture the head we just consumed so the commit/rollback hook
+            // can detect the keyword.
+            let consumed = &rest[..rest.len() - tail.len()];
             if let Some(mut stmt) = stmt_opt {
                 if let Some(callback) = callback {
                     run_statement_with_callback(&mut stmt, callback, ctx, errmsg, db)?;
@@ -58,13 +79,17 @@ pub extern "C" fn rldb_exec(
                     run_statement_to_completion(&mut stmt, errmsg, db)?;
                 }
             }
+            // Fire commit/rollback hook after each successful statement.
+            let _ = crate::sqlite3_api::hooks_fire::fire_for_sql(db, consumed);
+            // Fire profile hook with elapsed nanos.
+            let nanos = start.elapsed().as_nanos() as u64;
+            crate::sqlite3_api::hooks_fire::fire_profile(db, consumed, nanos);
             if tail.is_empty() {
                 break;
             }
             rest = tail;
         }
         Ok(RLDB_OK)
-    }))
 }
 
 fn prepare_statement<'a>(

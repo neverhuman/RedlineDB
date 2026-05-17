@@ -594,6 +594,53 @@ pub(super) fn order_and_project_rows(
         }
     }
 
+    // Custom collation fallback: when any ORDER BY key carries a custom
+    // (FFI-registered) collation, bypass the heap/spill paths — the custom
+    // comparator is the only authoritative ordering, so we collect, project,
+    // and sort in-memory with `Vec::sort_by` invoking the comparator.
+    let order_collations: Vec<Option<crate::collation::Collation>> = order_by
+        .iter()
+        .map(|order| crate::exec::expr::coerce::collation_from_expr(&order.expr))
+        .collect();
+    let any_custom = order_collations
+        .iter()
+        .any(|c| matches!(c, Some(crate::collation::Collation::Custom(_))));
+    if any_custom && !order_by.is_empty() {
+        let directions = directions_from_order_by(order_by);
+        let mut keyed: Vec<(Vec<SqlValue>, Vec<SqlValue>)> = Vec::with_capacity(filtered.len());
+        for row in &filtered {
+            let mut keys = Vec::with_capacity(order_by.len());
+            for order in order_by {
+                keys.push(eval_scalar(&order.expr, &row.context(), bindings)?);
+            }
+            let projected = project_row(projection, row, bindings)?;
+            keyed.push((keys, projected));
+        }
+        keyed.sort_by(|a, b| {
+            for (idx, dir) in directions.iter().enumerate() {
+                let cmp = match (&order_collations[idx], &a.0[idx], &b.0[idx]) {
+                    (Some(col), SqlValue::Text(la), SqlValue::Text(rb)) => col.compare_text(la, rb),
+                    _ => crate::value::compare_values(&a.0[idx], &b.0[idx]),
+                };
+                let cmp = if matches!(dir, vec::SortDirection::Desc) {
+                    cmp.reverse()
+                } else {
+                    cmp
+                };
+                if cmp != std::cmp::Ordering::Equal {
+                    return cmp;
+                }
+            }
+            std::cmp::Ordering::Equal
+        });
+        return Ok(keyed
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|(_, projected)| projected)
+            .collect());
+    }
+
     // Lane VE top-K fast path: ORDER BY ... LIMIT k where k is small wants
     // a fixed-size heap, not a full sort. The threshold matches
     // `vec::TOPK_LIMIT_THRESHOLD`.
@@ -700,7 +747,7 @@ fn normalize_order_key(order: &OrderByExpr, value: SqlValue) -> Result<SqlValue>
     let Some(collation) = collation_from_expr(&order.expr) else {
         return Ok(value);
     };
-    Ok(match (collation, value) {
+    Ok(match (&collation, value) {
         (crate::collation::Collation::NoCase, SqlValue::Text(text)) => {
             SqlValue::Text(Arc::from(text.to_ascii_lowercase()))
         }
