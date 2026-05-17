@@ -1,0 +1,19 @@
+[package]
+name = "redlinedb-tokio"
+version = "1.0.2"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Tokio async adapter for RedlineDB — a sqlx::Pool-shaped surface over the sync Database core. Lets async tokio crates use RedlineDB without writing spawn_blocking by hand."
+repository = "https://github.com/neverhuman/RedlineDB"
+keywords = ["database", "async", "tokio", "redlinedb", "sqlite"]
+categories = ["database", "asynchronous"]
+
+[dependencies]
+redlinedb = { path = "../redlinedb", version = "1.0.2" }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros"] }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3.23"
+tokio = { version = "1", features = ["full"] }
