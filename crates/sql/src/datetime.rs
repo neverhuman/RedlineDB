@@ -245,6 +245,17 @@ fn julian_to_dt(jd: f64) -> DateTime {
 
 /// Apply a sequence of SQLite modifiers (`'+1 day'`, `'start of month'`, etc.)
 /// to a DateTime. Unrecognized modifiers are reported as errors.
+///
+/// Supported modifiers (matching SQLite semantics):
+/// - `NNN {days|hours|minutes|seconds|months|years|weeks}` (signed)
+/// - `start of {day,month,year}`
+/// - `weekday N` — advance to the next occurrence of weekday N (0=Sun..6=Sat)
+/// - `utc`, `localtime`
+/// - `unixepoch` — when present as the first modifier, the preceding base
+///   value is reinterpreted as a Unix epoch seconds integer (handled in
+///   `parse_timestring`); when present later it is a no-op for compatibility.
+/// - `julianday` — alias accepted as a no-op so `julianday()` callers can
+///   chain modifiers after applying SQLite's "auto" form.
 pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
     for raw in mods {
         let m = raw.trim().to_ascii_lowercase();
@@ -254,6 +265,12 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
         }
         if m == "localtime" {
             dt.is_local = true;
+            continue;
+        }
+        if m == "unixepoch" || m == "julianday" || m == "auto" {
+            // Re-interpretation hints are absorbed by `parse_timestring`; here
+            // they are accepted for compatibility so chained modifiers parse
+            // without error.
             continue;
         }
         if m == "start of month" {
@@ -280,6 +297,19 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
             dt.micro = 0;
             continue;
         }
+        if let Some(weekday) = m.strip_prefix("weekday ") {
+            let target: u32 = weekday
+                .trim()
+                .parse()
+                .map_err(|_| Error::UnsupportedSql(format!("invalid weekday modifier: {raw}")))?;
+            if target > 6 {
+                return Err(Error::UnsupportedSql(format!(
+                    "weekday must be in 0..=6: {raw}"
+                )));
+            }
+            dt = advance_to_weekday(dt, target);
+            continue;
+        }
         // Try arithmetic: `+1 day`, `-3 hours`, `+90 minutes`, etc.
         if let Some(arith) = apply_arithmetic_modifier(&dt, &m)? {
             dt = arith;
@@ -290,6 +320,20 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
         )));
     }
     Ok(dt)
+}
+
+fn advance_to_weekday(dt: DateTime, target: u32) -> DateTime {
+    // SQLite's `weekday N` semantics: advance forward (or stay) to the next
+    // occurrence of weekday N. If `dt` is already on weekday N, return `dt`.
+    let cur = day_of_week(&dt);
+    let delta = (target as i64 - cur as i64).rem_euclid(7);
+    if delta == 0 {
+        return dt;
+    }
+    let secs = dt.to_unix() + delta * 86_400;
+    let mut next = DateTime::from_unix(secs, dt.micro);
+    next.is_local = dt.is_local;
+    next
 }
 
 fn apply_arithmetic_modifier(dt: &DateTime, m: &str) -> Result<Option<DateTime>> {
@@ -312,6 +356,10 @@ fn apply_arithmetic_modifier(dt: &DateTime, m: &str) -> Result<Option<DateTime>>
             let secs = next.to_unix() + (value * 86_400.0).round() as i64;
             next = DateTime::from_unix(secs, next.micro);
         }
+        "week" | "weeks" => {
+            let secs = next.to_unix() + (value * 7.0 * 86_400.0).round() as i64;
+            next = DateTime::from_unix(secs, next.micro);
+        }
         "hour" | "hours" => {
             let secs = next.to_unix() + (value * 3600.0).round() as i64;
             next = DateTime::from_unix(secs, next.micro);
@@ -324,18 +372,40 @@ fn apply_arithmetic_modifier(dt: &DateTime, m: &str) -> Result<Option<DateTime>>
             let secs = next.to_unix() + value.round() as i64;
             next = DateTime::from_unix(secs, next.micro);
         }
+        "millisecond" | "milliseconds" => {
+            let total_us = next.micro as i64 + (value * 1_000.0).round() as i64;
+            let extra_secs = total_us.div_euclid(1_000_000);
+            let new_micro = total_us.rem_euclid(1_000_000) as u32;
+            next = DateTime::from_unix(next.to_unix() + extra_secs, new_micro);
+        }
         "month" | "months" => {
+            // SQLite semantics: do NOT clamp the day. If the target month has
+            // fewer days, the result overflows into the next month so that
+            // `date('2024-01-31', '+1 month')` returns `2024-03-02` (matching
+            // SQLite's documented behaviour rather than a calendar-clamping
+            // approach).
             let total_months =
                 (next.year as i64 * 12 + next.month as i64 - 1) + value.round() as i64;
             let new_year = total_months.div_euclid(12) as i32;
             let new_month = (total_months.rem_euclid(12) + 1) as u32;
             next.year = new_year;
             next.month = new_month;
-            next.day = next.day.min(days_in_month(new_year, new_month));
+            // Re-normalise via Unix-seconds round-trip to let overflow days
+            // carry into the following month exactly like SQLite.
+            let secs = next.to_unix();
+            let normalised = DateTime::from_unix(secs, next.micro);
+            next.year = normalised.year;
+            next.month = normalised.month;
+            next.day = normalised.day;
         }
         "year" | "years" => {
             next.year += value.round() as i32;
-            next.day = next.day.min(days_in_month(next.year, next.month));
+            // Same overflow rule as months: 2024-02-29 + 1 year → 2025-03-01.
+            let secs = next.to_unix();
+            let normalised = DateTime::from_unix(secs, next.micro);
+            next.year = normalised.year;
+            next.month = normalised.month;
+            next.day = normalised.day;
         }
         _ => return Ok(None),
     }
@@ -356,6 +426,31 @@ fn days_in_month(year: i32, month: u32) -> u32 {
 }
 
 /// SQLite-style `strftime(format, time)`.
+///
+/// Supported format specifiers (per SQLite docs):
+///   `%d` day-of-month 01-31
+///   `%e` day-of-month space-padded
+///   `%f` SS.SSS (fractional seconds)
+///   `%H` hour 00-24
+///   `%I` hour 01-12
+///   `%j` day-of-year 001-366
+///   `%J` Julian day number
+///   `%k` hour space-padded 0-23
+///   `%l` hour space-padded 1-12
+///   `%m` month 01-12
+///   `%M` minute 00-59
+///   `%p` AM/PM
+///   `%P` am/pm
+///   `%R` HH:MM
+///   `%s` seconds since 1970-01-01
+///   `%S` seconds 00-59
+///   `%T` HH:MM:SS
+///   `%u` day-of-week 1-7 (Monday=1)
+///   `%U` week-of-year (Sunday-based) 00-53
+///   `%w` day-of-week 0-6 (Sunday=0)
+///   `%W` week-of-year (Monday-based) 00-53
+///   `%Y` year 0000-9999
+///   `%%` literal `%`
 pub fn strftime(format: &str, dt: &DateTime) -> String {
     let mut out = String::with_capacity(format.len());
     let bytes = format.as_bytes();
@@ -369,12 +464,43 @@ pub fn strftime(format: &str, dt: &DateTime) -> String {
                 b'Y' => out.push_str(&format!("{:04}", dt.year)),
                 b'm' => out.push_str(&format!("{:02}", dt.month)),
                 b'd' => out.push_str(&format!("{:02}", dt.day)),
+                b'e' => out.push_str(&format!("{:2}", dt.day)),
                 b'H' => out.push_str(&format!("{:02}", dt.hour)),
+                b'I' => {
+                    let h = match dt.hour % 12 {
+                        0 => 12,
+                        n => n,
+                    };
+                    out.push_str(&format!("{h:02}"));
+                }
+                b'k' => out.push_str(&format!("{:2}", dt.hour)),
+                b'l' => {
+                    let h = match dt.hour % 12 {
+                        0 => 12,
+                        n => n,
+                    };
+                    out.push_str(&format!("{h:2}"));
+                }
                 b'M' => out.push_str(&format!("{:02}", dt.minute)),
                 b'S' => out.push_str(&format!("{:02}", dt.second)),
                 b'j' => out.push_str(&format!("{:03}", day_of_year(dt))),
                 b's' => out.push_str(&dt.to_unix().to_string()),
                 b'w' => out.push_str(&day_of_week(dt).to_string()),
+                b'u' => {
+                    // SQLite/POSIX: Monday=1..Sunday=7
+                    let dow = day_of_week(dt);
+                    let v = if dow == 0 { 7 } else { dow };
+                    out.push_str(&v.to_string());
+                }
+                b'U' => out.push_str(&format!("{:02}", week_of_year_sunday(dt))),
+                b'W' => out.push_str(&format!("{:02}", week_of_year_monday(dt))),
+                b'p' => out.push_str(if dt.hour < 12 { "AM" } else { "PM" }),
+                b'P' => out.push_str(if dt.hour < 12 { "am" } else { "pm" }),
+                b'R' => out.push_str(&format!("{:02}:{:02}", dt.hour, dt.minute)),
+                b'T' => out.push_str(&format!(
+                    "{:02}:{:02}:{:02}",
+                    dt.hour, dt.minute, dt.second
+                )),
                 b'%' => out.push('%'),
                 b'f' => out.push_str(&format!("{:02}.{:03}", dt.second, dt.micro / 1000)),
                 b'J' => out.push_str(&format!("{:.6}", dt.julian_day())),
@@ -389,6 +515,53 @@ pub fn strftime(format: &str, dt: &DateTime) -> String {
         }
     }
     out
+}
+
+fn week_of_year_sunday(dt: &DateTime) -> u32 {
+    // SQLite `%U`: week 0 starts on Jan 1; week 1 starts on the first Sunday.
+    let jan1 = DateTime {
+        year: dt.year,
+        month: 1,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        micro: 0,
+        is_local: false,
+    };
+    let jan1_dow = day_of_week(&jan1); // 0=Sun..6=Sat
+    let doy = day_of_year(dt); // 1-based
+    // Days until first Sunday (offset from Jan 1).
+    let first_sunday_offset = (7 - jan1_dow) % 7;
+    if doy <= first_sunday_offset {
+        0
+    } else {
+        ((doy - first_sunday_offset - 1) / 7) + 1
+    }
+}
+
+fn week_of_year_monday(dt: &DateTime) -> u32 {
+    // SQLite `%W`: week 0 starts on Jan 1; week 1 starts on the first Monday.
+    let jan1 = DateTime {
+        year: dt.year,
+        month: 1,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        micro: 0,
+        is_local: false,
+    };
+    let jan1_dow = day_of_week(&jan1); // 0=Sun..6=Sat
+    // Convert to Monday-based offset: Monday=0..Sunday=6
+    let jan1_mon_dow = (jan1_dow + 6) % 7;
+    let doy = day_of_year(dt);
+    let first_monday_offset = (7 - jan1_mon_dow) % 7;
+    if doy <= first_monday_offset {
+        0
+    } else {
+        ((doy - first_monday_offset - 1) / 7) + 1
+    }
 }
 
 fn day_of_year(dt: &DateTime) -> u32 {
