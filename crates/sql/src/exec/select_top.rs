@@ -924,7 +924,11 @@ fn covering_projection_for_index(
     let mut col_to_index_pos: std::collections::HashMap<usize, usize> =
         std::collections::HashMap::new();
     for (pos, key) in index.keys.iter().enumerate() {
-        let IndexKeySource::Column { attnum } = key.source;
+        let IndexKeySource::Column { attnum } = key.source else {
+            // A6 SQL-D: expression keys are not addressable by table
+            // column ordinal; skip from the covering map.
+            continue;
+        };
         col_to_index_pos.insert(attnum as usize, pos);
     }
     let mut out: Vec<index_access::OutputColumnSource> = Vec::with_capacity(projection.len());
@@ -998,7 +1002,10 @@ fn covering_order_satisfies(
     let Some(first_key) = index.keys.first() else {
         return false;
     };
-    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source;
+    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source
+    else {
+        return false;
+    };
     table
         .columns
         .get(attnum as usize)

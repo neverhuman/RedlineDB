@@ -124,6 +124,7 @@ pub fn apply_create_table(
                         }],
                         flags: 0,
                         normalized_sql: None,
+                        predicate_sql: None,
                     };
                     next_relation_id.0 += 1;
                     indexes.push(index.clone());
@@ -165,6 +166,7 @@ pub fn apply_create_table(
                         }],
                         flags: 0,
                         normalized_sql: None,
+                        predicate_sql: None,
                     };
                     next_relation_id.0 += 1;
                     indexes.push(index.clone());
@@ -227,6 +229,7 @@ pub fn apply_create_table(
             not_null,
             default_value,
             default_expr,
+            generated: None,
         });
     }
 
@@ -417,6 +420,7 @@ pub fn apply_create_index(
         keys,
         flags: 0,
         normalized_sql: spec.normalized_sql.map(|sql| sql.into_boxed_str()),
+        predicate_sql: None,
     };
 
     let mut updated = false;
@@ -610,6 +614,7 @@ pub fn apply_alter_table(
                 not_null,
                 default_value: column.default_value.clone(),
                 default_expr: default_const_expr(column.default_value.as_ref()),
+                generated: None,
             });
         }
         AlterTableOperationSpec::DropColumn { .. } => {
@@ -674,6 +679,7 @@ fn build_table_constraint_index(
         keys,
         flags: 0,
         normalized_sql: None,
+        predicate_sql: None,
     };
     input.next_relation_id.0 += 1;
     let _ = input.conflict;

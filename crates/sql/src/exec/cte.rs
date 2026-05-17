@@ -148,6 +148,7 @@ fn synth_table_def(name: &str, columns: &[String], rows: &[Vec<SqlValue>]) -> Ar
             not_null: false,
             default_value: None,
             default_expr: None,
+            generated: None,
         })
         .collect();
     let rel = next_cte_rel_id();

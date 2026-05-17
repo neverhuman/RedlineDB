@@ -556,7 +556,10 @@ fn pragma_column_rows(
         }
     } else if let Some(index) = table.indexes.iter().find(|index| index.primary) {
         for (position, key) in index.keys.iter().enumerate() {
-            let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source;
+            let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source
+            else {
+                continue;
+            };
             if let Some(slot) = pk.get_mut(*attnum as usize) {
                 *slot = (position + 1) as i64;
             }
@@ -637,7 +640,10 @@ pub(crate) fn pragma_index_info_rows(
     };
     let mut rows = Vec::with_capacity(index.keys.len());
     for (seqno, key) in index.keys.iter().enumerate() {
-        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source;
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source
+        else {
+            continue;
+        };
         let column = match table.columns.get(*attnum as usize) {
             Some(c) => c,
             None => {
@@ -669,7 +675,10 @@ fn pragma_index_xinfo_rows(
     };
     let mut rows = Vec::with_capacity(index.keys.len());
     for (seqno, key) in index.keys.iter().enumerate() {
-        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source;
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source
+        else {
+            continue;
+        };
         let column = match table.columns.get(*attnum as usize) {
             Some(c) => c,
             None => {

@@ -123,7 +123,7 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
     let mut reader = BytesReader::new(bytes);
     let format_version = reader.u64()?;
-    if format_version > 6 {
+    if format_version > 7 {
         return Err(Error::UnsupportedVersion(format_version as u16));
     }
     let meta = CatalogMeta {
@@ -213,12 +213,12 @@ fn encode_table(out: &mut BytesWriter, table: &TableDef, format_version: u64) ->
 
     out.u32(table.columns.len() as u32);
     for column in &table.columns {
-        encode_column(out, column)?;
+        encode_column(out, column, format_version)?;
     }
 
     out.u32(table.indexes.len() as u32);
     for index in &table.indexes {
-        encode_index(out, index)?;
+        encode_index(out, index, format_version)?;
     }
 
     out.u32(table.constraints.len() as u32);
@@ -254,7 +254,7 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
     let column_count = reader.u32()? as usize;
     let mut columns = Vec::with_capacity(column_count);
     for _ in 0..column_count {
-        columns.push(decode_column(reader)?);
+        columns.push(decode_column(reader, format_version)?);
     }
 
     let index_count = reader.u32()? as usize;
@@ -303,7 +303,11 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
     })
 }
 
-fn encode_column(out: &mut BytesWriter, column: &ColumnDef) -> Result<()> {
+fn encode_column(
+    out: &mut BytesWriter,
+    column: &ColumnDef,
+    format_version: u64,
+) -> Result<()> {
     out.u64(column.column_id.0);
     out.u16(column.ordinal);
     write_str(out, &column.name);
@@ -313,31 +317,66 @@ fn encode_column(out: &mut BytesWriter, column: &ColumnDef) -> Result<()> {
     out.bool(column.not_null);
     write_opt_value(out, column.default_value.as_ref());
     write_opt_expr(out, column.default_expr.as_deref());
+    if format_version >= 7 {
+        match &column.generated {
+            None => out.bool(false),
+            Some(spec) => {
+                out.bool(true);
+                out.u8(spec.kind as u8);
+                write_str(out, &spec.expr_sql);
+            }
+        }
+    }
     Ok(())
 }
 
-fn decode_column(reader: &mut BytesReader<'_>) -> Result<ColumnDef> {
+fn decode_column(reader: &mut BytesReader<'_>, format_version: u64) -> Result<ColumnDef> {
+    let column_id = super::ColumnId(reader.u64()?);
+    let ordinal = reader.u16()?;
+    let name = read_box_str(reader)?;
+    let folded = read_box_str(reader)?;
+    let declared_type = read_opt_box_str(reader)?;
+    let affinity = match reader.u8()? {
+        0 => super::Affinity::Blob,
+        1 => super::Affinity::Text,
+        2 => super::Affinity::Numeric,
+        3 => super::Affinity::Integer,
+        4 => super::Affinity::Real,
+        _ => return Err(Error::CatalogCorrupt("invalid affinity")),
+    };
+    let not_null = reader.bool()?;
+    let default_value = read_opt_value(reader)?;
+    let default_expr = read_opt_expr(reader)?;
+    let generated = if format_version >= 7 {
+        if reader.bool()? {
+            let kind = match reader.u8()? {
+                0 => super::GeneratedColumnKind::Stored,
+                1 => super::GeneratedColumnKind::Virtual,
+                _ => return Err(Error::CatalogCorrupt("invalid generated column kind")),
+            };
+            let expr_sql = read_box_str(reader)?;
+            Some(super::GeneratedColumnSpec { kind, expr_sql })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     Ok(ColumnDef {
-        column_id: super::ColumnId(reader.u64()?),
-        ordinal: reader.u16()?,
-        name: read_box_str(reader)?,
-        folded: read_box_str(reader)?,
-        declared_type: read_opt_box_str(reader)?,
-        affinity: match reader.u8()? {
-            0 => super::Affinity::Blob,
-            1 => super::Affinity::Text,
-            2 => super::Affinity::Numeric,
-            3 => super::Affinity::Integer,
-            4 => super::Affinity::Real,
-            _ => return Err(Error::CatalogCorrupt("invalid affinity")),
-        },
-        not_null: reader.bool()?,
-        default_value: read_opt_value(reader)?,
-        default_expr: read_opt_expr(reader)?,
+        column_id,
+        ordinal,
+        name,
+        folded,
+        declared_type,
+        affinity,
+        not_null,
+        default_value,
+        default_expr,
+        generated,
     })
 }
 
-fn encode_index(out: &mut BytesWriter, index: &IndexDef) -> Result<()> {
+fn encode_index(out: &mut BytesWriter, index: &IndexDef, format_version: u64) -> Result<()> {
     out.u64(index.index_id.0);
     out.u64(index.table_id.0);
     out.u64(index.relation_id.0);
@@ -351,7 +390,10 @@ fn encode_index(out: &mut BytesWriter, index: &IndexDef) -> Result<()> {
     write_opt_str(out, index.normalized_sql.as_deref());
     out.u32(index.keys.len() as u32);
     for key in &index.keys {
-        encode_index_key(out, key)?;
+        encode_index_key(out, key, format_version)?;
+    }
+    if format_version >= 7 {
+        write_opt_str(out, index.predicate_sql.as_deref());
     }
     Ok(())
 }
@@ -380,8 +422,13 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
     let key_count = reader.u32()? as usize;
     let mut keys = Vec::with_capacity(key_count);
     for _ in 0..key_count {
-        keys.push(decode_index_key(reader)?);
+        keys.push(decode_index_key(reader, format_version)?);
     }
+    let predicate_sql = if format_version >= 7 {
+        read_opt_box_str(reader)?
+    } else {
+        None
+    };
     Ok(IndexDef {
         index_id,
         table_id,
@@ -395,15 +442,33 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
         keys,
         flags,
         normalized_sql,
+        predicate_sql,
     })
 }
 
-fn encode_index_key(out: &mut BytesWriter, key: &IndexKeyDef) -> Result<()> {
+fn encode_index_key(
+    out: &mut BytesWriter,
+    key: &IndexKeyDef,
+    format_version: u64,
+) -> Result<()> {
     out.u16(key.ordinal);
-    match key.source {
+    match &key.source {
         IndexKeySource::Column { attnum } => {
             out.u8(0);
-            out.u16(attnum);
+            out.u16(*attnum);
+        }
+        IndexKeySource::Expression { sql, referenced_cols } => {
+            if format_version < 7 {
+                return Err(Error::CatalogCorrupt(
+                    "expression index keys require catalog format >= 7",
+                ));
+            }
+            out.u8(1);
+            write_str(out, sql);
+            out.u32(referenced_cols.len() as u32);
+            for col in referenced_cols {
+                out.u16(*col);
+            }
         }
     }
     out.u8(key.sort_dir as u8);
@@ -411,12 +476,21 @@ fn encode_index_key(out: &mut BytesWriter, key: &IndexKeyDef) -> Result<()> {
     Ok(())
 }
 
-fn decode_index_key(reader: &mut BytesReader<'_>) -> Result<IndexKeyDef> {
+fn decode_index_key(reader: &mut BytesReader<'_>, format_version: u64) -> Result<IndexKeyDef> {
     let ordinal = reader.u16()?;
     let source = match reader.u8()? {
         0 => IndexKeySource::Column {
             attnum: reader.u16()?,
         },
+        1 if format_version >= 7 => {
+            let sql = read_box_str(reader)?;
+            let len = reader.u32()? as usize;
+            let mut referenced_cols = Vec::with_capacity(len);
+            for _ in 0..len {
+                referenced_cols.push(reader.u16()?);
+            }
+            IndexKeySource::Expression { sql, referenced_cols }
+        }
         _ => return Err(Error::CatalogCorrupt("invalid index key source")),
     };
     let sort_dir = match reader.u8()? {
