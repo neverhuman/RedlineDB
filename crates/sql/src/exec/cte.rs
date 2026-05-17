@@ -43,9 +43,13 @@ use redlinedb_kernel::format::RelId;
 /// bit of u64 keeps us comfortably out of any plausible real-id range.
 const CTE_RELATION_TAG: u64 = 0xC7E0_0000_0000_0000;
 
-/// Returns true if this `TableDef` was synthesized for a CTE.
+/// Returns true if this `TableDef` was synthesized for a CTE or a
+/// view (both share the same row-storage backing via
+/// `register_external_rows` and `rows_for_relation`). The view tag and
+/// the CTE tag share the same row-registry namespace.
 pub(crate) fn is_cte_table_def(def: &TableDef) -> bool {
-    (def.relation_id.0 & 0xFFFF_0000_0000_0000) == CTE_RELATION_TAG
+    let tag = def.relation_id.0 & 0xFFFF_0000_0000_0000;
+    tag == CTE_RELATION_TAG || tag == super::view::VIEW_RELATION_TAG
 }
 
 /// Maximum recursive-CTE iterations before bailing out.
@@ -106,6 +110,14 @@ fn register_cte_rows(rel: RelId, rows: Arc<Vec<Vec<SqlValue>>>) {
     });
 }
 
+/// Allow non-CTE callers (e.g. [`super::view`]) to publish synthetic
+/// row sets into the same per-thread registry. The lookup path is
+/// agnostic to the publisher; the relation_id tag distinguishes
+/// view-from-CTE storage in callers that care.
+pub(crate) fn register_external_rows(rel: RelId, rows: Arc<Vec<Vec<SqlValue>>>) {
+    register_cte_rows(rel, rows);
+}
+
 #[allow(dead_code)]
 fn release_scope_rows(scope: &HashMap<String, CteDef>) {
     CTE_ROWS_TL.with(|cell| {
@@ -149,6 +161,7 @@ fn synth_table_def(name: &str, columns: &[String], rows: &[Vec<SqlValue>]) -> Ar
         indexes: Vec::new(),
         constraints: Vec::new(),
         checks: Vec::new(),
+        foreign_keys: Vec::new(),
         rowid_alias_column: None,
         flags: 0,
         normalized_sql: None,
@@ -168,6 +181,28 @@ fn infer_affinity(rows: &[Vec<SqlValue>], col: usize) -> Affinity {
         }
     }
     Affinity::Blob
+}
+
+/// Build a [`CteDef`] from a pre-materialized row set, registering the
+/// row payload in the thread-local relation store so the join executor
+/// can resolve the synthetic relation_id at execution time. Used by the
+/// table-valued function pre-pass in `bind_select_from` so TVFs can
+/// participate in JOINs and other multi-table FROM lists.
+pub(crate) fn build_cte_def_from_rows(
+    name: &str,
+    columns: Vec<String>,
+    rows: Vec<Vec<SqlValue>>,
+) -> CteDef {
+    let table_def = synth_table_def(name, &columns, &rows);
+    let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(rows);
+    register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
+    let row_slice: Arc<[Vec<SqlValue>]> = Arc::from(rows_arc.as_slice().to_vec());
+    CteDef {
+        name: Arc::from(name),
+        columns: Arc::from(columns),
+        rows: row_slice,
+        table_def: Some(table_def),
+    }
 }
 
 /// Push a CTE scope (visible to bind-time lookups). Pairs with `pop_scope`.

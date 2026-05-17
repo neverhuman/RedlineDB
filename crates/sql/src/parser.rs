@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 #[allow(unused_imports)]
 use redlinedb_kernel::catalog::{
-    ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
-    DropIndexSpec, DropTableSpec, ExprAst, IndexColumnSpec, IndexOrigin, OwnedValue, QualifiedName,
-    SchemaEpoch, SchemaSnapshot, SortDir, TableConstraintSpec, lookup_index, lookup_table,
+    ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec,
+    CreateViewSpec, DbName, DropIndexSpec, DropTableSpec, DropViewSpec, ExprAst, IndexColumnSpec,
+    IndexOrigin, OwnedValue, QualifiedName, SchemaEpoch, SchemaSnapshot, SortDir,
+    TableConstraintSpec, lookup_index, lookup_table,
 };
 #[allow(unused_imports)]
 use sqlparser::ast::{
@@ -317,9 +318,9 @@ fn bind_statement(
             database_file_name,
             ..
         } => bind_attach(sql, schema_epoch, schema_name, database_file_name),
-        SqlStatement::CreateView(_) => Err(Error::UnsupportedSql(
-            "CREATE VIEW is parsed-only; execution not yet implemented".to_owned(),
-        )),
+        SqlStatement::CreateView(create_view) => {
+            bind_create_view(schema_epoch, sql, create_view)
+        }
         SqlStatement::CreateTrigger(_) => Err(Error::UnsupportedSql(
             "CREATE TRIGGER is parsed-only; execution not yet implemented".to_owned(),
         )),

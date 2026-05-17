@@ -48,12 +48,17 @@ pub(crate) fn bind_create_table(
     for (ordinal, column) in create_table.columns.iter().enumerate() {
         column_lookup.insert(column.name.value.to_ascii_lowercase(), ordinal);
     }
+    let mut constraints = Vec::new();
 
     for (ordinal, column) in create_table.columns.into_iter().enumerate() {
-        columns.push(convert_column_def(column, ordinal, &column_lookup)?);
+        columns.push(convert_column_def(
+            column,
+            ordinal,
+            &column_lookup,
+            &mut constraints,
+        )?);
     }
 
-    let mut constraints = Vec::new();
     for constraint in create_table.constraints {
         constraints.push(convert_table_constraint(constraint, &column_lookup)?);
     }
@@ -179,9 +184,12 @@ pub(crate) fn bind_drop(
         sqlparser::ast::ObjectType::Index => {
             PreparedKind::DropIndex(DropIndexSpec { name, if_exists })
         }
+        sqlparser::ast::ObjectType::View => {
+            PreparedKind::DropView(DropViewSpec { name, if_exists })
+        }
         _ => {
             return Err(Error::UnsupportedSql(
-                "only DROP TABLE and DROP INDEX are supported".to_owned(),
+                "only DROP TABLE, DROP INDEX, and DROP VIEW are supported".to_owned(),
             ));
         }
     };
@@ -244,7 +252,18 @@ pub(crate) fn bind_alter_table(
                     "ALTER TABLE ADD COLUMN position is not supported".to_owned(),
                 ));
             }
-            let column = convert_column_def(column_def, 0, &std::collections::HashMap::new())?;
+            let mut alter_constraints = Vec::new();
+            let column = convert_column_def(
+                column_def,
+                0,
+                &std::collections::HashMap::new(),
+                &mut alter_constraints,
+            )?;
+            if !alter_constraints.is_empty() {
+                return Err(Error::UnsupportedSql(
+                    "ALTER TABLE ADD COLUMN with FOREIGN KEY is not supported".to_owned(),
+                ));
+            }
             if column.constraints.iter().any(|constraint| {
                 !matches!(
                     constraint,
@@ -314,6 +333,65 @@ pub(crate) fn bind_alter_table(
             name: parse_qualified_name(name)?,
             if_exists,
             operation,
+        }),
+    })
+}
+
+/// Bind `CREATE [TEMP] VIEW [IF NOT EXISTS] name [(col, col)] AS SELECT ...`.
+///
+/// The body SELECT is re-emitted to canonical SQL via the sqlparser
+/// `Display` impl and stored verbatim on the [`CreateViewSpec`]. The
+/// kernel persists it as-is; at expansion time the SQL crate re-parses
+/// the body and binds it as a derived row source.
+///
+/// Rejects MySQL/Snowflake/Clickhouse modifiers that fresh SQLite-style
+/// applications do not need (materialized, secure, OR REPLACE,
+/// WITH NO SCHEMA BINDING, TO clause, CLUSTER BY, etc.).
+pub(crate) fn bind_create_view(
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    create_view: sqlparser::ast::CreateView,
+) -> Result<PreparedTemplate> {
+    if create_view.or_alter
+        || create_view.or_replace
+        || create_view.materialized
+        || create_view.secure
+        || create_view.with_no_schema_binding
+        || create_view.to.is_some()
+        || create_view.params.is_some()
+        || !create_view.cluster_by.is_empty()
+        || create_view.comment.is_some()
+    {
+        return Err(Error::UnsupportedSql(
+            "CREATE VIEW modifiers are not supported".to_owned(),
+        ));
+    }
+    let (schema, name) = split_name(create_view.name)?;
+    let columns = create_view
+        .columns
+        .into_iter()
+        .map(|col| DbName::new(col.name.value))
+        .collect();
+    // Render the body SELECT back to canonical SQL; the kernel persists
+    // it verbatim and the binder re-parses it on each view expansion.
+    let body_sql = create_view.query.to_string();
+    Ok(PreparedTemplate {
+        sql: Arc::from(sql),
+        schema_epoch,
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: ParamLayout::default(),
+        output_columns: Arc::from([]),
+        readonly: false,
+        kind: PreparedKind::CreateView(CreateViewSpec {
+            schema,
+            name,
+            if_not_exists: create_view.if_not_exists,
+            // SQLite `TEMP VIEW` modifier flag.
+            session_scoped: create_view.temporary,
+            columns,
+            body_sql,
+            normalized_sql: Some(sql.to_owned()),
         }),
     })
 }

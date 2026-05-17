@@ -64,6 +64,7 @@ pub(crate) fn lookup(name: &str) -> Option<&'static dyn TvFunc> {
     let lower = name.to_ascii_lowercase();
     super::pragma_tv::registry()
         .iter()
+        .chain(super::json_tv::registry().iter())
         .find(|f| f.name() == lower.as_str())
         .map(|f| *f)
 }

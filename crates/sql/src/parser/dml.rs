@@ -12,6 +12,13 @@ pub(crate) fn bind_insert(
             "INSERT ... SET is not supported".to_owned(),
         ));
     }
+    if let sqlparser::ast::TableObject::TableName(ref name) = insert.table
+        && crate::exec::view::name_is_view(&schema, name)
+    {
+        return Err(crate::exec::view::cannot_modify_view_error(
+            &name.to_string(),
+        ));
+    }
     let table = bind_table_object(&schema, &insert.table)?;
     let mut params = ParamLayout::default();
     let conflict = bind_insert_conflict(&table, insert.or, insert.on, &mut params)?;
@@ -123,6 +130,13 @@ pub(crate) fn bind_update(
         ));
     }
 
+    if let sqlparser::ast::TableFactor::Table { ref name, .. } = update.table.relation
+        && crate::exec::view::name_is_view(&schema, name)
+    {
+        return Err(crate::exec::view::cannot_modify_view_error(
+            &name.to_string(),
+        ));
+    }
     let table = bind_table_with_joins(&schema, &update.table)?;
     let mut params = ParamLayout::default();
     let mut assignments = Vec::new();
@@ -203,6 +217,13 @@ pub(crate) fn bind_delete(
     if from.len() != 1 {
         return Err(Error::UnsupportedSql(
             "only single-table DELETE is supported".to_owned(),
+        ));
+    }
+    if let sqlparser::ast::TableFactor::Table { ref name, .. } = from[0].relation
+        && crate::exec::view::name_is_view(&schema, name)
+    {
+        return Err(crate::exec::view::cannot_modify_view_error(
+            &name.to_string(),
         ));
     }
     let table = bind_table_with_joins(&schema, &from[0])?;

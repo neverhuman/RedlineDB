@@ -298,6 +298,10 @@ pub(crate) fn build_plan(
         }
         PreparedKind::Pragma(_) => simple_node(PhysicalKind::Constant, "PRAGMA".to_owned()),
         PreparedKind::Attach(_) => simple_node(PhysicalKind::Constant, "ATTACH/DETACH".to_owned()),
+        PreparedKind::CreateView(_) => {
+            simple_node(PhysicalKind::Constant, "CREATE VIEW".to_owned())
+        }
+        PreparedKind::DropView(_) => simple_node(PhysicalKind::Constant, "DROP VIEW".to_owned()),
     };
 
     if let Some(metrics) = metrics {

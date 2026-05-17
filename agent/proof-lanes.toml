@@ -59,6 +59,11 @@ name = "sql-parity-full"
 purpose = "full SQL differential parity gate against rusqlite oracle (zero-divergence)"
 
 [[lane]]
+command = "rtk cargo test -p redlinedb-sql --test parity_fk_enforce --quiet --locked"
+name = "sql-parity-fk"
+purpose = "A6 SQLite parity — FK enforcement (NO ACTION/RESTRICT/CASCADE/SET NULL/SET DEFAULT + DEFERRABLE + PRAGMA toggle)"
+
+[[lane]]
 command = "just ffi-parity-full"
 name = "ffi-parity-full"
 purpose = "full FFI symbol + behavior parity gate against rusqlite oracle"
