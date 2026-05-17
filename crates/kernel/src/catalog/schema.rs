@@ -130,6 +130,34 @@ pub struct ForeignKeyDef {
     pub deferred: bool,
 }
 
+/// A persisted trigger definition.
+///
+/// Captures the parent table, the firing event/period, an optional
+/// column-list filter for `UPDATE OF c1, c2 ...`, an optional `WHEN`
+/// predicate, and the verbatim body SQL. The SQL crate re-parses the
+/// body at fire time and binds it against an `OLD`/`NEW` row context.
+#[derive(Debug, Clone)]
+pub struct TriggerDef {
+    pub trigger_id: ObjectId,
+    pub schema_id: SchemaId,
+    pub name: Box<str>,
+    pub folded: Box<str>,
+    /// The parent table the trigger is attached to (case-preserved + folded).
+    pub table_name: Box<str>,
+    pub table_folded: Box<str>,
+    pub when_time: super::ddl::TriggerTimeKind,
+    pub when_event: super::ddl::TriggerEventKind,
+    /// Column filter for `UPDATE OF ...`. Empty when no column list was
+    /// specified or the event is not `UPDATE`.
+    pub when_cols: Vec<Box<str>>,
+    /// Optional `WHEN` predicate SQL text.
+    pub when_predicate_sql: Option<Box<str>>,
+    /// Verbatim body SQL (the contents of `BEGIN ... END` re-emitted as
+    /// SQL via the parser's Display impl). Re-parsed at fire time.
+    pub body_sql: Box<str>,
+    pub normalized_sql: Option<Box<str>>,
+}
+
 /// A persisted view definition. The view body SQL is stored verbatim
 /// alongside the optional alias column list; query-time expansion
 /// re-parses the body and binds it as a derived row source.
@@ -162,12 +190,14 @@ pub struct SchemaSnapshot {
     pub tables: Vec<Arc<TableDef>>,
     pub indexes: Vec<Arc<IndexDef>>,
     pub views: Vec<Arc<ViewDef>>,
+    pub triggers: Vec<Arc<TriggerDef>>,
     by_table_id: HashMap<TableId, Arc<TableDef>>,
     by_index_id: HashMap<IndexId, Arc<IndexDef>>,
     by_table_name: HashMap<(SchemaId, Box<str>), Arc<TableDef>>,
     by_namespace_name: HashMap<Box<str>, SchemaId>,
     by_index_name: HashMap<(SchemaId, Box<str>), Arc<IndexDef>>,
     by_view_name: HashMap<(SchemaId, Box<str>), Arc<ViewDef>>,
+    by_trigger_name: HashMap<(SchemaId, Box<str>), Arc<TriggerDef>>,
 }
 
 impl SchemaSnapshot {
@@ -178,12 +208,14 @@ impl SchemaSnapshot {
             tables: Vec::new(),
             indexes: Vec::new(),
             views: Vec::new(),
+            triggers: Vec::new(),
             by_table_id: HashMap::new(),
             by_index_id: HashMap::new(),
             by_table_name: HashMap::new(),
             by_namespace_name: HashMap::new(),
             by_index_name: HashMap::new(),
             by_view_name: HashMap::new(),
+            by_trigger_name: HashMap::new(),
         }
     }
 
@@ -215,6 +247,16 @@ impl SchemaSnapshot {
 
     pub fn lookup_view(&self, schema_id: SchemaId, name: &str) -> Option<Arc<ViewDef>> {
         self.by_view_name
+            .get(&(schema_id, name.to_ascii_lowercase().into_boxed_str()))
+            .cloned()
+    }
+
+    pub fn lookup_trigger(
+        &self,
+        schema_id: SchemaId,
+        name: &str,
+    ) -> Option<Arc<TriggerDef>> {
+        self.by_trigger_name
             .get(&(schema_id, name.to_ascii_lowercase().into_boxed_str()))
             .cloned()
     }
@@ -257,6 +299,18 @@ impl SchemaSnapshot {
                 },
             });
         }
+        for trigger in &self.triggers {
+            rows.push(SqliteSchemaRow {
+                type_name: "trigger".into(),
+                name: trigger.name.clone(),
+                tbl_name: trigger.table_name.clone(),
+                rootpage: 0,
+                sql: trigger
+                    .normalized_sql
+                    .clone()
+                    .unwrap_or_else(|| Box::from("")),
+            });
+        }
         rows
     }
 
@@ -287,6 +341,12 @@ impl SchemaSnapshot {
         for view in &self.views {
             self.by_view_name
                 .insert((view.schema_id, view.folded.clone()), Arc::clone(view));
+        }
+        for trigger in &self.triggers {
+            self.by_trigger_name.insert(
+                (trigger.schema_id, trigger.folded.clone()),
+                Arc::clone(trigger),
+            );
         }
     }
 }

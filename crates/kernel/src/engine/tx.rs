@@ -23,6 +23,12 @@ pub struct Txn {
     row_locks: Vec<RowKey>,
     open: bool,
     lifecycle: Option<Arc<TxnLifecycle>>,
+    /// Lane A5-triggers: depth counter for nested trigger fires. The SQL
+    /// crate increments this each time it enters a trigger body and
+    /// decrements on exit; SQLite caps recursion at 1000 by default and
+    /// surfaces a clear error past that. The counter is reset to 0 when
+    /// the trigger executor releases the outermost frame.
+    trigger_depth: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -47,7 +53,28 @@ impl Txn {
             row_locks: Vec::new(),
             open: true,
             lifecycle: Some(lifecycle),
+            trigger_depth: 0,
         }
+    }
+
+    /// Current trigger recursion depth. Used by the SQL executor's
+    /// fire-hook to enforce SQLite-compatible recursion caps.
+    pub fn trigger_depth(&self) -> u32 {
+        self.trigger_depth
+    }
+
+    /// Increment the trigger recursion depth and return the new value.
+    /// Saturates at u32::MAX rather than wrapping, which would let a
+    /// runaway nested-fire chain wrap to zero and bypass the cap.
+    pub fn increment_trigger_depth(&mut self) -> u32 {
+        self.trigger_depth = self.trigger_depth.saturating_add(1);
+        self.trigger_depth
+    }
+
+    /// Decrement the trigger recursion depth (clamped at 0). Called when
+    /// a trigger body completes.
+    pub fn decrement_trigger_depth(&mut self) {
+        self.trigger_depth = self.trigger_depth.saturating_sub(1);
     }
 
     pub fn id(&self) -> TxId {

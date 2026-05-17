@@ -52,6 +52,7 @@ pub(crate) mod json_tv;
 pub(crate) mod pragma_tv;
 pub(crate) mod set_ops;
 pub(crate) mod table_valued;
+pub(crate) mod trigger;
 pub(crate) mod view;
 pub(crate) mod window;
 pub(crate) mod attach;
@@ -59,12 +60,56 @@ pub(crate) mod attach;
 thread_local! {
     static CURRENT_CONNECTION: Cell<*const Connection> = const { Cell::new(std::ptr::null()) };
     static CURRENT_TX: Cell<*mut Txn> = const { Cell::new(std::ptr::null_mut()) };
+    /// Lane A5-triggers: pointer to the currently-locked SessionState.
+    /// Set by [`with_write_tx`] inside `with_session`, cleared on exit.
+    /// Re-entrant calls (e.g. trigger body fires) can borrow it directly
+    /// instead of re-locking the session mutex (which would deadlock).
+    static CURRENT_SESSION: Cell<*mut SessionState> = const { Cell::new(std::ptr::null_mut()) };
     /// Stack of *owned* `SqlRow` snapshots captured by enclosing query
     /// scopes. Inner-scope evaluators can walk this stack to resolve
     /// correlated identifiers (`outer_table.col`) when the immediate row
     /// context does not contain them.
     static OUTER_ROW_STACK: std::cell::RefCell<Vec<crate::exec::expr::scalar::row::SqlRow>> =
         const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Set the per-thread current-session pointer for the duration of `f`.
+/// Used by [`with_write_tx`] so re-entrant trigger fires can reuse the
+/// session without deadlocking the mutex.
+fn with_current_session<T>(ptr: *mut SessionState, f: impl FnOnce() -> T) -> T {
+    CURRENT_SESSION.with(|cell| {
+        let prev = cell.replace(ptr);
+        let result = f();
+        cell.set(prev);
+        result
+    })
+}
+
+fn with_current_session_ptr() -> Option<*mut SessionState> {
+    CURRENT_SESSION.with(|cell| {
+        let p = cell.get();
+        if p.is_null() { None } else { Some(p) }
+    })
+}
+
+/// Run `f` against the connection's session state. Prefers the
+/// thread-local current-session pointer when inside a re-entrant call
+/// (e.g. a trigger body fired during a parent DML); otherwise acquires
+/// the session mutex via `Connection::with_session`. Without this
+/// shortcut, nested `with_session` calls deadlock on the non-re-entrant
+/// `parking_lot::Mutex`.
+fn with_session_reentrant<T>(
+    conn: &Connection,
+    f: impl FnOnce(&mut SessionState) -> Result<T>,
+) -> Result<T> {
+    if let Some(ptr) = with_current_session_ptr() {
+        // SAFETY: the pointer was installed by an outer `with_write_tx`
+        // and is valid for the duration of that closure. Re-entrant
+        // trigger fires run strictly synchronously inside that scope.
+        let session_ref: &mut SessionState = unsafe { &mut *ptr };
+        return f(session_ref);
+    }
+    conn.with_session(f)
 }
 
 /// Push a correlated-scope row onto the thread-local stack for the
@@ -81,6 +126,21 @@ pub(crate) fn with_outer_row<T>(
         cell.borrow_mut().pop();
     });
     result
+}
+
+/// Push a row onto the correlated-scope stack without an enclosing
+/// closure. Pair with [`pop_outer_row`]. Used by the trigger fire-hook
+/// because BEFORE/AFTER firing happens across multiple SQL statement
+/// invocations that cannot share a single closure scope.
+pub(crate) fn push_outer_row(row: crate::exec::expr::scalar::row::SqlRow) {
+    OUTER_ROW_STACK.with(|cell| cell.borrow_mut().push(row));
+}
+
+/// Pop the most-recently pushed [`push_outer_row`] frame.
+pub(crate) fn pop_outer_row() {
+    OUTER_ROW_STACK.with(|cell| {
+        cell.borrow_mut().pop();
+    });
 }
 
 /// Walk the correlated-scope stack (from innermost to outermost) and
@@ -244,6 +304,30 @@ pub fn execute_prepared(
                 affected_rows: 1,
             })
         }
+        PreparedKind::CreateTrigger(spec) => {
+            with_write_tx(conn, |session, tx| {
+                conn.engine().create_trigger(tx, spec.clone())?;
+                session.changes += 1;
+                session.total_changes += 1;
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 1,
+            })
+        }
+        PreparedKind::DropTrigger(spec) => {
+            with_write_tx(conn, |session, tx| {
+                conn.engine().drop_trigger(tx, spec.clone())?;
+                session.changes += 1;
+                session.total_changes += 1;
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 1,
+            })
+        }
         PreparedKind::AlterTable(spec) => {
             with_write_tx(conn, |session, tx| {
                 conn.engine().alter_table(tx, spec.clone())?;
@@ -259,7 +343,7 @@ pub fn execute_prepared(
         PreparedKind::Insert(plan) => {
             let result = execute_insert(conn, plan, bindings)?;
             if result.affected_rows > 0 {
-                conn.with_session(|session| {
+                with_session_reentrant(conn, |session| {
                     session.changes += result.affected_rows;
                     session.total_changes += result.affected_rows;
                     Ok(())
@@ -270,7 +354,7 @@ pub fn execute_prepared(
         PreparedKind::Update(plan) => {
             let result = execute_update(conn, plan, bindings)?;
             if result.affected_rows > 0 {
-                conn.with_session(|session| {
+                with_session_reentrant(conn, |session| {
                     session.changes += result.affected_rows;
                     session.total_changes += result.affected_rows;
                     Ok(())
@@ -281,7 +365,7 @@ pub fn execute_prepared(
         PreparedKind::Delete(plan) => {
             let result = execute_delete(conn, plan, bindings)?;
             if result.affected_rows > 0 {
-                conn.with_session(|session| {
+                with_session_reentrant(conn, |session| {
                     session.changes += result.affected_rows;
                     session.total_changes += result.affected_rows;
                     Ok(())
@@ -375,22 +459,38 @@ fn with_write_tx<T>(
     mut f: impl FnMut(&mut SessionState, &mut Txn) -> Result<T>,
 ) -> Result<T> {
     const AUTOCOMMIT_WRITE_RETRY_LIMIT: usize = 4096;
+    // Lane A5-triggers: re-entrant call from a trigger body fires here
+    // while the parent DML's `with_session` lock is still held. In that
+    // case the parent already owns the tx via thread-local; recurse
+    // through it directly to avoid deadlocking on the session mutex.
+    if let Some(tx_ptr) = current_tx()
+        && let Some(session_ptr) = with_current_session_ptr()
+    {
+        // SAFETY: both pointers were installed by the parent
+        // `with_write_tx` call below and live for the closure's
+        // lifetime. The trigger fire-hook is strictly synchronous with
+        // the parent — no other writer can observe these references.
+        let session_ref: &mut SessionState = unsafe { &mut *session_ptr };
+        let tx_ref: &mut Txn = unsafe { &mut *tx_ptr };
+        return f(session_ref, tx_ref);
+    }
     conn.with_session(|session| {
         if session.failed {
             return Err(Error::TransactionState(
                 "transaction is failed and must roll back",
             ));
         }
+        let session_ptr: *mut SessionState = session;
         if session.tx.is_some() {
             let mut tx = session.tx.take().expect("checked some");
             let tx_ptr: *mut Txn = &mut tx;
-            let result = with_current_tx(tx_ptr, || {
+            let result = with_current_session(session_ptr, || with_current_tx(tx_ptr, || {
                 // SAFETY: `tx_ptr` points at the `tx` local above for the
                 // duration of this closure, and no other mutable borrow is
                 // handed out while the closure runs.
                 let tx_ref = unsafe { &mut *tx_ptr };
                 f(session, tx_ref)
-            });
+            }));
             session.tx = Some(tx);
             if result.is_err() {
                 session.failed = true;
@@ -401,13 +501,13 @@ fn with_write_tx<T>(
             loop {
                 let mut tx = conn.engine().begin(Isolation::ReadCommitted)?;
                 let tx_ptr: *mut Txn = &mut tx;
-                let result = with_current_tx(tx_ptr, || {
+                let result = with_current_session(session_ptr, || with_current_tx(tx_ptr, || {
                     // SAFETY: same as the branch above; `tx` lives for the
                     // full duration of the closure and only one mutable
                     // reference is created at a time.
                     let tx_ref = unsafe { &mut *tx_ptr };
                     f(session, tx_ref)
-                });
+                }));
                 match result {
                     Ok(value) => {
                         // A6 SQLite parity: drain deferred FK checks

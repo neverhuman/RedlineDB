@@ -1,4 +1,5 @@
 use super::*;
+use redlinedb_kernel::catalog::{TriggerEventKind, TriggerTimeKind};
 
 pub(super) fn execute_insert(
     conn: &Connection,
@@ -26,6 +27,7 @@ pub(super) fn execute_insert(
             )? {
                 InsertOutcome::Inserted { rowid, values }
                 | InsertOutcome::Updated { rowid, values } => {
+                    fire_insert_triggers(conn, tx, &plan.table, rowid, &values)?;
                     if let Some(returning) = &plan.returning {
                         returning_rows.push(project_returning_row(
                             &plan.table,
@@ -107,6 +109,7 @@ pub(super) fn execute_insert(
             )? {
                 InsertOutcome::Inserted { rowid, values }
                 | InsertOutcome::Updated { rowid, values } => {
+                    fire_insert_triggers(conn, tx, &plan.table, rowid, &values)?;
                     if let Some(returning) = &plan.returning {
                         returning_rows.push(project_returning_row(
                             &plan.table,
@@ -127,4 +130,32 @@ pub(super) fn execute_insert(
             plan.returning.is_some(),
         ))
     })
+}
+
+/// Fire AFTER INSERT triggers attached to `table`. NEW is the row just
+/// inserted; OLD is absent for INSERT. The schema snapshot is loaded
+/// from the live engine so triggers created earlier in the transaction
+/// are visible.
+fn fire_insert_triggers(
+    conn: &Connection,
+    tx: &mut redlinedb_kernel::engine::Txn,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    rowid: redlinedb_kernel::format::RowId,
+    values: &[SqlValue],
+) -> Result<()> {
+    let schema = conn.engine().schema_snapshot();
+    crate::exec::trigger::fire_triggers(
+        conn,
+        tx,
+        &schema,
+        table,
+        TriggerEventKind::Insert,
+        TriggerTimeKind::After,
+        None,
+        Some(crate::exec::trigger::TriggerRowValues {
+            rowid,
+            values: values.to_vec(),
+        }),
+        None,
+    )
 }

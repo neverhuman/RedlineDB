@@ -95,6 +95,51 @@ pub struct DropViewSpec {
     pub if_exists: bool,
 }
 
+/// Firing period for a trigger — BEFORE or AFTER row mutation.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum TriggerTimeKind {
+    Before,
+    After,
+}
+
+/// Firing event for a trigger — INSERT, UPDATE, or DELETE on the parent
+/// table. `INSTEAD OF` is intentionally absent at this layer; it is
+/// deferred to a followup task.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum TriggerEventKind {
+    Insert,
+    Update,
+    Delete,
+}
+
+/// Spec for `CREATE TRIGGER`. The body SQL is stored verbatim and
+/// re-parsed at fire time.
+#[derive(Debug, Clone)]
+pub struct CreateTriggerSpec {
+    pub schema: Option<DbName>,
+    pub name: DbName,
+    pub if_not_exists: bool,
+    pub table: DbName,
+    pub when_time: TriggerTimeKind,
+    pub when_event: TriggerEventKind,
+    /// Column filter for `UPDATE OF c1, c2 ...`. Empty when no filter
+    /// was specified or the event is not UPDATE.
+    pub when_cols: Vec<DbName>,
+    /// Optional `WHEN` predicate SQL text (re-parsed at fire time).
+    pub when_predicate_sql: Option<String>,
+    /// Verbatim body SQL, re-emitted from the `BEGIN ... END` block via
+    /// the parser's Display impl.
+    pub body_sql: String,
+    pub normalized_sql: Option<String>,
+}
+
+/// Drop a trigger by qualified name.
+#[derive(Debug, Clone)]
+pub struct DropTriggerSpec {
+    pub name: QualifiedName,
+    pub if_exists: bool,
+}
+
 #[derive(Debug, Clone)]
 pub enum AlterTableOperationSpec {
     RenameTable {

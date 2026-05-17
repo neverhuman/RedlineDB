@@ -8,9 +8,10 @@ pub fn bootstrap_schema(next_relation_id: RelId) -> Arc<SchemaSnapshot> {
     let meta = CatalogMeta {
         // v5 adds per-table foreign_keys vector (A6 SQLite parity FK
         // enforcement) and the per-snapshot views section (A5-views
-        // SQLite parity). v2/v3/v4 catalogs decode with an empty FK list
-        // and an empty view list, so the bump is forward-compatible.
-        format_version: 5,
+        // SQLite parity). v6 adds the triggers section (A5-triggers
+        // SQLite parity). Older catalogs decode with empty FK / view /
+        // trigger lists, so the bumps are forward-compatible.
+        format_version: 6,
         schema_epoch: SchemaEpoch(1),
         next_object_id: ObjectId(10_000),
         next_relation_id,

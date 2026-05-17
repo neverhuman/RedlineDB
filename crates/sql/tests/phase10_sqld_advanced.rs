@@ -69,19 +69,18 @@ fn create_view_now_executes() {
 }
 
 #[test]
-fn create_trigger_is_parser_only() {
+fn create_trigger_now_executes() {
+    // Triggers are implemented (Lane A5-triggers). Differential coverage
+    // lives in `parity_trigger.rs`; this test confirms the regression
+    // boundary.
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
     conn.execute("CREATE TABLE log(msg TEXT)").expect("create");
-    let res = conn.execute(
+    conn.execute(
         "CREATE TRIGGER trg AFTER INSERT ON t \
          FOR EACH ROW BEGIN INSERT INTO log VALUES ('hi'); END",
-    );
-    // Triggers not yet supported; parser may either reject the BEGIN..END
-    // body (multi-stmt parser interaction with Lane SQL-B) or surface a
-    // structured "not yet implemented" error. Either confirms the feature
-    // isn't silently misimplemented.
-    res.expect_err("CREATE TRIGGER must error");
+    )
+    .expect("CREATE TRIGGER should execute");
 }
 
 #[test]

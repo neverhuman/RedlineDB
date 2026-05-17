@@ -110,6 +110,16 @@ pub(crate) fn execute_update(
                 &old_values,
                 &values,
             )?;
+            fire_update_triggers(
+                conn,
+                tx,
+                &plan.table,
+                fresh.rowid,
+                new_rowid,
+                &old_values,
+                &values,
+                &plan.assignments,
+            )?;
             if let Some(returning) = &plan.returning {
                 returning_rows.push(project_returning_row(
                     &plan.table,
@@ -127,6 +137,76 @@ pub(crate) fn execute_update(
             plan.returning.is_some(),
         ))
     })
+}
+
+/// Fire AFTER UPDATE triggers attached to `table`. OLD is the row
+/// before the update; NEW is the row after. The `assignments` list
+/// drives the `UPDATE OF cols` filter so triggers declared to fire on a
+/// specific column set are skipped when none of those columns appear in
+/// the SET list.
+fn fire_update_triggers(
+    conn: &Connection,
+    tx: &mut redlinedb_kernel::engine::Txn,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    old_rowid: redlinedb_kernel::format::RowId,
+    new_rowid: redlinedb_kernel::format::RowId,
+    old_values: &[SqlValue],
+    new_values: &[SqlValue],
+    assignments: &[(usize, sqlparser::ast::Expr)],
+) -> Result<()> {
+    let schema = conn.engine().schema_snapshot();
+    let changed_cols: Vec<String> = assignments
+        .iter()
+        .filter_map(|(ordinal, _)| {
+            table
+                .columns
+                .get(*ordinal)
+                .map(|col| col.name.as_ref().to_owned())
+        })
+        .collect();
+    crate::exec::trigger::fire_triggers(
+        conn,
+        tx,
+        &schema,
+        table,
+        redlinedb_kernel::catalog::TriggerEventKind::Update,
+        redlinedb_kernel::catalog::TriggerTimeKind::After,
+        Some(crate::exec::trigger::TriggerRowValues {
+            rowid: old_rowid,
+            values: old_values.to_vec(),
+        }),
+        Some(crate::exec::trigger::TriggerRowValues {
+            rowid: new_rowid,
+            values: new_values.to_vec(),
+        }),
+        Some(&changed_cols),
+    )
+}
+
+/// Fire AFTER DELETE triggers attached to `table`. OLD is the row just
+/// removed; NEW is absent for DELETE.
+fn fire_delete_triggers(
+    conn: &Connection,
+    tx: &mut redlinedb_kernel::engine::Txn,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    rowid: redlinedb_kernel::format::RowId,
+    values: &[SqlValue],
+) -> Result<()> {
+    let schema = conn.engine().schema_snapshot();
+    crate::exec::trigger::fire_triggers(
+        conn,
+        tx,
+        &schema,
+        table,
+        redlinedb_kernel::catalog::TriggerEventKind::Delete,
+        redlinedb_kernel::catalog::TriggerTimeKind::After,
+        Some(crate::exec::trigger::TriggerRowValues {
+            rowid,
+            values: values.to_vec(),
+        }),
+        None,
+        None,
+    )
 }
 
 pub(crate) fn execute_delete(
@@ -177,6 +257,7 @@ pub(crate) fn execute_delete(
                 &plan.table,
                 &live,
             )?;
+            fire_delete_triggers(conn, tx, &plan.table, row.rowid, &live)?;
             count += 1;
         }
         Ok(build_dml_execution_result(
