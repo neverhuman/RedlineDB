@@ -42,6 +42,21 @@ pub trait FromValue: Sized {
     fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self>;
 }
 
+/// Trait for mapping a full [`Row`] into a Rust value (typically a struct
+/// or tuple). Used by `Connection::query_row` / `query_row_opt`.
+///
+/// A blanket impl maps any `T: FromValue` to column 0 — convenient for
+/// single-column scalar queries.
+pub trait FromRow: Sized {
+    fn from_row(row: &Row<'_>) -> Result<Self>;
+}
+
+impl<T: FromValue> FromRow for T {
+    fn from_row(row: &Row<'_>) -> Result<Self> {
+        row.get::<T>(0)
+    }
+}
+
 impl FromValue for i64 {
     fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
         stmt.inner.column_i64(index)

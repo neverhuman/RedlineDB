@@ -22,7 +22,7 @@ mod value;
 pub use connection::{Connection, InterruptHandle, Transaction};
 pub use error::{Error, ErrorCode, Result};
 pub use handle::Database;
-pub use iter::{FromValue, OwnedStep, Row, Step};
+pub use iter::{FromRow, FromValue, OwnedStep, Row, Step};
 pub use machine::{
     BinaryOp, ColumnRef, DeleteSpec, ExprSpec, InsertSpec, OrderSpec, QuerySpec, SchemaHandle,
     SelectSpec, TableRef, UnaryOp, UpdateSpec,
@@ -226,6 +226,35 @@ mod tests {
             Step::Row(row) => assert_eq!(row.get::<i64>(0).expect("count"), 2),
             Step::Done => panic!("expected row"),
         }
+    }
+
+    #[test]
+    fn query_row_returns_first_row_mapped() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("qrow.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+        conn.execute("CREATE TABLE t(id INTEGER, name TEXT)", ())
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 'Ada'), (2, 'Lin')", ())
+            .expect("insert");
+
+        let id: i64 = conn
+            .query_row("SELECT id FROM t WHERE name = ?", ("Ada",))
+            .expect("query_row");
+        assert_eq!(id, 1);
+
+        let missing = conn.query_row::<_, i64>("SELECT id FROM t WHERE name = ?", ("Z",));
+        assert_eq!(missing.unwrap_err().code(), ErrorCode::NotFound);
+
+        let opt: Option<i64> = conn
+            .query_row_opt("SELECT id FROM t WHERE name = ?", ("Z",))
+            .expect("opt");
+        assert!(opt.is_none());
+
+        let some_opt: Option<i64> = conn
+            .query_row_opt("SELECT id FROM t WHERE name = ?", ("Ada",))
+            .expect("some_opt");
+        assert_eq!(some_opt, Some(1));
     }
 
     #[test]
