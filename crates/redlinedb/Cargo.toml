@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb"
-version = "1.0.6"
+version = "1.0.7"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -12,12 +12,17 @@ serde_json = "1"
 sha2 = "0.10"
 redlinedb-kernel = { path = "../kernel" }
 redlinedb-sql = { path = "../sql" }
+tokio = { version = "1", features = ["rt", "sync"], optional = true }
 
 [features]
 default = []
+# Built-in async wrappers (AsyncDatabase / AsyncConnection / AsyncPool).
+# Internally calls tokio::task::spawn_blocking to bridge the sync engine.
+tokio = ["dep:tokio"]
 # Internal test-only feature — arms kernel failpoints for crash-injection tests.
 # Not for production use; not covered by semver stability guarantees.
 failpoints = ["redlinedb-kernel/failpoints", "redlinedb-sql/failpoints"]
 
 [dev-dependencies]
 tempfile = "3.23"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
