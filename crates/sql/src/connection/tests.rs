@@ -101,6 +101,38 @@ fn set_busy_timeout_updates_future_lock_waits() {
     conn1.rollback().expect("rollback");
 }
 
+#[test]
+fn schema_with_constant_expressions_reopens() {
+    let dir = tempdir().expect("scratch dir");
+    let path = dir.path().join("const-expr-schema.db");
+    {
+        let db = Database::create(&path, DbOptions::default()).expect("create db");
+        let conn = db.connect();
+        conn.execute(
+            "CREATE TABLE t(\
+                id INTEGER PRIMARY KEY,\
+                v INTEGER DEFAULT 7,\
+                label TEXT DEFAULT 'ready',\
+                CHECK (1 = 1)\
+            )",
+        )
+        .expect("create table");
+    }
+
+    let db = Database::open(&path, DbOptions::default()).expect("reopen db");
+    let conn = db.connect();
+    conn.execute("INSERT INTO t(id) VALUES (1)")
+        .expect("insert defaulted row");
+    let mut stmt = conn
+        .prepare("SELECT v, label FROM t WHERE id = 1")
+        .expect("prepare select");
+
+    assert_eq!(stmt.step().expect("step"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("default integer"), 7);
+    assert_eq!(stmt.column_text(1).expect("default text"), "ready");
+    assert_eq!(stmt.step().expect("done"), Step::Done);
+}
+
 /// New test (jankurai/repair-g): inserts and retrieves into the sharded
 /// statement cache to confirm shard-routing and value preservation. The
 /// cache has no fixed capacity (it's a per-shard `HashMap` with no
