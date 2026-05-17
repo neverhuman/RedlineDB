@@ -1,0 +1,93 @@
+# SQLite Parity Traceability Ledger
+
+This ledger records RedlineDB's current SQLite-facing compatibility status.
+The reference oracle is the SQLite library bundled with `rusqlite` in the test
+harness. Proof artifacts under `target/proof/sqlite-full-parity/` should record
+`sqlite_version()`, `PRAGMA compile_options`, ignored tests, `UnsupportedSql`
+sites, and the SQLLogicTest inventory for each parity pass.
+
+Status values are deliberately narrow:
+
+| Status | Meaning |
+|---|---|
+| `pass` | Covered by an executable test and expected to match the bundled SQLite reference for the stated row. |
+| `fail` | SQLite supports the row, but RedlineDB currently rejects it or implements only a documented subset. |
+| `not-started` | No production implementation exists yet, or the current implementation intentionally uses RedlineDB-native behavior instead of SQLite behavior. |
+
+## SQL Surface
+
+| Feature row | Status | Test path | Owner | Notes |
+|---|---|---|---|---|
+| Basic `SELECT` projection/filter/order | pass | `crates/sql/tests/smoke_select.rs`, `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Covered for scalar values and simple predicates. |
+| `INSERT`, `UPDATE`, `DELETE` basics | pass | `crates/sql/tests/smoke_dml.rs`, `crates/bench/compat/**` | sql-parser-planner-executor | Cross-engine SQLLogicTest corpus covers representative DML. |
+| `CREATE TABLE`, `DROP TABLE` basics | pass | `crates/bench/compat/**`, `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | SQLite metadata compatibility is not complete. |
+| `CREATE INDEX`, `DROP INDEX` basics | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Basic B-tree-backed indexes only. |
+| `ALTER TABLE RENAME TABLE/COLUMN` | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Add/drop-column variants remain partial. |
+| `RETURNING` expressions | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Insert/update expressions covered. |
+| UPSERT `ON CONFLICT DO UPDATE` representative path | pass | `crates/bench/compat/orm/migration.sqlt`, `crates/sql/tests/phase10_sqlc_conflict_matrix.rs` | sql-parser-planner-executor | Full SQLite conflict matrix is still incomplete. |
+| Savepoints | pass | `crates/sql/tests/parity_coverage.rs`, `crates/sql/tests/phase10_sqlb.rs` | sql-parser-planner-executor | Nested savepoint behavior has focused coverage. |
+| Joins and left joins | pass | `crates/sql/tests/parity_coverage.rs`, `crates/bench/compat/orm/queries.sqlt` | sql-parser-planner-executor | Natural joins are explicitly rejected. |
+| Row-value `IN` subqueries | pass | `crates/sql/tests/parity_coverage.rs`, `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Representative row-value `IN`/`NOT IN` covered. |
+| Correlated subqueries | fail | `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Some qualified correlated references still fail planning. |
+| CTEs (`WITH`, recursive and non-recursive) | pass | `crates/sql/tests/parity_cte.rs` | sql-parser-planner-executor | Non-recursive + recursive (UNION / UNION ALL) materialized into thread-local row store; supports JOIN against CTE via synthetic TableDef. Iteration cap 10_000. |
+| Compound `SELECT` (`UNION`, `INTERSECT`, `EXCEPT`) | fail | `crates/sql/src/parser/select.rs` | sql-parser-planner-executor | Unsupported paths return `UnsupportedSql`. |
+| Window functions and frames | pass | `crates/sql/tests/parity_window.rs` | sql-parser-planner-executor | ROW_NUMBER / RANK / DENSE_RANK / NTILE / LAG / LEAD / FIRST_VALUE / LAST_VALUE / NTH_VALUE / PERCENT_RANK / CUME_DIST + aggregate-OVER (SUM/COUNT/AVG/MIN/MAX/TOTAL) with ROWS / RANGE / GROUPS frames. |
+| Views | fail | `crates/sql/tests/parity_negative.rs`, `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | `CREATE VIEW` is parsed only as an unsupported statement. |
+| Triggers | fail | `crates/sql/tests/sqlite_full_parity.rs`, `crates/sql/src/parser.rs` | sql-parser-planner-executor | Trigger execution and schema storage are absent. |
+| Generated columns | fail | `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | SQLite accepts generated columns; RedlineDB rejects or lacks execution semantics. |
+| Partial indexes | fail | `crates/sql/tests/parity_negative.rs`, `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | `CREATE INDEX ... WHERE` is rejected. |
+| Expression indexes | fail | `crates/sql/tests/sqlite_full_parity.rs`, `crates/sql/src/parser/helpers/ddl.rs` | sql-parser-planner-executor | Index keys are column-only. |
+| Foreign keys | fail | `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | Parsing/PRAGMA coverage exists; full SQLite enforcement remains incomplete. |
+| ATTACH / DETACH | not-started | none | sql-parser-planner-executor | No multi-database attachment layer exists. |
+
+## Expressions And Functions
+
+| Feature row | Status | Test path | Owner | Notes |
+|---|---|---|---|---|
+| NULL comparison and `IN`/`NOT IN` edge cases | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | SQLite three-valued logic has focused coverage. |
+| Core string scalars (`substr`, `trim`, `instr`, `replace`, case conversion, length) | pass | `crates/sql/tests/parity_scalar_funcs.rs`, `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Representative SQLite behavior covered. |
+| Formatting and conditional scalars (`printf`, `format`, `iif`, `sign`) | pass | `crates/sql/tests/parity_scalar_funcs.rs`, `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Does not imply exhaustive SQLite format coverage. |
+| Blob/character helpers (`zeroblob`, `randomblob`, `char`, `unicode`) | pass | `crates/sql/tests/parity_scalar_funcs.rs` | sql-parser-planner-executor | Randomness is shape-tested, not value-matched. |
+| Aggregate functions (`count`, `sum`, `total`, `min`, `max`) | pass | `crates/sql/tests/parity_agg_funcs.rs`, `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Representative grouped and NULL behavior covered. |
+| JSON aggregate functions | pass | `crates/sql/tests/parity_agg_funcs.rs` | phase10-json1-surface | JSON aggregate rows covered. |
+| JSON scalar functions | fail | `crates/sql/tests/phase10_j1_compat.rs`, `crates/sql/src/json/scalar.rs` | phase10-json1-surface | Broad JSON1 compatibility is partial. |
+| Date/time functions | fail | `crates/sql/tests/phase10_sqld_datetime.rs`, `crates/sql/src/datetime.rs` | phase10-datetime | Subset exists; reference-build parity is not exhaustive. |
+| Collations | fail | `crates/sql/tests/phase10_sqld_collation.rs` | phase10-collations | Built-in collation behavior is partial. |
+| User-defined SQL functions/collations | not-started | none | c-abi | Requires broader C API/function registration support. |
+
+## PRAGMAs
+
+| Feature row | Status | Test path | Owner | Notes |
+|---|---|---|---|---|
+| `PRAGMA integrity_check` / `quick_check` | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Current checks are RedlineDB-native integrity summaries. |
+| `PRAGMA auto_vacuum` read shape | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Full auto-vacuum storage semantics are absent. |
+| `PRAGMA wal_checkpoint(MODE)` result shape | fail | `crates/sql/tests/parity_coverage.rs`, `crates/sql/src/parser/pragma.rs` | storage-and-catalog | Parser/result shape exists; real SQLite WAL-frame checkpoint semantics are not implemented. |
+| `PRAGMA foreign_keys` | fail | `crates/bench/compat/orm/migration.sqlt`, `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | Toggle is accepted for compatibility, but enforcement is incomplete. |
+| Table-valued PRAGMAs | not-started | none | sql-parser-planner-executor | No table-valued PRAGMA execution layer exists. |
+| Full reference-build PRAGMA set | not-started | `crates/sql/tests/sqlite_full_parity.rs` metadata only | sql-parser-planner-executor | Needs generated corpus from `PRAGMA compile_options` and SQLite docs. |
+
+## File Format, Durability, C API, And CLI
+
+| Feature row | Status | Test path | Owner | Notes |
+|---|---|---|---|---|
+| SQLite database header/pages/btrees/records | not-started | none | storage-and-catalog | Current files use RedlineDB-native page/control/WAL formats, not `SQLite format 3`. |
+| SQLite rollback journal compatibility | not-started | none | storage-and-catalog | No SQLite rollback-journal reader/writer exists. |
+| SQLite WAL compatibility and recovery | not-started | none | storage-and-catalog | RedlineDB has a native group-commit WAL, not SQLite WAL frames. |
+| Cross-open RedlineDB-created files with SQLite CLI | not-started | none | storage-and-catalog | Requires SQLite file-format writer. |
+| Cross-open SQLite-created files with RedlineDB | not-started | none | storage-and-catalog | Requires SQLite pager/btree/record reader. |
+| Covered `sqlite3_*` open/prepare/step/finalize aliases | pass | `crates/ffi/tests/**`, `contracts/c-abi/redlinedb.h` | c-abi | Covered ABI subset only. Header edits require an exception receipt. |
+| Broad `sqlite3_*` API surface | fail | `crates/ffi/src/**` | c-abi | Busy handlers, user functions, collations, backup/blob APIs, and lifetime edge cases are incomplete. |
+| CLI one-shot query/stats/backup commands | pass | `crates/cli` smoke lanes via `agent/test-map.json` | cli-shell | SQLite shell scripting compatibility is not complete. |
+| SQLite shell dot-command compatibility | not-started | none | cli-shell | RedlineDB CLI is not a clone of the SQLite shell. |
+
+## Required Receipts
+
+For any parity change, keep or regenerate:
+
+- `target/proof/sqlite-full-parity/git-status.txt`
+- `target/proof/sqlite-full-parity/diff-stat.txt`
+- `target/proof/sqlite-full-parity/rusqlite-reference.txt`
+- `target/proof/sqlite-full-parity/unsupported-sql-sites.txt`
+- `target/proof/sqlite-full-parity/ignored-tests.txt`
+- `target/proof/sqlite-full-parity/sqllogictest-inventory.txt`
+- `target/proof/sqlite-full-parity/sql-parity-tests.txt`
