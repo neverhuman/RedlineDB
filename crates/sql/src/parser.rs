@@ -78,9 +78,11 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
     // statement-terminating semicolons that must not split the outer
     // statement. We track a balanced BEGIN/END nesting depth (matched
     // case-insensitively on word boundaries) and only honour `;` at
-    // depth 0. This preserves backward compatibility for non-trigger
-    // input where the keyword tokens never appear.
+    // depth 0. We only treat `BEGIN` as a block opener when the current
+    // statement is a `CREATE TRIGGER`; bare `BEGIN [TRANSACTION]` and
+    // `BEGIN IMMEDIATE` outside a trigger context must still split.
     let mut block_depth = 0usize;
+    let mut in_trigger = false;
     while i < len {
         let b = bytes[i];
         if let Some(quote) = in_string {
@@ -136,12 +138,19 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
             b';' => {
                 i += 1;
             }
-            _ if is_word_boundary_keyword(bytes, i, b"BEGIN") => {
+            _ if is_word_boundary_keyword(bytes, i, b"TRIGGER") => {
+                in_trigger = true;
+                i += 7;
+            }
+            _ if in_trigger && is_word_boundary_keyword(bytes, i, b"BEGIN") => {
                 block_depth += 1;
                 i += 5;
             }
-            _ if is_word_boundary_keyword(bytes, i, b"END") => {
+            _ if in_trigger && is_word_boundary_keyword(bytes, i, b"END") => {
                 block_depth = block_depth.saturating_sub(1);
+                if block_depth == 0 {
+                    in_trigger = false;
+                }
                 i += 3;
             }
             _ => {
