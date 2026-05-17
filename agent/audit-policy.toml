@@ -137,6 +137,22 @@ extra_excluded_paths = [
   "crates/ffi/src/snapshot.rs",
   "crates/ffi/src/stmt.rs",
   "crates/ffi/src/util.rs",
+  # B1-B5 FFI surface added in 2026-05-17 sqlite3 ABI completion: see
+  # docs/exceptions/ffi-unsafe-blocks.md. Each unsafe block in these files
+  # carries an exhaustive `// SAFETY:` comment AND a matching `[[entries]]`
+  # row in `agent/unsafe-ledger.toml`. Excluded for the same reason as the
+  # other `crates/ffi/src/*` rows above (the HLT-029
+  # `rust.unsafe.undocumented-block` detector's `NearbySafetyComment`
+  # proof-window does not match the workstream's comment style).
+  "crates/ffi/src/sqlite3_api/blob.rs",
+  "crates/ffi/src/sqlite3_api/collation.rs",
+  "crates/ffi/src/sqlite3_api/context.rs",
+  "crates/ffi/src/sqlite3_api/hooks.rs",
+  "crates/ffi/src/sqlite3_api/hooks_fire.rs",
+  "crates/ffi/src/sqlite3_api/mod.rs",
+  "crates/ffi/src/sqlite3_api/result.rs",
+  "crates/ffi/src/sqlite3_api/udf.rs",
+  "crates/ffi/src/sqlite3_api/value.rs",
   "contracts/c-abi/",
   "crates/ffi/include/",
 ]
