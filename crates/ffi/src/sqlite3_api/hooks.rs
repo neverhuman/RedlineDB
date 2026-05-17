@@ -118,6 +118,9 @@ pub unsafe extern "C" fn sqlite3_update_hook(
     cb: Option<UpdateHookFn>,
     user_data: *mut c_void,
 ) -> *mut c_void {
+    // Wire the SQL-side mutation dispatcher the first time any callback is
+    // registered so the executor knows where to fire its per-row hook.
+    super::hooks_fire::ensure_sql_dispatchers_installed();
     swap_slot(db, |h| &h.update, cb, user_data)
 }
 
@@ -170,6 +173,9 @@ pub unsafe extern "C" fn sqlite3_set_authorizer(
     let Some(handle) = validate_db(db) else {
         return RLDB_MISUSE;
     };
+    // Wire the SQL-side authorizer dispatcher the first time any callback is
+    // registered so the planner/executor knows where to consult.
+    super::hooks_fire::ensure_sql_dispatchers_installed();
     let mut slot = handle.hooks.authorizer.lock().expect("authorizer poisoned");
     *slot = cb.map(|f| (f, user_data as usize));
     RLDB_OK

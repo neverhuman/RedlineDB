@@ -51,6 +51,7 @@ pub(crate) fn map_error(err: SqlError) -> c_int {
         SqlError::TransactionState(_) | SqlError::Bind(_) => RLDB_MISUSE,
         SqlError::Parse(_) => RLDB_ERROR,
         SqlError::UnsupportedSql(_) => RLDB_MISUSE,
+        SqlError::NotAuthorized => RLDB_AUTH,
         _ => RLDB_ERROR,
     }
 }
