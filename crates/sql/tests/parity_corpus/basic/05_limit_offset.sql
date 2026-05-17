@@ -1,0 +1,3 @@
+CREATE TABLE seq(n INTEGER);
+INSERT INTO seq VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
+SELECT n FROM seq ORDER BY n LIMIT 3 OFFSET 2

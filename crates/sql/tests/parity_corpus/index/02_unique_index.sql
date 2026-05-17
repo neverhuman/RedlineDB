@@ -1,0 +1,4 @@
+CREATE TABLE t(id INTEGER, sku TEXT);
+CREATE UNIQUE INDEX uniq_sku ON t(sku);
+INSERT INTO t VALUES (1, 'A'), (2, 'B');
+SELECT id, sku FROM t ORDER BY id
