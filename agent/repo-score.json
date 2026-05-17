@@ -1,7 +1,7 @@
 {
-  "report_fingerprint": "sha256:5385eef5aa02f60dbee1660cc4d72b6eca96895bb827d8ac194874cfbf9e3968",
-  "input_fingerprint": "sha256:26f0decb920e9b692fa7f8fee0e643781bf36aaaaced8c3208c95665549ca481",
-  "policy_fingerprint": "sha256:bf0047cb31cf891d7635ba8a72ec27013dfc0d21819ccad2e0902f3cf592b113",
+  "report_fingerprint": "sha256:7ce83d769049a455535ef40fa186dafaa555eba4944a48d3abcf941bedb19655",
+  "input_fingerprint": "sha256:e9133a47a109994d6539fac5add6c1c054ca0007b613c79ae4956367d616243b",
+  "policy_fingerprint": "sha256:653ecaa5f1ee2ba8fb4e857cb556461cdc27ac8407f6de97009d0655810a587e",
   "manifest_fingerprints": {
     "owner_map": "sha256:6a116832b8512c7dc7ee933250b3f28b889603dc300df9eb6fff4c7dbac6fe59",
     "test_map": "sha256:e95d18dca67a2a6d83a13fcc8041fed5d48c4f58ea33c1bda6d3fb5fe8c4929b",
@@ -10,8 +10,8 @@
     "proof_lanes": "sha256:2b5d2aac00734eb12db4967d4cf3c1fc8c3dd40fdd4158e14363cf87f1c70d08",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
-  "dirty_worktree": false,
-  "generated_at": "1779022466",
+  "dirty_worktree": true,
+  "generated_at": "1779043372",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -34,6 +34,7 @@
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/attach.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/attach.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/expr/window.rs",
+    "HLT-001-DEAD-MARKER on crates/sql/src/exec/index_dml.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/insert.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/tail.rs",
     "HLT-001-DEAD-MARKER on crates/sql/src/exec/tail.rs",
@@ -56,9 +57,9 @@
     "HLT-001-DEAD-MARKER on crates/sql/src/parser/ddl.rs"
   ],
   "repo": ".",
-  "run_id": "1779022466",
-  "started_at": "1779022466",
-  "elapsed_ms": 3746,
+  "run_id": "1779043372",
+  "started_at": "1779043372",
+  "elapsed_ms": 3985,
   "scope": {
     "mode": "full",
     "paths": []
@@ -69,7 +70,7 @@
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 30,
+    "hard_findings": 31,
     "soft_findings": 2,
     "ratchet": {
       "baseline_score": 64,
@@ -85,11 +86,11 @@
     }
   },
   "git": {
-    "head": "2db0bef",
+    "head": "b85ef4e",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": false
+    "dirty_worktree": true
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -382,7 +383,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1355",
+        "rust bad-behavior advisory signals: 1356",
         "ci bad-behavior advisory signals: 3",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -395,7 +396,7 @@
       "score": 23,
       "weighted_points": 2.76,
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/cte.rs (724 LOC)",
+        "largest authored code file: crates/sql/src/exec/cte.rs (725 LOC)",
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
         "copy-code advisory classes found: 36 (advisory only, no score impact)",
@@ -1094,7 +1095,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-17T12:54:23.091757+00:00",
+    "generated_at": "2026-05-17T18:42:48.791003+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1133,8 +1134,8 @@
     },
     "summary": {
       "files_scanned": 702,
-      "files_considered": 278,
-      "active_files": 278,
+      "files_considered": 275,
+      "active_files": 275,
       "exact_file_classes": 0,
       "hard_classes": 0,
       "warning_classes": 36,
@@ -1214,15 +1215,15 @@
           {
             "path": "crates/sql/src/exec/cte.rs",
             "language": "rust",
-            "start_line": 171,
-            "end_line": 184,
+            "start_line": 172,
+            "end_line": 185,
             "unit_name": "infer_affinity"
           },
           {
             "path": "crates/sql/src/exec/view.rs",
             "language": "rust",
-            "start_line": 181,
-            "end_line": 194,
+            "start_line": 182,
+            "end_line": 195,
             "unit_name": "infer_affinity"
           }
         ]
@@ -1666,8 +1667,8 @@
           {
             "path": "crates/kernel/src/catalog/ddl.rs",
             "language": "rust",
-            "start_line": 238,
-            "end_line": 238,
+            "start_line": 249,
+            "end_line": 249,
             "unit_name": "_keep_type_use"
           },
           {
@@ -1680,8 +1681,8 @@
           {
             "path": "crates/kernel/src/integrity/equivalence.rs",
             "language": "rust",
-            "start_line": 207,
-            "end_line": 207,
+            "start_line": 214,
+            "end_line": 214,
             "unit_name": "_force_error_visibility"
           },
           {
@@ -1869,8 +1870,8 @@
           {
             "path": "crates/bench/src/certify/scheduler/dispatch.rs",
             "language": "rust",
-            "start_line": 197,
-            "end_line": 199,
+            "start_line": 196,
+            "end_line": 198,
             "unit_name": "which_strace"
           },
           {
@@ -2814,7 +2815,7 @@
       "problem": "`Code shape and semantic surface` scored 23 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/cte.rs (724 LOC)",
+        "largest authored code file: crates/sql/src/exec/cte.rs (725 LOC)",
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
         "copy-code advisory classes found: 36 (advisory only, no score impact)"
@@ -2824,7 +2825,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:648e75f486c49b3fbd4f93e96c0f0cee304b31f9ccc29a18cdb256cf4478ef77",
+      "fingerprint": "sha256:aa267d04747635f0eed01004f900ed4b74b50be9679b8fd6b3871caa69e2e29e",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -2909,7 +2910,7 @@
       "problem": "future-hostile/dead-language term `temporary` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/catalog/ddl.rs:84",
+        "crates/kernel/src/catalog/ddl.rs:87",
         "future-hostile/dead-language term `temporary` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -2917,13 +2918,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:5ee23668b5a9fd5fc07ce8c58bca2e2d3717b672e4761545343d7bc17910f1d4",
+      "fingerprint": "sha256:e69e73399484762fce8568c8f67a81483380d3b14aaf4e2119353c55bb88ed40",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 84
+      "line": 87
     },
     {
       "severity": "high",
@@ -2932,7 +2933,7 @@
       "problem": "future-hostile/dead-language term `old` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/catalog/schema.rs:138",
+        "crates/kernel/src/catalog/schema.rs:161",
         "future-hostile/dead-language term `old` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -2940,13 +2941,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:06c8daa4acbf0980df73d78e7a7845de84ba7c8e41757806fe05c7b98166a782",
+      "fingerprint": "sha256:13e2f6a6bebdd5e832d7df8462d5a60eb5b60927126f8c0c1d513027269525d0",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 138
+      "line": 161
     },
     {
       "severity": "high",
@@ -2955,7 +2956,7 @@
       "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/catalog/schema.rs:166",
+        "crates/kernel/src/catalog/schema.rs:189",
         "future-hostile/dead-language term `temp` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -2963,13 +2964,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:44a5c8bac0289fb6e2a6b12c42ec4886cafc14551d33e2b959edbd21e8ce3dd4",
+      "fingerprint": "sha256:06f1155896c6509cdf8414a0f7f3077c80f8fbc0eb509060fe316a5dbfbf0ed9",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 166
+      "line": 189
     },
     {
       "severity": "high",
@@ -2978,20 +2979,20 @@
       "problem": "fallback soup detected in product code",
       "agent_fix": "collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance",
       "evidence": [
-        "crates/kernel/src/catalog/schema.rs:311 .unwrap_or_else(|| Box::from(\"\")),"
+        "crates/kernel/src/catalog/schema.rs:334 .unwrap_or_else(|| Box::from(\"\")),"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
       "hardness": "hard",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:b6a0f87a50b3f23a06f8745510f5c6e69e7a94bcb97224b0aec247c4993d0a6a",
+      "fingerprint": "sha256:bd4dfd7eeb27c03e7faf0bfd7affcea825a5d19cfe75c7a36543340d819cb8e8",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 311
+      "line": 334
     },
     {
       "severity": "high",
@@ -3000,7 +3001,7 @@
       "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/kernel/src/catalog/schema.rs:395",
+        "crates/kernel/src/catalog/schema.rs:418",
         "future-hostile/dead-language term `temp` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3008,13 +3009,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:bfdd0d7b119be25edf549d677e9d422652cf10c41571b956c81a4717e7a0708a",
+      "fingerprint": "sha256:c4bb219d5eb5f30b718de9ba80ce244ccac7191cad80e898b68fbfc3395535ea",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "storage-and-catalog",
-      "line": 395
+      "line": 418
     },
     {
       "severity": "high",
@@ -3088,6 +3089,29 @@
     {
       "severity": "high",
       "category": "vibe",
+      "path": "crates/sql/src/exec/index_dml.rs",
+      "problem": "future-hostile/dead-language term `shim` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/sql/src/exec/index_dml.rs:49",
+        "future-hostile/dead-language term `shim` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:2cb7e1754f9e00a3fcd4e78be859cd92d987239545fc8d2c5f8d201e4888dcb4",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "sql-parser-planner-executor",
+      "line": 49
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
       "path": "crates/sql/src/exec/insert.rs",
       "problem": "future-hostile/dead-language term `old` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
@@ -3115,7 +3139,7 @@
       "problem": "future-hostile/dead-language term `old` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/sql/src/exec/tail.rs:158",
+        "crates/sql/src/exec/tail.rs:163",
         "future-hostile/dead-language term `old` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3123,13 +3147,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:9b74ce963a8e913f986ff2ca9836baf4febfca5b2841129866793ab6ffee66b9",
+      "fingerprint": "sha256:6722677cdf05ba3e6628fc20d5b4c85c86b308b69e62b9a05f06426e0563bd80",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
-      "line": 158
+      "line": 163
     },
     {
       "severity": "high",
@@ -3138,7 +3162,7 @@
       "problem": "future-hostile/dead-language term `old` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/sql/src/exec/tail.rs:202",
+        "crates/sql/src/exec/tail.rs:207",
         "future-hostile/dead-language term `old` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3146,13 +3170,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:4c55148a1066b7b21ce821e7915af0ddff69a8612e6c3385f6799196e0e0943d",
+      "fingerprint": "sha256:e5f9968a8334e5a2046a991d83c7daefade6913c5e55536f5b7d031372fa43eb",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
-      "line": 202
+      "line": 207
     },
     {
       "severity": "high",
@@ -3460,7 +3484,7 @@
       "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/sql/src/parser/ddl.rs:340",
+        "crates/sql/src/parser/ddl.rs:339",
         "future-hostile/dead-language term `temp` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3468,13 +3492,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:1aae7b61c3e02aedcb701f7ec591f8e2ec8d1b1d16ba4577d8a8005e6d26f572",
+      "fingerprint": "sha256:5b2d689b8ce48ecbdac896161bc185f5b0bfffd7f99c315fb1842f9775f38ba3",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
-      "line": 340
+      "line": 339
     },
     {
       "severity": "high",
@@ -3483,7 +3507,7 @@
       "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/sql/src/parser/ddl.rs:390",
+        "crates/sql/src/parser/ddl.rs:389",
         "future-hostile/dead-language term `temp` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3491,7 +3515,30 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:23f5f83082bac8317539203fbd0475b0bd4c84730ec36d0c62f247ad65b894b7",
+      "fingerprint": "sha256:c9d57955c9e4c9573e1c58809a630218e89366fd47f6f00f24968c15db7f6111",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "sql-parser-planner-executor",
+      "line": 389
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/sql/src/parser/ddl.rs",
+      "problem": "future-hostile/dead-language term `temporary` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/sql/src/parser/ddl.rs:390",
+        "future-hostile/dead-language term `temporary` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:430366dbb94c8172d49fa0af62be92340c72336e8380a5d10f681db74ede0957",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3503,33 +3550,10 @@
       "severity": "high",
       "category": "vibe",
       "path": "crates/sql/src/parser/ddl.rs",
-      "problem": "future-hostile/dead-language term `temporary` appears in product/runtime code",
-      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
-      "evidence": [
-        "crates/sql/src/parser/ddl.rs:391",
-        "future-hostile/dead-language term `temporary` appears"
-      ],
-      "check_id": "HLT-001-DEAD-MARKER:vibe",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:2dd689dc53970e104b8a8cb1493c1fd14832e7953d7d4f346d218805e367011e",
-      "rule_id": "HLT-001-DEAD-MARKER",
-      "tlr": "Entropy",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
-      "owner": "sql-parser-planner-executor",
-      "line": 391
-    },
-    {
-      "severity": "high",
-      "category": "vibe",
-      "path": "crates/sql/src/parser/ddl.rs",
       "problem": "future-hostile/dead-language term `old` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/sql/src/parser/ddl.rs:404",
+        "crates/sql/src/parser/ddl.rs:403",
         "future-hostile/dead-language term `old` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3537,13 +3561,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:b4925f1cfd05c5243968881d3dccc478deb994dc55a1187c252ed3c373b4bc0d",
+      "fingerprint": "sha256:12f30a00407f4cd663eaba659d0e71d8f070b7fc5a2cb646c5d1de1aa1c26784",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
-      "line": 404
+      "line": 403
     }
   ],
   "agent_fix_queue": [
@@ -3619,6 +3643,16 @@
     },
     {
       "path": "crates/sql/src/exec/expr/window.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "sql-parser-planner-executor",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `shim` appears in product/runtime code"
+    },
+    {
+      "path": "crates/sql/src/exec/index_dml.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",

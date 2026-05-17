@@ -58,6 +58,9 @@ pub struct CreateIndexSpec {
     pub columns: Vec<IndexColumnSpec>,
     pub origin: IndexOrigin,
     pub normalized_sql: Option<String>,
+    /// A6 SQL-D: optional WHERE predicate for partial indexes, as
+    /// verbatim SQL.
+    pub predicate_sql: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -168,6 +171,9 @@ pub struct ColumnSpec {
     pub constraints: Vec<ColumnConstraintSpec>,
     pub collation: Option<String>,
     pub default_value: Option<OwnedValue>,
+    /// A6 SQL-D: GENERATED ALWAYS AS (expr) [STORED|VIRTUAL]. None for
+    /// ordinary columns.
+    pub generated: Option<super::schema::GeneratedColumnSpec>,
 }
 
 #[derive(Debug, Clone)]
@@ -232,6 +238,11 @@ pub struct IndexColumnSpec {
     pub name: DbName,
     pub sort_dir: super::key::SortDir,
     pub collation: Option<String>,
+    /// A6 SQL-D: when the index column is an expression rather than a
+    /// bare column name, the verbatim SQL fragment and the set of
+    /// column ordinals it references. `None` for ordinary column keys.
+    pub expr_sql: Option<String>,
+    pub expr_referenced_cols: Vec<u16>,
 }
 
 #[allow(dead_code)]
