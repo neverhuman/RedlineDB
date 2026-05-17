@@ -162,8 +162,8 @@ pub(super) fn execute_insert(
                     count += 1;
                 }
                 InsertOutcome::Updated { rowid, values } => {
+                    fire_insert_triggers(conn, tx, &plan.table, rowid, &values)?;
                     fire_update_hook(&plan.table, rowid);
->>>>>>> 7393717 (feat(ffi,sql): wire update_hook + set_authorizer fire sites)
                     if let Some(returning) = &plan.returning {
                         returning_rows.push(project_returning_row(
                             &plan.table,
