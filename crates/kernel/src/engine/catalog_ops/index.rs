@@ -272,7 +272,14 @@ impl Engine {
                 row_id,
                 TuplePtr::new_with_generation(PageId(0), 0, PageGeneration::ONE),
             );
+            eprintln!(
+                "BACKFILL INSERT tx={:?} bytes={:02x?} row_id={:?}",
+                tx.id(), &bytes, row_id
+            );
             btree.insert_tx(tx.id(), &bytes, row_ref)?;
+            // Post-insert verification: lookup with no visibility filter.
+            let raw = btree.point_lookup_filter(&bytes, |_| true)?;
+            eprintln!("BACKFILL POST-INSERT unfiltered={} entries", raw.len());
         }
         Ok(())
     }
