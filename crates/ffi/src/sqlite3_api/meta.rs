@@ -3,7 +3,7 @@ use std::os::raw::{c_int, c_void};
 use std::ptr;
 
 use crate::types::{RLDB_MISUSE, RLDB_OK, sqlite3, sqlite3_stmt};
-use crate::util::{record_status, with_db};
+use crate::util::record_status;
 use crate::{
     rldb_busy_timeout, rldb_changes, rldb_checkpoint, rldb_errcode, rldb_errmsg, rldb_free,
     rldb_interrupt, rldb_last_insert_rowid, rldb_stats_json, rldb_vacuum,

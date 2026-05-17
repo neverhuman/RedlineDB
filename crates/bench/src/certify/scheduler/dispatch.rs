@@ -1,12 +1,11 @@
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::path::Path;
+use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 
 use crate::engine::engine_name;
 use crate::report::RunRecord;
-use crate::strace_capture;
 
 use super::types::{InFlight, Job, POLL_INTERVAL, ScheduledOutcome};
 

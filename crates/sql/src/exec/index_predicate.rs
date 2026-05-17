@@ -11,6 +11,16 @@
 //!
 //! The parser side uses `sqlparser::dialect::SQLiteDialect` to stay in
 //! sync with the surface accepted by `crate::parser::bind_query`.
+//!
+//! Helpers here are scaffolding for future planner / maintenance wiring;
+//! the partial- and expression-index parity tests
+//! (`crates/sql/tests/parity_partial_index.rs`,
+//! `crates/sql/tests/parity_expr_index.rs`) currently exercise the
+//! enforcement via the existing index maintenance layer rather than
+//! these helpers directly. `#![allow(dead_code)]` keeps the scaffolding
+//! warning-free while the wiring lands.
+
+#![allow(dead_code)]
 
 use std::sync::Arc;
 

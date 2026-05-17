@@ -1,8 +1,8 @@
-use std::os::raw::{c_char, c_int, c_uchar, c_void};
+use std::os::raw::{c_char, c_int};
 use std::ptr;
 use std::sync::atomic::Ordering;
 
-use crate::types::{RLDB_DONE, RLDB_MISUSE, RLDB_OK, RLDB_ROW, sqlite3, sqlite3_stmt};
+use crate::types::{RLDB_DONE, RLDB_OK, RLDB_ROW, sqlite3, sqlite3_stmt};
 use crate::util::record_status;
 use crate::{rldb_clear_bindings, rldb_finalize, rldb_prepare_v2, rldb_reset, rldb_step};
 

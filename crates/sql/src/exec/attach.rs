@@ -81,6 +81,11 @@ impl AttachMap {
         Ok(())
     }
 
+    /// Inspect whether `alias` is currently bound; `main` is always present.
+    /// Reserved for the cross-database planner path that consumes the alias
+    /// map; kept on the public surface so the parser side can validate
+    /// without a round-trip through `path` first.
+    #[allow(dead_code)]
     pub fn contains(&self, alias: &str) -> bool {
         let lower = alias.to_ascii_lowercase();
         if lower == "main" {
@@ -92,11 +97,17 @@ impl AttachMap {
             .unwrap_or(false)
     }
 
+    /// Return the on-disk path bound to `alias`, if any. Reserved for the
+    /// cross-database planner path that resolves `alias.table` references.
+    #[allow(dead_code)]
     pub fn path(&self, alias: &str) -> Option<PathBuf> {
         let lower = alias.to_ascii_lowercase();
         self.inner.read().ok().and_then(|g| g.get(&lower).cloned())
     }
 
+    /// List every alias currently visible from this connection, including
+    /// the implicit `main` alias. Reserved for `PRAGMA database_list`.
+    #[allow(dead_code)]
     pub fn aliases(&self) -> Vec<String> {
         let mut out = vec!["main".to_owned()];
         if let Ok(g) = self.inner.read() {

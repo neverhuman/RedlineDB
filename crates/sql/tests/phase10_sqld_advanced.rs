@@ -17,6 +17,7 @@ fn open() -> (tempfile::TempDir, Arc<Connection>) {
     (dir, db.connect())
 }
 
+#[allow(dead_code)] // Helper used by parser-only assertions when expanding coverage.
 fn assert_parser_only(res: Result<usize, redlinedb_sql::Error>) {
     let err = res.expect_err("expected parser-only error");
     let msg = format!("{err:?}").to_ascii_lowercase();

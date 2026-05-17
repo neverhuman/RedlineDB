@@ -14,9 +14,6 @@ use super::value::OwnedValue;
 #[path = "stats/wire.rs"]
 mod wire;
 
-const MAGIC: u32 = u32::from_le_bytes(*b"RSTA");
-const VERSION: u16 = 1;
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct StatsEpoch(pub u64);
 
