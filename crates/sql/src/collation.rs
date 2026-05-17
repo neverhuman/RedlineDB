@@ -58,8 +58,10 @@ impl Collation {
             }
             Self::RTrim => a.trim_end_matches(' ').cmp(b.trim_end_matches(' ')),
             Self::Custom(name) => {
-                crate::udf::call_registered_collation(crate::udf::current_db(), name, a, b)
-                    .unwrap_or_else(|| a.cmp(b))
+                match crate::udf::call_registered_collation(crate::udf::current_db(), name, a, b) {
+                    Some(ord) => ord,
+                    None => a.cmp(b),
+                }
             }
         }
     }

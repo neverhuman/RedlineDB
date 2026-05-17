@@ -2,7 +2,7 @@
 //!
 //! `OVER (...)` calls are not evaluated through the scalar evaluator —
 //! they are precomputed by `crate::exec::window` against the materialized
-//! row set and substituted in during projection. The scalar shim here
+//! row set and substituted in during projection. The scalar adapter here
 //! returns NULL so that intermediate row evaluation (e.g. selection
 //! passes that incidentally call into eval_function on a windowed expr)
 //! does not panic.

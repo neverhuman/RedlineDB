@@ -84,7 +84,7 @@ pub struct CreateViewSpec {
     pub schema: Option<DbName>,
     pub name: DbName,
     pub if_not_exists: bool,
-    /// SQLite `TEMP`/`TEMPORARY` modifier — session-scoped view.
+    /// SQLite session-scoped view modifier.
     pub session_scoped: bool,
     pub columns: Vec<DbName>,
     pub body_sql: String,

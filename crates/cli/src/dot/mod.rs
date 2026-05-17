@@ -16,7 +16,7 @@ pub mod display;
 pub mod io_cmd;
 pub mod schema;
 
-/// Output formatting modes accepted by `.mode` and the legacy flag parser.
+/// Output formatting modes accepted by `.mode` and the flag parser.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputMode {
     List,

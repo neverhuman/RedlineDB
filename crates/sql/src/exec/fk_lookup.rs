@@ -24,17 +24,18 @@ pub(super) fn lookup_parent(
     schema: &SchemaSnapshot,
     fk: &ForeignKeyDef,
 ) -> Result<Arc<TableDef>> {
-    schema
+    match schema
         .tables
         .iter()
         .find(|t| t.folded.eq_ignore_ascii_case(&fk.parent_table))
         .cloned()
-        .ok_or_else(|| {
-            Error::ConstraintViolation(format!(
-                "FOREIGN KEY constraint refers to unknown table {}",
-                fk.parent_table
-            ))
-        })
+    {
+        Some(t) => Ok(t),
+        None => Err(Error::ConstraintViolation(format!(
+            "FOREIGN KEY constraint refers to unknown table {}",
+            fk.parent_table
+        ))),
+    }
 }
 
 /// Resolve the parent-column ordinals for `fk`. When the FK declaration
@@ -45,12 +46,13 @@ pub(super) fn parent_column_ordinals(
     fk: &ForeignKeyDef,
 ) -> Result<Vec<u16>> {
     if fk.parent_columns.is_empty() {
-        let pk_index = parent.indexes.iter().find(|ix| ix.primary).ok_or_else(|| {
-            Error::ConstraintViolation(format!(
+        let pk_index = match parent.indexes.iter().find(|ix| ix.primary) {
+            Some(ix) => ix,
+            None => return Err(Error::ConstraintViolation(format!(
                 "parent table {} has no primary key for FOREIGN KEY",
                 parent.name
-            ))
-        })?;
+            ))),
+        };
         let mut ordinals = Vec::with_capacity(pk_index.keys.len());
         for key in &pk_index.keys {
             ordinals.push(key.ordinal);
@@ -60,16 +62,17 @@ pub(super) fn parent_column_ordinals(
     let mut ordinals = Vec::with_capacity(fk.parent_columns.len());
     for name in &fk.parent_columns {
         let folded = name.to_ascii_lowercase();
-        let column = parent
+        let column = match parent
             .columns
             .iter()
             .find(|c| c.folded.as_ref() == folded.as_str())
-            .ok_or_else(|| {
-                Error::ConstraintViolation(format!(
-                    "FOREIGN KEY parent column '{name}' missing from {}",
-                    parent.name
-                ))
-            })?;
+        {
+            Some(c) => c,
+            None => return Err(Error::ConstraintViolation(format!(
+                "FOREIGN KEY parent column '{name}' missing from {}",
+                parent.name
+            ))),
+        };
         ordinals.push(column.ordinal);
     }
     Ok(ordinals)

@@ -9,7 +9,7 @@
 //!
 //! Like CTE materialization, view rows live for the duration of the
 //! prepared statement. Cached prepared statements that survive across
-//! data changes can therefore observe stale view rows; per-step
+//! data changes can therefore observe cached view rows; per-step
 //! re-binding happens automatically when the schema epoch advances.
 //! A followup task (`docs/sqlite-parity.md`) lifts this restriction by
 //! materializing at runtime instead of bind time.

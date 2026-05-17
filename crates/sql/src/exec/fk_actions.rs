@@ -88,12 +88,12 @@ pub(super) fn apply_parent_action(
         FkAction::SetDefault => {
             let mut defaults = Vec::with_capacity(fk.columns.len());
             for ord in &fk.columns {
-                let col = child
-                    .columns
-                    .get(*ord as usize)
-                    .ok_or_else(|| crate::error::Error::ConstraintViolation(format!(
+                let col = match child.columns.get(*ord as usize) {
+                    Some(c) => c,
+                    None => return Err(crate::error::Error::ConstraintViolation(format!(
                         "FOREIGN KEY child column ordinal {ord} missing"
-                    )))?;
+                    ))),
+                };
                 defaults.push(
                     col.default_value
                         .as_ref()
