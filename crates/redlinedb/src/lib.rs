@@ -258,6 +258,28 @@ mod tests {
     }
 
     #[test]
+    fn open_options_builder_chains_match_field_init() {
+        let opts = OpenOptions::default()
+            .with_busy_timeout(Duration::from_millis(250))
+            .with_read_only(false)
+            .with_statement_cache_capacity(64)
+            .with_durability(Durability::Normal);
+        assert_eq!(opts.busy_timeout, Duration::from_millis(250));
+        assert!(!opts.read_only);
+        assert_eq!(opts.statement_cache_capacity, 64);
+        assert_eq!(opts.durability, Durability::Normal);
+    }
+
+    #[test]
+    fn open_options_builder_opens_database_with_custom_busy_timeout() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("opts.redline");
+        let opts = OpenOptions::default().with_busy_timeout(Duration::from_millis(50));
+        let db = Database::open_with_options(&path, opts).expect("open");
+        let _conn = db.connect().expect("conn");
+    }
+
+    #[test]
     fn connection_set_busy_timeout_applies_to_future_lock_conflicts() {
         let dir = tempfile::tempdir().expect("tempdir");
         let db = Database::create(dir.path().join("timeout.redline")).expect("db");
