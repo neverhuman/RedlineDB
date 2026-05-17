@@ -14,6 +14,7 @@ mod machine;
 mod options;
 mod params;
 mod phase8;
+mod pool;
 mod registry;
 mod snapshot;
 mod statement;
@@ -24,6 +25,8 @@ mod asyncio;
 
 #[cfg(feature = "tokio")]
 pub use asyncio::{AsyncConnection, AsyncDatabase};
+
+pub use pool::{Pool, PoolBuilder, PooledConnection};
 
 pub use connection::{Connection, InterruptHandle, Transaction};
 pub use error::{Error, ErrorCode, Result};
@@ -329,6 +332,68 @@ mod tests {
             .await
             .expect("transaction");
         assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn pool_get_returns_connection_and_drop_returns_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("pool.redline")).expect("db");
+        let pool = Pool::builder(db).max_connections(2).build().expect("pool");
+
+        assert_eq!(pool.idle(), 0);
+        assert_eq!(pool.in_use(), 0);
+        {
+            let mut a = pool.get().expect("a");
+            a.execute("CREATE TABLE t(id INTEGER)", ()).expect("create");
+            assert_eq!(pool.in_use(), 1);
+
+            let mut b = pool.get().expect("b");
+            b.execute("INSERT INTO t VALUES (1)", ()).expect("insert");
+            assert_eq!(pool.in_use(), 2);
+        } // both drop
+        assert_eq!(pool.in_use(), 0);
+        assert_eq!(pool.idle(), 2);
+
+        let mut c = pool.get().expect("c");
+        assert_eq!(pool.in_use(), 1);
+        assert_eq!(pool.idle(), 1);
+        let count: i64 = c.query_row("SELECT COUNT(*) FROM t", ()).expect("count");
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn pool_busy_timeout_applies_to_handed_out_connections() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("pool-bt.redline")).expect("db");
+        let pool = Pool::builder(db)
+            .max_connections(2)
+            .busy_timeout(Duration::from_millis(15))
+            .build()
+            .expect("pool");
+
+        let mut a = pool.get().expect("a");
+        let mut b = pool.get().expect("b");
+        a.execute("CREATE TABLE t(id INTEGER)", ()).expect("create");
+        a.begin(BeginMode::Immediate).expect("begin");
+        let err = b.begin(BeginMode::Immediate).expect_err("expected busy");
+        assert_eq!(err.code(), ErrorCode::Busy);
+        a.rollback().expect("rollback");
+    }
+
+    #[cfg(feature = "tokio")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pool_acquire_async_returns_connection() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("pool-async.redline")).expect("db");
+        let pool = Pool::builder(db).max_connections(4).build().expect("pool");
+
+        {
+            let mut conn = pool.acquire().await.expect("acquire");
+            conn.execute("CREATE TABLE t(id INTEGER)", ())
+                .expect("create");
+        }
+        assert_eq!(pool.in_use(), 0);
+        assert_eq!(pool.idle(), 1);
     }
 
     #[test]
