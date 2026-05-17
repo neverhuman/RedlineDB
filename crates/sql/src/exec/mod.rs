@@ -46,10 +46,55 @@ mod insert;
 use insert::*;
 mod select_top;
 use select_top::*;
+pub(crate) mod cte;
+pub(crate) mod pragma_tv;
+pub(crate) mod set_ops;
+pub(crate) mod table_valued;
+pub(crate) mod window;
+pub(crate) mod attach;
 
 thread_local! {
     static CURRENT_CONNECTION: Cell<*const Connection> = const { Cell::new(std::ptr::null()) };
     static CURRENT_TX: Cell<*mut Txn> = const { Cell::new(std::ptr::null_mut()) };
+    /// Stack of *owned* `SqlRow` snapshots captured by enclosing query
+    /// scopes. Inner-scope evaluators can walk this stack to resolve
+    /// correlated identifiers (`outer_table.col`) when the immediate row
+    /// context does not contain them.
+    static OUTER_ROW_STACK: std::cell::RefCell<Vec<crate::exec::expr::scalar::row::SqlRow>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Push a correlated-scope row onto the thread-local stack for the
+/// duration of `f`. Used by subquery evaluators so that an outer
+/// `Expr::CompoundIdentifier(a.id)` resolves against the caller's row when
+/// the immediate scope does not bind the qualifier.
+pub(crate) fn with_outer_row<T>(
+    row: crate::exec::expr::scalar::row::SqlRow,
+    f: impl FnOnce() -> T,
+) -> T {
+    OUTER_ROW_STACK.with(|cell| cell.borrow_mut().push(row));
+    let result = f();
+    OUTER_ROW_STACK.with(|cell| {
+        cell.borrow_mut().pop();
+    });
+    result
+}
+
+/// Walk the correlated-scope stack (from innermost to outermost) and
+/// apply `f` to each frame's row context. Returns the first `Some` value.
+pub(crate) fn lookup_correlated<T>(
+    f: impl Fn(&crate::exec::expr::scalar::row::RowContext<'_>) -> Option<T>,
+) -> Option<T> {
+    OUTER_ROW_STACK.with(|cell| {
+        let stack = cell.borrow();
+        for row in stack.iter().rev() {
+            let ctx = row.context();
+            if let Some(v) = f(&ctx) {
+                return Some(v);
+            }
+        }
+        None
+    })
 }
 
 pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> T) -> T {
@@ -235,6 +280,13 @@ pub fn execute_prepared(
             let runtime = execute_select(conn, plan, bindings)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Select(runtime),
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::Attach(plan) => {
+            attach::apply_attach_plan(conn, plan)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
                 affected_rows: 0,
             })
         }

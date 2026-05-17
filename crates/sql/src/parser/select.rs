@@ -12,17 +12,29 @@ pub(crate) fn bind_query(
         order_by,
         limit_clause,
         with,
-        ..
+        fetch,
+        locks,
+        for_clause,
+        settings,
+        format_clause,
+        pipe_operators,
     } = query;
     if let Some(with) = with {
-        // Lane SQL-D phase 10 Tier-2: WITH ... SELECT (CTE) parses but is
-        // not yet planner-integrated. We surface a structured error so SQL
-        // text round-trips without becoming a parse-error and so future
-        // planner work can swap this branch for a materialisation pass.
-        let _ = with.cte_tables.len();
-        return Err(Error::UnsupportedSql(
-            "CTEs (WITH clauses) are parsed-only; execution not yet implemented".to_owned(),
-        ));
+        // CTEs: materialize each CTE body (handling recursive references)
+        // and dispatch to the trailing query under an active CTE scope.
+        let trailing = Query {
+            with: None,
+            body,
+            order_by,
+            limit_clause,
+            fetch,
+            locks,
+            for_clause,
+            settings,
+            format_clause,
+            pipe_operators,
+        };
+        return crate::exec::cte::bind_with_query(conn, schema, schema_epoch, sql, with, trailing);
     }
     match *body {
         SetExpr::Query(query) => {
@@ -55,6 +67,7 @@ pub(crate) fn bind_query(
         SetExpr::Select(select) => {
             let mut params = ParamLayout::default();
             bind_simple_select_query(
+                conn,
                 schema,
                 schema_epoch,
                 sql,
@@ -80,6 +93,7 @@ pub(crate) struct UnionAllQueryContext<'a> {
 }
 
 pub(crate) fn bind_simple_select_query(
+    conn: &Connection,
     schema: Arc<SchemaSnapshot>,
     schema_epoch: SchemaEpoch,
     sql: &str,
@@ -102,7 +116,7 @@ pub(crate) fn bind_simple_select_query(
     let mut projection = Vec::new();
     let mut output_columns = Vec::new();
 
-    let (source, mut selection) = bind_select_from(&schema, select.from, params)?;
+    let (source, mut selection) = bind_select_from(conn, &schema, select.from, params)?;
 
     for item in select.projection {
         let item = normalize_select_item(item, params)?;
@@ -230,11 +244,32 @@ pub(crate) fn bind_union_all_query(
     left: SetExpr,
     right: SetExpr,
 ) -> Result<PreparedTemplate> {
-    if !matches!(op, SetOperator::Union) || !matches!(set_quantifier, SetQuantifier::All) {
-        return Err(Error::UnsupportedSql(
-            "only UNION ALL is supported".to_owned(),
-        ));
-    }
+    // Map (op, quantifier) to our internal compound shape. UNION ALL keeps
+    // its existing fast path; UNION (default DISTINCT), INTERSECT, EXCEPT
+    // route through the new `CompoundSet` source whose dedup semantics
+    // live in `crate::exec::set_ops`.
+    let compound_op: Option<crate::statement::CompoundSetOp> = match (op, set_quantifier) {
+        (SetOperator::Union, SetQuantifier::All) => None,
+        (SetOperator::Union, SetQuantifier::Distinct | SetQuantifier::None) => {
+            Some(crate::statement::CompoundSetOp::UnionDistinct)
+        }
+        (SetOperator::Intersect, SetQuantifier::Distinct | SetQuantifier::None) => {
+            Some(crate::statement::CompoundSetOp::Intersect)
+        }
+        (SetOperator::Except, SetQuantifier::Distinct | SetQuantifier::None) => {
+            Some(crate::statement::CompoundSetOp::Except)
+        }
+        (SetOperator::Intersect | SetOperator::Except, SetQuantifier::All) => {
+            return Err(Error::UnsupportedSql(format!(
+                "{op} ALL is not supported"
+            )));
+        }
+        (op, quant) => {
+            return Err(Error::UnsupportedSql(format!(
+                "unsupported set operation: {op} {quant}"
+            )));
+        }
+    };
 
     let left = bind_query(
         ctx.conn,
@@ -327,27 +362,35 @@ pub(crate) fn bind_union_all_query(
     };
     if tail_params.count() > 0 {
         return Err(Error::UnsupportedSql(
-            "UNION ALL with parameters is not supported yet".to_owned(),
+            "compound SELECT with parameters is not supported yet".to_owned(),
         ));
     }
 
+    let left_plan = match left.kind {
+        PreparedKind::Select(plan) => plan,
+        _ => unreachable!("compound branch is always a SELECT"),
+    };
+    let right_plan = match right.kind {
+        PreparedKind::Select(plan) => plan,
+        _ => unreachable!("compound branch is always a SELECT"),
+    };
+    // For ORDER BY column resolution we need names — use the LEFT branch
+    // names since SQL columns are positional in set ops, and SQLite reports
+    // the left side's names.
+    let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
+
     let projection = Vec::new();
+    let source = match compound_op {
+        None => SelectSource::CompoundAll(vec![left_plan, right_plan]),
+        Some(op) => SelectSource::CompoundSet {
+            op,
+            branches: vec![left_plan, right_plan],
+        },
+    };
     let mut output_columns = Vec::new();
-    push_projection_columns(
-        &SelectSource::CompoundAll(vec![
-            match &left.kind {
-                PreparedKind::Select(plan) => plan.clone(),
-                _ => unreachable!(),
-            },
-            match &right.kind {
-                PreparedKind::Select(plan) => plan.clone(),
-                _ => unreachable!(),
-            },
-        ]),
-        &mut output_columns,
-    );
-    if projection.is_empty() {
-        output_columns.clear();
+    push_projection_columns(&source, &mut output_columns);
+    if output_columns.is_empty() {
+        output_columns.extend(left_columns_for_names.iter().cloned());
     }
 
     Ok(PreparedTemplate {
@@ -359,16 +402,7 @@ pub(crate) fn bind_union_all_query(
         output_columns: output_columns.into(),
         readonly: true,
         kind: PreparedKind::Select(SelectPlan {
-            source: SelectSource::CompoundAll(vec![
-                match left.kind {
-                    PreparedKind::Select(plan) => plan,
-                    _ => unreachable!(),
-                },
-                match right.kind {
-                    PreparedKind::Select(plan) => plan,
-                    _ => unreachable!(),
-                },
-            ]),
+            source,
             distinct: false,
             projection,
             selection: None,

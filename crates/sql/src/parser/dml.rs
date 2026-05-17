@@ -1,7 +1,7 @@
 use super::*;
 
 pub(crate) fn bind_insert(
-    _conn: &Connection,
+    conn: &Connection,
     schema: Arc<SchemaSnapshot>,
     schema_epoch: SchemaEpoch,
     sql: &str,
@@ -41,6 +41,7 @@ pub(crate) fn bind_insert(
             }
             SetExpr::Select(select) => {
                 let template = bind_simple_select_query(
+                    conn,
                     Arc::clone(&schema),
                     schema_epoch,
                     sql,
