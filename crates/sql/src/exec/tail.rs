@@ -61,6 +61,11 @@ pub(crate) fn execute_update(
                 values[*ordinal] = eval_scalar(expr, &RowContext::Table(&fresh), bindings)?;
             }
             values = apply_row_affinity(&plan.table, values)?;
+            // Phase-11 SQL-D A6: an UPDATE may have touched an input to
+            // a STORED generated column. Recompute every STORED column
+            // here so the persisted row stays consistent with the
+            // declared expression.
+            values = compute_stored_generated_columns(&plan.table, values)?;
             let new_rowid =
                 choose_rowid_for_update(conn.engine(), &plan.table, &values, fresh.rowid)?;
             if let Some(alias) = plan.table.rowid_alias_column

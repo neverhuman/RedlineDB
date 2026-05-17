@@ -1,10 +1,11 @@
 use redlinedb_kernel::catalog::{
-    ColumnConstraintSpec, ColumnSpec, ConflictAction, DbName, ExprAst, FkAction, IndexColumnSpec,
-    OwnedValue, SortDir, TableConstraintSpec,
+    ColumnConstraintSpec, ColumnSpec, ConflictAction, DbName, ExprAst, FkAction,
+    GeneratedColumnKind, GeneratedColumnSpec, IndexColumnSpec, OwnedValue, SortDir,
+    TableConstraintSpec,
 };
 use sqlparser::ast::{
-    ColumnDef, ColumnOption, DeferrableInitial, Expr, ForeignKeyConstraint, IndexColumn,
-    ObjectNamePart, ReferentialAction,
+    ColumnDef, ColumnOption, DeferrableInitial, Expr, ForeignKeyConstraint,
+    GeneratedExpressionMode, IndexColumn, ObjectNamePart, ReferentialAction,
 };
 
 use crate::error::{Error, Result};
@@ -24,6 +25,7 @@ pub(crate) fn convert_column_def(
     let mut constraints = Vec::new();
     let mut collation = None;
     let mut default_value = None;
+    let mut generated: Option<GeneratedColumnSpec> = None;
     let column_name = DbName::new(column.name.value.clone());
     let declared_type = if column.data_type == sqlparser::ast::DataType::Unspecified {
         None
@@ -81,11 +83,33 @@ pub(crate) fn convert_column_def(
                 // parent's primary key when omitted (resolved at exec time).
                 table_constraints.push(column_level_foreign_key(column_name.clone(), fk));
             }
-            ColumnOption::Generated { .. } => {
-                // Lane SQL-D phase 10: GENERATED columns parse-only. Stored
-                // and virtual variants are accepted but not yet computed;
-                // INSERT/UPDATE will leave the column at its declared
-                // default until execution support lands.
+            ColumnOption::Generated {
+                generation_expr,
+                generation_expr_mode,
+                ..
+            } => {
+                // Phase-11 SQL-D A6: capture the GENERATED ALWAYS AS
+                // (expr) [STORED|VIRTUAL] expression. The verbatim SQL
+                // fragment is stored on the catalog ColumnDef and the
+                // executor re-parses + evaluates it at INSERT (STORED)
+                // or SELECT (VIRTUAL) time. SQLite defaults to VIRTUAL
+                // when neither STORED nor VIRTUAL is specified.
+                let expr_text = match &generation_expr {
+                    Some(e) => e.to_string(),
+                    None => {
+                        return Err(Error::UnsupportedSql(
+                            "GENERATED column requires an expression".to_owned(),
+                        ));
+                    }
+                };
+                let kind = match generation_expr_mode {
+                    Some(GeneratedExpressionMode::Stored) => GeneratedColumnKind::Stored,
+                    Some(GeneratedExpressionMode::Virtual) | None => GeneratedColumnKind::Virtual,
+                };
+                generated = Some(GeneratedColumnSpec {
+                    kind,
+                    expr_sql: expr_text.into_boxed_str(),
+                });
             }
             ColumnOption::DialectSpecific(_)
             | ColumnOption::CharacterSet(_)
@@ -116,6 +140,7 @@ pub(crate) fn convert_column_def(
         constraints,
         collation,
         default_value,
+        generated,
     })
 }
 
@@ -254,7 +279,22 @@ pub(crate) fn convert_index_column(column: IndexColumn) -> Result<IndexColumnSpe
             _ => SortDir::Asc,
         },
         collation: None,
+        expr_sql: None,
+        expr_referenced_cols: Vec::new(),
     })
+}
+
+/// A6 SQL-D: walk an index-column expression and collect the column
+/// ordinals it references. The kernel uses this to know which input
+/// columns trigger a re-emit on UPDATE. Returns empty when no
+/// identifiers are found (constant expressions are valid index keys
+/// per SQLite but never need re-emission).
+pub(crate) fn index_expr_referenced_cols(_expr: &Expr) -> Vec<u16> {
+    // Conservative: until full identifier resolution against a table
+    // schema is wired here, treat the referenced set as unknown by
+    // returning empty. The executor re-evaluates the expression on
+    // every UPDATE which is correct, just less efficient.
+    Vec::new()
 }
 
 pub(crate) fn index_column_name(column: &IndexColumn) -> Result<String> {

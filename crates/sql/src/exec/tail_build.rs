@@ -140,7 +140,8 @@ pub(crate) fn build_default_values(
             values[idx] = default.clone();
         }
     }
-    apply_row_affinity(table, values)
+    let values = apply_row_affinity(table, values)?;
+    compute_stored_generated_columns(table, values)
 }
 
 fn build_default_values_for_omitted(
@@ -156,7 +157,45 @@ fn build_default_values_for_omitted(
             values[idx] = default.clone();
         }
     }
-    apply_row_affinity(table, values)
+    let values = apply_row_affinity(table, values)?;
+    compute_stored_generated_columns(table, values)
+}
+
+/// Phase-11 SQL-D A6: compute every STORED generated column from the
+/// already-populated row. VIRTUAL columns are evaluated at SELECT time
+/// (in `tail_rows::materialize_virtual_generated_columns`) and are left
+/// as NULL in the persisted heap row.
+pub(crate) fn compute_stored_generated_columns(
+    table: &TableDef,
+    mut values: Vec<SqlValue>,
+) -> Result<Vec<SqlValue>> {
+    use redlinedb_kernel::catalog::GeneratedColumnKind;
+
+    let has_generated = table.columns.iter().any(|c| c.generated.is_some());
+    if !has_generated {
+        return Ok(values);
+    }
+    // Snapshot inputs BEFORE we start overwriting generated columns so
+    // expressions like `c = a + b` always observe the original
+    // user-provided / defaulted inputs regardless of evaluation order.
+    let input_snapshot = values.clone();
+    for (idx, column) in table.columns.iter().enumerate() {
+        let Some(gen_def) = &column.generated else {
+            continue;
+        };
+        if !matches!(gen_def.kind, GeneratedColumnKind::Stored) {
+            // VIRTUAL columns leave the heap slot as NULL; reads
+            // compute on demand.
+            values[idx] = SqlValue::Null;
+            continue;
+        }
+        values[idx] = crate::exec::index_predicate::eval_generated_expr(
+            table,
+            gen_def.expr_sql.as_ref(),
+            &input_snapshot,
+        )?;
+    }
+    Ok(values)
 }
 
 pub(crate) fn apply_row_affinity(table: &TableDef, values: Vec<SqlValue>) -> Result<Vec<SqlValue>> {
