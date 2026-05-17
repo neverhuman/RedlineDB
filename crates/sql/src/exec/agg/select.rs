@@ -18,7 +18,7 @@ pub(crate) fn expr_contains_aggregate(expr: &Expr) -> bool {
     match expr {
         Expr::Function(func) => {
             let name = func.name.to_string().to_ascii_lowercase();
-            matches!(
+            let is_builtin = matches!(
                 name.as_str(),
                 "count"
                     | "sum"
@@ -30,7 +30,11 @@ pub(crate) fn expr_contains_aggregate(expr: &Expr) -> bool {
                     | "total"
                     | "json_group_array"
                     | "json_group_object"
-            )
+            );
+            // Registered aggregate UDFs route through the grouped evaluator
+            // exactly like built-in aggregates so `SELECT my_agg(col) FROM t
+            // GROUP BY k` works without parser/planner changes.
+            is_builtin || crate::udf::is_registered_aggregate(&name)
         }
         Expr::BinaryOp { left, right, .. } => {
             expr_contains_aggregate(left) || expr_contains_aggregate(right)

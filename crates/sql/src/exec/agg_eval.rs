@@ -538,8 +538,46 @@ fn eval_group_function(
             let json = serde_json::Value::Object(obj);
             Ok(SqlValue::Text(Arc::from(json.to_string())))
         }
-        _ => Err(Error::UnsupportedSql(format!(
-            "unsupported aggregate function: {name}"
-        ))),
+        _ => {
+            // Unknown name — try the registered UDF aggregate registry.
+            // We materialize each group row's single-argument-list values
+            // into a row vector so the C-callback xStep sees them with the
+            // declared arity. NULL-skip semantics match SQLite: an
+            // aggregate UDF receives every row (including those where its
+            // argument evaluates to NULL); it's the UDF's responsibility
+            // to choose whether to ignore them. This matches SQLite's
+            // documented contract for `sqlite3_create_function*`.
+            let rows: Vec<Vec<SqlValue>> = {
+                let mut out = Vec::with_capacity(group.len());
+                let arg_exprs: Vec<&Expr> = match &func.args {
+                    FunctionArguments::List(list) => list
+                        .args
+                        .iter()
+                        .filter_map(|arg| match arg {
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => Some(e),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                for row in group {
+                    let ctx = row.context();
+                    let mut row_values = Vec::with_capacity(arg_exprs.len());
+                    for expr in &arg_exprs {
+                        row_values.push(eval_scalar(expr, &ctx, bindings)?);
+                    }
+                    out.push(row_values);
+                }
+                out
+            };
+            let db = crate::udf::current_db();
+            match crate::udf::call_registered_aggregate(db, name.as_str(), &rows) {
+                Some(Ok(v)) => Ok(v),
+                Some(Err(msg)) => Err(Error::UnsupportedSql(msg)),
+                None => Err(Error::UnsupportedSql(format!(
+                    "unsupported aggregate function: {name}"
+                ))),
+            }
+        }
     }
 }
