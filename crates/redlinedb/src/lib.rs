@@ -192,6 +192,43 @@ mod tests {
     }
 
     #[test]
+    fn tuple_params_bind_heterogeneous_types_directly() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("tuples.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute(
+            "CREATE TABLE t(a INTEGER, b TEXT, c REAL, d BLOB, e INTEGER)",
+            (),
+        )
+        .expect("create");
+
+        conn.execute(
+            "INSERT INTO t VALUES (?, ?, ?, ?, ?)",
+            (1_i64, "hello", 3.14_f64, vec![1_u8, 2, 3], true),
+        )
+        .expect("insert via 5-tuple");
+
+        conn.execute(
+            "INSERT INTO t VALUES (?, ?, ?, ?, ?)",
+            (
+                42_i32,
+                String::from("world"),
+                2.71_f32,
+                &b"xyz"[..],
+                Some(0_u8),
+            ),
+        )
+        .expect("insert via 5-tuple with mixed Into<Value>");
+
+        let mut stmt = conn.prepare("SELECT COUNT(*) FROM t").expect("prep");
+        match stmt.step().expect("step") {
+            Step::Row(row) => assert_eq!(row.get::<i64>(0).expect("count"), 2),
+            Step::Done => panic!("expected row"),
+        }
+    }
+
+    #[test]
     fn connection_set_busy_timeout_applies_to_future_lock_conflicts() {
         let dir = tempfile::tempdir().expect("tempdir");
         let db = Database::create(dir.path().join("timeout.redline")).expect("db");
