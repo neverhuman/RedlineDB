@@ -29,6 +29,7 @@ pub(crate) const RLDB_SCHEMA: c_int = 17;
 pub(crate) const RLDB_CONSTRAINT: c_int = 19;
 pub(crate) const RLDB_MISMATCH: c_int = 20;
 pub(crate) const RLDB_MISUSE: c_int = 21;
+pub(crate) const RLDB_AUTH: c_int = 23;
 pub(crate) const RLDB_RANGE: c_int = 25;
 pub(crate) const RLDB_NOTADB: c_int = 26;
 pub(crate) const RLDB_ROW: c_int = 100;

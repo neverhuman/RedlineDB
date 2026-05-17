@@ -19,6 +19,13 @@ pub(crate) fn execute_update(
     plan: &crate::statement::UpdatePlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<ExecutionResult> {
+    match crate::udf::authorize_table_access(crate::udf::AUTH_UPDATE, &plan.table.name) {
+        crate::udf::AuthorizerDecision::Allow => {}
+        crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
+        crate::udf::AuthorizerDecision::Ignore => {
+            return Ok(build_dml_execution_result(0, Vec::new(), plan.returning.is_some()));
+        }
+    }
     with_write_tx(conn, |session, tx| {
         let target_rowids =
             if let Some(rowid) = selection_rowid_eq(&plan.table, &plan.selection, bindings)? {
@@ -129,6 +136,15 @@ pub(crate) fn execute_update(
                     bindings,
                 )?);
             }
+            // Fire update hook AFTER the heap+indexes are in sync. When
+            // the rowid alias changed the row was implemented as a
+            // delete+insert under the hood, but SQLite's contract is to
+            // surface this as a single UPDATE event with the new rowid.
+            crate::udf::fire_mutation(
+                crate::udf::MUTATION_UPDATE,
+                &plan.table.name,
+                new_rowid.0 as i64,
+            );
             count += 1;
         }
         Ok(build_dml_execution_result(
@@ -214,6 +230,13 @@ pub(crate) fn execute_delete(
     plan: &crate::statement::DeletePlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<ExecutionResult> {
+    match crate::udf::authorize_table_access(crate::udf::AUTH_DELETE, &plan.table.name) {
+        crate::udf::AuthorizerDecision::Allow => {}
+        crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
+        crate::udf::AuthorizerDecision::Ignore => {
+            return Ok(build_dml_execution_result(0, Vec::new(), plan.returning.is_some()));
+        }
+    }
     with_write_tx(conn, |session, tx| {
         let rows = dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?;
         let mut count = 0usize;
@@ -258,6 +281,11 @@ pub(crate) fn execute_delete(
                 &live,
             )?;
             fire_delete_triggers(conn, tx, &plan.table, row.rowid, &live)?;
+            crate::udf::fire_mutation(
+                crate::udf::MUTATION_DELETE,
+                &plan.table.name,
+                row.rowid.0 as i64,
+            );
             count += 1;
         }
         Ok(build_dml_execution_result(

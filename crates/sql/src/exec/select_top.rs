@@ -18,6 +18,21 @@ pub(super) fn execute_select(
     plan: &crate::statement::SelectPlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<SelectRuntime> {
+    // SQLite authorizer contract: consult before any access. We check
+    // every table referenced by the top-level source so DENY surfaces as
+    // the standard "not authorized" error before any rows are read.
+    // IGNORE on SELECT collapses the table to an empty source (SQLite's
+    // semantics is to substitute NULL columns; for table-level SELECT we
+    // surface zero rows, which is the closest analog).
+    if let Some(decision) = authorize_select_source(&plan.source) {
+        match decision {
+            crate::udf::AuthorizerDecision::Allow => {}
+            crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
+            crate::udf::AuthorizerDecision::Ignore => {
+                return Ok(empty_select_runtime(conn));
+            }
+        }
+    }
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
     let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
     let mut memory = QueryMemoryBroker::new(
@@ -1078,4 +1093,78 @@ fn try_ordered_index_limit_path(
         Some(take),
     )?;
     Ok(Some(rowids))
+}
+
+/// Consult the registered authorizer for every base table the SELECT
+/// reads. Returns the worst-case decision (Deny > Ignore > Allow) so
+/// the caller can take a single action. Returns `None` only when there
+/// is no authorizer installed (the cheap fast path).
+fn authorize_select_source(source: &SelectSource) -> Option<crate::udf::AuthorizerDecision> {
+    let mut found = false;
+    let mut worst = crate::udf::AuthorizerDecision::Allow;
+    let mut consider = |table: &str| {
+        found = true;
+        let d = crate::udf::authorize_table_access(crate::udf::AUTH_SELECT, table);
+        worst = match (worst, d) {
+            (crate::udf::AuthorizerDecision::Deny, _)
+            | (_, crate::udf::AuthorizerDecision::Deny) => crate::udf::AuthorizerDecision::Deny,
+            (crate::udf::AuthorizerDecision::Ignore, _)
+            | (_, crate::udf::AuthorizerDecision::Ignore) => crate::udf::AuthorizerDecision::Ignore,
+            _ => crate::udf::AuthorizerDecision::Allow,
+        };
+    };
+    match source {
+        SelectSource::Table(table) => consider(&table.name),
+        SelectSource::Tables(tables) => {
+            for bound in tables {
+                consider(&bound.table.name);
+            }
+        }
+        SelectSource::Joined(join) => {
+            consider(&join.base.table.name);
+            for step in &join.joins {
+                consider(&step.right.table.name);
+            }
+        }
+        SelectSource::CompoundAll(branches) => {
+            for branch in branches {
+                if let Some(d) = authorize_select_source(&branch.source) {
+                    found = true;
+                    worst = match (worst, d) {
+                        (crate::udf::AuthorizerDecision::Deny, _)
+                        | (_, crate::udf::AuthorizerDecision::Deny) => {
+                            crate::udf::AuthorizerDecision::Deny
+                        }
+                        (crate::udf::AuthorizerDecision::Ignore, _)
+                        | (_, crate::udf::AuthorizerDecision::Ignore) => {
+                            crate::udf::AuthorizerDecision::Ignore
+                        }
+                        _ => crate::udf::AuthorizerDecision::Allow,
+                    };
+                }
+            }
+        }
+        SelectSource::SqliteSchema | SelectSource::StaticRows { .. } | SelectSource::Empty => {}
+    }
+    if found { Some(worst) } else { None }
+}
+
+/// Build a SELECT runtime that yields zero rows. Used when the
+/// authorizer returns IGNORE for the top-level source.
+fn empty_select_runtime(_conn: &Connection) -> SelectRuntime {
+    SelectRuntime {
+        tx: SelectRuntimeTx::Empty,
+        restore_tx: false,
+        source: SelectRuntimeSource::StaticRows {
+            rows: Arc::from(Vec::<Vec<SqlValue>>::new()),
+            cursor: 0,
+        },
+        selection: None,
+        projection: Vec::new(),
+        limit: 0,
+        offset: 0,
+        seen: 0,
+        yielded: 0,
+        memory: QueryMemoryBroker::new(0, 0, None),
+    }
 }

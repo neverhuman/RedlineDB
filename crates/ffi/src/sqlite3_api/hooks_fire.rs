@@ -4,8 +4,35 @@
 
 use std::ffi::CString;
 use std::os::raw::{c_int, c_void};
+use std::sync::Once;
+
+use redlinedb_sql::udf as sql_udf;
 
 use crate::types::*;
+
+/// Ensure the SQL-side mutation/authorizer dispatchers are wired exactly
+/// once. Called from `sqlite3_update_hook` / `sqlite3_set_authorizer` so
+/// the SQL executor learns where to fire its hooks.
+pub(crate) fn ensure_sql_dispatchers_installed() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        sql_udf::install_mutation_dispatch(mutation_from_sql);
+        sql_udf::install_authorizer_dispatch(authorizer_from_sql);
+    });
+}
+
+fn mutation_from_sql(db_addr: usize, op: i32, table: &str, rowid: i64) {
+    fire_update(db_addr as *mut rldb, op, table, rowid);
+}
+
+fn authorizer_from_sql(
+    db_addr: usize,
+    action: i32,
+    arg3: Option<&str>,
+    arg4: Option<&str>,
+) -> i32 {
+    fire_authorizer(db_addr as *mut rldb, action, arg3, arg4)
+}
 
 pub(crate) enum CommitDecision {
     Proceed,
