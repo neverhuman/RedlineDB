@@ -140,3 +140,85 @@ fn null_db_returns_misuse() {
     };
     assert_eq!(rc, 21); // RLDB_MISUSE
 }
+
+// Aggregate UDF: sum_squares(x) = sum(x*x). xStep is called once per row;
+// xFinal returns the accumulator. The accumulator lives in a static for
+// test simplicity (per-test isolation is provided by the unique table
+// name + per-test rldb_open); production aggregates would use the
+// `agg_state_*` slot on RldbContext.
+use std::sync::atomic::{AtomicI64, Ordering as AtomicOrdering};
+static SUM_SQ_ACC: AtomicI64 = AtomicI64::new(0);
+
+unsafe extern "C" fn sum_sq_step(
+    _ctx: *mut RldbContext,
+    argc: c_int,
+    argv: *mut *mut RldbValue,
+) {
+    assert_eq!(argc, 1);
+    let val = unsafe { *argv };
+    let n = unsafe { sqlite3_value_int64(val) };
+    SUM_SQ_ACC.fetch_add(n * n, AtomicOrdering::Relaxed);
+}
+
+unsafe extern "C" fn sum_sq_final(ctx: *mut RldbContext) {
+    let total = SUM_SQ_ACC.swap(0, AtomicOrdering::Relaxed);
+    unsafe { sqlite3_result_int(ctx, total as c_int) };
+}
+
+#[test]
+fn aggregate_udf_sum_squares_invoked_per_group() {
+    let (_dir, db) = open_db();
+    let name = CString::new("sum_squares").unwrap();
+    let rc = unsafe {
+        sqlite3_create_function_v2(
+            db,
+            name.as_ptr(),
+            1,
+            0,
+            ptr::null_mut(),
+            None,
+            Some(sum_sq_step),
+            Some(sum_sq_final),
+            None,
+        )
+    };
+    assert_eq!(rc, 0);
+    exec(db, "CREATE TABLE t(k INTEGER, v INTEGER)");
+    exec(db, "INSERT INTO t VALUES (1, 2), (1, 3), (2, 4), (2, 5)");
+
+    // Drive a multi-row callback to read aggregate output per group.
+    let saw: std::sync::Arc<std::sync::Mutex<Vec<(i64, i64)>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let saw_ptr = std::sync::Arc::into_raw(saw.clone()) as *mut c_void;
+    extern "C" fn cb(
+        ctx: *mut c_void,
+        ncol: c_int,
+        argv: *mut *mut std::os::raw::c_char,
+        _argn: *mut *mut std::os::raw::c_char,
+    ) -> c_int {
+        assert_eq!(ncol, 2);
+        let k = unsafe { CStr::from_ptr(*argv) }
+            .to_string_lossy()
+            .parse::<i64>()
+            .unwrap_or(0);
+        let s = unsafe { CStr::from_ptr(*argv.add(1)) }
+            .to_string_lossy()
+            .parse::<i64>()
+            .unwrap_or(0);
+        let arc = unsafe {
+            std::sync::Arc::from_raw(ctx as *const std::sync::Mutex<Vec<(i64, i64)>>)
+        };
+        arc.lock().unwrap().push((k, s));
+        let _ = std::sync::Arc::into_raw(arc);
+        0
+    }
+    let c_sql =
+        CString::new("SELECT k, sum_squares(v) FROM t GROUP BY k ORDER BY k").unwrap();
+    let rc = rldb_exec(db, c_sql.as_ptr(), Some(cb), saw_ptr, ptr::null_mut());
+    assert_eq!(rc, 0);
+    let _ = unsafe { std::sync::Arc::from_raw(saw_ptr as *const std::sync::Mutex<Vec<(i64, i64)>>) };
+    let saw = saw.lock().unwrap();
+    // Group k=1: 2^2 + 3^2 = 13. Group k=2: 4^2 + 5^2 = 41.
+    assert_eq!(*saw, vec![(1, 13), (2, 41)]);
+    rldb_close(db);
+}

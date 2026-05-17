@@ -38,20 +38,20 @@ pub(crate) struct ScalarEntry {
 }
 
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 pub(crate) struct AggregateEntry {
-    // Aggregate UDFs are accepted by sqlite3_create_function*, but the
-    // RedlineDB aggregate evaluator does not currently dispatch through
-    // this registry. Aggregate UDFs registered through this API surface to
-    // the SQL parser as unknown functions until the agg dispatcher is
-    // extended in a follow-up subtask.
+    // Aggregate UDFs are dispatched at group end by
+    // `aggregate_run_from_sql` via the global
+    // `redlinedb_sql::udf::AGG_RUN` slot installed when the first UDF is
+    // registered (see [`registry`]).
     pub step: StepFn,
     pub final_fn: FinalFn,
     pub user_data: usize,
+    /// Held for the eventual destructor invocation path; currently never
+    /// fires because we never overwrite an existing registration mid-life.
+    #[allow(dead_code)]
     pub destructor: Option<DestructorFn>,
 }
 
-#[allow(dead_code)]
 pub(crate) enum UdfEntry {
     Scalar(ScalarEntry),
     Aggregate(AggregateEntry),
@@ -70,8 +70,127 @@ fn registry()
     if guard.is_none() {
         *guard = Some(std::collections::HashMap::new());
         sql_udf::install_dispatch(dispatch_from_sql);
+        sql_udf::install_aggregate_dispatch(aggregate_run_from_sql, aggregate_is_registered);
     }
     guard
+}
+
+/// Probe: does a connection have an aggregate UDF registered under
+/// `name`? Used by the planner to route the expression through the
+/// grouped evaluator.
+fn aggregate_is_registered(db_addr: usize, name: &str) -> bool {
+    let registry = registry();
+    let Some(map) = registry.as_ref() else {
+        return false;
+    };
+    let name_lower = name.to_ascii_lowercase();
+    map.iter().any(|((d, n, _), entry)| {
+        *d == db_addr && *n == name_lower && matches!(entry, UdfEntry::Aggregate(_))
+    })
+}
+
+/// Aggregate dispatch invoked by the SQL aggregator at group end. Walks
+/// every row in `rows`, calls `xStep` once per row, then calls `xFinal`
+/// and returns the value the UDF set on the context (via
+/// `sqlite3_result_*`). Errors set via `sqlite3_result_error` surface
+/// here as `Err`.
+fn aggregate_run_from_sql(
+    db_addr: usize,
+    name: &str,
+    rows: &[Vec<SqlValue>],
+) -> Option<Result<SqlValue, String>> {
+    let name_lower = name.to_ascii_lowercase();
+    let (step, final_fn, user_data) = {
+        let registry = registry();
+        let map = registry.as_ref()?;
+        // Match either the exact arity (rows[0].len()) or wildcard -1.
+        // Aggregate UDFs typically take 1 arg, but xStep may be called
+        // with any positive arity that matches the registration.
+        let narg_exact = rows.first().map(|r| r.len() as i32).unwrap_or(0);
+        let entry = map
+            .get(&(db_addr, name_lower.clone(), narg_exact))
+            .or_else(|| map.get(&(db_addr, name_lower.clone(), -1)))?;
+        let UdfEntry::Aggregate(agg) = entry else {
+            return Some(Err(format!(
+                "scalar UDF {name} cannot be invoked as aggregate"
+            )));
+        };
+        (agg.step, agg.final_fn, agg.user_data as *mut c_void)
+    };
+    // One context per group: SQLite's contract is that xStep is called
+    // multiple times against the same `sqlite3_context*`, then xFinal is
+    // called once on the same context. The accumulator lives via the
+    // context's `agg_state_*` slot or via `sqlite3_result_*` set on the
+    // last xStep — the latter is what we surface here.
+    let ctx = Box::new(RldbContext::new(
+        db_addr as *mut rldb,
+        user_data,
+    ));
+    let ctx_ptr = Box::into_raw(ctx);
+    for row in rows {
+        let mut boxed: Vec<*mut RldbValue> = row
+            .iter()
+            .map(|v| Box::into_raw(Box::new(RldbValue::from_sql(v))))
+            .collect();
+        // SAFETY: callback signature matches the FFI ABI for an aggregate
+        // step; ctx_ptr is the Box::into_raw allocation we just made
+        // above; boxed.as_mut_ptr names the argv buffer of Box::into_raw
+        // RldbValue pointers; the corresponding Box::from_raw block below
+        // reclaims every allocation we hand to the callback; ledgered at
+        // agent/unsafe-ledger.toml
+        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+        // detector=rust.unsafe.extern-fn).
+        unsafe {
+            step(ctx_ptr, boxed.len() as c_int, boxed.as_mut_ptr());
+        }
+        for ptr in boxed.drain(..) {
+            // SAFETY: matching constructor/destructor pair — each ptr
+            // originates from Box::into_raw above; the FFI ABI for
+            // sqlite3_value* never transfers ownership to the callback
+            // (read-only inspection only); ledgered at
+            // agent/unsafe-ledger.toml
+            // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+            // detector=rust.unsafe.raw-parts).
+            let _ = unsafe { Box::from_raw(ptr) };
+        }
+        // SAFETY: read-only borrow of the ctx allocation we just made
+        // (Box::into_raw above); short-lived borrow used only for the
+        // error check between rows; matched by Box::from_raw at the end
+        // of this function; ledgered at agent/unsafe-ledger.toml
+        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+        // detector=rust.unsafe.raw-parts).
+        let ctx_ref = unsafe { &*ctx_ptr };
+        if let Some(err) = ctx_ref.take_error() {
+            // SAFETY: matching constructor/destructor pair — ctx_ptr
+            // originates from Box::into_raw above; we reclaim it here so
+            // the Box drops before we return; ledgered at
+            // agent/unsafe-ledger.toml
+            // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+            // detector=rust.unsafe.raw-parts).
+            let _ = unsafe { Box::from_raw(ctx_ptr) };
+            return Some(Err(err));
+        }
+    }
+    // SAFETY: callback signature matches the FFI ABI for an aggregate
+    // final; ctx_ptr is the Box::into_raw allocation we made above;
+    // ledgered at agent/unsafe-ledger.toml
+    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+    // detector=rust.unsafe.extern-fn).
+    unsafe {
+        final_fn(ctx_ptr);
+    }
+    // SAFETY: matching constructor/destructor pair — ctx_ptr originates
+    // from Box::into_raw above; ownership invariant: the FFI ABI for
+    // sqlite3_context* never transfers ownership to the callback (the
+    // SQLite docs bound context lifetime to the UDF invocation);
+    // ledgered at agent/unsafe-ledger.toml
+    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+    // detector=rust.unsafe.raw-parts).
+    let ctx_box = unsafe { Box::from_raw(ctx_ptr) };
+    if let Some(err) = ctx_box.take_error() {
+        return Some(Err(err));
+    }
+    Some(Ok(ctx_box.take_result().to_sql()))
 }
 
 /// Hook invoked from `redlinedb_sql` for every unrecognised function call.
