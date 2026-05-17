@@ -35,6 +35,8 @@ use expr::*;
 pub(crate) mod index_access;
 pub(crate) mod index_batch;
 pub(crate) mod index_dml;
+pub(crate) mod index_partial;
+pub(crate) mod index_predicate;
 mod tail;
 use tail::*;
 pub(crate) mod vec;
