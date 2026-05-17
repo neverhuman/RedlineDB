@@ -1,0 +1,7 @@
+PRAGMA foreign_keys = ON;
+CREATE TABLE parent(id INTEGER PRIMARY KEY);
+CREATE TABLE child(id INTEGER, pid INTEGER REFERENCES parent(id) ON DELETE SET NULL);
+INSERT INTO parent VALUES (1);
+INSERT INTO child VALUES (10, 1);
+DELETE FROM parent WHERE id = 1;
+SELECT id, pid FROM child

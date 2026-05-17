@@ -130,6 +130,65 @@ pub(super) fn execute_select(
             });
         }
 
+        // Window-function fast-path: when the projection contains an
+        // `OVER (...)` call, route the entire SELECT through the window
+        // pipeline. The window post-processor handles materialization,
+        // partitioning, framing, projection, ORDER BY, and LIMIT/OFFSET
+        // in one pass so non-window items still evaluate per-row against
+        // the original row source.
+        if super::window::projection_has_window(&plan.projection) {
+            let base_rows = collect_select_rows(
+                conn,
+                conn.engine(),
+                tx.as_mut().expect("tx present"),
+                &plan.source,
+                &plan.selection,
+                bindings,
+            )?;
+            let filtered: Vec<SqlRow> = base_rows
+                .into_iter()
+                .filter_map(|row| match selection_passes(&plan.selection, &row, bindings) {
+                    Ok(true) => Some(Ok(row)),
+                    Ok(false) => None,
+                    Err(e) => Some(Err(e)),
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let mut projected = super::window::evaluate_window_functions(
+                &filtered,
+                &plan.projection,
+                bindings,
+            )?;
+            if !plan.order_by.is_empty() {
+                super::agg::sort_projected_rows_by_order_by(
+                    &mut projected,
+                    &plan.projection,
+                    &plan.order_by,
+                    bindings,
+                )?;
+            }
+            let projected: Vec<Vec<SqlValue>> = projected
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .collect();
+            let runtime_tx = std::mem::replace(&mut tx, SelectRuntimeTx::Empty);
+            return Ok(SelectRuntime {
+                tx: runtime_tx,
+                restore_tx,
+                source: SelectRuntimeSource::StaticRows {
+                    rows: Arc::from(projected),
+                    cursor: 0,
+                },
+                selection: None,
+                projection: Vec::new(),
+                limit: usize::MAX,
+                offset: 0,
+                seen: 0,
+                yielded: 0,
+                memory,
+            });
+        }
+
         let source = if plan.group_by.is_empty()
             && !select_requires_aggregation(plan)
             && !plan.distinct
@@ -322,6 +381,49 @@ pub(super) fn execute_select(
                     rows: Arc::clone(rows),
                     cursor: 0,
                 },
+                SelectSource::Cte {
+                    name,
+                    alias,
+                    columns,
+                    rows,
+                } => {
+                    // CTE rows go through the Batched path so projection /
+                    // selection / order-by can resolve column names. Pre-wrap
+                    // each row as `SqlRow::Cte` to retain column metadata.
+                    let sql_rows: Vec<SqlRow> = rows
+                        .iter()
+                        .cloned()
+                        .map(|values| {
+                            SqlRow::Cte(crate::exec::expr::scalar::row::CteRow {
+                                name: Arc::clone(name),
+                                alias: alias.clone(),
+                                columns: Arc::clone(columns),
+                                values,
+                            })
+                        })
+                        .collect();
+                    SelectRuntimeSource::Batched {
+                        node: MaterializeNode::new(order_and_project_rows(
+                            sql_rows,
+                            &plan.selection,
+                            &plan.order_by,
+                            bindings,
+                            &plan.projection,
+                            limit,
+                            offset,
+                            &mut memory,
+                        )?),
+                        ctx: ExecContext::new(
+                            conn.query_memory().work_mem_bytes,
+                            conn.query_memory().max_spill_bytes,
+                            temp_dir.clone(),
+                        ),
+                        batch: RowBatch::new(Arc::new(RowLayout {
+                            columns: Arc::from([]),
+                        })),
+                        cursor: 0,
+                    }
+                }
                 SelectSource::CompoundAll(branches) => {
                     let rows = collect_compound_all_rows(conn, branches, bindings)?
                         .into_iter()
@@ -602,6 +704,23 @@ pub(super) fn collect_select_rows(
             .map(SqlRow::SqliteSchema)
             .collect()),
         SelectSource::StaticRows { rows } => Ok(rows.iter().cloned().map(SqlRow::Static).collect()),
+        SelectSource::Cte {
+            name,
+            alias,
+            columns,
+            rows,
+        } => Ok(rows
+            .iter()
+            .cloned()
+            .map(|values| {
+                SqlRow::Cte(crate::exec::expr::scalar::row::CteRow {
+                    name: Arc::clone(name),
+                    alias: alias.clone(),
+                    columns: Arc::clone(columns),
+                    values,
+                })
+            })
+            .collect()),
         SelectSource::CompoundAll(branches) => {
             Ok(collect_compound_all_rows(conn, branches, bindings)?
                 .into_iter()
