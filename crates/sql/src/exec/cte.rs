@@ -255,19 +255,26 @@ pub(crate) fn bind_with_query(
 
     // Reset the synthetic-relation counter for this query.
     CTE_REL_COUNTER.with(|cell| cell.set(0));
-    let mut scope: HashMap<String, CteDef> = HashMap::new();
+    // Push each CTE's scope as soon as it's materialized so subsequent
+    // CTE bodies in the same WITH can reference earlier CTEs. Without
+    // this, `WITH a AS (...), b AS (SELECT FROM a) ...` would fail to
+    // resolve `a` at b's materialize time.
+    let mut pushed_scopes = 0usize;
     for cte in cte_tables {
         let def = materialize_cte(conn, Arc::clone(&schema), schema_epoch, sql, &cte, recursive)?;
-        scope.insert(def.name.to_string(), def);
+        let mut single = HashMap::new();
+        single.insert(def.name.to_string(), def);
+        push_scope(single);
+        pushed_scopes += 1;
     }
-
-    push_scope(scope);
     let bound = super::super::parser::bind_query(conn, schema, schema_epoch, sql, body_query);
-    // Pop the scope so nested binds don't see this CTE. The synthetic-
+    // Pop the per-CTE scopes so nested binds don't see them. Synthetic-
     // TableDef row registry is intentionally NOT cleared — the bound
     // template references those rows via relation_id and may be cached
     // and re-executed later.
-    pop_scope();
+    for _ in 0..pushed_scopes {
+        pop_scope();
+    }
     bound
 }
 

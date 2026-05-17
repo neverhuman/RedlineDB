@@ -230,6 +230,30 @@ fn fire_delete_triggers(
     )
 }
 
+fn fire_before_delete_triggers(
+    conn: &Connection,
+    tx: &mut redlinedb_kernel::engine::Txn,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    rowid: redlinedb_kernel::format::RowId,
+    values: &[SqlValue],
+) -> Result<()> {
+    let schema = conn.engine().schema_snapshot();
+    crate::exec::trigger::fire_triggers(
+        conn,
+        tx,
+        &schema,
+        table,
+        redlinedb_kernel::catalog::TriggerEventKind::Delete,
+        redlinedb_kernel::catalog::TriggerTimeKind::Before,
+        Some(crate::exec::trigger::TriggerRowValues {
+            rowid,
+            values: values.to_vec(),
+        }),
+        None,
+        None,
+    )
+}
+
 pub(crate) fn execute_delete(
     conn: &Connection,
     plan: &crate::statement::DeletePlan,
@@ -267,6 +291,8 @@ pub(crate) fn execute_delete(
                 Some(v) => v,
                 None => row.values.clone(),
             };
+            // BEFORE DELETE triggers fire while OLD row still exists.
+            fire_before_delete_triggers(conn, tx, &plan.table, row.rowid, &live)?;
             conn.engine()
                 .delete_for_relation(tx, plan.table.relation_id, row.rowid)?;
             crate::exec::index_dml::maintain_indexes_on_delete(
