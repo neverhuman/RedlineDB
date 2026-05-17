@@ -20,6 +20,8 @@ mod snapshot;
 mod statement;
 mod value;
 
+pub mod metrics;
+
 #[cfg(feature = "tokio")]
 mod asyncio;
 
@@ -394,6 +396,38 @@ mod tests {
         }
         assert_eq!(pool.in_use(), 0);
         assert_eq!(pool.idle(), 1);
+    }
+
+    #[test]
+    fn pool_metrics_hook_fires_on_acquire() {
+        use crate::metrics::{MetricResult, Metrics};
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        #[derive(Default)]
+        struct CountMetrics {
+            acquires: AtomicUsize,
+        }
+        impl Metrics for CountMetrics {
+            fn on_pool_acquire(&self, _wait: Duration, _result: MetricResult) {
+                self.acquires.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("metrics.redline")).expect("db");
+        let counter = Arc::new(CountMetrics::default());
+        let pool = Pool::builder(db)
+            .max_connections(2)
+            .metrics(counter.clone())
+            .build()
+            .expect("pool");
+        {
+            let _a = pool.get().expect("a");
+            let _b = pool.get().expect("b");
+        }
+        let _c = pool.get().expect("c");
+        assert_eq!(counter.acquires.load(Ordering::Relaxed), 3);
     }
 
     #[test]
