@@ -127,6 +127,11 @@ extra_excluded_paths = [
   "crates/bench/src/workload.rs",
   "crates/bench/src/chaos/",
   "crates/bench/src/process_metrics.rs",
+  # D7 fuzz-parity grammar generator: a SQL fuzzer's sole purpose is to
+  # emit string SQL. The output never reaches production code — it is
+  # consumed by `crates/bench/tests/fuzz_parity.rs` against fresh
+  # in-memory engines. See `docs/exceptions/fuzz-parity.md`.
+  "crates/bench/src/fuzz/",
   "crates/ffi/src/error.rs",
   "crates/ffi/src/lifecycle.rs",
   "crates/ffi/src/snapshot.rs",
