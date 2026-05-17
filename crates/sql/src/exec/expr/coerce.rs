@@ -26,7 +26,7 @@ pub(super) fn eval_binary(
     let left_value = eval_scalar(left, row, bindings)?;
     let right_value = eval_scalar(right, row, bindings)?;
     let compare_with_collation = |a: SqlValue, b: SqlValue, accept: fn(Ordering) -> bool| {
-        compare_binary_with(a, b, accept, collation)
+        compare_binary_with(a, b, accept, collation.clone())
     };
     Ok(match op {
         BinaryOperator::And => match (truthy_opt(&left_value), truthy_opt(&right_value)) {
@@ -146,7 +146,7 @@ pub(crate) fn compare_binary_with(
     if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let ord = match collation.and_then(|c| c.compare_values(&left, &right)) {
+    let ord = match collation.as_ref().and_then(|c| c.compare_values(&left, &right)) {
         Some(o) => o,
         None => compare_values(&left, &right),
     };
