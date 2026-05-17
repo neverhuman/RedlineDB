@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use crate::error::Result;
+use crate::error::{Error, ErrorCode, Result};
 use crate::statement::Statement;
 use crate::value::{Value, ValueRef};
 
@@ -69,5 +69,87 @@ impl FromValue for Value {
             ValueRef::Text(value) => Value::Text(Arc::from(value)),
             ValueRef::Blob(value) => Value::Blob(Arc::from(value)),
         })
+    }
+}
+
+/// Narrowing integer extraction; fails with [`ErrorCode::Mismatch`] if the
+/// underlying `i64` does not fit the target type.
+impl FromValue for i32 {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        i32::try_from(stmt.inner.column_i64(index)?)
+            .map_err(|_| Error::new(ErrorCode::Mismatch, "integer does not fit i32"))
+    }
+}
+
+impl FromValue for i16 {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        i16::try_from(stmt.inner.column_i64(index)?)
+            .map_err(|_| Error::new(ErrorCode::Mismatch, "integer does not fit i16"))
+    }
+}
+
+impl FromValue for i8 {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        i8::try_from(stmt.inner.column_i64(index)?)
+            .map_err(|_| Error::new(ErrorCode::Mismatch, "integer does not fit i8"))
+    }
+}
+
+impl FromValue for u64 {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        u64::try_from(stmt.inner.column_i64(index)?)
+            .map_err(|_| Error::new(ErrorCode::Mismatch, "integer does not fit u64"))
+    }
+}
+
+impl FromValue for u32 {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        u32::try_from(stmt.inner.column_i64(index)?)
+            .map_err(|_| Error::new(ErrorCode::Mismatch, "integer does not fit u32"))
+    }
+}
+
+impl FromValue for u16 {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        u16::try_from(stmt.inner.column_i64(index)?)
+            .map_err(|_| Error::new(ErrorCode::Mismatch, "integer does not fit u16"))
+    }
+}
+
+impl FromValue for u8 {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        u8::try_from(stmt.inner.column_i64(index)?)
+            .map_err(|_| Error::new(ErrorCode::Mismatch, "integer does not fit u8"))
+    }
+}
+
+/// `INTEGER` storage class with sqlite truthy convention: any nonzero
+/// integer is `true`, `0` is `false`.
+impl FromValue for bool {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        stmt.inner.column_i64(index).map(|v| v != 0)
+    }
+}
+
+impl FromValue for f32 {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        #[allow(clippy::cast_possible_truncation)]
+        Ok(stmt.inner.column_f64(index)? as f32)
+    }
+}
+
+impl FromValue for Vec<u8> {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        Ok(stmt.inner.column_blob(index)?.to_vec())
+    }
+}
+
+/// `Option<T>` returns `None` for `NULL`, else delegates to `T`.
+impl<T: FromValue> FromValue for Option<T> {
+    fn from_statement(stmt: &Statement<'_>, index: usize) -> Result<Self> {
+        match stmt.inner.column_ref(index)? {
+            ValueRef::Null => Ok(None),
+            _ => T::from_statement(stmt, index).map(Some),
+        }
     }
 }
