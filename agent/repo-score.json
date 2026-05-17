@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:7d7934bbd44b361c248d3e9bde79fa65df983832978ae6be0e8ba6506209d758",
-  "input_fingerprint": "sha256:c070ae8a306d1cc5461b0b09131d08ece31b681d7c388bbfe59069d395c1d4c0",
+  "report_fingerprint": "sha256:46233f83a8c30a5ef9f97e4bd121e20c74b1c3a8038bf8d748c1f4a1fe4491d8",
+  "input_fingerprint": "sha256:2319f29e69b88bab1f9ce35eadbb5549d7fa6778362ae93e9ecde55bd70c8409",
   "policy_fingerprint": "sha256:eaca17b4f280af0700dd95302a79cf419832e7a78800160ec46e58880678c57e",
   "manifest_fingerprints": {
     "owner_map": "sha256:8129ea85c137bdbab9f3c9af724816f6bc432acb6dcf5ee686884a4eb16f2ea4",
@@ -10,8 +10,8 @@
     "proof_lanes": "sha256:46832ba6baeeaf0c88962f9ec7e746ca1142e84ae277f195b19cc91a29af5f6a",
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
-  "dirty_worktree": true,
-  "generated_at": "1778958810",
+  "dirty_worktree": false,
+  "generated_at": "1778998804",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -25,23 +25,23 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1778958810",
-  "started_at": "1778958810",
-  "elapsed_ms": 3468,
+  "run_id": "1778998804",
+  "started_at": "1778998804",
+  "elapsed_ms": 3436,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 91,
-  "raw_score": 91,
+  "score": 89,
+  "raw_score": 89,
   "decision": {
-    "status": "pass",
+    "status": "advisory",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
     "soft_findings": 2,
     "ratchet": {
-      "baseline_score": 91,
+      "baseline_score": 89,
       "allowed_drop": 0,
       "passed": true,
       "score_delta": 0,
@@ -54,11 +54,11 @@
     }
   },
   "git": {
-    "head": "7bbea40",
+    "head": "37b758c",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": true
+    "dirty_worktree": false
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -71,7 +71,7 @@
       "medium",
       "low"
     ],
-    "mode": "standard",
+    "mode": "advisory",
     "standard_version": "0.9.0",
     "auditor_version": "1.4.1",
     "schema_version": "1.9.0",
@@ -295,7 +295,8 @@
         "reference-profile cell `ops` has local AGENTS.md guidance",
         "root `README.md` routes to workspace layout",
         "owner map covers audited paths",
-        "test map covers audited paths"
+        "test map covers audited paths",
+        "authored code file exceeds 500 LOC"
       ],
       "notes": []
     },
@@ -346,7 +347,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1167",
+        "rust bad-behavior advisory signals: 1175",
         "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -356,13 +357,14 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 80,
-      "weighted_points": 9.6,
+      "score": 65,
+      "weighted_points": 7.8,
       "evidence": [
-        "largest authored code file: crates/ffi/src/sqlite3_api.rs (499 LOC)",
+        "largest authored code file: crates/sql/src/datetime.rs (587 LOC)",
+        "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
         "copy-code advisory classes found: 29 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1167",
+        "rust bad-behavior advisory signals: 1175",
         "ci bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -1034,23 +1036,7 @@
       "cost-budget"
     ]
   },
-  "security_evidence": {
-    "artifact": {
-      "path": "target/jankurai/security/evidence.json",
-      "envelope_exit_code": 0,
-      "elapsed_ms": 45837,
-      "wrapper_strict": true,
-      "profile": "ci",
-      "commands_ran": 1,
-      "commands_skipped": 0,
-      "commands_failed": 0,
-      "required_commands_skipped": 0,
-      "required_commands_failed": 0,
-      "blocking_commands": [],
-      "generated_at": "1778957800",
-      "git_head": "7bbea409be5a08276141f8b9c35a84593efefcee"
-    }
-  },
+  "security_evidence": {},
   "boundaries": {
     "artifact": {
       "path": "agent/boundaries.toml",
@@ -1068,7 +1054,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-16T19:13:27.282964+00:00",
+    "generated_at": "2026-05-17T06:20:00.649296+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -2515,20 +2501,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 80 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 65 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/ffi/src/sqlite3_api.rs (499 LOC)",
+        "largest authored code file: crates/sql/src/datetime.rs (587 LOC)",
+        "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 29 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1167"
+        "copy-code advisory classes found: 29 (advisory only, no score impact)"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:d9e3e689063b2da5d656095df4b5a3e7f15480211448beff07a2c8a9e0912be1",
+      "fingerprint": "sha256:8d21498d5c387de9c487b8c97d2385d90fcdbb79fc684e27213d99a70e899369",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -2579,7 +2565,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 80 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 65 below the standard floor of 85"
     }
   ]
 }

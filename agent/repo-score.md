@@ -7,13 +7,13 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1778957962`
-- Started at: `1778957962`
-- Elapsed: `3348` ms
+- Run ID: `1778998804`
+- Started at: `1778998804`
+- Elapsed: `3436` ms
 - Scope: `full`
-- Raw score: `91`
-- Final score: `91`
-- Decision: `pass`
+- Raw score: `89`
+- Final score: `89`
+- Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
 
@@ -119,7 +119,7 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 80 | 9.60 | largest authored code file: crates/ffi/src/sqlite3_api.rs (499 LOC); most code files stay under 300 LOC |
+| Code shape and semantic surface | 12 | 65 | 7.80 | largest authored code file: crates/sql/src/datetime.rs (587 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 95 | 7.60 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -183,14 +183,6 @@
 | `release-readiness` | `release` | `auto` | `configured` | `manual launch checklist` | `agent/repo-score.json, agent/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `configured` | `manual spend review` | `agent/repo-score.json, agent/repo-score.md` |
 
-## Security evidence (ingested)
-
-- Source: `target/jankurai/security/evidence.json`
-- Envelope exit code: `0` · elapsed: `45837` ms · strict: `true`
-- Commands — ran: `1`, skipped: `0`, failed: `0`
-- Generated at: `1778957800`
-- Git HEAD (envelope): `7bbea409be5a08276141f8b9c35a84593efefcee`
-
 ## Boundary manifest (ingested)
 
 - Path: `agent/boundaries.toml`
@@ -209,11 +201,11 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
    Route: TLR `Entropy`, lane `fast`, owner `tools`
    Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 80 below the standard floor of 85
+   Reason: `Code shape and semantic surface` scored 65 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:d9e3e689063b2da5d656095df4b5a3e7f15480211448beff07a2c8a9e0912be1`
-   Evidence: largest authored code file: crates/ffi/src/sqlite3_api.rs (499 LOC), most code files stay under 300 LOC, copy-code advisory classes found: 29 (advisory only, no score impact), rust bad-behavior advisory signals: 1167
+   Fingerprint: `sha256:8d21498d5c387de9c487b8c97d2385d90fcdbb79fc684e27213d99a70e899369`
+   Evidence: largest authored code file: crates/sql/src/datetime.rs (587 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 29 (advisory only, no score impact)
 2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
