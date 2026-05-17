@@ -230,6 +230,13 @@ impl Engine {
             record
                 .decode_into(&mut scratch)
                 .map_err(|_| Error::CorruptPage("index backfill: record decode failed"))?;
+            // SQL-encoded rows (encode_sql_row) prepend table_id at col 0;
+            // kernel-direct rows (encode_record) do not. Detect by comparing
+            // the record column count against the table's user column count.
+            let ncols = record
+                .column_count()
+                .map_err(|_| Error::CorruptPage("index backfill: record decode failed"))?;
+            let col_offset = if ncols == table.columns.len() + 1 { 1 } else { 0 };
             let mut parts: Vec<ValueRef<'_>> = Vec::with_capacity(index.keys.len());
             let mut has_expression_key = false;
             for key in &index.keys {
@@ -244,7 +251,7 @@ impl Engine {
                     }
                 };
                 let value = record
-                    .value_at(&scratch, attnum as usize)
+                    .value_at(&scratch, attnum as usize + col_offset)
                     .map_err(|_| Error::CorruptPage("index backfill: column out of range"))?;
                 parts.push(value);
             }
@@ -272,14 +279,7 @@ impl Engine {
                 row_id,
                 TuplePtr::new_with_generation(PageId(0), 0, PageGeneration::ONE),
             );
-            eprintln!(
-                "BACKFILL INSERT tx={:?} bytes={:02x?} row_id={:?}",
-                tx.id(), &bytes, row_id
-            );
             btree.insert_tx(tx.id(), &bytes, row_ref)?;
-            // Post-insert verification: lookup with no visibility filter.
-            let raw = btree.point_lookup_filter(&bytes, |_| true)?;
-            eprintln!("BACKFILL POST-INSERT unfiltered={} entries", raw.len());
         }
         Ok(())
     }
