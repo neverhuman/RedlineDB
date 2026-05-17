@@ -39,6 +39,8 @@ impl BtreeIndex {
         let mut page_id = self.find_leaf(self.meta()?.root_page_id, logical_key)?;
         let mut out: Vec<IndexRowRef> = Vec::new();
         loop {
+            let leaf_latch = self.inner.latches.get(page_id);
+            let _leaf_read = leaf_latch.read();
             let guard = self.inner.buffer.pin(page_id)?;
             let (first_past_key, right_link) = guard.with_page(|page| {
                 let header = Self::read_page_header(page)?;

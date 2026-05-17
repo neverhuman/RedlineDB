@@ -16,6 +16,22 @@ pub(crate) fn collect_table_rows_with_alias(
     table: &Arc<TableDef>,
     alias: Option<Arc<str>>,
 ) -> Result<Vec<TableRow>> {
+    // CTE-backed table: short-circuit to the pre-materialized row store.
+    if crate::exec::cte::is_cte_table_def(table) {
+        if let Some(rows) = crate::exec::cte::rows_for_relation(table.relation_id) {
+            return Ok(rows
+                .iter()
+                .enumerate()
+                .map(|(idx, values)| TableRow {
+                    rowid: redlinedb_kernel::format::RowId(idx as u64 + 1),
+                    values: values.clone(),
+                    table: Arc::clone(table),
+                    alias: alias.clone(),
+                })
+                .collect());
+        }
+        return Ok(Vec::new());
+    }
     let mut rows = Vec::new();
     let rowids = engine.relation_rowids(table.relation_id)?;
     for rowid in rowids {
@@ -109,6 +125,12 @@ pub(crate) fn collect_table_rowids(
     tx: &mut Txn,
     table: &Arc<TableDef>,
 ) -> Result<Vec<RowId>> {
+    if crate::exec::cte::is_cte_table_def(table) {
+        if let Some(rows) = crate::exec::cte::rows_for_relation(table.relation_id) {
+            return Ok((1..=rows.len()).map(|i| RowId(i as u64)).collect());
+        }
+        return Ok(Vec::new());
+    }
     let mut rowids = Vec::new();
     let scan = engine.relation_rowids(table.relation_id)?;
     for rowid in scan {
@@ -125,6 +147,23 @@ pub(crate) fn load_table_row_by_rowid(
     table: &Arc<TableDef>,
     rowid: RowId,
 ) -> Result<Option<TableRow>> {
+    if crate::exec::cte::is_cte_table_def(table) {
+        if let Some(rows) = crate::exec::cte::rows_for_relation(table.relation_id) {
+            let idx = match (rowid.0 as usize).checked_sub(1) {
+                Some(idx) => idx,
+                None => return Ok(None),
+            };
+            if let Some(values) = rows.get(idx) {
+                return Ok(Some(TableRow {
+                    rowid,
+                    values: values.clone(),
+                    table: Arc::clone(table),
+                    alias: None,
+                }));
+            }
+        }
+        return Ok(None);
+    }
     if let Some(payload) = engine.get_for_relation(tx, table.relation_id, rowid)?
         && let Some((table_id, values)) = decode_sql_row(&payload)?
         && table_id == table.table_id.0

@@ -4,6 +4,136 @@ name = "fast"
 purpose = "deterministic local health proof"
 
 [[lane]]
+command = "just setup"
+name = "setup"
+purpose = "workspace cache warmup proof"
+
+[[lane]]
+command = "just check"
+name = "check"
+purpose = "root validation proof"
+
+[[lane]]
+command = "just test"
+name = "test"
+purpose = "root test proof"
+
+[[lane]]
+command = "just verify"
+name = "verify"
+purpose = "root verification proof"
+
+[[lane]]
+command = "just fast-check"
+name = "fast-check"
+purpose = "workspace compile proof for the default health lane"
+
+[[lane]]
+command = "just fast-test"
+name = "fast-test"
+purpose = "workspace test proof for the default health lane"
+
+[[lane]]
+command = "just kernel-cursor"
+name = "kernel-cursor"
+purpose = "kernel raw cursor and equivalence regression proof"
+
+[[lane]]
+command = "just kernel-check"
+name = "kernel-check"
+purpose = "targeted redlinedb-kernel compile proof"
+
+[[lane]]
+command = "just kernel-test"
+name = "kernel-test"
+purpose = "targeted redlinedb-kernel test proof"
+
+[[lane]]
+command = "just sql-parity"
+name = "sql-parity"
+purpose = "SQL differential parity proof"
+
+[[lane]]
+command = "just sql-parity-full"
+name = "sql-parity-full"
+purpose = "full SQL differential parity gate against rusqlite oracle (zero-divergence)"
+
+[[lane]]
+command = "just ffi-parity-full"
+name = "ffi-parity-full"
+purpose = "full FFI symbol + behavior parity gate against rusqlite oracle"
+
+[[lane]]
+command = "just ffi-symbol-diff"
+name = "ffi-symbol-diff"
+purpose = "FFI export set must cover libsqlite3 public surface (allowlist for documented exclusions)"
+
+[[lane]]
+command = "just cli-parity-full"
+name = "cli-parity-full"
+purpose = "CLI dot-command behavior parity gate against sqlite3 shell"
+
+[[lane]]
+command = "just fuzz-parity"
+name = "fuzz-parity"
+purpose = "differential fuzzing oracle (CI-bounded iteration budget; zero-divergence required)"
+
+[[lane]]
+command = "just fuzz-parity-nightly"
+name = "fuzz-parity-nightly"
+purpose = "extended differential fuzz (100k iterations, nightly CI only)"
+
+[[lane]]
+command = "just parity-full"
+name = "parity-full"
+purpose = "end-to-end SQLite drop-in parity gate (layer 1 + layer 2)"
+
+[[lane]]
+command = "just sql-check"
+name = "sql-check"
+purpose = "targeted redlinedb-sql compile proof"
+
+[[lane]]
+command = "just sql-test"
+name = "sql-test"
+purpose = "targeted redlinedb-sql test proof"
+
+[[lane]]
+command = "just ffi-abi"
+name = "ffi-abi"
+purpose = "C ABI compatibility proof"
+
+[[lane]]
+command = "just ffi-check"
+name = "ffi-check"
+purpose = "targeted redlinedb-ffi compile proof"
+
+[[lane]]
+command = "just ffi-test"
+name = "ffi-test"
+purpose = "targeted redlinedb-ffi test proof"
+
+[[lane]]
+command = "just cli-shell"
+name = "cli-shell"
+purpose = "CLI compatibility proof"
+
+[[lane]]
+command = "just cli-check"
+name = "cli-check"
+purpose = "targeted redlinedb-cli compile proof"
+
+[[lane]]
+command = "just cli-test"
+name = "cli-test"
+purpose = "targeted redlinedb-cli test proof"
+
+[[lane]]
+command = "just cache-warm"
+name = "cache-warm"
+purpose = "warm the workspace cache before wider proofs"
+
+[[lane]]
 command = "just score"
 name = "audit"
 purpose = "write jankurai score artifacts"
@@ -17,6 +147,46 @@ purpose = "secret, dependency, and workflow proof"
 command = "just check"
 name = "release"
 purpose = "full merge gate"
+
+[[lane]]
+command = "rtk just crate-check redlinedb-kernel"
+name = "kernel-check"
+purpose = "targeted kernel compile proof"
+
+[[lane]]
+command = "rtk just crate-test redlinedb-kernel"
+name = "kernel-test"
+purpose = "targeted kernel test proof"
+
+[[lane]]
+command = "rtk just crate-check redlinedb-sql"
+name = "sql-check"
+purpose = "targeted sql compile proof"
+
+[[lane]]
+command = "rtk just crate-test redlinedb-sql"
+name = "sql-test"
+purpose = "targeted sql test proof"
+
+[[lane]]
+command = "rtk just crate-check redlinedb-ffi"
+name = "ffi-check"
+purpose = "targeted ffi compile proof"
+
+[[lane]]
+command = "rtk just crate-test redlinedb-ffi"
+name = "ffi-test"
+purpose = "targeted ffi test proof"
+
+[[lane]]
+command = "rtk just crate-check redlinedb-cli"
+name = "cli-check"
+purpose = "targeted cli compile proof"
+
+[[lane]]
+command = "rtk just crate-test redlinedb-cli"
+name = "cli-test"
+purpose = "targeted cli test proof"
 
 [phase10-hnsw-recall]
 commands = ["rtk cargo test -p redlinedb-kernel --test hnsw_recall --quiet --locked -- --ignored"]

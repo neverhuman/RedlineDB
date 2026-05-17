@@ -8,13 +8,13 @@
 
 ## Abstract
 
-RedlineDB is a 100% safe-Rust embedded SQL engine that maintains the SQLite API contract — the C ABI (`sqlite3_*` symbol shim), the SQL surface, and the embedded deployment model — while replacing SQLite's single-writer WAL storage core with MVCC, a concurrent B-tree, real group-commit WAL, and deterministic crash recovery.
+RedlineDB is a 100% safe-Rust embedded SQL engine that targets the SQLite API contract on the documented compatibility surface — the C ABI shim, the SQL surface, and the embedded deployment model — while replacing SQLite's single-writer WAL storage core with MVCC, a concurrent B-tree, real group-commit WAL, and deterministic crash recovery.
 
 The key design claims:
 
 - **Multi-writer concurrency.** Row-level locks with snapshot isolation allow disjoint-row writes to proceed without serialization at the SQL level.
 - **Crash safety.** Every committed transaction is durable before the application receives acknowledgement. The failpoint matrix (24 cases) and recovery matrix (36 cases) verify zero lost acked commits across every crash injection point.
-- **SQLite drop-in ABI.** `crates/ffi` exports `sqlite3_open`, `sqlite3_prepare_v2`, `sqlite3_step`, and the full sqlite3 symbol surface. Applications linked against `libsqlite3` can relink against `libredlinedb` without source changes.
+- **SQLite compatibility shim.** `crates/ffi` exports `sqlite3_open`, `sqlite3_prepare_v2`, `sqlite3_step`, and the documented `sqlite3_*` aliases that the compatibility tests cover. The shim is intended for incremental integration and link-time testing, not a blanket claim that every SQLite-linked program can relink without review.
 - **Deterministic proof.** The 1,728-child certification matrix produces byte-comparable artifacts across runs given the same git SHA, Docker image digest, and seed.
 
 The codebase is 34,999 active source lines across 8 workspace crates. Test count: 928 passing.
@@ -1294,6 +1294,17 @@ struct SessionState {
 3. Clear all session state.
 4. `session.tx = None`, `session.failed = false`.
 
+### Sync Facade Integration Pattern
+
+The public Rust API is synchronous. `Database` is the shared handle and may be cloned or shared across threads; each worker that performs blocking SQL work should open its own `Connection`. `Connection` owns session state and is the unit that prepares and executes statements. Prepared statements are borrow-bound to a connection unless the code explicitly needs an owned form that can outlive that borrow.
+
+For async runtimes, the integration pattern is:
+
+1. Keep `Database` in shared application state.
+2. Open one `Connection` inside each blocking worker.
+3. Execute SQL work inside `tokio::task::spawn_blocking` or an equivalent blocking pool.
+4. Drop the `Connection` with the worker or task scope so session state does not cross thread boundaries unintentionally.
+
 ### Savepoint Mechanism
 
 Each `SAVEPOINT name` pushes:
@@ -1717,7 +1728,7 @@ Same `git_sha` + `image_digest` + `seed` → byte-comparable output files (verif
 
 Crash certification: **36/36** recovery cases, **24/24** failpoint cases — zero lost acked commits.
 
-SQL compat: **97 passing** / 21 skipped (documented gaps: `substr` negative offsets, `trim` extended char sets, `PRAGMA wal_checkpoint` mode variants).
+SQL compat: the focused SQLite parity suites currently cover **121 passing tests** with **0 ignored parity tests**. This is not a full SQLite claim; [docs/sqlite-parity.md](../sqlite-parity.md) tracks remaining `fail` and `not-started` rows such as SQLite file format, broad `sqlite3_*` API coverage, views, triggers, CTE execution, window functions, generated columns, partial/expression indexes, and broader PRAGMA/function coverage.
 
 ### Failpoint Placement Summary
 

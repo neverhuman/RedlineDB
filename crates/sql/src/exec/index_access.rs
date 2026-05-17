@@ -25,6 +25,7 @@ use redlinedb_kernel::catalog::{
 };
 use redlinedb_kernel::engine::{Engine, Txn};
 use redlinedb_kernel::format::RowId;
+use redlinedb_kernel::index::{CursorYield, IndexRowRef, RawPointCursor, SnapshotView};
 use sqlparser::ast::{BinaryOperator, Expr, Value};
 
 use crate::error::Result;
@@ -242,14 +243,26 @@ pub(crate) fn execute_index_point_lookup(
         // snapshots.
         return Ok(Vec::new());
     };
-    let entries =
-        handle.point_lookup_visible(engine.tx_status(), tx.snapshot(), Some(tx.id()), key)?;
-    let mut out = Vec::with_capacity(entries.len());
-    for entry in entries {
-        if visible_in_relation(engine, tx, table, entry.row_id)? {
-            out.push(entry.row_id);
+    let counters = engine.phase11_counters();
+    let snapshot = tx.snapshot().clone();
+    let view = SnapshotView::visible(engine.tx_status(), &snapshot, Some(tx.id()));
+    let mut cursor = RawPointCursor::open_with_counters(&handle, key, view, Some(&*counters))?;
+    let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
+    let mut out = Vec::new();
+    loop {
+        batch.clear();
+        match cursor.next_rowid_batch(&mut batch, MAX_BATCH)? {
+            CursorYield::End => break,
+            CursorYield::Batch(_) => {
+                for entry in &batch {
+                    if visible_in_relation(engine, tx, table, entry.row_id)? {
+                        out.push(entry.row_id);
+                    }
+                }
+            }
         }
     }
+    cursor.close();
     Ok(out)
 }
 

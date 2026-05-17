@@ -100,6 +100,9 @@ pub enum PreparedKind {
     Insert(InsertPlan),
     Update(UpdatePlan),
     Delete(DeletePlan),
+    /// ATTACH DATABASE 'path' AS alias / DETACH DATABASE alias — minimal
+    /// alias-map maintenance executed by [`crate::exec::attach::AttachPlan`].
+    Attach(crate::exec::attach::AttachPlan),
 }
 
 /// Sentinel SQL prefix used to tag `PreparedTemplate`s built for
@@ -187,11 +190,37 @@ pub enum SelectSource {
     Tables(Vec<BoundTable>),
     Joined(JoinSource),
     CompoundAll(Vec<SelectPlan>),
+    /// `UNION` (distinct), `INTERSECT`, `EXCEPT` — implemented in
+    /// `crate::exec::set_ops`. Each branch is materialised, then combined
+    /// according to [`CompoundSetOp`].
+    CompoundSet {
+        op: CompoundSetOp,
+        branches: Vec<SelectPlan>,
+    },
     SqliteSchema,
     StaticRows {
         rows: Arc<[Vec<crate::value::SqlValue>]>,
     },
+    /// A CTE / named-subquery reference: pre-materialized rows whose
+    /// column names are tracked so projections can resolve identifiers
+    /// like `cte.col`. Produced by `crate::exec::cte`.
+    Cte {
+        name: Arc<str>,
+        alias: Option<Arc<str>>,
+        columns: Arc<[String]>,
+        rows: Arc<[Vec<crate::value::SqlValue>]>,
+    },
     Empty,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompoundSetOp {
+    /// `UNION` (distinct): dedup both sides, concatenate, dedup again.
+    UnionDistinct,
+    /// `INTERSECT`: rows in both sides (deduped).
+    Intersect,
+    /// `EXCEPT`: rows in left-not-in-right (deduped).
+    Except,
 }
 
 #[derive(Debug, Clone)]

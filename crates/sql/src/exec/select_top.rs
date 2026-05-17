@@ -425,10 +425,40 @@ pub(super) fn execute_select(
                     }
                 }
                 SelectSource::CompoundAll(branches) => {
+                    let column_names = compound_output_column_names(branches);
                     let rows = collect_compound_all_rows(conn, branches, bindings)?
                         .into_iter()
-                        .map(SqlRow::Static)
+                        .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
                         .collect::<Vec<_>>();
+                    SelectRuntimeSource::Batched {
+                        node: MaterializeNode::new(order_and_project_rows(
+                            rows,
+                            &plan.selection,
+                            &plan.order_by,
+                            bindings,
+                            &plan.projection,
+                            limit,
+                            offset,
+                            &mut memory,
+                        )?),
+                        ctx: ExecContext::new(
+                            conn.query_memory().work_mem_bytes,
+                            conn.query_memory().max_spill_bytes,
+                            temp_dir.clone(),
+                        ),
+                        batch: RowBatch::new(Arc::new(RowLayout {
+                            columns: Arc::from([]),
+                        })),
+                        cursor: 0,
+                    }
+                }
+                SelectSource::CompoundSet { op, branches } => {
+                    let column_names = compound_output_column_names(branches);
+                    let rows =
+                        super::set_ops::collect_compound_set_rows(conn, *op, branches, bindings)?
+                            .into_iter()
+                            .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
+                            .collect::<Vec<_>>();
                     SelectRuntimeSource::Batched {
                         node: MaterializeNode::new(order_and_project_rows(
                             rows,
@@ -727,6 +757,12 @@ pub(super) fn collect_select_rows(
                 .map(SqlRow::Static)
                 .collect())
         }
+        SelectSource::CompoundSet { op, branches } => Ok(super::set_ops::collect_compound_set_rows(
+            conn, *op, branches, bindings,
+        )?
+        .into_iter()
+        .map(SqlRow::Static)
+        .collect()),
         SelectSource::Empty => Ok(vec![SqlRow::Empty]),
     }
 }
@@ -741,6 +777,37 @@ fn collect_compound_all_rows(
         out.extend(materialize_select_plan_rows(conn, branch, bindings)?);
     }
     Ok(out)
+}
+
+/// Derive an ordered list of column names that the *compound* query as a
+/// whole exposes. Falls back to "column1, column2, …" if the first branch's
+/// projection cannot yield a name.
+pub(super) fn compound_output_column_names(branches: &[SelectPlan]) -> Arc<[String]> {
+    let first = match branches.first() {
+        Some(p) => p,
+        None => return Arc::from([]),
+    };
+    let mut names = crate::parser::select_plan_output_names(first);
+    if names.is_empty() {
+        // Synthesise positional names so projection / ORDER BY can still
+        // reference rows by ordinal via `column1`, `column2`, …
+        names = (1..=branches.first().map(|p| p.projection.len().max(1)).unwrap_or(1))
+            .map(|i| format!("column{i}"))
+            .collect();
+    }
+    Arc::from(names)
+}
+
+/// Wrap a compound-result row as a `SqlRow::Cte` so identifier lookups in
+/// the compound query's ORDER BY / projection resolve against the column
+/// names derived from the first branch.
+pub(super) fn wrap_compound_row(values: Vec<SqlValue>, columns: Arc<[String]>) -> SqlRow {
+    SqlRow::Cte(crate::exec::expr::scalar::row::CteRow {
+        name: Arc::from("<compound>"),
+        alias: None,
+        columns,
+        values,
+    })
 }
 
 // ============================================================

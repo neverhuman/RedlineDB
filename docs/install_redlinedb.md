@@ -1,6 +1,6 @@
 # Installing RedlineDB
 
-RedlineDB provides a drop-in replacement for the standard `sqlite3` CLI tool. This allows AI agents, automated scripts, and interactive users to seamlessly use RedlineDB without knowing the difference!
+RedlineDB provides a CLI with a SQLite-oriented interface. It is intended for compatibility testing and incremental adoption, not as a blanket claim of perfect `sqlite3` parity.
 
 ## Global Installation
 
@@ -17,7 +17,7 @@ If you say **Yes**, it will create `/usr/local/bin/sqlite3` which simply symlink
 
 ## CLI Parity
 
-RedlineDB perfectly mimics the `sqlite3` binary signature:
+The command-line wrapper supports the documented flags and invocation patterns listed below:
 
 ```bash
 # Execute a single query via arguments

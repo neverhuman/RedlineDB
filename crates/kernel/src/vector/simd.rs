@@ -3,32 +3,24 @@
 //! Public functions ([`l2_distance`], [`cosine_distance`], [`inner_product`])
 //! pick the best implementation available for the host:
 //!
-//! * `x86_64` with AVX2 at runtime → 8-wide AVX2 + FMA path.
-//! * `aarch64` (NEON is mandatory in the AArch64 base ISA) → 4-wide NEON path.
-//! * Everything else → scalar implementation from [`super::distance`].
+//! * `x86_64` with AVX2 at runtime -> 8-wide AVX2 + FMA path.
+//! * `aarch64` (NEON is mandatory in the AArch64 base ISA) -> 4-wide NEON path.
+//! * Everything else -> scalar implementation from [`super::distance`].
 //!
-//! Run-time dispatch is deliberately resolved on every call. For phase-10
-//! Lane V1 the call sites are coarse (one call per scanned row), so the cost
-//! of `is_x86_feature_detected!` (~a single TLS load after the first call) is
-//! negligible. If profiling shows otherwise we can switch to the function
-//! pointer cache pattern, but doing so today would be premature optimisation.
-//!
-//! Lane V2 (HNSW) and Lane V3 (DiskANN) will reuse these entry points
-//! verbatim — keep the signatures stable.
-//!
-//! # Unsafety policy
-//!
-//! Each `target_feature`-gated kernel is an `unsafe fn` because the safety
-//! invariant is "the named feature is available on this CPU". The dispatcher
-//! upholds that invariant via `is_x86_feature_detected!` (x86) or the
-//! `target_arch` gate (NEON is in the AArch64 base ISA). Inside each kernel,
-//! Rust 2024 edition still demands per-call unsafe scopes for any
-//! operation flagged as such (notably the unaligned loads `_mm256_loadu_ps`
-//! and `vld1q_f32`). Every such scope below is preceded by a precise
-//! `SAFETY:` comment that names the invariant being relied on (runtime
-//! feature gate + bounds checked by the surrounding loop).
+//! The AVX2 and NEON kernels live in `simd/avx2.rs` and `simd/neon.rs`; this
+//! module keeps dispatch and the stable public API in one place.
 
 use super::distance::{cosine_distance_scalar, inner_product_scalar, l2_distance_scalar};
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[path = "simd/avx2.rs"]
+mod avx2;
+#[cfg(target_arch = "aarch64")]
+#[path = "simd/neon.rs"]
+mod neon;
+#[cfg(test)]
+#[path = "simd/tests.rs"]
+mod tests;
 
 /// Squared L2 distance with SIMD dispatch.
 #[inline]
@@ -41,7 +33,7 @@ pub fn l2_distance(a: &[f32], b: &[f32]) -> f32 {
             // inputs are equal-length slices (debug_asserted above).
             // SAFETY: `is_x86_feature_detected!("avx2")` returned true above, satisfying the `target_feature = "avx2,fma"` precondition of `l2_distance_avx2`.
             unsafe {
-                return l2_distance_avx2(a, b);
+                return avx2::l2_distance_avx2(a, b);
             }
         }
     }
@@ -49,9 +41,9 @@ pub fn l2_distance(a: &[f32], b: &[f32]) -> f32 {
     {
         // NEON is mandatory in the AArch64 base ISA; bounds checked by inner
         // loop; inputs are equal-length slices (debug_asserted above).
-        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `l2_distance_neon`.
+        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `neon::l2_distance_neon`.
         unsafe {
-            return l2_distance_neon(a, b);
+            return neon::l2_distance_neon(a, b);
         }
     }
     #[cfg_attr(target_arch = "aarch64", allow(unreachable_code))]
@@ -69,7 +61,7 @@ pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
             // inputs are equal-length slices (debug_asserted above).
             // SAFETY: `is_x86_feature_detected!("avx2")` returned true above, satisfying the `target_feature = "avx2,fma"` precondition of `cosine_distance_avx2`.
             unsafe {
-                return cosine_distance_avx2(a, b);
+                return avx2::cosine_distance_avx2(a, b);
             }
         }
     }
@@ -77,9 +69,9 @@ pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
     {
         // NEON is mandatory in the AArch64 base ISA; inputs are equal-length
         // slices (debug_asserted above).
-        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `cosine_distance_neon`.
+        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `neon::cosine_distance_neon`.
         unsafe {
-            return cosine_distance_neon(a, b);
+            return neon::cosine_distance_neon(a, b);
         }
     }
     #[cfg_attr(target_arch = "aarch64", allow(unreachable_code))]
@@ -97,7 +89,7 @@ pub fn inner_product(a: &[f32], b: &[f32]) -> f32 {
             // slices (debug_asserted above).
             // SAFETY: `is_x86_feature_detected!("avx2")` returned true above, satisfying the `target_feature = "avx2,fma"` precondition of `inner_product_avx2`.
             unsafe {
-                return inner_product_avx2(a, b);
+                return avx2::inner_product_avx2(a, b);
             }
         }
     }
@@ -105,307 +97,11 @@ pub fn inner_product(a: &[f32], b: &[f32]) -> f32 {
     {
         // NEON is mandatory in the AArch64 base ISA; inputs are equal-length
         // slices (debug_asserted above).
-        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `inner_product_neon`.
+        // SAFETY: AArch64 base ISA includes NEON, satisfying the `target_feature = "neon"` precondition of `neon::inner_product_neon`.
         unsafe {
-            return inner_product_neon(a, b);
+            return neon::inner_product_neon(a, b);
         }
     }
     #[cfg_attr(target_arch = "aarch64", allow(unreachable_code))]
     inner_product_scalar(a, b)
-}
-
-// -----------------------------------------------------------------------------
-// AVX2 (x86 / x86_64)
-// -----------------------------------------------------------------------------
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx2,fma")]
-unsafe fn l2_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
-    #[cfg(target_arch = "x86")]
-    use std::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-
-    let len = a.len();
-    let lanes = 8;
-    let mut acc = _mm256_setzero_ps();
-    let mut i = 0;
-    while i + lanes <= len {
-        // Loop guard ensures `i..i+8` lies inside both slices; `_mm256_loadu_ps`
-        // permits any alignment; AVX2 + FMA are upheld by the outer
-        // `#[target_feature(enable = "avx2,fma")]` on this function.
-        // SAFETY: bounded by loop guard `i + lanes <= len`; AVX2+FMA gated by outer `#[target_feature]`.
-        unsafe {
-            let va = _mm256_loadu_ps(a.as_ptr().add(i));
-            let vb = _mm256_loadu_ps(b.as_ptr().add(i));
-            let d = _mm256_sub_ps(va, vb);
-            acc = _mm256_fmadd_ps(d, d, acc);
-        }
-        i += lanes;
-    }
-    let mut tail = horizontal_sum_avx2(acc);
-    while i < len {
-        let d = a[i] - b[i];
-        tail += d * d;
-        i += 1;
-    }
-    tail
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx2,fma")]
-unsafe fn cosine_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
-    #[cfg(target_arch = "x86")]
-    use std::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-
-    let len = a.len();
-    let lanes = 8;
-    let mut dot = _mm256_setzero_ps();
-    let mut na = _mm256_setzero_ps();
-    let mut nb = _mm256_setzero_ps();
-    let mut i = 0;
-    while i + lanes <= len {
-        // Loop guard ensures `i..i+8` lies inside both slices; `_mm256_loadu_ps`
-        // permits any alignment; AVX2 + FMA are upheld by the outer
-        // `#[target_feature(enable = "avx2,fma")]`.
-        // SAFETY: bounded by loop guard `i + lanes <= len`; AVX2+FMA gated by outer `#[target_feature]`.
-        unsafe {
-            let va = _mm256_loadu_ps(a.as_ptr().add(i));
-            let vb = _mm256_loadu_ps(b.as_ptr().add(i));
-            dot = _mm256_fmadd_ps(va, vb, dot);
-            na = _mm256_fmadd_ps(va, va, na);
-            nb = _mm256_fmadd_ps(vb, vb, nb);
-        }
-        i += lanes;
-    }
-    let mut dot_s = horizontal_sum_avx2(dot);
-    let mut na_s = horizontal_sum_avx2(na);
-    let mut nb_s = horizontal_sum_avx2(nb);
-    while i < len {
-        dot_s += a[i] * b[i];
-        na_s += a[i] * a[i];
-        nb_s += b[i] * b[i];
-        i += 1;
-    }
-    let denom = na_s.sqrt() * nb_s.sqrt();
-    if denom == 0.0 {
-        return 1.0;
-    }
-    1.0 - dot_s / denom
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx2,fma")]
-unsafe fn inner_product_avx2(a: &[f32], b: &[f32]) -> f32 {
-    #[cfg(target_arch = "x86")]
-    use std::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-
-    let len = a.len();
-    let lanes = 8;
-    let mut acc = _mm256_setzero_ps();
-    let mut i = 0;
-    while i + lanes <= len {
-        // Loop guard ensures `i..i+8` lies inside both slices; `_mm256_loadu_ps`
-        // permits any alignment; AVX2 + FMA are upheld by the outer
-        // `#[target_feature(enable = "avx2,fma")]`.
-        // SAFETY: bounded by loop guard `i + lanes <= len`; AVX2+FMA gated by outer `#[target_feature]`.
-        unsafe {
-            let va = _mm256_loadu_ps(a.as_ptr().add(i));
-            let vb = _mm256_loadu_ps(b.as_ptr().add(i));
-            acc = _mm256_fmadd_ps(va, vb, acc);
-        }
-        i += lanes;
-    }
-    let mut tail = horizontal_sum_avx2(acc);
-    while i < len {
-        tail += a[i] * b[i];
-        i += 1;
-    }
-    -tail
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx2")]
-unsafe fn horizontal_sum_avx2(v: std::arch::x86_64::__m256) -> f32 {
-    use std::arch::x86_64::*;
-    let lo = _mm256_castps256_ps128(v);
-    let hi = _mm256_extractf128_ps(v, 1);
-    let s = _mm_add_ps(lo, hi);
-    let shuf = _mm_movehdup_ps(s);
-    let sums = _mm_add_ps(s, shuf);
-    let shuf2 = _mm_movehl_ps(shuf, sums);
-    let sums2 = _mm_add_ss(sums, shuf2);
-    _mm_cvtss_f32(sums2)
-}
-
-// -----------------------------------------------------------------------------
-// NEON (aarch64)
-// -----------------------------------------------------------------------------
-
-#[cfg(target_arch = "aarch64")]
-#[target_feature(enable = "neon")]
-unsafe fn l2_distance_neon(a: &[f32], b: &[f32]) -> f32 {
-    use std::arch::aarch64::*;
-    let len = a.len();
-    let lanes = 4;
-    let mut acc = vdupq_n_f32(0.0);
-    let mut i = 0;
-    while i + lanes <= len {
-        // Loop guard ensures `i..i+4` lies inside both slices; `vld1q_f32`
-        // permits any alignment; NEON is upheld by the outer
-        // `#[target_feature(enable = "neon")]`.
-        // SAFETY: bounded by loop guard `i + lanes <= len`; NEON gated by outer `#[target_feature]`.
-        unsafe {
-            let va = vld1q_f32(a.as_ptr().add(i));
-            let vb = vld1q_f32(b.as_ptr().add(i));
-            let d = vsubq_f32(va, vb);
-            acc = vfmaq_f32(acc, d, d);
-        }
-        i += lanes;
-    }
-    let mut tail = vaddvq_f32(acc);
-    while i < len {
-        let d = a[i] - b[i];
-        tail += d * d;
-        i += 1;
-    }
-    tail
-}
-
-#[cfg(target_arch = "aarch64")]
-#[target_feature(enable = "neon")]
-unsafe fn cosine_distance_neon(a: &[f32], b: &[f32]) -> f32 {
-    use std::arch::aarch64::*;
-    let len = a.len();
-    let lanes = 4;
-    let mut dot = vdupq_n_f32(0.0);
-    let mut na = vdupq_n_f32(0.0);
-    let mut nb = vdupq_n_f32(0.0);
-    let mut i = 0;
-    while i + lanes <= len {
-        // Loop guard ensures `i..i+4` lies inside both slices; `vld1q_f32`
-        // permits any alignment; NEON is upheld by the outer
-        // `#[target_feature(enable = "neon")]`.
-        // SAFETY: bounded by loop guard `i + lanes <= len`; NEON gated by outer `#[target_feature]`.
-        unsafe {
-            let va = vld1q_f32(a.as_ptr().add(i));
-            let vb = vld1q_f32(b.as_ptr().add(i));
-            dot = vfmaq_f32(dot, va, vb);
-            na = vfmaq_f32(na, va, va);
-            nb = vfmaq_f32(nb, vb, vb);
-        }
-        i += lanes;
-    }
-    let (mut dot_s, mut na_s, mut nb_s) = (vaddvq_f32(dot), vaddvq_f32(na), vaddvq_f32(nb));
-    while i < len {
-        dot_s += a[i] * b[i];
-        na_s += a[i] * a[i];
-        nb_s += b[i] * b[i];
-        i += 1;
-    }
-    let denom = na_s.sqrt() * nb_s.sqrt();
-    if denom == 0.0 {
-        return 1.0;
-    }
-    1.0 - dot_s / denom
-}
-
-#[cfg(target_arch = "aarch64")]
-#[target_feature(enable = "neon")]
-unsafe fn inner_product_neon(a: &[f32], b: &[f32]) -> f32 {
-    use std::arch::aarch64::*;
-    let len = a.len();
-    let lanes = 4;
-    let mut acc = vdupq_n_f32(0.0);
-    let mut i = 0;
-    while i + lanes <= len {
-        // Loop guard ensures `i..i+4` lies inside both slices; `vld1q_f32`
-        // permits any alignment; NEON is upheld by the outer
-        // `#[target_feature(enable = "neon")]`.
-        // SAFETY: bounded by loop guard `i + lanes <= len`; NEON gated by outer `#[target_feature]`.
-        unsafe {
-            let va = vld1q_f32(a.as_ptr().add(i));
-            let vb = vld1q_f32(b.as_ptr().add(i));
-            acc = vfmaq_f32(acc, va, vb);
-        }
-        i += lanes;
-    }
-    let mut tail = vaddvq_f32(acc);
-    while i < len {
-        tail += a[i] * b[i];
-        i += 1;
-    }
-    -tail
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::distance::{
-        cosine_distance_scalar, inner_product_scalar, l2_distance_scalar,
-    };
-    use super::*;
-
-    fn agree(a: f32, b: f32) -> bool {
-        // Squared-norm accumulators on a 1536-d random vector reach ~5e2.
-        // We accept agreement on the relative leg OR the absolute leg: FMA vs
-        // scalar order-of-summation can produce ~1e-7 wobble on near-zero
-        // metric values (notably inner product of near-orthogonal vectors).
-        if a == 0.0 && b == 0.0 {
-            return true;
-        }
-        let abs = (a - b).abs();
-        let scale = a.abs().max(b.abs()).max(1.0);
-        abs < 1e-6 || abs / scale < 1e-6
-    }
-
-    fn rand_vec(n: usize, seed: u64) -> Vec<f32> {
-        // Tiny xorshift so we don't pull in `rand`. Matches the kernel's
-        // existing zero-dependency posture.
-        let mut s = seed.wrapping_mul(0x9E3779B97F4A7C15).wrapping_add(1);
-        (0..n)
-            .map(|_| {
-                s ^= s << 13;
-                s ^= s >> 7;
-                s ^= s << 17;
-                ((s as i32) as f32) / (i32::MAX as f32)
-            })
-            .collect()
-    }
-
-    #[test]
-    fn simd_matches_scalar_l2_various_dims() {
-        for &dim in &[8usize, 64, 128, 512, 1536] {
-            let a = rand_vec(dim, 0xA);
-            let b = rand_vec(dim, 0xB);
-            let s = l2_distance_scalar(&a, &b);
-            let v = l2_distance(&a, &b);
-            assert!(agree(s, v), "dim={dim} scalar={s} simd={v}");
-        }
-    }
-
-    #[test]
-    fn simd_matches_scalar_cosine_various_dims() {
-        for &dim in &[8usize, 64, 128, 512, 1536] {
-            let a = rand_vec(dim, 0xC);
-            let b = rand_vec(dim, 0xD);
-            let s = cosine_distance_scalar(&a, &b);
-            let v = cosine_distance(&a, &b);
-            assert!(agree(s, v), "dim={dim} scalar={s} simd={v}");
-        }
-    }
-
-    #[test]
-    fn simd_matches_scalar_ip_various_dims() {
-        for &dim in &[8usize, 64, 128, 512, 1536] {
-            let a = rand_vec(dim, 0xE);
-            let b = rand_vec(dim, 0xF);
-            let s = inner_product_scalar(&a, &b);
-            let v = inner_product(&a, &b);
-            assert!(agree(s, v), "dim={dim} scalar={s} simd={v}");
-        }
-    }
 }
