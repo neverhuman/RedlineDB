@@ -231,12 +231,25 @@ impl Engine {
                 .decode_into(&mut scratch)
                 .map_err(|_| Error::CorruptPage("index backfill: record decode failed"))?;
             let mut parts: Vec<ValueRef<'_>> = Vec::with_capacity(index.keys.len());
+            let mut has_expression_key = false;
             for key in &index.keys {
-                let IndexKeySource::Column { attnum } = key.source;
+                let attnum = match &key.source {
+                    IndexKeySource::Column { attnum } => *attnum,
+                    IndexKeySource::Expression { .. } => {
+                        // Kernel cannot evaluate SQL expressions; the SQL
+                        // layer is the source of truth for expression
+                        // index maintenance.
+                        has_expression_key = true;
+                        break;
+                    }
+                };
                 let value = record
                     .value_at(&scratch, attnum as usize)
                     .map_err(|_| Error::CorruptPage("index backfill: column out of range"))?;
                 parts.push(value);
+            }
+            if has_expression_key {
+                continue;
             }
             let EncodedIndexKey {
                 bytes,

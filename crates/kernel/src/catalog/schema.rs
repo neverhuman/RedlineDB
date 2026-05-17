@@ -48,6 +48,24 @@ pub struct ColumnDef {
     pub not_null: bool,
     pub default_value: Option<OwnedValue>,
     pub default_expr: Option<Arc<super::expr::CompiledExpr>>,
+    /// A6 SQL-D: GENERATED ALWAYS AS (expr) column. None for ordinary
+    /// columns. Verbatim SQL fragment; re-parsed at eval time. `kind`
+    /// chooses STORED (computed at write, persisted) vs VIRTUAL
+    /// (computed at read).
+    pub generated: Option<GeneratedColumnSpec>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum GeneratedColumnKind {
+    Stored = 0,
+    Virtual = 1,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneratedColumnSpec {
+    pub kind: GeneratedColumnKind,
+    pub expr_sql: Box<str>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +82,11 @@ pub struct IndexDef {
     pub keys: Vec<IndexKeyDef>,
     pub flags: u64,
     pub normalized_sql: Option<Box<str>>,
+    /// A6 SQL-D: partial-index WHERE predicate as verbatim SQL.
+    /// None for full indexes. SQL exec re-parses and evaluates per row
+    /// before maintaining the index; planner only uses a partial index
+    /// when the query WHERE is provably implied (today: text match).
+    pub predicate_sql: Option<Box<str>>,
 }
 
 #[derive(Debug, Clone)]

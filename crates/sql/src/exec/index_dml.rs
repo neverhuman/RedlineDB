@@ -44,7 +44,13 @@ pub(crate) fn build_index_key(index: &IndexDef, values: &[SqlValue]) -> BuiltInd
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
     let mut owned_refs: Vec<&SqlValue> = Vec::with_capacity(index.keys.len());
     for key in &index.keys {
-        let IndexKeySource::Column { attnum } = key.source;
+        let IndexKeySource::Column { attnum } = key.source else {
+            // A6 SQL-D: expression index key — full per-expression
+            // build path not wired in this thin shim. Skip the key;
+            // upper layer should detect expression indexes and route
+            // through the dedicated expression-aware build.
+            continue;
+        };
         owned_refs.push(values.get(attnum as usize).unwrap_or(&SqlValue::Null));
         dirs.push(key.sort_dir);
     }

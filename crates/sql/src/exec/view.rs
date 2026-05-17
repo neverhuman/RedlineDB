@@ -158,6 +158,7 @@ fn synth_view_table_def(name: &str, columns: &[String], rows: &[Vec<SqlValue>]) 
             not_null: false,
             default_value: None,
             default_expr: None,
+            generated: None,
         })
         .collect();
     let rel = next_view_rel_id();

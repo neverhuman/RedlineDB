@@ -1,9 +1,9 @@
 {
-  "report_fingerprint": "sha256:0d56a2ca64dafa7b370b72af40bfb85203773f8fc22daf7f7fb8feff8ee8cc83",
-  "input_fingerprint": "sha256:e41b70818a8dc5ddee8bb84005e26e72b342036cff73cb12ce3689453240acc1",
-  "policy_fingerprint": "sha256:3c2550bb2b391b019131b6a4ae05345b020c75fab746d4b2d201ce170e83eea8",
+  "report_fingerprint": "sha256:5385eef5aa02f60dbee1660cc4d72b6eca96895bb827d8ac194874cfbf9e3968",
+  "input_fingerprint": "sha256:26f0decb920e9b692fa7f8fee0e643781bf36aaaaced8c3208c95665549ca481",
+  "policy_fingerprint": "sha256:bf0047cb31cf891d7635ba8a72ec27013dfc0d21819ccad2e0902f3cf592b113",
   "manifest_fingerprints": {
-    "owner_map": "sha256:36879a407b75259aeed211a2eda7a57456daa14114faead2414aaed2ce4c0607",
+    "owner_map": "sha256:6a116832b8512c7dc7ee933250b3f28b889603dc300df9eb6fff4c7dbac6fe59",
     "test_map": "sha256:e95d18dca67a2a6d83a13fcc8041fed5d48c4f58ea33c1bda6d3fb5fe8c4929b",
     "generated_zones": "sha256:88a3264cda9a9f5f3b22a557a844221b605df7cf5de14df9aff00f881f977fa7",
     "boundaries": "sha256:7a7bf640d469152bca6f0a9a4feabb90ae6eb170f3fe33a196871bfefb3936e3",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": false,
-  "generated_at": "1779008354",
+  "generated_at": "1779022466",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -26,15 +26,6 @@
   "conformance_blockers": [
     "HLT-023-INPUT-BOUNDARY-GAP on crates/cli/src/dot/io_cmd.rs",
     "HLT-001-DEAD-MARKER on crates/cli/src/dot/mod.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/blob.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/collation.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/udf.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/udf.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/udf.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/udf.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/udf.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/udf.rs",
-    "HLT-029-RUST-BAD-BEHAVIOR on crates/ffi/src/sqlite3_api/udf.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/ddl.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/schema.rs",
     "HLT-001-DEAD-MARKER on crates/kernel/src/catalog/schema.rs",
@@ -65,20 +56,20 @@
     "HLT-001-DEAD-MARKER on crates/sql/src/parser/ddl.rs"
   ],
   "repo": ".",
-  "run_id": "1779008354",
-  "started_at": "1779008354",
-  "elapsed_ms": 3669,
+  "run_id": "1779022466",
+  "started_at": "1779022466",
+  "elapsed_ms": 3746,
   "scope": {
     "mode": "full",
     "paths": []
   },
   "score": 64,
-  "raw_score": 85,
+  "raw_score": 87,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 39,
+    "hard_findings": 30,
     "soft_findings": 2,
     "ratchet": {
       "baseline_score": 64,
@@ -94,7 +85,7 @@
     }
   },
   "git": {
-    "head": "6d5d26a",
+    "head": "2db0bef",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -121,8 +112,7 @@
   "caps_applied": [
     "fallback-soup-in-product-code",
     "future-hostile-dead-language-in-product-code",
-    "input-boundary-gap",
-    "rust-bad-behavior"
+    "input-boundary-gap"
   ],
   "hard_rules": [
     {
@@ -392,25 +382,23 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior hard findings: 9",
+        "rust bad-behavior advisory signals: 1355",
         "ci bad-behavior advisory signals: 3",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
-      "notes": [
-        "rust hard findings are scored through the language-rule catalog"
-      ]
+      "notes": []
     },
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 8,
-      "weighted_points": 0.96,
+      "score": 23,
+      "weighted_points": 2.76,
       "evidence": [
         "largest authored code file: crates/sql/src/exec/cte.rs (724 LOC)",
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 37 (advisory only, no score impact)",
+        "copy-code advisory classes found: 36 (advisory only, no score impact)",
         "fallback soup marker found",
         "future-hostile/dead-language marker found",
         "rust bad-behavior advisory signals: 1265",
@@ -418,8 +406,7 @@
         "gittools bad-behavior advisory signals: 1"
       ],
       "notes": [
-        "product/runtime code contains future-hostile or dead-language terms",
-        "rust hard behavior is already captured by the language-rule catalog"
+        "product/runtime code contains future-hostile or dead-language terms"
       ]
     },
     {
@@ -1107,7 +1094,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-17T08:59:10.708244+00:00",
+    "generated_at": "2026-05-17T12:54:23.091757+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1145,20 +1132,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 710,
-      "files_considered": 287,
-      "active_files": 287,
+      "files_scanned": 702,
+      "files_considered": 278,
+      "active_files": 278,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 37,
+      "warning_classes": 36,
       "hard_instances": 0,
-      "warning_instances": 88,
-      "duplicate_lines": 83,
-      "duplicate_tokens": 240,
-      "duplicate_bytes": 2297,
-      "total_redundant_lines": 108,
-      "total_redundant_tokens": 301,
-      "total_redundant_bytes": 2854
+      "warning_instances": 86,
+      "duplicate_lines": 80,
+      "duplicate_tokens": 235,
+      "duplicate_bytes": 2249,
+      "total_redundant_lines": 105,
+      "total_redundant_tokens": 296,
+      "total_redundant_bytes": 2806
     },
     "classes": [
       {
@@ -1622,42 +1609,6 @@
         ]
       },
       {
-        "id": "copy-code-unit-rust-e37f347c33ed3453",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "validate_db",
-        "duplicate_lines": 3,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 48,
-        "instance_count": 2,
-        "total_redundant_lines": 3,
-        "total_redundant_tokens": 5,
-        "total_redundant_bytes": 48,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "ca2db8bdda40fd00",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/ffi/src/sqlite3_api/hooks.rs",
-            "language": "rust",
-            "start_line": 66,
-            "end_line": 69,
-            "unit_name": "validate_db"
-          },
-          {
-            "path": "crates/ffi/src/sqlite3_api/hooks_fire.rs",
-            "language": "rust",
-            "start_line": 15,
-            "end_line": 18,
-            "unit_name": "validate_db"
-          }
-        ]
-      },
-      {
         "id": "copy-code-unit-rust-7b7555bc73bd00fc",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -1813,8 +1764,8 @@
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 177,
-            "end_line": 179,
+            "start_line": 186,
+            "end_line": 188,
             "unit_name": "is_ident_byte"
           }
         ]
@@ -2860,20 +2811,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 8 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 23 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
         "largest authored code file: crates/sql/src/exec/cte.rs (724 LOC)",
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 37 (advisory only, no score impact)"
+        "copy-code advisory classes found: 36 (advisory only, no score impact)"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:bf0d17c7afec3e0fb5349c4bbb1741db31f473fee9b56a5d7426ada7ecd51927",
+      "fingerprint": "sha256:648e75f486c49b3fbd4f93e96c0f0cee304b31f9ccc29a18cdb256cf4478ef77",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -2950,240 +2901,6 @@
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "cli-shell",
       "line": 19
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/blob.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let _ = unsafe { Box::from_raw(blob) };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:ed2809a423d6faeb9c44e73134ec63c87c2af6068dcf28e83badbd75e9387908",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 216,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/collation.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe {"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:0df87d707956d3e26b654a87e3656a26d8c504ab7838a4de37b7b43bd82ec3f8",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 117,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/udf.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe {"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 122,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/udf.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let ctx_box = unsafe { Box::from_raw(ctx_ptr) };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:412eb4d329fc0cf05931b6c54313f969bfd285d6eb01bd2f3db862822cc66f28",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 131,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/udf.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let _ = unsafe { Box::from_raw(ptr) };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:d931c05f64fba820fd603013535bb6a38c2b8958ba2ab3bc8dce978493cf2162",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 140,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/udf.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe {"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 183,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/udf.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let name = match unsafe { name_to_string(name) } {"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:0e322fa4c99d6e5cec38e42e03ec78203b889be8211671771651b92dfe9a4872",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 213,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/udf.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=let slice = unsafe { std::slice::from_raw_parts(ptr, len) };"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:84cd48e1540a652aa0f49bff099546223baf77a177694fa3ccdb967175492e5b",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 280,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/ffi/src/sqlite3_api/udf.rs",
-      "problem": "unsafe block lacks a nearby local safety argument",
-      "agent_fix": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "evidence": [
-        "detector=unsafe {",
-        "proof-window=NearbySafetyComment",
-        "snippet=unsafe {"
-      ],
-      "check_id": "HLT-029-RUST-BAD-BEHAVIOR:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "c-abi",
-      "line": 293,
-      "matched_term": "rust.unsafe.undocumented-block",
-      "reason": "no nearby SAFETY comment was found"
     },
     {
       "severity": "high",
@@ -3375,7 +3092,7 @@
       "problem": "future-hostile/dead-language term `old` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/sql/src/exec/insert.rs:136",
+        "crates/sql/src/exec/insert.rs:190",
         "future-hostile/dead-language term `old` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3383,13 +3100,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:ea48a80fa875e0576034b0771ee04df961317051de1cf4b081d1b13c268aa1f9",
+      "fingerprint": "sha256:d57252fa588aeb67a636f090dca67fcc50b0ce0f1df91ac90645c36bd50fa063",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
-      "line": 136
+      "line": 190
     },
     {
       "severity": "high",
@@ -3398,7 +3115,7 @@
       "problem": "future-hostile/dead-language term `old` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/sql/src/exec/tail.rs:142",
+        "crates/sql/src/exec/tail.rs:158",
         "future-hostile/dead-language term `old` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3406,13 +3123,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:733b04c2cb087e8f9cc7e9630ce323497181ae39d9f2922f3dc9b5d87e938eb6",
+      "fingerprint": "sha256:9b74ce963a8e913f986ff2ca9836baf4febfca5b2841129866793ab6ffee66b9",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
-      "line": 142
+      "line": 158
     },
     {
       "severity": "high",
@@ -3421,7 +3138,7 @@
       "problem": "future-hostile/dead-language term `old` appears in product/runtime code",
       "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "crates/sql/src/exec/tail.rs:186",
+        "crates/sql/src/exec/tail.rs:202",
         "future-hostile/dead-language term `old` appears"
       ],
       "check_id": "HLT-001-DEAD-MARKER:vibe",
@@ -3429,13 +3146,13 @@
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:ac5f08bbaf97ef6efa2bd57bf2e898757c0778f58770c6ed70f8ea65f73561dc",
+      "fingerprint": "sha256:4c55148a1066b7b21ce821e7915af0ddff69a8612e6c3385f6799196e0e0943d",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
       "owner": "sql-parser-planner-executor",
-      "line": 186
+      "line": 202
     },
     {
       "severity": "high",
@@ -3861,36 +3578,6 @@
       "why": "future-hostile/dead-language term `legacy` appears in product/runtime code"
     },
     {
-      "path": "crates/ffi/src/sqlite3_api/blob.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
-      "path": "crates/ffi/src/sqlite3_api/collation.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
-      "path": "crates/ffi/src/sqlite3_api/udf.rs",
-      "priority": "high",
-      "rule_id": "HLT-029-RUST-BAD-BEHAVIOR",
-      "tlr": "Security, secrets, agency",
-      "lane": "fast",
-      "owner": "c-abi",
-      "task": "add a precise `SAFETY:` comment or remove the unsafe block",
-      "why": "unsafe block lacks a nearby local safety argument"
-    },
-    {
       "path": "crates/kernel/src/catalog/ddl.rs",
       "priority": "high",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -3998,7 +3685,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 8 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 23 below the standard floor of 85"
     }
   ]
 }

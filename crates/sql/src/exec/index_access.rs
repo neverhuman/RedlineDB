@@ -133,7 +133,12 @@ pub(crate) fn try_match_index_access(
         let Some(first_key) = index.keys.first() else {
             continue;
         };
-        let IndexKeySource::Column { attnum: leading } = first_key.source;
+        let IndexKeySource::Column { attnum: leading } = first_key.source else {
+            // A6 SQL-D: planner cannot yet match expression-source keys
+            // for index access; skip the index until full expression-
+            // index planner support lands.
+            continue;
+        };
         let leading = leading as usize;
 
         // Leading-column equality is the gateway. If we cannot bind the
@@ -149,7 +154,12 @@ pub(crate) fn try_match_index_access(
             full_key.push(leading_value.clone());
             let mut full_match = true;
             for key in index.keys.iter().skip(1) {
-                let IndexKeySource::Column { attnum } = key.source;
+                let IndexKeySource::Column { attnum } = key.source else {
+                    // A6 SQL-D: expression keys don't satisfy planner
+                    // column-equality matching yet.
+                    full_match = false;
+                    break;
+                };
                 let column = attnum as usize;
                 match first_constant_eq_for_column(&conjuncts, table, column, bindings) {
                     Some(value) => full_key.push(value),
@@ -631,7 +641,12 @@ fn encode_full_key(index: &IndexDef, values: &[SqlValue]) -> Vec<u8> {
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
     let mut owned_refs: Vec<&SqlValue> = Vec::with_capacity(index.keys.len());
     for (key, value) in index.keys.iter().zip(values.iter()) {
-        let IndexKeySource::Column { attnum: _ } = key.source;
+        // A6 SQL-D: expression key sources do not reach this encode
+        // path today — planner skips expression indexes — so the
+        // attnum is informational only.
+        if !matches!(key.source, IndexKeySource::Column { .. }) {
+            continue;
+        }
         owned_refs.push(value);
         dirs.push(key.sort_dir);
     }
@@ -645,7 +660,9 @@ fn encode_prefix_key(index: &IndexDef, leading_values: &[SqlValue]) -> Vec<u8> {
     let mut dirs: Vec<SortDir> = Vec::with_capacity(leading_values.len());
     let mut owned_refs: Vec<&SqlValue> = Vec::with_capacity(leading_values.len());
     for (key, value) in index.keys.iter().zip(leading_values.iter()) {
-        let IndexKeySource::Column { attnum: _ } = key.source;
+        if !matches!(key.source, IndexKeySource::Column { .. }) {
+            continue;
+        }
         owned_refs.push(value);
         dirs.push(key.sort_dir);
     }
