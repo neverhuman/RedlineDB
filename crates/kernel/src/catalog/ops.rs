@@ -4,8 +4,8 @@ use std::sync::Arc;
 use super::affinity::derive_affinity;
 use super::ddl::{
     AlterTableOperationSpec, AlterTableSpec, ColumnConstraintSpec, ConflictAction, CreateIndexSpec,
-    CreateTableSpec, CreateViewSpec, DropIndexSpec, DropTableSpec, DropViewSpec, IndexColumnSpec,
-    IndexOrigin, TableConstraintSpec,
+    CreateTableSpec, DropIndexSpec, DropTableSpec, IndexColumnSpec, IndexOrigin,
+    TableConstraintSpec,
 };
 use super::expr::{ExprAst, compile_expr};
 use super::ids::{ColumnId, ConstraintId, IndexId, ObjectId, SchemaId, TableId};
@@ -13,7 +13,7 @@ use super::key::{IndexKeyDef, IndexKeySource, NullOrder};
 use super::names::{DbName, QualifiedName};
 use super::schema::{
     CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef, SchemaEpoch,
-    SchemaSnapshot, TableDef, ViewDef,
+    SchemaSnapshot, TableDef,
 };
 use super::value::OwnedValue;
 use crate::format::{PageId, RelId};
@@ -229,7 +229,7 @@ pub fn apply_create_table(
             not_null,
             default_value,
             default_expr,
-            generated: None,
+            generated: column.generated.clone(),
         });
     }
 
@@ -420,7 +420,7 @@ pub fn apply_create_index(
         keys,
         flags: 0,
         normalized_sql: spec.normalized_sql.map(|sql| sql.into_boxed_str()),
-        predicate_sql: None,
+        predicate_sql: spec.predicate_sql.map(|sql| sql.into_boxed_str()),
     };
 
     let mut updated = false;
@@ -688,16 +688,30 @@ fn build_table_constraint_index(
 
 fn build_index_keys(table: &TableDef, columns: &[IndexColumnSpec]) -> Result<Vec<IndexKeyDef>> {
     let mut keys = Vec::with_capacity(columns.len());
-    for column in columns {
-        let ordinal = table
-            .columns
-            .iter()
-            .find(|candidate| candidate.folded.as_ref() == column.name.folded())
-            .ok_or(Error::ColumnNotFound)?
-            .ordinal;
+    for (idx, column) in columns.iter().enumerate() {
+        let (ordinal, source) = if let Some(expr_sql) = column.expr_sql.as_ref() {
+            // A6 SQL-D: expression-source index key. Synthetic ordinal
+            // is the position within the key list; kernel never indexes
+            // expression keys by column ordinal.
+            (
+                idx as u16,
+                IndexKeySource::Expression {
+                    sql: expr_sql.clone().into_boxed_str(),
+                    referenced_cols: column.expr_referenced_cols.clone(),
+                },
+            )
+        } else {
+            let ordinal = table
+                .columns
+                .iter()
+                .find(|candidate| candidate.folded.as_ref() == column.name.folded())
+                .ok_or(Error::ColumnNotFound)?
+                .ordinal;
+            (ordinal, IndexKeySource::Column { attnum: ordinal })
+        };
         keys.push(IndexKeyDef {
             ordinal,
-            source: IndexKeySource::Column { attnum: ordinal },
+            source,
             sort_dir: column.sort_dir,
             null_order: NullOrder::First,
         });

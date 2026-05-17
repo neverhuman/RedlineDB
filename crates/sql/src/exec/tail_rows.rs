@@ -173,6 +173,10 @@ pub(crate) fn load_table_row_by_rowid(
             values.resize(table.columns.len(), SqlValue::Null);
             values = build_default_values(table, values)?;
         }
+        // Phase-11 SQL-D A6: materialise VIRTUAL generated columns at
+        // read time. STORED columns were already computed and persisted
+        // at write time, so we leave their slots alone.
+        values = materialize_virtual_generated_columns(table, values)?;
         return Ok(Some(TableRow {
             rowid,
             values,
@@ -181,6 +185,42 @@ pub(crate) fn load_table_row_by_rowid(
         }));
     }
     Ok(None)
+}
+
+/// Phase-11 SQL-D A6: evaluate every VIRTUAL generated column expression
+/// against the row's stored values and overwrite the corresponding slot
+/// with the computed value. STORED columns are left untouched (they were
+/// computed at write time and persisted in the heap row).
+fn materialize_virtual_generated_columns(
+    table: &TableDef,
+    mut values: Vec<SqlValue>,
+) -> Result<Vec<SqlValue>> {
+    use redlinedb_kernel::catalog::GeneratedColumnKind;
+
+    let has_virtual = table.columns.iter().any(|c| {
+        matches!(
+            c.generated.as_ref().map(|g| g.kind),
+            Some(GeneratedColumnKind::Virtual)
+        )
+    });
+    if !has_virtual {
+        return Ok(values);
+    }
+    let snapshot = values.clone();
+    for (idx, column) in table.columns.iter().enumerate() {
+        let Some(gen_def) = &column.generated else {
+            continue;
+        };
+        if !matches!(gen_def.kind, GeneratedColumnKind::Virtual) {
+            continue;
+        }
+        values[idx] = crate::exec::index_predicate::eval_generated_expr(
+            table,
+            gen_def.expr_sql.as_ref(),
+            &snapshot,
+        )?;
+    }
+    Ok(values)
 }
 
 /// Executor-side wrapper around the planner's shared `selection_rowid_eq`

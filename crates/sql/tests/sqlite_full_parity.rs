@@ -47,6 +47,7 @@ impl Harness {
         );
     }
 
+    #[allow(dead_code)] // Used by parity-gap fixtures that drop in or out as the ledger flips.
     fn assert_sqlite_accepts_redline_rejects(&self, setup: &[&str], sql: &str) {
         for stmt in setup {
             self.execute_both(stmt);
@@ -63,6 +64,7 @@ impl Harness {
         );
     }
 
+    #[allow(dead_code)] // Used by parity-gap fixtures that drop in or out as the ledger flips.
     fn assert_sqlite_result_diff_or_redline_rejects(&self, setup: &[&str], sql: &str) {
         for stmt in setup {
             self.sqlite
@@ -126,6 +128,7 @@ fn try_query_redline(
     Ok(out)
 }
 
+#[allow(dead_code)] // Used by `assert_sqlite_accepts_redline_rejects` parity-gap fixtures.
 fn redline_accepts(conn: &Arc<Connection>, sql: &str) -> Result<(), redlinedb_sql::Error> {
     let trimmed = sql.trim_start();
     let upper = trimmed.to_ascii_uppercase();
@@ -202,19 +205,11 @@ fn known_full_sqlite_parity_gaps_are_explicit_failures() {
     // CREATE VIEW is now supported (Lane A5-views) — see `parity_view.rs`.
     // CREATE TRIGGER is now supported (Lane A5-triggers) — see
     // `parity_trigger.rs`.
-    Harness::new().assert_sqlite_result_diff_or_redline_rejects(
-        &[
-            "CREATE TABLE g(a INTEGER, b INTEGER GENERATED ALWAYS AS (a + 1) STORED)",
-            "INSERT INTO g(a) VALUES (4)",
-        ],
-        "SELECT a, b FROM g",
-    );
-    Harness::new().assert_sqlite_accepts_redline_rejects(
-        &["CREATE TABLE t(a INTEGER)"],
-        "CREATE INDEX idx_partial ON t(a) WHERE a > 0",
-    );
-    Harness::new().assert_sqlite_accepts_redline_rejects(
-        &["CREATE TABLE t(a INTEGER)"],
-        "CREATE INDEX idx_expr ON t((a + 1))",
-    );
+    // Partial / expression indexes are now supported (A6 SQL-D) —
+    // see `parity_partial_index.rs` and `parity_expr_index.rs`.
+    // Generated columns (`GENERATED ALWAYS AS (expr) [STORED|VIRTUAL]`)
+    // are now supported (A6 SQL-D) — see `parity_generated_col.rs`.
+    // The fixture list is currently empty; the test is retained as a
+    // documented sentinel so a regressed feature or a freshly-tracked
+    // gap can be re-introduced with one line and an `assert_*` call.
 }

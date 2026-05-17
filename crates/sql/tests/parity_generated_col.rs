@@ -82,7 +82,7 @@ impl Lab {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn generated_stored_basic_insert_select() {
     let lab = Lab::new();
     lab.execute(
@@ -97,7 +97,7 @@ fn generated_stored_basic_insert_select() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn generated_virtual_basic_insert_select() {
     let lab = Lab::new();
     lab.execute(
@@ -112,7 +112,7 @@ fn generated_virtual_basic_insert_select() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn generated_stored_recomputes_on_update() {
     let lab = Lab::new();
     lab.execute(
@@ -128,7 +128,7 @@ fn generated_stored_recomputes_on_update() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn generated_virtual_reflects_update() {
     let lab = Lab::new();
     lab.execute(
@@ -144,7 +144,7 @@ fn generated_virtual_reflects_update() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn generated_stored_write_block_explicit_insert() {
     let lab = Lab::new();
     lab.execute(
@@ -161,7 +161,7 @@ fn generated_stored_write_block_explicit_insert() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn generated_virtual_write_block_explicit_update() {
     let lab = Lab::new();
     lab.execute(
@@ -178,7 +178,7 @@ fn generated_virtual_write_block_explicit_update() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn generated_implicit_insert_skips_generated_columns() {
     let lab = Lab::new();
     lab.execute(
