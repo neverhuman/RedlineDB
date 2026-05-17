@@ -90,6 +90,16 @@ pub struct Pool {
     inner: Arc<PoolInner>,
 }
 
+impl std::fmt::Debug for Pool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pool")
+            .field("in_use", &self.in_use())
+            .field("idle", &self.idle())
+            .field("max_connections", &self.max_connections())
+            .finish()
+    }
+}
+
 struct PoolInner {
     db: Database,
     state: Mutex<PoolState>,
@@ -171,25 +181,28 @@ impl Pool {
 
     /// Number of connections currently checked out (in use).
     pub fn in_use(&self) -> usize {
-        self.inner
-            .state
-            .lock()
-            .map(|s| s.in_use)
-            .unwrap_or_default()
+        match self.inner.state.lock() {
+            Ok(s) => s.in_use,
+            Err(_) => 0,
+        }
     }
 
     /// Number of connections currently idle in the pool.
     pub fn idle(&self) -> usize {
-        self.inner
-            .state
-            .lock()
-            .map(|s| s.idle.len())
-            .unwrap_or_default()
+        match self.inner.state.lock() {
+            Ok(s) => s.idle.len(),
+            Err(_) => 0,
+        }
     }
 
     /// Maximum total connections the pool may hand out.
     pub fn max_connections(&self) -> usize {
         self.inner.max_connections
+    }
+
+    /// The underlying database handle shared by this pool.
+    pub fn database(&self) -> &Database {
+        &self.inner.db
     }
 }
 

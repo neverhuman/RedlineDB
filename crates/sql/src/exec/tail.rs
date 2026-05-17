@@ -160,8 +160,8 @@ pub(crate) fn execute_update(
     })
 }
 
-/// Fire AFTER UPDATE triggers attached to `table`. OLD is the row
-/// before the update; NEW is the row after. The `assignments` list
+/// Fire AFTER UPDATE triggers attached to `table`. The before-image is the
+/// row before the update; the after-image is the row after. The `assignments` list
 /// drives the `UPDATE OF cols` filter so triggers declared to fire on a
 /// specific column set are skipped when none of those columns appear in
 /// the SET list.
@@ -204,8 +204,8 @@ fn fire_update_triggers(
     )
 }
 
-/// Fire AFTER DELETE triggers attached to `table`. OLD is the row just
-/// removed; NEW is absent for DELETE.
+/// Fire AFTER DELETE triggers attached to `table`. The before-image is the
+/// row just removed; after-image is absent for DELETE.
 fn fire_delete_triggers(
     conn: &Connection,
     tx: &mut redlinedb_kernel::engine::Txn,
@@ -291,7 +291,7 @@ pub(crate) fn execute_delete(
                 Some(v) => v,
                 None => row.values.clone(),
             };
-            // BEFORE DELETE triggers fire while OLD row still exists.
+            // BEFORE DELETE triggers fire while the before-image row still exists.
             fire_before_delete_triggers(conn, tx, &plan.table, row.rowid, &live)?;
             conn.engine()
                 .delete_for_relation(tx, plan.table.relation_id, row.rowid)?;

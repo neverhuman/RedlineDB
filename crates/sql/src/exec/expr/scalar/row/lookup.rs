@@ -42,10 +42,12 @@ fn lookup_column_local(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
 pub(crate) fn lookup_column(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
     match lookup_column_local(row, name) {
         Ok(v) => Ok(v),
-        Err(Error::UnknownColumn(_)) => crate::exec::lookup_correlated(|outer| {
-            lookup_column_local(outer, name).ok()
-        })
-        .ok_or_else(|| Error::UnknownColumn(name.to_owned())),
+        Err(Error::UnknownColumn(_)) => {
+            match crate::exec::lookup_correlated(|outer| lookup_column_local(outer, name).ok()) {
+                Some(v) => Ok(v),
+                None => Err(Error::UnknownColumn(name.to_owned())),
+            }
+        }
         Err(other) => Err(other),
     }
 }
@@ -121,10 +123,12 @@ pub(crate) fn lookup_qualified_column(
         Ok(v) => Ok(v),
         Err(Error::UnknownColumn(_)) => {
             // Walk the correlated-subquery stack (innermost → outermost).
-            crate::exec::lookup_correlated(|outer| {
+            match crate::exec::lookup_correlated(|outer| {
                 lookup_qualified_column_local(outer, qualifier, name).ok()
-            })
-            .ok_or_else(|| Error::UnknownColumn(format!("{qualifier}.{name}")))
+            }) {
+                Some(v) => Ok(v),
+                None => Err(Error::UnknownColumn(format!("{qualifier}.{name}"))),
+            }
         }
         Err(other) => Err(other),
     }

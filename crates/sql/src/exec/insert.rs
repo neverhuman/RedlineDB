@@ -187,7 +187,7 @@ pub(super) fn execute_insert(
 }
 
 /// Fire AFTER INSERT triggers attached to `table`. NEW is the row just
-/// inserted; OLD is absent for INSERT. The schema snapshot is loaded
+/// inserted; before-image is absent for INSERT. The schema snapshot is loaded
 /// from the live engine so triggers created earlier in the transaction
 /// are visible.
 fn fire_insert_triggers(

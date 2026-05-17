@@ -117,16 +117,15 @@ pub(crate) fn sqlite_rtrim_function(
 fn sqlite_substr_text(input: &str, start: i64, len: Option<i64>) -> String {
     let chars: Vec<char> = input.chars().collect();
     let total = chars.len() as i64;
-    sqlite_substr_range(total, start, len)
-        .and_then(|(start_idx, take)| {
-            let start_idx = start_idx.max(0) as usize;
-            let take = take.max(0) as usize;
-            if start_idx >= chars.len() {
-                return Some(String::new());
-            }
-            Some(chars.iter().skip(start_idx).take(take).collect())
-        })
-        .unwrap_or_default()
+    let Some((start_range, take_range)) = sqlite_substr_range(total, start, len) else {
+        return String::new();
+    };
+    let start_idx = start_range.max(0) as usize;
+    let take = take_range.max(0) as usize;
+    if start_idx >= chars.len() {
+        return String::new();
+    }
+    chars.iter().skip(start_idx).take(take).collect()
 }
 
 fn sqlite_substr_bytes(input: &[u8], start: i64, len: Option<i64>) -> Arc<[u8]> {

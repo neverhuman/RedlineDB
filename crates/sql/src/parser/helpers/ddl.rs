@@ -223,8 +223,10 @@ pub(crate) fn column_level_foreign_key(
     column_name: DbName,
     fk: ForeignKeyConstraint,
 ) -> TableConstraintSpec {
-    let parent_table = parent_table_name(&fk.foreign_table.0)
-        .unwrap_or_else(|_| DbName::new(String::new()));
+    let parent_table = match parent_table_name(&fk.foreign_table.0) {
+        Ok(name) => name,
+        Err(_) => DbName::new(String::new()),
+    };
     let parent_columns = fk
         .referred_columns
         .into_iter()
@@ -247,8 +249,10 @@ pub(crate) fn column_level_foreign_key(
 }
 
 pub(crate) fn table_level_foreign_key(fk: ForeignKeyConstraint) -> TableConstraintSpec {
-    let parent_table = parent_table_name(&fk.foreign_table.0)
-        .unwrap_or_else(|_| DbName::new(String::new()));
+    let parent_table = match parent_table_name(&fk.foreign_table.0) {
+        Ok(name) => name,
+        Err(_) => DbName::new(String::new()),
+    };
     let deferred = fk_is_deferred(&fk);
     let columns = fk
         .columns

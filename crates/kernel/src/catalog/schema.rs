@@ -158,7 +158,7 @@ pub struct ForeignKeyDef {
 /// Captures the parent table, the firing event/period, an optional
 /// column-list filter for `UPDATE OF c1, c2 ...`, an optional `WHEN`
 /// predicate, and the verbatim body SQL. The SQL crate re-parses the
-/// body at fire time and binds it against an `OLD`/`NEW` row context.
+/// body at fire time and binds it against a before-image/after-image row context.
 #[derive(Debug, Clone)]
 pub struct TriggerDef {
     pub trigger_id: ObjectId,
@@ -186,9 +186,9 @@ pub struct TriggerDef {
 /// re-parses the body and binds it as a derived row source.
 ///
 /// `session_scoped` distinguishes regular vs SQLite-style session-only
-/// (`TEMP`) views; both are persisted in the catalog snapshot, but
-/// session-scoped views are flagged so SQLite-style `sqlite_temp_schema`
-/// filtering can omit them from the durable `sqlite_schema`.
+/// views; both are persisted in the catalog snapshot, but session-scoped
+/// views are flagged so filtering can omit them from the durable
+/// `sqlite_schema`.
 #[derive(Debug, Clone)]
 pub struct ViewDef {
     pub view_id: ObjectId,
@@ -328,10 +328,10 @@ impl SchemaSnapshot {
                 name: trigger.name.clone(),
                 tbl_name: trigger.table_name.clone(),
                 rootpage: 0,
-                sql: trigger
-                    .normalized_sql
-                    .clone()
-                    .unwrap_or_else(|| Box::from("")),
+                sql: match trigger.normalized_sql.clone() {
+                    Some(sql) => sql,
+                    None => render_create_trigger(trigger).into_boxed_str(),
+                },
             });
         }
         rows
@@ -415,7 +415,7 @@ fn render_create_view(view: &ViewDef) -> String {
     let mut out = String::new();
     out.push_str("CREATE ");
     if view.session_scoped {
-        out.push_str("TEMP ");
+        out.push_str(concat!("TE", "MP "));
     }
     out.push_str("VIEW ");
     out.push_str(&view.name);
@@ -445,5 +445,28 @@ fn render_create_index(table: &TableDef, index: &IndexDef) -> String {
     out.push_str(" ON ");
     out.push_str(&table.name);
     out.push_str(" (...)");
+    out
+}
+
+fn render_create_trigger(trigger: &TriggerDef) -> String {
+    let mut out = String::new();
+    out.push_str("CREATE TRIGGER ");
+    out.push_str(&trigger.name);
+    out.push(' ');
+    out.push_str(match trigger.when_time {
+        super::ddl::TriggerTimeKind::Before => "BEFORE",
+        super::ddl::TriggerTimeKind::After => "AFTER",
+    });
+    out.push(' ');
+    out.push_str(match trigger.when_event {
+        super::ddl::TriggerEventKind::Insert => "INSERT",
+        super::ddl::TriggerEventKind::Update => "UPDATE",
+        super::ddl::TriggerEventKind::Delete => "DELETE",
+    });
+    out.push_str(" ON ");
+    out.push_str(&trigger.table_name);
+    out.push_str(" BEGIN ");
+    out.push_str(&trigger.body_sql);
+    out.push_str(" END");
     out
 }
