@@ -302,6 +302,12 @@ pub(crate) fn build_plan(
             simple_node(PhysicalKind::Constant, "CREATE VIEW".to_owned())
         }
         PreparedKind::DropView(_) => simple_node(PhysicalKind::Constant, "DROP VIEW".to_owned()),
+        PreparedKind::CreateTrigger(_) => {
+            simple_node(PhysicalKind::Constant, "CREATE TRIGGER".to_owned())
+        }
+        PreparedKind::DropTrigger(_) => {
+            simple_node(PhysicalKind::Constant, "DROP TRIGGER".to_owned())
+        }
     };
 
     if let Some(metrics) = metrics {

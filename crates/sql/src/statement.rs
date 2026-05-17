@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use redlinedb_kernel::catalog::{
-    AlterTableSpec, CreateIndexSpec, CreateTableSpec, CreateViewSpec, DropIndexSpec, DropTableSpec,
-    DropViewSpec, SchemaEpoch, SqliteSchemaRow, TableDef,
+    AlterTableSpec, CreateIndexSpec, CreateTableSpec, CreateTriggerSpec, CreateViewSpec,
+    DropIndexSpec, DropTableSpec, DropTriggerSpec, DropViewSpec, SchemaEpoch, SqliteSchemaRow,
+    TableDef,
 };
 use redlinedb_kernel::engine::Txn;
 use redlinedb_kernel::format::RowId;
@@ -92,9 +93,11 @@ pub enum PreparedKind {
     CreateTable(CreateTableSpec),
     CreateIndex(CreateIndexSpec),
     CreateView(CreateViewSpec),
+    CreateTrigger(CreateTriggerSpec),
     DropTable(DropTableSpec),
     DropIndex(DropIndexSpec),
     DropView(DropViewSpec),
+    DropTrigger(DropTriggerSpec),
     AlterTable(AlterTableSpec),
     Analyze(AnalyzePlan),
     Explain(ExplainPlan),

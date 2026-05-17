@@ -6,13 +6,13 @@ use std::sync::Arc;
 use crate::{Error, Result};
 
 use super::codec::{BytesReader, BytesWriter, frame_snapshot, parse_header};
-use super::ddl::{ConflictAction, FkAction, IndexOrigin};
+use super::ddl::{ConflictAction, FkAction, IndexOrigin, TriggerEventKind, TriggerTimeKind};
 use super::expr::{CompiledExpr, ExprOp};
 use super::ids::SchemaId;
 use super::key::{IndexKeyDef, IndexKeySource, NullOrder, SortDir};
 use super::schema::{
     CatalogMeta, CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef,
-    NamespaceDef, SchemaEpoch, SchemaSnapshot, TableDef, ViewDef,
+    NamespaceDef, SchemaEpoch, SchemaSnapshot, TableDef, TriggerDef, ViewDef,
 };
 use super::value::OwnedValue;
 use crate::format::{PageId, RelId};
@@ -107,13 +107,23 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
         encode_view(&mut out, view)?;
     }
 
+    // Lane A5-triggers: trigger section was introduced at format_version 6.
+    // Emit only when the snapshot's persisted version supports the section
+    // — older catalogs round-trip without a trailing trigger block.
+    if snapshot.meta.format_version >= 6 {
+        out.u32(snapshot.triggers.len() as u32);
+        for trigger in &snapshot.triggers {
+            encode_trigger(&mut out, trigger)?;
+        }
+    }
+
     Ok(out.finish())
 }
 
 pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
     let mut reader = BytesReader::new(bytes);
     let format_version = reader.u64()?;
-    if format_version > 5 {
+    if format_version > 6 {
         return Err(Error::UnsupportedVersion(format_version as u16));
     }
     let meta = CatalogMeta {
@@ -140,6 +150,14 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
         let view_count = reader.u32()? as usize;
         for _ in 0..view_count {
             snapshot.views.push(Arc::new(decode_view(&mut reader)?));
+        }
+    }
+    if format_version >= 6 {
+        let trigger_count = reader.u32()? as usize;
+        for _ in 0..trigger_count {
+            snapshot
+                .triggers
+                .push(Arc::new(decode_trigger(&mut reader)?));
         }
     }
     snapshot.rebuild_indexes();
@@ -576,6 +594,90 @@ fn decode_view(reader: &mut BytesReader<'_>) -> Result<ViewDef> {
         body_sql,
         session_scoped,
         normalized_sql,
+    })
+}
+
+fn encode_trigger(out: &mut BytesWriter, trigger: &TriggerDef) -> Result<()> {
+    out.u64(trigger.trigger_id.0);
+    out.u64(trigger.schema_id.0);
+    write_str(out, &trigger.name);
+    write_str(out, &trigger.folded);
+    write_str(out, &trigger.table_name);
+    write_str(out, &trigger.table_folded);
+    out.u8(trigger_time_tag(trigger.when_time));
+    out.u8(trigger_event_tag(trigger.when_event));
+    out.u32(trigger.when_cols.len() as u32);
+    for col in &trigger.when_cols {
+        write_str(out, col);
+    }
+    write_opt_str(out, trigger.when_predicate_sql.as_deref());
+    write_str(out, &trigger.body_sql);
+    write_opt_str(out, trigger.normalized_sql.as_deref());
+    Ok(())
+}
+
+fn decode_trigger(reader: &mut BytesReader<'_>) -> Result<TriggerDef> {
+    let trigger_id = super::ObjectId(reader.u64()?);
+    let schema_id = SchemaId(reader.u64()?);
+    let name = read_box_str(reader)?;
+    let folded = read_box_str(reader)?;
+    let table_name = read_box_str(reader)?;
+    let table_folded = read_box_str(reader)?;
+    let when_time = trigger_time_from_tag(reader.u8()?)?;
+    let when_event = trigger_event_from_tag(reader.u8()?)?;
+    let col_count = reader.u32()? as usize;
+    let mut when_cols = Vec::with_capacity(col_count);
+    for _ in 0..col_count {
+        when_cols.push(read_box_str(reader)?);
+    }
+    let when_predicate_sql = read_opt_box_str(reader)?;
+    let body_sql = read_box_str(reader)?;
+    let normalized_sql = read_opt_box_str(reader)?;
+    Ok(TriggerDef {
+        trigger_id,
+        schema_id,
+        name,
+        folded,
+        table_name,
+        table_folded,
+        when_time,
+        when_event,
+        when_cols,
+        when_predicate_sql,
+        body_sql,
+        normalized_sql,
+    })
+}
+
+fn trigger_time_tag(time: TriggerTimeKind) -> u8 {
+    match time {
+        TriggerTimeKind::Before => 0,
+        TriggerTimeKind::After => 1,
+    }
+}
+
+fn trigger_time_from_tag(tag: u8) -> Result<TriggerTimeKind> {
+    Ok(match tag {
+        0 => TriggerTimeKind::Before,
+        1 => TriggerTimeKind::After,
+        _ => return Err(Error::CatalogCorrupt("invalid trigger time tag")),
+    })
+}
+
+fn trigger_event_tag(event: TriggerEventKind) -> u8 {
+    match event {
+        TriggerEventKind::Insert => 0,
+        TriggerEventKind::Update => 1,
+        TriggerEventKind::Delete => 2,
+    }
+}
+
+fn trigger_event_from_tag(tag: u8) -> Result<TriggerEventKind> {
+    Ok(match tag {
+        0 => TriggerEventKind::Insert,
+        1 => TriggerEventKind::Update,
+        2 => TriggerEventKind::Delete,
+        _ => return Err(Error::CatalogCorrupt("invalid trigger event tag")),
     })
 }
 

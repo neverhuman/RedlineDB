@@ -200,10 +200,8 @@ fn known_full_sqlite_parity_gaps_are_explicit_failures() {
     // CTE (`WITH`) is now supported — see `parity_cte.rs`.
     // Window functions (`OVER`) are now supported — see `parity_window.rs`.
     // CREATE VIEW is now supported (Lane A5-views) — see `parity_view.rs`.
-    Harness::new().assert_sqlite_accepts_redline_rejects(
-        &["CREATE TABLE t(a INTEGER)"],
-        "CREATE TRIGGER tr AFTER INSERT ON t BEGIN UPDATE t SET a = a + 1; END",
-    );
+    // CREATE TRIGGER is now supported (Lane A5-triggers) — see
+    // `parity_trigger.rs`.
     Harness::new().assert_sqlite_result_diff_or_redline_rejects(
         &[
             "CREATE TABLE g(a INTEGER, b INTEGER GENERATED ALWAYS AS (a + 1) STORED)",

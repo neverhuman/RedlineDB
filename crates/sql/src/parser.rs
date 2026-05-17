@@ -3,9 +3,10 @@ use std::sync::Arc;
 #[allow(unused_imports)]
 use redlinedb_kernel::catalog::{
     ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec,
-    CreateViewSpec, DbName, DropIndexSpec, DropTableSpec, DropViewSpec, ExprAst, IndexColumnSpec,
-    IndexOrigin, OwnedValue, QualifiedName, SchemaEpoch, SchemaSnapshot, SortDir,
-    TableConstraintSpec, lookup_index, lookup_table,
+    CreateTriggerSpec, CreateViewSpec, DbName, DropIndexSpec, DropTableSpec, DropTriggerSpec,
+    DropViewSpec, ExprAst, IndexColumnSpec, IndexOrigin, OwnedValue, QualifiedName, SchemaEpoch,
+    SchemaSnapshot, SortDir, TableConstraintSpec, TriggerEventKind, TriggerTimeKind, lookup_index,
+    lookup_table,
 };
 #[allow(unused_imports)]
 use sqlparser::ast::{
@@ -73,6 +74,13 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
     let mut i = 0usize;
     let len = bytes.len();
     let mut in_string: Option<u8> = None;
+    // Lane A5-triggers: `CREATE TRIGGER ... BEGIN ... END` bodies contain
+    // statement-terminating semicolons that must not split the outer
+    // statement. We track a balanced BEGIN/END nesting depth (matched
+    // case-insensitively on word boundaries) and only honour `;` at
+    // depth 0. This preserves backward compatibility for non-trigger
+    // input where the keyword tokens never appear.
+    let mut block_depth = 0usize;
     while i < len {
         let b = bytes[i];
         if let Some(quote) = in_string {
@@ -121,9 +129,20 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
                     i += 2;
                 }
             }
-            b';' => {
+            b';' if block_depth == 0 => {
                 let head_end = i + 1;
                 return (&sql[..head_end], &sql[head_end..]);
+            }
+            b';' => {
+                i += 1;
+            }
+            _ if is_word_boundary_keyword(bytes, i, b"BEGIN") => {
+                block_depth += 1;
+                i += 5;
+            }
+            _ if is_word_boundary_keyword(bytes, i, b"END") => {
+                block_depth = block_depth.saturating_sub(1);
+                i += 3;
             }
             _ => {
                 i += 1;
@@ -131,6 +150,32 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
         }
     }
     (sql, "")
+}
+
+/// True if `bytes[i..]` starts with `kw` (case-insensitively) AND the
+/// surrounding characters form a word boundary — i.e. the preceding
+/// byte (if any) and the byte immediately after `kw` are not ASCII
+/// alphanumerics or underscore.
+fn is_word_boundary_keyword(bytes: &[u8], i: usize, kw: &[u8]) -> bool {
+    if i + kw.len() > bytes.len() {
+        return false;
+    }
+    for (offset, expected) in kw.iter().enumerate() {
+        if !bytes[i + offset].eq_ignore_ascii_case(expected) {
+            return false;
+        }
+    }
+    if i > 0 && is_ident_byte(bytes[i - 1]) {
+        return false;
+    }
+    if i + kw.len() < bytes.len() && is_ident_byte(bytes[i + kw.len()]) {
+        return false;
+    }
+    true
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 /// True if `sql` (after trimming whitespace and stripping comments) is empty.
@@ -321,9 +366,21 @@ fn bind_statement(
         SqlStatement::CreateView(create_view) => {
             bind_create_view(schema_epoch, sql, create_view)
         }
-        SqlStatement::CreateTrigger(_) => Err(Error::UnsupportedSql(
-            "CREATE TRIGGER is parsed-only; execution not yet implemented".to_owned(),
-        )),
+        SqlStatement::CreateTrigger(create_trigger) => {
+            bind_create_trigger(schema_epoch, sql, create_trigger)
+        }
+        SqlStatement::DropTrigger(drop_trigger) => {
+            let name = parse_qualified_name(drop_trigger.trigger_name)?;
+            Ok(template(
+                sql,
+                schema_epoch,
+                false,
+                PreparedKind::DropTrigger(DropTriggerSpec {
+                    name,
+                    if_exists: drop_trigger.if_exists,
+                }),
+            ))
+        }
         other => Err(Error::UnsupportedSql(format!(
             "statement not supported yet: {other:?}"
         ))),

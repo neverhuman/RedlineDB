@@ -396,6 +396,106 @@ pub(crate) fn bind_create_view(
     })
 }
 
+/// Bind `CREATE TRIGGER name {BEFORE|AFTER} {INSERT|UPDATE [OF col,...]|DELETE}
+/// ON table [FOR EACH ROW] [WHEN expr] BEGIN body END`.
+///
+/// The body's statement list is re-emitted to canonical SQL and stored
+/// verbatim on the [`CreateTriggerSpec`]; the fire-hook re-parses the
+/// body and runs it against an `OLD`/`NEW` row context at runtime.
+///
+/// Rejects modifiers that fresh SQLite-style applications do not need
+/// (`OR REPLACE`, `OR ALTER`, MSSQL/Postgres trigger function bodies,
+/// constraint triggers, `REFERENCING NEW TABLE AS ...`, etc.) plus
+/// `INSTEAD OF` (deferred to a followup task).
+pub(crate) fn bind_create_trigger(
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    create_trigger: sqlparser::ast::CreateTrigger,
+) -> Result<PreparedTemplate> {
+    if create_trigger.or_alter
+        || create_trigger.or_replace
+        || create_trigger.is_constraint
+        || create_trigger.referenced_table_name.is_some()
+        || !create_trigger.referencing.is_empty()
+        || create_trigger.exec_body.is_some()
+        || create_trigger.statements_as
+        || create_trigger.characteristics.is_some()
+    {
+        return Err(Error::UnsupportedSql(
+            "CREATE TRIGGER modifiers are not supported".to_owned(),
+        ));
+    }
+    let period = create_trigger.period.ok_or_else(|| {
+        Error::UnsupportedSql("CREATE TRIGGER requires BEFORE or AFTER".to_owned())
+    })?;
+    let when_time = match period {
+        sqlparser::ast::TriggerPeriod::Before => TriggerTimeKind::Before,
+        sqlparser::ast::TriggerPeriod::After => TriggerTimeKind::After,
+        sqlparser::ast::TriggerPeriod::InsteadOf => {
+            return Err(Error::UnsupportedSql(
+                "INSTEAD OF triggers on views are not yet supported (followup)".to_owned(),
+            ));
+        }
+        other => {
+            return Err(Error::UnsupportedSql(format!(
+                "CREATE TRIGGER period not supported: {other:?}"
+            )));
+        }
+    };
+    if create_trigger.events.len() != 1 {
+        return Err(Error::UnsupportedSql(
+            "CREATE TRIGGER requires exactly one event".to_owned(),
+        ));
+    }
+    let (when_event, when_cols) = match create_trigger.events.into_iter().next().expect("checked len") {
+        sqlparser::ast::TriggerEvent::Insert => (TriggerEventKind::Insert, Vec::new()),
+        sqlparser::ast::TriggerEvent::Delete => (TriggerEventKind::Delete, Vec::new()),
+        sqlparser::ast::TriggerEvent::Update(cols) => (
+            TriggerEventKind::Update,
+            cols.into_iter().map(|c| DbName::new(c.value)).collect(),
+        ),
+        sqlparser::ast::TriggerEvent::Truncate => {
+            return Err(Error::UnsupportedSql(
+                "TRUNCATE triggers are not supported".to_owned(),
+            ));
+        }
+    };
+    let (schema, name) = split_name(create_trigger.name)?;
+    // We only persist the table name (not its schema). Multi-schema
+    // resolution is deferred to ATTACH/DETACH (A2).
+    let table = parse_qualified_name(create_trigger.table_name)?.name;
+    let when_predicate_sql = create_trigger.condition.as_ref().map(|expr| expr.to_string());
+    let body_sql = match create_trigger.statements {
+        Some(stmts) => stmts.to_string(),
+        None => {
+            return Err(Error::UnsupportedSql(
+                "CREATE TRIGGER requires a BEGIN ... END body".to_owned(),
+            ));
+        }
+    };
+    Ok(PreparedTemplate {
+        sql: Arc::from(sql),
+        schema_epoch,
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: ParamLayout::default(),
+        output_columns: Arc::from([]),
+        readonly: false,
+        kind: PreparedKind::CreateTrigger(CreateTriggerSpec {
+            schema,
+            name,
+            if_not_exists: false, // sqlparser does not surface this on CreateTrigger
+            table,
+            when_time,
+            when_event,
+            when_cols,
+            when_predicate_sql,
+            body_sql,
+            normalized_sql: Some(sql.to_owned()),
+        }),
+    })
+}
+
 pub(crate) fn bind_analyze(
     schema: Arc<SchemaSnapshot>,
     schema_epoch: SchemaEpoch,
