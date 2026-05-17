@@ -18,6 +18,21 @@ command = "just check"
 name = "release"
 purpose = "full merge gate"
 
+[[lane]]
+command = "just ffi-symbol-diff"
+name = "ffi-symbol-diff"
+purpose = "FFI export set must cover libsqlite3 public surface (allowlist for documented exclusions)"
+
+[[lane]]
+command = "just fuzz-parity"
+name = "fuzz-parity"
+purpose = "differential fuzzing oracle (CI-bounded iteration budget; baseline-gated)"
+
+[[lane]]
+command = "just fuzz-parity-nightly"
+name = "fuzz-parity-nightly"
+purpose = "extended differential fuzz (100k iterations, nightly CI only)"
+
 [phase10-hnsw-recall]
 commands = ["rtk cargo test -p redlinedb-kernel --test hnsw_recall --quiet --locked -- --ignored"]
 

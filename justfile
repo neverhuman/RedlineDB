@@ -153,6 +153,29 @@ crate-check crate:
 crate-test crate:
   rtk cargo test -p {{crate}} --locked --quiet
 
+# D6 FFI symbol-diff lane (sqlite-parity closure plan, layer 2).
+# Refreshes the libsqlite3 reference list (no-op when unchanged), builds
+# the FFI cdylib, runs the symbol-diff integration test. The test fails
+# until WS-B1-B5 export the in-scope sqlite3_* symbols (see
+# crates/ffi/tests/symbol_allowlist.toml for legitimate exclusions).
+ffi-symbol-diff:
+  bash scripts/parity/dump-sqlite-symbols.sh
+  rtk cargo build -p redlinedb-ffi --locked
+  rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked -- --ignored
+
+# D7 random-SQL fuzz parity lane (sqlite-parity closure plan, layer 2).
+# Runs REDLINEDB_FUZZ_ITERS (default 1000) seedable iterations; each
+# iteration runs the generated SQL through both rusqlite and RedlineDB
+# and asserts (rows-normalized, error-class) equal. The gate is rate-
+# monotone: divergence rate must not exceed the previously recorded
+# baseline (see target/proof/sqlite-full-parity/fuzz-divergence.txt).
+fuzz-parity:
+  rtk cargo test -p redlinedb-bench --test fuzz_parity --quiet --locked -- --test-threads=1
+
+# Extended differential fuzz (nightly CI only) — 100k iterations.
+fuzz-parity-nightly:
+  REDLINEDB_FUZZ_ITERS=100000 rtk cargo test -p redlinedb-bench --test fuzz_parity --release --quiet --locked
+
 # jankurai scaffold Justfile
 score:
 	jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md --score-history agent/score-history.jsonl --score-history-csv agent/score-history.csv
