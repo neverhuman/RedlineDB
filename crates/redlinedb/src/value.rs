@@ -367,6 +367,118 @@ impl<'a> From<redlinedb_sql::SqlValueRef<'a>> for ValueRef<'a> {
     }
 }
 
+// --- Postgres-style type bridges (each behind a Cargo feature) --------------
+//
+// All bridges store into one of the existing SQLite storage classes (no new
+// Value variants), so the sqlite drop-in surface is unchanged. Consumers
+// opt in via the `chrono`, `uuid`, `json`, or `decimal` Cargo features.
+
+// SystemTime (always-on; no Cargo feature — std type)
+impl From<std::time::SystemTime> for Value {
+    fn from(value: std::time::SystemTime) -> Self {
+        let micros = match value.duration_since(std::time::UNIX_EPOCH) {
+            Ok(d) => i64::try_from(d.as_micros()).unwrap_or(i64::MAX),
+            Err(err) => -i64::try_from(err.duration().as_micros()).unwrap_or(i64::MAX),
+        };
+        Self::Integer(micros)
+    }
+}
+
+impl TryFrom<&Value> for std::time::SystemTime {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self> {
+        let micros = value.as_integer()?;
+        if micros >= 0 {
+            std::time::UNIX_EPOCH
+                .checked_add(std::time::Duration::from_micros(micros as u64))
+                .ok_or_else(|| Error::new(ErrorCode::Mismatch, "timestamp overflow"))
+        } else {
+            std::time::UNIX_EPOCH
+                .checked_sub(std::time::Duration::from_micros(micros.unsigned_abs()))
+                .ok_or_else(|| Error::new(ErrorCode::Mismatch, "timestamp underflow"))
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl From<chrono::DateTime<chrono::Utc>> for Value {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+        Self::Integer(value.timestamp_micros())
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl TryFrom<&Value> for chrono::DateTime<chrono::Utc> {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self> {
+        let micros = value.as_integer()?;
+        chrono::DateTime::<chrono::Utc>::from_timestamp_micros(micros)
+            .ok_or_else(|| Error::new(ErrorCode::Mismatch, "chrono timestamp out of range"))
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl From<uuid::Uuid> for Value {
+    fn from(value: uuid::Uuid) -> Self {
+        Self::Blob(Arc::from(value.as_bytes().as_slice()))
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl TryFrom<&Value> for uuid::Uuid {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self> {
+        let bytes = value.as_blob()?;
+        let arr: [u8; 16] = bytes
+            .try_into()
+            .map_err(|_| Error::new(ErrorCode::Mismatch, "uuid blob must be exactly 16 bytes"))?;
+        Ok(uuid::Uuid::from_bytes(arr))
+    }
+}
+
+#[cfg(feature = "json")]
+impl From<serde_json::Value> for Value {
+    fn from(value: serde_json::Value) -> Self {
+        // Always serialize to canonical JSON text. Matches sqlite's JSON1
+        // convention (TEXT storage class with parsed-on-access semantics).
+        Self::Text(Arc::from(value.to_string()))
+    }
+}
+
+#[cfg(feature = "json")]
+impl TryFrom<&Value> for serde_json::Value {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self> {
+        let text = value.as_text()?;
+        serde_json::from_str(text)
+            .map_err(|err| Error::new(ErrorCode::Mismatch, format!("invalid json: {err}")))
+    }
+}
+
+#[cfg(feature = "decimal")]
+impl From<rust_decimal::Decimal> for Value {
+    fn from(value: rust_decimal::Decimal) -> Self {
+        // Postgres NUMERIC convention: canonical text preserves precision.
+        Self::Text(Arc::from(value.to_string()))
+    }
+}
+
+#[cfg(feature = "decimal")]
+impl TryFrom<&Value> for rust_decimal::Decimal {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self> {
+        use std::str::FromStr;
+        let text = value.as_text()?;
+        rust_decimal::Decimal::from_str(text)
+            .map_err(|err| Error::new(ErrorCode::Mismatch, format!("invalid decimal: {err}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,5 +613,66 @@ mod tests {
 
         let b = Value::Blob(Arc::from(&[9_u8, 8][..]));
         assert_eq!(Vec::<u8>::try_from(&b).unwrap(), vec![9, 8]);
+    }
+
+    #[test]
+    fn system_time_round_trips_through_value() {
+        let now = std::time::SystemTime::now();
+        let v: Value = now.into();
+        let back = std::time::SystemTime::try_from(&v).unwrap();
+        // Round-trip precision is microseconds (Value::Integer epoch micros).
+        let diff = match (now.duration_since(std::time::UNIX_EPOCH), back.duration_since(std::time::UNIX_EPOCH)) {
+            (Ok(a), Ok(b)) => a.as_micros().abs_diff(b.as_micros()),
+            _ => u128::MAX,
+        };
+        assert!(diff <= 1);
+    }
+
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn chrono_datetime_round_trips_through_value() {
+        let dt = chrono::DateTime::<chrono::Utc>::from_timestamp_micros(1_700_000_000_000_000).unwrap();
+        let v: Value = dt.into();
+        let back: chrono::DateTime<chrono::Utc> = (&v).try_into().unwrap();
+        assert_eq!(dt, back);
+    }
+
+    #[cfg(feature = "uuid")]
+    #[test]
+    fn uuid_round_trips_through_value_as_16_byte_blob() {
+        let id = uuid::Uuid::from_u128(0x0123_4567_89ab_cdef_0011_2233_4455_6677_u128);
+        let v: Value = id.into();
+        let back: uuid::Uuid = (&v).try_into().unwrap();
+        assert_eq!(id, back);
+        match v {
+            Value::Blob(bytes) => assert_eq!(bytes.len(), 16),
+            _ => panic!("expected blob storage"),
+        }
+    }
+
+    #[cfg(feature = "uuid")]
+    #[test]
+    fn uuid_from_invalid_blob_length_errors() {
+        let v = Value::Blob(Arc::from(&[0_u8; 15][..]));
+        assert!(uuid::Uuid::try_from(&v).is_err());
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn json_round_trips_through_value_as_text() {
+        let j = serde_json::json!({"name": "Ada", "count": 42, "active": true});
+        let v: Value = j.clone().into();
+        let back: serde_json::Value = (&v).try_into().unwrap();
+        assert_eq!(j, back);
+    }
+
+    #[cfg(feature = "decimal")]
+    #[test]
+    fn decimal_round_trips_through_value_as_text() {
+        use std::str::FromStr;
+        let d = rust_decimal::Decimal::from_str("12345.6789").unwrap();
+        let v: Value = d.into();
+        let back: rust_decimal::Decimal = (&v).try_into().unwrap();
+        assert_eq!(d, back);
     }
 }
