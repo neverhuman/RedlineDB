@@ -54,6 +54,7 @@ fn create_kv_table_only(engine: &Arc<Engine>) {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+            generated: None,
                     },
                     ColumnSpec {
                         name: DbName::new("v"),
@@ -61,6 +62,7 @@ fn create_kv_table_only(engine: &Arc<Engine>) {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+            generated: None,
                     },
                 ],
                 constraints: vec![],
@@ -90,9 +92,12 @@ fn create_kv_index(engine: &Arc<Engine>) {
                     name: DbName::new("k"),
                     sort_dir: SortDir::Asc,
                     collation: None,
+                expr_sql: None,
+                expr_referenced_cols: Vec::new(),
                 }],
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_kv_k ON kv(k)".to_owned()),
+                predicate_sql: None,
             },
         )
         .expect("create index");

@@ -112,37 +112,35 @@ pub(crate) fn bind_create_index(
     let (schema, name) = split_name(name)?;
     let table = parse_qualified_name(create_index.table_name)?;
     let mut columns = Vec::with_capacity(create_index.columns.len());
-    let mut has_expression_column = false;
     for column in create_index.columns {
         match convert_index_column(column.clone()) {
             Ok(c) => columns.push(c),
             Err(_) => {
-                // Lane SQL-D phase 10: parse-only acceptance of expression
-                // indexes. We record a synthetic column so the catalog
-                // operation can be rejected at execute time with a clear
-                // diagnostic, while CREATE INDEX still parses for tools that
-                // round-trip schema text.
-                has_expression_column = true;
+                // A6 SQL-D: expression-source index column. Stash the
+                // verbatim SQL fragment so the executor can re-parse
+                // and evaluate it per row, plus the set of referenced
+                // column ordinals for UPDATE re-emit decisions.
+                let expr_sql = column.column.expr.to_string();
+                let referenced =
+                    super::helpers::ddl::index_expr_referenced_cols(&column.column.expr);
                 columns.push(IndexColumnSpec {
                     name: DbName::new(format!("__expr_{}", columns.len())),
-                    sort_dir: SortDir::Asc,
+                    sort_dir: match column.column.options.asc {
+                        Some(false) => SortDir::Desc,
+                        _ => SortDir::Asc,
+                    },
                     collation: None,
+                    expr_sql: Some(expr_sql),
+                    expr_referenced_cols: referenced,
                 });
             }
         }
     }
 
-    let has_predicate = create_index.predicate.is_some();
-    if has_predicate || has_expression_column {
-        // Both partial and expression indexes are parser-only in this lane:
-        // the kernel does not yet thread the predicate / expression through
-        // index DML. Surface a clear unsupported error so callers know the
-        // syntax is recognised but not yet enforced.
-        return Err(Error::UnsupportedSql(
-            "partial and expression indexes are parsed-only; execution not yet implemented"
-                .to_owned(),
-        ));
-    }
+    // A6 SQL-D: thread the partial-index WHERE predicate through to
+    // the kernel as its verbatim SQL fragment; the executor re-parses
+    // it per DML so the predicate semantics match the catalog text.
+    let predicate_sql = create_index.predicate.as_ref().map(|p| p.to_string());
 
     Ok(PreparedTemplate {
         sql: Arc::from(sql),
@@ -160,6 +158,7 @@ pub(crate) fn bind_create_index(
             columns,
             origin: IndexOrigin::User,
             normalized_sql: Some(sql.to_owned()),
+            predicate_sql,
         }),
     })
 }

@@ -81,7 +81,7 @@ impl Lab {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn partial_index_indexes_only_matching_rows() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, status TEXT, score INTEGER)");
@@ -103,7 +103,7 @@ fn partial_index_indexes_only_matching_rows() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn partial_index_skip_insert_when_predicate_false() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, active INTEGER, name TEXT)");
@@ -115,7 +115,7 @@ fn partial_index_skip_insert_when_predicate_false() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn partial_index_update_moves_in_and_out() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, k INTEGER, flag INTEGER)");
@@ -129,7 +129,7 @@ fn partial_index_update_moves_in_and_out() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn partial_index_delete_only_marks_matching_keys() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, x INTEGER, kind TEXT)");
@@ -142,7 +142,7 @@ fn partial_index_delete_only_marks_matching_keys() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn partial_index_planner_only_uses_matching_predicate() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, a INTEGER, b TEXT)");

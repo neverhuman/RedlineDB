@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779022466`
-- Started at: `1779022466`
-- Elapsed: `3746` ms
+- Run ID: `1779043372`
+- Started at: `1779043372`
+- Elapsed: `3985` ms
 - Scope: `full`
 - Raw score: `87`
 - Final score: `64`
@@ -70,7 +70,7 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`36` files=`278`
+- Status: `review` hard=`0` warning=`36` files=`275`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
 - Duplicate volume: lines=`80` tokens=`235` bytes=`2249`
 
@@ -82,7 +82,7 @@
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
 | `ExactUnitSameName` | `Warning` | `rust` | 10 | 34 | `crates/sql/src/datetime.rs:416-426, crates/sql/src/datetime/format.rs:60-70, crates/sql/src/datetime/modifiers.rs:104-114` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 13 | 42 | `crates/sql/src/exec/cte.rs:171-184, crates/sql/src/exec/view.rs:181-194` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 13 | 42 | `crates/sql/src/exec/cte.rs:172-185, crates/sql/src/exec/view.rs:182-195` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 19 | `crates/sql/src/datetime.rs:567-573, crates/sql/src/datetime/format.rs:39-45` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:215-219` | `same-name semantic unit copied across multiple files` |
@@ -93,12 +93,12 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/statement.rs:180-181, crates/redlinedb/src/value.rs:106-107, crates/redlinedb/src/value.rs:118-119, crates/redlinedb/src/value.rs:130-131` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/value.rs:40-41, crates/sql/src/exec/expr/scalar/row/model.rs:64-65, crates/sql/src/exec/expr/scalar/row/model.rs:77-78, crates/sql/src/exec/expr/scalar/row/model.rs:87-88` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:238-238, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:207-207, crates/kernel/src/integrity/page_csum.rs:107-107` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:249-249, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:214-214, crates/kernel/src/integrity/page_csum.rs:107-107` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/connection.rs:194-195, crates/redlinedb/src/connection.rs:203-204, crates/redlinedb/src/connection.rs:213-214` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/json/path_bytecode.rs:138-140, crates/sql/src/parser.rs:186-188` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/connection.rs:52-53, crates/redlinedb/src/connection.rs:88-89, crates/redlinedb/src/connection.rs:94-95` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/certify/scheduler/dispatch.rs:197-199, crates/kernel/src/engine/runtime/commit.rs:30-32` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/certify/scheduler/dispatch.rs:196-198, crates/kernel/src/engine/runtime/commit.rs:30-32` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:159-160, crates/sql/src/exec/expr/scalar/row/lookup.rs:163-164` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:177-178, crates/redlinedb/src/statement.rs:204-205` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:69-70, crates/redlinedb/src/connection.rs:75-76` | `same body appears under different names across files` |
@@ -126,7 +126,7 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 23 | 2.76 | largest authored code file: crates/sql/src/exec/cte.rs (724 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 23 | 2.76 | largest authored code file: crates/sql/src/exec/cte.rs (725 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 95 | 7.60 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -211,8 +211,8 @@ No audited runtime boundary reclassifications declared.
    Reason: `Code shape and semantic surface` scored 23 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:648e75f486c49b3fbd4f93e96c0f0cee304b31f9ccc29a18cdb256cf4478ef77`
-   Evidence: largest authored code file: crates/sql/src/exec/cte.rs (724 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 36 (advisory only, no score impact)
+   Fingerprint: `sha256:aa267d04747635f0eed01004f900ed4b74b50be9679b8fd6b3871caa69e2e29e`
+   Evidence: largest authored code file: crates/sql/src/exec/cte.rs (725 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 36 (advisory only, no score impact)
 2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
@@ -244,7 +244,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:eb251b166b5847d01230b905e49cf98384d67017bbeb1205353d316b53546fbd`
    Evidence: crates/cli/src/dot/mod.rs:19, future-hostile/dead-language term `legacy` appears
-5. `high` `vibe` `crates/kernel/src/catalog/ddl.rs:84`
+5. `high` `vibe` `crates/kernel/src/catalog/ddl.rs:87`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -252,9 +252,9 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `temporary` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:5ee23668b5a9fd5fc07ce8c58bca2e2d3717b672e4761545343d7bc17910f1d4`
-   Evidence: crates/kernel/src/catalog/ddl.rs:84, future-hostile/dead-language term `temporary` appears
-6. `high` `vibe` `crates/kernel/src/catalog/schema.rs:138`
+   Fingerprint: `sha256:e69e73399484762fce8568c8f67a81483380d3b14aaf4e2119353c55bb88ed40`
+   Evidence: crates/kernel/src/catalog/ddl.rs:87, future-hostile/dead-language term `temporary` appears
+6. `high` `vibe` `crates/kernel/src/catalog/schema.rs:161`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -262,9 +262,9 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `old` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:06c8daa4acbf0980df73d78e7a7845de84ba7c8e41757806fe05c7b98166a782`
-   Evidence: crates/kernel/src/catalog/schema.rs:138, future-hostile/dead-language term `old` appears
-7. `high` `vibe` `crates/kernel/src/catalog/schema.rs:166`
+   Fingerprint: `sha256:13e2f6a6bebdd5e832d7df8462d5a60eb5b60927126f8c0c1d513027269525d0`
+   Evidence: crates/kernel/src/catalog/schema.rs:161, future-hostile/dead-language term `old` appears
+7. `high` `vibe` `crates/kernel/src/catalog/schema.rs:189`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -272,9 +272,9 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `temp` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:44a5c8bac0289fb6e2a6b12c42ec4886cafc14551d33e2b959edbd21e8ce3dd4`
-   Evidence: crates/kernel/src/catalog/schema.rs:166, future-hostile/dead-language term `temp` appears
-8. `high` `vibe` `crates/kernel/src/catalog/schema.rs:311`
+   Fingerprint: `sha256:06f1155896c6509cdf8414a0f7f3077c80f8fbc0eb509060fe316a5dbfbf0ed9`
+   Evidence: crates/kernel/src/catalog/schema.rs:189, future-hostile/dead-language term `temp` appears
+8. `high` `vibe` `crates/kernel/src/catalog/schema.rs:334`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -282,9 +282,9 @@ No audited runtime boundary reclassifications declared.
    Reason: fallback soup detected in product code
    Fix: collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
    Rerun: `just fast`
-   Fingerprint: `sha256:b6a0f87a50b3f23a06f8745510f5c6e69e7a94bcb97224b0aec247c4993d0a6a`
-   Evidence: crates/kernel/src/catalog/schema.rs:311 .unwrap_or_else(|| Box::from("")),
-9. `high` `vibe` `crates/kernel/src/catalog/schema.rs:395`
+   Fingerprint: `sha256:bd4dfd7eeb27c03e7faf0bfd7affcea825a5d19cfe75c7a36543340d819cb8e8`
+   Evidence: crates/kernel/src/catalog/schema.rs:334 .unwrap_or_else(|| Box::from("")),
+9. `high` `vibe` `crates/kernel/src/catalog/schema.rs:418`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `storage-and-catalog`
@@ -292,8 +292,8 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `temp` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:bfdd0d7b119be25edf549d677e9d422652cf10c41571b956c81a4717e7a0708a`
-   Evidence: crates/kernel/src/catalog/schema.rs:395, future-hostile/dead-language term `temp` appears
+   Fingerprint: `sha256:c4bb219d5eb5f30b718de9ba80ce244ccac7191cad80e898b68fbfc3395535ea`
+   Evidence: crates/kernel/src/catalog/schema.rs:418, future-hostile/dead-language term `temp` appears
 10. `high` `vibe` `crates/sql/src/exec/attach.rs:47`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
@@ -324,7 +324,17 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:29891aecd9ac62d787f7372b476ccaec7fe5bbb07b6902361b46d6de98001538`
    Evidence: crates/sql/src/exec/expr/window.rs:5, future-hostile/dead-language term `shim` appears
-13. `high` `vibe` `crates/sql/src/exec/insert.rs:190`
+13. `high` `vibe` `crates/sql/src/exec/index_dml.rs:49`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `shim` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:2cb7e1754f9e00a3fcd4e78be859cd92d987239545fc8d2c5f8d201e4888dcb4`
+   Evidence: crates/sql/src/exec/index_dml.rs:49, future-hostile/dead-language term `shim` appears
+14. `high` `vibe` `crates/sql/src/exec/insert.rs:190`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -334,7 +344,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:d57252fa588aeb67a636f090dca67fcc50b0ce0f1df91ac90645c36bd50fa063`
    Evidence: crates/sql/src/exec/insert.rs:190, future-hostile/dead-language term `old` appears
-14. `high` `vibe` `crates/sql/src/exec/tail.rs:158`
+15. `high` `vibe` `crates/sql/src/exec/tail.rs:163`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -342,9 +352,9 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `old` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:9b74ce963a8e913f986ff2ca9836baf4febfca5b2841129866793ab6ffee66b9`
-   Evidence: crates/sql/src/exec/tail.rs:158, future-hostile/dead-language term `old` appears
-15. `high` `vibe` `crates/sql/src/exec/tail.rs:202`
+   Fingerprint: `sha256:6722677cdf05ba3e6628fc20d5b4c85c86b308b69e62b9a05f06426e0563bd80`
+   Evidence: crates/sql/src/exec/tail.rs:163, future-hostile/dead-language term `old` appears
+16. `high` `vibe` `crates/sql/src/exec/tail.rs:207`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -352,9 +362,9 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `old` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:4c55148a1066b7b21ce821e7915af0ddff69a8612e6c3385f6799196e0e0943d`
-   Evidence: crates/sql/src/exec/tail.rs:202, future-hostile/dead-language term `old` appears
-16. `high` `vibe` `crates/sql/src/exec/trigger.rs:8`
+   Fingerprint: `sha256:e5f9968a8334e5a2046a991d83c7daefade6913c5e55536f5b7d031372fa43eb`
+   Evidence: crates/sql/src/exec/tail.rs:207, future-hostile/dead-language term `old` appears
+17. `high` `vibe` `crates/sql/src/exec/trigger.rs:8`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -364,7 +374,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:aba18607d06975b7da064d9ee160a1c9c96b5fd025db7873f919c4c0767075be`
    Evidence: crates/sql/src/exec/trigger.rs:8, future-hostile/dead-language term `old` appears
-17. `high` `vibe` `crates/sql/src/exec/trigger.rs:9`
+18. `high` `vibe` `crates/sql/src/exec/trigger.rs:9`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -374,7 +384,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3ed80b72363de69c45daf9f2d2ce369154e495427f185780de4057e236f89a4d`
    Evidence: crates/sql/src/exec/trigger.rs:9, future-hostile/dead-language term `old` appears
-18. `high` `vibe` `crates/sql/src/exec/trigger.rs:56`
+19. `high` `vibe` `crates/sql/src/exec/trigger.rs:56`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -384,7 +394,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:cab48fe346b9eeb551a5d33e424db975487696667dc2794bb9b209dc78fa27bd`
    Evidence: crates/sql/src/exec/trigger.rs:56, future-hostile/dead-language term `old` appears
-19. `high` `vibe` `crates/sql/src/exec/trigger.rs:71`
+20. `high` `vibe` `crates/sql/src/exec/trigger.rs:71`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -394,7 +404,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a994d2cf1d328aee93368bb1f20f67bb06b07ed5ded8dad32fa15861b1013d4f`
    Evidence: crates/sql/src/exec/trigger.rs:71, future-hostile/dead-language term `old` appears
-20. `high` `vibe` `crates/sql/src/exec/trigger.rs:76`
+21. `high` `vibe` `crates/sql/src/exec/trigger.rs:76`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -404,7 +414,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:8f50720c75d5f81caf36b17b2149239ec65de89ee3876253ce4b58857533e0fb`
    Evidence: crates/sql/src/exec/trigger.rs:76, future-hostile/dead-language term `old` appears
-21. `high` `vibe` `crates/sql/src/exec/trigger.rs:78`
+22. `high` `vibe` `crates/sql/src/exec/trigger.rs:78`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -414,7 +424,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:0261d69a282b2d8133c9e6dfd813d74d406b9ab509fc2ba0fe7e33aa8955f62f`
    Evidence: crates/sql/src/exec/trigger.rs:78, future-hostile/dead-language term `old` appears
-22. `high` `vibe` `crates/sql/src/exec/trigger.rs:99`
+23. `high` `vibe` `crates/sql/src/exec/trigger.rs:99`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -424,7 +434,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b2a0bd96be86e0714cfa85badabb0cdd6ea3d5d4ab88522cb1006dbd4f7378a3`
    Evidence: crates/sql/src/exec/trigger.rs:99, future-hostile/dead-language term `old` appears
-23. `high` `vibe` `crates/sql/src/exec/trigger.rs:110`
+24. `high` `vibe` `crates/sql/src/exec/trigger.rs:110`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -434,7 +444,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:826ebceaa858ca92bec829bf7c651dd090c6f87b117e91789be24793513657b9`
    Evidence: crates/sql/src/exec/trigger.rs:110, future-hostile/dead-language term `old` appears
-24. `high` `vibe` `crates/sql/src/exec/trigger.rs:119`
+25. `high` `vibe` `crates/sql/src/exec/trigger.rs:119`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -444,7 +454,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:b13a20ab28cd2f294411ee5c95794dd4bcbf1f35fe196ce55021c7c5f6947b50`
    Evidence: crates/sql/src/exec/trigger.rs:119, future-hostile/dead-language term `old` appears
-25. `high` `vibe` `crates/sql/src/exec/trigger.rs:122`
+26. `high` `vibe` `crates/sql/src/exec/trigger.rs:122`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -454,7 +464,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:02c2a9c5ab628cc74fdffdc606745ea1483ee1d398f766fc3bdbca3664adf59a`
    Evidence: crates/sql/src/exec/trigger.rs:122, future-hostile/dead-language term `old` appears
-26. `high` `vibe` `crates/sql/src/exec/trigger.rs:125`
+27. `high` `vibe` `crates/sql/src/exec/trigger.rs:125`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -464,7 +474,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:c0e8b07d3deb141a22a4912eadbc99742048d95f036d833917d9012041207325`
    Evidence: crates/sql/src/exec/trigger.rs:125, future-hostile/dead-language term `old` appears
-27. `high` `vibe` `crates/sql/src/exec/trigger.rs:161`
+28. `high` `vibe` `crates/sql/src/exec/trigger.rs:161`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -474,7 +484,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:39d1891d420def03c343485cf6c3bf5007093cd4a86d28788ee757fc2ba6e180`
    Evidence: crates/sql/src/exec/trigger.rs:161, future-hostile/dead-language term `old` appears
-28. `high` `vibe` `crates/sql/src/exec/view.rs:12`
+29. `high` `vibe` `crates/sql/src/exec/view.rs:12`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -484,7 +494,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:35e25404c100141fe575741926f6db6294a229fbf374ab74535e69d094385d10`
    Evidence: crates/sql/src/exec/view.rs:12, future-hostile/dead-language term `stale` appears
-29. `high` `vibe` `crates/sql/src/parser/ddl.rs:340`
+30. `high` `vibe` `crates/sql/src/parser/ddl.rs:339`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -492,9 +502,9 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `temp` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:1aae7b61c3e02aedcb701f7ec591f8e2ec8d1b1d16ba4577d8a8005e6d26f572`
-   Evidence: crates/sql/src/parser/ddl.rs:340, future-hostile/dead-language term `temp` appears
-30. `high` `vibe` `crates/sql/src/parser/ddl.rs:390`
+   Fingerprint: `sha256:5b2d689b8ce48ecbdac896161bc185f5b0bfffd7f99c315fb1842f9775f38ba3`
+   Evidence: crates/sql/src/parser/ddl.rs:339, future-hostile/dead-language term `temp` appears
+31. `high` `vibe` `crates/sql/src/parser/ddl.rs:389`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -502,9 +512,9 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `temp` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:23f5f83082bac8317539203fbd0475b0bd4c84730ec36d0c62f247ad65b894b7`
-   Evidence: crates/sql/src/parser/ddl.rs:390, future-hostile/dead-language term `temp` appears
-31. `high` `vibe` `crates/sql/src/parser/ddl.rs:391`
+   Fingerprint: `sha256:c9d57955c9e4c9573e1c58809a630218e89366fd47f6f00f24968c15db7f6111`
+   Evidence: crates/sql/src/parser/ddl.rs:389, future-hostile/dead-language term `temp` appears
+32. `high` `vibe` `crates/sql/src/parser/ddl.rs:390`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -512,9 +522,9 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `temporary` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:2dd689dc53970e104b8a8cb1493c1fd14832e7953d7d4f346d218805e367011e`
-   Evidence: crates/sql/src/parser/ddl.rs:391, future-hostile/dead-language term `temporary` appears
-32. `high` `vibe` `crates/sql/src/parser/ddl.rs:404`
+   Fingerprint: `sha256:430366dbb94c8172d49fa0af62be92340c72336e8380a5d10f681db74ede0957`
+   Evidence: crates/sql/src/parser/ddl.rs:390, future-hostile/dead-language term `temporary` appears
+33. `high` `vibe` `crates/sql/src/parser/ddl.rs:403`
    Rule: `HLT-001-DEAD-MARKER`
    Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
    Route: TLR `Entropy`, lane `fast`, owner `sql-parser-planner-executor`
@@ -522,8 +532,8 @@ No audited runtime boundary reclassifications declared.
    Reason: future-hostile/dead-language term `old` appears in product/runtime code
    Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Rerun: `just fast`
-   Fingerprint: `sha256:b4925f1cfd05c5243968881d3dccc478deb994dc55a1187c252ed3c373b4bc0d`
-   Evidence: crates/sql/src/parser/ddl.rs:404, future-hostile/dead-language term `old` appears
+   Fingerprint: `sha256:12f30a00407f4cd663eaba659d0e71d8f070b7fc5a2cb646c5d1de1aa1c26784`
+   Evidence: crates/sql/src/parser/ddl.rs:403, future-hostile/dead-language term `old` appears
 
 ## Policy
 
@@ -549,15 +559,17 @@ No audited runtime boundary reclassifications declared.
    Route: `Entropy`/`fast`
 8. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/expr/window.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Route: `Entropy`/`fast`
-9. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/insert.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+9. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/index_dml.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Route: `Entropy`/`fast`
-10. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/tail.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+10. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/insert.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Route: `Entropy`/`fast`
-11. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/trigger.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+11. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/tail.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Route: `Entropy`/`fast`
-12. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/view.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+12. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/trigger.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Route: `Entropy`/`fast`
-13. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/parser/ddl.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+13. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/view.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
    Route: `Entropy`/`fast`
-14. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+14. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/parser/ddl.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+15. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`

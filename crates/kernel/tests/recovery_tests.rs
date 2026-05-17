@@ -633,6 +633,7 @@ fn create_index_atomicity_under_simulated_crash_mid_backfill() {
                         }],
                         collation: None,
                         default_value: None,
+            generated: None,
                     },
                     ColumnSpec {
                         name: DbName::new("v"),
@@ -640,6 +641,7 @@ fn create_index_atomicity_under_simulated_crash_mid_backfill() {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+            generated: None,
                     },
                 ],
                 constraints: vec![],
@@ -686,9 +688,12 @@ fn create_index_atomicity_under_simulated_crash_mid_backfill() {
                     name: DbName::new("v"),
                     sort_dir: SortDir::Asc,
                     collation: None,
+                expr_sql: None,
+                expr_referenced_cols: Vec::new(),
                 }],
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
+                predicate_sql: None,
             },
         )
         .unwrap();
@@ -734,6 +739,7 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
                         }],
                         collation: None,
                         default_value: None,
+            generated: None,
                     },
                     ColumnSpec {
                         name: DbName::new("v"),
@@ -741,6 +747,7 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+            generated: None,
                     },
                 ],
                 constraints: vec![],
@@ -780,9 +787,12 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
                     name: DbName::new("v"),
                     sort_dir: SortDir::Asc,
                     collation: None,
+                expr_sql: None,
+                expr_referenced_cols: Vec::new(),
                 }],
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
+                predicate_sql: None,
             },
         )
         .unwrap();
@@ -834,6 +844,7 @@ fn committed_heap_and_index_deltas_replay_after_reopen() {
                         }],
                         collation: None,
                         default_value: None,
+            generated: None,
                     },
                     ColumnSpec {
                         name: DbName::new("v"),
@@ -841,6 +852,7 @@ fn committed_heap_and_index_deltas_replay_after_reopen() {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+            generated: None,
                     },
                 ],
                 constraints: vec![],
@@ -868,9 +880,12 @@ fn committed_heap_and_index_deltas_replay_after_reopen() {
                     name: DbName::new("v"),
                     sort_dir: SortDir::Asc,
                     collation: None,
+                expr_sql: None,
+                expr_referenced_cols: Vec::new(),
                 }],
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
+                predicate_sql: None,
             },
         )
         .unwrap();

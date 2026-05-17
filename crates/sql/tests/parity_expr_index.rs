@@ -81,7 +81,7 @@ impl Lab {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn expression_index_lower_lookup() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)");
@@ -94,7 +94,7 @@ fn expression_index_lower_lookup() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn expression_index_update_recomputes_key() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)");
@@ -106,7 +106,7 @@ fn expression_index_update_recomputes_key() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn expression_index_delete_removes_key() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)");
@@ -118,7 +118,7 @@ fn expression_index_delete_removes_key() {
 }
 
 #[test]
-#[ignore = "A6: parser+exec wiring lands in followup; foundation (catalog v7 + helper modules) is in"]
+
 fn expression_index_fallback_to_scan_when_pred_form_does_not_match() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)");
