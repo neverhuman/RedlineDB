@@ -19,6 +19,12 @@ mod snapshot;
 mod statement;
 mod value;
 
+#[cfg(feature = "tokio")]
+mod asyncio;
+
+#[cfg(feature = "tokio")]
+pub use asyncio::{AsyncConnection, AsyncDatabase};
+
 pub use connection::{Connection, InterruptHandle, Transaction};
 pub use error::{Error, ErrorCode, Result};
 pub use handle::Database;
@@ -277,6 +283,52 @@ mod tests {
         let opts = OpenOptions::default().with_busy_timeout(Duration::from_millis(50));
         let db = Database::open_with_options(&path, opts).expect("open");
         let _conn = db.connect().expect("conn");
+    }
+
+    #[cfg(feature = "tokio")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn async_database_round_trip_via_spawn_blocking() {
+        use crate::{AsyncDatabase, BeginMode, Value};
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = AsyncDatabase::create(dir.path().join("async.redline"))
+            .await
+            .expect("create");
+        let conn = db.connect().await.expect("connect");
+
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string(),
+            vec![],
+        )
+        .await
+        .expect("create table");
+
+        conn.execute(
+            "INSERT INTO t(id, name) VALUES (?, ?)".to_string(),
+            vec![Value::Integer(1), Value::Text(std::sync::Arc::from("Ada"))],
+        )
+        .await
+        .expect("insert");
+
+        let name: String = conn
+            .query_row(
+                "SELECT name FROM t WHERE id = ?".to_string(),
+                vec![Value::Integer(1)],
+            )
+            .await
+            .expect("query_row");
+        assert_eq!(name, "Ada");
+
+        let count: i64 = conn
+            .transaction(BeginMode::Immediate, |c| {
+                c.execute(
+                    "INSERT INTO t(id, name) VALUES (?, ?)",
+                    (2_i64, "Lin"),
+                )?;
+                c.query_row::<_, i64>("SELECT COUNT(*) FROM t", ())
+            })
+            .await
+            .expect("transaction");
+        assert_eq!(count, 2);
     }
 
     #[test]
