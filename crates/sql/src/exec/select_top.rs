@@ -1144,7 +1144,11 @@ fn authorize_select_source(source: &SelectSource) -> Option<crate::udf::Authoriz
                 }
             }
         }
-        SelectSource::SqliteSchema | SelectSource::StaticRows { .. } | SelectSource::Empty => {}
+        SelectSource::SqliteSchema
+        | SelectSource::StaticRows { .. }
+        | SelectSource::Empty
+        | SelectSource::CompoundSet { .. }
+        | SelectSource::Cte { .. } => {}
     }
     if found { Some(worst) } else { None }
 }
