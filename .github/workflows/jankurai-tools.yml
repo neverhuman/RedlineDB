@@ -145,6 +145,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with: { toolchain: 1.95.0 }
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install mold linker
+        run: sudo apt-get install -y mold
       - name: input-boundary (ops/ci/jankurai-tools.sh)
         run: bash ops/ci/jankurai-tools.sh input-boundary
       - name: Cross-check ffi exec input-boundary tests (HLT-023 negative proofs)
