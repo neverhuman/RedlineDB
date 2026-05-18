@@ -39,7 +39,10 @@ fn exec(db: *mut rldb, sql: &str) {
 fn open_read_write_close_round_trip() {
     let (_dir, db) = open_db();
     exec(db, "CREATE TABLE docs(id INTEGER PRIMARY KEY, body BLOB)");
-    exec(db, "INSERT INTO docs(id, body) VALUES (1, x'00010203040506070809')");
+    exec(
+        db,
+        "INSERT INTO docs(id, body) VALUES (1, x'00010203040506070809')",
+    );
     let main = CString::new("main").unwrap();
     let table = CString::new("docs").unwrap();
     let column = CString::new("body").unwrap();

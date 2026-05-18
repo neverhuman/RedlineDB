@@ -109,8 +109,7 @@ fn float_eq(a: f64, b: f64) -> bool {
     if a.is_nan() && b.is_nan() {
         return true;
     }
-    (a - b).abs() <= FLOAT_EPSILON
-        || (a != 0.0 && ((a - b) / a).abs() <= FLOAT_EPSILON)
+    (a - b).abs() <= FLOAT_EPSILON || (a != 0.0 && ((a - b) / a).abs() <= FLOAT_EPSILON)
 }
 
 pub fn rows_equal(left: &[Vec<SqlValue>], right: &[Vec<SqlValue>]) -> bool {

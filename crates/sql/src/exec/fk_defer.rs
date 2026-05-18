@@ -19,10 +19,10 @@ use crate::session::SessionState;
 
 use super::super::*;
 
+use super::fk_violation_error;
 use super::lookup::{
     extract_child_key, key_has_null, lookup_parent, parent_column_ordinals, parent_row_exists,
 };
-use super::fk_violation_error;
 
 /// Helper to drop all deferred checks (used by ROLLBACK).
 pub(crate) fn clear_deferred_fk_checks(session: &mut SessionState) {
@@ -45,20 +45,17 @@ pub(crate) fn drain_deferred_fk_checks(
     let schema = conn.engine().schema_snapshot();
     let pending = std::mem::take(&mut session.deferred_fk_checks);
     for entry in pending {
-        let Some(child) = schema.table_by_id(redlinedb_kernel::catalog::TableId(entry.child_table_id))
+        let Some(child) =
+            schema.table_by_id(redlinedb_kernel::catalog::TableId(entry.child_table_id))
         else {
             continue;
         };
-        let row = match load_table_row_by_rowid(
-            conn.engine(),
-            tx,
-            &child,
-            RowId(entry.child_rowid),
-        )? {
-            Some(row) => row,
-            // Child row vanished (e.g. cascade deleted it): nothing to check.
-            None => continue,
-        };
+        let row =
+            match load_table_row_by_rowid(conn.engine(), tx, &child, RowId(entry.child_rowid))? {
+                Some(row) => row,
+                // Child row vanished (e.g. cascade deleted it): nothing to check.
+                None => continue,
+            };
         let Some(fk) = child.foreign_keys.get(entry.fk_index) else {
             continue;
         };

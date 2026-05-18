@@ -41,8 +41,8 @@ use redlinedb_kernel::catalog::{
 };
 use redlinedb_kernel::format::RelId;
 
-pub(crate) use registry::{register_external_rows, rows_for_relation};
 use registry::register_cte_rows;
+pub(crate) use registry::{register_external_rows, rows_for_relation};
 use sqlparser::ast::Query;
 
 /// Sentinel relation id used by synthetic CTE table defs. Real relations
@@ -93,7 +93,11 @@ fn next_cte_rel_id() -> RelId {
 /// the CTE name as a real table. Column types are inferred from the
 /// first non-NULL value in each column; declared NOT NULL is left off so
 /// any value flows.
-pub(crate) fn synth_table_def(name: &str, columns: &[String], rows: &[Vec<SqlValue>]) -> Arc<TableDef> {
+pub(crate) fn synth_table_def(
+    name: &str,
+    columns: &[String],
+    rows: &[Vec<SqlValue>],
+) -> Arc<TableDef> {
     let column_defs: Vec<ColumnDef> = columns
         .iter()
         .enumerate()
@@ -213,7 +217,14 @@ pub(crate) fn bind_with_query(
     CTE_REL_COUNTER.with(|cell| cell.set(0));
     let mut pushed_scopes = 0usize;
     for cte in cte_tables {
-        let def = recursive::materialize_cte(conn, Arc::clone(&schema), schema_epoch, sql, &cte, recursive)?;
+        let def = recursive::materialize_cte(
+            conn,
+            Arc::clone(&schema),
+            schema_epoch,
+            sql,
+            &cte,
+            recursive,
+        )?;
         let mut single = HashMap::new();
         single.insert(def.name.to_string(), def);
         push_scope(single);

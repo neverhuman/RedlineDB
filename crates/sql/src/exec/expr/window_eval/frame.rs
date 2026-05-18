@@ -89,7 +89,10 @@ pub(super) fn frame_bounds(
             WindowFrameUnits::Range | WindowFrameUnits::Groups => {
                 // First row of the current peer group.
                 let target = peer_ids[sorted_pos];
-                peer_ids.iter().position(|&id| id == target).unwrap_or(sorted_pos) as i64
+                peer_ids
+                    .iter()
+                    .position(|&id| id == target)
+                    .unwrap_or(sorted_pos) as i64
             }
             WindowFrameUnits::Rows => sorted_pos as i64,
         },

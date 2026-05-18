@@ -343,14 +343,9 @@ fn compute_function_for_row(
             Ok(SqlValue::Real(n / total))
         }
         "ntile" => ntile_value(args, order_index_map.len(), sorted_pos),
-        "lag" | "lead" => lag_lead_value(
-            func_name,
-            args,
-            rows,
-            order_index_map,
-            sorted_pos,
-            bindings,
-        ),
+        "lag" | "lead" => {
+            lag_lead_value(func_name, args, rows, order_index_map, sorted_pos, bindings)
+        }
         "first_value" => {
             let bounds = frame_bounds(frame, sorted_pos, peer_ids, order_index_map.len());
             if bounds.0 > bounds.1 {

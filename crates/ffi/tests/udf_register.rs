@@ -31,22 +31,14 @@ fn exec(db: *mut rldb, sql: &str) {
     assert_eq!(rc, 0, "exec({sql}) failed");
 }
 
-unsafe extern "C" fn times_two(
-    ctx: *mut RldbContext,
-    argc: c_int,
-    argv: *mut *mut RldbValue,
-) {
+unsafe extern "C" fn times_two(ctx: *mut RldbContext, argc: c_int, argv: *mut *mut RldbValue) {
     assert_eq!(argc, 1);
     let val = unsafe { *argv };
     let n = unsafe { sqlite3_value_int64(val) };
     unsafe { sqlite3_result_int(ctx, (n * 2) as c_int) };
 }
 
-unsafe extern "C" fn echo_label(
-    ctx: *mut RldbContext,
-    _argc: c_int,
-    _argv: *mut *mut RldbValue,
-) {
+unsafe extern "C" fn echo_label(ctx: *mut RldbContext, _argc: c_int, _argv: *mut *mut RldbValue) {
     let label = CString::new("hello-udf").unwrap();
     unsafe { sqlite3_result_text(ctx, label.as_ptr(), -1, None) };
 }
@@ -83,11 +75,7 @@ fn times_two_scalar_udf_invoked_from_select() {
         let val = unsafe { *argv };
         let cstr = unsafe { CStr::from_ptr(val) };
         let s = cstr.to_string_lossy().into_owned();
-        let arc = unsafe {
-            std::sync::Arc::from_raw(
-                ctx as *const std::sync::Mutex<Option<i64>>,
-            )
-        };
+        let arc = unsafe { std::sync::Arc::from_raw(ctx as *const std::sync::Mutex<Option<i64>>) };
         *arc.lock().unwrap() = s.parse::<i64>().ok();
         let _ = std::sync::Arc::into_raw(arc);
         0
@@ -149,11 +137,7 @@ fn null_db_returns_misuse() {
 use std::sync::atomic::{AtomicI64, Ordering as AtomicOrdering};
 static SUM_SQ_ACC: AtomicI64 = AtomicI64::new(0);
 
-unsafe extern "C" fn sum_sq_step(
-    _ctx: *mut RldbContext,
-    argc: c_int,
-    argv: *mut *mut RldbValue,
-) {
+unsafe extern "C" fn sum_sq_step(_ctx: *mut RldbContext, argc: c_int, argv: *mut *mut RldbValue) {
     assert_eq!(argc, 1);
     let val = unsafe { *argv };
     let n = unsafe { sqlite3_value_int64(val) };
@@ -205,18 +189,17 @@ fn aggregate_udf_sum_squares_invoked_per_group() {
             .to_string_lossy()
             .parse::<i64>()
             .unwrap_or(0);
-        let arc = unsafe {
-            std::sync::Arc::from_raw(ctx as *const std::sync::Mutex<Vec<(i64, i64)>>)
-        };
+        let arc =
+            unsafe { std::sync::Arc::from_raw(ctx as *const std::sync::Mutex<Vec<(i64, i64)>>) };
         arc.lock().unwrap().push((k, s));
         let _ = std::sync::Arc::into_raw(arc);
         0
     }
-    let c_sql =
-        CString::new("SELECT k, sum_squares(v) FROM t GROUP BY k ORDER BY k").unwrap();
+    let c_sql = CString::new("SELECT k, sum_squares(v) FROM t GROUP BY k ORDER BY k").unwrap();
     let rc = rldb_exec(db, c_sql.as_ptr(), Some(cb), saw_ptr, ptr::null_mut());
     assert_eq!(rc, 0);
-    let _ = unsafe { std::sync::Arc::from_raw(saw_ptr as *const std::sync::Mutex<Vec<(i64, i64)>>) };
+    let _ =
+        unsafe { std::sync::Arc::from_raw(saw_ptr as *const std::sync::Mutex<Vec<(i64, i64)>>) };
     let saw = saw.lock().unwrap();
     // Group k=1: 2^2 + 3^2 = 13. Group k=2: 4^2 + 5^2 = 41.
     assert_eq!(*saw, vec![(1, 13), (2, 41)]);

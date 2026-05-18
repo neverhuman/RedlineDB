@@ -74,9 +74,7 @@ impl AttachMap {
             .write()
             .map_err(|_| Error::TransactionState("attach map poisoned"))?;
         if guard.remove(&lower).is_none() {
-            return Err(Error::UnknownTable(format!(
-                "no such database: {alias}"
-            )));
+            return Err(Error::UnknownTable(format!("no such database: {alias}")));
         }
         Ok(())
     }

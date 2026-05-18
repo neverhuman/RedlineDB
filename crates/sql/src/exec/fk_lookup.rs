@@ -20,10 +20,7 @@ use super::super::*;
 /// Resolve the parent table referenced by `fk` from the current schema
 /// snapshot. Errors with `ConstraintViolation` when the parent is missing,
 /// matching SQLite's behaviour for an unresolved REFERENCES target.
-pub(super) fn lookup_parent(
-    schema: &SchemaSnapshot,
-    fk: &ForeignKeyDef,
-) -> Result<Arc<TableDef>> {
+pub(super) fn lookup_parent(schema: &SchemaSnapshot, fk: &ForeignKeyDef) -> Result<Arc<TableDef>> {
     match schema
         .tables
         .iter()
@@ -41,17 +38,16 @@ pub(super) fn lookup_parent(
 /// Resolve the parent-column ordinals for `fk`. When the FK declaration
 /// omitted the parent column list (SQLite-allowed shorthand), default to
 /// the parent table's primary-key columns in declaration order.
-pub(super) fn parent_column_ordinals(
-    parent: &TableDef,
-    fk: &ForeignKeyDef,
-) -> Result<Vec<u16>> {
+pub(super) fn parent_column_ordinals(parent: &TableDef, fk: &ForeignKeyDef) -> Result<Vec<u16>> {
     if fk.parent_columns.is_empty() {
         let pk_index = match parent.indexes.iter().find(|ix| ix.primary) {
             Some(ix) => ix,
-            None => return Err(Error::ConstraintViolation(format!(
-                "parent table {} has no primary key for FOREIGN KEY",
-                parent.name
-            ))),
+            None => {
+                return Err(Error::ConstraintViolation(format!(
+                    "parent table {} has no primary key for FOREIGN KEY",
+                    parent.name
+                )));
+            }
         };
         let mut ordinals = Vec::with_capacity(pk_index.keys.len());
         for key in &pk_index.keys {
@@ -68,10 +64,12 @@ pub(super) fn parent_column_ordinals(
             .find(|c| c.folded.as_ref() == folded.as_str())
         {
             Some(c) => c,
-            None => return Err(Error::ConstraintViolation(format!(
-                "FOREIGN KEY parent column '{name}' missing from {}",
-                parent.name
-            ))),
+            None => {
+                return Err(Error::ConstraintViolation(format!(
+                    "FOREIGN KEY parent column '{name}' missing from {}",
+                    parent.name
+                )));
+            }
         };
         ordinals.push(column.ordinal);
     }
@@ -81,12 +79,7 @@ pub(super) fn parent_column_ordinals(
 pub(super) fn extract_child_key(fk: &ForeignKeyDef, values: &[SqlValue]) -> Vec<SqlValue> {
     fk.columns
         .iter()
-        .map(|ord| {
-            values
-                .get(*ord as usize)
-                .cloned()
-                .unwrap_or(SqlValue::Null)
-        })
+        .map(|ord| values.get(*ord as usize).cloned().unwrap_or(SqlValue::Null))
         .collect()
 }
 
@@ -94,11 +87,7 @@ pub(super) fn key_has_null(values: &[SqlValue]) -> bool {
     values.iter().any(|v| matches!(v, SqlValue::Null))
 }
 
-fn rows_match(
-    child: &[SqlValue],
-    parent_row: &[SqlValue],
-    parent_ords: &[u16],
-) -> bool {
+fn rows_match(child: &[SqlValue], parent_row: &[SqlValue], parent_ords: &[u16]) -> bool {
     if child.len() != parent_ords.len() {
         return false;
     }
@@ -148,9 +137,7 @@ pub(super) fn child_references(
             continue;
         }
         for (idx, fk) in child.foreign_keys.iter().enumerate() {
-            if fk
-                .parent_table
-                .eq_ignore_ascii_case(&parent.folded)
+            if fk.parent_table.eq_ignore_ascii_case(&parent.folded)
                 || fk.parent_table.eq_ignore_ascii_case(&parent.name)
             {
                 out.push((Arc::clone(child), idx));

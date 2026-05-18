@@ -124,9 +124,7 @@ fn view_with_alias_columns() {
 fn view_with_predicate_and_projection() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE orders(id INTEGER, amount INTEGER, status TEXT)");
-    lab.execute(
-        "INSERT INTO orders VALUES (1, 100, 'OK'), (2, 200, 'CANCEL'), (3, 300, 'OK')",
-    );
+    lab.execute("INSERT INTO orders VALUES (1, 100, 'OK'), (2, 200, 'CANCEL'), (3, 300, 'OK')");
     lab.execute("CREATE VIEW ok_orders AS SELECT id, amount FROM orders WHERE status = 'OK'");
     lab.assert_match("SELECT id, amount FROM ok_orders ORDER BY id");
     lab.assert_match("SELECT SUM(amount) FROM ok_orders");
@@ -140,9 +138,7 @@ fn join_two_tables_through_view() {
     lab.execute("CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT)");
     lab.execute("CREATE TABLE orders(uid INTEGER, total INTEGER)");
     lab.execute("INSERT INTO users VALUES (1, 'a'), (2, 'b'), (3, 'c')");
-    lab.execute(
-        "INSERT INTO orders VALUES (1, 10), (1, 30), (2, 50), (3, 20)",
-    );
+    lab.execute("INSERT INTO orders VALUES (1, 10), (1, 30), (2, 50), (3, 20)");
     lab.execute(
         "CREATE VIEW user_totals AS SELECT uid, SUM(total) AS total FROM orders GROUP BY uid",
     );
@@ -221,7 +217,8 @@ fn view_survives_reopen() {
         let conn = db.connect();
         conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
         conn.execute("INSERT INTO t VALUES (42)").expect("insert");
-        conn.execute("CREATE VIEW v AS SELECT a FROM t").expect("view");
+        conn.execute("CREATE VIEW v AS SELECT a FROM t")
+            .expect("view");
     }
     let db = Database::open(&path, DbOptions::default()).expect("reopen");
     let conn = db.connect();

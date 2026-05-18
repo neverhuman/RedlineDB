@@ -236,7 +236,11 @@ impl Engine {
             let ncols = record
                 .column_count()
                 .map_err(|_| Error::CorruptPage("index backfill: record decode failed"))?;
-            let col_offset = if ncols == table.columns.len() + 1 { 1 } else { 0 };
+            let col_offset = if ncols == table.columns.len() + 1 {
+                1
+            } else {
+                0
+            };
             let mut parts: Vec<ValueRef<'_>> = Vec::with_capacity(index.keys.len());
             let mut has_expression_key = false;
             for key in &index.keys {

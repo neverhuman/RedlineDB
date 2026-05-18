@@ -96,8 +96,8 @@ fn redline_handles_compound_via_database_handle() {
     // End-to-end smoke against `Database::create` so we know the path
     // through the public API (not just the parity harness) works.
     let dir = tempfile::tempdir().expect("tempdir");
-    let db = Database::create(dir.path().join("compound.db"), DbOptions::default())
-        .expect("create db");
+    let db =
+        Database::create(dir.path().join("compound.db"), DbOptions::default()).expect("create db");
     let conn = db.connect();
     conn.execute("CREATE TABLE x(a INTEGER); INSERT INTO x VALUES (1),(2),(3);")
         .expect("setup");

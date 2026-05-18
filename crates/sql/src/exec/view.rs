@@ -132,10 +132,7 @@ fn materialize_view(
 ) -> Result<(Vec<Vec<SqlValue>>, Vec<String>)> {
     let template = crate::parser::parse_prepared_template(conn, view.body_sql.as_ref())?;
     let column_names: Vec<String> = if !view.columns.is_empty() {
-        view.columns
-            .iter()
-            .map(|c| c.as_ref().to_owned())
-            .collect()
+        view.columns.iter().map(|c| c.as_ref().to_owned()).collect()
     } else {
         template.output_columns.iter().cloned().collect()
     };

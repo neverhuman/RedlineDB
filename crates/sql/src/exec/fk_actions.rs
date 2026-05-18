@@ -18,8 +18,8 @@ use crate::value::SqlValue;
 use super::super::*;
 
 use super::cascade::{enforce_fk_on_insert, enforce_fk_on_parent_change};
-use super::lookup::{lookup_parent, parent_column_ordinals};
 use super::fk_violation_error;
+use super::lookup::{lookup_parent, parent_column_ordinals};
 
 /// Apply the declared FK action to every affected child row. The driver
 /// recurses through `enforce_fk_on_parent_change` so cascading deletes/
@@ -50,7 +50,12 @@ pub(super) fn apply_parent_action(
                 let new_parent = new_parent.unwrap();
                 let new_key: Vec<SqlValue> = parent_ords
                     .iter()
-                    .map(|o| new_parent.get(*o as usize).cloned().unwrap_or(SqlValue::Null))
+                    .map(|o| {
+                        new_parent
+                            .get(*o as usize)
+                            .cloned()
+                            .unwrap_or(SqlValue::Null)
+                    })
                     .collect();
                 for (rowid, values) in affected {
                     update_child_columns(
@@ -90,9 +95,11 @@ pub(super) fn apply_parent_action(
             for ord in &fk.columns {
                 let col = match child.columns.get(*ord as usize) {
                     Some(c) => c,
-                    None => return Err(crate::error::Error::ConstraintViolation(format!(
-                        "FOREIGN KEY child column ordinal {ord} missing"
-                    ))),
+                    None => {
+                        return Err(crate::error::Error::ConstraintViolation(format!(
+                            "FOREIGN KEY child column ordinal {ord} missing"
+                        )));
+                    }
                 };
                 defaults.push(
                     col.default_value
@@ -158,7 +165,13 @@ fn update_child_columns(
     let payload = encode_sql_row(child.table_id.0, &new_values)?;
     engine.update_for_relation(tx, child.relation_id, rowid, payload)?;
     super::super::index_dml::maintain_indexes_on_update(
-        engine, tx, child, old_values, &new_values, rowid, rowid,
+        engine,
+        tx,
+        child,
+        old_values,
+        &new_values,
+        rowid,
+        rowid,
     )?;
     // Re-validate every FK on the cascaded row. Mirrors SQLite's behaviour
     // for SET DEFAULT (and SET NULL with NOT NULL columns): if the new

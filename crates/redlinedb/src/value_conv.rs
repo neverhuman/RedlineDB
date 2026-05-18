@@ -163,8 +163,7 @@ impl TryFrom<&Value> for std::time::SystemTime {
     fn try_from(value: &Value) -> Result<Self> {
         let micros = value.as_integer()?;
         if micros >= 0 {
-            match std::time::UNIX_EPOCH
-                .checked_add(std::time::Duration::from_micros(micros as u64))
+            match std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_micros(micros as u64))
             {
                 Some(t) => Ok(t),
                 None => Err(Error::new(ErrorCode::Mismatch, "timestamp overflow")),
@@ -195,7 +194,10 @@ impl TryFrom<&Value> for chrono::DateTime<chrono::Utc> {
         let micros = value.as_integer()?;
         match chrono::DateTime::<chrono::Utc>::from_timestamp_micros(micros) {
             Some(dt) => Ok(dt),
-            None => Err(Error::new(ErrorCode::Mismatch, "chrono timestamp out of range")),
+            None => Err(Error::new(
+                ErrorCode::Mismatch,
+                "chrono timestamp out of range",
+            )),
         }
     }
 }

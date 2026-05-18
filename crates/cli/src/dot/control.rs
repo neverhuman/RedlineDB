@@ -1,8 +1,8 @@
 //! Control-knob dot-commands: `.bail`, `.timer`, `.changes`, `.echo`,
 //! `.show`, `.limit`, `.eqp`, `.explain`.
 
-use super::{CliState, DotOutcome, ExplainSetting};
 use super::display::parse_bool;
+use super::{CliState, DotOutcome, ExplainSetting};
 
 pub fn bail(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     state.bail = parse_required_bool(".bail", args)?;
@@ -59,15 +59,8 @@ pub fn show(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> 
     lines.push(format!("{:>13}: {}", "explain", explain_label));
     lines.push(format!("{:>13}: {}", "headers", on_off(state.show_header)));
     lines.push(format!("{:>13}: {}", "mode", state.mode.name()));
-    lines.push(format!(
-        "{:>13}: \"{}\"",
-        "nullvalue", state.null_value
-    ));
-    lines.push(format!(
-        "{:>13}: {}",
-        "output",
-        state.output.label()
-    ));
+    lines.push(format!("{:>13}: \"{}\"", "nullvalue", state.null_value));
+    lines.push(format!("{:>13}: {}", "output", state.output.label()));
     lines.push(format!(
         "{:>13}: \"{}\"",
         "separator",
@@ -84,13 +77,12 @@ pub fn show(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> 
             .join(" ")
     };
     lines.push(format!("{:>13}: {}", "width", widths_disp));
-    lines.push(format!(
-        "{:>13}: {}",
-        "filename",
-        state.db_path.display()
-    ));
+    lines.push(format!("{:>13}: {}", "filename", state.db_path.display()));
     for line in lines {
-        state.output.write_line(&line).map_err(|err| err.to_string())?;
+        state
+            .output
+            .write_line(&line)
+            .map_err(|err| err.to_string())?;
     }
     Ok(DotOutcome::Ok)
 }
@@ -107,7 +99,10 @@ pub fn limit(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> 
         0 => {
             for (name, value) in &state.limits {
                 let line = format!("{name:>20} {value}");
-                state.output.write_line(&line).map_err(|err| err.to_string())?;
+                state
+                    .output
+                    .write_line(&line)
+                    .map_err(|err| err.to_string())?;
             }
             Ok(DotOutcome::Ok)
         }
@@ -119,7 +114,10 @@ pub fn limit(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> 
                 .find_map(|(k, v)| (k == &key).then_some(*v))
                 .unwrap_or(0);
             let line = format!("{key:>20} {value}");
-            state.output.write_line(&line).map_err(|err| err.to_string())?;
+            state
+                .output
+                .write_line(&line)
+                .map_err(|err| err.to_string())?;
             Ok(DotOutcome::Ok)
         }
         _ => {

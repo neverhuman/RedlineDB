@@ -327,7 +327,8 @@ impl Connection {
         // aborts the commit and rolls back the tx, matching SQLite's
         // statement-time deferred enforcement.
         if let Some(mut tx) = session.tx.take() {
-            let drain_result = crate::exec::fk::drain_deferred_fk_checks(self, &mut session, &mut tx);
+            let drain_result =
+                crate::exec::fk::drain_deferred_fk_checks(self, &mut session, &mut tx);
             if let Err(err) = drain_result {
                 let _ = self.db.engine.rollback(tx);
                 session.kernel_unique_guards.clear();

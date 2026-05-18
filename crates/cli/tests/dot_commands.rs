@@ -204,10 +204,7 @@ fn dot_read_executes_file_contents() {
     )
     .expect("write script");
 
-    let driver = format!(
-        ".read {}\nSELECT * FROM imported;\n",
-        script_path.display()
-    );
+    let driver = format!(".read {}\nSELECT * FROM imported;\n", script_path.display());
     let (out, err, code) = run_script(None, &driver);
     assert_eq!(code, 0, "stderr={err}");
     assert!(out.contains("42"), "stdout={out}");

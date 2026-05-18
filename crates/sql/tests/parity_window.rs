@@ -42,9 +42,7 @@ impl Lab {
         let rl = query_redline(&self.redline, sql);
         // Allow small float epsilon differences when both are real.
         if !approx_eq(&ru, &rl) {
-            panic!(
-                "window mismatch on {sql:?}\n  sqlite={ru:?}\n  redline={rl:?}"
-            );
+            panic!("window mismatch on {sql:?}\n  sqlite={ru:?}\n  redline={rl:?}");
         }
     }
 }
@@ -68,7 +66,9 @@ fn approx_eq(a: &[Vec<SqlValue>], b: &[Vec<SqlValue>]) -> bool {
 
 fn approx_eq_one(a: &SqlValue, b: &SqlValue) -> bool {
     match (a, b) {
-        (SqlValue::Real(x), SqlValue::Real(y)) => (x - y).abs() < 1e-9 || (x.is_nan() && y.is_nan()),
+        (SqlValue::Real(x), SqlValue::Real(y)) => {
+            (x - y).abs() < 1e-9 || (x.is_nan() && y.is_nan())
+        }
         (SqlValue::Real(x), SqlValue::Integer(y)) => (x - *y as f64).abs() < 1e-9,
         (SqlValue::Integer(x), SqlValue::Real(y)) => (*x as f64 - y).abs() < 1e-9,
         _ => a == b,
@@ -131,9 +131,7 @@ fn row_number_over_order_by() {
 fn rank_dense_rank_with_ties() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(grp TEXT, v INTEGER)");
-    lab.execute(
-        "INSERT INTO t VALUES ('A', 1), ('A', 1), ('A', 2), ('B', 5), ('B', 5), ('B', 7)",
-    );
+    lab.execute("INSERT INTO t VALUES ('A', 1), ('A', 1), ('A', 2), ('B', 5), ('B', 5), ('B', 7)");
     lab.assert_match(
         "SELECT grp, v, RANK() OVER (PARTITION BY grp ORDER BY v) AS r, \
             DENSE_RANK() OVER (PARTITION BY grp ORDER BY v) AS dr \
@@ -229,9 +227,7 @@ fn count_partitioned() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(grp TEXT, v INTEGER)");
     lab.execute("INSERT INTO t VALUES ('A',1),('A',2),('B',5),('B',6),('B',7)");
-    lab.assert_match(
-        "SELECT grp, v, COUNT(*) OVER (PARTITION BY grp) AS c FROM t ORDER BY grp, v",
-    );
+    lab.assert_match("SELECT grp, v, COUNT(*) OVER (PARTITION BY grp) AS c FROM t ORDER BY grp, v");
 }
 
 // ── Default frame semantics (ORDER BY only) ───────────────────────────────

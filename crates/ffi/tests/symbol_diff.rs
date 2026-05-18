@@ -214,10 +214,7 @@ fn libsqlite3_public_surface_is_covered_or_allowlisted() {
             .unwrap_or(&reference_path)
             .display(),
         reference.len(),
-        dylib
-            .strip_prefix(&workspace)
-            .unwrap_or(&dylib)
-            .display(),
+        dylib.strip_prefix(&workspace).unwrap_or(&dylib).display(),
         exports.len(),
         allowlist_path
             .strip_prefix(&workspace)

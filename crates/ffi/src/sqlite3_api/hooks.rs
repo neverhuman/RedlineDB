@@ -82,7 +82,9 @@ fn swap_slot<F: Copy>(
         return std::ptr::null_mut();
     };
     let mut slot = pick(&handle.hooks).lock().expect("hook slot poisoned");
-    let prev = slot.map(|(_, prev_user)| prev_user as *mut c_void).unwrap_or(std::ptr::null_mut());
+    let prev = slot
+        .map(|(_, prev_user)| prev_user as *mut c_void)
+        .unwrap_or(std::ptr::null_mut());
     *slot = cb.map(|f| (f, user_data as usize));
     prev
 }

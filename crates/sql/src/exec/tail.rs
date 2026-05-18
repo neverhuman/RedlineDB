@@ -23,7 +23,11 @@ pub(crate) fn execute_update(
         crate::udf::AuthorizerDecision::Allow => {}
         crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
         crate::udf::AuthorizerDecision::Ignore => {
-            return Ok(build_dml_execution_result(0, Vec::new(), plan.returning.is_some()));
+            return Ok(build_dml_execution_result(
+                0,
+                Vec::new(),
+                plan.returning.is_some(),
+            ));
         }
     }
     with_write_tx(conn, |session, tx| {
@@ -263,7 +267,11 @@ pub(crate) fn execute_delete(
         crate::udf::AuthorizerDecision::Allow => {}
         crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
         crate::udf::AuthorizerDecision::Ignore => {
-            return Ok(build_dml_execution_result(0, Vec::new(), plan.returning.is_some()));
+            return Ok(build_dml_execution_result(
+                0,
+                Vec::new(),
+                plan.returning.is_some(),
+            ));
         }
     }
     with_write_tx(conn, |session, tx| {
@@ -304,13 +312,7 @@ pub(crate) fn execute_delete(
             )?;
             // A6 SQLite parity: propagate the parent deletion to every
             // referencing child via the declared `ON DELETE` action.
-            crate::exec::fk::enforce_fk_on_parent_delete(
-                conn,
-                session,
-                tx,
-                &plan.table,
-                &live,
-            )?;
+            crate::exec::fk::enforce_fk_on_parent_delete(conn, session, tx, &plan.table, &live)?;
             fire_delete_triggers(conn, tx, &plan.table, row.rowid, &live)?;
             crate::udf::fire_mutation(
                 crate::udf::MUTATION_DELETE,

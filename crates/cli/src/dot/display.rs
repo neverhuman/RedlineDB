@@ -8,7 +8,9 @@ pub fn mode(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
         return Err("Error: usage: .mode MODE".to_owned());
     };
     let Some(parsed) = OutputMode::parse(token) else {
-        return Err(format!("Error: mode should be one of: list csv json line markdown table tabs insert column html quote (got: {token})"));
+        return Err(format!(
+            "Error: mode should be one of: list csv json line markdown table tabs insert column html quote (got: {token})"
+        ));
     };
     state.mode = parsed;
     state.separator = parsed.default_separator().to_owned();
@@ -58,9 +60,7 @@ pub fn parse_bool(value: &str) -> Result<bool, String> {
     match value.to_ascii_lowercase().as_str() {
         "on" | "1" | "true" | "yes" => Ok(true),
         "off" | "0" | "false" | "no" => Ok(false),
-        other => Err(format!(
-            "Error: expected on or off (got: {other})"
-        )),
+        other => Err(format!("Error: expected on or off (got: {other})")),
     }
 }
 

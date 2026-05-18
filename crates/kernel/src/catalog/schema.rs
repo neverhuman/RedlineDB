@@ -274,11 +274,7 @@ impl SchemaSnapshot {
             .cloned()
     }
 
-    pub fn lookup_trigger(
-        &self,
-        schema_id: SchemaId,
-        name: &str,
-    ) -> Option<Arc<TriggerDef>> {
+    pub fn lookup_trigger(&self, schema_id: SchemaId, name: &str) -> Option<Arc<TriggerDef>> {
         self.by_trigger_name
             .get(&(schema_id, name.to_ascii_lowercase().into_boxed_str()))
             .cloned()

@@ -373,7 +373,10 @@ mod tests {
         let v: Value = now.into();
         let back = std::time::SystemTime::try_from(&v).unwrap();
         // Round-trip precision is microseconds (Value::Integer epoch micros).
-        let diff = match (now.duration_since(std::time::UNIX_EPOCH), back.duration_since(std::time::UNIX_EPOCH)) {
+        let diff = match (
+            now.duration_since(std::time::UNIX_EPOCH),
+            back.duration_since(std::time::UNIX_EPOCH),
+        ) {
             (Ok(a), Ok(b)) => a.as_micros().abs_diff(b.as_micros()),
             _ => u128::MAX,
         };
@@ -383,7 +386,8 @@ mod tests {
     #[cfg(feature = "chrono")]
     #[test]
     fn chrono_datetime_round_trips_through_value() {
-        let dt = chrono::DateTime::<chrono::Utc>::from_timestamp_micros(1_700_000_000_000_000).unwrap();
+        let dt =
+            chrono::DateTime::<chrono::Utc>::from_timestamp_micros(1_700_000_000_000_000).unwrap();
         let v: Value = dt.into();
         let back: chrono::DateTime<chrono::Utc> = (&v).try_into().unwrap();
         assert_eq!(dt, back);

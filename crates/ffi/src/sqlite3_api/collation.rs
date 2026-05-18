@@ -45,9 +45,8 @@ pub(crate) struct CollationEntry {
     pub destructor: Option<CollationDestructorFn>,
 }
 
-static REGISTRY: Mutex<
-    Option<std::collections::HashMap<(usize, String), CollationEntry>>,
-> = Mutex::new(None);
+static REGISTRY: Mutex<Option<std::collections::HashMap<(usize, String), CollationEntry>>> =
+    Mutex::new(None);
 
 #[derive(Clone, Copy)]
 struct NeededCb {
@@ -59,9 +58,10 @@ struct NeededCb {
 
 static NEEDED_CB: Mutex<Option<NeededCb>> = Mutex::new(None);
 
-fn registry()
--> std::sync::MutexGuard<'static, Option<std::collections::HashMap<(usize, String), CollationEntry>>>
-{
+fn registry() -> std::sync::MutexGuard<
+    'static,
+    Option<std::collections::HashMap<(usize, String), CollationEntry>>,
+> {
     let mut guard = REGISTRY.lock().expect("collation registry poisoned");
     if guard.is_none() {
         *guard = Some(std::collections::HashMap::new());
@@ -70,12 +70,7 @@ fn registry()
     guard
 }
 
-fn dispatch_from_sql(
-    db_addr: usize,
-    name: &str,
-    a: &str,
-    b: &str,
-) -> Option<std::cmp::Ordering> {
+fn dispatch_from_sql(db_addr: usize, name: &str, a: &str, b: &str) -> Option<std::cmp::Ordering> {
     let key = (db_addr, name.to_ascii_lowercase());
     let registry = registry();
     let map = registry.as_ref()?;

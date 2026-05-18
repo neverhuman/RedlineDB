@@ -372,9 +372,7 @@ fn bind_statement(
             database_file_name,
             ..
         } => bind_attach(sql, schema_epoch, schema_name, database_file_name),
-        SqlStatement::CreateView(create_view) => {
-            bind_create_view(schema_epoch, sql, create_view)
-        }
+        SqlStatement::CreateView(create_view) => bind_create_view(schema_epoch, sql, create_view),
         SqlStatement::CreateTrigger(create_trigger) => {
             bind_create_trigger(schema_epoch, sql, create_trigger)
         }

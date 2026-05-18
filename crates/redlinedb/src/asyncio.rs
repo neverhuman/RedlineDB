@@ -57,10 +57,7 @@ impl AsyncDatabase {
         })
     }
 
-    pub async fn open_with_options(
-        path: impl Into<PathBuf>,
-        options: OpenOptions,
-    ) -> Result<Self> {
+    pub async fn open_with_options(path: impl Into<PathBuf>, options: OpenOptions) -> Result<Self> {
         let path = path.into();
         let inner = spawn_blocking_err(move || Database::open_with_options(&path, options)).await?;
         Ok(Self {
@@ -163,10 +160,7 @@ impl AsyncConnection {
 }
 
 fn poison_error() -> Error {
-    Error::new(
-        ErrorCode::Internal,
-        "redlinedb connection mutex poisoned",
-    )
+    Error::new(ErrorCode::Internal, "redlinedb connection mutex poisoned")
 }
 
 async fn spawn_blocking_err<T, F>(f: F) -> Result<T>

@@ -129,7 +129,13 @@ impl OutputTarget {
 }
 
 impl CliState {
-    pub fn new(db: Database, db_path: PathBuf, mode: OutputMode, separator: String, header: bool) -> Self {
+    pub fn new(
+        db: Database,
+        db_path: PathBuf,
+        mode: OutputMode,
+        separator: String,
+        header: bool,
+    ) -> Self {
         Self {
             db,
             db_path,

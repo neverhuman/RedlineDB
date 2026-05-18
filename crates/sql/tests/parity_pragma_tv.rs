@@ -89,9 +89,7 @@ fn pragma_table_info_tv_form_matches_sqlite() {
     // PRIMARY KEY` columns while SQLite reports `notnull=0`. That gap is
     // tracked by workstream A6 (`crates/sql/src/parser/pragma.rs`) and
     // unrelated to the TV form wrapper validated here.
-    pair.assert_parity(
-        "SELECT cid, name, type, dflt_value, pk FROM pragma_table_info('t')",
-    );
+    pair.assert_parity("SELECT cid, name, type, dflt_value, pk FROM pragma_table_info('t')");
 }
 
 #[test]
@@ -103,20 +101,14 @@ fn pragma_table_info_tv_form_handles_identifier_arg() {
     // form to keep parity with rusqlite.
     let pair = Pair::new();
     pair.execute_both("CREATE TABLE widgets(id INTEGER PRIMARY KEY, label TEXT)");
-    pair.assert_parity(
-        "SELECT cid, name FROM pragma_table_info('widgets') ORDER BY cid",
-    );
+    pair.assert_parity("SELECT cid, name FROM pragma_table_info('widgets') ORDER BY cid");
 }
 
 #[test]
 fn pragma_table_info_tv_form_supports_where_clause() {
     let pair = Pair::new();
-    pair.execute_both(
-        "CREATE TABLE composite(a INTEGER, b INTEGER, c INTEGER, PRIMARY KEY(a, b))",
-    );
-    pair.assert_parity(
-        "SELECT name FROM pragma_table_info('composite') WHERE pk > 0 ORDER BY pk",
-    );
+    pair.execute_both("CREATE TABLE composite(a INTEGER, b INTEGER, c INTEGER, PRIMARY KEY(a, b))");
+    pair.assert_parity("SELECT name FROM pragma_table_info('composite') WHERE pk > 0 ORDER BY pk");
 }
 
 #[test]
@@ -139,9 +131,7 @@ fn pragma_index_info_tv_form_matches_sqlite() {
     let pair = Pair::new();
     pair.execute_both("CREATE TABLE t(a INTEGER, b INTEGER, c INTEGER)");
     pair.execute_both("CREATE INDEX t_bc_idx ON t(b, c)");
-    pair.assert_parity(
-        "SELECT seqno, cid, name FROM pragma_index_info('t_bc_idx') ORDER BY seqno",
-    );
+    pair.assert_parity("SELECT seqno, cid, name FROM pragma_index_info('t_bc_idx') ORDER BY seqno");
 }
 
 #[test]
@@ -166,9 +156,7 @@ fn pragma_foreign_key_list_tv_form_shape_matches_sqlite() {
 #[test]
 fn pragma_database_list_tv_form_returns_main_entry() {
     let pair = Pair::new();
-    let rows = pair.redline_rows(
-        "SELECT seq, name FROM pragma_database_list() ORDER BY seq",
-    );
+    let rows = pair.redline_rows("SELECT seq, name FROM pragma_database_list() ORDER BY seq");
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0][0], SqlValue::Integer(0));
     assert_eq!(rows[0][1], SqlValue::Text(Arc::from("main")));
@@ -180,9 +168,7 @@ fn pragma_tv_results_are_joinable_with_user_tables() {
     pair.execute_both("CREATE TABLE t(a INTEGER, b TEXT)");
     // Cross-join the TV pragma against a literal to demonstrate the TV
     // result participates in joins like any other relation.
-    pair.assert_parity(
-        "SELECT name FROM pragma_table_info('t') ORDER BY cid",
-    );
+    pair.assert_parity("SELECT name FROM pragma_table_info('t') ORDER BY cid");
 }
 
 #[test]

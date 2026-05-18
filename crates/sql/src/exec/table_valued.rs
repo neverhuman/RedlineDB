@@ -33,12 +33,7 @@ pub(crate) struct TvResult {
 /// Anything callable as `name(arg1, arg2, ...)` in a `FROM` list.
 pub(crate) trait TvFunc: Send + Sync {
     fn name(&self) -> &'static str;
-    fn eval(
-        &self,
-        conn: &Connection,
-        schema: &SchemaSnapshot,
-        args: &[TvArg],
-    ) -> Result<TvResult>;
+    fn eval(&self, conn: &Connection, schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult>;
 }
 
 /// Normalised single argument value.
@@ -80,7 +75,10 @@ pub(crate) fn lower_args(args: &TableFunctionArgs) -> Result<Vec<TvArg>> {
     for arg in &args.args {
         let expr = match arg {
             FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr,
-            FunctionArg::ExprNamed { arg: FunctionArgExpr::Expr(expr), .. } => expr,
+            FunctionArg::ExprNamed {
+                arg: FunctionArgExpr::Expr(expr),
+                ..
+            } => expr,
             _ => {
                 return Err(Error::UnsupportedSql(
                     "table-valued functions accept only positional value arguments".to_owned(),

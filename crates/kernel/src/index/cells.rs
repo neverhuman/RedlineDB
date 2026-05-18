@@ -261,8 +261,8 @@ pub(super) fn entry_visible(
     else {
         return false;
     };
-    let create_check = *create_tx != TxId::ZERO
-        && !tx_status.is_tx_visible(*create_tx, snapshot, owner);
+    let create_check =
+        *create_tx != TxId::ZERO && !tx_status.is_tx_visible(*create_tx, snapshot, owner);
     if create_check {
         return false;
     }

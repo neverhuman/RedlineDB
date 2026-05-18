@@ -22,15 +22,15 @@
 
 use std::sync::Arc;
 
+use crate::connection::Connection;
+use crate::error::{Error, Result};
+use crate::exec::expr::scalar::row::{SqlRow, TableRow};
+use crate::value::SqlValue;
 use redlinedb_kernel::catalog::{
     SchemaSnapshot, TableDef, TriggerDef, TriggerEventKind, TriggerTimeKind, triggers_for,
 };
 use redlinedb_kernel::engine::Txn;
 use redlinedb_kernel::format::RowId;
-use crate::connection::Connection;
-use crate::error::{Error, Result};
-use crate::exec::expr::scalar::row::{SqlRow, TableRow};
-use crate::value::SqlValue;
 
 /// Recursion cap. SQLite's default `SQLITE_MAX_TRIGGER_DEPTH` is 1000,
 /// but RedlineDB's debug builds have heavier stack frames; we cap at 32

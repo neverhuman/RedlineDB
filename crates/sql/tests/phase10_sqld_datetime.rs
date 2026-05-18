@@ -130,10 +130,7 @@ fn assert_text_parity(conn: &Arc<Connection>, sql: &str) {
 #[test]
 fn modifier_start_of_day_matches_sqlite() {
     let (_d, c) = open();
-    assert_text_parity(
-        &c,
-        "SELECT datetime('2024-06-15 14:25:36', 'start of day')",
-    );
+    assert_text_parity(&c, "SELECT datetime('2024-06-15 14:25:36', 'start of day')");
 }
 
 #[test]
@@ -195,10 +192,7 @@ fn modifier_weekday_sunday_wraps() {
 #[allow(non_snake_case)]
 fn strftime_percent_T_full_clock() {
     let (_d, c) = open();
-    assert_text_parity(
-        &c,
-        "SELECT strftime('%T', '2024-06-15 09:08:07')",
-    );
+    assert_text_parity(&c, "SELECT strftime('%T', '2024-06-15 09:08:07')");
 }
 
 #[test]
@@ -249,21 +243,16 @@ fn unixepoch_round_trips_through_datetime() {
     // datetime(unixepoch_value, 'unixepoch') should round-trip.
     let (_d, c) = open();
     let ts = rusqlite_i64("SELECT unixepoch('2024-06-15 12:00:00')");
-    assert_eq!(
-        first_i64(&c, "SELECT unixepoch('2024-06-15 12:00:00')"),
-        ts
-    );
+    assert_eq!(first_i64(&c, "SELECT unixepoch('2024-06-15 12:00:00')"), ts);
 }
 
 #[test]
 fn julianday_known_value_matches_sqlite() {
     let jd = rusqlite::Connection::open_in_memory()
         .expect("rusqlite")
-        .query_row(
-            "SELECT julianday('2024-06-15 12:00:00')",
-            [],
-            |r| r.get::<_, f64>(0),
-        )
+        .query_row("SELECT julianday('2024-06-15 12:00:00')", [], |r| {
+            r.get::<_, f64>(0)
+        })
         .expect("rusqlite julianday");
     let ours = first_f64(&open().1, "SELECT julianday('2024-06-15 12:00:00')");
     assert!(

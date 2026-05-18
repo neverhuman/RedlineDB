@@ -260,9 +260,7 @@ pub(crate) fn bind_union_all_query(
             Some(crate::statement::CompoundSetOp::Except)
         }
         (SetOperator::Intersect | SetOperator::Except, SetQuantifier::All) => {
-            return Err(Error::UnsupportedSql(format!(
-                "{op} ALL is not supported"
-            )));
+            return Err(Error::UnsupportedSql(format!("{op} ALL is not supported")));
         }
         (op, quant) => {
             return Err(Error::UnsupportedSql(format!(

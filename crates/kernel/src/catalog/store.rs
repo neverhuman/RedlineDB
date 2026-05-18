@@ -303,11 +303,7 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
     })
 }
 
-fn encode_column(
-    out: &mut BytesWriter,
-    column: &ColumnDef,
-    format_version: u64,
-) -> Result<()> {
+fn encode_column(out: &mut BytesWriter, column: &ColumnDef, format_version: u64) -> Result<()> {
     out.u64(column.column_id.0);
     out.u16(column.ordinal);
     write_str(out, &column.name);
@@ -446,18 +442,17 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
     })
 }
 
-fn encode_index_key(
-    out: &mut BytesWriter,
-    key: &IndexKeyDef,
-    format_version: u64,
-) -> Result<()> {
+fn encode_index_key(out: &mut BytesWriter, key: &IndexKeyDef, format_version: u64) -> Result<()> {
     out.u16(key.ordinal);
     match &key.source {
         IndexKeySource::Column { attnum } => {
             out.u8(0);
             out.u16(*attnum);
         }
-        IndexKeySource::Expression { sql, referenced_cols } => {
+        IndexKeySource::Expression {
+            sql,
+            referenced_cols,
+        } => {
             if format_version < 7 {
                 return Err(Error::CatalogCorrupt(
                     "expression index keys require catalog format >= 7",
@@ -489,7 +484,10 @@ fn decode_index_key(reader: &mut BytesReader<'_>, format_version: u64) -> Result
             for _ in 0..len {
                 referenced_cols.push(reader.u16()?);
             }
-            IndexKeySource::Expression { sql, referenced_cols }
+            IndexKeySource::Expression {
+                sql,
+                referenced_cols,
+            }
         }
         _ => return Err(Error::CatalogCorrupt("invalid index key source")),
     };

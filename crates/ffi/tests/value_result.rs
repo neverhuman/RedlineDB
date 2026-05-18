@@ -10,9 +10,8 @@ use std::ptr;
 
 use redlinedb::sqlite3_api::context::{RldbContext, sqlite3_context_db_handle, sqlite3_user_data};
 use redlinedb::sqlite3_api::result::{
-    sqlite3_result_blob, sqlite3_result_double, sqlite3_result_error,
-    sqlite3_result_error_code, sqlite3_result_int, sqlite3_result_int64,
-    sqlite3_result_null, sqlite3_result_text,
+    sqlite3_result_blob, sqlite3_result_double, sqlite3_result_error, sqlite3_result_error_code,
+    sqlite3_result_int, sqlite3_result_int64, sqlite3_result_null, sqlite3_result_text,
 };
 use redlinedb::sqlite3_api::value::{
     RldbValue, sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_int,
@@ -78,7 +77,9 @@ fn text_value_returns_nul_terminated_pointer() {
 
 #[test]
 fn blob_value_returns_pointer_and_length() {
-    let v = make_value(SqlValue::Blob(std::sync::Arc::from(b"\x00\x01\x02".as_slice())));
+    let v = make_value(SqlValue::Blob(std::sync::Arc::from(
+        b"\x00\x01\x02".as_slice(),
+    )));
     unsafe {
         assert_eq!(sqlite3_value_type(v), 4);
         let ptr = sqlite3_value_blob(v) as *const u8;

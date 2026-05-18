@@ -126,10 +126,17 @@ fn collect_columns(expr: &sqlparser::ast::Expr, table: &TableDef, out: &mut Vec<
                 out.push(ordinal);
             }
         }
-        Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } | Expr::IsNull(inner)
-        | Expr::IsNotNull(inner) | Expr::IsTrue(inner) | Expr::IsNotTrue(inner)
-        | Expr::IsFalse(inner) | Expr::IsNotFalse(inner) | Expr::IsUnknown(inner)
-        | Expr::IsNotUnknown(inner) | Expr::Cast { expr: inner, .. }
+        Expr::Nested(inner)
+        | Expr::UnaryOp { expr: inner, .. }
+        | Expr::IsNull(inner)
+        | Expr::IsNotNull(inner)
+        | Expr::IsTrue(inner)
+        | Expr::IsNotTrue(inner)
+        | Expr::IsFalse(inner)
+        | Expr::IsNotFalse(inner)
+        | Expr::IsUnknown(inner)
+        | Expr::IsNotUnknown(inner)
+        | Expr::Cast { expr: inner, .. }
         | Expr::Collate { expr: inner, .. } => {
             collect_columns(inner, table, out);
         }
@@ -137,11 +144,18 @@ fn collect_columns(expr: &sqlparser::ast::Expr, table: &TableDef, out: &mut Vec<
             collect_columns(left, table, out);
             collect_columns(right, table, out);
         }
-        Expr::Like { expr: e, pattern, .. } | Expr::ILike { expr: e, pattern, .. } => {
+        Expr::Like {
+            expr: e, pattern, ..
+        }
+        | Expr::ILike {
+            expr: e, pattern, ..
+        } => {
             collect_columns(e, table, out);
             collect_columns(pattern, table, out);
         }
-        Expr::Between { expr: e, low, high, .. } => {
+        Expr::Between {
+            expr: e, low, high, ..
+        } => {
             collect_columns(e, table, out);
             collect_columns(low, table, out);
             collect_columns(high, table, out);

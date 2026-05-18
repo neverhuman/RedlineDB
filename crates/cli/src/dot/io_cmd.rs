@@ -132,7 +132,8 @@ pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
         };
         let mut stmt = conn.prepare(&sql).map_err(|err| err.to_string())?;
         for (i, field) in record.iter().enumerate() {
-            stmt.bind_text(i + 1, field).map_err(|err| err.to_string())?;
+            stmt.bind_text(i + 1, field)
+                .map_err(|err| err.to_string())?;
         }
         while let Step::Row(_) = stmt.step().map_err(|err| err.to_string())? {}
     }

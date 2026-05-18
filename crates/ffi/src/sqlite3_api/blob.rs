@@ -60,9 +60,7 @@ fn run_update(db: *mut rldb, table: &str, column: &str, rowid: i64, bytes: &[u8]
     let Ok(conn) = crate::util::with_db(db, |db| db.conn.clone()) else {
         return false;
     };
-    let sql = format!(
-        "UPDATE \"{table}\" SET \"{column}\" = ? WHERE rowid = {rowid}"
-    );
+    let sql = format!("UPDATE \"{table}\" SET \"{column}\" = ? WHERE rowid = {rowid}");
     let mut stmt: Statement = match conn.prepare(&sql) {
         Ok(s) => s,
         Err(_) => return false,

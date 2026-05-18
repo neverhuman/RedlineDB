@@ -35,7 +35,11 @@ impl Pair {
         let db = Database::create(&path, DbOptions::default()).expect("create");
         let redline = db.connect();
         let sqlite = rusqlite::Connection::open_in_memory().expect("rusqlite open");
-        Pair { _dir: dir, redline, sqlite }
+        Pair {
+            _dir: dir,
+            redline,
+            sqlite,
+        }
     }
 
     fn execute_both(&self, sql: &str) {
@@ -103,15 +107,9 @@ fn json_each_object_emits_row_per_property() {
 #[test]
 fn json_each_atom_emits_single_row() {
     let pair = Pair::new();
-    pair.assert_parity(
-        "SELECT key, value, type, atom, fullkey, path FROM json_each('42')",
-    );
-    pair.assert_parity(
-        "SELECT key, value, type, atom, fullkey, path FROM json_each('\"hello\"')",
-    );
-    pair.assert_parity(
-        "SELECT key, value, type, atom, fullkey, path FROM json_each('null')",
-    );
+    pair.assert_parity("SELECT key, value, type, atom, fullkey, path FROM json_each('42')");
+    pair.assert_parity("SELECT key, value, type, atom, fullkey, path FROM json_each('\"hello\"')");
+    pair.assert_parity("SELECT key, value, type, atom, fullkey, path FROM json_each('null')");
 }
 
 #[test]
@@ -134,17 +132,13 @@ fn json_each_nested_object_only_emits_immediate_children() {
 #[test]
 fn json_each_empty_array_emits_zero_rows() {
     let pair = Pair::new();
-    pair.assert_parity(
-        "SELECT key, value FROM json_each('[]')",
-    );
+    pair.assert_parity("SELECT key, value FROM json_each('[]')");
 }
 
 #[test]
 fn json_each_empty_object_emits_zero_rows() {
     let pair = Pair::new();
-    pair.assert_parity(
-        "SELECT key, value FROM json_each('{}')",
-    );
+    pair.assert_parity("SELECT key, value FROM json_each('{}')");
 }
 
 #[test]
@@ -159,9 +153,7 @@ fn json_each_filter_by_type() {
 #[test]
 fn json_each_with_missing_path_returns_zero_rows() {
     let pair = Pair::new();
-    pair.assert_parity(
-        "SELECT key, value FROM json_each('{\"a\":1}', '$.missing')",
-    );
+    pair.assert_parity("SELECT key, value FROM json_each('{\"a\":1}', '$.missing')");
 }
 
 #[test]
@@ -182,7 +174,10 @@ fn json_each_invalid_json_raises_error() {
     if let Err(_) = pair.sqlite.prepare("SELECT key FROM json_each('not json')") {
         sl_failed = true;
     }
-    assert!(err_rl.is_some() || sl_failed, "expected invalid-JSON error from at least one engine");
+    assert!(
+        err_rl.is_some() || sl_failed,
+        "expected invalid-JSON error from at least one engine"
+    );
     // Always assert RedlineDB rejects it (this is the actionable invariant
     // for the parity story; rusqlite's exact prepare/step boundary varies).
     assert!(err_rl.is_some(), "redlinedb must reject malformed JSON");
@@ -259,7 +254,5 @@ fn json_each_used_in_subquery_select() {
     let pair = Pair::new();
     // Wrap json_each as a derived count to prove it is usable in WHERE/SELECT
     // contexts via the standard CTE-style materialisation.
-    pair.assert_parity(
-        "SELECT (SELECT count(*) FROM json_each('[1,2,3,4,5]')) AS n",
-    );
+    pair.assert_parity("SELECT (SELECT count(*) FROM json_each('[1,2,3,4,5]')) AS n");
 }

@@ -14,7 +14,7 @@ use crate::value::SqlValue;
 use redlinedb_kernel::catalog::{SchemaEpoch, SchemaSnapshot};
 
 use super::registry::{deregister_rows, register_cte_rows};
-use super::{push_scope, pop_scope, run_query_to_rows, synth_table_def, CteDef};
+use super::{CteDef, pop_scope, push_scope, run_query_to_rows, synth_table_def};
 
 /// Maximum recursive-CTE iterations before bailing out.
 pub(super) const RECURSIVE_CTE_ITERATION_LIMIT: usize = 10_000;
@@ -212,7 +212,11 @@ fn split_recursive_body(query: &Query, cte_name: &str) -> Result<(Query, Query, 
             )));
         }
     };
-    Ok((wrap_as_query(anchor), wrap_as_query(recursive_arm), union_all))
+    Ok((
+        wrap_as_query(anchor),
+        wrap_as_query(recursive_arm),
+        union_all,
+    ))
 }
 
 fn wrap_as_query(body: SetExpr) -> Query {
@@ -236,11 +240,13 @@ pub(super) fn body_uses_name(query: &Query, name: &str) -> bool {
 
 fn setexpr_uses_name(set_expr: &SetExpr, name: &str) -> bool {
     match set_expr {
-        SetExpr::Select(select) => from_uses_name(&select.from, name)
-            || select
-                .selection
-                .as_ref()
-                .is_some_and(|expr| expr_uses_name(expr, name)),
+        SetExpr::Select(select) => {
+            from_uses_name(&select.from, name)
+                || select
+                    .selection
+                    .as_ref()
+                    .is_some_and(|expr| expr_uses_name(expr, name))
+        }
         SetExpr::Query(inner) => setexpr_uses_name(inner.body.as_ref(), name),
         SetExpr::SetOperation { left, right, .. } => {
             setexpr_uses_name(left, name) || setexpr_uses_name(right, name)
@@ -280,17 +286,21 @@ fn expr_uses_name(expr: &Expr, name: &str) -> bool {
     use sqlparser::ast::Expr as E;
     match expr {
         E::Subquery(q) | E::Exists { subquery: q, .. } => setexpr_uses_name(q.body.as_ref(), name),
-        E::BinaryOp { left, right, .. } => expr_uses_name(left, name) || expr_uses_name(right, name),
+        E::BinaryOp { left, right, .. } => {
+            expr_uses_name(left, name) || expr_uses_name(right, name)
+        }
         E::UnaryOp { expr, .. } | E::Nested(expr) | E::IsNull(expr) | E::IsNotNull(expr) => {
             expr_uses_name(expr, name)
         }
         E::Function(func) => match &func.args {
-            sqlparser::ast::FunctionArguments::List(list) => list.args.iter().any(|arg| match arg {
-                sqlparser::ast::FunctionArg::Unnamed(
-                    sqlparser::ast::FunctionArgExpr::Expr(inner),
-                ) => expr_uses_name(inner, name),
-                _ => false,
-            }),
+            sqlparser::ast::FunctionArguments::List(list) => {
+                list.args.iter().any(|arg| match arg {
+                    sqlparser::ast::FunctionArg::Unnamed(
+                        sqlparser::ast::FunctionArgExpr::Expr(inner),
+                    ) => expr_uses_name(inner, name),
+                    _ => false,
+                })
+            }
             _ => false,
         },
         _ => false,

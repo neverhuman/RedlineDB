@@ -87,8 +87,7 @@ pub(crate) fn select_plan_output_names(plan: &crate::statement::SelectPlan) -> V
         // Empty projection means the plan emits the source's columns.
         // For nested compounds, recurse into the first branch.
         match &plan.source {
-            SelectSource::CompoundAll(branches)
-            | SelectSource::CompoundSet { branches, .. } => {
+            SelectSource::CompoundAll(branches) | SelectSource::CompoundSet { branches, .. } => {
                 if let Some(first) = branches.first() {
                     return select_plan_output_names(first);
                 }

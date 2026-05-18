@@ -48,6 +48,7 @@ mod insert;
 use insert::*;
 mod select_top;
 use select_top::*;
+pub(crate) mod attach;
 pub(crate) mod cte;
 pub(crate) mod fk;
 pub(crate) mod json_tv;
@@ -57,7 +58,6 @@ pub(crate) mod table_valued;
 pub(crate) mod trigger;
 pub(crate) mod view;
 pub(crate) mod window;
-pub(crate) mod attach;
 
 thread_local! {
     static CURRENT_CONNECTION: Cell<*const Connection> = const { Cell::new(std::ptr::null()) };
@@ -486,13 +486,15 @@ fn with_write_tx<T>(
         if session.tx.is_some() {
             let mut tx = session.tx.take().expect("checked some");
             let tx_ptr: *mut Txn = &mut tx;
-            let result = with_current_session(session_ptr, || with_current_tx(tx_ptr, || {
-                // SAFETY: `tx_ptr` points at the `tx` local above for the
-                // duration of this closure, and no other mutable borrow is
-                // handed out while the closure runs.
-                let tx_ref = unsafe { &mut *tx_ptr };
-                f(session, tx_ref)
-            }));
+            let result = with_current_session(session_ptr, || {
+                with_current_tx(tx_ptr, || {
+                    // SAFETY: `tx_ptr` points at the `tx` local above for the
+                    // duration of this closure, and no other mutable borrow is
+                    // handed out while the closure runs.
+                    let tx_ref = unsafe { &mut *tx_ptr };
+                    f(session, tx_ref)
+                })
+            });
             session.tx = Some(tx);
             if result.is_err() {
                 session.failed = true;
@@ -503,13 +505,15 @@ fn with_write_tx<T>(
             loop {
                 let mut tx = conn.engine().begin(Isolation::ReadCommitted)?;
                 let tx_ptr: *mut Txn = &mut tx;
-                let result = with_current_session(session_ptr, || with_current_tx(tx_ptr, || {
-                    // SAFETY: same as the branch above; `tx` lives for the
-                    // full duration of the closure and only one mutable
-                    // reference is created at a time.
-                    let tx_ref = unsafe { &mut *tx_ptr };
-                    f(session, tx_ref)
-                }));
+                let result = with_current_session(session_ptr, || {
+                    with_current_tx(tx_ptr, || {
+                        // SAFETY: same as the branch above; `tx` lives for the
+                        // full duration of the closure and only one mutable
+                        // reference is created at a time.
+                        let tx_ref = unsafe { &mut *tx_ptr };
+                        f(session, tx_ref)
+                    })
+                });
                 match result {
                     Ok(value) => {
                         // A6 SQLite parity: drain deferred FK checks
@@ -548,7 +552,7 @@ fn with_write_tx<T>(
                                 return Err(err.into());
                             }
                         }
-                    },
+                    }
                     Err(err)
                         if is_retryable_autocommit_write_error(&err)
                             && attempts < AUTOCOMMIT_WRITE_RETRY_LIMIT =>

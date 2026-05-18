@@ -8,8 +8,8 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use redlinedb::sqlite3_api::hooks_fire::{
     __test_fire_authorizer, __test_fire_busy, __test_fire_commit, __test_fire_profile,
@@ -181,7 +181,10 @@ fn hook_registration_on_null_db_returns_null_or_misuse() {
         assert!(prev.is_null());
         let prev = sqlite3_profile(ptr::null_mut(), None, ptr::null_mut());
         assert!(prev.is_null());
-        assert_eq!(sqlite3_busy_handler(ptr::null_mut(), None, ptr::null_mut()), 21);
+        assert_eq!(
+            sqlite3_busy_handler(ptr::null_mut(), None, ptr::null_mut()),
+            21
+        );
         assert_eq!(
             sqlite3_set_authorizer(ptr::null_mut(), None, ptr::null_mut()),
             21
@@ -192,8 +195,7 @@ fn hook_registration_on_null_db_returns_null_or_misuse() {
 // End-to-end: update_hook fires per row across INSERT/UPDATE/DELETE.
 // Drives the SQL DML executors via rldb_exec so the hook firing path is
 // the production path (not the test-only __test_fire_update helper).
-static UPDATE_ROWS: std::sync::Mutex<Vec<(c_int, String, i64)>> =
-    std::sync::Mutex::new(Vec::new());
+static UPDATE_ROWS: std::sync::Mutex<Vec<(c_int, String, i64)>> = std::sync::Mutex::new(Vec::new());
 
 unsafe extern "C" fn update_record_cb(
     _: *mut c_void,
@@ -319,7 +321,10 @@ fn set_authorizer_denies_table_access() {
     assert_eq!(rc, 23, "expected RLDB_AUTH=23 got {rc}");
     if !errmsg.is_null() {
         let msg = unsafe { CStr::from_ptr(errmsg).to_string_lossy().into_owned() };
-        assert!(msg.to_ascii_lowercase().contains("not authorized"), "msg={msg}");
+        assert!(
+            msg.to_ascii_lowercase().contains("not authorized"),
+            "msg={msg}"
+        );
         redlinedb::rldb_free(errmsg as *mut c_void);
     }
     rldb_close(db);
@@ -336,10 +341,8 @@ fn exec_walk_invokes_trace_profile_commit_hooks() {
         sqlite3_commit_hook(db, Some(commit_ok), ptr::null_mut());
         sqlite3_profile(db, Some(profile_cb), ptr::null_mut());
     }
-    let sql = CString::new(
-        "CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1); COMMIT;",
-    )
-    .unwrap();
+    let sql =
+        CString::new("CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1); COMMIT;").unwrap();
     // No active tx, the COMMIT statement is a no-op; trace fires per
     // statement, commit hook fires on the COMMIT keyword path.
     let _rc = redlinedb::rldb_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut());

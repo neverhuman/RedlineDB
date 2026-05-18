@@ -17,8 +17,8 @@ use redlinedb_sql::{Database, DbOptions};
 
 fn open_redline() -> (tempfile::TempDir, std::sync::Arc<redlinedb_sql::Connection>) {
     let dir = tempfile::tempdir().expect("tempdir");
-    let db = Database::create(dir.path().join("main.db"), DbOptions::default())
-        .expect("create main");
+    let db =
+        Database::create(dir.path().join("main.db"), DbOptions::default()).expect("create main");
     (dir, db.connect())
 }
 
@@ -80,5 +80,7 @@ fn attach_via_rusqlite_oracle_smoke() {
     let oracle = rusqlite::Connection::open_in_memory().expect("ru open");
     let attach_sql = format!("ATTACH DATABASE '{aux_str}' AS aux");
     oracle.execute_batch(&attach_sql).expect("rusqlite attach");
-    oracle.execute_batch("DETACH DATABASE aux").expect("rusqlite detach");
+    oracle
+        .execute_batch("DETACH DATABASE aux")
+        .expect("rusqlite detach");
 }

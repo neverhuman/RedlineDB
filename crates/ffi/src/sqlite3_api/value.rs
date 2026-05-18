@@ -157,7 +157,10 @@ pub unsafe extern "C" fn sqlite3_value_text(value: *mut RldbValue) -> *const c_u
     };
     let mut cache = v.text_cache.borrow_mut();
     *cache = Some(cstring);
-    cache.as_ref().map(|c| c.as_ptr() as *const c_uchar).unwrap_or(ptr::null())
+    cache
+        .as_ref()
+        .map(|c| c.as_ptr() as *const c_uchar)
+        .unwrap_or(ptr::null())
 }
 
 /// # Safety

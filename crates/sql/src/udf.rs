@@ -40,7 +40,8 @@ pub fn call_registered_scalar(
 
 /// Pluggable collation dispatcher analogous to [`install_dispatch`] but for
 /// custom text collations registered via `sqlite3_create_collation*`.
-pub type CollationFn = fn(db_addr: usize, name: &str, a: &str, b: &str) -> Option<std::cmp::Ordering>;
+pub type CollationFn =
+    fn(db_addr: usize, name: &str, a: &str, b: &str) -> Option<std::cmp::Ordering>;
 
 static COLLATION: OnceLock<CollationFn> = OnceLock::new();
 
@@ -63,11 +64,8 @@ pub fn call_registered_collation(
 /// `Some(Err(msg))` if the aggregate failed, `None` if no aggregate with
 /// `name` is registered (the caller should then surface its usual
 /// "unsupported aggregate" error).
-pub type AggregateRunFn = fn(
-    db_addr: usize,
-    name: &str,
-    rows: &[Vec<SqlValue>],
-) -> Option<Result<SqlValue, String>>;
+pub type AggregateRunFn =
+    fn(db_addr: usize, name: &str, rows: &[Vec<SqlValue>]) -> Option<Result<SqlValue, String>>;
 
 /// Probe: returns `true` when an aggregate UDF with `name` is registered
 /// on the connection identified by `db_addr`. Used at plan time so the
@@ -154,12 +152,8 @@ pub enum AuthorizerDecision {
 /// `sqlite3_set_authorizer` callback can veto the access.
 ///
 /// Returns a raw SQLite return code (0 = OK, 1 = DENY, 2 = IGNORE).
-pub type AuthorizerFn = fn(
-    db_addr: usize,
-    action: i32,
-    arg3: Option<&str>,
-    arg4: Option<&str>,
-) -> i32;
+pub type AuthorizerFn =
+    fn(db_addr: usize, action: i32, arg3: Option<&str>, arg4: Option<&str>) -> i32;
 
 static AUTHORIZER: OnceLock<AuthorizerFn> = OnceLock::new();
 
@@ -167,11 +161,7 @@ pub fn install_authorizer_dispatch(f: AuthorizerFn) -> bool {
     AUTHORIZER.set(f).is_ok()
 }
 
-pub fn fire_authorizer(
-    action: i32,
-    arg3: Option<&str>,
-    arg4: Option<&str>,
-) -> AuthorizerDecision {
+pub fn fire_authorizer(action: i32, arg3: Option<&str>, arg4: Option<&str>) -> AuthorizerDecision {
     let Some(cb) = AUTHORIZER.get() else {
         return AuthorizerDecision::Allow;
     };

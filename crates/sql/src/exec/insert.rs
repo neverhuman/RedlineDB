@@ -12,7 +12,11 @@ pub(super) fn execute_insert(
         crate::udf::AuthorizerDecision::Allow => {}
         crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
         crate::udf::AuthorizerDecision::Ignore => {
-            return Ok(build_dml_execution_result(0, Vec::new(), plan.returning.is_some()));
+            return Ok(build_dml_execution_result(
+                0,
+                Vec::new(),
+                plan.returning.is_some(),
+            ));
         }
     }
     let source_rows = plan

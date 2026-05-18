@@ -108,9 +108,7 @@ fn partial_index_skip_insert_when_predicate_false() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, active INTEGER, name TEXT)");
     lab.execute("CREATE INDEX ix_a ON t(name) WHERE active = 1");
-    lab.execute(
-        "INSERT INTO t VALUES (1, 1, 'a'), (2, 0, 'b'), (3, 1, 'c'), (4, 0, 'd')",
-    );
+    lab.execute("INSERT INTO t VALUES (1, 1, 'a'), (2, 0, 'b'), (3, 1, 'c'), (4, 0, 'd')");
     lab.assert_query_matches("SELECT id, name FROM t WHERE active = 1 ORDER BY name");
 }
 
@@ -134,9 +132,7 @@ fn partial_index_delete_only_marks_matching_keys() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, x INTEGER, kind TEXT)");
     lab.execute("CREATE INDEX ix_x ON t(x) WHERE kind = 'A'");
-    lab.execute(
-        "INSERT INTO t VALUES (1, 10, 'A'), (2, 20, 'B'), (3, 30, 'A'), (4, 40, 'B')",
-    );
+    lab.execute("INSERT INTO t VALUES (1, 10, 'A'), (2, 20, 'B'), (3, 30, 'A'), (4, 40, 'B')");
     lab.execute("DELETE FROM t WHERE kind = 'B'");
     lab.assert_query_matches("SELECT id, x FROM t WHERE kind = 'A' ORDER BY id");
 }

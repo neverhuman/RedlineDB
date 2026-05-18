@@ -446,7 +446,12 @@ pub(crate) fn bind_create_trigger(
             "CREATE TRIGGER requires exactly one event".to_owned(),
         ));
     }
-    let (when_event, when_cols) = match create_trigger.events.into_iter().next().expect("checked len") {
+    let (when_event, when_cols) = match create_trigger
+        .events
+        .into_iter()
+        .next()
+        .expect("checked len")
+    {
         sqlparser::ast::TriggerEvent::Insert => (TriggerEventKind::Insert, Vec::new()),
         sqlparser::ast::TriggerEvent::Delete => (TriggerEventKind::Delete, Vec::new()),
         sqlparser::ast::TriggerEvent::Update(cols) => (
@@ -463,7 +468,10 @@ pub(crate) fn bind_create_trigger(
     // We only persist the table name (not its schema). Multi-schema
     // resolution is deferred to ATTACH/DETACH (A2).
     let table = parse_qualified_name(create_trigger.table_name)?.name;
-    let when_predicate_sql = create_trigger.condition.as_ref().map(|expr| expr.to_string());
+    let when_predicate_sql = create_trigger
+        .condition
+        .as_ref()
+        .map(|expr| expr.to_string());
     let body_sql = match create_trigger.statements {
         Some(stmts) => stmts.to_string(),
         None => {

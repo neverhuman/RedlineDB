@@ -26,8 +26,8 @@ use crate::value::SqlValue;
 
 use super::actions::apply_parent_action;
 use super::lookup::{
-    child_references, extract_child_key, find_child_rows_matching, key_has_null,
-    lookup_parent, parent_column_ordinals, parent_row_exists,
+    child_references, extract_child_key, find_child_rows_matching, key_has_null, lookup_parent,
+    parent_column_ordinals, parent_row_exists,
 };
 use super::{MAX_CASCADE_DEPTH, fk_violation_error};
 
@@ -101,7 +101,12 @@ pub(crate) fn enforce_fk_on_parent_change(
         let parent_ords = parent_column_ordinals(parent, fk)?;
         let old_key: Vec<SqlValue> = parent_ords
             .iter()
-            .map(|o| old_values.get(*o as usize).cloned().unwrap_or(SqlValue::Null))
+            .map(|o| {
+                old_values
+                    .get(*o as usize)
+                    .cloned()
+                    .unwrap_or(SqlValue::Null)
+            })
             .collect();
         if key_has_null(&old_key) {
             continue;
@@ -111,20 +116,19 @@ pub(crate) fn enforce_fk_on_parent_change(
         } else {
             fk.on_update
         };
-        let affected = find_child_rows_matching(
-            conn.engine(),
-            tx,
-            &child,
-            &fk.columns,
-            &old_key,
-        )?;
+        let affected = find_child_rows_matching(conn.engine(), tx, &child, &fk.columns, &old_key)?;
         if affected.is_empty() {
             continue;
         }
         if let Some(new_values) = new_values {
             let new_key: Vec<SqlValue> = parent_ords
                 .iter()
-                .map(|o| new_values.get(*o as usize).cloned().unwrap_or(SqlValue::Null))
+                .map(|o| {
+                    new_values
+                        .get(*o as usize)
+                        .cloned()
+                        .unwrap_or(SqlValue::Null)
+                })
                 .collect();
             // No-op when the key did not change.
             if new_key == old_key {
@@ -132,15 +136,7 @@ pub(crate) fn enforce_fk_on_parent_change(
             }
         }
         apply_parent_action(
-            conn,
-            session,
-            tx,
-            &child,
-            fk_idx,
-            &affected,
-            new_values,
-            action,
-            depth,
+            conn, session, tx, &child, fk_idx, &affected, new_values, action, depth,
         )?;
     }
     Ok(())
@@ -156,15 +152,7 @@ pub(crate) fn enforce_fk_on_parent_update(
     old_values: &[SqlValue],
     new_values: &[SqlValue],
 ) -> Result<()> {
-    enforce_fk_on_parent_change(
-        conn,
-        session,
-        tx,
-        parent,
-        old_values,
-        Some(new_values),
-        0,
-    )
+    enforce_fk_on_parent_change(conn, session, tx, parent, old_values, Some(new_values), 0)
 }
 
 /// Top-level entrypoint for DELETE — propagates the parent removal

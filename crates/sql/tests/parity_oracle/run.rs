@@ -47,10 +47,7 @@ pub fn run_oracle(sql: &str) -> OracleResult {
                     let v: RuValue = match row.get(i) {
                         Ok(v) => v,
                         Err(e) => {
-                            return OracleResult::err(
-                                classify_err(&e.to_string()),
-                                e.to_string(),
-                            );
+                            return OracleResult::err(classify_err(&e.to_string()), e.to_string());
                         }
                     };
                     current.push(to_sql_value(v));

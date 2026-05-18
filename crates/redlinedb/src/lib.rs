@@ -157,8 +157,16 @@ mod tests {
         conn.execute(
             "INSERT INTO t VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
             params![
-                1_i64, 7_i64, 1234_i64, 200_000_i64, 200_i64, 50_000_i64, 3_000_000_i64,
-                5_000_000_i64, 1.5_f64, vec![9_u8, 8, 7]
+                1_i64,
+                7_i64,
+                1234_i64,
+                200_000_i64,
+                200_i64,
+                50_000_i64,
+                3_000_000_i64,
+                5_000_000_i64,
+                1.5_f64,
+                vec![9_u8, 8, 7]
             ],
         )
         .expect("insert");
@@ -188,7 +196,8 @@ mod tests {
         let db = Database::create(dir.path().join("overflow.redline")).expect("db");
         let mut conn = db.connect().expect("conn");
 
-        conn.execute("CREATE TABLE t(big INTEGER)", ()).expect("create");
+        conn.execute("CREATE TABLE t(big INTEGER)", ())
+            .expect("create");
         conn.execute("INSERT INTO t VALUES (?)", params![i64::MAX])
             .expect("insert");
 
@@ -325,10 +334,7 @@ mod tests {
 
         let count: i64 = conn
             .transaction(BeginMode::Immediate, |c| {
-                c.execute(
-                    "INSERT INTO t(id, name) VALUES (?, ?)",
-                    (2_i64, "Lin"),
-                )?;
+                c.execute("INSERT INTO t(id, name) VALUES (?, ?)", (2_i64, "Lin"))?;
                 c.query_row::<_, i64>("SELECT COUNT(*) FROM t", ())
             })
             .await

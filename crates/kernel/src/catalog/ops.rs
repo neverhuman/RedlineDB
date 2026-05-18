@@ -330,10 +330,7 @@ pub fn apply_create_table(
                     name: name.as_ref().map(|n| n.original().into()),
                     columns: ordinals,
                     parent_table: parent_table.original().into(),
-                    parent_columns: parent_columns
-                        .iter()
-                        .map(|n| n.original().into())
-                        .collect(),
+                    parent_columns: parent_columns.iter().map(|n| n.original().into()).collect(),
                     on_delete: *on_delete,
                     on_update: *on_update,
                     deferred: *deferred,

@@ -154,10 +154,20 @@ fn generated_stored_write_block_explicit_insert() {
          c INTEGER GENERATED ALWAYS AS (a + 1) STORED)",
     );
     // Both engines must reject writes that name a generated column.
-    let res_ru = lab.sqlite.execute("INSERT INTO t(id, a, c) VALUES (1, 1, 99)", []);
-    let res_rl = lab.redline.execute("INSERT INTO t(id, a, c) VALUES (1, 1, 99)");
-    assert!(res_ru.is_err(), "sqlite should reject writing generated col");
-    assert!(res_rl.is_err(), "redline should reject writing generated col");
+    let res_ru = lab
+        .sqlite
+        .execute("INSERT INTO t(id, a, c) VALUES (1, 1, 99)", []);
+    let res_rl = lab
+        .redline
+        .execute("INSERT INTO t(id, a, c) VALUES (1, 1, 99)");
+    assert!(
+        res_ru.is_err(),
+        "sqlite should reject writing generated col"
+    );
+    assert!(
+        res_rl.is_err(),
+        "redline should reject writing generated col"
+    );
 }
 
 #[test]
@@ -173,8 +183,14 @@ fn generated_virtual_write_block_explicit_update() {
     lab.execute("INSERT INTO t(id, a) VALUES (1, 5)");
     let res_ru = lab.sqlite.execute("UPDATE t SET c = 99 WHERE id = 1", []);
     let res_rl = lab.redline.execute("UPDATE t SET c = 99 WHERE id = 1");
-    assert!(res_ru.is_err(), "sqlite should reject updating generated col");
-    assert!(res_rl.is_err(), "redline should reject updating generated col");
+    assert!(
+        res_ru.is_err(),
+        "sqlite should reject updating generated col"
+    );
+    assert!(
+        res_rl.is_err(),
+        "redline should reject updating generated col"
+    );
 }
 
 #[test]

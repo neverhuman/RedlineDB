@@ -82,5 +82,5 @@ pub use sqlite3_api::hooks::{
     sqlite3_set_authorizer, sqlite3_trace, sqlite3_update_hook,
 };
 pub use sqlite3_api::udf::{
-    sqlite3_create_function, sqlite3_create_function16, sqlite3_create_function_v2,
+    sqlite3_create_function, sqlite3_create_function_v2, sqlite3_create_function16,
 };

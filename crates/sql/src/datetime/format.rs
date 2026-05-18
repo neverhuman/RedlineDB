@@ -47,10 +47,7 @@ pub fn strftime(format: &str, dt: &DateTime) -> String {
                 b'p' => out.push_str(if dt.hour < 12 { "AM" } else { "PM" }),
                 b'P' => out.push_str(if dt.hour < 12 { "am" } else { "pm" }),
                 b'R' => out.push_str(&format!("{:02}:{:02}", dt.hour, dt.minute)),
-                b'T' => out.push_str(&format!(
-                    "{:02}:{:02}:{:02}",
-                    dt.hour, dt.minute, dt.second
-                )),
+                b'T' => out.push_str(&format!("{:02}:{:02}:{:02}", dt.hour, dt.minute, dt.second)),
                 b'%' => out.push('%'),
                 b'f' => out.push_str(&format!("{:02}.{:03}", dt.second, dt.micro / 1000)),
                 b'J' => out.push_str(&format!("{:.6}", dt.julian_day())),

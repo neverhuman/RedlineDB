@@ -195,7 +195,13 @@ fn main() {
         if state.echo {
             println!("{}", sql);
         }
-        if let Err(e) = run_query_sqlite(&state.db, &sql, &state.mode, &state.separator, state.show_header) {
+        if let Err(e) = run_query_sqlite(
+            &state.db,
+            &sql,
+            &state.mode,
+            &state.separator,
+            state.show_header,
+        ) {
             eprintln!("Error: {}", e);
             exit(1);
         }
@@ -239,7 +245,13 @@ fn main() {
                 if state.echo {
                     println!("{}", buffer.trim_end());
                 }
-                if let Err(e) = run_query_sqlite(&state.db, &buffer, &state.mode, &state.separator, state.show_header) {
+                if let Err(e) = run_query_sqlite(
+                    &state.db,
+                    &buffer,
+                    &state.mode,
+                    &state.separator,
+                    state.show_header,
+                ) {
                     eprintln!("Error: {}", e);
                     if state.bail {
                         exit(1);
@@ -249,7 +261,13 @@ fn main() {
             }
         }
         if !buffer.trim().is_empty() {
-            if let Err(e) = run_query_sqlite(&state.db, &buffer, &state.mode, &state.separator, state.show_header) {
+            if let Err(e) = run_query_sqlite(
+                &state.db,
+                &buffer,
+                &state.mode,
+                &state.separator,
+                state.show_header,
+            ) {
                 eprintln!("Error: {}", e);
                 if state.bail {
                     exit(1);
@@ -298,9 +316,13 @@ fn main() {
                     buffer.push('\n');
 
                     if line.ends_with(';') {
-                        if let Err(e) =
-                            run_query_sqlite(&state.db, &buffer, &state.mode, &state.separator, state.show_header)
-                        {
+                        if let Err(e) = run_query_sqlite(
+                            &state.db,
+                            &buffer,
+                            &state.mode,
+                            &state.separator,
+                            state.show_header,
+                        ) {
                             eprintln!("Error: {}", e);
                         }
                         buffer.clear();
@@ -336,12 +358,24 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
         buffer.push_str(raw_line);
         buffer.push('\n');
         if raw_line.trim_end().ends_with(';') {
-            run_query_sqlite(&state.db, &buffer, &state.mode, &state.separator, state.show_header)?;
+            run_query_sqlite(
+                &state.db,
+                &buffer,
+                &state.mode,
+                &state.separator,
+                state.show_header,
+            )?;
             buffer.clear();
         }
     }
     if !buffer.trim().is_empty() {
-        run_query_sqlite(&state.db, &buffer, &state.mode, &state.separator, state.show_header)?;
+        run_query_sqlite(
+            &state.db,
+            &buffer,
+            &state.mode,
+            &state.separator,
+            state.show_header,
+        )?;
     }
     Ok(())
 }

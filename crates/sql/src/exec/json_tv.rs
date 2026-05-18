@@ -25,10 +25,12 @@ pub(super) fn registry() -> &'static [&'static dyn TvFunc] {
 }
 
 fn columns() -> Vec<String> {
-    ["key", "value", "type", "atom", "id", "parent", "fullkey", "path"]
-        .into_iter()
-        .map(String::from)
-        .collect()
+    [
+        "key", "value", "type", "atom", "id", "parent", "fullkey", "path",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
 }
 
 /// SQLite's `json_type` token for a `serde_json::Value`.
@@ -114,15 +116,25 @@ fn parse_args<'a>(
             };
             let path = JsonPath::parse(path_text)
                 .map_err(|e| Error::Parse(format!("JSON path error: {e}")))?;
-            let referent = if path.is_root() { Some(doc) } else { resolve(doc, &path) };
-            let Some(target) = referent else { return Ok(None) };
+            let referent = if path.is_root() {
+                Some(doc)
+            } else {
+                resolve(doc, &path)
+            };
+            let Some(target) = referent else {
+                return Ok(None);
+            };
             let root_key = match path.segments.last() {
                 None => SqlValue::Null,
                 Some(PathSegment::Key(k)) => SqlValue::Text(Arc::from(k.as_str())),
                 Some(PathSegment::Index(i)) => SqlValue::Integer(*i as i64),
                 Some(PathSegment::FromEnd(_) | PathSegment::Append) => SqlValue::Null,
             };
-            Ok(Some(ResolvedArgs { target, fullkey: path_text.to_owned(), root_key }))
+            Ok(Some(ResolvedArgs {
+                target,
+                fullkey: path_text.to_owned(),
+                root_key,
+            }))
         }
         n => Err(Error::UnsupportedSql(format!(
             "{name} expects 1 or 2 arguments (got {n})"
@@ -168,30 +180,47 @@ fn make_row(
 
 /// Common driver shared by both `eval` implementations: parse args,
 /// dispatch the body, return the materialised `TvResult`.
-fn run_walk<F>(
-    name: &'static str,
-    args: &[TvArg],
-    body: F,
-) -> Result<TvResult>
+fn run_walk<F>(name: &'static str, args: &[TvArg], body: F) -> Result<TvResult>
 where
     F: FnOnce(&Value, &str, SqlValue, &mut Vec<Vec<SqlValue>>),
 {
     let cols = columns();
     let Some(doc) = parse_doc_arg(name, args)? else {
-        return Ok(TvResult { columns: cols, rows: vec![] });
+        return Ok(TvResult {
+            columns: cols,
+            rows: vec![],
+        });
     };
     let Some(resolved) = parse_args(name, &doc, args)? else {
-        return Ok(TvResult { columns: cols, rows: vec![] });
+        return Ok(TvResult {
+            columns: cols,
+            rows: vec![],
+        });
     };
     let mut rows = Vec::new();
-    body(resolved.target, &resolved.fullkey, resolved.root_key, &mut rows);
-    Ok(TvResult { columns: cols, rows })
+    body(
+        resolved.target,
+        &resolved.fullkey,
+        resolved.root_key,
+        &mut rows,
+    );
+    Ok(TvResult {
+        columns: cols,
+        rows,
+    })
 }
 
 struct JsonEach;
 impl TvFunc for JsonEach {
-    fn name(&self) -> &'static str { "json_each" }
-    fn eval(&self, _conn: &Connection, _schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult> {
+    fn name(&self) -> &'static str {
+        "json_each"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
         run_walk("json_each", args, |target, prefix, _root_key, rows| {
             let mut id: i64 = 0;
             emit_each(target, prefix, &mut id, rows);
@@ -204,14 +233,28 @@ fn emit_each(value: &Value, prefix: &str, id: &mut i64, rows: &mut Vec<Vec<SqlVa
         Value::Array(arr) => {
             for (idx, child) in arr.iter().enumerate() {
                 let fk = format!("{prefix}[{idx}]");
-                rows.push(make_row(SqlValue::Integer(idx as i64), child, *id, None, &fk, prefix));
+                rows.push(make_row(
+                    SqlValue::Integer(idx as i64),
+                    child,
+                    *id,
+                    None,
+                    &fk,
+                    prefix,
+                ));
                 *id += 1;
             }
         }
         Value::Object(map) => {
             for (k, child) in map {
                 let fk = format!("{prefix}{}", segment_key(k));
-                rows.push(make_row(SqlValue::Text(Arc::from(k.as_str())), child, *id, None, &fk, prefix));
+                rows.push(make_row(
+                    SqlValue::Text(Arc::from(k.as_str())),
+                    child,
+                    *id,
+                    None,
+                    &fk,
+                    prefix,
+                ));
                 *id += 1;
             }
         }
@@ -224,8 +267,15 @@ fn emit_each(value: &Value, prefix: &str, id: &mut i64, rows: &mut Vec<Vec<SqlVa
 
 struct JsonTree;
 impl TvFunc for JsonTree {
-    fn name(&self) -> &'static str { "json_tree" }
-    fn eval(&self, _conn: &Connection, _schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult> {
+    fn name(&self) -> &'static str {
+        "json_tree"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
         run_walk("json_tree", args, |target, prefix, root_key, rows| {
             let mut id: i64 = 0;
             // Root row: key = last-segment-of-path (NULL at `$`), parent NULL.
@@ -238,13 +288,26 @@ impl TvFunc for JsonTree {
 }
 
 /// Recursive tree walk; emits one row per child node, depth-first.
-fn emit_tree(value: &Value, parent_fullkey: &str, parent_id: i64, id: &mut i64, rows: &mut Vec<Vec<SqlValue>>) {
+fn emit_tree(
+    value: &Value,
+    parent_fullkey: &str,
+    parent_id: i64,
+    id: &mut i64,
+    rows: &mut Vec<Vec<SqlValue>>,
+) {
     match value {
         Value::Array(arr) => {
             for (idx, child) in arr.iter().enumerate() {
                 let fk = format!("{parent_fullkey}[{idx}]");
                 let my_id = *id;
-                rows.push(make_row(SqlValue::Integer(idx as i64), child, my_id, Some(parent_id), &fk, parent_fullkey));
+                rows.push(make_row(
+                    SqlValue::Integer(idx as i64),
+                    child,
+                    my_id,
+                    Some(parent_id),
+                    &fk,
+                    parent_fullkey,
+                ));
                 *id += 1;
                 emit_tree(child, &fk, my_id, id, rows);
             }
@@ -253,7 +316,14 @@ fn emit_tree(value: &Value, parent_fullkey: &str, parent_id: i64, id: &mut i64, 
             for (k, child) in map {
                 let fk = format!("{parent_fullkey}{}", segment_key(k));
                 let my_id = *id;
-                rows.push(make_row(SqlValue::Text(Arc::from(k.as_str())), child, my_id, Some(parent_id), &fk, parent_fullkey));
+                rows.push(make_row(
+                    SqlValue::Text(Arc::from(k.as_str())),
+                    child,
+                    my_id,
+                    Some(parent_id),
+                    &fk,
+                    parent_fullkey,
+                ));
                 *id += 1;
                 emit_tree(child, &fk, my_id, id, rows);
             }

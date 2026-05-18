@@ -162,17 +162,16 @@ pub(super) fn execute_select(
             )?;
             let filtered: Vec<SqlRow> = base_rows
                 .into_iter()
-                .filter_map(|row| match selection_passes(&plan.selection, &row, bindings) {
-                    Ok(true) => Some(Ok(row)),
-                    Ok(false) => None,
-                    Err(e) => Some(Err(e)),
-                })
+                .filter_map(
+                    |row| match selection_passes(&plan.selection, &row, bindings) {
+                        Ok(true) => Some(Ok(row)),
+                        Ok(false) => None,
+                        Err(e) => Some(Err(e)),
+                    },
+                )
                 .collect::<Result<Vec<_>>>()?;
-            let mut projected = super::window::evaluate_window_functions(
-                &filtered,
-                &plan.projection,
-                bindings,
-            )?;
+            let mut projected =
+                super::window::evaluate_window_functions(&filtered, &plan.projection, bindings)?;
             if !plan.order_by.is_empty() {
                 super::agg::sort_projected_rows_by_order_by(
                     &mut projected,
@@ -181,11 +180,8 @@ pub(super) fn execute_select(
                     bindings,
                 )?;
             }
-            let projected: Vec<Vec<SqlValue>> = projected
-                .into_iter()
-                .skip(offset)
-                .take(limit)
-                .collect();
+            let projected: Vec<Vec<SqlValue>> =
+                projected.into_iter().skip(offset).take(limit).collect();
             let runtime_tx = std::mem::replace(&mut tx, SelectRuntimeTx::Empty);
             return Ok(SelectRuntime {
                 tx: runtime_tx,
@@ -819,12 +815,12 @@ pub(super) fn collect_select_rows(
                 .map(SqlRow::Static)
                 .collect())
         }
-        SelectSource::CompoundSet { op, branches } => Ok(super::set_ops::collect_compound_set_rows(
-            conn, *op, branches, bindings,
-        )?
-        .into_iter()
-        .map(SqlRow::Static)
-        .collect()),
+        SelectSource::CompoundSet { op, branches } => Ok(
+            super::set_ops::collect_compound_set_rows(conn, *op, branches, bindings)?
+                .into_iter()
+                .map(SqlRow::Static)
+                .collect(),
+        ),
         SelectSource::Empty => Ok(vec![SqlRow::Empty]),
     }
 }
@@ -853,7 +849,10 @@ pub(super) fn compound_output_column_names(branches: &[SelectPlan]) -> Arc<[Stri
     if names.is_empty() {
         // Synthesise positional names so projection / ORDER BY can still
         // reference rows by ordinal via `column1`, `column2`, …
-        names = (1..=branches.first().map(|p| p.projection.len().max(1)).unwrap_or(1))
+        names = (1..=branches
+            .first()
+            .map(|p| p.projection.len().max(1))
+            .unwrap_or(1))
             .map(|i| format!("column{i}"))
             .collect();
     }
@@ -1002,8 +1001,7 @@ fn covering_order_satisfies(
     let Some(first_key) = index.keys.first() else {
         return false;
     };
-    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source
-    else {
+    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source else {
         return false;
     };
     table

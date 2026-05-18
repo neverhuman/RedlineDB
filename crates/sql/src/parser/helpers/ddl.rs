@@ -172,9 +172,7 @@ pub(crate) fn convert_table_constraint(
             expr: expr_to_kernel_ast(&check.expr, column_lookup)?,
             normalized_sql: check.expr.to_string(),
         }),
-        sqlparser::ast::TableConstraint::ForeignKey(fk) => {
-            Ok(table_level_foreign_key(fk))
-        }
+        sqlparser::ast::TableConstraint::ForeignKey(fk) => Ok(table_level_foreign_key(fk)),
         sqlparser::ast::TableConstraint::Index(_)
         | sqlparser::ast::TableConstraint::FulltextOrSpatial(_) => Err(Error::UnsupportedSql(
             "table constraint not supported yet".to_owned(),
@@ -195,9 +193,7 @@ fn ref_action_to_fk(action: Option<ReferentialAction>) -> FkAction {
 
 fn fk_is_deferred(fk: &ForeignKeyConstraint) -> bool {
     matches!(
-        fk.characteristics
-            .as_ref()
-            .and_then(|c| c.initially),
+        fk.characteristics.as_ref().and_then(|c| c.initially),
         Some(DeferrableInitial::Deferred)
     )
 }
@@ -240,9 +236,7 @@ pub(crate) fn column_level_foreign_key(
         on_delete: ref_action_to_fk(fk.on_delete),
         on_update: ref_action_to_fk(fk.on_update),
         deferred: matches!(
-            fk.characteristics
-                .as_ref()
-                .and_then(|c| c.initially),
+            fk.characteristics.as_ref().and_then(|c| c.initially),
             Some(DeferrableInitial::Deferred)
         ),
     }

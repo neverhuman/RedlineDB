@@ -537,7 +537,9 @@ fn unquote_pragma_token(input: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn pragma_table_info_rows(table: &redlinedb_kernel::catalog::TableDef) -> Vec<Vec<SqlValue>> {
+pub(crate) fn pragma_table_info_rows(
+    table: &redlinedb_kernel::catalog::TableDef,
+) -> Vec<Vec<SqlValue>> {
     pragma_column_rows(table, false)
 }
 
@@ -556,8 +558,7 @@ fn pragma_column_rows(
         }
     } else if let Some(index) = table.indexes.iter().find(|index| index.primary) {
         for (position, key) in index.keys.iter().enumerate() {
-            let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source
-            else {
+            let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source else {
                 continue;
             };
             if let Some(slot) = pk.get_mut(*attnum as usize) {
@@ -604,7 +605,9 @@ fn pragma_table_list_rows(schema: &SchemaSnapshot) -> Vec<Vec<SqlValue>> {
         .collect()
 }
 
-pub(crate) fn pragma_index_list_rows(table: &redlinedb_kernel::catalog::TableDef) -> Vec<Vec<SqlValue>> {
+pub(crate) fn pragma_index_list_rows(
+    table: &redlinedb_kernel::catalog::TableDef,
+) -> Vec<Vec<SqlValue>> {
     table
         .indexes
         .iter()
@@ -640,8 +643,7 @@ pub(crate) fn pragma_index_info_rows(
     };
     let mut rows = Vec::with_capacity(index.keys.len());
     for (seqno, key) in index.keys.iter().enumerate() {
-        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source
-        else {
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source else {
             continue;
         };
         let column = match table.columns.get(*attnum as usize) {
@@ -675,8 +677,7 @@ fn pragma_index_xinfo_rows(
     };
     let mut rows = Vec::with_capacity(index.keys.len());
     for (seqno, key) in index.keys.iter().enumerate() {
-        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source
-        else {
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source else {
             continue;
         };
         let column = match table.columns.get(*attnum as usize) {

@@ -39,8 +39,6 @@ pub use ops::{
     apply_alter_table, apply_create_index, apply_create_table, apply_drop_index, apply_drop_table,
     apply_set_index_meta_page_id, lookup_index, lookup_table, resolve_schema_id,
 };
-pub use triggers::{apply_create_trigger, apply_drop_trigger, triggers_for};
-pub use views::{apply_create_view, apply_drop_view, lookup_view};
 pub use record::{RecordRef, RecordScratch, encode_record};
 pub use schema::{
     CatalogError, CatalogMeta, CheckDef, ClassKind, ColumnDef, ConstraintDef, ConstraintKind,
@@ -53,4 +51,6 @@ pub use stats::{
 };
 pub use store::{CatalogStore, decode_snapshot, encode_snapshot};
 pub use system::*;
+pub use triggers::{apply_create_trigger, apply_drop_trigger, triggers_for};
 pub use value::{OwnedValue, StorageClass, ValueRef};
+pub use views::{apply_create_view, apply_drop_view, lookup_view};

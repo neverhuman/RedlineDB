@@ -59,9 +59,8 @@ pub(crate) enum UdfEntry {
 
 /// Registry: (db_addr, lowercased_name, narg) -> entry.
 /// `narg = -1` matches any arity.
-static REGISTRY: Mutex<
-    Option<std::collections::HashMap<(usize, String, i32), UdfEntry>>,
-> = Mutex::new(None);
+static REGISTRY: Mutex<Option<std::collections::HashMap<(usize, String, i32), UdfEntry>>> =
+    Mutex::new(None);
 
 fn registry()
 -> std::sync::MutexGuard<'static, Option<std::collections::HashMap<(usize, String, i32), UdfEntry>>>
@@ -122,10 +121,7 @@ fn aggregate_run_from_sql(
     // called once on the same context. The accumulator lives via the
     // context's `agg_state_*` slot or via `sqlite3_result_*` set on the
     // last xStep — the latter is what we surface here.
-    let ctx = Box::new(RldbContext::new(
-        db_addr as *mut rldb,
-        user_data,
-    ));
+    let ctx = Box::new(RldbContext::new(db_addr as *mut rldb, user_data));
     let ctx_ptr = Box::into_raw(ctx);
     for row in rows {
         let mut boxed: Vec<*mut RldbValue> = row
@@ -226,10 +222,7 @@ fn dispatch_from_sql(
         .iter()
         .map(|v| Box::into_raw(Box::new(RldbValue::from_sql(v))))
         .collect();
-    let ctx = Box::new(RldbContext::new(
-        db_addr as *mut rldb,
-        user_data,
-    ));
+    let ctx = Box::new(RldbContext::new(db_addr as *mut rldb, user_data));
     let ctx_ptr = Box::into_raw(ctx);
     // SAFETY: callback signature matches the FFI ABI for a scalar UDF;
     // ctx_ptr is a Box::into_raw allocation we just made; boxed.as_mut_ptr

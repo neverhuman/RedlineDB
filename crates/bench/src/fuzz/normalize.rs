@@ -53,7 +53,10 @@ pub enum Outcome {
     Done,
     /// Statement was rejected. `class` is the canonicalized error class;
     /// `raw` is the engine's own message for debug printing.
-    Error { class: ErrorClass, raw: String },
+    Error {
+        class: ErrorClass,
+        raw: String,
+    },
 }
 
 /// Canonical buckets covering every error a fresh app might see. Two

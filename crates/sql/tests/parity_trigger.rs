@@ -205,7 +205,8 @@ fn trigger_survives_reopen() {
         let db = Database::create(&path, DbOptions::default()).expect("create");
         let conn = db.connect();
         conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
-        conn.execute("CREATE TABLE seen(a INTEGER)").expect("create");
+        conn.execute("CREATE TABLE seen(a INTEGER)")
+            .expect("create");
         conn.execute(
             "CREATE TRIGGER mirror AFTER INSERT ON t FOR EACH ROW \
              BEGIN INSERT INTO seen VALUES (NEW.a); END",

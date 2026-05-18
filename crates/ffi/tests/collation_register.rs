@@ -77,7 +77,14 @@ fn reverse_nocase_orders_descending() {
     let (_dir, db) = open_db();
     let name = CString::new("REVERSE_NOCASE").unwrap();
     let rc = unsafe {
-        sqlite3_create_collation_v2(db, name.as_ptr(), 0, ptr::null_mut(), Some(reverse_nocase), None)
+        sqlite3_create_collation_v2(
+            db,
+            name.as_ptr(),
+            0,
+            ptr::null_mut(),
+            Some(reverse_nocase),
+            None,
+        )
     };
     assert_eq!(rc, 0);
     exec(db, "CREATE TABLE t(s TEXT)");
@@ -96,14 +103,12 @@ fn reverse_nocase_orders_descending() {
         let s = unsafe { std::ffi::CStr::from_ptr(val) }
             .to_string_lossy()
             .into_owned();
-        let arc =
-            unsafe { std::sync::Arc::from_raw(ctx as *const std::sync::Mutex<Vec<String>>) };
+        let arc = unsafe { std::sync::Arc::from_raw(ctx as *const std::sync::Mutex<Vec<String>>) };
         arc.lock().unwrap().push(s);
         let _ = std::sync::Arc::into_raw(arc);
         0
     }
-    let c_sql =
-        CString::new("SELECT s FROM t ORDER BY s COLLATE REVERSE_NOCASE").unwrap();
+    let c_sql = CString::new("SELECT s FROM t ORDER BY s COLLATE REVERSE_NOCASE").unwrap();
     let rc = rldb_exec(db, c_sql.as_ptr(), Some(cb), ctx, ptr::null_mut());
     assert_eq!(rc, 0);
     let _ = unsafe { std::sync::Arc::from_raw(ctx as *const std::sync::Mutex<Vec<String>>) };

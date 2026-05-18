@@ -19,14 +19,14 @@
 //! Each file is `pub(super)` inside the `fk` module so the SQL crate sees
 //! a single facade. Cross-module helpers go through these wrappers.
 
-#[path = "fk_lookup.rs"]
-mod lookup;
-#[path = "fk_cascade.rs"]
-mod cascade;
 #[path = "fk_actions.rs"]
 mod actions;
+#[path = "fk_cascade.rs"]
+mod cascade;
 #[path = "fk_defer.rs"]
 mod defer;
+#[path = "fk_lookup.rs"]
+mod lookup;
 
 pub(crate) use cascade::{
     enforce_fk_on_insert, enforce_fk_on_parent_delete, enforce_fk_on_parent_update,
@@ -40,7 +40,9 @@ pub(crate) use lookup::child_has_parent;
 /// when guarding circular cascades and is bounded by SQLITE_MAX_TRIGGER_DEPTH.
 pub(super) const MAX_CASCADE_DEPTH: usize = 1000;
 
-pub(super) fn fk_violation_error(child: &redlinedb_kernel::catalog::TableDef) -> crate::error::Error {
+pub(super) fn fk_violation_error(
+    child: &redlinedb_kernel::catalog::TableDef,
+) -> crate::error::Error {
     crate::error::Error::ConstraintViolation(format!(
         "FOREIGN KEY constraint failed: {}",
         child.name

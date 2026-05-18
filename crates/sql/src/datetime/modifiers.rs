@@ -143,11 +143,14 @@ fn advance_to_weekday(dt: DateTime, target: u32) -> DateTime {
 }
 
 fn day_of_week(dt: &DateTime) -> u32 {
-    let m = if dt.month < 3 { dt.month + 12 } else { dt.month };
+    let m = if dt.month < 3 {
+        dt.month + 12
+    } else {
+        dt.month
+    };
     let y = if dt.month < 3 { dt.year - 1 } else { dt.year };
     let k = y % 100;
     let j = y / 100;
     let h = (dt.day as i32 + (13 * (m as i32 + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
     ((h + 6) % 7) as u32
 }
-

@@ -26,10 +26,7 @@ use crate::exec::index_predicate::normalise_predicate;
 /// partial-WHERE. Currently exact-match (modulo normalisation); the
 /// query must contain the index predicate as one of its top-level AND
 /// conjuncts.
-pub(crate) fn query_implies_index_predicate(
-    selection: &Option<Expr>,
-    index: &IndexDef,
-) -> bool {
+pub(crate) fn query_implies_index_predicate(selection: &Option<Expr>, index: &IndexDef) -> bool {
     let Some(pred_sql) = index.predicate_sql.as_deref() else {
         return true;
     };

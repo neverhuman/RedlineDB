@@ -152,9 +152,7 @@ fn recursive_cte_fibonacci_first_eight() {
 fn recursive_cte_ancestors_walk() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE edge(parent INTEGER, child INTEGER)");
-    lab.execute(
-        "INSERT INTO edge(parent, child) VALUES (1,2), (2,3), (3,4), (1,5), (5,6), (6,7)",
-    );
+    lab.execute("INSERT INTO edge(parent, child) VALUES (1,2), (2,3), (3,4), (1,5), (5,6), (6,7)");
 
     // Descendants of 1
     lab.assert_match(

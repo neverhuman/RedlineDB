@@ -58,9 +58,7 @@ pub fn apply_create_trigger(
             .into_iter()
             .map(|n| n.original().to_owned().into_boxed_str())
             .collect(),
-        when_predicate_sql: spec
-            .when_predicate_sql
-            .map(|s| s.into_boxed_str()),
+        when_predicate_sql: spec.when_predicate_sql.map(|s| s.into_boxed_str()),
         body_sql: spec.body_sql.into_boxed_str(),
         normalized_sql: spec.normalized_sql.map(|s| s.into_boxed_str()),
     });

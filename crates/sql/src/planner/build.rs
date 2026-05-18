@@ -51,10 +51,7 @@ pub(crate) fn build_select_plan(
             node
         }
         SelectSource::Cte { name, rows, .. } => {
-            let mut node = PhysicalPlan::leaf(
-                PhysicalKind::Constant,
-                Some(format!("cte {name}")),
-            );
+            let mut node = PhysicalPlan::leaf(PhysicalKind::Constant, Some(format!("cte {name}")));
             node.estimated_rows = rows.len() as f64;
             node.cost = Cost::zero();
             node

@@ -86,9 +86,7 @@ fn expression_index_lower_lookup() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)");
     lab.execute("CREATE INDEX ix_lname ON t(lower(name))");
-    lab.execute(
-        "INSERT INTO t VALUES (1, 'Alice'), (2, 'bob'), (3, 'CAROL'), (4, 'Dave')",
-    );
+    lab.execute("INSERT INTO t VALUES (1, 'Alice'), (2, 'bob'), (3, 'CAROL'), (4, 'Dave')");
     lab.assert_query_matches("SELECT id, name FROM t WHERE lower(name) = 'bob' ORDER BY id");
     lab.assert_query_matches("SELECT id FROM t WHERE lower(name) = 'carol' ORDER BY id");
 }

@@ -26,7 +26,8 @@ pub(crate) fn bind_select_from(
     // joins names an active CTE, route it through `SelectSource::Cte` so
     // the executor reads the pre-materialized rows instead of looking the
     // name up in the catalog.
-    if from.len() == 1 && from[0].joins.is_empty()
+    if from.len() == 1
+        && from[0].joins.is_empty()
         && let TableFactor::Table { name, alias, .. } = &from[0].relation
     {
         let alias_arc: Option<Arc<str>> = alias.as_ref().map(|a| Arc::from(a.name.value.as_str()));
@@ -50,8 +51,14 @@ pub(crate) fn bind_select_from(
     // function name resolves in the TV registry we materialise the rows
     // here and route them through `SelectSource::Cte` so the rest of the
     // pipeline (`SELECT *`, `WHERE`, `ORDER BY`) keeps the column names.
-    if from.len() == 1 && from[0].joins.is_empty()
-        && let TableFactor::Table { name, alias, args: Some(args), .. } = &from[0].relation
+    if from.len() == 1
+        && from[0].joins.is_empty()
+        && let TableFactor::Table {
+            name,
+            alias,
+            args: Some(args),
+            ..
+        } = &from[0].relation
         && let Some(source) = try_table_valued_source(conn, schema, name, alias.as_ref(), args)?
     {
         return Ok((source, None));
@@ -259,11 +266,9 @@ pub(crate) fn bind_select_table_factor(
             // View-name resolution: if the name matches a persisted
             // view, materialize its body and return a synthetic
             // BoundTable backed by row storage.
-            if let Some(bound) = crate::exec::view::try_resolve_view_bound_table(
-                schema,
-                &name,
-                alias_arc.as_ref(),
-            )? {
+            if let Some(bound) =
+                crate::exec::view::try_resolve_view_bound_table(schema, &name, alias_arc.as_ref())?
+            {
                 return Ok(bound);
             }
             Ok(BoundTable {
@@ -409,7 +414,10 @@ fn try_rewrite_tvf_factor(
     counter: &mut usize,
     scope: &mut HashMap<String, crate::exec::cte::CteDef>,
 ) -> Result<()> {
-    let TableFactor::Table { name, alias, args, .. } = factor else {
+    let TableFactor::Table {
+        name, alias, args, ..
+    } = factor
+    else {
         return Ok(());
     };
     let Some(call_args) = args.as_ref() else {
@@ -433,11 +441,7 @@ fn try_rewrite_tvf_factor(
     // the rewritten name. The synthetic TableDef's stored name is also
     // the sentinel; SQL column resolution uses the alias (preserved or
     // synthesised below) instead of the underlying table name.
-    let def = crate::exec::cte::build_cte_def_from_rows(
-        &sentinel,
-        result.columns,
-        result.rows,
-    );
+    let def = crate::exec::cte::build_cte_def_from_rows(&sentinel, result.columns, result.rows);
     scope.insert(sentinel.clone(), def);
     // Rewrite: drop args, point name at the sentinel, and ensure an
     // alias is present so column refs in the SELECT stay sensible. If
@@ -446,7 +450,8 @@ fn try_rewrite_tvf_factor(
     // `json_each.value` continue to bind.
     *args = None;
     name.0.clear();
-    name.0.push(ObjectNamePart::Identifier(Ident::new(sentinel)));
+    name.0
+        .push(ObjectNamePart::Identifier(Ident::new(sentinel)));
     if alias.is_none() {
         *alias = Some(TableAlias {
             explicit: false,

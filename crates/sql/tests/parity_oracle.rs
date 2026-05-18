@@ -41,7 +41,10 @@ fn proof_dir() -> PathBuf {
         .ancestors()
         .nth(2)
         .expect("workspace root");
-    workspace_root.join("target").join("proof").join("sqlite-full-parity")
+    workspace_root
+        .join("target")
+        .join("proof")
+        .join("sqlite-full-parity")
 }
 
 fn list_sql_files(dir: &Path) -> Vec<PathBuf> {
@@ -78,7 +81,11 @@ fn run_tag(tag: &str) -> TagReport {
         let sql = match fs::read_to_string(&path) {
             Ok(s) => s,
             Err(e) => {
-                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_owned();
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?")
+                    .to_owned();
                 report.failures.push((name, format!("read error: {e}")));
                 continue;
             }
@@ -86,7 +93,11 @@ fn run_tag(tag: &str) -> TagReport {
         match harness::check_parity(&sql) {
             Ok(()) => report.passed += 1,
             Err(diff) => {
-                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_owned();
+                let name = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?")
+                    .to_owned();
                 report.failures.push((name, diff));
             }
         }
@@ -111,7 +122,10 @@ fn write_summary(reports: &[TagReport]) {
         total_files += r.files;
         total_passed += r.passed;
         total_failed += failed;
-        out.push_str(&format!("{:<10} {:>5} {:>6} {:>6}\n", r.tag, r.files, r.passed, failed));
+        out.push_str(&format!(
+            "{:<10} {:>5} {:>6} {:>6}\n",
+            r.tag, r.files, r.passed, failed
+        ));
     }
     out.push_str(&format!(
         "TOTAL      {:>5} {:>6} {:>6}\n\n",
@@ -121,7 +135,12 @@ fn write_summary(reports: &[TagReport]) {
         if r.failures.is_empty() {
             continue;
         }
-        out.push_str(&format!("\n## Failures in {} ({}/{})\n", r.tag, r.failures.len(), r.files));
+        out.push_str(&format!(
+            "\n## Failures in {} ({}/{})\n",
+            r.tag,
+            r.failures.len(),
+            r.files
+        ));
         for (name, diff) in &r.failures {
             out.push_str(&format!("\n### {}\n", name));
             out.push_str(diff);

@@ -71,10 +71,8 @@ impl Engine {
     ) -> Result<Arc<crate::catalog::ViewDef>> {
         tx.ensure_open()?;
         let _ddl = self.catalog.lock_ddl();
-        let next = crate::catalog::apply_create_view(
-            (*self.catalog_snapshot_for_tx(tx)).clone(),
-            spec,
-        )?;
+        let next =
+            crate::catalog::apply_create_view((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
         let next = Arc::new(next);
         let view = next
             .views
@@ -88,10 +86,8 @@ impl Engine {
     pub fn drop_view(&self, tx: &mut Txn, spec: crate::catalog::DropViewSpec) -> Result<()> {
         tx.ensure_open()?;
         let _ddl = self.catalog.lock_ddl();
-        let next = crate::catalog::apply_drop_view(
-            (*self.catalog_snapshot_for_tx(tx)).clone(),
-            spec,
-        )?;
+        let next =
+            crate::catalog::apply_drop_view((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
         tx.set_pending_schema_snapshot(Arc::new(next));
         Ok(())
     }
@@ -108,26 +104,18 @@ impl Engine {
             spec,
         )?;
         let next = Arc::new(next);
-        let trigger = next
-            .triggers
-            .last()
-            .cloned()
-            .ok_or(Error::CatalogCorrupt("created trigger missing from snapshot"))?;
+        let trigger = next.triggers.last().cloned().ok_or(Error::CatalogCorrupt(
+            "created trigger missing from snapshot",
+        ))?;
         tx.set_pending_schema_snapshot(Arc::clone(&next));
         Ok(trigger)
     }
 
-    pub fn drop_trigger(
-        &self,
-        tx: &mut Txn,
-        spec: crate::catalog::DropTriggerSpec,
-    ) -> Result<()> {
+    pub fn drop_trigger(&self, tx: &mut Txn, spec: crate::catalog::DropTriggerSpec) -> Result<()> {
         tx.ensure_open()?;
         let _ddl = self.catalog.lock_ddl();
-        let next = crate::catalog::apply_drop_trigger(
-            (*self.catalog_snapshot_for_tx(tx)).clone(),
-            spec,
-        )?;
+        let next =
+            crate::catalog::apply_drop_trigger((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
         tx.set_pending_schema_snapshot(Arc::new(next));
         Ok(())
     }

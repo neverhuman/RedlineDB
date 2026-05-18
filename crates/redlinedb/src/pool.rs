@@ -216,13 +216,17 @@ pub struct PooledConnection {
 impl Deref for PooledConnection {
     type Target = Connection;
     fn deref(&self) -> &Self::Target {
-        self.conn.as_ref().expect("connection always present until drop")
+        self.conn
+            .as_ref()
+            .expect("connection always present until drop")
     }
 }
 
 impl DerefMut for PooledConnection {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.conn.as_mut().expect("connection always present until drop")
+        self.conn
+            .as_mut()
+            .expect("connection always present until drop")
     }
 }
 

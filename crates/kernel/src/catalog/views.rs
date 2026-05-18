@@ -38,7 +38,10 @@ pub fn apply_create_view(
         }
         return Err(Error::ObjectExists);
     }
-    if snapshot.lookup_view(schema_id, spec.name.folded()).is_some() {
+    if snapshot
+        .lookup_view(schema_id, spec.name.folded())
+        .is_some()
+    {
         if spec.if_not_exists {
             return Ok(snapshot);
         }
@@ -78,10 +81,7 @@ pub fn apply_create_view(
 
 /// Apply a `DROP VIEW` spec to the snapshot. Returns `ObjectNotFound`
 /// when the name is unknown unless `IF EXISTS` is set.
-pub fn apply_drop_view(
-    mut snapshot: SchemaSnapshot,
-    spec: DropViewSpec,
-) -> Result<SchemaSnapshot> {
+pub fn apply_drop_view(mut snapshot: SchemaSnapshot, spec: DropViewSpec) -> Result<SchemaSnapshot> {
     let schema_id = resolve_schema_id(&snapshot, Some(&spec.name.schema))?;
     let folded = spec.name.name.folded().to_owned();
     let len_before = snapshot.views.len();
