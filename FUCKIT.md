@@ -624,3 +624,13 @@ Agent-authored tracking file. Entries are pending documentation of observed gaps
 - Evidence: `grep -rn fp_inject crates/kernel/src/` returns ~68 sites, concentrated in WAL append, commit publish, and recovery replay. None hook page-cache eviction-after-flush, B-tree post-split-pre-parent-update, catalog rename mid-fsync, or vacuum mid-shard. The 24/24 failpoint-matrix headline only guarantees safety on the paths the failpoints can interrupt.
 - Change: Add failpoints at: (a) `flush_frame_if_durable` post-write-pre-page-state-update, (b) B-tree split between leaf write and parent pointer update, (c) catalog DDL between temp write and rename, (d) vacuum between shard purges. Extend `crates/bench/bench/failpoint-matrix.toml` with the new cases.
 - Test: `rtk cargo run -p redlinedb-bench --release -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint.json --seed 7` — matrix moves from 24/24 to 28+/28+ green with zero lost acked commits.
+
+## <pending> WO-068: Make Jeryu Autonomy Ledger Use RedlineDB As The SQLx Drop-In
+
+- Area: RedlineDB/Jeryu SQLx integration
+- Severity: High
+- Confidence: High
+- Requested by: user during the 2026-05-18 dougx Jeryu cleanup. The user explicitly rejected `target/jeryu/autonomy.sqlite` and requested a RedlineDB-backed ledger such as `target/jeryu/autonomy.redlineDB`, because RedlineDB is intended to be the 100% parity drop-in.
+- Evidence: In the consuming dougx workspace, the pinned Jeryu `autonomy` binary rejects `JERYU_DATABASE_URL=redline://...` / `redlineDB://...` with an unsupported-scheme error and only accepts `postgres://`, `postgresql://`, or `sqlite:` today. `crates/redlinedb-sqlx/src/lib.rs` documents that consumers must call `redlinedb_sqlx::install_default_drivers()` before the first `sqlx::AnyPool` or `sqlx::AnyConnection`; `crates/redlinedb-sqlx/tests/driver_registration.rs` and `crates/redlinedb-sqlx/tests/jeryu_schema.rs` prove the RedlineDB SQLx bridge exists, but Jeryu's pinned binary is not using it.
+- Change: Add or document the consuming-binary bootstrap required for Jeryu/autonomy to install the RedlineDB SQLx driver before opening its launch ledger. Define the canonical URL/path shape for a RedlineDB-backed autonomy ledger and make the profile/kill-bell commands run against it without falling back to SQLite.
+- Test: A consuming-project smoke where `JERYU_DATABASE_URL=redline://.../target/jeryu/autonomy.redlineDB` (or the final canonical URL form) passes `autonomy kill-bell status` and `autonomy profile validate --profile sovereign_plus`; keep `rtk cargo test -p redlinedb-sqlx --test driver_registration --test jeryu_schema --quiet --locked` green.

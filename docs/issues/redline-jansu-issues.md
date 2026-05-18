@@ -5,9 +5,41 @@ the Wave 11.B integration.
 
 ## Current Status
 
-No open RedlineDB product-code issue remains from this tracker. The resolved
-items below are integration-contract or upstream dependency notes, not active
-engine defects.
+One high-priority integration gap is open from a user request in the dougx
+Jeryu cleanup flow. The resolved items below are integration-contract or
+upstream dependency notes, not active engine defects.
+
+## Open
+
+### R-3: Jeryu autonomy ledger cannot use `redline://` / `redlineDB://` as a SQLx drop-in yet
+
+**Date:** 2026-05-18
+**Status:** open -- high priority
+**Priority:** High
+**Owner:** redlinedb-sqlx / external integration
+**Requested by:** user, during dougx Jeryu cleanup after rejecting
+`target/jeryu/autonomy.sqlite` as the autonomy ledger name.
+
+The user request is that Jeryu autonomy state should be backed by a RedlineDB
+ledger as a 100% parity drop-in, not by an `autonomy.sqlite` file. The current
+blocking gap is that the pinned Jeryu `autonomy` binary rejects
+`JERYU_DATABASE_URL=redline://...` / `redlineDB://...` before profile validation;
+its accepted URL schemes are currently `postgres://`, `postgresql://`, and
+`sqlite:`. RedlineDB provides the `redlinedb-sqlx` integration layer and
+`redline://` tests, but consuming binaries still must link that crate and call
+`redlinedb_sqlx::install_default_drivers()` before the first `sqlx::AnyPool` or
+`sqlx::AnyConnection`.
+
+**Required fix:** make the Jeryu/autonomy SQLx bootstrap path install the
+RedlineDB driver before opening the launch ledger, document the canonical
+RedlineDB ledger URL/path, and add an integration proof that
+`JERYU_DATABASE_URL=redline://.../target/jeryu/autonomy.redlineDB` (or the final
+canonical URL form) passes `autonomy kill-bell status` and
+`autonomy profile validate --profile sovereign_plus`.
+
+**Proof target:** a consuming-project smoke that fails without RedlineDB driver
+registration and passes with it, plus the existing `redlinedb-sqlx`
+`jeryu_schema` and driver-registration tests.
 
 ## Resolved
 

@@ -231,7 +231,7 @@ impl<'q> sqlx::arguments::Arguments<'q> for RedlineArguments<'q> {
     where
         T: 'q + sqlx::encode::Encode<'q, Self::Database> + Type<Self::Database>,
     {
-        Err("RedlineDb sqlx arguments are not used by the redline:// bridge".into())
+        Err("RedlineDb sqlx arguments are not used by the RedlineDB URL bridge".into())
     }
 
     fn len(&self) -> usize {
@@ -344,7 +344,7 @@ impl<'i> sqlx::column::ColumnIndex<RedlineRow> for &'i str {
 
 impl RedlineDb {
     pub(crate) const NAME: &'static str = "RedlineDB";
-    pub(crate) const URL_SCHEMES: &'static [&'static str] = &["redline"];
+    pub(crate) const URL_SCHEMES: &'static [&'static str] = &["redline", "redlinedb"];
 }
 
 impl Database for RedlineDb {

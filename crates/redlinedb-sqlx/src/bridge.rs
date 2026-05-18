@@ -22,6 +22,7 @@ use url::Url;
 use crate::dummy::RedlineDb;
 
 const DEFAULT_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
+const REDLINE_URL_SCHEMES: &[&str] = &["redline", "redlinedb"];
 
 pub(crate) struct ConnectionState {
     #[allow(dead_code)]
@@ -99,9 +100,13 @@ impl ConnectOptions for RedlineConnectOptions {
     type Connection = RedlineConnection;
 
     fn from_url(url: &Url) -> Result<Self, Error> {
-        if url.scheme() != "redline" {
+        if !REDLINE_URL_SCHEMES.contains(&url.scheme()) {
             return Err(Error::Configuration(
-                format!("unsupported URL scheme {url:?} for RedlineDB").into(),
+                format!(
+                    "unsupported URL scheme {:?} for RedlineDB; expected redline:// or redlinedb://",
+                    url.scheme()
+                )
+                .into(),
             ));
         }
 
