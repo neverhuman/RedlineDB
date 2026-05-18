@@ -1,3 +1,4 @@
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -35,12 +36,20 @@ impl Connection {
     /// silently dropped. Use [`Connection::prepare_v2`] for the
     /// `sqlite3_prepare_v2`-style API that returns the unconsumed tail.
     pub fn prepare(self: &Arc<Self>, sql: &str) -> Result<Statement> {
-        let (stmt, _tail) = self.prepare_v2(sql)?;
-        match stmt {
-            Some(stmt) => Ok(stmt),
-            None => Err(Error::UnsupportedSql(
-                "no statement in SQL input".to_owned(),
-            )),
+        match catch_unwind(AssertUnwindSafe(|| self.prepare_v2(sql))) {
+            Ok(result) => {
+                let (stmt, _tail) = result?;
+                match stmt {
+                    Some(stmt) => Ok(stmt),
+                    None => Err(Error::UnsupportedSql(
+                        "no statement in SQL input".to_owned(),
+                    )),
+                }
+            }
+            Err(payload) => Err(Error::Parse(format!(
+                "sql parser panic: {}",
+                crate::parser::panic_payload_to_string(payload)
+            ))),
         }
     }
 
@@ -54,21 +63,29 @@ impl Connection {
     /// side-effects fire during preparation and the returned statement is a
     /// fully-completed no-op (`step` immediately yields `Step::Done`).
     pub fn prepare_v2<'a>(self: &Arc<Self>, sql: &'a str) -> Result<(Option<Statement>, &'a str)> {
-        let (head, tail) = crate::parser::split_first_statement(sql);
-        if crate::parser::is_blank_sql(head) {
-            // Either fully blank input, or a remaining comment-only tail.
-            return Ok((None, tail));
+        match catch_unwind(AssertUnwindSafe(|| {
+            let (head, tail) = crate::parser::split_first_statement(sql);
+            if crate::parser::is_blank_sql(head) {
+                // Either fully blank input, or a remaining comment-only tail.
+                return Ok((None, tail));
+            }
+            if let Some(action) = try_parse_savepoint(head)? {
+                self.apply_savepoint_action(&action)?;
+                // Build a no-op completed statement so the FFI still returns a
+                // valid handle that the caller can step() / finalize().
+                let template = self.savepoint_marker_template(head);
+                let stmt = Statement::new_completed(Arc::clone(self), template);
+                return Ok((Some(stmt), tail));
+            }
+            let template = self.prepare_cached(head)?;
+            Ok((Some(Statement::new(Arc::clone(self), template)), tail))
+        })) {
+            Ok(result) => result,
+            Err(payload) => Err(Error::Parse(format!(
+                "sql parser panic: {}",
+                crate::parser::panic_payload_to_string(payload)
+            ))),
         }
-        if let Some(action) = try_parse_savepoint(head)? {
-            self.apply_savepoint_action(&action)?;
-            // Build a no-op completed statement so the FFI still returns a
-            // valid handle that the caller can step() / finalize().
-            let template = self.savepoint_marker_template(head);
-            let stmt = Statement::new_completed(Arc::clone(self), template);
-            return Ok((Some(stmt), tail));
-        }
-        let template = self.prepare_cached(head)?;
-        Ok((Some(Statement::new(Arc::clone(self), template)), tail))
     }
 
     /// Execute every statement in `sql`. For multi-statement input, runs

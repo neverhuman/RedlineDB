@@ -157,13 +157,14 @@ pub enum PragmaPlan {
 }
 
 /// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the
-/// requested mode but does not implement WAL/TRUNCATE/PERSIST journal
-/// physics; those values are rejected up-front in the parser instead of
-/// being silently accepted.
+/// requested mode and exposes a truthful `wal` response for the WAL-style
+/// journal it already uses internally; `truncate` and `persist` remain
+/// rejected because their on-disk semantics are not implemented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JournalMode {
     Delete,
     Memory,
+    Wal,
     Off,
 }
 
@@ -172,6 +173,7 @@ impl JournalMode {
         match self {
             JournalMode::Delete => "delete",
             JournalMode::Memory => "memory",
+            JournalMode::Wal => "wal",
             JournalMode::Off => "off",
         }
     }

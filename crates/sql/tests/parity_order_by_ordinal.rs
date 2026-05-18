@@ -19,6 +19,11 @@ const T1_T2: &str = "
     INSERT INTO t2 VALUES (4, 4), (2, 2), (6, 6);
 ";
 
+const COLLATE_T: &str = "
+    CREATE TABLE t(v TEXT);
+    INSERT INTO t VALUES ('b'), ('A'), ('a'), ('a  ');
+";
+
 #[test]
 fn single_branch_order_by_position_asc() {
     harness::assert_parity(&format!("{T} SELECT a, b FROM t ORDER BY 1"));
@@ -81,5 +86,39 @@ fn order_by_three_column_position_resolves() {
         CREATE TABLE t(id INTEGER, name TEXT, price INTEGER);
         INSERT INTO t VALUES (1, 'b', 30), (2, 'a', 10), (3, 'c', 20);
         SELECT id, name, price FROM t ORDER BY 3";
+    harness::assert_parity(sql);
+}
+
+#[test]
+fn order_by_collate_nocase_matches_sqlite() {
+    let sql = "
+        CREATE TABLE t(v TEXT);
+        INSERT INTO t VALUES ('c'), ('B'), ('a'), ('d');
+        SELECT v FROM t ORDER BY v COLLATE NOCASE";
+    harness::assert_parity(sql);
+}
+
+#[test]
+fn order_by_collate_rtrim_matches_sqlite() {
+    let sql = "
+        CREATE TABLE t(v TEXT);
+        INSERT INTO t VALUES ('b  '), ('A'), ('c'), ('d');
+        SELECT v FROM t ORDER BY v COLLATE RTRIM";
+    harness::assert_parity(sql);
+}
+
+#[test]
+fn order_by_collate_binary_matches_sqlite() {
+    harness::assert_parity(&format!(
+        "{COLLATE_T} SELECT v FROM t ORDER BY v COLLATE BINARY"
+    ));
+}
+
+#[test]
+fn order_by_collate_nocase_limit_matches_sqlite() {
+    let sql = "
+        CREATE TABLE t(v TEXT);
+        INSERT INTO t VALUES ('c'), ('B'), ('a'), ('d');
+        SELECT v FROM t ORDER BY v COLLATE NOCASE LIMIT 2";
     harness::assert_parity(sql);
 }

@@ -30,10 +30,11 @@ struct Pair {
 impl Pair {
     fn new() -> Self {
         let dir = tempdir().expect("tempdir");
-        let path = dir.path().join("lab.db");
-        let db = Database::create(&path, DbOptions::default()).expect("create");
+        let redline_path = dir.path().join("lab.db");
+        let sqlite_path = dir.path().join("lab.sqlite");
+        let db = Database::create(&redline_path, DbOptions::default()).expect("create");
         let redline = db.connect();
-        let sqlite = rusqlite::Connection::open_in_memory().expect("rusqlite open");
+        let sqlite = rusqlite::Connection::open(&sqlite_path).expect("rusqlite open");
         Pair {
             _dir: dir,
             redline,
@@ -257,20 +258,10 @@ fn pragma_journal_mode_round_trips_supported_values() {
 }
 
 #[test]
-fn pragma_journal_mode_rejects_wal_and_friends() {
+fn pragma_journal_mode_accepts_wal_and_reads_back_wal() {
     let pair = Pair::new();
-    for mode in ["wal", "truncate", "persist"] {
-        let err = pair
-            .redline
-            .execute(&format!("PRAGMA journal_mode = {mode}"))
-            .err()
-            .unwrap_or_else(|| panic!("expected reject for journal_mode={mode}"));
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("journal_mode") && msg.contains(mode),
-            "reject message for {mode} should mention name+value: {msg}"
-        );
-    }
+    pair.assert_parity("PRAGMA journal_mode = WAL");
+    pair.assert_parity("PRAGMA journal_mode");
 }
 
 #[test]

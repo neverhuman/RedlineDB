@@ -119,6 +119,30 @@ fn non_recursive_cte_with_aggregate() {
     );
 }
 
+#[test]
+fn non_recursive_cte_materialized_hint_is_accepted() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(id INTEGER, v INTEGER)");
+    lab.execute("INSERT INTO t VALUES (1, 10), (2, 20), (3, 30)");
+
+    lab.assert_match(
+        "WITH filtered AS MATERIALIZED (SELECT id, v FROM t WHERE v >= 20) \
+         SELECT id, v FROM filtered ORDER BY id",
+    );
+}
+
+#[test]
+fn non_recursive_cte_not_materialized_hint_is_accepted() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(id INTEGER, v INTEGER)");
+    lab.execute("INSERT INTO t VALUES (1, 10), (2, 20), (3, 30)");
+
+    lab.assert_match(
+        "WITH filtered AS NOT MATERIALIZED (SELECT id, v FROM t WHERE v < 30) \
+         SELECT id, v FROM filtered ORDER BY id",
+    );
+}
+
 // ── Recursive CTE: numeric ───────────────────────────────────────────────────
 
 #[test]

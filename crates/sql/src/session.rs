@@ -75,8 +75,8 @@ pub struct SessionState {
     /// any trigger from within an existing trigger body.
     pub recursive_triggers: bool,
     /// Mirrors SQLite's `PRAGMA journal_mode`. Stored as a typed value;
-    /// only the subset we can honour (`memory`, `off`, `delete`) is
-    /// accepted at parse time.
+    /// RedlineDB accepts `memory`, `off`, `delete`, and `wal` (which
+    /// round-trips as the WAL-style mode already used internally).
     pub journal_mode: crate::statement::JournalMode,
     /// Mirrors SQLite's `PRAGMA synchronous`. The engine's fsync policy is
     /// workspace-wide so this field is recall-only — set to satisfy

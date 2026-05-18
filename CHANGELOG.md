@@ -6,6 +6,17 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Added
 
+- **SQL ingress compatibility hardening**:
+  - `PRAGMA journal_mode = WAL` now round-trips as `wal` for RedlineDB's
+    WAL-style journal, while `truncate` / `persist` stay rejected.
+  - Compound `SELECT` now shares parameter slots across branches and tail
+    `ORDER BY` / `LIMIT` wrappers.
+  - Nested `SELECT` wrappers with trailing `ORDER BY` / `LIMIT` now bind
+    correctly instead of rejecting the wrapper form.
+  - `WITH ... AS MATERIALIZED` / `AS NOT MATERIALIZED` CTE hints are
+    accepted as no-op syntax.
+  - The parser boundary now catches upstream `sqlparser` panics and
+    converts them into `Error::Parse`.
 - **SQLite parity coverage expansion**: `sqlite_full_parity.rs` now writes a
   reference-build PRAGMA corpus from bundled SQLite metadata and asserts the
   remaining unsupported PRAGMAs and SQLite-native file-format gaps explicitly;
