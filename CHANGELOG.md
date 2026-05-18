@@ -56,6 +56,22 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 - Jankurai 1.4.3 is the supported version.
 
+## [1.0.8] - 2026-05-18
+
+### Added
+
+- `redlinedb-sqlx` now registers both SQLx `Any` URL schemes used by Jeryu
+  autonomy ledgers: canonical `redline://` and compatibility alias
+  `redlinedb://`. Mixed-case inputs such as `redlineDB://` are accepted after
+  URL scheme normalization.
+
+### Notes for Jeryu consumers
+
+- Preferred autonomy ledger URL:
+  `redline:///absolute/path/to/target/jeryu/autonomy.redlineDB`.
+- Compatibility alias:
+  `redlineDB:///absolute/path/to/target/jeryu/autonomy.redlineDB`.
+
 ## [1.0.2] - 2026-05-17
 
 New crate **`redlinedb-tokio`** — a tokio async adapter that wraps the sync
