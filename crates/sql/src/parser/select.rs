@@ -165,7 +165,7 @@ pub(crate) fn bind_simple_select_query(
         None => None,
     };
 
-    let order_by = match order_by {
+    let mut order_by = match order_by {
         Some(order_by) => match order_by.kind {
             OrderByKind::Expressions(exprs) => exprs
                 .into_iter()
@@ -188,6 +188,7 @@ pub(crate) fn bind_simple_select_query(
         },
         None => Vec::new(),
     };
+    resolve_order_by_positions(&mut order_by, &output_columns);
 
     let (limit, offset) = match limit_clause {
         Some(LimitClause::LimitOffset {
@@ -312,8 +313,13 @@ pub(crate) fn bind_union_all_query(
         ));
     }
 
+    // For ORDER BY column resolution we need names — use the LEFT branch
+    // names since SQL columns are positional in set ops, and SQLite reports
+    // the left side's names.
+    let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
+
     let mut tail_params = ParamLayout::default();
-    let order_by = match ctx.order_by {
+    let mut order_by = match ctx.order_by {
         Some(order_by) => match order_by.kind {
             OrderByKind::Expressions(exprs) => exprs
                 .into_iter()
@@ -336,6 +342,7 @@ pub(crate) fn bind_union_all_query(
         },
         None => Vec::new(),
     };
+    resolve_order_by_positions(&mut order_by, &left_columns_for_names);
     let (limit, offset) = match ctx.limit_clause {
         Some(LimitClause::LimitOffset {
             limit,
@@ -372,10 +379,6 @@ pub(crate) fn bind_union_all_query(
         PreparedKind::Select(plan) => plan,
         _ => unreachable!("compound branch is always a SELECT"),
     };
-    // For ORDER BY column resolution we need names — use the LEFT branch
-    // names since SQL columns are positional in set ops, and SQLite reports
-    // the left side's names.
-    let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
 
     let projection = Vec::new();
     let source = match compound_op {
@@ -808,5 +811,34 @@ pub(crate) fn scan_sql_parameters(sql: &str, params: &mut ParamLayout) {
                 }
             }
         }
+    }
+}
+
+/// SQLite parity: a bare positive integer at the top of an `ORDER BY` term is a
+/// 1-based positional reference to the N-th output column, not the literal
+/// integer value. Rewrites matching terms to `Expr::Identifier(<column-name>)`
+/// so the existing column-lookup path (`crate::exec::expr::lookup_column`)
+/// resolves them. `ORDER BY 1+0`, `ORDER BY 1.5`, and `ORDER BY (1)` are left
+/// alone — only bare integer literals are positional in SQLite.
+fn resolve_order_by_positions(items: &mut [OrderByExpr], output_columns: &[String]) {
+    for item in items {
+        if let Some(idx) = top_level_positive_int(&item.expr)
+            && let Ok(pos) = usize::try_from(idx)
+            && pos >= 1
+            && pos <= output_columns.len()
+        {
+            let name = output_columns[pos - 1].clone();
+            item.expr = Expr::Identifier(Ident::new(name));
+        }
+    }
+}
+
+fn top_level_positive_int(expr: &Expr) -> Option<i64> {
+    match expr {
+        Expr::Value(v) => match &v.value {
+            Value::Number(n, _) => n.parse::<i64>().ok().filter(|n| *n > 0),
+            _ => None,
+        },
+        _ => None,
     }
 }
