@@ -18,10 +18,11 @@ engine defects.
 **Owner:** rust-public-api  
 **Proof:** [README.md](../../README.md), [docs/sqlite-parity.md](../sqlite-parity.md)
 
-RedlineDB exposes a synchronous Rust facade plus a covered C ABI shim. It does
-not provide a `sqlx`-compatible async pool/query API. Consuming projects that
-currently use `sqlx::AnyPool` need an integration layer, typically one blocking
-RedlineDB connection per worker and `spawn_blocking` around async call sites.
+RedlineDB exposes a synchronous Rust facade plus a covered C ABI shim. The
+`redlinedb-tokio` wrapper makes the core connection async-friendly, but it is
+not itself a SQLx bridge. Consuming projects that use `sqlx::AnyPool` need the
+`redlinedb-sqlx` integration layer and must install its driver before the first
+`AnyPool` or `AnyConnection` is created.
 
 ### R-2: RedlineDB requires Rust 1.95 and edition 2024
 

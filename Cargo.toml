@@ -6,6 +6,7 @@ members = [
     "crates/bench",
     "crates/redlinedb",
     "crates/redlinedb-tokio",
+    "crates/redlinedb-sqlx",
     "crates/ffi",
     "crates/cli",
     "crates/server",
