@@ -74,27 +74,12 @@ fn order_by_expression_not_literal_unchanged() {
 }
 
 #[test]
-fn order_by_constant_expression_does_not_reorder_as_ordinal() {
-    // SQLite treats `ORDER BY 1 + 1` as the constant 2 (not ordinal 2). If
-    // the rewrite incorrectly fired on the inner literal, output would be
-    // sorted by column b. Verify the negative: results must NOT be sorted
-    // by b ascending in either engine. (We don't compare engine-to-engine
-    // because both engines preserve different underlying row orders when
-    // every sort key is equal — that's a separate harness limitation, not
-    // a rewrite bug.)
-    let sql = format!("{T} SELECT a, b FROM t ORDER BY 1 + 1");
-    let redline = harness::run_redline(&sql);
-    let bs: Vec<i64> = redline
-        .rows
-        .iter()
-        .map(|r| match &r[1] {
-            redlinedb_sql::SqlValue::Integer(v) => *v,
-            other => panic!("expected Integer, got {other:?}"),
-        })
-        .collect();
-    assert_ne!(
-        bs,
-        vec![10_i64, 20, 30],
-        "ORDER BY 1+1 must not be rewritten as ORDER BY 2"
-    );
+fn order_by_three_column_position_resolves() {
+    // Three projected columns; ORDER BY 3 must select the third output
+    // column (price) and produce the same sequence as the oracle.
+    let sql = "
+        CREATE TABLE t(id INTEGER, name TEXT, price INTEGER);
+        INSERT INTO t VALUES (1, 'b', 30), (2, 'a', 10), (3, 'c', 20);
+        SELECT id, name, price FROM t ORDER BY 3";
+    harness::assert_parity(sql);
 }

@@ -842,3 +842,73 @@ fn top_level_positive_int(expr: &Expr) -> Option<i64> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod order_by_position_tests {
+    use super::*;
+    use sqlparser::dialect::SQLiteDialect;
+    use sqlparser::parser::Parser as SqlParser;
+
+    fn parse_expr(text: &str) -> Expr {
+        let dialect = SQLiteDialect {};
+        SqlParser::new(&dialect)
+            .try_with_sql(text)
+            .expect("parser init")
+            .parse_expr()
+            .expect("parse expr")
+    }
+
+    #[test]
+    fn bare_positive_integer_resolves() {
+        assert_eq!(top_level_positive_int(&parse_expr("1")), Some(1));
+        assert_eq!(top_level_positive_int(&parse_expr("42")), Some(42));
+    }
+
+    #[test]
+    fn zero_and_negative_integers_are_not_positions() {
+        assert_eq!(top_level_positive_int(&parse_expr("0")), None);
+        // `-1` parses as UnaryOp(Minus, 1) — top-level isn't a literal.
+        assert_eq!(top_level_positive_int(&parse_expr("-1")), None);
+    }
+
+    #[test]
+    fn non_integer_literals_are_not_positions() {
+        assert_eq!(top_level_positive_int(&parse_expr("1.5")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("'1'")), None);
+    }
+
+    #[test]
+    fn nested_integer_is_not_a_position() {
+        // The key invariant: the rewrite must not descend into BinaryOp,
+        // Nested, or any other compound shape — only a bare top-level
+        // integer literal counts as a positional reference.
+        assert_eq!(top_level_positive_int(&parse_expr("1 + 1")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("(1)")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("a + 1")), None);
+    }
+
+    #[test]
+    fn resolve_rewrites_matching_position_and_leaves_others() {
+        let cols = vec!["a".to_owned(), "b".to_owned()];
+        let mk = |sql: &str| OrderByExpr {
+            expr: parse_expr(sql),
+            options: sqlparser::ast::OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            },
+            with_fill: None,
+        };
+        let mut items = vec![mk("1"), mk("2"), mk("1 + 1"), mk("3"), mk("a")];
+        resolve_order_by_positions(&mut items, &cols);
+        // [0] 1 -> Identifier("a")
+        assert!(matches!(&items[0].expr, Expr::Identifier(id) if id.value == "a"));
+        // [1] 2 -> Identifier("b")
+        assert!(matches!(&items[1].expr, Expr::Identifier(id) if id.value == "b"));
+        // [2] `1 + 1` left as BinaryOp
+        assert!(matches!(&items[2].expr, Expr::BinaryOp { .. }));
+        // [3] 3 out of range -> left as Value
+        assert!(matches!(&items[3].expr, Expr::Value(_)));
+        // [4] `a` was already an Identifier
+        assert!(matches!(&items[4].expr, Expr::Identifier(id) if id.value == "a"));
+    }
+}
