@@ -13,14 +13,17 @@ mod schema;
 mod stats;
 mod store;
 mod system;
+mod triggers;
 mod value;
+mod views;
 
 pub use affinity::{Affinity, CoerceError, apply_affinity, derive_affinity};
 pub use bootstrap::bootstrap_schema;
 pub use ddl::{
     AlterTableOperationSpec, AlterTableSpec, ColumnConstraintSpec, ColumnSpec, ConflictAction,
-    CreateIndexSpec, CreateTableSpec, DropIndexSpec, DropTableSpec, IndexColumnSpec, IndexOrigin,
-    TableConstraintSpec,
+    CreateIndexSpec, CreateTableSpec, CreateTriggerSpec, CreateViewSpec, DropIndexSpec,
+    DropTableSpec, DropTriggerSpec, DropViewSpec, FkAction, IndexColumnSpec, IndexOrigin,
+    TableConstraintSpec, TriggerEventKind, TriggerTimeKind,
 };
 pub use expr::{
     CompiledExpr, EvalScratch, ExprAst, ExprError, ExprOp, RowValueSource, compile_expr, eval_expr,
@@ -39,7 +42,8 @@ pub use ops::{
 pub use record::{RecordRef, RecordScratch, encode_record};
 pub use schema::{
     CatalogError, CatalogMeta, CheckDef, ClassKind, ColumnDef, ConstraintDef, ConstraintKind,
-    IndexDef, NamespaceDef, SchemaEpoch, SchemaSnapshot, SqliteSchemaRow, TableDef,
+    ForeignKeyDef, GeneratedColumnKind, GeneratedColumnSpec, IndexDef, NamespaceDef, SchemaEpoch,
+    SchemaSnapshot, SqliteSchemaRow, TableDef, TriggerDef, ViewDef,
 };
 pub use stats::{
     ColumnStats, HistogramBucket, IndexStats, MostCommonValue, StatsEpoch, StatsSnapshot,
@@ -47,4 +51,6 @@ pub use stats::{
 };
 pub use store::{CatalogStore, decode_snapshot, encode_snapshot};
 pub use system::*;
+pub use triggers::{apply_create_trigger, apply_drop_trigger, triggers_for};
 pub use value::{OwnedValue, StorageClass, ValueRef};
+pub use views::{apply_create_view, apply_drop_view, lookup_view};

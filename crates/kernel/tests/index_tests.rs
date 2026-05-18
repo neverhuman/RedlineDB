@@ -607,6 +607,7 @@ fn engine_create_index_allocates_meta_page_and_recovers() {
                         }],
                         collation: None,
                         default_value: None,
+                        generated: None,
                     },
                     ColumnSpec {
                         name: DbName::new("v"),
@@ -614,6 +615,7 @@ fn engine_create_index_allocates_meta_page_and_recovers() {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+                        generated: None,
                     },
                 ],
                 constraints: vec![],
@@ -661,9 +663,12 @@ fn engine_create_index_allocates_meta_page_and_recovers() {
                     name: DbName::new("v"),
                     sort_dir: SortDir::Asc,
                     collation: None,
+                    expr_sql: None,
+                    expr_referenced_cols: Vec::new(),
                 }],
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
+                predicate_sql: None,
             },
         )
         .unwrap();
@@ -745,6 +750,7 @@ fn ddl_index_handles_publish_and_remove_only_on_commit() {
                     constraints: Vec::new(),
                     collation: None,
                     default_value: None,
+                    generated: None,
                 }],
                 constraints: Vec::new(),
                 if_not_exists: false,
@@ -768,9 +774,12 @@ fn ddl_index_handles_publish_and_remove_only_on_commit() {
             name: DbName::new("v"),
             sort_dir: SortDir::Asc,
             collation: None,
+            expr_sql: None,
+            expr_referenced_cols: Vec::new(),
         }],
         origin: IndexOrigin::User,
         normalized_sql: Some("CREATE INDEX ix_t_v ON t(v)".to_owned()),
+        predicate_sql: None,
     };
 
     let mut tx = engine

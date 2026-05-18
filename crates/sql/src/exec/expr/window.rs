@@ -1,24 +1,20 @@
-//! Window function execution entry points.
+//! Window function entry point used by the scalar expression dispatcher.
 //!
-//! Lane SQL-D phase 10 Tier-3: window functions parse, but the runtime
-//! pipeline is reserved for a follow-on milestone. The dispatcher in
-//! `super::json_dispatch::eval_function`
-//! delegates here when a function call carries an `OVER (...)` clause so
-//! that the planner work can pick it up cleanly later without touching
-//! scalar evaluation.
+//! `OVER (...)` calls are not evaluated through the scalar evaluator —
+//! they are precomputed by `crate::exec::window` against the materialized
+//! row set and substituted in during projection. The scalar adapter here
+//! returns NULL so that intermediate row evaluation (e.g. selection
+//! passes that incidentally call into eval_function on a windowed expr)
+//! does not panic.
 
 use super::*;
 
-/// Returns `Some(Err(...))` with a typed unsupported-feature error when
-/// the function call has a window clause (runtime is reserved for a
-/// follow-on milestone). Returns `None` for non-window calls so the
-/// scalar dispatcher can continue.
 pub(super) fn try_eval_window(func: &sqlparser::ast::Function) -> Option<Result<SqlValue>> {
     if func.over.is_some() {
-        Some(Err(Error::UnsupportedSql(format!(
-            "window functions are parsed-only; execution not yet implemented: {}",
-            func.name
-        ))))
+        // The real value is computed by the window pipeline. Return NULL
+        // as a safe sentinel so callers that route through eval_scalar
+        // do not error mid-flight.
+        Some(Ok(SqlValue::Null))
     } else {
         None
     }

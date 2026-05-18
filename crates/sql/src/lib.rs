@@ -10,7 +10,8 @@ mod planner;
 mod regexp;
 mod session;
 mod statement;
-mod value;
+pub mod udf;
+pub mod value;
 
 pub use connection::{
     Connection, Database, DbOptions, OptimizerConfig, QueryMemoryConfig, StatsConfig,

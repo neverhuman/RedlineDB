@@ -175,6 +175,26 @@ fn value_not_in_list_with_null() {
 }
 
 #[test]
+fn row_value_in_subquery_matches() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE lhs(a INTEGER, b TEXT)")
+        .expect("create lhs");
+    c.execute("CREATE TABLE rhs(a INTEGER, b TEXT)")
+        .expect("create rhs");
+    c.execute("INSERT INTO lhs VALUES (1, 'one'), (2, 'two')")
+        .expect("insert lhs");
+    c.execute("INSERT INTO rhs VALUES (1, 'one')")
+        .expect("insert rhs");
+    let rows = query_all(
+        &c,
+        "SELECT (a, b) IN (SELECT a, b FROM rhs), (a, b) NOT IN (SELECT a, b FROM rhs) FROM lhs ORDER BY a",
+    );
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0], vec![SqlValue::Integer(1), SqlValue::Integer(0)]);
+    assert_eq!(rows[1], vec![SqlValue::Integer(0), SqlValue::Integer(1)]);
+}
+
+#[test]
 fn null_comparison_is_null() {
     let (_d, c) = open();
     // NULL = NULL → NULL, not 1
@@ -217,10 +237,8 @@ fn pragma_integrity_check_ok() {
 // ── WAL checkpoint modes ──────────────────────────────────────────────────────
 
 #[test]
-#[ignore = "PRAGMA wal_checkpoint(MODE) not yet parsed by redlinedb SQL layer"]
 fn pragma_wal_checkpoint_passive() {
     let (_d, c) = open();
-    c.execute("PRAGMA journal_mode=WAL").expect("wal");
     // Should not error; checkpoint returns row(s) with counts
     let mut stmt = c
         .prepare("PRAGMA wal_checkpoint(PASSIVE)")
@@ -229,19 +247,15 @@ fn pragma_wal_checkpoint_passive() {
 }
 
 #[test]
-#[ignore = "PRAGMA wal_checkpoint(MODE) not yet parsed by redlinedb SQL layer"]
 fn pragma_wal_checkpoint_full() {
     let (_d, c) = open();
-    c.execute("PRAGMA journal_mode=WAL").expect("wal");
     let mut stmt = c.prepare("PRAGMA wal_checkpoint(FULL)").expect("prepare");
     while let Step::Row = stmt.step().unwrap() {}
 }
 
 #[test]
-#[ignore = "PRAGMA wal_checkpoint(MODE) not yet parsed by redlinedb SQL layer"]
 fn pragma_wal_checkpoint_restart() {
     let (_d, c) = open();
-    c.execute("PRAGMA journal_mode=WAL").expect("wal");
     let mut stmt = c
         .prepare("PRAGMA wal_checkpoint(RESTART)")
         .expect("prepare");
@@ -249,10 +263,8 @@ fn pragma_wal_checkpoint_restart() {
 }
 
 #[test]
-#[ignore = "PRAGMA wal_checkpoint(MODE) not yet parsed by redlinedb SQL layer"]
 fn pragma_wal_checkpoint_truncate() {
     let (_d, c) = open();
-    c.execute("PRAGMA journal_mode=WAL").expect("wal");
     let mut stmt = c
         .prepare("PRAGMA wal_checkpoint(TRUNCATE)")
         .expect("prepare");
@@ -294,7 +306,6 @@ fn nested_savepoint_release() {
 // ── PRAGMA additional coverage ────────────────────────────────────────────────
 
 #[test]
-#[ignore = "PRAGMA auto_vacuum not yet implemented in redlinedb SQL layer"]
 fn pragma_auto_vacuum() {
     let (_d, c) = open();
     // Read current auto_vacuum setting
@@ -306,7 +317,6 @@ fn pragma_auto_vacuum() {
 }
 
 #[test]
-#[ignore = "PRAGMA quick_check not yet implemented in redlinedb SQL layer"]
 fn pragma_quick_check() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");

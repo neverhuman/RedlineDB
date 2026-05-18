@@ -203,7 +203,9 @@ mod lane_b {
         let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
         let mut owned_refs: Vec<&OwnedValue> = Vec::with_capacity(index.keys.len());
         for key in &index.keys {
-            let IndexKeySource::Column { attnum } = key.source;
+            let IndexKeySource::Column { attnum } = key.source else {
+                continue;
+            };
             owned_refs.push(values.get(attnum as usize).unwrap_or(&OwnedValue::Null));
             dirs.push(key.sort_dir);
         }

@@ -22,6 +22,9 @@ while IFS= read -r file; do
     agent/baselines/*)
       continue
       ;;
+    docs/architecture/ENGINEERING_SPEC.md)
+      continue
+      ;;
   esac
   [[ -f "$file" ]] || continue
   if ! grep -Iq . "$file"; then

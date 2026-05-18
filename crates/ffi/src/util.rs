@@ -51,6 +51,7 @@ pub(crate) fn map_error(err: SqlError) -> c_int {
         SqlError::TransactionState(_) | SqlError::Bind(_) => RLDB_MISUSE,
         SqlError::Parse(_) => RLDB_ERROR,
         SqlError::UnsupportedSql(_) => RLDB_MISUSE,
+        SqlError::NotAuthorized => RLDB_AUTH,
         _ => RLDB_ERROR,
     }
 }
@@ -108,6 +109,7 @@ pub(crate) fn open_handle(
         last_message: Mutex::new(CString::new("").unwrap()),
         interrupted: AtomicBool::new(false),
         active_statements: AtomicUsize::new(0),
+        hooks: crate::sqlite3_api::hooks::HookSlots::default(),
     });
     Ok(Box::into_raw(handle))
 }

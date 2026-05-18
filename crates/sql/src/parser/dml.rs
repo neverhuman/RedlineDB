@@ -1,7 +1,7 @@
 use super::*;
 
 pub(crate) fn bind_insert(
-    _conn: &Connection,
+    conn: &Connection,
     schema: Arc<SchemaSnapshot>,
     schema_epoch: SchemaEpoch,
     sql: &str,
@@ -12,17 +12,48 @@ pub(crate) fn bind_insert(
             "INSERT ... SET is not supported".to_owned(),
         ));
     }
+    if let sqlparser::ast::TableObject::TableName(ref name) = insert.table
+        && crate::exec::view::name_is_view(&schema, name)
+    {
+        return Err(crate::exec::view::cannot_modify_view_error(
+            &name.to_string(),
+        ));
+    }
     let table = bind_table_object(&schema, &insert.table)?;
     let mut params = ParamLayout::default();
     let conflict = bind_insert_conflict(&table, insert.or, insert.on, &mut params)?;
     let columns = if insert.columns.is_empty() {
-        (0..table.columns.len()).collect::<Vec<_>>()
+        // Phase-11 SQL-D A6: implicit INSERT (no column list) only
+        // binds to non-generated columns; user-provided VALUES must
+        // never feed a generated column.
+        (0..table.columns.len())
+            .filter(|idx| {
+                table
+                    .columns
+                    .get(*idx)
+                    .map(|c| c.generated.is_none())
+                    .unwrap_or(true)
+            })
+            .collect::<Vec<_>>()
     } else {
-        insert
+        let ordinals: Vec<usize> = insert
             .columns
             .into_iter()
             .map(|column| resolve_column_ordinal_in_table(&table, &column.value))
-            .collect::<Result<Vec<_>>>()?
+            .collect::<Result<Vec<_>>>()?;
+        // Phase-11 SQL-D A6: SQLite rejects explicit INSERT into a
+        // generated column with "cannot INSERT into generated column X".
+        for ord in &ordinals {
+            if let Some(col) = table.columns.get(*ord)
+                && col.generated.is_some()
+            {
+                return Err(Error::UnsupportedSql(format!(
+                    "cannot INSERT into generated column \"{}\"",
+                    col.name
+                )));
+            }
+        }
+        ordinals
     };
 
     let mut rows = Vec::new();
@@ -41,6 +72,7 @@ pub(crate) fn bind_insert(
             }
             SetExpr::Select(select) => {
                 let template = bind_simple_select_query(
+                    conn,
                     Arc::clone(&schema),
                     schema_epoch,
                     sql,
@@ -122,6 +154,13 @@ pub(crate) fn bind_update(
         ));
     }
 
+    if let sqlparser::ast::TableFactor::Table { ref name, .. } = update.table.relation
+        && crate::exec::view::name_is_view(&schema, name)
+    {
+        return Err(crate::exec::view::cannot_modify_view_error(
+            &name.to_string(),
+        ));
+    }
     let table = bind_table_with_joins(&schema, &update.table)?;
     let mut params = ParamLayout::default();
     let mut assignments = Vec::new();
@@ -136,6 +175,16 @@ pub(crate) fn bind_update(
                 ));
             }
         };
+        // Phase-11 SQL-D A6: SQLite rejects assigning a value directly
+        // to a generated column with "cannot UPDATE generated column X".
+        if let Some(col) = table.columns.get(ordinal)
+            && col.generated.is_some()
+        {
+            return Err(Error::UnsupportedSql(format!(
+                "cannot UPDATE generated column \"{}\"",
+                col.name
+            )));
+        }
         assignments.push((ordinal, normalize_expr(assignment.value, &mut params)?));
     }
     let selection = match update.selection {
@@ -202,6 +251,13 @@ pub(crate) fn bind_delete(
     if from.len() != 1 {
         return Err(Error::UnsupportedSql(
             "only single-table DELETE is supported".to_owned(),
+        ));
+    }
+    if let sqlparser::ast::TableFactor::Table { ref name, .. } = from[0].relation
+        && crate::exec::view::name_is_view(&schema, name)
+    {
+        return Err(crate::exec::view::cannot_modify_view_error(
+            &name.to_string(),
         ));
     }
     let table = bind_table_with_joins(&schema, &from[0])?;
@@ -306,6 +362,17 @@ pub(crate) fn bind_insert_conflict(
                                 ));
                             }
                         };
+                        // Phase-11 SQL-D A6: ON CONFLICT DO UPDATE is
+                        // still an UPDATE — assigning a generated column
+                        // is forbidden in SQLite.
+                        if let Some(col) = table.columns.get(ordinal)
+                            && col.generated.is_some()
+                        {
+                            return Err(Error::UnsupportedSql(format!(
+                                "cannot UPDATE generated column \"{}\"",
+                                col.name
+                            )));
+                        }
                         Ok((ordinal, normalize_expr(assignment.value, params)?))
                     })
                     .collect::<Result<Vec<_>>>()?,

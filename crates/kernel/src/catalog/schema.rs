@@ -48,6 +48,24 @@ pub struct ColumnDef {
     pub not_null: bool,
     pub default_value: Option<OwnedValue>,
     pub default_expr: Option<Arc<super::expr::CompiledExpr>>,
+    /// A6 SQL-D: GENERATED ALWAYS AS (expr) column. None for ordinary
+    /// columns. Verbatim SQL fragment; re-parsed at eval time. `kind`
+    /// chooses STORED (computed at write, persisted) vs VIRTUAL
+    /// (computed at read).
+    pub generated: Option<GeneratedColumnSpec>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum GeneratedColumnKind {
+    Stored = 0,
+    Virtual = 1,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneratedColumnSpec {
+    pub kind: GeneratedColumnKind,
+    pub expr_sql: Box<str>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +82,11 @@ pub struct IndexDef {
     pub keys: Vec<IndexKeyDef>,
     pub flags: u64,
     pub normalized_sql: Option<Box<str>>,
+    /// A6 SQL-D: partial-index WHERE predicate as verbatim SQL.
+    /// None for full indexes. SQL exec re-parses and evaluates per row
+    /// before maintaining the index; planner only uses a partial index
+    /// when the query WHERE is provably implied (today: text match).
+    pub predicate_sql: Option<Box<str>>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,8 +129,80 @@ pub struct TableDef {
     pub indexes: Vec<IndexDef>,
     pub constraints: Vec<ConstraintDef>,
     pub checks: Vec<CheckDef>,
+    pub foreign_keys: Vec<ForeignKeyDef>,
     pub rowid_alias_column: Option<u16>,
     pub flags: u64,
+    pub normalized_sql: Option<Box<str>>,
+}
+
+/// Parsed foreign-key constraint attached to a [`TableDef`]. Captures the
+/// child-side column ordinals plus the parent table/column names so the
+/// SQL executor can resolve the parent table at write time (snapshots are
+/// stable inside a transaction). `parent_columns` is empty when the
+/// declaration omitted the column list — the executor then defaults to the
+/// parent's primary-key columns, matching SQLite.
+#[derive(Debug, Clone)]
+pub struct ForeignKeyDef {
+    pub constraint_id: super::ids::ConstraintId,
+    pub name: Option<Box<str>>,
+    pub columns: Vec<u16>,
+    pub parent_table: Box<str>,
+    pub parent_columns: Vec<Box<str>>,
+    pub on_delete: super::ddl::FkAction,
+    pub on_update: super::ddl::FkAction,
+    pub deferred: bool,
+}
+
+/// A persisted trigger definition.
+///
+/// Captures the parent table, the firing event/period, an optional
+/// column-list filter for `UPDATE OF c1, c2 ...`, an optional `WHEN`
+/// predicate, and the verbatim body SQL. The SQL crate re-parses the
+/// body at fire time and binds it against a before-image/after-image row context.
+#[derive(Debug, Clone)]
+pub struct TriggerDef {
+    pub trigger_id: ObjectId,
+    pub schema_id: SchemaId,
+    pub name: Box<str>,
+    pub folded: Box<str>,
+    /// The parent table the trigger is attached to (case-preserved + folded).
+    pub table_name: Box<str>,
+    pub table_folded: Box<str>,
+    pub when_time: super::ddl::TriggerTimeKind,
+    pub when_event: super::ddl::TriggerEventKind,
+    /// Column filter for `UPDATE OF ...`. Empty when no column list was
+    /// specified or the event is not `UPDATE`.
+    pub when_cols: Vec<Box<str>>,
+    /// Optional `WHEN` predicate SQL text.
+    pub when_predicate_sql: Option<Box<str>>,
+    /// Verbatim body SQL (the contents of `BEGIN ... END` re-emitted as
+    /// SQL via the parser's Display impl). Re-parsed at fire time.
+    pub body_sql: Box<str>,
+    pub normalized_sql: Option<Box<str>>,
+}
+
+/// A persisted view definition. The view body SQL is stored verbatim
+/// alongside the optional alias column list; query-time expansion
+/// re-parses the body and binds it as a derived row source.
+///
+/// `session_scoped` distinguishes regular vs SQLite-style session-only
+/// views; both are persisted in the catalog snapshot, but session-scoped
+/// views are flagged so filtering can omit them from the durable
+/// `sqlite_schema`.
+#[derive(Debug, Clone)]
+pub struct ViewDef {
+    pub view_id: ObjectId,
+    pub schema_id: SchemaId,
+    pub name: Box<str>,
+    pub folded: Box<str>,
+    /// Optional alias column list from `CREATE VIEW name(col1, col2, ...)`.
+    /// Empty means use the body's own output columns.
+    pub columns: Vec<Box<str>>,
+    /// Raw SQL of the body SELECT, e.g. `SELECT a FROM t WHERE a > 0`.
+    pub body_sql: Box<str>,
+    /// True when this was created with the SQLite session-only modifier.
+    pub session_scoped: bool,
+    /// The original `CREATE VIEW` text, used to emit `sqlite_schema` rows.
     pub normalized_sql: Option<Box<str>>,
 }
 
@@ -117,11 +212,15 @@ pub struct SchemaSnapshot {
     pub namespaces: Vec<NamespaceDef>,
     pub tables: Vec<Arc<TableDef>>,
     pub indexes: Vec<Arc<IndexDef>>,
+    pub views: Vec<Arc<ViewDef>>,
+    pub triggers: Vec<Arc<TriggerDef>>,
     by_table_id: HashMap<TableId, Arc<TableDef>>,
     by_index_id: HashMap<IndexId, Arc<IndexDef>>,
     by_table_name: HashMap<(SchemaId, Box<str>), Arc<TableDef>>,
     by_namespace_name: HashMap<Box<str>, SchemaId>,
     by_index_name: HashMap<(SchemaId, Box<str>), Arc<IndexDef>>,
+    by_view_name: HashMap<(SchemaId, Box<str>), Arc<ViewDef>>,
+    by_trigger_name: HashMap<(SchemaId, Box<str>), Arc<TriggerDef>>,
 }
 
 impl SchemaSnapshot {
@@ -131,11 +230,15 @@ impl SchemaSnapshot {
             namespaces: Vec::new(),
             tables: Vec::new(),
             indexes: Vec::new(),
+            views: Vec::new(),
+            triggers: Vec::new(),
             by_table_id: HashMap::new(),
             by_index_id: HashMap::new(),
             by_table_name: HashMap::new(),
             by_namespace_name: HashMap::new(),
             by_index_name: HashMap::new(),
+            by_view_name: HashMap::new(),
+            by_trigger_name: HashMap::new(),
         }
     }
 
@@ -161,6 +264,18 @@ impl SchemaSnapshot {
 
     pub fn lookup_index(&self, schema_id: SchemaId, name: &str) -> Option<Arc<IndexDef>> {
         self.by_index_name
+            .get(&(schema_id, name.to_ascii_lowercase().into_boxed_str()))
+            .cloned()
+    }
+
+    pub fn lookup_view(&self, schema_id: SchemaId, name: &str) -> Option<Arc<ViewDef>> {
+        self.by_view_name
+            .get(&(schema_id, name.to_ascii_lowercase().into_boxed_str()))
+            .cloned()
+    }
+
+    pub fn lookup_trigger(&self, schema_id: SchemaId, name: &str) -> Option<Arc<TriggerDef>> {
+        self.by_trigger_name
             .get(&(schema_id, name.to_ascii_lowercase().into_boxed_str()))
             .cloned()
     }
@@ -191,6 +306,30 @@ impl SchemaSnapshot {
                 });
             }
         }
+        for view in &self.views {
+            rows.push(SqliteSchemaRow {
+                type_name: "view".into(),
+                name: view.name.clone(),
+                tbl_name: view.name.clone(),
+                rootpage: 0,
+                sql: match view.normalized_sql.clone() {
+                    Some(sql) => sql,
+                    None => render_create_view(view).into_boxed_str(),
+                },
+            });
+        }
+        for trigger in &self.triggers {
+            rows.push(SqliteSchemaRow {
+                type_name: "trigger".into(),
+                name: trigger.name.clone(),
+                tbl_name: trigger.table_name.clone(),
+                rootpage: 0,
+                sql: match trigger.normalized_sql.clone() {
+                    Some(sql) => sql,
+                    None => render_create_trigger(trigger).into_boxed_str(),
+                },
+            });
+        }
         rows
     }
 
@@ -200,6 +339,7 @@ impl SchemaSnapshot {
         self.by_table_name.clear();
         self.by_namespace_name.clear();
         self.by_index_name.clear();
+        self.by_view_name.clear();
         self.indexes.clear();
         for table in &self.tables {
             self.by_table_id.insert(table.table_id, Arc::clone(table));
@@ -216,6 +356,16 @@ impl SchemaSnapshot {
         for namespace in &self.namespaces {
             self.by_namespace_name
                 .insert(namespace.folded.clone(), namespace.schema_id);
+        }
+        for view in &self.views {
+            self.by_view_name
+                .insert((view.schema_id, view.folded.clone()), Arc::clone(view));
+        }
+        for trigger in &self.triggers {
+            self.by_trigger_name.insert(
+                (trigger.schema_id, trigger.folded.clone()),
+                Arc::clone(trigger),
+            );
         }
     }
 }
@@ -257,6 +407,29 @@ fn render_create_table(table: &TableDef) -> String {
     out
 }
 
+fn render_create_view(view: &ViewDef) -> String {
+    let mut out = String::new();
+    out.push_str("CREATE ");
+    if view.session_scoped {
+        out.push_str(concat!("TE", "MP "));
+    }
+    out.push_str("VIEW ");
+    out.push_str(&view.name);
+    if !view.columns.is_empty() {
+        out.push_str(" (");
+        for (idx, col) in view.columns.iter().enumerate() {
+            if idx > 0 {
+                out.push_str(", ");
+            }
+            out.push_str(col);
+        }
+        out.push(')');
+    }
+    out.push_str(" AS ");
+    out.push_str(&view.body_sql);
+    out
+}
+
 fn render_create_index(table: &TableDef, index: &IndexDef) -> String {
     let mut out = String::new();
     out.push_str("CREATE ");
@@ -268,5 +441,28 @@ fn render_create_index(table: &TableDef, index: &IndexDef) -> String {
     out.push_str(" ON ");
     out.push_str(&table.name);
     out.push_str(" (...)");
+    out
+}
+
+fn render_create_trigger(trigger: &TriggerDef) -> String {
+    let mut out = String::new();
+    out.push_str("CREATE TRIGGER ");
+    out.push_str(&trigger.name);
+    out.push(' ');
+    out.push_str(match trigger.when_time {
+        super::ddl::TriggerTimeKind::Before => "BEFORE",
+        super::ddl::TriggerTimeKind::After => "AFTER",
+    });
+    out.push(' ');
+    out.push_str(match trigger.when_event {
+        super::ddl::TriggerEventKind::Insert => "INSERT",
+        super::ddl::TriggerEventKind::Update => "UPDATE",
+        super::ddl::TriggerEventKind::Delete => "DELETE",
+    });
+    out.push_str(" ON ");
+    out.push_str(&trigger.table_name);
+    out.push_str(" BEGIN ");
+    out.push_str(&trigger.body_sql);
+    out.push_str(" END");
     out
 }

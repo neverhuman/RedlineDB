@@ -10,7 +10,7 @@ use std::time::Duration;
 use redlinedb_sql::BeginMode;
 
 use crate::error::{Error, ErrorCode, Result};
-use crate::iter::Step;
+use crate::iter::{FromRow, Step};
 use crate::options::{CommitStats, ConnectionStats, ExecuteSummary, FunctionArity, FunctionFlags};
 use crate::params::Params;
 use crate::statement::{OwnedStatement, Rows, Statement};
@@ -83,6 +83,36 @@ impl Connection {
             rows_affected: stmt.affected_rows() as u64,
             rows_returned: rows,
         })
+    }
+
+    /// Fetch the first row of a query and map it via the `FromRow` trait.
+    /// Returns `ErrorCode::NotFound` if the query produced zero rows.
+    pub fn query_row<P, T>(&mut self, sql: &str, params: P) -> Result<T>
+    where
+        P: Params,
+        T: FromRow,
+    {
+        let mut stmt = self.prepare(sql)?;
+        stmt.bind_all(params)?;
+        match stmt.step()? {
+            Step::Row(row) => T::from_row(&row),
+            Step::Done => Err(Error::new(ErrorCode::NotFound, "query_row: no rows")),
+        }
+    }
+
+    /// Fetch the first row of a query if any, mapped via `FromRow`.
+    /// Returns `Ok(None)` if no rows were produced.
+    pub fn query_row_opt<P, T>(&mut self, sql: &str, params: P) -> Result<Option<T>>
+    where
+        P: Params,
+        T: FromRow,
+    {
+        let mut stmt = self.prepare(sql)?;
+        stmt.bind_all(params)?;
+        match stmt.step()? {
+            Step::Row(row) => T::from_row(&row).map(Some),
+            Step::Done => Ok(None),
+        }
     }
 
     pub fn begin(&mut self, mode: BeginMode) -> Result<()> {

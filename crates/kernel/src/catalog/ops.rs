@@ -12,8 +12,8 @@ use super::ids::{ColumnId, ConstraintId, IndexId, ObjectId, SchemaId, TableId};
 use super::key::{IndexKeyDef, IndexKeySource, NullOrder};
 use super::names::{DbName, QualifiedName};
 use super::schema::{
-    CheckDef, ColumnDef, ConstraintDef, ConstraintKind, IndexDef, SchemaEpoch, SchemaSnapshot,
-    TableDef,
+    CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef, SchemaEpoch,
+    SchemaSnapshot, TableDef,
 };
 use super::value::OwnedValue;
 use crate::format::{PageId, RelId};
@@ -76,6 +76,7 @@ pub fn apply_create_table(
     let mut constraints = Vec::new();
     let mut checks = Vec::new();
     let mut indexes = Vec::new();
+    let mut foreign_keys: Vec<ForeignKeyDef> = Vec::new();
     let mut rowid_alias_column = None;
 
     for (ordinal, column) in spec.columns.iter().enumerate() {
@@ -123,6 +124,7 @@ pub fn apply_create_table(
                         }],
                         flags: 0,
                         normalized_sql: None,
+                        predicate_sql: None,
                     };
                     next_relation_id.0 += 1;
                     indexes.push(index.clone());
@@ -164,6 +166,7 @@ pub fn apply_create_table(
                         }],
                         flags: 0,
                         normalized_sql: None,
+                        predicate_sql: None,
                     };
                     next_relation_id.0 += 1;
                     indexes.push(index.clone());
@@ -226,6 +229,7 @@ pub fn apply_create_table(
             not_null,
             default_value,
             default_expr,
+            generated: column.generated.clone(),
         });
     }
 
@@ -302,6 +306,36 @@ pub fn apply_create_table(
                     expr: compile_expr(expr),
                 });
             }
+            TableConstraintSpec::ForeignKey {
+                name,
+                columns: fk_columns,
+                parent_table,
+                parent_columns,
+                on_delete,
+                on_update,
+                deferred,
+            } => {
+                let constraint_id = ConstraintId(next_object_id.0);
+                next_object_id.0 += 1;
+                let mut ordinals = Vec::with_capacity(fk_columns.len());
+                for col in fk_columns {
+                    let folded = col.folded().to_owned().into_boxed_str();
+                    match column_lookup.get(&folded) {
+                        Some(idx) => ordinals.push(*idx),
+                        None => return Err(Error::ObjectNotFound),
+                    }
+                }
+                foreign_keys.push(ForeignKeyDef {
+                    constraint_id,
+                    name: name.as_ref().map(|n| n.original().into()),
+                    columns: ordinals,
+                    parent_table: parent_table.original().into(),
+                    parent_columns: parent_columns.iter().map(|n| n.original().into()).collect(),
+                    on_delete: *on_delete,
+                    on_update: *on_update,
+                    deferred: *deferred,
+                });
+            }
         }
     }
 
@@ -315,6 +349,7 @@ pub fn apply_create_table(
         indexes,
         constraints,
         checks,
+        foreign_keys,
         rowid_alias_column,
         flags: u64::from(spec.strict),
         normalized_sql: spec.normalized_sql.map(|sql| sql.into_boxed_str()),
@@ -382,6 +417,7 @@ pub fn apply_create_index(
         keys,
         flags: 0,
         normalized_sql: spec.normalized_sql.map(|sql| sql.into_boxed_str()),
+        predicate_sql: spec.predicate_sql.map(|sql| sql.into_boxed_str()),
     };
 
     let mut updated = false;
@@ -575,6 +611,7 @@ pub fn apply_alter_table(
                 not_null,
                 default_value: column.default_value.clone(),
                 default_expr: default_const_expr(column.default_value.as_ref()),
+                generated: None,
             });
         }
         AlterTableOperationSpec::DropColumn { .. } => {
@@ -639,6 +676,7 @@ fn build_table_constraint_index(
         keys,
         flags: 0,
         normalized_sql: None,
+        predicate_sql: None,
     };
     input.next_relation_id.0 += 1;
     let _ = input.conflict;
@@ -647,16 +685,30 @@ fn build_table_constraint_index(
 
 fn build_index_keys(table: &TableDef, columns: &[IndexColumnSpec]) -> Result<Vec<IndexKeyDef>> {
     let mut keys = Vec::with_capacity(columns.len());
-    for column in columns {
-        let ordinal = table
-            .columns
-            .iter()
-            .find(|candidate| candidate.folded.as_ref() == column.name.folded())
-            .ok_or(Error::ColumnNotFound)?
-            .ordinal;
+    for (idx, column) in columns.iter().enumerate() {
+        let (ordinal, source) = if let Some(expr_sql) = column.expr_sql.as_ref() {
+            // A6 SQL-D: expression-source index key. Synthetic ordinal
+            // is the position within the key list; kernel never indexes
+            // expression keys by column ordinal.
+            (
+                idx as u16,
+                IndexKeySource::Expression {
+                    sql: expr_sql.clone().into_boxed_str(),
+                    referenced_cols: column.expr_referenced_cols.clone(),
+                },
+            )
+        } else {
+            let ordinal = table
+                .columns
+                .iter()
+                .find(|candidate| candidate.folded.as_ref() == column.name.folded())
+                .ok_or(Error::ColumnNotFound)?
+                .ordinal;
+            (ordinal, IndexKeySource::Column { attnum: ordinal })
+        };
         keys.push(IndexKeyDef {
             ordinal,
-            source: IndexKeySource::Column { attnum: ordinal },
+            source,
             sort_dir: column.sort_dir,
             null_order: NullOrder::First,
         });

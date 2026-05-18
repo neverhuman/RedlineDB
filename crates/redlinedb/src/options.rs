@@ -66,6 +66,53 @@ impl Default for OpenOptions {
     }
 }
 
+impl OpenOptions {
+    /// Fluent setter for `busy_timeout`. Callers can write
+    /// `OpenOptions::default().with_busy_timeout(Duration::from_millis(100))`
+    /// instead of constructing the struct field-by-field.
+    #[must_use]
+    pub fn with_busy_timeout(mut self, timeout: Duration) -> Self {
+        self.busy_timeout = timeout;
+        self
+    }
+
+    #[must_use]
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
+    #[must_use]
+    pub fn with_create(mut self, create: bool) -> Self {
+        self.create = create;
+        self
+    }
+
+    #[must_use]
+    pub fn with_durability(mut self, durability: Durability) -> Self {
+        self.durability = durability;
+        self
+    }
+
+    #[must_use]
+    pub fn with_statement_cache_capacity(mut self, capacity: usize) -> Self {
+        self.statement_cache_capacity = capacity;
+        self
+    }
+
+    #[must_use]
+    pub fn with_process_owner_lock(mut self, locked: bool) -> Self {
+        self.process_owner_lock = locked;
+        self
+    }
+
+    #[must_use]
+    pub fn with_temp_dir(mut self, temp_dir: impl Into<std::path::PathBuf>) -> Self {
+        self.temp_dir = Some(temp_dir.into());
+        self
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BackupOptions {
     pub batch_rows: usize,

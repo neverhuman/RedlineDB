@@ -30,7 +30,18 @@ pub struct IndexKeyDef {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IndexKeySource {
-    Column { attnum: u16 },
+    Column {
+        attnum: u16,
+    },
+    /// A6 SQL-D: expression index key. SQL stored verbatim from CREATE
+    /// INDEX; SQL exec re-parses with `sqlparser` and evaluates against
+    /// row values. `referenced_cols` lists ordinals the expression
+    /// mentions so the index-update path re-emits keys only when an
+    /// input column was touched.
+    Expression {
+        sql: Box<str>,
+        referenced_cols: Vec<u16>,
+    },
 }
 
 pub fn encode_index_key(

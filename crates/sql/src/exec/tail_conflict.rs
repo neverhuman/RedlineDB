@@ -225,6 +225,10 @@ fn apply_upsert_update(
         values[*ordinal] = eval_scalar(expr, &upsert_row, ctx.bindings)?;
     }
     values = apply_row_affinity(ctx.table, values)?;
+    // Phase-11 SQL-D A6: an UPSERT DO UPDATE may have touched an input
+    // to a STORED generated column. Recompute every STORED column
+    // before the persisted row is materialised.
+    values = compute_stored_generated_columns(ctx.table, values)?;
     let new_rowid = choose_rowid_for_update(ctx.conn.engine(), ctx.table, &values, existing.rowid)?;
     if let Some(alias) = ctx.table.rowid_alias_column
         && let Some(slot) = values.get_mut(alias as usize)
@@ -368,6 +372,10 @@ pub(in crate::exec) fn insert_row_with_resolution(
 ) -> Result<InsertOutcome> {
     values.resize(table.columns.len(), SqlValue::Null);
     *values = apply_row_affinity(table, std::mem::take(values))?;
+    // Phase-11 SQL-D A6: compute STORED generated columns from inputs
+    // (idempotent if already computed by a build_row* path) before any
+    // constraint validation or unique-conflict checks observe the row.
+    *values = compute_stored_generated_columns(table, std::mem::take(values))?;
     let rowid = choose_rowid_for_insert(conn.engine(), table, values)?;
 
     let action = conflict_action_for(conflict);
@@ -395,6 +403,10 @@ pub(in crate::exec) fn insert_row_with_resolution(
             values,
             rowid,
         )?;
+        // A6 SQLite parity: verify every declared FK against its parent.
+        // Deferred constraints are queued for COMMIT; immediate ones must
+        // resolve right now.
+        crate::exec::fk::enforce_fk_on_insert(conn, session, tx, table, values, rowid)?;
         session.last_insert_rowid = Some(rowid.0 as i64);
         return Ok(InsertOutcome::Inserted {
             rowid,

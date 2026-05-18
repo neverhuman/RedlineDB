@@ -123,8 +123,9 @@ fn diff_scalar_string_matrix() {
     lab.execute("INSERT INTO t VALUES ('hello'), ('world'), ('  spaces  '), (NULL)");
 
     lab.assert_queries(&[
-        // substr() skipped: sqlparser maps it to ANSI SUBSTRING AST (not yet implemented)
-        // trim(v) skipped: sqlparser Trim AST node not yet implemented
+        "SELECT substr(v, 2) FROM t ORDER BY v",
+        "SELECT substring(v, 2, 3) FROM t ORDER BY v",
+        "SELECT trim(v) FROM t ORDER BY v",
         "SELECT instr(v, 'o') FROM t ORDER BY v",
         "SELECT instr(v, 'x') FROM t ORDER BY v",
         "SELECT replace(v, 'o', 'X') FROM t ORDER BY v",
@@ -181,7 +182,13 @@ fn diff_join_and_subquery_matrix() {
         "SELECT id FROM a WHERE id IN (SELECT aid FROM b) ORDER BY id",
         // Subquery NOT IN
         "SELECT id FROM a WHERE id NOT IN (SELECT aid FROM b) ORDER BY id",
-        // Correlated EXISTS and scalar subquery skipped: a.id qualified ref in correlated
-        // subquery context triggers UnknownColumn in redlinedb planner
+        "SELECT (id, v) IN (SELECT aid, v FROM b) FROM a ORDER BY id",
+        "SELECT (id, v) NOT IN (SELECT aid, v FROM b) FROM a ORDER BY id",
+        // Correlated subqueries — A7 thread-local outer-row stack now
+        // resolves outer-scope qualified references.
+        "SELECT a.id FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.aid = a.id) ORDER BY a.id",
+        "SELECT a.id FROM a WHERE NOT EXISTS (SELECT 1 FROM b WHERE b.aid = a.id) ORDER BY a.id",
+        // Correlated scalar subquery in projection.
+        "SELECT a.id, (SELECT COUNT(*) FROM b WHERE b.aid = a.id) AS bcnt FROM a ORDER BY a.id",
     ]);
 }

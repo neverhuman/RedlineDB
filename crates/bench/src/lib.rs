@@ -5,6 +5,7 @@ pub mod config;
 mod cross_engine;
 mod engine;
 pub mod failpoint_matrix;
+pub mod fuzz;
 mod gates;
 mod metrics;
 pub mod process_metrics;

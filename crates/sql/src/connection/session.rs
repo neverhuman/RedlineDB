@@ -21,6 +21,10 @@ pub struct Connection {
     pub(super) db: Arc<Database>,
     pub(super) session: Mutex<SessionState>,
     pub(super) local_cache: StatementCache,
+    /// Per-connection ATTACH/DETACH alias map. Populated by
+    /// `crate::exec::attach::apply_attach_plan` when the executor runs
+    /// `PreparedKind::Attach`.
+    pub(super) attach_map: crate::exec::attach::AttachMap,
 }
 
 impl Connection {
@@ -318,6 +322,23 @@ impl Connection {
                 "transaction is failed and must roll back",
             ));
         }
+        // A6 SQLite parity: drain DEFERRABLE INITIALLY DEFERRED FK
+        // checks before handing off to the kernel commit. A failure here
+        // aborts the commit and rolls back the tx, matching SQLite's
+        // statement-time deferred enforcement.
+        if let Some(mut tx) = session.tx.take() {
+            let drain_result =
+                crate::exec::fk::drain_deferred_fk_checks(self, &mut session, &mut tx);
+            if let Err(err) = drain_result {
+                let _ = self.db.engine.rollback(tx);
+                session.kernel_unique_guards.clear();
+                session.unique_guards.clear();
+                session.failed = false;
+                session.clear_savepoints();
+                return Err(err);
+            }
+            session.tx = Some(tx);
+        }
         let tx = session
             .tx
             .take()
@@ -359,6 +380,9 @@ impl Connection {
         let result = self.db.engine.rollback(tx);
         session.kernel_unique_guards.clear();
         session.unique_guards.clear();
+        // A6 SQLite parity: ROLLBACK discards every pending deferred FK
+        // check; the rolled-back rows never made it to the durable state.
+        crate::exec::fk::clear_deferred_fk_checks(&mut session);
         session.failed = false;
         session.clear_savepoints();
         result?;
@@ -448,6 +472,10 @@ impl Connection {
         &self.db.engine
     }
 
+    pub(crate) fn attach_map(&self) -> &crate::exec::attach::AttachMap {
+        &self.attach_map
+    }
+
     /// Read-only access to the underlying kernel engine. Exposed for SQL
     /// smoke tests and tooling that need to inspect physical indexes /
     /// catalog state directly. Production code paths must continue to use
@@ -474,6 +502,15 @@ impl Connection {
     }
 
     pub(crate) fn prepare_cached(self: &Arc<Self>, sql: &str) -> Result<Arc<PreparedTemplate>> {
+        // Set the per-thread current-connection slot so binders that need
+        // to execute sub-queries during prepare (notably view-body
+        // materialisation in `crate::exec::view`) can locate the
+        // connection. The slot is cleared on closure exit, restoring any
+        // previous value installed by an outer `Statement::step`.
+        crate::exec::with_current_connection(self.as_ref(), || self.prepare_cached_inner(sql))
+    }
+
+    fn prepare_cached_inner(self: &Arc<Self>, sql: &str) -> Result<Arc<PreparedTemplate>> {
         let normalized = sql.trim();
         if crate::parser::is_pragma_sql(normalized) {
             let mut template = parse_prepared_template(self.as_ref(), sql)?;
@@ -501,12 +538,55 @@ impl Connection {
         template.stats_epoch = self.stats_epoch().0;
         template.optimizer_hash = self.optimizer_hash();
         let template = Arc::new(template);
-        self.db
-            .stmt_cache
-            .insert(key.clone(), Arc::clone(&template));
+        // Views (and other binders that execute sub-queries against the
+        // live connection) embed the materialised rows into the template,
+        // so the cached template is correct only for the schema/data
+        // epoch captured at prepare time. We skip the shared db cache
+        // when the template depends on the current connection's row
+        // store; views are detected by checking whether the prepared
+        // SELECT plan contains a `SelectSource::Cte` that did not come
+        // from a CTE (i.e. is unbound in the current scope). For now we
+        // simply cache locally to avoid cross-connection staleness.
+        if !template_contains_view_materialisation(&template) {
+            self.db
+                .stmt_cache
+                .insert(key.clone(), Arc::clone(&template));
+        }
         self.local_cache.insert(key, Arc::clone(&template));
         Ok(template)
     }
+}
+
+/// True if the prepared template embeds view-materialised rows. Such
+/// templates must not be shared across connections because the embedded
+/// row set captures point-in-time data, not just schema. CTE templates
+/// share the same `SelectSource::Cte` shape but are produced from query
+/// SQL that contains `WITH`, so we conservatively skip caching any
+/// template whose SQL is not a `WITH`-prefixed SELECT but still embeds
+/// pre-materialised rows.
+fn template_contains_view_materialisation(template: &PreparedTemplate) -> bool {
+    use crate::statement::{PreparedKind, SelectSource};
+    let plan = match &template.kind {
+        PreparedKind::Select(plan) => plan,
+        _ => return false,
+    };
+    fn source_has_view(src: &SelectSource) -> bool {
+        match src {
+            SelectSource::Cte { .. } => true,
+            SelectSource::CompoundAll(branches) | SelectSource::CompoundSet { branches, .. } => {
+                branches.iter().any(|p| source_has_view(&p.source))
+            }
+            _ => false,
+        }
+    }
+    if !source_has_view(&plan.source) {
+        return false;
+    }
+    let sql_trimmed = template.sql.trim_start().to_ascii_lowercase();
+    // CTE prepares always start with `WITH`. Anything else that produced a
+    // `SelectSource::Cte` came from a view or a TVF expansion — keep those
+    // out of the cross-connection cache.
+    !sql_trimmed.starts_with("with")
 }
 
 #[allow(dead_code)]

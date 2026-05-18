@@ -1781,7 +1781,7 @@ Never silently consume huge memory just because RAM exists. That is how you beat
 
 ## Avoid LSM as the primary SQL storage kernel
 
-LSM trees are fantastic for write-heavy KV workloads, but for a SQLite/Postgres-like SQL engine they make several things harder:
+LSM trees are fantastic for write-heavy KV workloads, but for a SQLite-like SQL engine they make several things harder:
 
 ```text
 range scans
@@ -1883,4 +1883,3 @@ If the storage kernel is built this way, every later layer has a serious foundat
 [1]: https://www.sqlite.org/wal.html "Write-Ahead Logging"
 [2]: https://www.postgresql.org/docs/current/transaction-iso.html "PostgreSQL: Documentation: 18: 13.2. Transaction Isolation"
 [3]: https://research.ibm.com/publications/aries-a-transaction-recovery-method-supporting-fine-granularity-locking-and-partial-rollbacks-using-write-ahead-logging "ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging for ACM Transactions on Database Systems (TODS) - IBM Research"
-

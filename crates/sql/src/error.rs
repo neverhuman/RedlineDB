@@ -41,6 +41,9 @@ pub enum Error {
 
     #[error("datatype mismatch")]
     DatatypeMismatch,
+
+    #[error("not authorized")]
+    NotAuthorized,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -61,6 +64,7 @@ impl PartialEq for Error {
             (Self::CommitMaybeCommitted, Self::CommitMaybeCommitted) => true,
             (Self::ConstraintViolation(a), Self::ConstraintViolation(b)) => a == b,
             (Self::DatatypeMismatch, Self::DatatypeMismatch) => true,
+            (Self::NotAuthorized, Self::NotAuthorized) => true,
             _ => false,
         }
     }

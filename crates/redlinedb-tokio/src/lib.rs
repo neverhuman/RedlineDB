@@ -168,17 +168,18 @@ impl AsyncRow {
     }
 
     fn get_required(&self, index: usize) -> Result<&Value> {
-        self.columns.get(index).ok_or_else(|| {
-            Error::new(
-                ErrorCode::Range,
-                format!(
-                    "column index {} out of bounds (row has {} columns)",
-                    index,
-                    self.columns.len()
-                ),
-            )
-        })
+        match self.columns.get(index) {
+            Some(value) => Ok(value),
+            None => Err(column_out_of_bounds(index, self.columns.len())),
+        }
     }
+}
+
+fn column_out_of_bounds(index: usize, len: usize) -> Error {
+    Error::new(
+        ErrorCode::Range,
+        format!("column index {index} out of bounds (row has {len} columns)"),
+    )
 }
 
 fn mismatch(index: usize, expected: &str, got: &Value) -> Error {
@@ -307,9 +308,13 @@ impl Pool {
         let rows = self
             .run_blocking(move || materialize_rows(&db, &sql, params, busy, Some(1)))
             .await?;
-        rows.into_iter()
-            .next()
-            .ok_or_else(|| Error::new(ErrorCode::NotFound, "fetch_one: query returned no rows"))
+        match rows.into_iter().next() {
+            Some(row) => Ok(row),
+            None => Err(Error::new(
+                ErrorCode::NotFound,
+                "fetch_one: query returned no rows",
+            )),
+        }
     }
 
     /// Run `sql` and materialize the first row if any. Returns `Ok(None)` for
@@ -478,9 +483,15 @@ impl PoolBuilder {
 
     /// Construct the [`Pool`].
     pub fn build(self) -> Result<Pool> {
-        let db = self
-            .db
-            .ok_or_else(|| Error::new(ErrorCode::Misuse, "PoolBuilder requires a Database"))?;
+        let db = match self.db {
+            Some(db) => db,
+            None => {
+                return Err(Error::new(
+                    ErrorCode::Misuse,
+                    "PoolBuilder requires a Database",
+                ));
+            }
+        };
         Ok(Pool {
             inner: Arc::new(PoolInner {
                 db,
