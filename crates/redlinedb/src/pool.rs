@@ -228,7 +228,10 @@ impl DerefMut for PooledConnection {
 
 impl Drop for PooledConnection {
     fn drop(&mut self) {
-        if let Some(conn) = self.conn.take() {
+        if let Some(mut conn) = self.conn.take() {
+            if conn.in_transaction() {
+                let _ = conn.rollback();
+            }
             if let Ok(mut state) = self.pool.state.lock() {
                 state.idle.push(conn);
                 state.in_use = state.in_use.saturating_sub(1);
