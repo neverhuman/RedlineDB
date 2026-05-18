@@ -563,8 +563,8 @@ fn index_mvcc_aborted_insert_and_delete_are_invisible() {
 fn engine_create_index_allocates_meta_page_and_recovers() {
     use redlinedb_kernel::catalog::{
         ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
-        IndexColumnSpec, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef, encode_index_key,
-        encode_record,
+        IndexColumnSpec, IndexMethod, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef,
+        encode_index_key, encode_record,
     };
     use redlinedb_kernel::engine::{Engine, EngineConfig};
     use redlinedb_kernel::format::DEFAULT_PAGE_SIZE;
@@ -669,6 +669,7 @@ fn engine_create_index_allocates_meta_page_and_recovers() {
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
                 predicate_sql: None,
+                method: IndexMethod::Btree,
             },
         )
         .unwrap();
@@ -715,7 +716,7 @@ fn engine_create_index_allocates_meta_page_and_recovers() {
 fn ddl_index_handles_publish_and_remove_only_on_commit() {
     use redlinedb_kernel::catalog::{
         ColumnSpec, CreateIndexSpec, CreateTableSpec, DbName, DropIndexSpec, IndexColumnSpec,
-        IndexOrigin, QualifiedName, SchemaId, SortDir,
+        IndexMethod, IndexOrigin, QualifiedName, SchemaId, SortDir,
     };
     use redlinedb_kernel::engine::{Engine, EngineConfig};
 
@@ -780,6 +781,7 @@ fn ddl_index_handles_publish_and_remove_only_on_commit() {
         origin: IndexOrigin::User,
         normalized_sql: Some("CREATE INDEX ix_t_v ON t(v)".to_owned()),
         predicate_sql: None,
+        method: IndexMethod::Btree,
     };
 
     let mut tx = engine

@@ -12,10 +12,13 @@ pub fn bootstrap_schema(next_relation_id: RelId) -> Arc<SchemaSnapshot> {
         // SQLite parity). v7 adds per-column generated-column spec
         // (A6 SQLite parity STORED/VIRTUAL) and per-index predicate_sql
         // + expression-source key variant (A6 SQLite parity partial /
-        // expression indexes). Older catalogs decode with empty
-        // generated / predicate fields and Column-only key sources, so
-        // the bumps are forward-compatible.
-        format_version: 7,
+        // expression indexes). v8 (Phase 2B.1a) adds per-index
+        // `method` discriminator (Btree=0, Hnsw=1) so reopen dispatches
+        // to the correct kernel index. Older catalogs decode with empty
+        // generated / predicate fields, Column-only key sources, and
+        // Btree as the default method, so the bumps are
+        // forward-compatible.
+        format_version: 8,
         schema_epoch: SchemaEpoch(1),
         next_object_id: ObjectId(10_000),
         next_relation_id,

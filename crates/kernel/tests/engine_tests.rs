@@ -1,7 +1,8 @@
 use redlinedb_kernel::Error;
 use redlinedb_kernel::catalog::{
     ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
-    IndexColumnSpec, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef, encode_record,
+    IndexColumnSpec, IndexMethod, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef,
+    encode_record,
 };
 use redlinedb_kernel::engine::{CommitOutcome, Engine, EngineConfig};
 use redlinedb_kernel::format::{Csn, RelId, RowId};
@@ -141,6 +142,7 @@ fn engine_rebuilds_v1_index_meta_on_open() {
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_t_migrate_v ON t_migrate(v)".to_owned()),
                 predicate_sql: None,
+                method: IndexMethod::Btree,
             },
         )
         .unwrap();
@@ -272,6 +274,7 @@ fn uncommitted_index_pages_do_not_flush_before_wal_is_durable() {
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_t_v ON t(v)".to_owned()),
                 predicate_sql: None,
+                method: IndexMethod::Btree,
             },
         )
         .unwrap();
@@ -952,6 +955,7 @@ fn ddl_create_table_and_index_survive_reopen() {
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX widgets_name_idx ON widgets(name)".to_owned()),
                 predicate_sql: None,
+                method: IndexMethod::Btree,
             },
         )
         .unwrap();

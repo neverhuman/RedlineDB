@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use redlinedb_kernel::catalog::{
-    ColumnSpec, CreateIndexSpec, CreateTableSpec, DbName, IndexColumnSpec, IndexOrigin,
-    QualifiedName, SortDir, ValueRef, encode_record,
+    ColumnSpec, CreateIndexSpec, CreateTableSpec, DbName, IndexColumnSpec, IndexMethod,
+    IndexOrigin, QualifiedName, SortDir, ValueRef, encode_record,
 };
 use redlinedb_kernel::engine::{Engine, EngineConfig};
 use redlinedb_kernel::format::{DEFAULT_PAGE_SIZE, PageId, RelId, RowId, TuplePtr};
@@ -98,6 +98,7 @@ fn create_kv_index(engine: &Arc<Engine>) {
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_kv_k ON kv(k)".to_owned()),
                 predicate_sql: None,
+                method: IndexMethod::Btree,
             },
         )
         .expect("create index");
