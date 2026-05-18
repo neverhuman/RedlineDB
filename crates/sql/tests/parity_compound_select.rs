@@ -55,6 +55,21 @@ fn except_returns_left_only_rows() {
 }
 
 #[test]
+fn union_all_order_by_position_matches_fuzz_iter_110() {
+    // Regression for target/proof/sqlite-full-parity/fuzz-divergence.txt
+    // seed=7 iter=110: ORDER BY 1 after UNION ALL was a no-op because the
+    // bare integer literal evaluated to the constant `Integer(1)` per row
+    // instead of being treated as a 1-based output-column reference.
+    let sql = "
+        CREATE TABLE t1(id INTEGER, x INTEGER);
+        CREATE TABLE t2(id INTEGER, price INTEGER);
+        INSERT INTO t1 VALUES (1, 50), (2, 40), (3, 30);
+        INSERT INTO t2 VALUES (4, 1), (5, 2), (6, 7);
+        SELECT id FROM t1 WHERE x > 6 UNION ALL SELECT id FROM t2 WHERE price < 6 ORDER BY 1";
+    harness::assert_parity(sql);
+}
+
+#[test]
 fn three_way_union_all_concatenates() {
     let sql = "
         CREATE TABLE a(v INTEGER);

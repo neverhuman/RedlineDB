@@ -165,7 +165,7 @@ pub(crate) fn bind_simple_select_query(
         None => None,
     };
 
-    let order_by = match order_by {
+    let mut order_by = match order_by {
         Some(order_by) => match order_by.kind {
             OrderByKind::Expressions(exprs) => exprs
                 .into_iter()
@@ -188,6 +188,7 @@ pub(crate) fn bind_simple_select_query(
         },
         None => Vec::new(),
     };
+    resolve_order_by_positions(&mut order_by, &output_columns);
 
     let (limit, offset) = match limit_clause {
         Some(LimitClause::LimitOffset {
@@ -312,8 +313,13 @@ pub(crate) fn bind_union_all_query(
         ));
     }
 
+    // For ORDER BY column resolution we need names — use the LEFT branch
+    // names since SQL columns are positional in set ops, and SQLite reports
+    // the left side's names.
+    let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
+
     let mut tail_params = ParamLayout::default();
-    let order_by = match ctx.order_by {
+    let mut order_by = match ctx.order_by {
         Some(order_by) => match order_by.kind {
             OrderByKind::Expressions(exprs) => exprs
                 .into_iter()
@@ -336,6 +342,7 @@ pub(crate) fn bind_union_all_query(
         },
         None => Vec::new(),
     };
+    resolve_order_by_positions(&mut order_by, &left_columns_for_names);
     let (limit, offset) = match ctx.limit_clause {
         Some(LimitClause::LimitOffset {
             limit,
@@ -372,10 +379,6 @@ pub(crate) fn bind_union_all_query(
         PreparedKind::Select(plan) => plan,
         _ => unreachable!("compound branch is always a SELECT"),
     };
-    // For ORDER BY column resolution we need names — use the LEFT branch
-    // names since SQL columns are positional in set ops, and SQLite reports
-    // the left side's names.
-    let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
 
     let projection = Vec::new();
     let source = match compound_op {
@@ -808,5 +811,104 @@ pub(crate) fn scan_sql_parameters(sql: &str, params: &mut ParamLayout) {
                 }
             }
         }
+    }
+}
+
+/// SQLite parity: a bare positive integer at the top of an `ORDER BY` term is a
+/// 1-based positional reference to the N-th output column, not the literal
+/// integer value. Rewrites matching terms to `Expr::Identifier(<column-name>)`
+/// so the existing column-lookup path (`crate::exec::expr::lookup_column`)
+/// resolves them. `ORDER BY 1+0`, `ORDER BY 1.5`, and `ORDER BY (1)` are left
+/// alone — only bare integer literals are positional in SQLite.
+fn resolve_order_by_positions(items: &mut [OrderByExpr], output_columns: &[String]) {
+    for item in items {
+        if let Some(idx) = top_level_positive_int(&item.expr)
+            && let Ok(pos) = usize::try_from(idx)
+            && pos >= 1
+            && pos <= output_columns.len()
+        {
+            let name = output_columns[pos - 1].clone();
+            item.expr = Expr::Identifier(Ident::new(name));
+        }
+    }
+}
+
+fn top_level_positive_int(expr: &Expr) -> Option<i64> {
+    match expr {
+        Expr::Value(v) => match &v.value {
+            Value::Number(n, _) => n.parse::<i64>().ok().filter(|n| *n > 0),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod order_by_position_tests {
+    use super::*;
+    use sqlparser::dialect::SQLiteDialect;
+    use sqlparser::parser::Parser as SqlParser;
+
+    fn parse_expr(text: &str) -> Expr {
+        let dialect = SQLiteDialect {};
+        SqlParser::new(&dialect)
+            .try_with_sql(text)
+            .expect("parser init")
+            .parse_expr()
+            .expect("parse expr")
+    }
+
+    #[test]
+    fn bare_positive_integer_resolves() {
+        assert_eq!(top_level_positive_int(&parse_expr("1")), Some(1));
+        assert_eq!(top_level_positive_int(&parse_expr("42")), Some(42));
+    }
+
+    #[test]
+    fn zero_and_negative_integers_are_not_positions() {
+        assert_eq!(top_level_positive_int(&parse_expr("0")), None);
+        // `-1` parses as UnaryOp(Minus, 1) — top-level isn't a literal.
+        assert_eq!(top_level_positive_int(&parse_expr("-1")), None);
+    }
+
+    #[test]
+    fn non_integer_literals_are_not_positions() {
+        assert_eq!(top_level_positive_int(&parse_expr("1.5")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("'1'")), None);
+    }
+
+    #[test]
+    fn nested_integer_is_not_a_position() {
+        // The key invariant: the rewrite must not descend into BinaryOp,
+        // Nested, or any other compound shape — only a bare top-level
+        // integer literal counts as a positional reference.
+        assert_eq!(top_level_positive_int(&parse_expr("1 + 1")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("(1)")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("a + 1")), None);
+    }
+
+    #[test]
+    fn resolve_rewrites_matching_position_and_leaves_others() {
+        let cols = vec!["a".to_owned(), "b".to_owned()];
+        let mk = |sql: &str| OrderByExpr {
+            expr: parse_expr(sql),
+            options: sqlparser::ast::OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            },
+            with_fill: None,
+        };
+        let mut items = vec![mk("1"), mk("2"), mk("1 + 1"), mk("3"), mk("a")];
+        resolve_order_by_positions(&mut items, &cols);
+        // [0] 1 -> Identifier("a")
+        assert!(matches!(&items[0].expr, Expr::Identifier(id) if id.value == "a"));
+        // [1] 2 -> Identifier("b")
+        assert!(matches!(&items[1].expr, Expr::Identifier(id) if id.value == "b"));
+        // [2] `1 + 1` left as BinaryOp
+        assert!(matches!(&items[2].expr, Expr::BinaryOp { .. }));
+        // [3] 3 out of range -> left as Value
+        assert!(matches!(&items[3].expr, Expr::Value(_)));
+        // [4] `a` was already an Identifier
+        assert!(matches!(&items[4].expr, Expr::Identifier(id) if id.value == "a"));
     }
 }
