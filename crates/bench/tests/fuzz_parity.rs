@@ -250,24 +250,9 @@ fn render_divergence(seed: u64, i: usize, sql: &str, div: &Divergence) -> String
 }
 
 fn iter_known_skips(sql: &str) -> bool {
-    // Currently the SQL surface workstream A is in progress; skip the
-    // statement kinds that lack execution today so the fuzz gate remains
-    // green and tracks new regressions. Each skip is keyed to the
-    // workstream that delivers it; remove the skip atomically when the
-    // corresponding `parity_*` test under `crates/sql/tests/` flips to
-    // pass. Tracking: `target/proof/sqlite-full-parity/unsupported-sql-sites.txt`.
+    // Skip only active tracked gaps. Implemented SQL surfaces must stay in
+    // the fuzzer so parity regressions are caught before they reach users.
     let lower = sql.to_ascii_lowercase();
-    // WS-A3: CTE execution
-    if lower.starts_with("with ") {
-        return true;
-    }
-    // WS-A2: INTERSECT / EXCEPT / UNION (distinct) — only UNION ALL works today.
-    if lower.contains(" intersect ") || lower.contains(" except ") {
-        return true;
-    }
-    if lower.contains(" union ") && !lower.contains(" union all ") {
-        return true;
-    }
     // WS-A7: correlated subqueries — qualified outer-column refs in nested
     // SELECTs fail planning today (see crates/sql/tests/differential_lab.rs:171).
     // The scalar-subquery generator emits `WHERE t2.t1_id = t1.id` which
@@ -405,11 +390,12 @@ fn fuzz_parity_against_rusqlite() {
     // margin to absorb fuzzer non-determinism across dep upgrades). The
     // rate framing makes the gate iteration-count-independent: bumping
     // REDLINEDB_FUZZ_ITERS from 1000 to 100000 (nightly lane) does not
-    // false-fail the gate. A pristine repo (no baseline file yet)
-    // records the current rate as the new baseline and passes.
+    // false-fail the gate. A pristine repo without a baseline only passes
+    // when it observes zero divergences, so first-run drift cannot bless
+    // itself as the new baseline.
     let gate_failed = match prior_baseline_rate {
         Some(baseline) => observed_rate > baseline * 1.10 + 0.01,
-        None => false,
+        None => observed != 0,
     };
 
     // Always write the (possibly new) baseline when the gate passes so

@@ -23,6 +23,7 @@ set -euo pipefail
 run_preflight() {
     cargo fmt --check
     bash scripts/check_file_sizes.sh
+    bash scripts/parity/lint-sqlite-parity-ledger.sh
     cargo check --workspace --locked
 }
 

@@ -6,6 +6,13 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Added
 
+- **SQLite parity receipts**: `just sql-parity-full` now regenerates the
+  required `target/proof/sqlite-full-parity/` receipts for git status, diff
+  stat, rusqlite reference metadata, unsupported SQL sites, ignored tests,
+  sqllogictest inventory, and SQL parity test inventory.
+- **SQLite parity ledger lint**: the fast preflight lane rejects `pass` rows in
+  `docs/sqlite-parity.md` whose notes admit known gaps, and prevents rejected
+  PRAGMA rows from being counted as parity passes.
 - **PRAGMA truth pass**: real implementations for `PRAGMA journal_mode`
   (`memory`/`off`/`delete`), `synchronous`, `temp_store`, `cache_size`,
   `query_only` round-trip on the session; `query_only` additionally blocks
@@ -42,6 +49,15 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Changed (potentially BREAKING for callers that probe unknown PRAGMAs)
 
+- `sql-parity-full` now fails on any SQLite parity corpus divergence after
+  writing `baseline-divergence.txt`; the corpus is no longer a non-fatal
+  baseline recorder.
+- The fuzz parity gate no longer skips implemented CTE or compound SELECT
+  forms, and a missing fuzz baseline only passes when the current run observes
+  zero divergences.
+- SQLite parity documentation now distinguishes `pass`, `partial`, `fail`,
+  `not-started`, and `rejects-by-design` so covered subsets and intentional
+  PRAGMA rejections are not counted as full parity.
 - `PRAGMA auto_vacuum` and `PRAGMA wal_checkpoint(MODE)` previously
   returned fabricated rows; they now return `UnsupportedSql`. Callers
   that branched on the row shape need to handle the error instead.

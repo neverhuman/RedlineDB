@@ -312,7 +312,10 @@ cargo run -p redlinedb-cli --release -- backup /tmp/demo.redline /tmp/demo.bak -
 
 The default SQLite-visible contract is documented in [docs/sqlite-parity.md](docs/sqlite-parity.md).
 
-RedlineDB currently ships **121 SQL-focused SQLite parity tests** across six suites. The high-level status is:
+RedlineDB currently ships **300+ SQL-focused SQLite parity tests** across
+dedicated oracle, surface, and negative-boundary suites, plus the
+`parity_oracle` corpus under `crates/sql/tests/parity_corpus/`. The high-level
+status is:
 
 | Suite | Tests | Role |
 |---|---:|---|
@@ -320,12 +323,22 @@ RedlineDB currently ships **121 SQL-focused SQLite parity tests** across six sui
 | `crates/sql/tests/parity_coverage.rs` | 29 | Positive SQL constructs: ALTER, DROP INDEX, RETURNING, subqueries, NULL behavior, PRAGMAs, savepoints, joins |
 | `crates/sql/tests/parity_negative.rs` | 24 | Explicit error boundaries for unsupported SQL so gaps do not silently mis-execute |
 | `crates/sql/tests/parity_scalar_funcs.rs` | 44 | SQLite scalar functions including `substr`, `trim`, `instr`, `replace`, `printf`, `iif`, `char`, `unicode`, blobs |
-| `crates/sql/tests/differential_lab.rs` | 4 | Live row-for-row differential checks against bundled `rusqlite` |
-| `crates/sql/tests/sqlite_full_parity.rs` | 3 | Reference-build metadata, representative differential coverage, and known full-parity gap assertions |
+| `crates/sql/tests/parity_{cte,compound_select,window,view,trigger,attach,fk_enforce,json1,json_table,partial_index,expr_index,generated_col,operators}.rs` | 140+ | Focused rusqlite-oracle parity for implemented SQLite SQL surfaces |
+| `crates/sql/tests/differential_lab.rs` | 4 | Live row-for-row differential matrices against bundled `rusqlite` |
+| `crates/sql/tests/sqlite_full_parity.rs` | 3 | Reference-build metadata, representative differential coverage, and full-parity sentinels |
+| `crates/sql/tests/parity_oracle.rs` | 58 | Full corpus gate across 55 SQL files plus harness self-tests |
 
 > **Current local proof:** `rtk cargo test -p redlinedb-sql --test parity_agg_funcs --test parity_coverage --test parity_negative --test parity_scalar_funcs --test differential_lab --test sqlite_full_parity --quiet --locked`
 
-The parity suites have **0 ignored tests**. RedlineDB is still **not full SQLite**: file-format compatibility, the broad `sqlite3_*` C API, views, triggers, CTE execution, window functions, generated columns, partial/expression indexes, and many PRAGMAs/functions remain tracked as `fail` or `not-started` in [docs/sqlite-parity.md](docs/sqlite-parity.md).
+The parity suites have **0 ignored tests**. RedlineDB is still **not full
+SQLite**: native SQLite file-format compatibility, rollback-journal/WAL byte
+compatibility, full reference-build PRAGMA coverage, collation completeness,
+natural joins, cross-database writes, and some ALTER/UPSERT/view/trigger/CLI
+edge cases remain tracked as `partial`, `fail`, `not-started`, or
+`rejects-by-design` in [docs/sqlite-parity.md](docs/sqlite-parity.md). CTEs,
+compound SELECT, window functions, views, triggers, generated columns,
+partial/expression indexes, foreign keys, ATTACH/DETACH read paths, JSON1, and
+the covered `sqlite3_*` ABI surface are no longer listed as unstarted gaps.
 
 ---
 
@@ -430,7 +443,10 @@ We try to publish RedlineDB's wins and its trailing edges with equal weight. As 
 - **Single-row hot contention** (e.g., `hot-row-update`) is roughly 5× slower than SQLite. SQLite's WAL writer batches small commits in a way our group-commit path does not yet match. Improving this is a 2026 lane.
 - **Large secondary-index range scans** are the biggest gap. The B-tree range cursor is correct but lacks prefetch and warm-leaf reuse. SQLite wins ~80× at 64 threads on `secondary-index-range`. Range-cursor prefetch is a planned kernel lane.
 - **Single-thread, per-tx overhead** is higher than SQLite's. The MVCC version-chain bookkeeping and durable rowid B-tree pay off as concurrency rises but cost a constant tax at thread count = 1.
-- **`sqlite3_*` ABI shim** covers the core symbol set but is not yet complete. The full symbol-level coverage (so rusqlite / Python `sqlite3` / Go drivers swap binary-compatibly without stubs) is the next FFI lane. The shim is a Rust crate (`crates/ffi`), not a separate C codebase.
+- **`sqlite3_*` ABI shim** now covers the documented symbol set enforced by
+  `crates/ffi/tests/symbol_diff.rs`; any deliberately excluded symbols stay in
+  the allowlist instead of being counted as SQL parity passes. The shim is a
+  Rust crate (`crates/ffi`), not a separate C codebase.
 - **No encryption-at-rest yet.** Pages and WAL are checksummed but not encrypted. Tracked as a Phase 10 deliverable.
 - **Serializable isolation** is not yet supported; we run snapshot isolation. SSI (Cahill-style) is on the future-work list.
 

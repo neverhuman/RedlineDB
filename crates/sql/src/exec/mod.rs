@@ -13,8 +13,8 @@ use redlinedb_kernel::engine::{CommitOutcome, Engine, Txn};
 use redlinedb_kernel::format::RowId;
 use redlinedb_kernel::txn::Isolation;
 use sqlparser::ast::{
-    BinaryOperator, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, OrderByExpr, SelectItem,
-    UnaryOperator, Value,
+    BinaryOperator, Expr, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArguments,
+    OrderByExpr, SelectItem, UnaryOperator, Value,
 };
 
 use crate::batch::{

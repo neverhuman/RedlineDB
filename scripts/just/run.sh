@@ -120,7 +120,16 @@ case "$lane" in
     rtk cargo test -p redlinedb-sql --test parity_coverage --test parity_scalar_funcs --test parity_agg_funcs --test differential_lab --test sqlite_full_parity --quiet --locked
     ;;
   sql-parity-full)
+    set +e
     rtk cargo test -p redlinedb-sql --test parity_oracle --quiet --locked
+    test_status=$?
+    rtk bash scripts/parity/write-sqlite-full-parity-receipts.sh
+    receipt_status=$?
+    set -e
+    if [[ "$test_status" -ne 0 ]]; then
+      exit "$test_status"
+    fi
+    exit "$receipt_status"
     ;;
   ffi-abi)
     rtk cargo test -p redlinedb-ffi --quiet --locked
