@@ -29,6 +29,44 @@ fn value_to_string_handles_all_variants() {
 }
 
 #[test]
+fn format_real_sqlite_keeps_trailing_zero_for_whole_values() {
+    use super::value::format_real_sqlite;
+    assert_eq!(format_real_sqlite(1.0), "1.0");
+    assert_eq!(format_real_sqlite(0.0), "0.0");
+    assert_eq!(format_real_sqlite(-0.0), "-0.0");
+    assert_eq!(format_real_sqlite(22.0), "22.0");
+    assert_eq!(format_real_sqlite(-3.0), "-3.0");
+}
+
+#[test]
+fn format_real_sqlite_preserves_fractional_digits() {
+    use super::value::format_real_sqlite;
+    assert_eq!(format_real_sqlite(1.5), "1.5");
+    assert_eq!(format_real_sqlite(4.5), "4.5");
+    assert_eq!(format_real_sqlite(12.25), "12.25");
+    assert_eq!(format_real_sqlite(0.1), "0.1");
+}
+
+#[test]
+fn format_real_sqlite_renders_non_finite_values() {
+    use super::value::format_real_sqlite;
+    assert_eq!(format_real_sqlite(f64::INFINITY), "Inf");
+    assert_eq!(format_real_sqlite(f64::NEG_INFINITY), "-Inf");
+    assert_eq!(format_real_sqlite(f64::NAN), "NaN");
+}
+
+#[test]
+fn value_to_string_for_real_keeps_trailing_zero() {
+    // Regression: fuzz seed=7 iter=286 showed `lower(price)` returning
+    // "1" instead of "1.0". Root cause was `value_to_string(Real)`
+    // calling `f64::to_string` directly; the fix routes through
+    // `format_real_sqlite`.
+    assert_eq!(value_to_string(&SqlValue::Real(1.0)), "1.0");
+    assert_eq!(value_to_string(&SqlValue::Real(22.0)), "22.0");
+    assert_eq!(value_to_string(&SqlValue::Real(7.0)), "7.0");
+}
+
+#[test]
 fn scalar_to_usize_clamps_negatives_to_zero() {
     assert_eq!(scalar_to_usize(&SqlValue::Integer(-5)).unwrap(), 0);
     assert_eq!(scalar_to_usize(&SqlValue::Integer(12)).unwrap(), 12);

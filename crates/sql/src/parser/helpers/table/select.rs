@@ -271,6 +271,16 @@ pub(crate) fn bind_select_table_factor(
             {
                 return Ok(bound);
             }
+            // Cross-database resolution: `alias.table` where `alias` is an
+            // ATTACHed sidecar database resolves to a synthetic BoundTable
+            // materialized from the sidecar engine at bind time.
+            if let Some(bound) = crate::exec::cross_db::try_resolve_cross_db_bound_table(
+                schema,
+                &name,
+                alias_arc.as_ref(),
+            )? {
+                return Ok(bound);
+            }
             Ok(BoundTable {
                 table: bind_table_name(schema, &name)?,
                 alias: alias.map(|alias| Arc::from(alias.name.value)),

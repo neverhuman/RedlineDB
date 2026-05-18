@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:5d099dd9727d973f4cc7f94f206fa9b8c2d5f4cf87883da4c6d111fb455472df",
-  "input_fingerprint": "sha256:892c1343029fc9f3602d9ec095bc87af3f3c661bc8f9a3e1f3c0619ada6b5e97",
+  "report_fingerprint": "sha256:767d6bc9e06479f7ba25d5467f663719e2d14c383c3cf13128ef06fd54e3b9a7",
+  "input_fingerprint": "sha256:90a8d9722ac8e4ad8520e00066942b70e91eaa9c9f36adb125df8ea2ce3815d9",
   "policy_fingerprint": "sha256:a2eb64c9162b94aa1cde5a376bdf2f1c1cedb0e2d2230a4a9d095b9771dbd229",
   "manifest_fingerprints": {
     "owner_map": "sha256:6a116832b8512c7dc7ee933250b3f28b889603dc300df9eb6fff4c7dbac6fe59",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1779074347",
+  "generated_at": "1779078874",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1779074347",
-  "started_at": "1779074347",
-  "elapsed_ms": 3884,
+  "run_id": "1779078874",
+  "started_at": "1779078874",
+  "elapsed_ms": 3513,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "18255b4",
+    "head": "a09b00a",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -347,7 +347,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1445",
+        "rust bad-behavior advisory signals: 1449",
         "ci bad-behavior advisory signals: 3",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -364,7 +364,7 @@
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
         "copy-code advisory classes found: 44 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1445",
+        "rust bad-behavior advisory signals: 1449",
         "ci bad-behavior advisory signals: 3",
         "gittools bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -1056,7 +1056,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-18T03:19:03.379154+00:00",
+    "generated_at": "2026-05-18T04:34:30.893608+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1094,20 +1094,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 717,
-      "files_considered": 279,
-      "active_files": 279,
+      "files_scanned": 718,
+      "files_considered": 280,
+      "active_files": 280,
       "exact_file_classes": 0,
       "hard_classes": 0,
       "warning_classes": 44,
       "hard_instances": 0,
-      "warning_instances": 103,
+      "warning_instances": 105,
       "duplicate_lines": 97,
       "duplicate_tokens": 283,
       "duplicate_bytes": 2670,
-      "total_redundant_lines": 118,
-      "total_redundant_tokens": 321,
-      "total_redundant_bytes": 3116
+      "total_redundant_lines": 136,
+      "total_redundant_tokens": 372,
+      "total_redundant_bytes": 3668
     },
     "classes": [
       {
@@ -1120,21 +1120,28 @@
         "duplicate_lines": 13,
         "duplicate_tokens": 42,
         "duplicate_bytes": 424,
-        "instance_count": 2,
-        "total_redundant_lines": 13,
-        "total_redundant_tokens": 42,
-        "total_redundant_bytes": 424,
+        "instance_count": 3,
+        "total_redundant_lines": 26,
+        "total_redundant_tokens": 84,
+        "total_redundant_bytes": 848,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "5ff4fa04b879d94b",
+        "fingerprint": "42e597035ea1288b",
         "reason": "same-name semantic unit copied across multiple files",
         "recommended_action": "keep the named unit in one owner and call it from the other sites",
         "instances": [
           {
+            "path": "crates/sql/src/exec/cross_db.rs",
+            "language": "rust",
+            "start_line": 194,
+            "end_line": 207,
+            "unit_name": "infer_affinity"
+          },
+          {
             "path": "crates/sql/src/exec/cte.rs",
             "language": "rust",
-            "start_line": 135,
-            "end_line": 148,
+            "start_line": 137,
+            "end_line": 150,
             "unit_name": "infer_affinity"
           },
           {
@@ -1183,6 +1190,49 @@
         ]
       },
       {
+        "id": "copy-code-unit-rust-e3eba62657620309",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "eval",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 9,
+        "duplicate_bytes": 128,
+        "instance_count": 3,
+        "total_redundant_lines": 10,
+        "total_redundant_tokens": 18,
+        "total_redundant_bytes": 256,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "8567105256d20193",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 218,
+            "end_line": 223,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 273,
+            "end_line": 278,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 192,
+            "end_line": 197,
+            "unit_name": "eval"
+          }
+        ]
+      },
+      {
         "id": "copy-code-unit-rust-eae604cd6a041810",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -1205,22 +1255,22 @@
           {
             "path": "crates/sql/src/exec/pragma_tv.rs",
             "language": "rust",
-            "start_line": 69,
-            "end_line": 74,
+            "start_line": 70,
+            "end_line": 75,
             "unit_name": "eval"
           },
           {
             "path": "crates/sql/src/exec/pragma_tv.rs",
             "language": "rust",
-            "start_line": 101,
-            "end_line": 106,
+            "start_line": 102,
+            "end_line": 107,
             "unit_name": "eval"
           },
           {
             "path": "crates/sql/src/exec/pragma_tv.rs",
             "language": "rust",
-            "start_line": 127,
-            "end_line": 132,
+            "start_line": 128,
+            "end_line": 133,
             "unit_name": "eval"
           }
         ]
@@ -1339,42 +1389,6 @@
         ]
       },
       {
-        "id": "copy-code-unit-rust-e3eba62657620309",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "eval",
-        "duplicate_lines": 5,
-        "duplicate_tokens": 9,
-        "duplicate_bytes": 128,
-        "instance_count": 2,
-        "total_redundant_lines": 5,
-        "total_redundant_tokens": 9,
-        "total_redundant_bytes": 128,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "311f35284e35f9a7",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/sql/src/exec/json_tv.rs",
-            "language": "rust",
-            "start_line": 218,
-            "end_line": 223,
-            "unit_name": "eval"
-          },
-          {
-            "path": "crates/sql/src/exec/json_tv.rs",
-            "language": "rust",
-            "start_line": 273,
-            "end_line": 278,
-            "unit_name": "eval"
-          }
-        ]
-      },
-      {
         "id": "copy-code-unit-rust-d38ffff3c586fd30",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -1404,8 +1418,8 @@
           {
             "path": "crates/sql/src/session.rs",
             "language": "rust",
-            "start_line": 215,
-            "end_line": 219,
+            "start_line": 241,
+            "end_line": 245,
             "unit_name": "drop"
           }
         ]

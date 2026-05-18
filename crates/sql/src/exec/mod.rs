@@ -49,6 +49,7 @@ use insert::*;
 mod select_top;
 use select_top::*;
 pub(crate) mod attach;
+pub(crate) mod cross_db;
 pub(crate) mod cte;
 pub(crate) mod fk;
 pub(crate) mod json_tv;
@@ -85,6 +86,10 @@ fn with_current_session<T>(ptr: *mut SessionState, f: impl FnOnce() -> T) -> T {
         cell.set(prev);
         result
     })
+}
+
+pub(crate) fn current_session_ptr() -> Option<*mut SessionState> {
+    with_current_session_ptr()
 }
 
 fn with_current_session_ptr() -> Option<*mut SessionState> {
@@ -453,6 +458,10 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             Ok(())
         }
         PragmaPlan::SetUserVersion(value) => conn.set_user_version(*value),
+        PragmaPlan::SetRecursiveTriggers(value) => {
+            conn.set_recursive_triggers(*value);
+            Ok(())
+        }
     }
 }
 

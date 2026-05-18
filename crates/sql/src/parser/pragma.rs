@@ -408,9 +408,73 @@ pub(crate) fn parse_pragma_template(
                 pragma_foreign_key_list_rows(&table),
             )
         }
+        "recursive_triggers" => {
+            if let Some(value) = value {
+                let value = parse_pragma_bool(&value)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetRecursiveTriggers(value)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("recursive_triggers")],
+                    vec![vec![SqlValue::Integer(if conn.recursive_triggers() {
+                        1
+                    } else {
+                        0
+                    })]],
+                )
+            }
+        }
+        "compile_options" => {
+            if value.is_some() {
+                return Err(Error::UnsupportedSql(
+                    "PRAGMA compile_options does not accept arguments".to_owned(),
+                ));
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("compile_options")],
+                compile_options_rows(),
+            )
+        }
         _ => return Ok(None),
     };
     Ok(Some(template))
+}
+
+/// Static list of RedlineDB compile-time-enabled feature flags exposed
+/// through `PRAGMA compile_options` / `pragma_compile_options()`. Order
+/// is alphabetical to keep the surface diffable.
+pub(crate) fn pragma_compile_options_rows() -> Vec<Vec<SqlValue>> {
+    compile_options_rows()
+}
+
+fn compile_options_rows() -> Vec<Vec<SqlValue>> {
+    const OPTIONS: &[&str] = &[
+        "ENABLE_ATTACH",
+        "ENABLE_CTE",
+        "ENABLE_EXPRESSION_INDEX",
+        "ENABLE_FOREIGN_KEY",
+        "ENABLE_GENERATED_COLUMNS",
+        "ENABLE_JSON1",
+        "ENABLE_PARTIAL_INDEX",
+        "ENABLE_RECURSIVE_TRIGGERS",
+        "ENABLE_TRIGGERS",
+        "ENABLE_VIEWS",
+        "ENABLE_WINDOW_FUNCTIONS",
+        "REDLINEDB=1",
+        "THREADSAFE=1",
+    ];
+    OPTIONS
+        .iter()
+        .map(|opt| vec![SqlValue::Text(Arc::from(*opt))])
+        .collect()
 }
 
 fn pragma_static_select(

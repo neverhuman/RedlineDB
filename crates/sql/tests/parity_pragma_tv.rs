@@ -180,3 +180,57 @@ fn pragma_tv_unknown_table_errors() {
         .err();
     assert!(err.is_some(), "expected an error for unknown table");
 }
+
+#[test]
+fn pragma_recursive_triggers_default_is_on() {
+    let pair = Pair::new();
+    let rows = pair.redline_rows("PRAGMA recursive_triggers");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], SqlValue::Integer(1));
+}
+
+#[test]
+fn pragma_recursive_triggers_set_and_get() {
+    let pair = Pair::new();
+    pair.redline
+        .execute("PRAGMA recursive_triggers = OFF")
+        .expect("set off");
+    let rows = pair.redline_rows("PRAGMA recursive_triggers");
+    assert_eq!(rows[0][0], SqlValue::Integer(0));
+    pair.redline
+        .execute("PRAGMA recursive_triggers = 1")
+        .expect("set on");
+    let rows = pair.redline_rows("PRAGMA recursive_triggers");
+    assert_eq!(rows[0][0], SqlValue::Integer(1));
+}
+
+#[test]
+fn pragma_compile_options_lists_redlinedb_features() {
+    let pair = Pair::new();
+    let rows = pair.redline_rows("PRAGMA compile_options");
+    let opts: Vec<String> = rows
+        .iter()
+        .filter_map(|r| match r.first() {
+            Some(SqlValue::Text(s)) => Some(s.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(opts.contains(&"REDLINEDB=1".to_string()));
+    assert!(opts.contains(&"ENABLE_JSON1".to_string()));
+    assert!(opts.contains(&"ENABLE_FOREIGN_KEY".to_string()));
+}
+
+#[test]
+fn pragma_compile_options_tv_form_lists_features() {
+    let pair = Pair::new();
+    let rows = pair.redline_rows("SELECT compile_options FROM pragma_compile_options() ORDER BY 1");
+    let opts: Vec<String> = rows
+        .iter()
+        .filter_map(|r| match r.first() {
+            Some(SqlValue::Text(s)) => Some(s.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(opts.contains(&"REDLINEDB=1".to_string()));
+    assert!(opts.contains(&"ENABLE_JSON1".to_string()));
+}

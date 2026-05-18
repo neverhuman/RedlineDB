@@ -420,6 +420,20 @@ impl Connection {
         self.session.lock().expect("session poisoned").foreign_keys = value;
     }
 
+    pub(crate) fn recursive_triggers(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .recursive_triggers
+    }
+
+    pub(crate) fn set_recursive_triggers(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .recursive_triggers = value;
+    }
+
     pub(crate) fn user_version(&self) -> i64 {
         self.db.user_version()
     }

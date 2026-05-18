@@ -148,6 +148,7 @@ pub struct ExplainPlan {
 pub enum PragmaPlan {
     SetForeignKeys(bool),
     SetUserVersion(i64),
+    SetRecursiveTriggers(bool),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
