@@ -32,7 +32,11 @@ pub(crate) fn format_real_sqlite(v: f64) -> String {
         return "NaN".to_owned();
     }
     if v.is_infinite() {
-        return if v < 0.0 { "-Inf".to_owned() } else { "Inf".to_owned() };
+        return if v < 0.0 {
+            "-Inf".to_owned()
+        } else {
+            "Inf".to_owned()
+        };
     }
     let s = format!("{v}");
     if s.contains('.') || s.contains('e') || s.contains('E') {

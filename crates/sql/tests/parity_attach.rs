@@ -110,8 +110,7 @@ fn select_from_attached_alias_returns_rows() {
     let dir = tempfile::tempdir().expect("tempdir");
     let aux_path = dir.path().join("aux.db");
     {
-        let aux_db =
-            Database::create(&aux_path, DbOptions::default()).expect("create aux");
+        let aux_db = Database::create(&aux_path, DbOptions::default()).expect("create aux");
         let aux_conn = aux_db.connect();
         aux_conn
             .execute("CREATE TABLE events(id INTEGER, kind TEXT)")
@@ -140,8 +139,7 @@ fn select_join_across_attached_alias_returns_rows() {
     let dir = tempfile::tempdir().expect("tempdir");
     let aux_path = dir.path().join("aux.db");
     {
-        let aux_db =
-            Database::create(&aux_path, DbOptions::default()).expect("create aux");
+        let aux_db = Database::create(&aux_path, DbOptions::default()).expect("create aux");
         let aux_conn = aux_db.connect();
         aux_conn
             .execute("CREATE TABLE events(uid INTEGER, kind TEXT)")
@@ -196,8 +194,7 @@ fn cross_db_write_returns_clear_error() {
     let dir = tempfile::tempdir().expect("tempdir");
     let aux_path = dir.path().join("aux.db");
     {
-        let aux_db =
-            Database::create(&aux_path, DbOptions::default()).expect("create aux");
+        let aux_db = Database::create(&aux_path, DbOptions::default()).expect("create aux");
         let aux_conn = aux_db.connect();
         aux_conn
             .execute("CREATE TABLE t(id INTEGER)")

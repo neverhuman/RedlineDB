@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+use crate::DbOptions;
 use crate::connection::{Connection, Database};
 use crate::error::{Error, Result};
-use crate::DbOptions;
 
 /// A single ATTACH / DETACH directive emitted by the parser.
 #[derive(Debug, Clone)]
@@ -50,7 +50,9 @@ impl std::fmt::Debug for AttachMap {
             .read()
             .map(|g| g.keys().cloned().collect())
             .unwrap_or_default();
-        f.debug_struct("AttachMap").field("aliases", &aliases).finish()
+        f.debug_struct("AttachMap")
+            .field("aliases", &aliases)
+            .finish()
     }
 }
 

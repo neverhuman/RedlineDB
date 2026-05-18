@@ -223,8 +223,7 @@ fn pragma_compile_options_lists_redlinedb_features() {
 #[test]
 fn pragma_compile_options_tv_form_lists_features() {
     let pair = Pair::new();
-    let rows =
-        pair.redline_rows("SELECT compile_options FROM pragma_compile_options() ORDER BY 1");
+    let rows = pair.redline_rows("SELECT compile_options FROM pragma_compile_options() ORDER BY 1");
     let opts: Vec<String> = rows
         .iter()
         .filter_map(|r| match r.first() {
