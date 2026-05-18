@@ -6,13 +6,13 @@ use std::sync::Arc;
 use crate::{Error, Result};
 
 use super::codec::{BytesReader, BytesWriter, frame_snapshot, parse_header};
-use super::ddl::{ConflictAction, IndexOrigin};
+use super::ddl::{ConflictAction, FkAction, IndexOrigin, TriggerEventKind, TriggerTimeKind};
 use super::expr::{CompiledExpr, ExprOp};
 use super::ids::SchemaId;
 use super::key::{IndexKeyDef, IndexKeySource, NullOrder, SortDir};
 use super::schema::{
-    CatalogMeta, CheckDef, ColumnDef, ConstraintDef, ConstraintKind, IndexDef, NamespaceDef,
-    SchemaEpoch, SchemaSnapshot, TableDef,
+    CatalogMeta, CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef,
+    NamespaceDef, SchemaEpoch, SchemaSnapshot, TableDef, TriggerDef, ViewDef,
 };
 use super::value::OwnedValue;
 use crate::format::{PageId, RelId};
@@ -96,7 +96,25 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 
     out.u32(snapshot.tables.len() as u32);
     for table in &snapshot.tables {
-        encode_table(&mut out, table)?;
+        encode_table(&mut out, table, snapshot.meta.format_version)?;
+    }
+
+    // Lane A5-views: view section was introduced at format_version 4. Always
+    // emit a length even when empty so decoders pinned at v4 can treat the
+    // counter as authoritative.
+    out.u32(snapshot.views.len() as u32);
+    for view in &snapshot.views {
+        encode_view(&mut out, view)?;
+    }
+
+    // Lane A5-triggers: trigger section was introduced at format_version 6.
+    // Emit only when the snapshot's persisted version supports the section
+    // — older catalogs round-trip without a trailing trigger block.
+    if snapshot.meta.format_version >= 6 {
+        out.u32(snapshot.triggers.len() as u32);
+        for trigger in &snapshot.triggers {
+            encode_trigger(&mut out, trigger)?;
+        }
     }
 
     Ok(out.finish())
@@ -105,7 +123,7 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
     let mut reader = BytesReader::new(bytes);
     let format_version = reader.u64()?;
-    if format_version > 2 {
+    if format_version > 7 {
         return Err(Error::UnsupportedVersion(format_version as u16));
     }
     let meta = CatalogMeta {
@@ -127,6 +145,20 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
         snapshot
             .tables
             .push(Arc::new(decode_table(&mut reader, format_version)?));
+    }
+    if format_version >= 4 {
+        let view_count = reader.u32()? as usize;
+        for _ in 0..view_count {
+            snapshot.views.push(Arc::new(decode_view(&mut reader)?));
+        }
+    }
+    if format_version >= 6 {
+        let trigger_count = reader.u32()? as usize;
+        for _ in 0..trigger_count {
+            snapshot
+                .triggers
+                .push(Arc::new(decode_trigger(&mut reader)?));
+        }
     }
     snapshot.rebuild_indexes();
     if reader.remaining() != 0 {
@@ -169,7 +201,7 @@ fn decode_namespace(reader: &mut BytesReader<'_>) -> Result<NamespaceDef> {
     })
 }
 
-fn encode_table(out: &mut BytesWriter, table: &TableDef) -> Result<()> {
+fn encode_table(out: &mut BytesWriter, table: &TableDef, format_version: u64) -> Result<()> {
     out.u64(table.table_id.0);
     out.u64(table.schema_id.0);
     out.u64(table.relation_id.0);
@@ -181,12 +213,12 @@ fn encode_table(out: &mut BytesWriter, table: &TableDef) -> Result<()> {
 
     out.u32(table.columns.len() as u32);
     for column in &table.columns {
-        encode_column(out, column)?;
+        encode_column(out, column, format_version)?;
     }
 
     out.u32(table.indexes.len() as u32);
     for index in &table.indexes {
-        encode_index(out, index)?;
+        encode_index(out, index, format_version)?;
     }
 
     out.u32(table.constraints.len() as u32);
@@ -197,6 +229,13 @@ fn encode_table(out: &mut BytesWriter, table: &TableDef) -> Result<()> {
     out.u32(table.checks.len() as u32);
     for check in &table.checks {
         encode_check(out, check)?;
+    }
+
+    if format_version >= 5 {
+        out.u32(table.foreign_keys.len() as u32);
+        for fk in &table.foreign_keys {
+            encode_foreign_key(out, fk)?;
+        }
     }
 
     Ok(())
@@ -215,7 +254,7 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
     let column_count = reader.u32()? as usize;
     let mut columns = Vec::with_capacity(column_count);
     for _ in 0..column_count {
-        columns.push(decode_column(reader)?);
+        columns.push(decode_column(reader, format_version)?);
     }
 
     let index_count = reader.u32()? as usize;
@@ -236,6 +275,17 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
         checks.push(decode_check(reader)?);
     }
 
+    let foreign_keys = if format_version >= 5 {
+        let fk_count = reader.u32()? as usize;
+        let mut fks = Vec::with_capacity(fk_count);
+        for _ in 0..fk_count {
+            fks.push(decode_foreign_key(reader)?);
+        }
+        fks
+    } else {
+        Vec::new()
+    };
+
     Ok(TableDef {
         table_id,
         schema_id,
@@ -246,13 +296,14 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
         indexes,
         constraints,
         checks,
+        foreign_keys,
         rowid_alias_column,
         flags,
         normalized_sql,
     })
 }
 
-fn encode_column(out: &mut BytesWriter, column: &ColumnDef) -> Result<()> {
+fn encode_column(out: &mut BytesWriter, column: &ColumnDef, format_version: u64) -> Result<()> {
     out.u64(column.column_id.0);
     out.u16(column.ordinal);
     write_str(out, &column.name);
@@ -262,31 +313,66 @@ fn encode_column(out: &mut BytesWriter, column: &ColumnDef) -> Result<()> {
     out.bool(column.not_null);
     write_opt_value(out, column.default_value.as_ref());
     write_opt_expr(out, column.default_expr.as_deref());
+    if format_version >= 7 {
+        match &column.generated {
+            None => out.bool(false),
+            Some(spec) => {
+                out.bool(true);
+                out.u8(spec.kind as u8);
+                write_str(out, &spec.expr_sql);
+            }
+        }
+    }
     Ok(())
 }
 
-fn decode_column(reader: &mut BytesReader<'_>) -> Result<ColumnDef> {
+fn decode_column(reader: &mut BytesReader<'_>, format_version: u64) -> Result<ColumnDef> {
+    let column_id = super::ColumnId(reader.u64()?);
+    let ordinal = reader.u16()?;
+    let name = read_box_str(reader)?;
+    let folded = read_box_str(reader)?;
+    let declared_type = read_opt_box_str(reader)?;
+    let affinity = match reader.u8()? {
+        0 => super::Affinity::Blob,
+        1 => super::Affinity::Text,
+        2 => super::Affinity::Numeric,
+        3 => super::Affinity::Integer,
+        4 => super::Affinity::Real,
+        _ => return Err(Error::CatalogCorrupt("invalid affinity")),
+    };
+    let not_null = reader.bool()?;
+    let default_value = read_opt_value(reader)?;
+    let default_expr = read_opt_expr(reader)?;
+    let generated = if format_version >= 7 {
+        if reader.bool()? {
+            let kind = match reader.u8()? {
+                0 => super::GeneratedColumnKind::Stored,
+                1 => super::GeneratedColumnKind::Virtual,
+                _ => return Err(Error::CatalogCorrupt("invalid generated column kind")),
+            };
+            let expr_sql = read_box_str(reader)?;
+            Some(super::GeneratedColumnSpec { kind, expr_sql })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     Ok(ColumnDef {
-        column_id: super::ColumnId(reader.u64()?),
-        ordinal: reader.u16()?,
-        name: read_box_str(reader)?,
-        folded: read_box_str(reader)?,
-        declared_type: read_opt_box_str(reader)?,
-        affinity: match reader.u8()? {
-            0 => super::Affinity::Blob,
-            1 => super::Affinity::Text,
-            2 => super::Affinity::Numeric,
-            3 => super::Affinity::Integer,
-            4 => super::Affinity::Real,
-            _ => return Err(Error::CatalogCorrupt("invalid affinity")),
-        },
-        not_null: reader.bool()?,
-        default_value: read_opt_value(reader)?,
-        default_expr: read_opt_expr(reader)?,
+        column_id,
+        ordinal,
+        name,
+        folded,
+        declared_type,
+        affinity,
+        not_null,
+        default_value,
+        default_expr,
+        generated,
     })
 }
 
-fn encode_index(out: &mut BytesWriter, index: &IndexDef) -> Result<()> {
+fn encode_index(out: &mut BytesWriter, index: &IndexDef, format_version: u64) -> Result<()> {
     out.u64(index.index_id.0);
     out.u64(index.table_id.0);
     out.u64(index.relation_id.0);
@@ -300,7 +386,10 @@ fn encode_index(out: &mut BytesWriter, index: &IndexDef) -> Result<()> {
     write_opt_str(out, index.normalized_sql.as_deref());
     out.u32(index.keys.len() as u32);
     for key in &index.keys {
-        encode_index_key(out, key)?;
+        encode_index_key(out, key, format_version)?;
+    }
+    if format_version >= 7 {
+        write_opt_str(out, index.predicate_sql.as_deref());
     }
     Ok(())
 }
@@ -329,8 +418,13 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
     let key_count = reader.u32()? as usize;
     let mut keys = Vec::with_capacity(key_count);
     for _ in 0..key_count {
-        keys.push(decode_index_key(reader)?);
+        keys.push(decode_index_key(reader, format_version)?);
     }
+    let predicate_sql = if format_version >= 7 {
+        read_opt_box_str(reader)?
+    } else {
+        None
+    };
     Ok(IndexDef {
         index_id,
         table_id,
@@ -344,15 +438,32 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
         keys,
         flags,
         normalized_sql,
+        predicate_sql,
     })
 }
 
-fn encode_index_key(out: &mut BytesWriter, key: &IndexKeyDef) -> Result<()> {
+fn encode_index_key(out: &mut BytesWriter, key: &IndexKeyDef, format_version: u64) -> Result<()> {
     out.u16(key.ordinal);
-    match key.source {
+    match &key.source {
         IndexKeySource::Column { attnum } => {
             out.u8(0);
-            out.u16(attnum);
+            out.u16(*attnum);
+        }
+        IndexKeySource::Expression {
+            sql,
+            referenced_cols,
+        } => {
+            if format_version < 7 {
+                return Err(Error::CatalogCorrupt(
+                    "expression index keys require catalog format >= 7",
+                ));
+            }
+            out.u8(1);
+            write_str(out, sql);
+            out.u32(referenced_cols.len() as u32);
+            for col in referenced_cols {
+                out.u16(*col);
+            }
         }
     }
     out.u8(key.sort_dir as u8);
@@ -360,12 +471,24 @@ fn encode_index_key(out: &mut BytesWriter, key: &IndexKeyDef) -> Result<()> {
     Ok(())
 }
 
-fn decode_index_key(reader: &mut BytesReader<'_>) -> Result<IndexKeyDef> {
+fn decode_index_key(reader: &mut BytesReader<'_>, format_version: u64) -> Result<IndexKeyDef> {
     let ordinal = reader.u16()?;
     let source = match reader.u8()? {
         0 => IndexKeySource::Column {
             attnum: reader.u16()?,
         },
+        1 if format_version >= 7 => {
+            let sql = read_box_str(reader)?;
+            let len = reader.u32()? as usize;
+            let mut referenced_cols = Vec::with_capacity(len);
+            for _ in 0..len {
+                referenced_cols.push(reader.u16()?);
+            }
+            IndexKeySource::Expression {
+                sql,
+                referenced_cols,
+            }
+        }
         _ => return Err(Error::CatalogCorrupt("invalid index key source")),
     };
     let sort_dir = match reader.u8()? {
@@ -435,6 +558,198 @@ fn decode_check(reader: &mut BytesReader<'_>) -> Result<CheckDef> {
         constraint_id: super::ConstraintId(reader.u64()?),
         name: read_opt_box_str(reader)?,
         expr: read_opt_expr(reader)?.ok_or(Error::CatalogCorrupt("missing check expression"))?,
+    })
+}
+
+fn fk_action_tag(action: FkAction) -> u8 {
+    match action {
+        FkAction::NoAction => 0,
+        FkAction::Restrict => 1,
+        FkAction::SetNull => 2,
+        FkAction::SetDefault => 3,
+        FkAction::Cascade => 4,
+    }
+}
+
+fn fk_action_from_tag(tag: u8) -> Result<FkAction> {
+    Ok(match tag {
+        0 => FkAction::NoAction,
+        1 => FkAction::Restrict,
+        2 => FkAction::SetNull,
+        3 => FkAction::SetDefault,
+        4 => FkAction::Cascade,
+        _ => return Err(Error::CatalogCorrupt("invalid FK action tag")),
+    })
+}
+
+fn encode_foreign_key(out: &mut BytesWriter, fk: &ForeignKeyDef) -> Result<()> {
+    out.u64(fk.constraint_id.0);
+    write_opt_str(out, fk.name.as_deref());
+    out.u32(fk.columns.len() as u32);
+    for ord in &fk.columns {
+        out.u16(*ord);
+    }
+    write_str(out, &fk.parent_table);
+    out.u32(fk.parent_columns.len() as u32);
+    for name in &fk.parent_columns {
+        write_str(out, name);
+    }
+    out.u8(fk_action_tag(fk.on_delete));
+    out.u8(fk_action_tag(fk.on_update));
+    out.bool(fk.deferred);
+    Ok(())
+}
+
+fn decode_foreign_key(reader: &mut BytesReader<'_>) -> Result<ForeignKeyDef> {
+    let constraint_id = super::ConstraintId(reader.u64()?);
+    let name = read_opt_box_str(reader)?;
+    let column_count = reader.u32()? as usize;
+    let mut columns = Vec::with_capacity(column_count);
+    for _ in 0..column_count {
+        columns.push(reader.u16()?);
+    }
+    let parent_table = read_box_str(reader)?;
+    let parent_count = reader.u32()? as usize;
+    let mut parent_columns = Vec::with_capacity(parent_count);
+    for _ in 0..parent_count {
+        parent_columns.push(read_box_str(reader)?);
+    }
+    let on_delete = fk_action_from_tag(reader.u8()?)?;
+    let on_update = fk_action_from_tag(reader.u8()?)?;
+    let deferred = reader.bool()?;
+    Ok(ForeignKeyDef {
+        constraint_id,
+        name,
+        columns,
+        parent_table,
+        parent_columns,
+        on_delete,
+        on_update,
+        deferred,
+    })
+}
+
+fn encode_view(out: &mut BytesWriter, view: &ViewDef) -> Result<()> {
+    out.u64(view.view_id.0);
+    out.u64(view.schema_id.0);
+    write_str(out, &view.name);
+    write_str(out, &view.folded);
+    out.bool(view.session_scoped);
+    write_str(out, &view.body_sql);
+    out.u32(view.columns.len() as u32);
+    for col in &view.columns {
+        write_str(out, col);
+    }
+    write_opt_str(out, view.normalized_sql.as_deref());
+    Ok(())
+}
+
+fn decode_view(reader: &mut BytesReader<'_>) -> Result<ViewDef> {
+    let view_id = super::ObjectId(reader.u64()?);
+    let schema_id = SchemaId(reader.u64()?);
+    let name = read_box_str(reader)?;
+    let folded = read_box_str(reader)?;
+    let session_scoped = reader.bool()?;
+    let body_sql = read_box_str(reader)?;
+    let column_count = reader.u32()? as usize;
+    let mut columns = Vec::with_capacity(column_count);
+    for _ in 0..column_count {
+        columns.push(read_box_str(reader)?);
+    }
+    let normalized_sql = read_opt_box_str(reader)?;
+    Ok(ViewDef {
+        view_id,
+        schema_id,
+        name,
+        folded,
+        columns,
+        body_sql,
+        session_scoped,
+        normalized_sql,
+    })
+}
+
+fn encode_trigger(out: &mut BytesWriter, trigger: &TriggerDef) -> Result<()> {
+    out.u64(trigger.trigger_id.0);
+    out.u64(trigger.schema_id.0);
+    write_str(out, &trigger.name);
+    write_str(out, &trigger.folded);
+    write_str(out, &trigger.table_name);
+    write_str(out, &trigger.table_folded);
+    out.u8(trigger_time_tag(trigger.when_time));
+    out.u8(trigger_event_tag(trigger.when_event));
+    out.u32(trigger.when_cols.len() as u32);
+    for col in &trigger.when_cols {
+        write_str(out, col);
+    }
+    write_opt_str(out, trigger.when_predicate_sql.as_deref());
+    write_str(out, &trigger.body_sql);
+    write_opt_str(out, trigger.normalized_sql.as_deref());
+    Ok(())
+}
+
+fn decode_trigger(reader: &mut BytesReader<'_>) -> Result<TriggerDef> {
+    let trigger_id = super::ObjectId(reader.u64()?);
+    let schema_id = SchemaId(reader.u64()?);
+    let name = read_box_str(reader)?;
+    let folded = read_box_str(reader)?;
+    let table_name = read_box_str(reader)?;
+    let table_folded = read_box_str(reader)?;
+    let when_time = trigger_time_from_tag(reader.u8()?)?;
+    let when_event = trigger_event_from_tag(reader.u8()?)?;
+    let col_count = reader.u32()? as usize;
+    let mut when_cols = Vec::with_capacity(col_count);
+    for _ in 0..col_count {
+        when_cols.push(read_box_str(reader)?);
+    }
+    let when_predicate_sql = read_opt_box_str(reader)?;
+    let body_sql = read_box_str(reader)?;
+    let normalized_sql = read_opt_box_str(reader)?;
+    Ok(TriggerDef {
+        trigger_id,
+        schema_id,
+        name,
+        folded,
+        table_name,
+        table_folded,
+        when_time,
+        when_event,
+        when_cols,
+        when_predicate_sql,
+        body_sql,
+        normalized_sql,
+    })
+}
+
+fn trigger_time_tag(time: TriggerTimeKind) -> u8 {
+    match time {
+        TriggerTimeKind::Before => 0,
+        TriggerTimeKind::After => 1,
+    }
+}
+
+fn trigger_time_from_tag(tag: u8) -> Result<TriggerTimeKind> {
+    Ok(match tag {
+        0 => TriggerTimeKind::Before,
+        1 => TriggerTimeKind::After,
+        _ => return Err(Error::CatalogCorrupt("invalid trigger time tag")),
+    })
+}
+
+fn trigger_event_tag(event: TriggerEventKind) -> u8 {
+    match event {
+        TriggerEventKind::Insert => 0,
+        TriggerEventKind::Update => 1,
+        TriggerEventKind::Delete => 2,
+    }
+}
+
+fn trigger_event_from_tag(tag: u8) -> Result<TriggerEventKind> {
+    Ok(match tag {
+        0 => TriggerEventKind::Insert,
+        1 => TriggerEventKind::Update,
+        2 => TriggerEventKind::Delete,
+        _ => return Err(Error::CatalogCorrupt("invalid trigger event tag")),
     })
 }
 

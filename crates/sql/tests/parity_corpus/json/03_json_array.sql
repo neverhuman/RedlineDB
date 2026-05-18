@@ -1,0 +1,1 @@
+SELECT json_array(1, 2, 3, 'x')

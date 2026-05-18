@@ -10,7 +10,7 @@ fn run_spec(engine: redlinedb_bench::config::EngineKind) -> redlinedb_bench::con
         durability: redlinedb_bench::config::DurabilityKind::Strict,
         threads: 1,
         rows: 32,
-        duration: Duration::from_millis(100),
+        duration: Duration::from_secs(1),
         cache_bytes: 4 * 1024 * 1024,
         seed: 7,
         base_dir: std::env::temp_dir().join("redlinedb-bench-tests"),

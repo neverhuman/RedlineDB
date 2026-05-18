@@ -44,7 +44,13 @@ pub(crate) fn build_index_key(index: &IndexDef, values: &[SqlValue]) -> BuiltInd
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
     let mut owned_refs: Vec<&SqlValue> = Vec::with_capacity(index.keys.len());
     for key in &index.keys {
-        let IndexKeySource::Column { attnum } = key.source;
+        let IndexKeySource::Column { attnum } = key.source else {
+            // A6 SQL-D: expression index key — full per-expression
+            // build path not wired in this adapter. Skip the key;
+            // upper layer should detect expression indexes and route
+            // through the dedicated expression-aware build.
+            continue;
+        };
         owned_refs.push(values.get(attnum as usize).unwrap_or(&SqlValue::Null));
         dirs.push(key.sort_dir);
     }
@@ -126,6 +132,15 @@ pub(crate) fn maintain_indexes_on_insert(
         let Some(handle) = open_index_handle(engine, index) else {
             continue;
         };
+        // A6 SQL-D: partial indexes only contain rows whose WHERE
+        // predicate evaluates to true. Skip the insert when the row
+        // doesn't match; the heap still has it, the planner falls back
+        // to a table scan for queries that don't imply the predicate.
+        if let Some(pred_sql) = index.predicate_sql.as_deref()
+            && !crate::exec::index_predicate::eval_index_predicate(table, pred_sql, values)?
+        {
+            continue;
+        }
         let key = build_index_key(index, values);
         let row_ref = synthetic_row_ref(rowid);
         // SQLite NULL parity for unique indexes: NULL key parts are not
@@ -148,6 +163,13 @@ pub(crate) fn maintain_indexes_on_delete(
         let Some(handle) = open_index_handle(engine, index) else {
             continue;
         };
+        // A6 SQL-D: don't delete-mark partial-index keys for rows that
+        // were never inserted (predicate was false at insert time).
+        if let Some(pred_sql) = index.predicate_sql.as_deref()
+            && !crate::exec::index_predicate::eval_index_predicate(table, pred_sql, old_values)?
+        {
+            continue;
+        }
         let key = build_index_key(index, old_values);
         let row_ref = synthetic_row_ref(rowid);
         handle.delete_mark_tx_visible(

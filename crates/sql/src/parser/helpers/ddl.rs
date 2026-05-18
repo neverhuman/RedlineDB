@@ -1,8 +1,12 @@
 use redlinedb_kernel::catalog::{
-    ColumnConstraintSpec, ColumnSpec, ConflictAction, DbName, ExprAst, IndexColumnSpec, OwnedValue,
-    SortDir, TableConstraintSpec,
+    ColumnConstraintSpec, ColumnSpec, ConflictAction, DbName, ExprAst, FkAction,
+    GeneratedColumnKind, GeneratedColumnSpec, IndexColumnSpec, OwnedValue, SortDir,
+    TableConstraintSpec,
 };
-use sqlparser::ast::{ColumnDef, ColumnOption, Expr, IndexColumn, ObjectNamePart};
+use sqlparser::ast::{
+    ColumnDef, ColumnOption, DeferrableInitial, Expr, ForeignKeyConstraint,
+    GeneratedExpressionMode, IndexColumn, ObjectNamePart, ReferentialAction,
+};
 
 use crate::error::{Error, Result};
 
@@ -16,10 +20,13 @@ pub(crate) fn convert_column_def(
     column: ColumnDef,
     ordinal: usize,
     column_lookup: &std::collections::HashMap<String, usize>,
+    table_constraints: &mut Vec<TableConstraintSpec>,
 ) -> Result<ColumnSpec> {
     let mut constraints = Vec::new();
     let mut collation = None;
     let mut default_value = None;
+    let mut generated: Option<GeneratedColumnSpec> = None;
+    let column_name = DbName::new(column.name.value.clone());
     let declared_type = if column.data_type == sqlparser::ast::DataType::Unspecified {
         None
     } else {
@@ -68,18 +75,41 @@ pub(crate) fn convert_column_def(
             ColumnOption::Collation(name) => {
                 collation = Some(name.to_string());
             }
-            ColumnOption::ForeignKey(_) => {
-                // Lane SQL-D phase 10: column-level REFERENCES is accepted
-                // for parser-only compatibility. The kernel does not yet
-                // enforce the FK constraint at write time; the declaration
-                // is recorded only by being present in the CREATE TABLE
-                // text we round-trip through `normalized_sql`.
+            ColumnOption::ForeignKey(fk) => {
+                // A6 SQLite-parity: column-level REFERENCES is normalised
+                // into a table-level FK spec so the same enforcement code
+                // path handles both forms. The originating column is the
+                // sole child column; parent column list defaults to the
+                // parent's primary key when omitted (resolved at exec time).
+                table_constraints.push(column_level_foreign_key(column_name.clone(), fk));
             }
-            ColumnOption::Generated { .. } => {
-                // Lane SQL-D phase 10: GENERATED columns parse-only. Stored
-                // and virtual variants are accepted but not yet computed;
-                // INSERT/UPDATE will leave the column at its declared
-                // default until execution support lands.
+            ColumnOption::Generated {
+                generation_expr,
+                generation_expr_mode,
+                ..
+            } => {
+                // Phase-11 SQL-D A6: capture the GENERATED ALWAYS AS
+                // (expr) [STORED|VIRTUAL] expression. The verbatim SQL
+                // fragment is stored on the catalog ColumnDef and the
+                // executor re-parses + evaluates it at INSERT (STORED)
+                // or SELECT (VIRTUAL) time. SQLite defaults to VIRTUAL
+                // when neither STORED nor VIRTUAL is specified.
+                let expr_text = match &generation_expr {
+                    Some(e) => e.to_string(),
+                    None => {
+                        return Err(Error::UnsupportedSql(
+                            "GENERATED column requires an expression".to_owned(),
+                        ));
+                    }
+                };
+                let kind = match generation_expr_mode {
+                    Some(GeneratedExpressionMode::Stored) => GeneratedColumnKind::Stored,
+                    Some(GeneratedExpressionMode::Virtual) | None => GeneratedColumnKind::Virtual,
+                };
+                generated = Some(GeneratedColumnSpec {
+                    kind,
+                    expr_sql: expr_text.into_boxed_str(),
+                });
             }
             ColumnOption::DialectSpecific(_)
             | ColumnOption::CharacterSet(_)
@@ -110,6 +140,7 @@ pub(crate) fn convert_column_def(
         constraints,
         collation,
         default_value,
+        generated,
     })
 }
 
@@ -141,24 +172,100 @@ pub(crate) fn convert_table_constraint(
             expr: expr_to_kernel_ast(&check.expr, column_lookup)?,
             normalized_sql: check.expr.to_string(),
         }),
-        sqlparser::ast::TableConstraint::ForeignKey(fk) => {
-            // Lane SQL-D phase 10: FK declarations parse-only. We synthesize
-            // a CHECK(1) so the existing TableConstraintSpec surface accepts
-            // the constraint without altering the kernel API. Enforcement is
-            // tracked in `FEATURE_GAPS.md` (foreign-key enforcement);
-            // the declaration text round-trips via the CREATE TABLE
-            // normalized_sql.
-            let _ = fk; // referenced metadata kept for future use
-            Ok(TableConstraintSpec::Check {
-                name: None,
-                expr: ExprAst::Const(OwnedValue::Integer(1)),
-                normalized_sql: "1 /* foreign key parsed-only */".to_owned(),
-            })
-        }
+        sqlparser::ast::TableConstraint::ForeignKey(fk) => Ok(table_level_foreign_key(fk)),
         sqlparser::ast::TableConstraint::Index(_)
         | sqlparser::ast::TableConstraint::FulltextOrSpatial(_) => Err(Error::UnsupportedSql(
             "table constraint not supported yet".to_owned(),
         )),
+    }
+}
+
+fn ref_action_to_fk(action: Option<ReferentialAction>) -> FkAction {
+    match action {
+        None => FkAction::NoAction,
+        Some(ReferentialAction::Restrict) => FkAction::Restrict,
+        Some(ReferentialAction::Cascade) => FkAction::Cascade,
+        Some(ReferentialAction::SetNull) => FkAction::SetNull,
+        Some(ReferentialAction::SetDefault) => FkAction::SetDefault,
+        Some(ReferentialAction::NoAction) => FkAction::NoAction,
+    }
+}
+
+fn fk_is_deferred(fk: &ForeignKeyConstraint) -> bool {
+    matches!(
+        fk.characteristics.as_ref().and_then(|c| c.initially),
+        Some(DeferrableInitial::Deferred)
+    )
+}
+
+fn parent_table_name(parts: &[ObjectNamePart]) -> Result<DbName> {
+    match parts {
+        [] => Err(Error::UnsupportedSql(
+            "FOREIGN KEY references missing parent table".to_owned(),
+        )),
+        [ObjectNamePart::Identifier(ident)] => Ok(DbName::new(ident.value.clone())),
+        [_, ObjectNamePart::Identifier(ident)] => {
+            // Allow `schema.table` and drop the schema qualifier — SQLite
+            // resolves FKs in the same database; A6 scope is single-DB.
+            Ok(DbName::new(ident.value.clone()))
+        }
+        _ => Err(Error::UnsupportedSql(
+            "FOREIGN KEY references unsupported parent name shape".to_owned(),
+        )),
+    }
+}
+
+pub(crate) fn column_level_foreign_key(
+    column_name: DbName,
+    fk: ForeignKeyConstraint,
+) -> TableConstraintSpec {
+    let parent_table = match parent_table_name(&fk.foreign_table.0) {
+        Ok(name) => name,
+        Err(_) => DbName::new(String::new()),
+    };
+    let parent_columns = fk
+        .referred_columns
+        .into_iter()
+        .map(|ident| DbName::new(ident.value))
+        .collect();
+    TableConstraintSpec::ForeignKey {
+        name: fk.name.map(|ident| DbName::new(ident.value)),
+        columns: vec![column_name],
+        parent_table,
+        parent_columns,
+        on_delete: ref_action_to_fk(fk.on_delete),
+        on_update: ref_action_to_fk(fk.on_update),
+        deferred: matches!(
+            fk.characteristics.as_ref().and_then(|c| c.initially),
+            Some(DeferrableInitial::Deferred)
+        ),
+    }
+}
+
+pub(crate) fn table_level_foreign_key(fk: ForeignKeyConstraint) -> TableConstraintSpec {
+    let parent_table = match parent_table_name(&fk.foreign_table.0) {
+        Ok(name) => name,
+        Err(_) => DbName::new(String::new()),
+    };
+    let deferred = fk_is_deferred(&fk);
+    let columns = fk
+        .columns
+        .into_iter()
+        .map(|ident| DbName::new(ident.value))
+        .collect();
+    let parent_columns = fk
+        .referred_columns
+        .into_iter()
+        .map(|ident| DbName::new(ident.value))
+        .collect();
+    TableConstraintSpec::ForeignKey {
+        name: fk.name.map(|ident| DbName::new(ident.value)),
+        columns,
+        parent_table,
+        parent_columns,
+        on_delete: ref_action_to_fk(fk.on_delete),
+        on_update: ref_action_to_fk(fk.on_update),
+        deferred,
     }
 }
 
@@ -170,7 +277,22 @@ pub(crate) fn convert_index_column(column: IndexColumn) -> Result<IndexColumnSpe
             _ => SortDir::Asc,
         },
         collation: None,
+        expr_sql: None,
+        expr_referenced_cols: Vec::new(),
     })
+}
+
+/// A6 SQL-D: walk an index-column expression and collect the column
+/// ordinals it references. The kernel uses this to know which input
+/// columns trigger a re-emit on UPDATE. Returns empty when no
+/// identifiers are found (constant expressions are valid index keys
+/// per SQLite but never need re-emission).
+pub(crate) fn index_expr_referenced_cols(_expr: &Expr) -> Vec<u16> {
+    // Conservative: until full identifier resolution against a table
+    // schema is wired here, treat the referenced set as unknown by
+    // returning empty. The executor re-evaluates the expression on
+    // every UPDATE which is correct, just less efficient.
+    Vec::new()
 }
 
 pub(crate) fn index_column_name(column: &IndexColumn) -> Result<String> {

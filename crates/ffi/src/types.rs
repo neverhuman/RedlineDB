@@ -12,6 +12,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize};
 use std::sync::{Arc, Mutex};
 
+use crate::sqlite3_api::hooks::HookSlots;
+
 // ---- Result codes (C-visible) -----------------------------------------------
 
 pub(crate) const RLDB_OK: c_int = 0;
@@ -27,6 +29,7 @@ pub(crate) const RLDB_SCHEMA: c_int = 17;
 pub(crate) const RLDB_CONSTRAINT: c_int = 19;
 pub(crate) const RLDB_MISMATCH: c_int = 20;
 pub(crate) const RLDB_MISUSE: c_int = 21;
+pub(crate) const RLDB_AUTH: c_int = 23;
 pub(crate) const RLDB_RANGE: c_int = 25;
 pub(crate) const RLDB_NOTADB: c_int = 26;
 pub(crate) const RLDB_ROW: c_int = 100;
@@ -66,6 +69,7 @@ pub struct rldb {
     pub(crate) last_message: Mutex<CString>,
     pub(crate) interrupted: AtomicBool,
     pub(crate) active_statements: AtomicUsize,
+    pub(crate) hooks: HookSlots,
 }
 
 #[allow(non_camel_case_types)]

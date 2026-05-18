@@ -6,6 +6,7 @@
 //!   * `scalar`        — arithmetic / string / null helpers, vector and
 //!     datetime helpers, row-context plumbing
 //!   * `coerce`        — type coercion, comparison, binary-operator eval
+//!   * `predicate`     — CASE / IN / EXISTS / scalar-subquery helpers
 //!   * `json_dispatch` — function-call dispatcher (delegates JSON funcs
 //!     to `crate::json::scalar`)
 //!   * `window`        — window-function execution stubs (parsed-only)
@@ -19,8 +20,10 @@ use super::*;
 
 pub(crate) mod coerce;
 pub(crate) mod json_dispatch;
+mod predicate;
 pub(crate) mod scalar;
 pub(crate) mod window;
+pub(crate) mod window_eval;
 
 // Glob-re-export every symbol from the sibling files so each sibling's
 // `use super::*` (combined with the `use super::*` re-exporting `exec`'s
@@ -29,6 +32,7 @@ pub(crate) mod window;
 // the siblings reach unqualified helpers through these re-exports.
 pub(crate) use coerce::*;
 use json_dispatch::eval_function;
+pub(crate) use predicate::*;
 pub(crate) use scalar::*;
 
 pub(crate) fn project_row(
@@ -126,6 +130,57 @@ pub(crate) fn eval_scalar(
             }
         },
         Expr::Nested(expr) => eval_scalar(expr, row, bindings)?,
+        Expr::Substring {
+            expr,
+            substring_from,
+            substring_for,
+            ..
+        } => {
+            let mut values = Vec::with_capacity(3);
+            values.push(eval_scalar(expr, row, bindings)?);
+            match substring_from {
+                Some(from) => values.push(eval_scalar(from, row, bindings)?),
+                None => values.push(SqlValue::Null),
+            }
+            match substring_for {
+                Some(for_expr) => values.push(eval_scalar(for_expr, row, bindings)?),
+                None => {}
+            }
+            sqlite_substr_function(&values)?
+        }
+        Expr::Trim {
+            expr,
+            trim_where,
+            trim_what,
+            trim_characters,
+        } => {
+            let value = eval_scalar(expr, row, bindings)?;
+            let chars = if let Some(what) = trim_what {
+                Some(eval_scalar(what, row, bindings)?)
+            } else if let Some(chars) = trim_characters {
+                let mut out = String::new();
+                for ch in chars {
+                    let ch_value = eval_scalar(ch, row, bindings)?;
+                    if matches!(ch_value, SqlValue::Null) {
+                        return Ok(SqlValue::Null);
+                    }
+                    out.push_str(&value_to_string(&ch_value));
+                }
+                Some(SqlValue::Text(Arc::from(out)))
+            } else {
+                None
+            };
+            let chars_ref = chars.as_ref();
+            match trim_where {
+                Some(sqlparser::ast::TrimWhereField::Leading) => {
+                    sqlite_ltrim_function(&value, chars_ref)?
+                }
+                Some(sqlparser::ast::TrimWhereField::Trailing) => {
+                    sqlite_rtrim_function(&value, chars_ref)?
+                }
+                _ => sqlite_trim_function(&value, chars_ref)?,
+            }
+        }
         Expr::UnaryOp { op, expr } => {
             let value = eval_scalar(expr, row, bindings)?;
             match op {
@@ -218,46 +273,9 @@ pub(crate) fn eval_scalar(
             expr,
             list,
             negated,
-        } => {
-            let value = eval_scalar(expr, row, bindings)?;
-            if matches!(value, SqlValue::Null) {
-                SqlValue::Null
-            } else {
-                // SQLite semantics: compute the base IN as TRUE / FALSE / NULL,
-                // then apply NOT only on TRUE / FALSE — NULL must propagate
-                // through unchanged.
-                //   `5 NOT IN (1, NULL)`  → NULL  (cannot prove 5 != NULL)
-                //   `1 NOT IN (1, NULL)`  → FALSE (we found a match)
-                //   `5 NOT IN (1, 2, 3)`  → TRUE  (no NULL, no match)
-                let mut found = false;
-                let mut saw_null = false;
-                for item in list {
-                    let candidate = eval_scalar(item, row, bindings)?;
-                    match candidate {
-                        SqlValue::Null => saw_null = true,
-                        _ if compare_values(&value, &candidate) == Ordering::Equal => {
-                            found = true;
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                let base_in: Option<bool> = if found {
-                    Some(true)
-                } else if saw_null {
-                    None
-                } else {
-                    Some(false)
-                };
-                match (base_in, *negated) {
-                    (Some(b), false) => SqlValue::Integer(if b { 1 } else { 0 }),
-                    (Some(b), true) => SqlValue::Integer(if !b { 1 } else { 0 }),
-                    (None, _) => SqlValue::Null,
-                }
-            }
-        }
+        } => in_list_result(expr, list, *negated, row, bindings)?,
         Expr::Exists { subquery, negated } => {
-            let rows = evaluate_subquery_rows(subquery, bindings)?;
+            let rows = evaluate_subquery_rows(subquery, row, bindings)?;
             let exists = !rows.is_empty();
             SqlValue::Integer(if exists ^ *negated { 1 } else { 0 })
         }
@@ -265,59 +283,8 @@ pub(crate) fn eval_scalar(
             expr,
             subquery,
             negated,
-        } => {
-            let value = eval_scalar(expr, row, bindings)?;
-            if matches!(value, SqlValue::Null) {
-                SqlValue::Null
-            } else {
-                let rows = evaluate_subquery_rows(subquery, bindings)?;
-                let mut found = false;
-                let mut saw_null = false;
-                for row in rows {
-                    if row.len() != 1 {
-                        return Err(Error::UnsupportedSql(
-                            "IN subquery must return exactly one column".to_owned(),
-                        ));
-                    }
-                    let candidate = row.into_iter().next().unwrap_or(SqlValue::Null);
-                    match candidate {
-                        SqlValue::Null => saw_null = true,
-                        _ if compare_values(&value, &candidate) == Ordering::Equal => {
-                            found = true;
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                // Same NOT-IN-with-NULL semantics as InList: compute base IN as
-                // TRUE / FALSE / NULL, then apply NOT only on TRUE / FALSE.
-                let base_in: Option<bool> = if found {
-                    Some(true)
-                } else if saw_null {
-                    None
-                } else {
-                    Some(false)
-                };
-                match (base_in, *negated) {
-                    (Some(b), false) => SqlValue::Integer(if b { 1 } else { 0 }),
-                    (Some(b), true) => SqlValue::Integer(if !b { 1 } else { 0 }),
-                    (None, _) => SqlValue::Null,
-                }
-            }
-        }
-        Expr::Subquery(subquery) => {
-            let rows = evaluate_subquery_rows(subquery, bindings)?;
-            match rows.as_slice() {
-                [] => SqlValue::Null,
-                [row] if row.len() == 1 => row[0].clone(),
-                [row] if row.is_empty() => SqlValue::Null,
-                _ => {
-                    return Err(Error::UnsupportedSql(
-                        "scalar subquery must return exactly one row and one column".to_owned(),
-                    ));
-                }
-            }
-        }
+        } => in_subquery_result(expr, subquery, *negated, row, bindings)?,
+        Expr::Subquery(subquery) => eval_subquery_value(subquery, row, bindings)?,
         Expr::IsNull(expr) => SqlValue::Integer(
             if matches!(eval_scalar(expr, row, bindings)?, SqlValue::Null) {
                 1
@@ -378,63 +345,4 @@ pub(crate) fn eval_scalar(
             )));
         }
     })
-}
-
-pub(crate) fn truthy_opt(value: &SqlValue) -> Option<bool> {
-    match value {
-        SqlValue::Null => None,
-        _ => Some(is_truthy(value)),
-    }
-}
-
-fn eval_case(
-    operand: Option<&Expr>,
-    conditions: &[sqlparser::ast::CaseWhen],
-    else_result: Option<&Expr>,
-    row: &RowContext<'_>,
-    bindings: &[Option<SqlValue>],
-) -> Result<SqlValue> {
-    if let Some(operand) = operand {
-        let operand = eval_scalar(operand, row, bindings)?;
-        for when in conditions {
-            let condition = eval_scalar(&when.condition, row, bindings)?;
-            if matches!(condition, SqlValue::Null) {
-                continue;
-            }
-            if compare_values(&operand, &condition) == Ordering::Equal {
-                return eval_scalar(&when.result, row, bindings);
-            }
-        }
-    } else {
-        for when in conditions {
-            let condition = eval_scalar(&when.condition, row, bindings)?;
-            if !matches!(condition, SqlValue::Null) && is_truthy(&condition) {
-                return eval_scalar(&when.result, row, bindings);
-            }
-        }
-    }
-    match else_result {
-        Some(expr) => eval_scalar(expr, row, bindings),
-        None => Ok(SqlValue::Null),
-    }
-}
-
-fn evaluate_subquery_rows(
-    subquery: &sqlparser::ast::Query,
-    bindings: &[Option<SqlValue>],
-) -> Result<Vec<Vec<SqlValue>>> {
-    let Some(conn) = current_connection() else {
-        return Err(Error::TransactionState(
-            "subquery evaluation requires an active connection",
-        ));
-    };
-    let schema = conn.engine().schema_snapshot();
-    let template = crate::parser::bind_query(
-        conn,
-        schema,
-        conn.schema_epoch(),
-        "<subquery>",
-        subquery.clone(),
-    )?;
-    materialize_prepared_rows(conn, &template, bindings)
 }

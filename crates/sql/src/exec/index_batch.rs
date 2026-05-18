@@ -11,9 +11,7 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 use redlinedb_kernel::catalog::{IndexDef, SortDir, TableDef};
 use redlinedb_kernel::engine::{Engine, Txn};
 use redlinedb_kernel::format::RowId;
-use redlinedb_kernel::index::{
-    CursorYield, IndexCursor, IndexRowRef, KeyRange, RawIndexCursor, SnapshotView,
-};
+use redlinedb_kernel::index::{CursorYield, IndexRowRef, KeyRange, RawIndexCursor, SnapshotView};
 
 use crate::error::Result;
 use crate::value::SqlValue;
@@ -62,7 +60,8 @@ pub(super) fn execute_index_range_scan_streaming(
     let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
     {
         let view = SnapshotView::visible(tx_status, &snapshot, owner);
-        let mut cursor = IndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
+        let mut cursor =
+            RawIndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
         loop {
             if let Some(n) = limit
                 && out.len() >= n
@@ -70,7 +69,7 @@ pub(super) fn execute_index_range_scan_streaming(
                 break;
             }
             batch.clear();
-            match cursor.next_batch(&mut batch, MAX_BATCH)? {
+            match cursor.next_rowid_batch(&mut batch, MAX_BATCH)? {
                 CursorYield::End => break,
                 CursorYield::Batch(_) => {
                     counters.heap_rechecks.fetch_add(1, AtomicOrdering::Relaxed);

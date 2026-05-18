@@ -704,7 +704,7 @@ max_dirty_pages_before_throttle = buffer_pool_pages * 0.40
 
 # 12. Buffer manager
 
-This is where a lot of SQLite/Postgres replacement attempts lose performance. Do not build a naive `HashMap<PageId, Arc<RwLock<Page>>>` hot path.
+This is where a lot of SQLite-like replacement attempts lose performance. Do not build a naive `HashMap<PageId, Arc<RwLock<Page>>>` hot path.
 
 LeanStore’s work is relevant here because it shows that traditional buffer managers can become a major overhead, and that modern designs can get close to in-memory performance while still managing datasets larger than RAM. 
 
@@ -1461,4 +1461,3 @@ That is the kernel with the best shot at being a brutally fast, robust, lower-me
 [6]: https://www.microsoft.com/en-us/research/publication/the-bw-tree-a-b-tree-for-new-hardware/ "The Bw-Tree: A B-tree for New Hardware Platforms - Microsoft Research"
 [7]: https://www.postgresql.org/docs/current/transaction-iso.html "PostgreSQL: Documentation: 18: 13.2. Transaction Isolation"
 [8]: https://arxiv.org/abs/1208.4179 "[1208.4179] Serializable Snapshot Isolation in PostgreSQL"
-

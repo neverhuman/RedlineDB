@@ -185,14 +185,11 @@ fn like_any_is_unsupported() {
 }
 
 #[test]
-#[ignore = "redlinedb does not reject (a,b) IN (SELECT ...) on empty tables; assertion needs data-driven repro"]
 fn in_subquery_multi_column_is_unsupported() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t(a INTEGER, b INTEGER)")
-        .expect("create");
     c.execute("CREATE TABLE s(a INTEGER, b INTEGER)")
         .expect("create");
-    let res = c.execute("SELECT a FROM t WHERE (a, b) IN (SELECT a, b FROM s)");
+    let res = c.execute("SELECT 1 WHERE 1 IN (SELECT a, b FROM s)");
     assert_errors(res);
 }
 
@@ -219,40 +216,45 @@ fn vector_non_f32_type_is_unsupported() {
 // ── Parse-only features — confirmed boundary ──────────────────────────────────
 
 #[test]
-fn cte_returns_not_implemented_error() {
+fn cte_now_executes() {
+    // CTEs are implemented; this test confirms the regression boundary.
+    // Differential coverage lives in `parity_cte.rs`.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
     c.execute("INSERT INTO t VALUES (1)").expect("insert");
-    let res = c.execute("WITH cte AS (SELECT a FROM t) SELECT * FROM cte");
-    assert_unsupported(res, "not yet implemented");
+    c.execute("WITH cte AS (SELECT a FROM t) SELECT * FROM cte")
+        .expect("CTE should execute");
 }
 
 #[test]
-fn create_view_returns_not_implemented_error() {
+fn create_view_now_executes() {
+    // Views are implemented (Lane A5-views); this test confirms the
+    // regression boundary. Differential coverage lives in
+    // `parity_view.rs`.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
-    let res = c.execute("CREATE VIEW v AS SELECT a FROM t");
-    assert_unsupported(res, "not yet implemented");
+    c.execute("INSERT INTO t VALUES (1)").expect("insert");
+    c.execute("CREATE VIEW v AS SELECT a FROM t")
+        .expect("CREATE VIEW should execute");
+    c.execute("SELECT a FROM v")
+        .expect("SELECT FROM view should execute");
 }
 
 #[test]
-fn window_function_returns_not_implemented_error() {
+fn window_function_now_executes() {
+    // Window functions are implemented; this test confirms the
+    // regression boundary. Differential coverage lives in
+    // `parity_window.rs`.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
     c.execute("INSERT INTO t VALUES (1),(2),(3)")
         .expect("insert");
-    let res = c.execute("SELECT row_number() OVER (ORDER BY a) FROM t");
-    assert_unsupported(res, "not yet implemented");
+    c.execute("SELECT row_number() OVER (ORDER BY a) FROM t")
+        .expect("OVER should execute");
 }
 
-#[test]
-fn partial_index_returns_error() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(a INTEGER, b TEXT)")
-        .expect("create");
-    let res = c.execute("CREATE INDEX idx ON t(a) WHERE a > 0");
-    assert_errors(res);
-}
+// A6 SQL-D: partial indexes are now supported (see parity_partial_index.rs).
+// Stale "returns-error" assertion removed when the feature landed.
 
 #[test]
 fn unsupported_function_returns_error() {

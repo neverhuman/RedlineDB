@@ -182,6 +182,22 @@
       "command": "just fast",
       "purpose": "verify proof-lane recipes execute"
     },
+    "Justfile": {
+      "command": "just fast",
+      "purpose": "verify root proof-lane routing stays executable"
+    },
+    "just/lanes.just": {
+      "command": "just fast",
+      "purpose": "verify split lane definitions stay executable"
+    },
+    "crates/kernel/src/index/cursor/raw.rs": {
+      "command": "just kernel-cursor",
+      "purpose": "verify the split raw cursor implementation and equivalence tests"
+    },
+    "crates/kernel/src/index/cursor/raw/": {
+      "command": "just kernel-cursor",
+      "purpose": "verify the split raw cursor implementation and equivalence tests"
+    },
     "paper/": {
       "command": "just score",
       "purpose": "verify paper artifacts stay routed and reproducible"
@@ -300,6 +316,16 @@
     "crates/ffi/tests/safety_invariants.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test safety_invariants --quiet --locked",
       "purpose": "prove documented ownership invariants for the FFI surface"
+    },
+    "crates/ffi/tests/symbol_diff.rs": {
+      "command": "rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked -- --ignored",
+      "purpose": "D6 FFI symbol-diff against libsqlite3 public surface (allowlisted exclusions in crates/ffi/tests/symbol_allowlist.toml)",
+      "proof_lane": "ffi-symbol-diff"
+    },
+    "crates/bench/tests/fuzz_parity.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test fuzz_parity --quiet --locked -- --test-threads=1",
+      "purpose": "D7 differential SQL fuzz parity gate (rate-monotone baseline at target/proof/sqlite-full-parity/fuzz-divergence.txt)",
+      "proof_lane": "fuzz-parity"
     },
     "contracts/c-abi/": {
       "command": "rtk cargo test -p redlinedb-ffi --quiet --locked",

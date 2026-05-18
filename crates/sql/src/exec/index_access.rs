@@ -25,6 +25,7 @@ use redlinedb_kernel::catalog::{
 };
 use redlinedb_kernel::engine::{Engine, Txn};
 use redlinedb_kernel::format::RowId;
+use redlinedb_kernel::index::{CursorYield, IndexRowRef, RawPointCursor, SnapshotView};
 use sqlparser::ast::{BinaryOperator, Expr, Value};
 
 use crate::error::Result;
@@ -129,10 +130,23 @@ pub(crate) fn try_match_index_access(
         if index.meta_page_id.is_none() || engine.index_handle(index.index_id).is_none() {
             continue;
         }
+        // A6 SQL-D: partial indexes only contain rows matching their
+        // WHERE predicate; the planner may use one only when the query
+        // WHERE provably implies the index WHERE (today: exact match).
+        // Otherwise we risk missing rows that exist in the heap but
+        // were never inserted into the partial index.
+        if !crate::exec::index_partial::query_implies_index_predicate(selection, index) {
+            continue;
+        }
         let Some(first_key) = index.keys.first() else {
             continue;
         };
-        let IndexKeySource::Column { attnum: leading } = first_key.source;
+        let IndexKeySource::Column { attnum: leading } = first_key.source else {
+            // A6 SQL-D: planner cannot yet match expression-source keys
+            // for index access; skip the index until full expression-
+            // index planner support lands.
+            continue;
+        };
         let leading = leading as usize;
 
         // Leading-column equality is the gateway. If we cannot bind the
@@ -148,7 +162,12 @@ pub(crate) fn try_match_index_access(
             full_key.push(leading_value.clone());
             let mut full_match = true;
             for key in index.keys.iter().skip(1) {
-                let IndexKeySource::Column { attnum } = key.source;
+                let IndexKeySource::Column { attnum } = key.source else {
+                    // A6 SQL-D: expression keys don't satisfy planner
+                    // column-equality matching yet.
+                    full_match = false;
+                    break;
+                };
                 let column = attnum as usize;
                 match first_constant_eq_for_column(&conjuncts, table, column, bindings) {
                     Some(value) => full_key.push(value),
@@ -242,14 +261,26 @@ pub(crate) fn execute_index_point_lookup(
         // snapshots.
         return Ok(Vec::new());
     };
-    let entries =
-        handle.point_lookup_visible(engine.tx_status(), tx.snapshot(), Some(tx.id()), key)?;
-    let mut out = Vec::with_capacity(entries.len());
-    for entry in entries {
-        if visible_in_relation(engine, tx, table, entry.row_id)? {
-            out.push(entry.row_id);
+    let counters = engine.phase11_counters();
+    let snapshot = tx.snapshot().clone();
+    let view = SnapshotView::visible(engine.tx_status(), &snapshot, Some(tx.id()));
+    let mut cursor = RawPointCursor::open_with_counters(&handle, key, view, Some(&*counters))?;
+    let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
+    let mut out = Vec::new();
+    loop {
+        batch.clear();
+        match cursor.next_rowid_batch(&mut batch, MAX_BATCH)? {
+            CursorYield::End => break,
+            CursorYield::Batch(_) => {
+                for entry in &batch {
+                    if visible_in_relation(engine, tx, table, entry.row_id)? {
+                        out.push(entry.row_id);
+                    }
+                }
+            }
         }
     }
+    cursor.close();
     Ok(out)
 }
 
@@ -618,7 +649,12 @@ fn encode_full_key(index: &IndexDef, values: &[SqlValue]) -> Vec<u8> {
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
     let mut owned_refs: Vec<&SqlValue> = Vec::with_capacity(index.keys.len());
     for (key, value) in index.keys.iter().zip(values.iter()) {
-        let IndexKeySource::Column { attnum: _ } = key.source;
+        // A6 SQL-D: expression key sources do not reach this encode
+        // path today — planner skips expression indexes — so the
+        // attnum is informational only.
+        if !matches!(key.source, IndexKeySource::Column { .. }) {
+            continue;
+        }
         owned_refs.push(value);
         dirs.push(key.sort_dir);
     }
@@ -632,7 +668,9 @@ fn encode_prefix_key(index: &IndexDef, leading_values: &[SqlValue]) -> Vec<u8> {
     let mut dirs: Vec<SortDir> = Vec::with_capacity(leading_values.len());
     let mut owned_refs: Vec<&SqlValue> = Vec::with_capacity(leading_values.len());
     for (key, value) in index.keys.iter().zip(leading_values.iter()) {
-        let IndexKeySource::Column { attnum: _ } = key.source;
+        if !matches!(key.source, IndexKeySource::Column { .. }) {
+            continue;
+        }
         owned_refs.push(value);
         dirs.push(key.sort_dir);
     }

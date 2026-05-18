@@ -1,0 +1,300 @@
+//! Dot-command dispatch table for the SQLite-compatible shell.
+//!
+//! Each command group lives in its own module so individual files stay below
+//! the 300-LOC ceiling. The public entry point is [`dispatch`], which is
+//! called by `main` after observing a `.`-prefixed line at the start of an
+//! input buffer.
+
+use std::fs::File;
+use std::io::{self, Write};
+use std::path::PathBuf;
+
+use redlinedb::Database;
+
+pub mod control;
+pub mod display;
+pub mod io_cmd;
+pub mod schema;
+
+/// Output formatting modes accepted by `.mode` and the flag parser.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputMode {
+    List,
+    Csv,
+    Json,
+    Line,
+    Markdown,
+    Quote,
+    Table,
+    Tabs,
+    Insert,
+    Column,
+    Html,
+}
+
+impl OutputMode {
+    pub fn parse(token: &str) -> Option<Self> {
+        Some(match token.to_ascii_lowercase().as_str() {
+            "list" => Self::List,
+            "csv" => Self::Csv,
+            "json" => Self::Json,
+            "line" | "lines" => Self::Line,
+            "markdown" => Self::Markdown,
+            "quote" => Self::Quote,
+            "table" | "box" => Self::Table,
+            "tabs" => Self::Tabs,
+            "insert" => Self::Insert,
+            "column" => Self::Column,
+            "html" => Self::Html,
+            _ => return None,
+        })
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::List => "list",
+            Self::Csv => "csv",
+            Self::Json => "json",
+            Self::Line => "line",
+            Self::Markdown => "markdown",
+            Self::Quote => "quote",
+            Self::Table => "table",
+            Self::Tabs => "tabs",
+            Self::Insert => "insert",
+            Self::Column => "column",
+            Self::Html => "html",
+        }
+    }
+
+    pub fn default_separator(self) -> &'static str {
+        match self {
+            Self::Tabs => "\t",
+            Self::Csv => ",",
+            _ => "|",
+        }
+    }
+}
+
+/// Mutable shell state that dot-commands read and update.
+pub struct CliState {
+    pub db: Database,
+    pub db_path: PathBuf,
+    pub mode: OutputMode,
+    pub separator: String,
+    pub show_header: bool,
+    pub null_value: String,
+    pub bail: bool,
+    pub timer: bool,
+    pub changes: bool,
+    pub echo: bool,
+    pub eqp: bool,
+    pub explain: ExplainSetting,
+    pub widths: Vec<usize>,
+    pub limits: Vec<(String, i64)>,
+    pub output: OutputTarget,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExplainSetting {
+    On,
+    Off,
+    Auto,
+}
+
+/// Sink for query output and `.print`.
+pub enum OutputTarget {
+    Stdout,
+    File { path: PathBuf, writer: File },
+}
+
+impl OutputTarget {
+    pub fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        match self {
+            Self::Stdout => io::stdout().write_all(bytes),
+            Self::File { writer, .. } => writer.write_all(bytes),
+        }
+    }
+
+    pub fn write_line(&mut self, line: &str) -> io::Result<()> {
+        self.write_all(line.as_bytes())?;
+        self.write_all(b"\n")
+    }
+
+    pub fn label(&self) -> String {
+        match self {
+            Self::Stdout => "stdout".into(),
+            Self::File { path, .. } => path.display().to_string(),
+        }
+    }
+}
+
+impl CliState {
+    pub fn new(
+        db: Database,
+        db_path: PathBuf,
+        mode: OutputMode,
+        separator: String,
+        header: bool,
+    ) -> Self {
+        Self {
+            db,
+            db_path,
+            mode,
+            separator,
+            show_header: header,
+            null_value: String::new(),
+            bail: false,
+            timer: false,
+            changes: false,
+            echo: false,
+            eqp: false,
+            explain: ExplainSetting::Auto,
+            widths: Vec::new(),
+            limits: Vec::new(),
+            output: OutputTarget::Stdout,
+        }
+    }
+}
+
+/// Outcome of executing a dot-command.
+pub enum DotOutcome {
+    Ok,
+    /// `.read FILE` must be executed by the REPL because executing SQL
+    /// requires the caller's statement runner.
+    ReadFile(PathBuf),
+    /// `.exit` / `.quit` request termination of the REPL with the given
+    /// exit code.
+    Exit(i32),
+}
+
+/// Dispatch a single dot-command line. The `line` must include the leading
+/// `.` and may include arguments separated by ASCII whitespace.
+pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> {
+    let line = line.trim();
+    if !line.starts_with('.') {
+        return Err(format!("not a dot-command: {line}"));
+    }
+    let parts = split_args(line);
+    let Some((cmd, args)) = parts.split_first() else {
+        return Err("empty dot-command".to_owned());
+    };
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    match cmd.as_str() {
+        ".exit" | ".quit" => Ok(DotOutcome::Exit(0)),
+        ".help" => print_help(state),
+        ".tables" => schema::tables(state, &args),
+        ".schema" => schema::schema(state, &args),
+        ".indexes" | ".indices" => schema::indexes(state, &args),
+        ".databases" => schema::databases(state, &args),
+        ".dump" => io_cmd::dump(state, &args),
+        ".save" => io_cmd::save(state, &args),
+        ".restore" => io_cmd::restore(state, &args),
+        ".output" => io_cmd::output(state, &args),
+        ".print" => io_cmd::print(state, &args),
+        ".import" => io_cmd::import(state, &args),
+        ".read" => io_cmd::read(state, &args),
+        ".mode" => display::mode(state, &args),
+        ".headers" | ".header" => display::headers(state, &args),
+        ".width" | ".widths" => display::width(state, &args),
+        ".nullvalue" => display::nullvalue(state, &args),
+        ".separator" => display::separator(state, &args),
+        ".bail" => control::bail(state, &args),
+        ".timer" => control::timer(state, &args),
+        ".changes" => control::changes(state, &args),
+        ".echo" => control::echo(state, &args),
+        ".show" => control::show(state, &args),
+        ".limit" => control::limit(state, &args),
+        ".eqp" => control::eqp(state, &args),
+        ".explain" => control::explain(state, &args),
+        other => Err(format!(
+            "Error: unknown command or invalid arguments: \"{}\". Enter \".help\" for help",
+            other.trim_start_matches('.')
+        )),
+    }
+}
+
+fn print_help(_state: &mut CliState) -> Result<DotOutcome, String> {
+    let lines = [
+        ".bail on|off            Stop after hitting an error",
+        ".changes on|off         Show number of rows changed by SQL",
+        ".databases              List names and files of attached databases",
+        ".dump ?TABLE?           Render database content as SQL",
+        ".echo on|off            Turn command echo on or off",
+        ".eqp on|off             Enable / disable automatic EXPLAIN QUERY PLAN",
+        ".exit                   Exit this program",
+        ".explain on|off|auto    Toggle EXPLAIN output mode",
+        ".headers on|off         Turn display of headers on or off",
+        ".help                   Show this message",
+        ".import FILE TABLE      Import data from FILE into TABLE",
+        ".indexes ?TABLE?        List indexes",
+        ".limit ?OPT? ?N?        Inspect or set SQLITE_LIMIT values",
+        ".mode MODE              Set output mode",
+        ".nullvalue STRING       Use STRING in place of NULL",
+        ".output ?FILE?          Send output to FILENAME or stdout",
+        ".print STRING...        Print literal STRING",
+        ".quit                   Exit this program",
+        ".read FILENAME          Execute SQL from FILENAME",
+        ".restore FILE           Restore content of database from FILE",
+        ".save FILE              Write in-memory database into FILE",
+        ".schema ?TABLE?         Show CREATE statements",
+        ".separator SEP          Change separator string",
+        ".show                   Show the current values for various settings",
+        ".tables ?TABLE?         List names of tables matching PATTERN",
+        ".timer on|off           Turn SQL timer on or off",
+        ".width N1 N2 ...        Set minimum column widths for column mode",
+    ];
+    for line in lines {
+        println!("{line}");
+    }
+    Ok(DotOutcome::Ok)
+}
+
+/// Split a dot-command line into tokens, honouring single/double quotes.
+pub fn split_args(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut iter = line.chars().peekable();
+    let mut quote: Option<char> = None;
+    while let Some(ch) = iter.next() {
+        match (quote, ch) {
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), c) => current.push(c),
+            (None, c) if c.is_whitespace() => {
+                if !current.is_empty() {
+                    out.push(std::mem::take(&mut current));
+                }
+            }
+            (None, '"') | (None, '\'') => quote = Some(ch),
+            (None, c) => current.push(c),
+        }
+    }
+    if !current.is_empty() {
+        out.push(current);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_simple_tokens() {
+        assert_eq!(split_args(".tables foo bar"), vec![".tables", "foo", "bar"]);
+    }
+
+    #[test]
+    fn split_quoted_tokens() {
+        assert_eq!(
+            split_args(".import 'my file.csv' t"),
+            vec![".import", "my file.csv", "t"]
+        );
+    }
+
+    #[test]
+    fn mode_parses_aliases() {
+        assert_eq!(OutputMode::parse("box"), Some(OutputMode::Table));
+        assert_eq!(OutputMode::parse("lines"), Some(OutputMode::Line));
+        assert_eq!(OutputMode::parse("nope"), None);
+    }
+}

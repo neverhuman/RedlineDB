@@ -49,6 +49,19 @@ pub struct SavepointFrame {
     pub implicit_tx: bool,
 }
 
+/// A deferred FK check buffered until COMMIT. We capture just enough state
+/// to recompute the parent-row lookup at commit time: the child table and
+/// row id (so we can re-read the latest child values) plus the FK index
+/// inside `table.foreign_keys`. Resolving the parent table is done from the
+/// schema snapshot at commit time, which keeps replay/rollback semantics
+/// straightforward.
+#[derive(Debug, Clone)]
+pub struct DeferredFkCheck {
+    pub child_table_id: u64,
+    pub child_rowid: u64,
+    pub fk_index: usize,
+}
+
 #[derive(Debug, Default)]
 pub struct SessionState {
     pub tx: Option<Txn>,
@@ -71,6 +84,10 @@ pub struct SessionState {
     /// True while the journal is being replayed; suppresses re-recording so
     /// replay does not feed itself.
     pub replay_in_progress: bool,
+    /// Pending FK checks for `DEFERRABLE INITIALLY DEFERRED` constraints.
+    /// Drained at COMMIT; if any entry still violates referential integrity
+    /// the commit is aborted with a `ConstraintViolation` mirroring SQLite.
+    pub deferred_fk_checks: Vec<DeferredFkCheck>,
 }
 
 impl SessionState {
@@ -87,12 +104,14 @@ impl SessionState {
         self.journal.clear();
         self.savepoints.clear();
         self.replay_in_progress = false;
+        self.deferred_fk_checks.clear();
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.
     pub fn clear_savepoints(&mut self) {
         self.journal.clear();
         self.savepoints.clear();
+        self.deferred_fk_checks.clear();
     }
 }
 

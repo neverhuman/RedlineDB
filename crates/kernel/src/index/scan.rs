@@ -81,6 +81,8 @@ impl BtreeIndex {
         let mut out = Vec::new();
         let mut leaf_id = self.find_leaf(self.meta()?.root_page_id, start)?;
         loop {
+            let leaf_latch = self.inner.latches.get(leaf_id);
+            let _leaf_read = leaf_latch.read();
             let guard = self.inner.buffer.pin(leaf_id)?;
             self.inner
                 .range_scan_leaves_visited
@@ -142,6 +144,8 @@ impl BtreeIndex {
         let mut leaf_id = self.leftmost_leaf(meta.root_page_id)?;
         let mut out = Vec::new();
         loop {
+            let leaf_latch = self.inner.latches.get(leaf_id);
+            let _leaf_read = leaf_latch.read();
             let guard = self.inner.buffer.pin(leaf_id)?;
             let (next, entries) = guard.with_page(|page| {
                 let header = Self::read_page_header(page)?;
@@ -179,6 +183,8 @@ impl BtreeIndex {
     }
 
     pub(super) fn leftmost_leaf(&self, page_id: PageId) -> Result<PageId> {
+        let leaf_latch = self.inner.latches.get(page_id);
+        let _leaf_read = leaf_latch.read();
         let guard = self.inner.buffer.pin(page_id)?;
         let next = guard.with_page(|page| {
             let header = Self::read_page_header(page)?;
