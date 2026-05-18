@@ -216,3 +216,93 @@ fn unknown_dot_command_reports_error_without_terminating() {
     assert_eq!(code, 0);
     assert!(err.contains("unknown command"), "stderr={err}");
 }
+
+#[test]
+fn dot_fullschema_emits_schema_and_sqlite_master_section() {
+    let (out, err, code) = run_script(
+        None,
+        "CREATE TABLE widgets(id INTEGER PRIMARY KEY, name TEXT);\n\
+         .fullschema\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    let lower = out.to_ascii_lowercase();
+    assert!(lower.contains("create table"), "stdout={out}");
+    assert!(out.contains("widgets"), "stdout={out}");
+    assert!(
+        out.contains("/* sqlite_master */"),
+        "fullschema must emit sqlite_master section: stdout={out}"
+    );
+    assert!(
+        out.lines().any(|l| l.starts_with("table|widgets|")),
+        "fullschema must dump sqlite_master rows: stdout={out}"
+    );
+}
+
+#[test]
+fn dot_once_redirects_only_the_next_query() {
+    let dir = tempdir().expect("tempdir");
+    let once_path = dir.path().join("once.txt");
+    let script = format!(
+        "CREATE TABLE t(x INTEGER);\n\
+         INSERT INTO t VALUES (1), (2);\n\
+         .once {}\n\
+         SELECT x FROM t ORDER BY x;\n\
+         SELECT x FROM t ORDER BY x DESC;\n",
+        once_path.display()
+    );
+    let (out, err, code) = run_script(None, &script);
+    assert_eq!(code, 0, "stderr={err}");
+
+    let once_contents = std::fs::read_to_string(&once_path).expect("read once file");
+    assert!(
+        once_contents.contains('1') && once_contents.contains('2'),
+        "once file should contain redirected rows: contents={once_contents}"
+    );
+
+    let lines: Vec<&str> = out.lines().filter(|l| !l.is_empty()).collect();
+    assert!(
+        lines.iter().any(|l| l.trim() == "2"),
+        "stdout should contain second-query output: stdout={out}"
+    );
+}
+
+#[test]
+fn dot_parameter_set_binds_named_placeholders() {
+    let (out, err, code) = run_script(
+        None,
+        ".parameter set :n 42\n\
+         SELECT :n;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(
+        out.lines().any(|l| l.trim() == "42"),
+        "named parameter should bind: stdout={out}"
+    );
+}
+
+#[test]
+fn dot_parameter_list_and_clear_round_trip() {
+    let (out, err, code) = run_script(
+        None,
+        ".parameter set :a 1\n\
+         .parameter set :b two\n\
+         .parameter list\n\
+         .parameter clear\n\
+         .parameter list\n\
+         .print done\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    let listed = out
+        .lines()
+        .filter(|l| l.contains('\t'))
+        .collect::<Vec<_>>();
+    assert!(
+        listed.iter().any(|l| l.contains(":a") && l.contains('1')),
+        "first .parameter list should include :a=1, got: {listed:?}"
+    );
+    assert!(
+        listed.iter().any(|l| l.contains(":b") && l.contains("two")),
+        "first .parameter list should include :b=two, got: {listed:?}"
+    );
+    assert!(out.trim_end().ends_with("done"), "stdout={out}");
+}

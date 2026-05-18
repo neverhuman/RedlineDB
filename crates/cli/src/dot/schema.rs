@@ -110,3 +110,34 @@ pub fn databases(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, Str
         .map_err(|err| err.to_string())?;
     Ok(DotOutcome::Ok)
 }
+
+/// `.fullschema [PATTERN]` — like `.schema` but also dumps the contents of
+/// `sqlite_master` so callers can see the raw catalog rows (type, name,
+/// tbl_name, rootpage, sql).
+pub fn fullschema(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    schema(state, args)?;
+    state
+        .output
+        .write_line("/* sqlite_master */")
+        .map_err(|err| err.to_string())?;
+    let mut conn = state.db.connect().map_err(|err| err.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT type, name, tbl_name, rootpage, sql FROM sqlite_master \
+             ORDER BY type, name",
+        )
+        .map_err(|err| err.to_string())?;
+    while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
+        let ty: String = row.get(0).map_err(|err| err.to_string())?;
+        let name: String = row.get(1).map_err(|err| err.to_string())?;
+        let tbl_name: String = row.get(2).map_err(|err| err.to_string())?;
+        let rootpage: i64 = row.get(3).unwrap_or(0);
+        let sql: String = row.get(4).unwrap_or_default();
+        let line = format!("{ty}|{name}|{tbl_name}|{rootpage}|{sql}");
+        state
+            .output
+            .write_line(&line)
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(DotOutcome::Ok)
+}

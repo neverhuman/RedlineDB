@@ -434,6 +434,46 @@ impl Connection {
             .recursive_triggers = value;
     }
 
+    pub(crate) fn journal_mode(&self) -> crate::statement::JournalMode {
+        self.session.lock().expect("session poisoned").journal_mode
+    }
+
+    pub(crate) fn set_journal_mode(&self, value: crate::statement::JournalMode) {
+        self.session.lock().expect("session poisoned").journal_mode = value;
+    }
+
+    pub(crate) fn synchronous(&self) -> crate::statement::SynchronousLevel {
+        self.session.lock().expect("session poisoned").synchronous
+    }
+
+    pub(crate) fn set_synchronous(&self, value: crate::statement::SynchronousLevel) {
+        self.session.lock().expect("session poisoned").synchronous = value;
+    }
+
+    pub(crate) fn temp_store(&self) -> crate::statement::TempStoreMode {
+        self.session.lock().expect("session poisoned").temp_store
+    }
+
+    pub(crate) fn set_temp_store(&self, value: crate::statement::TempStoreMode) {
+        self.session.lock().expect("session poisoned").temp_store = value;
+    }
+
+    pub(crate) fn cache_size(&self) -> i64 {
+        self.session.lock().expect("session poisoned").cache_size
+    }
+
+    pub(crate) fn set_cache_size(&self, value: i64) {
+        self.session.lock().expect("session poisoned").cache_size = value;
+    }
+
+    pub(crate) fn query_only(&self) -> bool {
+        self.session.lock().expect("session poisoned").query_only
+    }
+
+    pub(crate) fn set_query_only(&self, value: bool) {
+        self.session.lock().expect("session poisoned").query_only = value;
+    }
+
     pub(crate) fn user_version(&self) -> i64 {
         self.db.user_version()
     }
