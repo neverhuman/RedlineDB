@@ -14,8 +14,9 @@ use redlinedb::sqlite3_api::result::{
     sqlite3_result_int, sqlite3_result_int64, sqlite3_result_null, sqlite3_result_text,
 };
 use redlinedb::sqlite3_api::value::{
-    RldbValue, sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_int,
-    sqlite3_value_int64, sqlite3_value_text, sqlite3_value_type,
+    RldbValue, sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_dup,
+    sqlite3_value_free, sqlite3_value_int, sqlite3_value_int64, sqlite3_value_text,
+    sqlite3_value_type,
 };
 use redlinedb::types::rldb;
 use redlinedb_sql::value::SqlValue;
@@ -87,6 +88,22 @@ fn blob_value_returns_pointer_and_length() {
         let slice = std::slice::from_raw_parts(ptr, 3);
         assert_eq!(slice, &[0u8, 1, 2]);
         assert_eq!(sqlite3_value_bytes(v), 3);
+    }
+    free_value(v);
+}
+
+#[test]
+fn value_dup_and_free_round_trip_owned_copy() {
+    let v = make_value(SqlValue::Text(std::sync::Arc::from("copy-me")));
+    let dup = unsafe { sqlite3_value_dup(v) };
+    assert!(!dup.is_null());
+    unsafe {
+        assert_eq!(sqlite3_value_type(dup), 3);
+        let ptr = sqlite3_value_text(dup);
+        assert!(!ptr.is_null());
+        let cstr = CStr::from_ptr(ptr as *const i8);
+        assert_eq!(cstr.to_str().unwrap(), "copy-me");
+        sqlite3_value_free(dup);
     }
     free_value(v);
 }

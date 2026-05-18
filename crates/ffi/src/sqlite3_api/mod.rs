@@ -5,6 +5,7 @@
 //! They delegate to the corresponding `rldb_*` implementation, layering on
 //! the status-recording semantics expected by the SQLite ABI.
 
+pub mod backup;
 mod bind;
 pub mod blob;
 pub mod collation;
@@ -20,6 +21,7 @@ mod stmt;
 pub mod udf;
 pub mod value;
 
+pub use backup::*;
 pub use bind::*;
 pub use blob::*;
 pub use collation::*;

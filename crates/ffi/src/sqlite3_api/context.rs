@@ -8,9 +8,17 @@
 use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Mutex;
+use std::{collections::HashMap, os::raw::c_int};
 
 use super::value::{RldbValue, RldbValueInner};
 use crate::types::*;
+
+pub type AuxDestructorFn = unsafe extern "C" fn(*mut c_void);
+
+struct AuxData {
+    ptr_addr: usize,
+    destructor: Option<AuxDestructorFn>,
+}
 
 #[allow(non_camel_case_types)]
 pub struct RldbContext {
@@ -29,6 +37,8 @@ pub struct RldbContext {
     pub(crate) agg_state_addr: Mutex<usize>,
     #[allow(dead_code)]
     pub(crate) agg_state_size: Mutex<usize>,
+    pub(crate) agg_state: Mutex<Option<Box<[u8]>>>,
+    aux_data: Mutex<HashMap<c_int, AuxData>>,
 }
 
 impl RldbContext {
@@ -41,6 +51,8 @@ impl RldbContext {
             error_code: Mutex::new(None),
             agg_state_addr: Mutex::new(0),
             agg_state_size: Mutex::new(0),
+            agg_state: Mutex::new(None),
+            aux_data: Mutex::new(HashMap::new()),
         }
     }
 
@@ -72,6 +84,20 @@ impl RldbContext {
     }
 }
 
+impl Drop for RldbContext {
+    fn drop(&mut self) {
+        if let Ok(mut aux_data) = self.aux_data.lock() {
+            for (_, entry) in aux_data.drain() {
+                if let Some(destructor) = entry.destructor {
+                    // SAFETY: the destructor pointer and payload were supplied
+                    // together via sqlite3_set_auxdata for this context.
+                    unsafe { destructor(entry.ptr_addr as *mut c_void) };
+                }
+            }
+        }
+    }
+}
+
 /// # Safety
 /// `ctx` must be a non-NULL `*mut RldbContext` from this crate, valid for
 /// the call duration only.
@@ -98,4 +124,107 @@ pub unsafe extern "C" fn sqlite3_user_data(ctx: *mut RldbContext) -> *mut c_void
     // shared borrow valid for the call duration only; user_data_addr is a
     // usize form of the pointer the registrar originally provided.
     unsafe { (*ctx).user_data_ptr() }
+}
+
+/// # Safety
+/// `ctx` must be a non-NULL `*mut RldbContext` from this crate, valid for
+/// the call duration only.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_aggregate_context(
+    ctx: *mut RldbContext,
+    nbytes: c_int,
+) -> *mut c_void {
+    if ctx.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: caller obligation 1 — non-null per the # Safety contract.
+    let ctx = unsafe { &*ctx };
+    let mut state = match ctx.agg_state.lock() {
+        Ok(state) => state,
+        Err(_) => return ptr::null_mut(),
+    };
+    if state.is_none() {
+        if nbytes <= 0 {
+            return ptr::null_mut();
+        }
+        *state = Some(vec![0; nbytes as usize].into_boxed_slice());
+        if let Ok(mut addr) = ctx.agg_state_addr.lock() {
+            *addr = state.as_mut().unwrap().as_mut_ptr() as usize;
+        }
+        if let Ok(mut size) = ctx.agg_state_size.lock() {
+            *size = nbytes as usize;
+        }
+    }
+    state
+        .as_mut()
+        .map(|bytes| bytes.as_mut_ptr() as *mut c_void)
+        .unwrap_or(ptr::null_mut())
+}
+
+/// # Safety
+/// `ctx` must be a non-NULL `*mut RldbContext` from this crate, valid for
+/// the call duration only.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_get_auxdata(ctx: *mut RldbContext, index: c_int) -> *mut c_void {
+    if ctx.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: caller obligation 1 — non-null per the # Safety contract.
+    let ctx = unsafe { &*ctx };
+    ctx.aux_data
+        .lock()
+        .ok()
+        .and_then(|aux_data| {
+            aux_data
+                .get(&index)
+                .map(|entry| entry.ptr_addr as *mut c_void)
+        })
+        .unwrap_or(ptr::null_mut())
+}
+
+/// # Safety
+/// `ctx` must be a non-NULL `*mut RldbContext` from this crate, valid for
+/// the call duration only. `data` and `destructor` follow SQLite's auxdata
+/// ownership contract for UDF callbacks.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_set_auxdata(
+    ctx: *mut RldbContext,
+    index: c_int,
+    data: *mut c_void,
+    destructor: Option<AuxDestructorFn>,
+) {
+    if ctx.is_null() {
+        if let Some(destructor) = destructor {
+            // SAFETY: SQLite calls the supplied destructor when auxdata
+            // cannot be retained.
+            unsafe { destructor(data) };
+        }
+        return;
+    }
+    // SAFETY: caller obligation 1 — non-null per the # Safety contract.
+    let ctx = unsafe { &*ctx };
+    let Ok(mut aux_data) = ctx.aux_data.lock() else {
+        if let Some(destructor) = destructor {
+            // SAFETY: SQLite calls the supplied destructor when auxdata
+            // cannot be retained.
+            unsafe { destructor(data) };
+        }
+        return;
+    };
+    if let Some(previous) = aux_data.remove(&index) {
+        if let Some(destructor) = previous.destructor {
+            // SAFETY: paired with the previous sqlite3_set_auxdata call.
+            unsafe { destructor(previous.ptr_addr as *mut c_void) };
+        }
+    }
+    if data.is_null() {
+        return;
+    }
+    aux_data.insert(
+        index,
+        AuxData {
+            ptr_addr: data as usize,
+            destructor,
+        },
+    );
 }
