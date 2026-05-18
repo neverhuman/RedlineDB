@@ -16,9 +16,29 @@ pub(crate) fn value_to_string(value: &SqlValue) -> String {
     match value {
         SqlValue::Null => String::new(),
         SqlValue::Integer(v) => v.to_string(),
-        SqlValue::Real(v) => v.to_string(),
+        SqlValue::Real(v) => format_real_sqlite(*v),
         SqlValue::Text(v) => v.to_string(),
         SqlValue::Blob(v) => String::from_utf8_lossy(v).into_owned(),
+    }
+}
+
+/// Format a `f64` the way SQLite renders REAL values in text contexts
+/// (`%!.15g` semantics). Whole-valued finite reals keep a trailing `.0`
+/// so that `lower(1.0)` returns `"1.0"`, not `"1"` — matching the
+/// rusqlite oracle. Non-finite values render as SQLite's
+/// `"Inf"` / `"-Inf"` / `"NaN"` literals.
+pub(crate) fn format_real_sqlite(v: f64) -> String {
+    if v.is_nan() {
+        return "NaN".to_owned();
+    }
+    if v.is_infinite() {
+        return if v < 0.0 { "-Inf".to_owned() } else { "Inf".to_owned() };
+    }
+    let s = format!("{v}");
+    if s.contains('.') || s.contains('e') || s.contains('E') {
+        s
+    } else {
+        format!("{s}.0")
     }
 }
 
