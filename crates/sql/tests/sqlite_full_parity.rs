@@ -7,8 +7,78 @@
 
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
 use rusqlite::types::Value as RuValue;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::tempdir;
+
+fn proof_dir() -> PathBuf {
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+    let workspace_root = Path::new(&manifest)
+        .ancestors()
+        .nth(2)
+        .expect("workspace root");
+    workspace_root
+        .join("target")
+        .join("proof")
+        .join("sqlite-full-parity")
+}
+
+fn sqlite_pragma_list(conn: &rusqlite::Connection) -> Vec<String> {
+    let mut stmt = conn
+        .prepare("PRAGMA pragma_list")
+        .expect("prepare pragma_list");
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("pragma_list rows");
+    let mut out = rows
+        .collect::<Result<Vec<_>, _>>()
+        .expect("pragma_list values");
+    out.sort();
+    out
+}
+
+fn write_pragma_corpus(version: &str, options: &[String], pragmas: &[String]) {
+    let dir = proof_dir();
+    fs::create_dir_all(&dir)
+        .unwrap_or_else(|err| panic!("could not create proof dir {}: {err}", dir.display()));
+
+    let mut out = String::new();
+    out.push_str("# SQLite parity reference-build pragma corpus\n");
+    out.push_str(&format!("sqlite_version={}\n", version.trim()));
+    out.push_str("compile_options:\n");
+    for option in options {
+        out.push_str(option);
+        out.push('\n');
+    }
+    out.push_str("pragma_list:\n");
+    for pragma in pragmas {
+        out.push_str(pragma);
+        out.push('\n');
+    }
+
+    let path = dir.join("pragma-reference-corpus.txt");
+    fs::write(&path, out).unwrap_or_else(|err| panic!("could not write {}: {err}", path.display()));
+}
+
+fn sqlite_reference_metadata() -> (String, Vec<String>, Vec<String>) {
+    let conn = rusqlite::Connection::open_in_memory().expect("open sqlite");
+    let version: String = conn
+        .query_row("SELECT sqlite_version()", [], |row| row.get(0))
+        .expect("sqlite version");
+    let compile_options: Vec<String> = {
+        let mut stmt = conn
+            .prepare("PRAGMA compile_options")
+            .expect("compile options");
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .expect("compile option rows");
+        rows.collect::<Result<Vec<_>, _>>()
+            .expect("compile option values")
+    };
+    let pragmas = sqlite_pragma_list(&conn);
+    (version, compile_options, pragmas)
+}
 
 struct Harness {
     _dir: tempfile::TempDir,
@@ -152,20 +222,8 @@ fn to_sql_value(value: RuValue) -> SqlValue {
 
 #[test]
 fn reference_build_metadata_is_available() {
-    let conn = rusqlite::Connection::open_in_memory().expect("open sqlite");
-    let version: String = conn
-        .query_row("SELECT sqlite_version()", [], |row| row.get(0))
-        .expect("sqlite version");
-    let compile_options: Vec<String> = {
-        let mut stmt = conn
-            .prepare("PRAGMA compile_options")
-            .expect("compile options");
-        let rows = stmt
-            .query_map([], |row| row.get::<_, String>(0))
-            .expect("compile option rows");
-        rows.collect::<Result<Vec<_>, _>>()
-            .expect("compile option values")
-    };
+    let (version, compile_options, pragmas) = sqlite_reference_metadata();
+    write_pragma_corpus(&version, &compile_options, &pragmas);
 
     println!("rusqlite_crate_version=0.37.0");
     println!("sqlite_version={version}");
@@ -173,43 +231,126 @@ fn reference_build_metadata_is_available() {
     for option in &compile_options {
         println!("{option}");
     }
+    println!("pragma_list:");
+    for pragma in &pragmas {
+        println!("{pragma}");
+    }
 
     assert!(!version.trim().is_empty(), "empty sqlite_version()");
     assert!(
         !compile_options.is_empty(),
         "bundled SQLite reported no compile options"
     );
+    assert!(
+        !pragmas.is_empty(),
+        "bundled SQLite reported no PRAGMA names"
+    );
 }
 
 #[test]
-fn representative_sqlite_supported_rows_match_reference() {
+fn reference_build_pragma_rows_match_for_supported_surfaces() {
     let harness = Harness::new();
+    harness.execute_both("PRAGMA foreign_keys = ON");
+    harness.execute_both("PRAGMA recursive_triggers = ON");
+    harness.execute_both("PRAGMA user_version = 7");
+    harness.execute_both("PRAGMA journal_mode = memory");
+    harness.execute_both("PRAGMA synchronous = FULL");
+    harness.execute_both("PRAGMA temp_store = MEMORY");
+    harness.execute_both("PRAGMA cache_size = -256");
+    harness.execute_both("PRAGMA query_only = OFF");
     harness.execute_both("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, n INTEGER)");
+    harness.execute_both("CREATE TABLE x(a TEXT, b INTEGER)");
+    harness.execute_both("CREATE TABLE parent(id INTEGER PRIMARY KEY, label TEXT)");
+    harness.execute_both(
+        "CREATE TABLE child(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id), label TEXT)",
+    );
+    harness.execute_both("CREATE INDEX t_name_idx ON t(name)");
     harness.execute_both(
         "INSERT INTO t(id, name, n) VALUES (1, ' Ada ', 10), (2, 'Grace', NULL), (3, NULL, 5)",
     );
-
-    harness.assert_query_matches(
-        "SELECT id, trim(name), substr(name, 2, 2), coalesce(n, 99) FROM t ORDER BY id",
+    harness.execute_both("INSERT INTO parent(id, label) VALUES (1, 'Ada'), (2, 'Grace')");
+    harness.execute_both(
+        "INSERT INTO child(id, parent_id, label) VALUES (10, 1, 'alpha'), (11, NULL, 'beta')",
     );
-    harness.assert_query_matches("SELECT count(*), count(n), total(n) FROM t");
+
+    harness.assert_query_matches("PRAGMA foreign_keys");
+    harness.assert_query_matches("PRAGMA recursive_triggers");
+    harness.assert_query_matches("PRAGMA user_version");
+    harness.assert_query_matches("PRAGMA journal_mode");
+    harness.assert_query_matches("PRAGMA synchronous");
+    harness.assert_query_matches("PRAGMA temp_store");
+    harness.assert_query_matches("PRAGMA cache_size");
+    harness.assert_query_matches("PRAGMA query_only");
+    harness.assert_query_matches("PRAGMA integrity_check");
+    harness.assert_query_matches("PRAGMA quick_check");
     harness.assert_query_matches(
-        "SELECT id FROM t WHERE id IN (SELECT id FROM t WHERE n IS NOT NULL) ORDER BY id",
+        "SELECT seq, name FROM pragma_database_list() WHERE name = 'main' ORDER BY seq",
+    );
+    harness.assert_query_matches(
+        "SELECT cid, name, type, dflt_value, pk FROM pragma_table_info('t') ORDER BY cid",
+    );
+    harness.assert_query_matches("PRAGMA table_xinfo('x')");
+    harness.assert_query_matches(
+        "SELECT name, \"unique\", origin FROM pragma_index_list('t') \
+         WHERE name NOT LIKE 'sqlite_autoindex_%' ORDER BY name",
+    );
+    harness.assert_query_matches(
+        "SELECT seqno, cid, name FROM pragma_index_info('t_name_idx') ORDER BY seqno",
     );
 }
 
 #[test]
 fn known_full_sqlite_parity_gaps_are_explicit_failures() {
-    // CTE (`WITH`) is now supported — see `parity_cte.rs`.
-    // Window functions (`OVER`) are now supported — see `parity_window.rs`.
-    // CREATE VIEW is now supported (Lane A5-views) — see `parity_view.rs`.
-    // CREATE TRIGGER is now supported (Lane A5-triggers) — see
-    // `parity_trigger.rs`.
-    // Partial / expression indexes are now supported (A6 SQL-D) —
-    // see `parity_partial_index.rs` and `parity_expr_index.rs`.
-    // Generated columns (`GENERATED ALWAYS AS (expr) [STORED|VIRTUAL]`)
-    // are now supported (A6 SQL-D) — see `parity_generated_col.rs`.
-    // The fixture list is currently empty; the test is retained as a
-    // documented sentinel so a regressed feature or a freshly-tracked
-    // gap can be re-introduced with one line and an `assert_*` call.
+    let harness = Harness::new();
+    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA auto_vacuum = FULL");
+    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA page_size = 4096");
+    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA encoding = 'UTF-8'");
+    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA application_id = 42");
+    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA wal_checkpoint(FULL)");
+    harness.assert_sqlite_result_diff_or_redline_rejects(
+        &[
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)",
+            "CREATE INDEX t_name_idx ON t(name)",
+        ],
+        "PRAGMA index_xinfo('t_name_idx')",
+    );
+    harness.assert_sqlite_result_diff_or_redline_rejects(
+        &[
+            "CREATE TABLE parent(id INTEGER PRIMARY KEY, label TEXT)",
+            "CREATE TABLE child(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id), label TEXT)",
+        ],
+        "SELECT id, seq, \"table\", \"from\", \"to\", on_update, on_delete, \"match\" \
+         FROM pragma_foreign_key_list('child') ORDER BY id, seq",
+    );
+}
+
+#[test]
+fn sqlite_native_file_format_is_not_compatibility_surface() {
+    let dir = tempdir().expect("temp dir");
+    let path = dir.path().join("redline-native.db");
+    {
+        let db = Database::create(&path, DbOptions::default()).expect("create redline db");
+        let conn = db.connect();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
+            .expect("create table");
+        conn.execute("INSERT INTO t(id, name) VALUES (1, 'Ada')")
+            .expect("insert");
+    }
+
+    assert!(
+        path.is_dir(),
+        "RedlineDB root should remain a directory, not a SQLite database file"
+    );
+    let mut entries = fs::read_dir(&path)
+        .unwrap_or_else(|err| panic!("read RedlineDB root directory {}: {err}", path.display()));
+    assert!(
+        entries.next().is_some(),
+        "RedlineDB root should contain Redline-native files"
+    );
+
+    let sqlite = rusqlite::Connection::open(&path);
+    assert!(
+        sqlite.is_err(),
+        "SQLite should not open a RedlineDB-native directory as a valid SQLite database"
+    );
 }

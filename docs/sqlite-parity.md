@@ -72,13 +72,13 @@ Status values are deliberately narrow:
 | Unknown PRAGMA names | rejects-by-design | `crates/sql/tests/parity_pragma_tv.rs` | sql-parser-planner-executor | All unsupported PRAGMAs now return `UnsupportedSql` naming the PRAGMA. |
 | `PRAGMA foreign_keys` | pass | `crates/sql/tests/parity_fk_enforce.rs`, `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | A6: per-connection toggle now gates the FK enforcement layer end-to-end; OFF skips every check (matches SQLite's bundled default). |
 | Table-valued PRAGMAs | pass | `crates/sql/tests/parity_pragma_tv.rs` | sql-parser-planner-executor | C2: `PRAGMA table_info(...)`, `PRAGMA index_list(...)`, `PRAGMA index_info(...)`, `PRAGMA foreign_key_list(...)` and the rest of the table-valued PRAGMA family produce row sets with column names and ordering that match the rusqlite oracle. |
-| Full reference-build PRAGMA set | not-started | `crates/sql/tests/sqlite_full_parity.rs` metadata only | sql-parser-planner-executor | Needs generated corpus from `PRAGMA compile_options` and SQLite docs. |
+| Full reference-build PRAGMA set | partial | `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | Reference-build corpus is derived from bundled SQLite metadata (`sqlite_version()`, `PRAGMA compile_options`, `PRAGMA pragma_list`) and compared against the RedlineDB-supported PRAGMA subset row-by-row; intentional rejects remain explicit sentinels. |
 
 ## File Format, Durability, C API, And CLI
 
 | Feature row | Status | Test path | Owner | Notes |
 |---|---|---|---|---|
-| SQLite database header/pages/btrees/records | not-started | none | storage-and-catalog | Current files use RedlineDB-native page/control/WAL formats, not `SQLite format 3`. |
+| SQLite database header/pages/btrees/records | not-started | `crates/sql/tests/sqlite_full_parity.rs` sentinel only | storage-and-catalog | Current files use RedlineDB-native page/control/WAL formats, not `SQLite format 3`; the parity suite now asserts the header mismatch explicitly. |
 | SQLite rollback journal compatibility | not-started | none | storage-and-catalog | No SQLite rollback-journal reader/writer exists. |
 | SQLite WAL compatibility and recovery | not-started | none | storage-and-catalog | RedlineDB has a native group-commit WAL, not SQLite WAL frames. |
 | Cross-open RedlineDB-created files with SQLite CLI | not-started | none | storage-and-catalog | Requires SQLite file-format writer. |
