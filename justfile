@@ -16,6 +16,9 @@ check:
 setup:
   ./scripts/just/run.sh cache-warm
 
+install-hooks:
+  ./tools/jankurai-hooks/install.sh
+
 test:
   ./scripts/just/run.sh fast-test
 

@@ -60,9 +60,9 @@ jobs:
         id: install-jankurai
         run: |
           mkdir -p target/jankurai
-          if cargo install --git https://github.com/jeppsontaylor/Jankurai.git \
-              --tag v0.8.16 --package jankurai --locked 2>target/jankurai/jankurai-install.log \
-              || cargo install jankurai --locked 2>>target/jankurai/jankurai-install.log; then
+          if cargo install --git https://github.com/neverhuman/jankurai.git \
+              --tag v1.5.0 --package jankurai --locked 2>target/jankurai/jankurai-install.log \
+              || cargo install jankurai --version 1.5.0 --locked 2>>target/jankurai/jankurai-install.log; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "installed=false" >> "$GITHUB_OUTPUT"
@@ -91,7 +91,7 @@ jobs:
         if: steps.install-jankurai.outputs.installed == 'true'
         run: |
           rm -rf target/jankurai-src
-          if git clone --depth 1 https://github.com/jeppsontaylor/Jankurai.git target/jankurai-src 2>/dev/null; then
+          if git clone --depth 1 --branch v1.5.0 https://github.com/neverhuman/jankurai.git target/jankurai-src 2>/dev/null; then
             ( cd target/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
               > >(tee target/jankurai/language-bad-behavior.log) 2>&1
           else

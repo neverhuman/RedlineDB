@@ -39,6 +39,10 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
   bypasses.
 - **Hook integration test**
   (`tools/jankurai-hooks/tests/pre_commit_blocks.sh`).
+- **Tracked Jankurai hook installer** (`just install-hooks`): sets
+  `core.hooksPath=tools/jankurai-hooks` so clones use the repo-managed
+  `pre-commit` and `prepare-commit-msg` hooks without copying files into
+  `.git/hooks`.
 
 ### Changed (potentially BREAKING for callers that probe unknown PRAGMAs)
 
@@ -54,7 +58,8 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Notes
 
-- Jankurai 1.4.3 is the supported version.
+- Jankurai 1.5.0 from `https://github.com/neverhuman/jankurai` is the
+  supported version.
 
 ## [1.0.2] - 2026-05-17
 

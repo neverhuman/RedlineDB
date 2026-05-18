@@ -32,15 +32,14 @@ mkdir -p "$LOG_DIR" "$LOG_DIR/security" "$LOG_DIR/proofbind" "$LOG_DIR/proofmark
 JANKURAI_INSTALL_LOG="$LOG_DIR/jankurai-install.log"
 
 # ---- 1) Install jankurai ----------------------------------------------------
-# Try the canonical git source first, then the fallback fork, then the
-# crates.io publication if/when one exists. Matches the install logic
-# previously inline in .github/workflows/jankurai.yml.
+# Try the pinned canonical git source first, then the matching crates.io
+# publication if/when one exists. Matches the install logic previously
+# inline in .github/workflows/jankurai.yml.
 #
 # Returns the install exit code so `ci_soft_gate` can stamp the marker.
 step_install_jankurai() {
-    cargo install --git "${CI_JANKURAI_GIT}" --locked jankurai \
-        || cargo install --git https://github.com/anthropics/jankurai --locked jankurai \
-        || cargo install jankurai --locked
+    cargo install --git "${CI_JANKURAI_GIT}" --tag "${CI_JANKURAI_TAG}" --package jankurai --locked \
+        || cargo install jankurai --version "${CI_JANKURAI_CRATE_VERSION}" --locked
 }
 
 # ---- 2) jankurai --version --------------------------------------------------
@@ -147,8 +146,7 @@ step_language_bad_behavior() {
     rm -rf target/jankurai-src
 
     local cloned=0
-    if git clone --depth 1 "${CI_JANKURAI_GIT}.git" target/jankurai-src \
-        || git clone --depth 1 https://github.com/anthropics/jankurai.git target/jankurai-src; then
+    if git clone --depth 1 --branch "${CI_JANKURAI_TAG}" "${CI_JANKURAI_GIT}.git" target/jankurai-src; then
         cloned=1
     fi
 

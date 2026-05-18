@@ -22,7 +22,9 @@ set -euo pipefail
 readonly CI_RUST_TOOLCHAIN="${CI_RUST_TOOLCHAIN:-1.95.0}"
 readonly CI_CARGO_DENY_VERSION="${CI_CARGO_DENY_VERSION:-0.18.0}"
 readonly CI_GITLEAKS_VERSION="${CI_GITLEAKS_VERSION:-8.21.2}"
-readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-https://github.com/jeppsontaylor/Jankurai}"
+readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-https://github.com/neverhuman/jankurai}"
+readonly CI_JANKURAI_TAG="${CI_JANKURAI_TAG:-v1.5.0}"
+readonly CI_JANKURAI_CRATE_VERSION="${CI_JANKURAI_CRATE_VERSION:-1.5.0}"
 
 # ---- Artifact assertions ----------------------------------------------------
 # Every CI lane that produces an evidence artifact should call

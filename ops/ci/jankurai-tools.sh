@@ -30,8 +30,8 @@ mkdir -p "target/jankurai/${tool}" target/jankurai
 
 # Install jankurai (soft-gated per agent/ci-soft-gate-ledger.toml#jankurai-install).
 installed=false
-if cargo install --git https://github.com/jeppsontaylor/Jankurai.git \
-        --tag v0.8.16 --package jankurai --locked \
+if cargo install --git "${CI_JANKURAI_GIT}" \
+        --tag "${CI_JANKURAI_TAG}" --package jankurai --locked \
         2>>"target/jankurai/${tool}/install.log"; then
     installed=true
 else

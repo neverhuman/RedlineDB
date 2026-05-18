@@ -10,6 +10,16 @@ Thanks for the interest in RedlineDB.
 4. Prefer small, reviewable commits with a clear intent.
 5. Include raw evidence for failures: exit codes, failing test names, spans, advisory IDs, seeds, and log paths.
 
+Enable the tracked staged-file Jankurai hooks once per clone:
+
+```bash
+just install-hooks
+```
+
+The installer sets `core.hooksPath=tools/jankurai-hooks`; it does not copy
+files into `.git/hooks`. Use `JANKURAI_SKIP_HOOKS=1 git commit ...` only for
+explicit bypasses.
+
 ## Proof
 
 - Default lane: `just fast`
