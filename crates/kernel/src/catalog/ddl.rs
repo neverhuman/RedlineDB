@@ -53,6 +53,7 @@ pub struct DropTableSpec {
 pub struct CreateIndexSpec {
     pub schema: Option<DbName>,
     pub name: DbName,
+    pub if_not_exists: bool,
     pub table: QualifiedName,
     pub unique: bool,
     pub columns: Vec<IndexColumnSpec>,

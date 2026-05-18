@@ -78,6 +78,17 @@ pub(crate) fn execute_update(
             {
                 *slot = SqlValue::Integer(new_rowid.0 as i64);
             }
+            fire_update_triggers(
+                conn,
+                tx,
+                &plan.table,
+                redlinedb_kernel::catalog::TriggerTimeKind::Before,
+                fresh.rowid,
+                new_rowid,
+                &old_values,
+                &values,
+                &plan.assignments,
+            )?;
             apply_constraints(&plan.table, &values)?;
             ensure_unique_constraints(conn, session, tx, &plan.table, &values, Some(fresh.rowid))?;
             let payload = encode_sql_row(plan.table.table_id.0, &values)?;
@@ -130,6 +141,7 @@ pub(crate) fn execute_update(
                 conn,
                 tx,
                 &plan.table,
+                redlinedb_kernel::catalog::TriggerTimeKind::After,
                 fresh.rowid,
                 new_rowid,
                 &old_values,
@@ -173,6 +185,7 @@ fn fire_update_triggers(
     conn: &Connection,
     tx: &mut redlinedb_kernel::engine::Txn,
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    time: redlinedb_kernel::catalog::TriggerTimeKind,
     old_rowid: redlinedb_kernel::format::RowId,
     new_rowid: redlinedb_kernel::format::RowId,
     old_values: &[SqlValue],
@@ -195,7 +208,7 @@ fn fire_update_triggers(
         &schema,
         table,
         redlinedb_kernel::catalog::TriggerEventKind::Update,
-        redlinedb_kernel::catalog::TriggerTimeKind::After,
+        time,
         Some(crate::exec::trigger::TriggerRowValues {
             rowid: old_rowid,
             values: old_values.to_vec(),

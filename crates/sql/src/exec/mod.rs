@@ -212,7 +212,9 @@ pub fn execute_prepared(
     // PRAGMA query_only mirrors SQLite: prevent any write-side DDL/DML
     // while still allowing reads, transaction control, and PRAGMA setters
     // that read-only callers legitimately need.
-    if conn.query_only() && template_writes(&template.kind) {
+    if template_writes(&template.kind)
+        && with_session_reentrant(conn, |session| Ok(session.query_only))?
+    {
         return Err(Error::UnsupportedSql(
             "attempt to write while PRAGMA query_only is set".to_owned(),
         ));

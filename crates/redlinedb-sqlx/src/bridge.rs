@@ -25,6 +25,8 @@ const DEFAULT_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(crate) struct ConnectionState {
     #[allow(dead_code)]
+    pub(crate) db: redlinedb::Database,
+    #[allow(dead_code)]
     pub(crate) conn: redlinedb::Connection,
 }
 
@@ -73,24 +75,22 @@ impl RedlineConnection {
     }
 
     fn connect_sync(options: RedlineConnectOptions) -> Result<Self, Error> {
-        let conn = match options.location {
-            RedlineLocation::File(path) => redlinedb::Database::create(path)
-                .map_err(map_redline_error)?
-                .connect()
-                .map_err(map_redline_error)?,
+        let db = match options.location {
+            RedlineLocation::File(path) => {
+                redlinedb::Database::create(path).map_err(map_redline_error)?
+            }
             RedlineLocation::InMemory => {
                 redlinedb::Database::create_in_memory(redlinedb::OpenOptions::default())
                     .map_err(map_redline_error)?
-                    .connect()
-                    .map_err(map_redline_error)?
             }
         };
+        let conn = db.connect().map_err(map_redline_error)?;
 
         let mut conn = conn;
         conn.set_busy_timeout(options.busy_timeout);
 
         Ok(Self {
-            state: Arc::new(Mutex::new(ConnectionState { conn })),
+            state: Arc::new(Mutex::new(ConnectionState { db, conn })),
         })
     }
 }

@@ -126,6 +126,7 @@ fn engine_rebuilds_v1_index_meta_on_open() {
             CreateIndexSpec {
                 schema: None,
                 name: DbName::new("ix_t_migrate_v"),
+                if_not_exists: false,
                 table: QualifiedName {
                     schema: DbName::new("main"),
                     name: DbName::new("t_migrate"),
@@ -257,6 +258,7 @@ fn uncommitted_index_pages_do_not_flush_before_wal_is_durable() {
             CreateIndexSpec {
                 schema: None,
                 name: DbName::new("ix_t_v"),
+                if_not_exists: false,
                 table: QualifiedName {
                     schema: DbName::new("main"),
                     name: DbName::new("t"),
@@ -937,6 +939,7 @@ fn ddl_create_table_and_index_survive_reopen() {
             CreateIndexSpec {
                 schema: None,
                 name: DbName::new("widgets_name_idx"),
+                if_not_exists: false,
                 table: QualifiedName {
                     schema: DbName::new("main"),
                     name: DbName::new("widgets"),

@@ -654,6 +654,7 @@ fn engine_create_index_allocates_meta_page_and_recovers() {
             CreateIndexSpec {
                 schema: None,
                 name: DbName::new("ix_v"),
+                if_not_exists: false,
                 table: QualifiedName {
                     schema: DbName::new("main"),
                     name: DbName::new("t"),
@@ -765,6 +766,7 @@ fn ddl_index_handles_publish_and_remove_only_on_commit() {
     let create_spec = || CreateIndexSpec {
         schema: None,
         name: DbName::new("ix_t_v"),
+        if_not_exists: false,
         table: QualifiedName {
             schema: DbName::new("main"),
             name: DbName::new("t"),
