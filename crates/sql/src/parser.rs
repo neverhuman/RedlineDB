@@ -12,10 +12,11 @@ use redlinedb_kernel::catalog::{
 use sqlparser::ast::{
     AlterTableOperation, Analyze as SqlAnalyze, AnalyzeFormat, AnalyzeFormatKind, BinaryOperator,
     ColumnDef, ColumnOption, ConflictTarget, Distinct, Expr, FunctionArg, FunctionArgExpr,
-    FunctionArguments, GroupByExpr, Ident, IndexColumn, JoinConstraint, JoinOperator, LimitClause,
-    ObjectName, ObjectNamePart, OnConflictAction, OnInsert, OrderByExpr, OrderByKind, Query,
-    SelectItem, SetExpr, SetOperator, SetQuantifier, SqliteOnConflict, Statement as SqlStatement,
-    TableFactor, TableObject, TableWithJoins, UnaryOperator, Value, ValueWithSpan,
+    FunctionArgumentClause, FunctionArguments, GroupByExpr, Ident, IndexColumn, JoinConstraint,
+    JoinOperator, LimitClause, ObjectName, ObjectNamePart, OnConflictAction, OnInsert, OrderByExpr,
+    OrderByKind, Query, SelectItem, SetExpr, SetOperator, SetQuantifier, SqliteOnConflict,
+    Statement as SqlStatement, TableFactor, TableObject, TableWithJoins, UnaryOperator, Value,
+    ValueWithSpan,
 };
 #[allow(unused_imports)]
 use sqlparser::dialect::SQLiteDialect;

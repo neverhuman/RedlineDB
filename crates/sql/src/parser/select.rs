@@ -684,6 +684,13 @@ pub(crate) fn normalize_function_args(
                 _ => {}
             }
         }
+        for clause in &mut list.clauses {
+            if let FunctionArgumentClause::OrderBy(order_by) = clause {
+                for order in order_by {
+                    order.expr = normalize_expr(order.expr.clone(), params)?;
+                }
+            }
+        }
     }
     Ok(())
 }
