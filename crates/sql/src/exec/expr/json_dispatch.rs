@@ -53,7 +53,10 @@ pub(super) fn eval_function(
         "length" => match values.first() {
             // SQLite: length(NULL) is NULL, not 0.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Integer(value_to_string(other).len() as i64)),
+            Some(SqlValue::Blob(bytes)) => Ok(SqlValue::Integer(bytes.len() as i64)),
+            Some(other) => Ok(SqlValue::Integer(
+                value_to_string(other).chars().count() as i64
+            )),
         },
         "lower" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
@@ -224,7 +227,7 @@ pub(super) fn eval_function(
         },
         // SQLite zeroblob(N) — returns a BLOB of N zero bytes.
         "zeroblob" => match values.first() {
-            None | Some(SqlValue::Null) => Ok(SqlValue::Null),
+            None | Some(SqlValue::Null) => Ok(SqlValue::Blob(Arc::from(&[][..]))),
             Some(v) => {
                 let n = match v {
                     SqlValue::Integer(n) => *n,
@@ -237,14 +240,17 @@ pub(super) fn eval_function(
         },
         // SQLite randomblob(N) — returns N random bytes as BLOB.
         "randomblob" => match values.first() {
-            None | Some(SqlValue::Null) => Ok(SqlValue::Null),
+            None | Some(SqlValue::Null) => {
+                let bytes = [(random_i64() & 0xFF) as u8];
+                Ok(SqlValue::Blob(Arc::from(bytes.as_slice())))
+            }
             Some(v) => {
                 let n = match v {
                     SqlValue::Integer(n) => *n,
                     SqlValue::Real(r) => *r as i64,
                     other => value_to_string(other).trim().parse::<i64>().unwrap_or(0),
                 };
-                let n = n.max(0) as usize;
+                let n = n.max(1) as usize;
                 let bytes: Vec<u8> = (0..n).map(|_| (random_i64() & 0xFF) as u8).collect();
                 Ok(SqlValue::Blob(Arc::from(bytes.as_slice())))
             }

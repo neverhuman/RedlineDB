@@ -49,7 +49,7 @@ fn update_or_conflict_is_unsupported() {
         .expect("create");
     c.execute("INSERT INTO t VALUES (1, 'a')").expect("insert");
     let res = c.execute("UPDATE OR REPLACE t SET id = 1, v = 'b' WHERE id = 1");
-    assert_errors(res);
+    assert_unsupported(res, "UPDATE OR ... is not supported yet");
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn delete_using_is_unsupported() {
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
     c.execute("CREATE TABLE src(id INTEGER)").expect("create");
     let res = c.execute("DELETE FROM t USING src WHERE t.id = src.id");
-    assert_errors(res);
+    assert_unsupported(res, "DELETE ... USING is not supported");
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn delete_order_by_is_unsupported() {
     c.execute("INSERT INTO t VALUES (1),(2),(3)")
         .expect("insert");
     let res = c.execute("DELETE FROM t ORDER BY id");
-    assert_errors(res);
+    assert_unsupported(res, "DELETE ORDER BY is not supported");
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn insert_set_syntax_is_unsupported() {
     c.execute("CREATE TABLE t(id INTEGER, v TEXT)")
         .expect("create");
     let res = c.execute("INSERT INTO t SET id=1, v='x'");
-    assert_errors(res);
+    assert_unsupported(res, "INSERT ... SET is not supported");
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn insert_on_duplicate_key_update_is_unsupported() {
     c.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT)")
         .expect("create");
     let res = c.execute("INSERT INTO t VALUES (1, 'a') ON DUPLICATE KEY UPDATE v = 'b'");
-    assert_errors(res);
+    assert_unsupported(res, "INSERT ON DUPLICATE KEY UPDATE is not supported");
 }
 
 // ── DDL unsupported constructs ────────────────────────────────────────────────
@@ -117,7 +117,7 @@ fn alter_table_only_is_unsupported() {
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
     // ALTER TABLE ONLY is Postgres-specific
     let res = c.execute("ALTER TABLE ONLY t ADD COLUMN v TEXT");
-    assert_errors(res);
+    assert_unsupported(res, "ALTER TABLE ONLY is not supported");
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn alter_table_add_column_after_is_unsupported() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
     let res = c.execute("ALTER TABLE t ADD COLUMN b TEXT AFTER a");
-    assert_errors(res);
+    assert_unsupported(res, "ALTER TABLE ADD COLUMN position is not supported");
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn alter_table_drop_multiple_columns_is_unsupported() {
     c.execute("CREATE TABLE t(a INTEGER, b TEXT, c REAL)")
         .expect("create");
     let res = c.execute("ALTER TABLE t DROP COLUMN a, DROP COLUMN b");
-    assert_errors(res);
+    assert_unsupported(res, "ALTER TABLE DROP COLUMN supports a single column");
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn group_by_all_is_unsupported() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
     let res = c.execute("SELECT a FROM t GROUP BY ALL");
-    assert_errors(res);
+    assert_unsupported(res, "GROUP BY ALL is not supported");
 }
 
 #[test]

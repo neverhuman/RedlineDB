@@ -302,8 +302,18 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
         return Ok(template);
     }
 
+    if let Some(message) = preparse_unsupported_message(trimmed) {
+        return Err(Error::UnsupportedSql(message.to_owned()));
+    }
+
     let dialect = SQLiteDialect {};
-    let mut statements = Parser::parse_sql(&dialect, sql)?;
+    let mut statements = match Parser::parse_sql(&dialect, sql) {
+        Ok(statements) => statements,
+        Err(err) => match rewrite_sqlite_trim_call(sql) {
+            Some(rewritten) => Parser::parse_sql(&dialect, &rewritten)?,
+            None => return Err(Error::from(err)),
+        },
+    };
     if statements.len() != 1 {
         return Err(Error::UnsupportedSql(
             "only single-statement prepares are supported".to_owned(),
@@ -311,6 +321,204 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
     }
 
     bind_statement(conn, schema, schema_epoch, trimmed, statements.remove(0))
+}
+
+fn preparse_unsupported_message(sql: &str) -> Option<&'static str> {
+    let lower = lowercase_sql_outside_literals(sql);
+    if lower.starts_with("insert into ")
+        && let Some(set_idx) = lower.find(" set ")
+    {
+        let source_before_set = [" values ", " select ", " default "]
+            .iter()
+            .any(|keyword| lower.find(keyword).is_some_and(|idx| idx < set_idx));
+        if !source_before_set {
+            return Some("INSERT ... SET is not supported");
+        }
+    }
+    if lower.starts_with("alter table ") {
+        if lower.contains(" add column ") && lower.contains(" after ") {
+            return Some("ALTER TABLE ADD COLUMN position is not supported");
+        }
+        if lower.contains(" drop column ") && lower.contains(", drop column ") {
+            return Some("ALTER TABLE DROP COLUMN supports a single column at a time");
+        }
+    }
+    None
+}
+
+fn lowercase_sql_outside_literals(sql: &str) -> String {
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut in_string: Option<u8> = None;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(quote) = in_string {
+            out.push(' ');
+            if b == quote {
+                if quote != b'[' && i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    out.push(' ');
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+            } else if quote == b'[' && b == b']' {
+                in_string = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'[' => {
+                in_string = Some(b);
+                out.push(' ');
+            }
+            _ if b.is_ascii() => out.push((b as char).to_ascii_lowercase()),
+            _ => out.push(' '),
+        }
+        i += 1;
+    }
+    out
+}
+
+fn rewrite_sqlite_trim_call(sql: &str) -> Option<String> {
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut cursor = 0usize;
+    let mut i = 0usize;
+    let mut changed = false;
+    let mut in_string: Option<u8> = None;
+    while i + 5 <= bytes.len() {
+        let b = bytes[i];
+        if let Some(quote) = in_string {
+            if b == quote {
+                if quote != b'[' && i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+            } else if quote == b'[' && b == b']' {
+                in_string = None;
+            }
+            i += 1;
+            continue;
+        }
+        if matches!(b, b'\'' | b'"' | b'[') {
+            in_string = Some(b);
+            i += 1;
+            continue;
+        }
+        if !is_trim_call_at(bytes, i) {
+            i += 1;
+            continue;
+        }
+        let open = i + 4;
+        let close = find_matching_paren(sql, open)?;
+        let inner = &sql[open + 1..close];
+        if let Some(comma) = find_top_level_comma(inner) {
+            let value = inner[..comma].trim();
+            let chars = inner[comma + 1..].trim();
+            out.push_str(&sql[cursor..i]);
+            out.push_str("trim(");
+            out.push_str(chars);
+            out.push_str(" FROM ");
+            out.push_str(value);
+            out.push(')');
+            cursor = close + 1;
+            changed = true;
+            i = close + 1;
+            continue;
+        }
+        i = close + 1;
+    }
+    if changed {
+        out.push_str(&sql[cursor..]);
+        Some(out)
+    } else {
+        None
+    }
+}
+
+fn is_trim_call_at(bytes: &[u8], i: usize) -> bool {
+    if i + 5 > bytes.len() || !bytes[i..i + 4].eq_ignore_ascii_case(b"trim") {
+        return false;
+    }
+    if bytes[i + 4] != b'(' {
+        return false;
+    }
+    let prev_is_ident = i
+        .checked_sub(1)
+        .and_then(|idx| bytes.get(idx))
+        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+    !prev_is_ident
+}
+
+fn find_matching_paren(sql: &str, open: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    let mut depth = 0usize;
+    let mut in_string: Option<u8> = None;
+    let mut i = open;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(quote) = in_string {
+            if b == quote {
+                if quote != b'[' && i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+            } else if quote == b'[' && b == b']' {
+                in_string = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'[' => in_string = Some(b),
+            b'(' => depth += 1,
+            b')' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+fn find_top_level_comma(sql: &str) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    let mut depth = 0usize;
+    let mut in_string: Option<u8> = None;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(quote) = in_string {
+            if b == quote {
+                if quote != b'[' && i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+            } else if quote == b'[' && b == b']' {
+                in_string = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'[' => in_string = Some(b),
+            b'(' => depth += 1,
+            b')' => depth = depth.checked_sub(1)?,
+            b',' if depth == 0 => return Some(i),
+            _ => {}
+        }
+        i += 1;
+    }
+    None
 }
 
 fn bind_statement(
