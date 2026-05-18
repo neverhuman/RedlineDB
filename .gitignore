@@ -15,3 +15,6 @@
 target/jankurai/
 .jankurai/
 :memory:/
+
+# Local jeryu daemon artifacts (not part of repo)
+.jeryu/
