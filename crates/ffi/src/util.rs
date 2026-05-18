@@ -229,6 +229,7 @@ pub(crate) fn recursive_copy(src: &Path, dst: &Path) -> std::io::Result<()> {
 pub(crate) fn status_message(code: c_int) -> &'static str {
     match code {
         RLDB_OK => "ok",
+        RLDB_NOMEM => "out of memory",
         RLDB_BUSY => "busy",
         RLDB_LOCKED => "locked",
         RLDB_INTERRUPT => "interrupted",
@@ -236,6 +237,7 @@ pub(crate) fn status_message(code: c_int) -> &'static str {
         RLDB_READONLY => "read only",
         RLDB_CANTOPEN => "cannot open",
         RLDB_SCHEMA => "schema changed",
+        RLDB_TOOBIG => "string or blob too big",
         RLDB_CONSTRAINT => "constraint violation",
         RLDB_MISMATCH => "datatype mismatch",
         RLDB_MISUSE => "misuse",
@@ -271,6 +273,7 @@ pub(crate) fn sqlite_errstr(code: c_int) -> &'static CStr {
         RLDB_OK => c"not an error",
         RLDB_ERROR => c"SQL error or missing database",
         RLDB_INTERNAL => c"internal error",
+        RLDB_NOMEM => c"out of memory",
         RLDB_BUSY => c"database is busy",
         RLDB_LOCKED => c"database is locked",
         RLDB_INTERRUPT => c"operation interrupted",
@@ -278,6 +281,7 @@ pub(crate) fn sqlite_errstr(code: c_int) -> &'static CStr {
         RLDB_READONLY => c"attempt to write a readonly database",
         RLDB_CANTOPEN => c"unable to open database file",
         RLDB_SCHEMA => c"database schema has changed",
+        RLDB_TOOBIG => c"string or blob too big",
         RLDB_CONSTRAINT => c"constraint failed",
         RLDB_MISMATCH => c"datatype mismatch",
         RLDB_MISUSE => c"library routine called out of sequence",

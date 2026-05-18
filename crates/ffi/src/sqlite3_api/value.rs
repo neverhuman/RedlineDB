@@ -6,13 +6,15 @@
 //! handed to C as `*mut RldbValue` for read-only inspection.
 
 use std::ffi::CString;
-use std::os::raw::{c_int, c_uchar, c_void};
+use std::os::raw::{c_int, c_uchar, c_uint, c_void};
 use std::ptr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use redlinedb_sql::value::SqlValue;
 
 use crate::types::*;
+
+static DUP_VALUES: Mutex<Vec<Box<RldbValue>>> = Mutex::new(Vec::new());
 
 /// Opaque value type backing the C `sqlite3_value*` opaque pointer.
 ///
@@ -56,6 +58,13 @@ impl RldbValue {
             RldbValueInner::Real(f) => SqlValue::Real(*f),
             RldbValueInner::Text(t) => SqlValue::Text(Arc::clone(t)),
             RldbValueInner::Blob(b) => SqlValue::Blob(Arc::clone(b)),
+        }
+    }
+
+    pub fn duplicate(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            text_cache: std::cell::RefCell::new(None),
         }
     }
 }
@@ -195,4 +204,83 @@ pub unsafe extern "C" fn sqlite3_value_bytes(value: *mut RldbValue) -> c_int {
         RldbValueInner::Real(f) => f.to_string().len() as c_int,
         RldbValueInner::Null => 0,
     }
+}
+
+/// # Safety
+/// `value` must be NULL or a valid `*mut RldbValue` from this crate.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_value_dup(value: *mut RldbValue) -> *mut RldbValue {
+    if value.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: caller obligation; non-null checked above.
+    let value = unsafe { &*value };
+    let mut duplicate = Box::new(value.duplicate());
+    let duplicate_ptr = duplicate.as_mut() as *mut RldbValue;
+    match DUP_VALUES.lock() {
+        Ok(mut values) => {
+            values.push(duplicate);
+            duplicate_ptr
+        }
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// # Safety
+/// `value` must be NULL or a pointer returned by `sqlite3_value_dup`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_value_free(value: *mut RldbValue) {
+    if value.is_null() {
+        return;
+    }
+    let target = value as usize;
+    if let Ok(mut values) = DUP_VALUES.lock() {
+        if let Some(index) = values
+            .iter()
+            .position(|stored| stored.as_ref() as *const RldbValue as usize == target)
+        {
+            values.swap_remove(index);
+        }
+    }
+}
+
+/// # Safety
+/// `value` must be NULL or a valid `*mut RldbValue` from this crate.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_value_numeric_type(value: *mut RldbValue) -> c_int {
+    if value.is_null() {
+        return RLDB_NULL;
+    }
+    // SAFETY: caller obligation; non-null checked above.
+    let v = unsafe { &*value };
+    match &v.inner {
+        RldbValueInner::Integer(_) => RLDB_INTEGER,
+        RldbValueInner::Real(_) => RLDB_REAL,
+        RldbValueInner::Text(t) => {
+            let trimmed = t.trim();
+            if trimmed.parse::<i64>().is_ok() {
+                RLDB_INTEGER
+            } else if trimmed.parse::<f64>().is_ok() {
+                RLDB_REAL
+            } else {
+                RLDB_TEXT
+            }
+        }
+        RldbValueInner::Blob(_) => RLDB_BLOB,
+        RldbValueInner::Null => RLDB_NULL,
+    }
+}
+
+/// # Safety
+/// `value` must be NULL or a valid `*mut RldbValue` from this crate.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_value_subtype(_value: *mut RldbValue) -> c_uint {
+    0
+}
+
+/// # Safety
+/// `value` must be NULL or a valid `*mut RldbValue` from this crate.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_value_frombind(_value: *mut RldbValue) -> c_int {
+    0
 }

@@ -352,6 +352,33 @@ pub unsafe extern "C" fn sqlite3_create_function_v2(
     }
 }
 
+/// # Safety
+/// `db` non-NULL valid sqlite3*; `name` NUL-terminated; callbacks are either
+/// NULL or valid C function pointers per the SQLite ABI.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn sqlite3_create_window_function(
+    db: *mut rldb,
+    name: *const c_char,
+    narg: c_int,
+    enc: c_int,
+    user_data: *mut c_void,
+    step: Option<StepFn>,
+    final_func: Option<FinalFn>,
+    _value: Option<FinalFn>,
+    _inverse: Option<StepFn>,
+    destroy: Option<DestructorFn>,
+) -> c_int {
+    // RedlineDB's SQL executor currently routes custom aggregate callbacks,
+    // not inverse/value window callbacks. Register the aggregate portion so
+    // callers that provide xStep/xFinal get the same grouped behavior.
+    unsafe {
+        sqlite3_create_function_v2(
+            db, name, narg, enc, user_data, None, step, final_func, destroy,
+        )
+    }
+}
+
 /// `_16` variant: UTF-16 name path. We accept the UTF-16 name, convert to
 /// UTF-8, and delegate. Unlike v2, the destructor slot is unsupported here
 /// (SQLite's `_16` overload predates `_v2`).

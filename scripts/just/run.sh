@@ -126,10 +126,13 @@ case "$lane" in
     rtk cargo test -p redlinedb-ffi --quiet --locked
     ;;
   ffi-parity-full)
-    rtk cargo test -p redlinedb-ffi --test parity_oracle --quiet --locked
+    "$0" ffi-abi
+    "$0" ffi-symbol-diff
     ;;
   ffi-symbol-diff)
-    rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked
+    rtk bash scripts/parity/dump-sqlite-symbols.sh
+    rtk cargo build -p redlinedb-ffi --quiet --locked
+    rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked -- --ignored
     ;;
   cli-shell)
     rtk cargo test -p redlinedb-cli --quiet --locked
