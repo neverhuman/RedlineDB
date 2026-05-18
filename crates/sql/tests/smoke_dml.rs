@@ -10,7 +10,42 @@
 mod common;
 
 use common::open_database;
-use redlinedb_sql::Step;
+use redlinedb_sql::{Database, DbOptions, Step};
+
+#[test]
+fn column_defaults_survive_catalog_reopen() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = dir.path().join("defaults.redline");
+    {
+        let db = Database::create(&path, DbOptions::default()).expect("create");
+        let conn = db.connect();
+        conn.execute(
+            "CREATE TABLE t(\
+                id INTEGER PRIMARY KEY,\
+                boolish BOOLEAN DEFAULT FALSE,\
+                ts_text TEXT DEFAULT '1970-01-01T00:00:00Z',\
+                metadata JSONB DEFAULT '{}'\
+            )",
+        )
+        .expect("create table with defaults");
+        conn.execute("INSERT INTO t(id) VALUES (1)")
+            .expect("insert");
+    }
+
+    let db = Database::open(&path, DbOptions::default()).expect("reopen");
+    let conn = db.connect();
+    let mut stmt = conn
+        .prepare("SELECT boolish, ts_text, metadata FROM t WHERE id = 1")
+        .expect("select");
+    assert_eq!(stmt.step().expect("row"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("bool default"), 0);
+    assert_eq!(
+        stmt.column_text(1).expect("timestamp default"),
+        "1970-01-01T00:00:00Z"
+    );
+    assert_eq!(stmt.column_text(2).expect("json default"), "{}");
+    assert_eq!(stmt.step().expect("done"), Step::Done);
+}
 
 #[test]
 fn explicit_null_does_not_receive_column_default() {

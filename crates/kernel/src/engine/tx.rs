@@ -34,10 +34,6 @@ pub struct Txn {
 #[derive(Debug, Clone)]
 pub(crate) enum PendingIndexHandle {
     Install(CatalogIndexId, Arc<BtreeIndex>),
-    /// Phase 2B.1a: install a freshly-created HNSW index handle when
-    /// the surrounding DDL transaction commits. Rollback drops the
-    /// `Arc<HnswIndex>` so the in-memory graph never becomes visible.
-    InstallHnsw(CatalogIndexId, Arc<crate::vector::hnsw::HnswIndex>),
     Remove(CatalogIndexId),
 }
 

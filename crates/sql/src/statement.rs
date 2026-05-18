@@ -149,6 +149,54 @@ pub enum PragmaPlan {
     SetForeignKeys(bool),
     SetUserVersion(i64),
     SetRecursiveTriggers(bool),
+    SetJournalMode(JournalMode),
+    SetSynchronous(SynchronousLevel),
+    SetTempStore(TempStoreMode),
+    SetCacheSize(i64),
+    SetQueryOnly(bool),
+}
+
+/// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the
+/// requested mode but does not implement WAL/TRUNCATE/PERSIST journal
+/// physics; those values are rejected up-front in the parser instead of
+/// being silently accepted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JournalMode {
+    Delete,
+    Memory,
+    Off,
+}
+
+impl JournalMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            JournalMode::Delete => "delete",
+            JournalMode::Memory => "memory",
+            JournalMode::Off => "off",
+        }
+    }
+}
+
+/// SQLite-compatible `PRAGMA synchronous` values. Stored on the session;
+/// the underlying engine's fsync policy is workspace-wide so the value is
+/// recall-only (documented in `docs/sqlite-parity.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SynchronousLevel {
+    Off = 0,
+    Normal = 1,
+    Full = 2,
+    Extra = 3,
+}
+
+/// SQLite-compatible `PRAGMA temp_store` values. RedlineDB honours the
+/// `MEMORY` selection by routing spill artifacts to in-memory buffers; the
+/// `FILE` selection requires a caller-supplied temp root (see
+/// `Database::create_in_memory`). `DEFAULT` means "engine default".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TempStoreMode {
+    Default = 0,
+    File = 1,
+    Memory = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

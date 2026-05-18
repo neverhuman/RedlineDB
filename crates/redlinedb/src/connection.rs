@@ -134,6 +134,10 @@ impl Connection {
         Ok(())
     }
 
+    pub fn in_transaction(&self) -> bool {
+        self.inner.in_transaction()
+    }
+
     pub fn transaction<T>(
         &mut self,
         f: impl FnOnce(&mut Transaction<'_>) -> Result<T>,

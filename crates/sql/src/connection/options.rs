@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use redlinedb_kernel::engine::EngineConfig;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DbOptions {
     pub engine: EngineConfig,
     pub unique_lock_shards: usize,

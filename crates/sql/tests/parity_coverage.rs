@@ -235,40 +235,33 @@ fn pragma_integrity_check_ok() {
 }
 
 // ── WAL checkpoint modes ──────────────────────────────────────────────────────
+//
+// RedlineDB has no WAL journal, so `PRAGMA wal_checkpoint` is now rejected
+// at prepare time. Detailed coverage lives in
+// `parity_pragma_tv.rs::pragma_wal_checkpoint_is_rejected`.
 
 #[test]
 fn pragma_wal_checkpoint_passive() {
     let (_d, c) = open();
-    // Should not error; checkpoint returns row(s) with counts
-    let mut stmt = c
-        .prepare("PRAGMA wal_checkpoint(PASSIVE)")
-        .expect("prepare");
-    while let Step::Row = stmt.step().unwrap() {}
+    assert!(c.prepare("PRAGMA wal_checkpoint(PASSIVE)").is_err());
 }
 
 #[test]
 fn pragma_wal_checkpoint_full() {
     let (_d, c) = open();
-    let mut stmt = c.prepare("PRAGMA wal_checkpoint(FULL)").expect("prepare");
-    while let Step::Row = stmt.step().unwrap() {}
+    assert!(c.prepare("PRAGMA wal_checkpoint(FULL)").is_err());
 }
 
 #[test]
 fn pragma_wal_checkpoint_restart() {
     let (_d, c) = open();
-    let mut stmt = c
-        .prepare("PRAGMA wal_checkpoint(RESTART)")
-        .expect("prepare");
-    while let Step::Row = stmt.step().unwrap() {}
+    assert!(c.prepare("PRAGMA wal_checkpoint(RESTART)").is_err());
 }
 
 #[test]
 fn pragma_wal_checkpoint_truncate() {
     let (_d, c) = open();
-    let mut stmt = c
-        .prepare("PRAGMA wal_checkpoint(TRUNCATE)")
-        .expect("prepare");
-    while let Step::Row = stmt.step().unwrap() {}
+    assert!(c.prepare("PRAGMA wal_checkpoint(TRUNCATE)").is_err());
 }
 
 // ── Nested SAVEPOINT ──────────────────────────────────────────────────────────
@@ -307,13 +300,10 @@ fn nested_savepoint_release() {
 
 #[test]
 fn pragma_auto_vacuum() {
+    // RedlineDB has no auto-vacuum machine; `PRAGMA auto_vacuum` is now
+    // rejected instead of returning a fabricated `0` row.
     let (_d, c) = open();
-    // Read current auto_vacuum setting
-    let v = q1(&c, "PRAGMA auto_vacuum");
-    assert!(
-        matches!(v, SqlValue::Integer(_)),
-        "expected integer, got {v:?}"
-    );
+    assert!(c.prepare("PRAGMA auto_vacuum").is_err());
 }
 
 #[test]

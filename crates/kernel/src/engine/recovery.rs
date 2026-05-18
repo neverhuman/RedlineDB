@@ -68,7 +68,6 @@ impl Engine {
             tx_status_store,
             checkpoint: std::sync::Mutex::new(checkpoint),
             index_handles: std::sync::Mutex::new(HashMap::new()),
-            hnsw_handles: std::sync::Mutex::new(HashMap::new()),
         }))
     }
 
@@ -202,7 +201,6 @@ impl Engine {
             tx_status_store,
             checkpoint: std::sync::Mutex::new(checkpoint),
             index_handles: std::sync::Mutex::new(HashMap::new()),
-            hnsw_handles: std::sync::Mutex::new(HashMap::new()),
         });
         engine.rehydrate_index_handles()?;
         recover_indexes(&scan_report.records, replay_from_lsn, target, &engine)?;

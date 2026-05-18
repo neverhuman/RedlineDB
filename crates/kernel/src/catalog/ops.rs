@@ -125,7 +125,6 @@ pub fn apply_create_table(
                         flags: 0,
                         normalized_sql: None,
                         predicate_sql: None,
-                        method: super::IndexMethod::Btree,
                     };
                     next_relation_id.0 += 1;
                     indexes.push(index.clone());
@@ -168,7 +167,6 @@ pub fn apply_create_table(
                         flags: 0,
                         normalized_sql: None,
                         predicate_sql: None,
-                        method: super::IndexMethod::Btree,
                     };
                     next_relation_id.0 += 1;
                     indexes.push(index.clone());
@@ -420,7 +418,6 @@ pub fn apply_create_index(
         flags: 0,
         normalized_sql: spec.normalized_sql.map(|sql| sql.into_boxed_str()),
         predicate_sql: spec.predicate_sql.map(|sql| sql.into_boxed_str()),
-        method: spec.method,
     };
 
     let mut updated = false;
@@ -680,7 +677,6 @@ fn build_table_constraint_index(
         flags: 0,
         normalized_sql: None,
         predicate_sql: None,
-        method: super::IndexMethod::Btree,
     };
     input.next_relation_id.0 += 1;
     let _ = input.conflict;

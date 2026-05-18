@@ -123,7 +123,7 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
     let mut reader = BytesReader::new(bytes);
     let format_version = reader.u64()?;
-    if format_version > 8 {
+    if format_version > 7 {
         return Err(Error::UnsupportedVersion(format_version as u16));
     }
     let meta = CatalogMeta {
@@ -391,14 +391,6 @@ fn encode_index(out: &mut BytesWriter, index: &IndexDef, format_version: u64) ->
     if format_version >= 7 {
         write_opt_str(out, index.predicate_sql.as_deref());
     }
-    if format_version >= 8 {
-        // Phase 2B.1a: physical index method (Btree=0, Hnsw=1).
-        let method_tag: u8 = match index.method {
-            super::IndexMethod::Btree => 0,
-            super::IndexMethod::Hnsw => 1,
-        };
-        out.u8(method_tag);
-    }
     Ok(())
 }
 
@@ -433,15 +425,6 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
     } else {
         None
     };
-    let method = if format_version >= 8 {
-        match reader.u8()? {
-            0 => super::IndexMethod::Btree,
-            1 => super::IndexMethod::Hnsw,
-            _ => return Err(Error::CatalogCorrupt("invalid index method")),
-        }
-    } else {
-        super::IndexMethod::Btree
-    };
     Ok(IndexDef {
         index_id,
         table_id,
@@ -456,7 +439,6 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
         flags,
         normalized_sql,
         predicate_sql,
-        method,
     })
 }
 

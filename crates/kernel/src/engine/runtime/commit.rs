@@ -141,41 +141,16 @@ impl Engine {
             let _ = self.catalog_store.save_atomic(&snapshot);
             self.catalog.publish(snapshot);
         }
-        if !tx.pending_index_handles().is_empty() {
-            // Phase 2B.1a: B-tree and HNSW handles live in separate
-            // maps so the B-tree fast paths (recovery WAL replay,
-            // integrity check) keep iterating `index_handles` without
-            // paying any HNSW dispatch cost. We acquire both locks for
-            // the install path; a `Remove` from a `DROP INDEX` is
-            // applied to whichever map currently holds the entry.
-            let mut btree_handles = match self.index_handles.lock() {
-                Ok(g) => g,
-                Err(_) => {
-                    self.release_locks(tx);
-                    tx.close();
-                    return outcome;
-                }
-            };
-            let mut hnsw_handles = match self.hnsw_handles.lock() {
-                Ok(g) => g,
-                Err(_) => {
-                    drop(btree_handles);
-                    self.release_locks(tx);
-                    tx.close();
-                    return outcome;
-                }
-            };
+        if !tx.pending_index_handles().is_empty()
+            && let Ok(mut handles) = self.index_handles.lock()
+        {
             for action in tx.pending_index_handles() {
                 match action {
                     PendingIndexHandle::Install(index_id, handle) => {
-                        btree_handles.insert(*index_id, Arc::clone(handle));
-                    }
-                    PendingIndexHandle::InstallHnsw(index_id, handle) => {
-                        hnsw_handles.insert(*index_id, Arc::clone(handle));
+                        handles.insert(*index_id, Arc::clone(handle));
                     }
                     PendingIndexHandle::Remove(index_id) => {
-                        btree_handles.remove(index_id);
-                        hnsw_handles.remove(index_id);
+                        handles.remove(index_id);
                     }
                 }
             }

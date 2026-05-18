@@ -38,6 +38,19 @@ pub fn output(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
     Ok(DotOutcome::Ok)
 }
 
+/// `.once FILE` — redirect the next single statement's output to `FILE`.
+pub fn once(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    match args.first().copied() {
+        None => {
+            state.once = None;
+        }
+        Some(path) => {
+            state.once = Some(PathBuf::from(path));
+        }
+    }
+    Ok(DotOutcome::Ok)
+}
+
 /// `.print TEXT...` — emit literal text followed by a newline.
 pub fn print(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     let line = args.join(" ");

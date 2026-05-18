@@ -172,12 +172,4 @@ pub struct Engine {
     /// catalog snapshot at open time. Lane A wires this so SQL exec lanes
     /// (B/C) can borrow handles via `Engine::index_handle`.
     index_handles: Mutex<HashMap<CatalogIndexId, Arc<BtreeIndex>>>,
-    /// Phase 2B.1a: live `HnswIndex` handles keyed by catalog `IndexId`.
-    /// Populated alongside `index_handles` when `create_index` dispatches
-    /// on [`crate::catalog::IndexMethod::Hnsw`], and during reopen via
-    /// `rehydrate_index_handles`. Kept in a separate map so the B-tree
-    /// fast paths (recovery WAL replay, integrity check, maintenance
-    /// validation) keep iterating `index_handles` without paying any
-    /// HNSW dispatch cost.
-    hnsw_handles: Mutex<HashMap<CatalogIndexId, Arc<crate::vector::hnsw::HnswIndex>>>,
 }
