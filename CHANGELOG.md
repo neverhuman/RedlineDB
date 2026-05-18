@@ -6,6 +6,10 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Added
 
+- **SQLite parity coverage expansion**: `sqlite_full_parity.rs` now writes a
+  reference-build PRAGMA corpus from bundled SQLite metadata and asserts the
+  remaining unsupported PRAGMAs and SQLite-native file-format gaps explicitly;
+  `parity_oracle` now requires 25 seed files per tag.
 - **SQLite parity receipts**: `just sql-parity-full` now regenerates the
   required `target/proof/sqlite-full-parity/` receipts for git status, diff
   stat, rusqlite reference metadata, unsupported SQL sites, ignored tests,

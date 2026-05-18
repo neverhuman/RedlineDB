@@ -168,27 +168,68 @@ fn diff_aggregate_matrix() {
 }
 
 #[test]
-fn diff_join_and_subquery_matrix() {
+fn diff_outer_and_cross_join_matrix() {
     let lab = Lab::new();
-    lab.execute("CREATE TABLE a(id INTEGER, v TEXT)");
-    lab.execute("CREATE TABLE b(aid INTEGER, v TEXT)");
-    lab.execute("INSERT INTO a VALUES (1, 'A1'), (2, 'A2'), (3, 'A3')");
-    lab.execute("INSERT INTO b VALUES (1, 'B1'), (1, 'B1.5'), (3, 'B3'), (4, 'B4')");
+    lab.execute("CREATE TABLE a(id INTEGER PRIMARY KEY, v TEXT)");
+    lab.execute("CREATE TABLE b(aid INTEGER, payload TEXT)");
+    lab.execute("INSERT INTO a VALUES (1, 'A1'), (2, NULL), (3, 'A3')");
+    lab.execute("INSERT INTO b VALUES (1, 'B1'), (1, NULL), (3, 'B3'), (4, 'B4')");
 
     lab.assert_queries(&[
-        // Inner Join
-        "SELECT id FROM a JOIN b ON id = aid ORDER BY id",
-        // Subquery IN
-        "SELECT id FROM a WHERE id IN (SELECT aid FROM b) ORDER BY id",
-        // Subquery NOT IN
-        "SELECT id FROM a WHERE id NOT IN (SELECT aid FROM b) ORDER BY id",
-        "SELECT (id, v) IN (SELECT aid, v FROM b) FROM a ORDER BY id",
-        "SELECT (id, v) NOT IN (SELECT aid, v FROM b) FROM a ORDER BY id",
-        // Correlated subqueries — A7 thread-local outer-row stack now
-        // resolves outer-scope qualified references.
-        "SELECT a.id FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.aid = a.id) ORDER BY a.id",
-        "SELECT a.id FROM a WHERE NOT EXISTS (SELECT 1 FROM b WHERE b.aid = a.id) ORDER BY a.id",
-        // Correlated scalar subquery in projection.
+        "SELECT a.id, b.aid FROM a CROSS JOIN b ORDER BY a.id, b.aid, b.payload",
+        "SELECT a.id, b.payload FROM a LEFT JOIN b ON a.id = b.aid ORDER BY a.id, b.payload",
+        "SELECT a.id, b.payload FROM b LEFT JOIN a ON a.id = b.aid ORDER BY b.rowid, a.id",
+        "SELECT a.id, b.payload FROM a JOIN b ON a.id = b.aid ORDER BY a.id, b.payload",
+    ]);
+}
+
+#[test]
+fn diff_group_by_having_matrix() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(grp TEXT, v INTEGER)");
+    lab.execute(
+        "INSERT INTO t VALUES ('A', 1), ('A', 2), ('A', NULL), ('B', NULL), ('B', 4), ('C', 5)",
+    );
+
+    lab.assert_queries(&[
+        "SELECT grp, count(*), count(v) FROM t GROUP BY grp HAVING count(*) >= 2 ORDER BY grp",
+        "SELECT grp, sum(v), total(v) FROM t GROUP BY grp HAVING sum(COALESCE(v, 0)) >= 3 ORDER BY grp",
+        "SELECT grp, min(v), max(v) FROM t GROUP BY grp HAVING max(v) IS NOT NULL ORDER BY grp",
+        "SELECT grp, avg(v) FROM t GROUP BY grp HAVING avg(v) > 1 ORDER BY grp",
+    ]);
+}
+
+#[test]
+fn diff_window_null_semantics_matrix() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, grp TEXT, v INTEGER)");
+    lab.execute(
+        "INSERT INTO t(id, grp, v) VALUES (1, 'A', 10), (2, 'A', NULL), (3, 'A', 30), \
+         (4, 'B', NULL), (5, 'B', 50), (6, 'B', 60)",
+    );
+
+    lab.assert_queries(&[
+        "SELECT id, grp, v, row_number() OVER (PARTITION BY grp ORDER BY id) FROM t ORDER BY id",
+        "SELECT id, grp, v, lag(v) OVER (PARTITION BY grp ORDER BY id) FROM t ORDER BY id",
+        "SELECT id, grp, v, lead(v) OVER (PARTITION BY grp ORDER BY id) FROM t ORDER BY id",
+        "SELECT id, grp, v, sum(COALESCE(v, 0)) OVER (PARTITION BY grp ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t ORDER BY id",
+    ]);
+}
+
+#[test]
+fn diff_subquery_matrix() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE a(id INTEGER PRIMARY KEY, v TEXT)");
+    lab.execute("CREATE TABLE b(aid INTEGER, v TEXT)");
+    lab.execute("INSERT INTO a VALUES (1, 'A1'), (2, NULL), (3, 'A3')");
+    lab.execute("INSERT INTO b VALUES (1, 'B1'), (1, NULL), (3, 'B3'), (4, 'B4')");
+
+    lab.assert_queries(&[
+        "SELECT id FROM a WHERE id IN (SELECT aid FROM b WHERE v IS NOT NULL) ORDER BY id",
+        "SELECT id FROM a WHERE id NOT IN (SELECT aid FROM b WHERE aid IS NOT NULL AND v IS NOT NULL) ORDER BY id",
+        "SELECT a.id FROM a WHERE EXISTS (SELECT 1 FROM b WHERE b.aid = a.id AND b.v IS NULL) ORDER BY a.id",
+        "SELECT a.id FROM a WHERE NOT EXISTS (SELECT 1 FROM b WHERE b.aid = a.id AND b.v IS NULL) ORDER BY a.id",
         "SELECT a.id, (SELECT COUNT(*) FROM b WHERE b.aid = a.id) AS bcnt FROM a ORDER BY a.id",
+        "SELECT id, (SELECT v FROM b WHERE b.aid = a.id ORDER BY v LIMIT 1) FROM a ORDER BY id",
     ]);
 }

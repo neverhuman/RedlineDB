@@ -1,0 +1,625 @@
+query
+SELECT 'text_1'
+----
+text_1
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 3, 'text_3'
+----
+3|text_3
+
+query
+SELECT 4
+----
+4
+
+query
+SELECT 'text_5'
+----
+text_5
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 7, 'text_7'
+----
+7|text_7
+
+query
+SELECT 8
+----
+8
+
+query
+SELECT 'text_9'
+----
+text_9
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 11, 'text_11'
+----
+11|text_11
+
+query
+SELECT 12
+----
+12
+
+query
+SELECT 'text_13'
+----
+text_13
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 15, 'text_15'
+----
+15|text_15
+
+query
+SELECT 16
+----
+16
+
+query
+SELECT 'text_17'
+----
+text_17
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 19, 'text_19'
+----
+19|text_19
+
+query
+SELECT 20
+----
+20
+
+query
+SELECT 'text_21'
+----
+text_21
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 23, 'text_23'
+----
+23|text_23
+
+query
+SELECT 24
+----
+24
+
+query
+SELECT 'text_25'
+----
+text_25
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 27, 'text_27'
+----
+27|text_27
+
+query
+SELECT 28
+----
+28
+
+query
+SELECT 'text_29'
+----
+text_29
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 31, 'text_31'
+----
+31|text_31
+
+query
+SELECT 32
+----
+32
+
+query
+SELECT 'text_33'
+----
+text_33
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 35, 'text_35'
+----
+35|text_35
+
+query
+SELECT 36
+----
+36
+
+query
+SELECT 'text_37'
+----
+text_37
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 39, 'text_39'
+----
+39|text_39
+
+query
+SELECT 40
+----
+40
+
+query
+SELECT 'text_41'
+----
+text_41
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 43, 'text_43'
+----
+43|text_43
+
+query
+SELECT 44
+----
+44
+
+query
+SELECT 'text_45'
+----
+text_45
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 47, 'text_47'
+----
+47|text_47
+
+query
+SELECT 48
+----
+48
+
+query
+SELECT 'text_49'
+----
+text_49
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 51, 'text_51'
+----
+51|text_51
+
+query
+SELECT 52
+----
+52
+
+query
+SELECT 'text_53'
+----
+text_53
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 55, 'text_55'
+----
+55|text_55
+
+query
+SELECT 56
+----
+56
+
+query
+SELECT 'text_57'
+----
+text_57
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 59, 'text_59'
+----
+59|text_59
+
+query
+SELECT 60
+----
+60
+
+query
+SELECT 'text_61'
+----
+text_61
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 63, 'text_63'
+----
+63|text_63
+
+query
+SELECT 64
+----
+64
+
+query
+SELECT 'text_65'
+----
+text_65
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 67, 'text_67'
+----
+67|text_67
+
+query
+SELECT 68
+----
+68
+
+query
+SELECT 'text_69'
+----
+text_69
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 71, 'text_71'
+----
+71|text_71
+
+query
+SELECT 72
+----
+72
+
+query
+SELECT 'text_73'
+----
+text_73
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 75, 'text_75'
+----
+75|text_75
+
+query
+SELECT 76
+----
+76
+
+query
+SELECT 'text_77'
+----
+text_77
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 79, 'text_79'
+----
+79|text_79
+
+query
+SELECT 80
+----
+80
+
+query
+SELECT 'text_81'
+----
+text_81
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 83, 'text_83'
+----
+83|text_83
+
+query
+SELECT 84
+----
+84
+
+query
+SELECT 'text_85'
+----
+text_85
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 87, 'text_87'
+----
+87|text_87
+
+query
+SELECT 88
+----
+88
+
+query
+SELECT 'text_89'
+----
+text_89
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 91, 'text_91'
+----
+91|text_91
+
+query
+SELECT 92
+----
+92
+
+query
+SELECT 'text_93'
+----
+text_93
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 95, 'text_95'
+----
+95|text_95
+
+query
+SELECT 96
+----
+96
+
+query
+SELECT 'text_97'
+----
+text_97
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 99, 'text_99'
+----
+99|text_99
+
+query
+SELECT 100
+----
+100
+
+query
+SELECT 'text_101'
+----
+text_101
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 103, 'text_103'
+----
+103|text_103
+
+query
+SELECT 104
+----
+104
+
+query
+SELECT 'text_105'
+----
+text_105
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 107, 'text_107'
+----
+107|text_107
+
+query
+SELECT 108
+----
+108
+
+query
+SELECT 'text_109'
+----
+text_109
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 111, 'text_111'
+----
+111|text_111
+
+query
+SELECT 112
+----
+112
+
+query
+SELECT 'text_113'
+----
+text_113
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 115, 'text_115'
+----
+115|text_115
+
+query
+SELECT 116
+----
+116
+
+query
+SELECT 'text_117'
+----
+text_117
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 119, 'text_119'
+----
+119|text_119
+
+query
+SELECT 120
+----
+120
+
+query
+SELECT 'text_121'
+----
+text_121
+
+query
+SELECT NULL
+----
+NULL
+
+query
+SELECT 123, 'text_123'
+----
+123|text_123
+
+query
+SELECT 124
+----
+124
+
+query
+SELECT 'text_125'
+----
+text_125
+

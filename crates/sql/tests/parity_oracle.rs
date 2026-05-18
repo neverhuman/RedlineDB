@@ -164,11 +164,11 @@ fn parity_oracle_baseline() {
         total.0, total.1, total.2
     );
 
-    // Ensure each tag has at least 5 files so the foundation is real.
+    // Ensure each tag has at least 25 files so the foundation is real.
     for r in &reports {
         assert!(
-            r.files >= 5,
-            "parity tag {} has only {} files; the A1 corpus floor is 5 per tag",
+            r.files >= 25,
+            "parity tag {} has only {} files; the A1 corpus floor is 25 per tag",
             r.tag,
             r.files
         );
