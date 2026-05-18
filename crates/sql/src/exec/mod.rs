@@ -242,6 +242,27 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::Pragma(plan) => {
+            if let PragmaPlan::SetJournalMode(value) = plan {
+                execute_pragma(conn, plan)?;
+                return Ok(ExecutionResult {
+                    runtime: RuntimeState::Select(SelectRuntime {
+                        tx: SelectRuntimeTx::Empty,
+                        restore_tx: false,
+                        source: SelectRuntimeSource::StaticRows {
+                            rows: Arc::from(vec![vec![SqlValue::Text(Arc::from(value.as_str()))]]),
+                            cursor: 0,
+                        },
+                        selection: None,
+                        projection: Vec::new(),
+                        limit: usize::MAX,
+                        offset: 0,
+                        seen: 0,
+                        yielded: 0,
+                        memory: QueryMemoryBroker::new(0, 0, None),
+                    }),
+                    affected_rows: 0,
+                });
+            }
             execute_pragma(conn, plan)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,

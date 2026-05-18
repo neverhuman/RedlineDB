@@ -149,12 +149,14 @@ pub(crate) fn parse_pragma_template(
         "journal_mode" => {
             if let Some(raw) = value {
                 let parsed = parse_pragma_journal_mode(&raw)?;
-                template(
+                let mut template = template(
                     sql,
                     schema_epoch,
                     false,
                     PreparedKind::Pragma(crate::statement::PragmaPlan::SetJournalMode(parsed)),
-                )
+                );
+                template.output_columns = Arc::from([String::from("journal_mode")]);
+                template
             } else {
                 pragma_static_select(
                     sql,
@@ -638,9 +640,10 @@ fn parse_pragma_journal_mode(input: &str) -> Result<crate::statement::JournalMod
     match token.to_ascii_lowercase().as_str() {
         "delete" => Ok(JournalMode::Delete),
         "memory" => Ok(JournalMode::Memory),
+        "wal" => Ok(JournalMode::Wal),
         "off" => Ok(JournalMode::Off),
-        other @ ("wal" | "truncate" | "persist") => Err(Error::UnsupportedSql(format!(
-            "PRAGMA journal_mode={other} is not supported by RedlineDB; accepted modes: delete, memory, off"
+        other @ ("truncate" | "persist") => Err(Error::UnsupportedSql(format!(
+            "PRAGMA journal_mode={other} is not supported by RedlineDB; accepted modes: delete, memory, off, wal"
         ))),
         other => Err(Error::UnsupportedSql(format!(
             "invalid PRAGMA journal_mode value: {other}"

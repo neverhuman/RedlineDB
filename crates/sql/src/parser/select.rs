@@ -7,6 +7,18 @@ pub(crate) fn bind_query(
     sql: &str,
     query: Query,
 ) -> Result<PreparedTemplate> {
+    let mut params = ParamLayout::default();
+    bind_query_with_params(conn, schema, schema_epoch, sql, query, &mut params)
+}
+
+fn bind_query_with_params(
+    conn: &Connection,
+    schema: Arc<SchemaSnapshot>,
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    query: Query,
+    params: &mut ParamLayout,
+) -> Result<PreparedTemplate> {
     let Query {
         body,
         order_by,
@@ -38,12 +50,12 @@ pub(crate) fn bind_query(
     }
     match *body {
         SetExpr::Query(query) => {
+            let mut template =
+                bind_query_with_params(conn, schema, schema_epoch, sql, *query, params)?;
             if order_by.is_some() || limit_clause.is_some() {
-                return Err(Error::UnsupportedSql(
-                    "nested query wrappers with ORDER BY or LIMIT are not supported yet".to_owned(),
-                ));
+                template = apply_query_tail(template, order_by, limit_clause, params)?;
             }
-            bind_query(conn, schema, schema_epoch, sql, *query)
+            Ok(template)
         }
         SetExpr::SetOperation {
             op,
@@ -58,29 +70,105 @@ pub(crate) fn bind_query(
                 sql,
                 order_by,
                 limit_clause,
+                params,
             },
             op,
             set_quantifier,
             *left,
             *right,
         ),
-        SetExpr::Select(select) => {
-            let mut params = ParamLayout::default();
-            bind_simple_select_query(
-                conn,
-                schema,
-                schema_epoch,
-                sql,
-                select,
-                order_by,
-                limit_clause,
-                &mut params,
-            )
-        }
+        SetExpr::Select(select) => bind_simple_select_query(
+            conn,
+            schema,
+            schema_epoch,
+            sql,
+            select,
+            order_by,
+            limit_clause,
+            params,
+        ),
         _ => Err(Error::UnsupportedSql(
             "only simple SELECT and UNION ALL queries are supported".to_owned(),
         )),
     }
+}
+
+fn apply_query_tail(
+    mut template: PreparedTemplate,
+    order_by: Option<sqlparser::ast::OrderBy>,
+    limit_clause: Option<LimitClause>,
+    params: &mut ParamLayout,
+) -> Result<PreparedTemplate> {
+    let plan = match template.kind {
+        PreparedKind::Select(plan) => plan,
+        _ => {
+            return Err(Error::UnsupportedSql(
+                "nested query wrappers are only supported for SELECT queries".to_owned(),
+            ));
+        }
+    };
+
+    let mut order_by = match order_by {
+        Some(order_by) => match order_by.kind {
+            OrderByKind::Expressions(exprs) => exprs
+                .into_iter()
+                .map(|expr| {
+                    let options = expr.options;
+                    let with_fill = expr.with_fill;
+                    let expr = normalize_expr(expr.expr, params)?;
+                    Ok(OrderByExpr {
+                        expr,
+                        options,
+                        with_fill,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?,
+            OrderByKind::All(_) => {
+                return Err(Error::UnsupportedSql(
+                    "ORDER BY ALL is not supported".to_owned(),
+                ));
+            }
+        },
+        None => Vec::new(),
+    };
+    resolve_order_by_positions(&mut order_by, &template.output_columns);
+
+    let (limit, offset) = match limit_clause {
+        Some(LimitClause::LimitOffset {
+            limit,
+            offset,
+            limit_by: _,
+        }) => {
+            let limit = match limit {
+                Some(expr) => Some(normalize_expr(expr, params)?),
+                None => None,
+            };
+            let offset = match offset {
+                Some(offset) => Some(normalize_expr(offset.value, params)?),
+                None => None,
+            };
+            (limit, offset)
+        }
+        Some(LimitClause::OffsetCommaLimit { offset, limit }) => (
+            Some(normalize_expr(limit, params)?),
+            Some(normalize_expr(offset, params)?),
+        ),
+        None => (None, None),
+    };
+
+    template.param_layout = params.clone();
+    template.kind = PreparedKind::Select(SelectPlan {
+        source: plan.source,
+        distinct: plan.distinct,
+        projection: plan.projection,
+        selection: plan.selection,
+        group_by: plan.group_by,
+        having: plan.having,
+        order_by,
+        limit,
+        offset,
+    });
+    Ok(template)
 }
 
 pub(crate) struct UnionAllQueryContext<'a> {
@@ -90,6 +178,7 @@ pub(crate) struct UnionAllQueryContext<'a> {
     pub sql: &'a str,
     pub order_by: Option<sqlparser::ast::OrderBy>,
     pub limit_clause: Option<LimitClause>,
+    pub params: &'a mut ParamLayout,
 }
 
 pub(crate) fn bind_simple_select_query(
@@ -270,7 +359,7 @@ pub(crate) fn bind_union_all_query(
         }
     };
 
-    let left = bind_query(
+    let left = bind_query_with_params(
         ctx.conn,
         Arc::clone(&ctx.schema),
         ctx.schema_epoch,
@@ -287,8 +376,9 @@ pub(crate) fn bind_union_all_query(
             format_clause: None,
             pipe_operators: Vec::new(),
         },
+        ctx.params,
     )?;
-    let right = bind_query(
+    let right = bind_query_with_params(
         ctx.conn,
         ctx.schema,
         ctx.schema_epoch,
@@ -305,20 +395,14 @@ pub(crate) fn bind_union_all_query(
             format_clause: None,
             pipe_operators: Vec::new(),
         },
+        ctx.params,
     )?;
-
-    if left.param_layout.count() != 0 || right.param_layout.count() != 0 {
-        return Err(Error::UnsupportedSql(
-            "UNION ALL with parameters is not supported yet".to_owned(),
-        ));
-    }
 
     // For ORDER BY column resolution we need names — use the LEFT branch
     // names since SQL columns are positional in set ops, and SQLite reports
     // the left side's names.
     let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
 
-    let mut tail_params = ParamLayout::default();
     let mut order_by = match ctx.order_by {
         Some(order_by) => match order_by.kind {
             OrderByKind::Expressions(exprs) => exprs
@@ -326,7 +410,7 @@ pub(crate) fn bind_union_all_query(
                 .map(|expr| {
                     let options = expr.options;
                     let with_fill = expr.with_fill;
-                    let expr = normalize_expr(expr.expr, &mut tail_params)?;
+                    let expr = normalize_expr(expr.expr, ctx.params)?;
                     Ok(OrderByExpr {
                         expr,
                         options,
@@ -350,26 +434,21 @@ pub(crate) fn bind_union_all_query(
             limit_by: _,
         }) => {
             let limit = match limit {
-                Some(expr) => Some(normalize_expr(expr, &mut tail_params)?),
+                Some(expr) => Some(normalize_expr(expr, ctx.params)?),
                 None => None,
             };
             let offset = match offset {
-                Some(offset) => Some(normalize_expr(offset.value, &mut tail_params)?),
+                Some(offset) => Some(normalize_expr(offset.value, ctx.params)?),
                 None => None,
             };
             (limit, offset)
         }
         Some(LimitClause::OffsetCommaLimit { offset, limit }) => (
-            Some(normalize_expr(limit, &mut tail_params)?),
-            Some(normalize_expr(offset, &mut tail_params)?),
+            Some(normalize_expr(limit, ctx.params)?),
+            Some(normalize_expr(offset, ctx.params)?),
         ),
         None => (None, None),
     };
-    if tail_params.count() > 0 {
-        return Err(Error::UnsupportedSql(
-            "compound SELECT with parameters is not supported yet".to_owned(),
-        ));
-    }
 
     let left_plan = match left.kind {
         PreparedKind::Select(plan) => plan,
@@ -399,7 +478,7 @@ pub(crate) fn bind_union_all_query(
         schema_epoch: ctx.schema_epoch,
         stats_epoch: 0,
         optimizer_hash: 0,
-        param_layout: ParamLayout::default(),
+        param_layout: ctx.params.clone(),
         output_columns: output_columns.into(),
         readonly: true,
         kind: PreparedKind::Select(SelectPlan {
@@ -917,5 +996,88 @@ mod order_by_position_tests {
         assert!(matches!(&items[3].expr, Expr::Value(_)));
         // [4] `a` was already an Identifier
         assert!(matches!(&items[4].expr, Expr::Identifier(id) if id.value == "a"));
+    }
+}
+
+#[cfg(test)]
+mod nested_query_wrapper_tests {
+    use super::*;
+    use crate::DbOptions;
+    use sqlparser::dialect::SQLiteDialect;
+    use sqlparser::parser::Parser as SqlParser;
+
+    fn parse_expr(text: &str) -> Expr {
+        let dialect = SQLiteDialect {};
+        SqlParser::new(&dialect)
+            .try_with_sql(text)
+            .expect("parser init")
+            .parse_expr()
+            .expect("parse expr")
+    }
+
+    #[test]
+    fn wrapper_order_by_and_limit_apply_to_inner_query() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = crate::Database::create(dir.path().join("nested_query.db"), DbOptions::default())
+            .expect("create db");
+        let conn = db.connect();
+        conn.execute("CREATE TABLE t(v INTEGER)")
+            .expect("create table");
+
+        let dialect = SQLiteDialect {};
+        let mut statements =
+            SqlParser::parse_sql(&dialect, "SELECT v FROM t UNION ALL SELECT 5 AS v")
+                .expect("parse sql");
+        let inner = match statements.remove(0) {
+            SqlStatement::Query(query) => query,
+            other => panic!("unexpected statement: {other:?}"),
+        };
+        let outer = Query {
+            with: None,
+            body: Box::new(SetExpr::Query(inner)),
+            order_by: Some(sqlparser::ast::OrderBy {
+                kind: OrderByKind::Expressions(vec![OrderByExpr {
+                    expr: parse_expr("1"),
+                    options: sqlparser::ast::OrderByOptions::default(),
+                    with_fill: None,
+                }]),
+                interpolate: None,
+            }),
+            limit_clause: Some(LimitClause::LimitOffset {
+                limit: Some(parse_expr("2")),
+                offset: None,
+                limit_by: Vec::new(),
+            }),
+            fetch: None,
+            locks: Vec::new(),
+            for_clause: None,
+            settings: None,
+            format_clause: None,
+            pipe_operators: Vec::new(),
+        };
+        let schema = conn.engine().schema_snapshot();
+        let mut params = ParamLayout::default();
+        let template = bind_query_with_params(
+            conn.as_ref(),
+            schema,
+            conn.schema_epoch(),
+            "nested",
+            outer,
+            &mut params,
+        )
+        .expect("bind nested wrapper");
+        assert_eq!(
+            params.count(),
+            0,
+            "wrapper without parameters should keep an empty layout"
+        );
+        let plan = match template.kind {
+            PreparedKind::Select(plan) => plan,
+            other => panic!("unexpected prepared kind: {other:?}"),
+        };
+        assert_eq!(plan.order_by.len(), 1);
+        assert!(matches!(&plan.order_by[0].expr, Expr::Identifier(id) if id.value == "v"));
+        assert!(matches!(plan.limit, Some(Expr::Value(_))));
+        assert!(matches!(plan.offset, None));
     }
 }
