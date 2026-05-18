@@ -1,15 +1,24 @@
-//! Lane J1 — SQLite JSON1 compatibility integration tests.
+//! Lane J1 — SQLite JSON1 integration coverage.
 //!
-//! Each scalar function is exercised with at least a positive case and an
-//! edge case (NULL propagation, malformed input, out-of-range path, etc.).
-//! The fuzz harness at the bottom mints randomized JSON-like documents
-//! and asserts (a) no panics from the SQL surface and (b) `json_valid`
-//! agrees with `serde_json::from_str` on the same input.
+//! Deterministic JSON behavior is checked against the bundled rusqlite oracle.
+//! The fuzz tests at the bottom are robustness checks for RedlineDB's SQL
+//! surface; they are intentionally not the parity proof.
 
 use std::sync::Arc;
 
-use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
+use redlinedb_sql::{Connection, Database, DbOptions, Step};
 use tempfile::tempdir;
+
+#[path = "parity_oracle/harness.rs"]
+mod harness;
+
+fn assert_json_parity(sql: &str) {
+    harness::assert_parity(sql);
+}
+
+fn assert_json_error_parity(sql: &str) {
+    harness::check_parity(sql).expect("expected matching JSON error class");
+}
 
 fn open() -> (tempfile::TempDir, Arc<Connection>) {
     let dir = tempdir().expect("temp dir");
@@ -19,47 +28,23 @@ fn open() -> (tempfile::TempDir, Arc<Connection>) {
     (dir, conn)
 }
 
-fn one_text(conn: &Arc<Connection>, sql: &str) -> String {
-    let mut stmt = conn.prepare(sql).expect("prepare");
-    assert_eq!(stmt.step().expect("step"), Step::Row);
-    stmt.column_text(0).expect("text").to_owned()
-}
-
-fn one_int(conn: &Arc<Connection>, sql: &str) -> i64 {
-    let mut stmt = conn.prepare(sql).expect("prepare");
-    assert_eq!(stmt.step().expect("step"), Step::Row);
-    stmt.column_i64(0).expect("int")
-}
-
-fn one_value(conn: &Arc<Connection>, sql: &str) -> SqlValue {
-    let mut stmt = conn.prepare(sql).expect("prepare");
-    assert_eq!(stmt.step().expect("step"), Step::Row);
-    stmt.column_value(0).expect("value").clone()
-}
-
 // ---------------------------------------------------------------------------
 // json() — minify + validate
 // ---------------------------------------------------------------------------
 
 #[test]
 fn phase10_j1_json_minifies_whitespace() {
-    let (_d, c) = open();
-    let v = one_text(&c, "SELECT json('  { \"a\" : 1 }  ')");
-    assert_eq!(v, r#"{"a":1}"#);
+    assert_json_parity(r#"SELECT json('  { "a" : 1 }  ')"#);
 }
 
 #[test]
 fn phase10_j1_json_propagates_null() {
-    let (_d, c) = open();
-    let v = one_value(&c, "SELECT json(NULL)");
-    assert_eq!(v, SqlValue::Null);
+    assert_json_parity("SELECT json(NULL)");
 }
 
 #[test]
 fn phase10_j1_json_rejects_malformed() {
-    let (_d, c) = open();
-    let mut stmt = c.prepare("SELECT json('not-json')").expect("prepare");
-    assert!(stmt.step().is_err());
+    assert_json_error_parity("SELECT json('not-json')");
 }
 
 // ---------------------------------------------------------------------------
@@ -68,16 +53,12 @@ fn phase10_j1_json_rejects_malformed() {
 
 #[test]
 fn phase10_j1_json_array_builds_mixed_types() {
-    let (_d, c) = open();
-    let v = one_text(&c, "SELECT json_array(1, 2.5, 'x', NULL)");
-    assert_eq!(v, r#"[1,2.5,"x",null]"#);
+    assert_json_parity("SELECT json_array(1, 2.5, 'x', NULL)");
 }
 
 #[test]
 fn phase10_j1_json_array_empty() {
-    let (_d, c) = open();
-    let v = one_text(&c, "SELECT json_array()");
-    assert_eq!(v, "[]");
+    assert_json_parity("SELECT json_array()");
 }
 
 // ---------------------------------------------------------------------------
@@ -86,23 +67,17 @@ fn phase10_j1_json_array_empty() {
 
 #[test]
 fn phase10_j1_json_array_length_counts() {
-    let (_d, c) = open();
-    let v = one_int(&c, "SELECT json_array_length('[1,2,3,4]')");
-    assert_eq!(v, 4);
+    assert_json_parity("SELECT json_array_length('[1,2,3,4]')");
 }
 
 #[test]
 fn phase10_j1_json_array_length_with_path() {
-    let (_d, c) = open();
-    let v = one_int(&c, "SELECT json_array_length('{\"a\":[1,2,3]}', '$.a')");
-    assert_eq!(v, 3);
+    assert_json_parity(r#"SELECT json_array_length('{"a":[1,2,3]}', '$.a')"#);
 }
 
 #[test]
 fn phase10_j1_json_array_length_non_array_returns_zero() {
-    let (_d, c) = open();
-    let v = one_int(&c, "SELECT json_array_length('{\"a\":1}')");
-    assert_eq!(v, 0);
+    assert_json_parity(r#"SELECT json_array_length('{"a":1}')"#);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,16 +86,12 @@ fn phase10_j1_json_array_length_non_array_returns_zero() {
 
 #[test]
 fn phase10_j1_json_object_builds_pairs() {
-    let (_d, c) = open();
-    let v = one_text(&c, "SELECT json_object('a', 1, 'b', 'two')");
-    assert_eq!(v, r#"{"a":1,"b":"two"}"#);
+    assert_json_parity("SELECT json_object('a', 1, 'b', 'two')");
 }
 
 #[test]
 fn phase10_j1_json_object_rejects_odd_args() {
-    let (_d, c) = open();
-    let mut stmt = c.prepare("SELECT json_object('a')").expect("prepare");
-    assert!(stmt.step().is_err());
+    assert_json_error_parity("SELECT json_object('a')");
 }
 
 // ---------------------------------------------------------------------------
@@ -129,36 +100,23 @@ fn phase10_j1_json_object_rejects_odd_args() {
 
 #[test]
 fn phase10_j1_json_extract_single_path() {
-    let (_d, c) = open();
-    assert_eq!(one_int(&c, "SELECT json_extract('{\"a\":42}', '$.a')"), 42);
-    assert_eq!(
-        one_text(&c, "SELECT json_extract('{\"a\":\"hi\"}', '$.a')"),
-        "hi"
-    );
+    assert_json_parity(r#"SELECT json_extract('{"a":42}', '$.a')"#);
+    assert_json_parity(r#"SELECT json_extract('{"a":"hi"}', '$.a')"#);
 }
 
 #[test]
 fn phase10_j1_json_extract_missing_returns_null() {
-    let (_d, c) = open();
-    let v = one_value(&c, "SELECT json_extract('{\"a\":1}', '$.b')");
-    assert_eq!(v, SqlValue::Null);
+    assert_json_parity(r#"SELECT json_extract('{"a":1}', '$.b')"#);
 }
 
 #[test]
 fn phase10_j1_json_extract_multi_path_returns_array() {
-    let (_d, c) = open();
-    let v = one_text(
-        &c,
-        "SELECT json_extract('{\"a\":1,\"b\":2}', '$.a', '$.b', '$.c')",
-    );
-    assert_eq!(v, "[1,2,null]");
+    assert_json_parity(r#"SELECT json_extract('{"a":1,"b":2}', '$.a', '$.b', '$.c')"#);
 }
 
 #[test]
 fn phase10_j1_json_extract_object_path_returns_json() {
-    let (_d, c) = open();
-    let v = one_text(&c, "SELECT json_extract('{\"a\":[1,2]}', '$.a')");
-    assert_eq!(v, "[1,2]");
+    assert_json_parity(r#"SELECT json_extract('{"a":[1,2]}', '$.a')"#);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,36 +125,22 @@ fn phase10_j1_json_extract_object_path_returns_json() {
 
 #[test]
 fn phase10_j1_json_set_overwrites_and_creates() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(&c, "SELECT json_set('{\"a\":1}', '$.a', 9, '$.b', 2)"),
-        r#"{"a":9,"b":2}"#
-    );
+    assert_json_parity(r#"SELECT json_set('{"a":1}', '$.a', 9, '$.b', 2)"#);
 }
 
 #[test]
 fn phase10_j1_json_set_null_doc_propagates() {
-    let (_d, c) = open();
-    let v = one_value(&c, "SELECT json_set(NULL, '$.a', 1)");
-    assert_eq!(v, SqlValue::Null);
+    assert_json_parity("SELECT json_set(NULL, '$.a', 1)");
 }
 
 #[test]
 fn phase10_j1_json_insert_only_creates_missing() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(&c, "SELECT json_insert('{\"a\":1}', '$.a', 9, '$.b', 2)"),
-        r#"{"a":1,"b":2}"#
-    );
+    assert_json_parity(r#"SELECT json_insert('{"a":1}', '$.a', 9, '$.b', 2)"#);
 }
 
 #[test]
 fn phase10_j1_json_replace_only_overwrites_existing() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(&c, "SELECT json_replace('{\"a\":1}', '$.a', 9, '$.b', 2)"),
-        r#"{"a":9}"#
-    );
+    assert_json_parity(r#"SELECT json_replace('{"a":1}', '$.a', 9, '$.b', 2)"#);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,29 +149,17 @@ fn phase10_j1_json_replace_only_overwrites_existing() {
 
 #[test]
 fn phase10_j1_json_remove_drops_members() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(&c, "SELECT json_remove('{\"a\":1,\"b\":2}', '$.a')"),
-        r#"{"b":2}"#
-    );
+    assert_json_parity(r#"SELECT json_remove('{"a":1,"b":2}', '$.a')"#);
 }
 
 #[test]
 fn phase10_j1_json_remove_missing_path_is_noop() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(&c, "SELECT json_remove('{\"a\":1}', '$.missing')"),
-        r#"{"a":1}"#
-    );
+    assert_json_parity(r#"SELECT json_remove('{"a":1}', '$.missing')"#);
 }
 
 #[test]
 fn phase10_j1_json_remove_array_index() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(&c, "SELECT json_remove('[1,2,3,4]', '$[1]')"),
-        "[1,3,4]"
-    );
+    assert_json_parity("SELECT json_remove('[1,2,3,4]', '$[1]')");
 }
 
 // ---------------------------------------------------------------------------
@@ -236,26 +168,12 @@ fn phase10_j1_json_remove_array_index() {
 
 #[test]
 fn phase10_j1_json_patch_merges_and_deletes() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(
-            &c,
-            "SELECT json_patch('{\"a\":1,\"b\":2}', '{\"b\":null,\"c\":3}')"
-        ),
-        r#"{"a":1,"c":3}"#
-    );
+    assert_json_parity(r#"SELECT json_patch('{"a":1,"b":2}', '{"b":null,"c":3}')"#);
 }
 
 #[test]
 fn phase10_j1_json_patch_recursive() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(
-            &c,
-            "SELECT json_patch('{\"a\":{\"x\":1,\"y\":2}}', '{\"a\":{\"y\":null,\"z\":9}}')"
-        ),
-        r#"{"a":{"x":1,"z":9}}"#
-    );
+    assert_json_parity(r#"SELECT json_patch('{"a":{"x":1,"y":2}}', '{"a":{"y":null,"z":9}}')"#);
 }
 
 // ---------------------------------------------------------------------------
@@ -264,28 +182,17 @@ fn phase10_j1_json_patch_recursive() {
 
 #[test]
 fn phase10_j1_json_type_named() {
-    let (_d, c) = open();
-    assert_eq!(one_text(&c, "SELECT json_type('null')"), "null");
-    assert_eq!(one_text(&c, "SELECT json_type('true')"), "true");
-    assert_eq!(one_text(&c, "SELECT json_type('false')"), "false");
-    assert_eq!(one_text(&c, "SELECT json_type('1')"), "integer");
-    assert_eq!(one_text(&c, "SELECT json_type('3.14')"), "real");
-    assert_eq!(one_text(&c, "SELECT json_type('\"x\"')"), "text");
-    assert_eq!(one_text(&c, "SELECT json_type('[1]')"), "array");
-    assert_eq!(one_text(&c, "SELECT json_type('{}')"), "object");
+    for doc in [
+        "'null'", "'true'", "'false'", "'1'", "'3.14'", r#"'"x"'"#, "'[1]'", "'{}'",
+    ] {
+        assert_json_parity(&format!("SELECT json_type({doc})"));
+    }
 }
 
 #[test]
 fn phase10_j1_json_type_with_path() {
-    let (_d, c) = open();
-    assert_eq!(
-        one_text(&c, "SELECT json_type('{\"a\":[1]}', '$.a')"),
-        "array"
-    );
-    assert_eq!(
-        one_value(&c, "SELECT json_type('{\"a\":1}', '$.missing')"),
-        SqlValue::Null
-    );
+    assert_json_parity(r#"SELECT json_type('{"a":[1]}', '$.a')"#);
+    assert_json_parity(r#"SELECT json_type('{"a":1}', '$.missing')"#);
 }
 
 // ---------------------------------------------------------------------------
@@ -294,15 +201,13 @@ fn phase10_j1_json_type_with_path() {
 
 #[test]
 fn phase10_j1_json_valid_recognizes_input() {
-    let (_d, c) = open();
-    assert_eq!(one_int(&c, "SELECT json_valid('[1,2,3]')"), 1);
-    assert_eq!(one_int(&c, "SELECT json_valid('not-json')"), 0);
+    assert_json_parity("SELECT json_valid('[1,2,3]')");
+    assert_json_parity("SELECT json_valid('not-json')");
 }
 
 #[test]
 fn phase10_j1_json_valid_null_is_null() {
-    let (_d, c) = open();
-    assert_eq!(one_value(&c, "SELECT json_valid(NULL)"), SqlValue::Null);
+    assert_json_parity("SELECT json_valid(NULL)");
 }
 
 // ---------------------------------------------------------------------------
@@ -311,15 +216,13 @@ fn phase10_j1_json_valid_null_is_null() {
 
 #[test]
 fn phase10_j1_json_quote_text_and_numbers() {
-    let (_d, c) = open();
-    assert_eq!(one_text(&c, "SELECT json_quote('hi')"), "\"hi\"");
-    assert_eq!(one_text(&c, "SELECT json_quote(42)"), "42");
+    assert_json_parity("SELECT json_quote('hi')");
+    assert_json_parity("SELECT json_quote(42)");
 }
 
 #[test]
 fn phase10_j1_json_quote_null_returns_null_literal() {
-    let (_d, c) = open();
-    assert_eq!(one_text(&c, "SELECT json_quote(NULL)"), "null");
+    assert_json_parity("SELECT json_quote(NULL)");
 }
 
 // ---------------------------------------------------------------------------
@@ -328,23 +231,17 @@ fn phase10_j1_json_quote_null_returns_null_literal() {
 
 #[test]
 fn phase10_j1_arrow_returns_json() {
-    let (_d, c) = open();
-    let v = one_text(&c, "SELECT '{\"a\":[1,2]}' -> '$.a'");
-    assert_eq!(v, "[1,2]");
+    assert_json_parity(r#"SELECT '{"a":[1,2]}' -> '$.a'"#);
 }
 
 #[test]
 fn phase10_j1_long_arrow_returns_sql_value() {
-    let (_d, c) = open();
-    let v = one_int(&c, "SELECT '{\"a\":42}' ->> '$.a'");
-    assert_eq!(v, 42);
+    assert_json_parity(r#"SELECT '{"a":42}' ->> '$.a'"#);
 }
 
 #[test]
 fn phase10_j1_arrow_shorthand_path() {
-    let (_d, c) = open();
-    let v = one_int(&c, "SELECT '{\"a\":7}' ->> 'a'");
-    assert_eq!(v, 7);
+    assert_json_parity(r#"SELECT '{"a":7}' ->> 'a'"#);
 }
 
 // ---------------------------------------------------------------------------
@@ -353,49 +250,32 @@ fn phase10_j1_arrow_shorthand_path() {
 
 #[test]
 fn phase10_j1_path_root_returns_whole_doc() {
-    let (_d, c) = open();
-    let v = one_text(&c, "SELECT json_extract('[1,2]', '$')");
-    assert_eq!(v, "[1,2]");
+    assert_json_parity("SELECT json_extract('[1,2]', '$')");
 }
 
 #[test]
 fn phase10_j1_path_unicode_key() {
-    let (_d, c) = open();
-    let v = one_int(&c, "SELECT json_extract('{\"café\":1}', '$.café')");
-    assert_eq!(v, 1);
+    assert_json_parity(r#"SELECT json_extract('{"café":1}', '$.café')"#);
 }
 
 #[test]
 fn phase10_j1_path_quoted_member_with_dot() {
-    let (_d, c) = open();
-    let v = one_int(&c, "SELECT json_extract('{\"a.b\":5}', '$.\"a.b\"')");
-    assert_eq!(v, 5);
+    assert_json_parity(r#"SELECT json_extract('{"a.b":5}', '$."a.b"')"#);
 }
 
 #[test]
 fn phase10_j1_path_malformed_errors() {
-    let (_d, c) = open();
-    let mut stmt = c
-        .prepare("SELECT json_extract('{}', 'no-dollar')")
-        .expect("prepare");
-    assert!(stmt.step().is_err());
+    assert_json_error_parity("SELECT json_extract('{}', 'no-dollar')");
 }
 
 #[test]
 fn phase10_j1_path_nested_array_object() {
-    let (_d, c) = open();
-    let v = one_int(
-        &c,
-        "SELECT json_extract('{\"x\":[{\"y\":99}]}', '$.x[0].y')",
-    );
-    assert_eq!(v, 99);
+    assert_json_parity(r#"SELECT json_extract('{"x":[{"y":99}]}', '$.x[0].y')"#);
 }
 
 #[test]
 fn phase10_j1_path_append_token_extends_array() {
-    let (_d, c) = open();
-    let v = one_text(&c, "SELECT json_set('[1,2]', '$[#]', 3)");
-    assert_eq!(v, "[1,2,3]");
+    assert_json_parity("SELECT json_set('[1,2]', '$[#]', 3)");
 }
 
 // ---------------------------------------------------------------------------
@@ -404,9 +284,7 @@ fn phase10_j1_path_append_token_extends_array() {
 
 #[test]
 fn phase10_j1_extract_json_null_literal_returns_sql_null() {
-    let (_d, c) = open();
-    let v = one_value(&c, "SELECT json_extract('null', '$')");
-    assert_eq!(v, SqlValue::Null);
+    assert_json_parity("SELECT json_extract('null', '$')");
 }
 
 // ---------------------------------------------------------------------------
@@ -415,31 +293,22 @@ fn phase10_j1_extract_json_null_literal_returns_sql_null() {
 
 #[test]
 fn phase10_j1_round_trip_through_table() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE docs(id INTEGER PRIMARY KEY, body TEXT)")
-        .expect("create");
-    c.execute("INSERT INTO docs(body) VALUES ('{\"a\":[10,20,30]}')")
-        .expect("insert");
-
-    let mut stmt = c
-        .prepare("SELECT json_extract(body, '$.a[2]'), json_array_length(body, '$.a') FROM docs")
-        .expect("prepare");
-    assert_eq!(stmt.step().expect("step"), Step::Row);
-    assert_eq!(stmt.column_i64(0).expect("extract"), 30);
-    assert_eq!(stmt.column_i64(1).expect("length"), 3);
+    assert_json_parity(
+        r#"CREATE TABLE docs(id INTEGER PRIMARY KEY, body TEXT);
+           INSERT INTO docs(body) VALUES ('{"a":[10,20,30]}');
+           SELECT json_extract(body, '$.a[2]'), json_array_length(body, '$.a') FROM docs"#,
+    );
 }
 
 // ---------------------------------------------------------------------------
-// Fuzz harness — 100 randomized inputs, never panics, json_valid agrees
-// with serde_json on the same string.
+// Fuzz harness — robustness only. These tests assert no panics and local
+// `json_valid` agreement with serde_json on the same input.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn phase10_j1_fuzz_validity_matches_serde_json() {
     let (_d, c) = open();
 
-    // Tiny xorshift RNG so we don't pull in `rand`. Seed is fixed for
-    // determinism but covers a varied set of inputs.
     let mut state: u64 = 0xDEAD_BEEF_CAFE_F00D;
     let mut next = || -> u64 {
         state ^= state << 13;
@@ -454,17 +323,12 @@ fn phase10_j1_fuzz_validity_matches_serde_json() {
         let len = (next() as usize) % 60 + 1;
         let mut s = String::with_capacity(len);
         for _ in 0..len {
-            // Bias toward JSON-relevant ASCII characters.
             let pool = b"{}[]\"',:0123456789truefalsenull. -_abcXYZ\\";
             let b = pool[(next() as usize) % pool.len()];
             s.push(b as char);
         }
-        // Escape for embedding in single-quoted SQL literal.
         let sql_safe = s.replace('\'', "''");
 
-        // Some randomized strings happen to break the SQL parser (e.g.
-        // contain unbalanced double-quotes or are interpreted as
-        // identifiers); skip those, the goal here is the JSON layer.
         let prepare = c.prepare(&format!("SELECT json_valid('{sql_safe}')"));
         let Ok(mut stmt) = prepare else { continue };
         let Ok(step) = stmt.step() else { continue };
@@ -483,8 +347,6 @@ fn phase10_j1_fuzz_validity_matches_serde_json() {
         agreed += 1;
         iterations += 1;
     }
-    // Sanity: we should have actually exercised the path, not skipped
-    // every iteration.
     assert!(iterations > 30, "only {iterations} iterations completed");
     assert_eq!(iterations, agreed);
 }
@@ -515,7 +377,6 @@ fn phase10_j1_fuzz_extract_never_panics() {
             let b = path_pool[(next() as usize) % path_pool.len()];
             path.push(b as char);
         }
-        // Don't care about the result — we just want no panic.
         let sql = format!(
             "SELECT json_extract('{}', '{}')",
             doc,
