@@ -209,6 +209,16 @@ pub fn execute_prepared(
     template: &PreparedTemplate,
     bindings: &[Option<SqlValue>],
 ) -> Result<ExecutionResult> {
+    // PRAGMA query_only mirrors SQLite: prevent any write-side DDL/DML
+    // while still allowing reads, transaction control, and PRAGMA setters
+    // that read-only callers legitimately need.
+    if template_writes(&template.kind)
+        && with_session_reentrant(conn, |session| Ok(session.query_only))?
+    {
+        return Err(Error::UnsupportedSql(
+            "attempt to write while PRAGMA query_only is set".to_owned(),
+        ));
+    }
     match &template.kind {
         PreparedKind::Begin(mode) => {
             conn.begin(*mode)?;
@@ -451,6 +461,34 @@ pub(crate) fn materialize_select_plan_rows(
     materialize_prepared_rows(conn, &template, bindings)
 }
 
+/// True when `kind` would mutate database or schema state. Used by the
+/// `PRAGMA query_only` gate to reject writes without enumerating every
+/// statement variant at the call site.
+fn template_writes(kind: &PreparedKind) -> bool {
+    match kind {
+        PreparedKind::Begin(_)
+        | PreparedKind::Commit
+        | PreparedKind::Rollback
+        | PreparedKind::Pragma(_)
+        | PreparedKind::Analyze(_)
+        | PreparedKind::Explain(_)
+        | PreparedKind::Select(_)
+        | PreparedKind::Attach(_) => false,
+        PreparedKind::CreateTable(_)
+        | PreparedKind::CreateIndex(_)
+        | PreparedKind::CreateView(_)
+        | PreparedKind::CreateTrigger(_)
+        | PreparedKind::DropTable(_)
+        | PreparedKind::DropIndex(_)
+        | PreparedKind::DropView(_)
+        | PreparedKind::DropTrigger(_)
+        | PreparedKind::AlterTable(_)
+        | PreparedKind::Insert(_)
+        | PreparedKind::Update(_)
+        | PreparedKind::Delete(_) => true,
+    }
+}
+
 fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
     match plan {
         PragmaPlan::SetForeignKeys(value) => {
@@ -460,6 +498,26 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
         PragmaPlan::SetUserVersion(value) => conn.set_user_version(*value),
         PragmaPlan::SetRecursiveTriggers(value) => {
             conn.set_recursive_triggers(*value);
+            Ok(())
+        }
+        PragmaPlan::SetJournalMode(value) => {
+            conn.set_journal_mode(*value);
+            Ok(())
+        }
+        PragmaPlan::SetSynchronous(value) => {
+            conn.set_synchronous(*value);
+            Ok(())
+        }
+        PragmaPlan::SetTempStore(value) => {
+            conn.set_temp_store(*value);
+            Ok(())
+        }
+        PragmaPlan::SetCacheSize(value) => {
+            conn.set_cache_size(*value);
+            Ok(())
+        }
+        PragmaPlan::SetQueryOnly(value) => {
+            conn.set_query_only(*value);
             Ok(())
         }
     }

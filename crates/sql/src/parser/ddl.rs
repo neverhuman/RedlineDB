@@ -153,6 +153,7 @@ pub(crate) fn bind_create_index(
         kind: PreparedKind::CreateIndex(CreateIndexSpec {
             schema,
             name,
+            if_not_exists: create_index.if_not_exists,
             table,
             unique: create_index.unique,
             columns,

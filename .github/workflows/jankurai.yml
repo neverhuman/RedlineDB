@@ -98,6 +98,15 @@ jobs:
             printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=agent/ci-soft-gate-ledger.toml\n' \
               | tee target/jankurai/language-bad-behavior.log
           fi
+      - name: jankurai staged-gate (PR changed files)
+        # Mirrors tools/jankurai-hooks/pre-commit but compares against the
+        # PR merge base. Blocks the lane on any new hard finding so PRs
+        # cannot land changes that JANKURAI_SKIP_HOOKS=1 let through
+        # locally.
+        if: steps.install-jankurai.outputs.installed == 'true' && github.event_name == 'pull_request'
+        env:
+          BASE_REF: origin/main
+        run: bash ops/ci/jankurai-staged-gate.sh
       - name: jankurai audit
         if: steps.install-jankurai.outputs.installed == 'true'
         run: jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl

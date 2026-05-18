@@ -8,8 +8,15 @@ impl Engine {
     ) -> Result<Arc<crate::catalog::IndexDef>> {
         tx.ensure_open()?;
         let _ddl = self.catalog.lock_ddl();
+        let snapshot = self.catalog_snapshot_for_tx(tx);
+        if spec.if_not_exists {
+            let schema_id = crate::catalog::resolve_schema_id(&snapshot, spec.schema.as_ref())?;
+            if let Some(existing) = snapshot.lookup_index(schema_id, spec.name.folded()) {
+                return Ok(existing);
+            }
+        }
         // Step 1: build the catalog delta so we know the index_id.
-        let next = apply_create_index((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
+        let next = apply_create_index((*snapshot).clone(), spec)?;
         let created_index = next
             .indexes
             .last()

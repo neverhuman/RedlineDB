@@ -679,6 +679,7 @@ fn create_index_atomicity_under_simulated_crash_mid_backfill() {
             CreateIndexSpec {
                 schema: None,
                 name: DbName::new("ix_v"),
+                if_not_exists: false,
                 table: QualifiedName {
                     schema: DbName::new("main"),
                     name: DbName::new("t"),
@@ -778,6 +779,7 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
             CreateIndexSpec {
                 schema: None,
                 name: DbName::new("ix_v"),
+                if_not_exists: false,
                 table: QualifiedName {
                     schema: DbName::new("main"),
                     name: DbName::new("t"),
@@ -871,6 +873,7 @@ fn committed_heap_and_index_deltas_replay_after_reopen() {
             CreateIndexSpec {
                 schema: None,
                 name: DbName::new("ix_v"),
+                if_not_exists: false,
                 table: QualifiedName {
                     schema: DbName::new("main"),
                     name: DbName::new("t"),

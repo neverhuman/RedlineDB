@@ -15,7 +15,6 @@ use super::schema::{
     CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef, SchemaEpoch,
     SchemaSnapshot, TableDef,
 };
-use super::value::OwnedValue;
 use crate::format::{PageId, RelId};
 use crate::{Error, Result};
 
@@ -90,7 +89,7 @@ pub fn apply_create_table(
         let affinity = derive_affinity(column.declared_type.as_deref());
         let mut not_null = false;
         let mut default_value = column.default_value.clone();
-        let mut default_expr = default_const_expr(default_value.as_ref());
+        let default_expr = None;
         for constraint in &column.constraints {
             match constraint {
                 ColumnConstraintSpec::PrimaryKey { sort_dir, conflict } => {
@@ -199,7 +198,6 @@ pub fn apply_create_table(
                     expr,
                     normalized_sql: _,
                 } => {
-                    default_expr = Some(compile_expr(expr));
                     if let ExprAst::Const(value) = expr {
                         default_value = Some(value.clone());
                     }
@@ -393,6 +391,9 @@ pub fn apply_create_index(
         .lookup_index(schema_id, spec.name.folded())
         .is_some()
     {
+        if spec.if_not_exists {
+            return Ok(snapshot);
+        }
         return Err(Error::ObjectExists);
     }
     let table = lookup_table(&snapshot, &spec.table)?;
@@ -610,7 +611,7 @@ pub fn apply_alter_table(
                 affinity: derive_affinity(declared_type.as_deref()),
                 not_null,
                 default_value: column.default_value.clone(),
-                default_expr: default_const_expr(column.default_value.as_ref()),
+                default_expr: None,
                 generated: None,
             });
         }
@@ -733,8 +734,4 @@ fn build_index_keys_from_names(
         });
     }
     Ok(keys)
-}
-
-fn default_const_expr(value: Option<&OwnedValue>) -> Option<Arc<super::expr::CompiledExpr>> {
-    value.map(|value| compile_expr(&ExprAst::Const(value.clone())))
 }

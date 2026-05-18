@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  preflight:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -29,37 +29,81 @@ jobs:
           curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
       # Thin dispatcher: all fast-lane logic lives in ops/ci/fast.sh so
       # CI and local (`scripts/ci-local.sh fast`, `just fast`, the
-      # pre-push gate) run the same four commands. Audit references:
-      # HLT-042 ci-local-parity.lib-missing, HLT-034 ci-bad-behavior.
-      - run: bash ops/ci/fast.sh
+      # pre-push gate) run the same command set. The preflight stage is
+      # isolated here and the test shards fan out below so no single job
+      # exceeds the GitHub timeout.
+      - run: CI_FAST_STAGE=preflight bash ops/ci/fast.sh
 
-  # The branch ruleset requires checks named build/lint/typecheck/cli.
-  # These relay jobs propagate the test result under those names so the
-  # required status checks are satisfied without duplicating the build.
-  build:
-    needs: [test]
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        stage:
+          - core
+          - kernel
+          - sql-unit
+          - sql-contracts
+          - sql-parity
+          - bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install mold linker
+        run: sudo apt-get install -y mold
+      - name: Install cargo-nextest
+        run: |
+          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+      - name: Run fast test shard
+        run: CI_FAST_STAGE=${{ matrix.stage }} bash ops/ci/fast.sh
+
+  # The branch ruleset requires checks named test/build/lint/typecheck/cli.
+  # The aggregate test relay emits the required `test` context, while the
+  # other relay jobs propagate the aggregate result under their required
+  # names without duplicating the build.
+  test:
+    needs: [preflight, tests]
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - run: test "${{ needs.preflight.result }}" = "success"
+      - run: test "${{ needs.tests.result }}" = "success"
+
+  build:
+    needs: [preflight, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.preflight.result }}" = "success"
       - run: test "${{ needs.test.result }}" = "success"
 
   lint:
-    needs: [test]
+    needs: [preflight, test]
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - run: test "${{ needs.preflight.result }}" = "success"
       - run: test "${{ needs.test.result }}" = "success"
 
   typecheck:
-    needs: [test]
+    needs: [preflight, test]
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - run: test "${{ needs.preflight.result }}" = "success"
       - run: test "${{ needs.test.result }}" = "success"
 
   cli:
-    needs: [test]
+    needs: [preflight, test]
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - run: test "${{ needs.preflight.result }}" = "success"
       - run: test "${{ needs.test.result }}" = "success"

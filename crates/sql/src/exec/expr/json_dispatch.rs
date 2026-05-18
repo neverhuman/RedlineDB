@@ -17,6 +17,10 @@ pub(super) fn eval_function(
     if let Some(result) = window::try_eval_window(func) {
         return result;
     }
+    let name = func.name.to_string().to_ascii_lowercase();
+    if name == "raise" {
+        return eval_raise_function(func);
+    }
     let mut values = Vec::new();
     if let FunctionArguments::List(list) = &func.args {
         for arg in &list.args {
@@ -37,8 +41,15 @@ pub(super) fn eval_function(
         ));
     }
 
-    let name = func.name.to_string().to_ascii_lowercase();
     match name.as_str() {
+        "last_insert_rowid" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql(
+                    "last_insert_rowid requires 0 args".to_owned(),
+                ));
+            }
+            Ok(SqlValue::Integer(last_insert_rowid_value()))
+        }
         "length" => match values.first() {
             // SQLite: length(NULL) is NULL, not 0.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
@@ -299,4 +310,87 @@ pub(super) fn eval_function(
             }
         }
     }
+}
+
+fn eval_raise_function(func: &sqlparser::ast::Function) -> Result<SqlValue> {
+    let FunctionArguments::List(list) = &func.args else {
+        return Err(Error::UnsupportedSql("RAISE requires arguments".to_owned()));
+    };
+    let action = raise_action(list.args.first())?;
+    if action == "ignore" {
+        return Err(Error::UnsupportedSql(
+            "RAISE(IGNORE) is not supported in trigger bodies".to_owned(),
+        ));
+    }
+    if !matches!(action.as_str(), "abort" | "fail" | "rollback") {
+        return Err(Error::UnsupportedSql(format!(
+            "unsupported RAISE action: {action}"
+        )));
+    }
+    if list.args.len() != 2 {
+        return Err(Error::UnsupportedSql(format!(
+            "RAISE({}) requires a message",
+            action.to_ascii_uppercase()
+        )));
+    }
+    let message = raise_message(list.args.get(1))?;
+    Err(Error::ConstraintViolation(message))
+}
+
+fn raise_action(arg: Option<&FunctionArg>) -> Result<String> {
+    match arg {
+        Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Identifier(ident)))) => {
+            Ok(ident.value.to_ascii_lowercase())
+        }
+        Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value)))) => {
+            match &value.value {
+                Value::SingleQuotedString(value) | Value::DoubleQuotedString(value) => {
+                    Ok(value.to_ascii_lowercase())
+                }
+                _ => Err(Error::UnsupportedSql(
+                    "RAISE action must be ABORT, FAIL, ROLLBACK, or IGNORE".to_owned(),
+                )),
+            }
+        }
+        _ => Err(Error::UnsupportedSql(
+            "RAISE action must be ABORT, FAIL, ROLLBACK, or IGNORE".to_owned(),
+        )),
+    }
+}
+
+fn raise_message(arg: Option<&FunctionArg>) -> Result<String> {
+    match arg {
+        Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(value)))) => match &value.value
+        {
+            Value::SingleQuotedString(value)
+            | Value::DoubleQuotedString(value)
+            | Value::EscapedStringLiteral(value)
+            | Value::TripleSingleQuotedString(value)
+            | Value::TripleDoubleQuotedString(value)
+            | Value::UnicodeStringLiteral(value)
+            | Value::SingleQuotedRawStringLiteral(value)
+            | Value::DoubleQuotedRawStringLiteral(value)
+            | Value::TripleSingleQuotedRawStringLiteral(value)
+            | Value::TripleDoubleQuotedRawStringLiteral(value) => Ok(value.clone()),
+            Value::DollarQuotedString(value) => Ok(value.value.clone()),
+            _ => Err(Error::UnsupportedSql(
+                "RAISE message must be a string literal".to_owned(),
+            )),
+        },
+        _ => Err(Error::UnsupportedSql(
+            "RAISE message must be a string literal".to_owned(),
+        )),
+    }
+}
+
+fn last_insert_rowid_value() -> i64 {
+    if let Some(ptr) = crate::exec::current_session_ptr() {
+        // SAFETY: installed by `with_write_tx` for the duration of the
+        // synchronous statement/trigger execution scope.
+        let session: &crate::session::SessionState = unsafe { &*ptr };
+        return session.last_insert_rowid.unwrap_or(0);
+    }
+    current_connection()
+        .and_then(|conn| conn.last_insert_rowid())
+        .unwrap_or(0)
 }

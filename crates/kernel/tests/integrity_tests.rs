@@ -83,6 +83,7 @@ fn create_kv_index(engine: &Arc<Engine>) {
             CreateIndexSpec {
                 schema: None,
                 name: DbName::new("ix_kv_k"),
+                if_not_exists: false,
                 table: QualifiedName {
                     schema: DbName::new("main"),
                     name: DbName::new("kv"),

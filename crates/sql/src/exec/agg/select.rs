@@ -34,7 +34,9 @@ pub(crate) fn expr_contains_aggregate(expr: &Expr) -> bool {
             // Registered aggregate UDFs route through the grouped evaluator
             // exactly like built-in aggregates so `SELECT my_agg(col) FROM t
             // GROUP BY k` works without parser/planner changes.
-            is_builtin || crate::udf::is_registered_aggregate(&name)
+            is_builtin
+                || crate::udf::is_registered_aggregate(&name)
+                || function_args_contain_aggregate(func)
         }
         Expr::BinaryOp { left, right, .. } => {
             expr_contains_aggregate(left) || expr_contains_aggregate(right)
@@ -75,4 +77,22 @@ pub(crate) fn expr_contains_aggregate(expr: &Expr) -> bool {
         }
         _ => false,
     }
+}
+
+fn function_args_contain_aggregate(func: &sqlparser::ast::Function) -> bool {
+    let FunctionArguments::List(list) = &func.args else {
+        return false;
+    };
+    list.args.iter().any(|arg| match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+        | FunctionArg::Named {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        }
+        | FunctionArg::ExprNamed {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        } => expr_contains_aggregate(expr),
+        _ => false,
+    })
 }
