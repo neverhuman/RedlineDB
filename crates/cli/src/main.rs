@@ -470,8 +470,7 @@ fn run_query_writer<W: Write>(
                                     || escaped.contains('"')
                                     || escaped.contains('\n')
                                 {
-                                    write!(out, "\"{escaped}\"")
-                                        .map_err(|err| err.to_string())?;
+                                    write!(out, "\"{escaped}\"").map_err(|err| err.to_string())?;
                                 } else {
                                     write!(out, "{escaped}").map_err(|err| err.to_string())?;
                                 }
@@ -480,8 +479,7 @@ fn run_query_writer<W: Write>(
                             }
                         }
                         ValueRef::Blob(value) => {
-                            write!(out, "<blob:{}>", value.len())
-                                .map_err(|err| err.to_string())?;
+                            write!(out, "<blob:{}>", value.len()).map_err(|err| err.to_string())?;
                         }
                     }
                 }

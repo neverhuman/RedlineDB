@@ -160,7 +160,9 @@ pub(crate) fn parse_pragma_template(
                     sql,
                     schema_epoch,
                     vec![String::from("journal_mode")],
-                    vec![vec![SqlValue::Text(Arc::from(conn.journal_mode().as_str()))]],
+                    vec![vec![SqlValue::Text(Arc::from(
+                        conn.journal_mode().as_str(),
+                    ))]],
                 )
             }
         }
@@ -232,7 +234,11 @@ pub(crate) fn parse_pragma_template(
                     sql,
                     schema_epoch,
                     vec![String::from("query_only")],
-                    vec![vec![SqlValue::Integer(if conn.query_only() { 1 } else { 0 })]],
+                    vec![vec![SqlValue::Integer(if conn.query_only() {
+                        1
+                    } else {
+                        0
+                    })]],
                 )
             }
         }

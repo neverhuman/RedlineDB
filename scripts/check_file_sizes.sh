@@ -7,6 +7,9 @@ status=0
 
 while IFS= read -r file; do
   case "$file" in
+    Cargo.lock)
+      continue
+      ;;
     agent/repo-score.json|agent/repo-score.md)
       continue
       ;;

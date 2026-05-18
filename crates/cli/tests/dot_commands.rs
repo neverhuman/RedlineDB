@@ -292,10 +292,7 @@ fn dot_parameter_list_and_clear_round_trip() {
          .print done\n",
     );
     assert_eq!(code, 0, "stderr={err}");
-    let listed = out
-        .lines()
-        .filter(|l| l.contains('\t'))
-        .collect::<Vec<_>>();
+    let listed = out.lines().filter(|l| l.contains('\t')).collect::<Vec<_>>();
     assert!(
         listed.iter().any(|l| l.contains(":a") && l.contains('1')),
         "first .parameter list should include :a=1, got: {listed:?}"
