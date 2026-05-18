@@ -31,6 +31,33 @@ pub enum IndexOrigin {
     UniqueConstraint,
 }
 
+/// Physical index method to allocate behind a `CREATE INDEX` statement.
+///
+/// Phase 2B.1a wires the SQL surface for `USING hnsw` through to the
+/// in-kernel HNSW graph (see [`crate::vector::hnsw`]). The default
+/// `Btree` variant preserves the existing call sites — every primary
+/// key, unique constraint, and `CREATE INDEX` without a `USING` clause
+/// still allocates a B-tree.
+///
+/// Future variants (`Ivf`, `DiskAnn`, …) slot in here; the engine's
+/// `create_index` matches on the method and dispatches to the right
+/// kernel module.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum IndexMethod {
+    /// Lane KH B-tree (`crate::index::BtreeIndex`). The default.
+    Btree,
+    /// Lane V2 HNSW graph (`crate::vector::hnsw::HnswIndex`). Requires
+    /// the index column to be declared `VECTOR(N[, f32])`; tuning
+    /// parameters default to [`crate::vector::hnsw::HnswParams::standard`].
+    Hnsw,
+}
+
+impl Default for IndexMethod {
+    fn default() -> Self {
+        Self::Btree
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateTableSpec {
     pub schema: Option<DbName>,
@@ -61,6 +88,10 @@ pub struct CreateIndexSpec {
     /// A6 SQL-D: optional WHERE predicate for partial indexes, as
     /// verbatim SQL.
     pub predicate_sql: Option<String>,
+    /// Phase 2B.1a: which kernel index method backs this declaration.
+    /// Defaults to [`IndexMethod::Btree`]; the SQL parser fills the
+    /// `USING <name>` clause when present.
+    pub method: IndexMethod,
 }
 
 #[derive(Debug, Clone)]

@@ -22,8 +22,8 @@ pub use bootstrap::bootstrap_schema;
 pub use ddl::{
     AlterTableOperationSpec, AlterTableSpec, ColumnConstraintSpec, ColumnSpec, ConflictAction,
     CreateIndexSpec, CreateTableSpec, CreateTriggerSpec, CreateViewSpec, DropIndexSpec,
-    DropTableSpec, DropTriggerSpec, DropViewSpec, FkAction, IndexColumnSpec, IndexOrigin,
-    TableConstraintSpec, TriggerEventKind, TriggerTimeKind,
+    DropTableSpec, DropTriggerSpec, DropViewSpec, FkAction, IndexColumnSpec, IndexMethod,
+    IndexOrigin, TableConstraintSpec, TriggerEventKind, TriggerTimeKind,
 };
 pub use expr::{
     CompiledExpr, EvalScratch, ExprAst, ExprError, ExprOp, RowValueSource, compile_expr, eval_expr,

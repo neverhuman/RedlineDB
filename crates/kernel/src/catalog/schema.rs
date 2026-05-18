@@ -87,6 +87,10 @@ pub struct IndexDef {
     /// before maintaining the index; planner only uses a partial index
     /// when the query WHERE is provably implied (today: text match).
     pub predicate_sql: Option<Box<str>>,
+    /// Phase 2B.1a: physical kernel method backing this index. Defaults
+    /// to [`IndexMethod::Btree`]; HNSW indexes set this to
+    /// [`IndexMethod::Hnsw`] so reopen dispatches to the right kernel.
+    pub method: super::ddl::IndexMethod,
 }
 
 #[derive(Debug, Clone)]

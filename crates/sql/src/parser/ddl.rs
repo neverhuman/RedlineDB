@@ -90,17 +90,27 @@ pub(crate) fn bind_create_index(
     create_index: sqlparser::ast::CreateIndex,
 ) -> Result<PreparedTemplate> {
     if create_index.concurrently
-        || create_index.using.is_some()
         || !create_index.include.is_empty()
         || create_index.nulls_distinct.is_some()
         || !create_index.with.is_empty()
-        || !create_index.index_options.is_empty()
         || !create_index.alter_options.is_empty()
     {
         return Err(Error::UnsupportedSql(
             "CREATE INDEX modifiers are not supported".to_owned(),
         ));
     }
+
+    // Phase 2B.1a: accept `USING btree` / `USING hnsw` in any of the
+    // grammar positions sqlparser surfaces:
+    //   * `CREATE INDEX idx USING <m> ON t (col)` and
+    //     `CREATE INDEX idx ON t USING <m> (col)` land in `using`.
+    //   * `CREATE INDEX idx ON t (col) USING <m>` lands in
+    //     `index_options` (a MySQL-style trailing option).
+    // Reject any other identifier; this is the only loosening of the
+    // pre-existing rejection — every program that previously parsed
+    // unchanged still parses unchanged.
+    let method = resolve_index_method(&create_index)?;
+
     let name = match create_index.name {
         Some(n) => n,
         None => {
@@ -159,8 +169,76 @@ pub(crate) fn bind_create_index(
             origin: IndexOrigin::User,
             normalized_sql: Some(sql.to_owned()),
             predicate_sql,
+            method,
         }),
     })
+}
+
+/// Inspect every `USING <ident>` slot sqlparser surfaces on a
+/// `CREATE INDEX` and resolve it into a kernel
+/// [`redlinedb_kernel::catalog::IndexMethod`]. Returns
+/// `IndexMethod::Btree` when no `USING` clause is present (the SQLite
+/// default), `IndexMethod::Hnsw` when the user wrote `USING hnsw`, and
+/// `Err(UnsupportedSql)` for any other identifier or for declarations
+/// that combine `USING` with another unsupported modifier.
+///
+/// SQLite's own `CREATE INDEX` grammar rejects `USING` outright; every
+/// program that previously parsed without a `USING` clause still
+/// resolves to the historical `Btree` default and continues to behave
+/// identically.
+fn resolve_index_method(
+    create_index: &sqlparser::ast::CreateIndex,
+) -> Result<redlinedb_kernel::catalog::IndexMethod> {
+    use redlinedb_kernel::catalog::IndexMethod;
+    use sqlparser::ast::{IndexOption, IndexType};
+
+    // Collect every `USING` token the parser surfaced. There are at most
+    // two slots: the `using` field (pre-`(columns)` placement) and the
+    // index-option chain (post-`(columns)` placement). It's a parse
+    // error if both are set with different methods.
+    let mut found: Vec<IndexType> = Vec::new();
+    if let Some(it) = create_index.using.clone() {
+        found.push(it);
+    }
+    for opt in &create_index.index_options {
+        match opt {
+            IndexOption::Using(it) => found.push(it.clone()),
+            IndexOption::Comment(_) => {
+                return Err(Error::UnsupportedSql(
+                    "CREATE INDEX ... COMMENT is not supported".to_owned(),
+                ));
+            }
+        }
+    }
+    if found.is_empty() {
+        return Ok(IndexMethod::default());
+    }
+    if found.len() > 1 {
+        return Err(Error::UnsupportedSql(
+            "CREATE INDEX accepts at most one USING clause".to_owned(),
+        ));
+    }
+    match &found[0] {
+        IndexType::BTree => Ok(IndexMethod::Btree),
+        IndexType::Custom(ident) => {
+            let name = ident.value.to_ascii_lowercase();
+            match name.as_str() {
+                // Defensive: parser folds the BTREE keyword to BTree
+                // above, but a backtick-quoted `btree` survives as a
+                // Custom ident.
+                "btree" => Ok(IndexMethod::Btree),
+                "hnsw" => Ok(IndexMethod::Hnsw),
+                other => Err(Error::UnsupportedSql(format!(
+                    "CREATE INDEX USING '{other}' is not supported \
+                     (supported: btree, hnsw)"
+                ))),
+            }
+        }
+        other => Err(Error::UnsupportedSql(format!(
+            "CREATE INDEX USING '{other}' is not supported \
+             (supported: btree, hnsw)"
+        ))),
+    }
 }
 
 pub(crate) fn bind_drop(

@@ -608,7 +608,8 @@ fn old_commit_payload_shape_is_not_accepted_for_commit_records() {
 fn create_index_atomicity_under_simulated_crash_mid_backfill() {
     use redlinedb_kernel::catalog::{
         ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
-        IndexColumnSpec, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef, encode_record,
+        IndexColumnSpec, IndexMethod, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef,
+        encode_record,
     };
 
     let temp = TempDir::new().unwrap();
@@ -694,6 +695,7 @@ fn create_index_atomicity_under_simulated_crash_mid_backfill() {
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
                 predicate_sql: None,
+                method: IndexMethod::Btree,
             },
         )
         .unwrap();
@@ -715,7 +717,8 @@ fn create_index_atomicity_under_simulated_crash_mid_backfill() {
 fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
     use redlinedb_kernel::catalog::{
         ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
-        IndexColumnSpec, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef, encode_record,
+        IndexColumnSpec, IndexMethod, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef,
+        encode_record,
     };
 
     let temp = TempDir::new().unwrap();
@@ -793,6 +796,7 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
                 predicate_sql: None,
+                method: IndexMethod::Btree,
             },
         )
         .unwrap();
@@ -818,7 +822,7 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
 fn committed_heap_and_index_deltas_replay_after_reopen() {
     use redlinedb_kernel::catalog::{
         ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
-        IndexColumnSpec, IndexOrigin, QualifiedName, SortDir, ValueRef, encode_record,
+        IndexColumnSpec, IndexMethod, IndexOrigin, QualifiedName, SortDir, ValueRef, encode_record,
     };
     use redlinedb_kernel::format::{PageGeneration, PageId, TuplePtr};
     use redlinedb_kernel::index::IndexRowRef;
@@ -886,6 +890,7 @@ fn committed_heap_and_index_deltas_replay_after_reopen() {
                 origin: IndexOrigin::User,
                 normalized_sql: Some("CREATE INDEX ix_v ON t(v)".to_owned()),
                 predicate_sql: None,
+                method: IndexMethod::Btree,
             },
         )
         .unwrap();
