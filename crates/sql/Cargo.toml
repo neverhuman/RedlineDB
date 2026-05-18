@@ -1,3 +1,28 @@
 [package]
 name = "redlinedb-sql"
 version = "1.0.2"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+arc-swap = "1.7"
+parking_lot = "0.12"
+regex = { version = "1.11", default-features = false, features = ["std", "perf"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+sqlparser = "0.61"
+thiserror = "2.0"
+redlinedb-kernel = { path = "../kernel" }
+
+[dev-dependencies]
+tempfile = "3.23"
+fail = { version = "0.5", features = ["failpoints"] }
+proptest = "1.5"
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+
+[features]
+default = []
+# Lane KH P0 #3: enables `failpoints` in the kernel transitively so the
+# commit-failure rollback test can arm `engine::commit::before_publish`
+# with a `return(...)` action and observe SQL-side index repair.
+failpoints = ["redlinedb-kernel/failpoints"]
