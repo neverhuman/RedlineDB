@@ -7,13 +7,42 @@
 
 use super::*;
 
+#[path = "value/datetime.rs"]
+mod datetime;
+
+pub(crate) use datetime::*;
+
 pub(crate) fn value_to_string(value: &SqlValue) -> String {
     match value {
         SqlValue::Null => String::new(),
         SqlValue::Integer(v) => v.to_string(),
-        SqlValue::Real(v) => v.to_string(),
+        SqlValue::Real(v) => format_real_sqlite(*v),
         SqlValue::Text(v) => v.to_string(),
         SqlValue::Blob(v) => String::from_utf8_lossy(v).into_owned(),
+    }
+}
+
+/// Format a `f64` the way SQLite renders REAL values in text contexts
+/// (`%!.15g` semantics). Whole-valued finite reals keep a trailing `.0`
+/// so that `lower(1.0)` returns `"1.0"`, not `"1"` — matching the
+/// rusqlite oracle. Non-finite values render as SQLite's
+/// `"Inf"` / `"-Inf"` / `"NaN"` literals.
+pub(crate) fn format_real_sqlite(v: f64) -> String {
+    if v.is_nan() {
+        return "NaN".to_owned();
+    }
+    if v.is_infinite() {
+        return if v < 0.0 {
+            "-Inf".to_owned()
+        } else {
+            "Inf".to_owned()
+        };
+    }
+    let s = format!("{v}");
+    if s.contains('.') || s.contains('e') || s.contains('E') {
+        s
+    } else {
+        format!("{s}.0")
     }
 }
 
@@ -28,6 +57,147 @@ pub(crate) fn resolve_binding(name: &str, bindings: &[Option<SqlValue>]) -> Resu
             .unwrap_or(SqlValue::Null));
     }
     Err(Error::Bind(format!("unknown parameter {name}")))
+}
+
+pub(crate) fn sqlite_substr_function(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() < 2 {
+        return Ok(SqlValue::Null);
+    }
+    if matches!(values[0], SqlValue::Null)
+        || matches!(values[1], SqlValue::Null)
+        || matches!(values.get(2), Some(SqlValue::Null))
+    {
+        return Ok(SqlValue::Null);
+    }
+    let start = match &values[1] {
+        SqlValue::Integer(n) => *n,
+        other => value_to_string(other).trim().parse::<i64>().unwrap_or(0),
+    };
+    let len = values.get(2).map(|value| match value {
+        SqlValue::Integer(n) => *n,
+        other => value_to_string(other).trim().parse::<i64>().unwrap_or(0),
+    });
+    match &values[0] {
+        SqlValue::Blob(bytes) => Ok(SqlValue::Blob(sqlite_substr_bytes(bytes, start, len))),
+        other => Ok(SqlValue::Text(Arc::from(sqlite_substr_text(
+            &value_to_string(other),
+            start,
+            len,
+        )))),
+    }
+}
+
+pub(crate) fn sqlite_trim_function(value: &SqlValue, chars: Option<&SqlValue>) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) || matches!(chars, Some(SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let s = value_to_string(value);
+    let result = match chars {
+        None => s.trim_matches(' ').to_owned(),
+        Some(chars) => {
+            let strip: Vec<char> = value_to_string(chars).chars().collect();
+            s.trim_matches(strip.as_slice()).to_owned()
+        }
+    };
+    Ok(SqlValue::Text(Arc::from(result)))
+}
+
+pub(crate) fn sqlite_ltrim_function(
+    value: &SqlValue,
+    chars: Option<&SqlValue>,
+) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) || matches!(chars, Some(SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let s = value_to_string(value);
+    let result = match chars {
+        None => s.trim_start_matches(' ').to_owned(),
+        Some(chars) => {
+            let strip: Vec<char> = value_to_string(chars).chars().collect();
+            s.trim_start_matches(strip.as_slice()).to_owned()
+        }
+    };
+    Ok(SqlValue::Text(Arc::from(result)))
+}
+
+pub(crate) fn sqlite_rtrim_function(
+    value: &SqlValue,
+    chars: Option<&SqlValue>,
+) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) || matches!(chars, Some(SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let s = value_to_string(value);
+    let result = match chars {
+        None => s.trim_end_matches(' ').to_owned(),
+        Some(chars) => {
+            let strip: Vec<char> = value_to_string(chars).chars().collect();
+            s.trim_end_matches(strip.as_slice()).to_owned()
+        }
+    };
+    Ok(SqlValue::Text(Arc::from(result)))
+}
+
+fn sqlite_substr_text(input: &str, start: i64, len: Option<i64>) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let total = chars.len() as i64;
+    let Some((start_range, take_range)) = sqlite_substr_range(total, start, len) else {
+        return String::new();
+    };
+    let start_idx = start_range.max(0) as usize;
+    let take = take_range.max(0) as usize;
+    if start_idx >= chars.len() {
+        return String::new();
+    }
+    chars.iter().skip(start_idx).take(take).collect()
+}
+
+fn sqlite_substr_bytes(input: &[u8], start: i64, len: Option<i64>) -> Arc<[u8]> {
+    let total = input.len() as i64;
+    match sqlite_substr_range(total, start, len) {
+        Some((start_idx, take)) => {
+            let start_idx = start_idx.max(0) as usize;
+            let take = take.max(0) as usize;
+            if start_idx >= input.len() {
+                Arc::from(&[][..])
+            } else {
+                let end = start_idx.saturating_add(take).min(input.len());
+                Arc::from(&input[start_idx..end])
+            }
+        }
+        None => Arc::from(&[][..]),
+    }
+}
+
+fn sqlite_substr_range(len: i64, mut start: i64, take: Option<i64>) -> Option<(i64, i64)> {
+    let mut take = take.unwrap_or(i64::MAX);
+    if start < 0 {
+        start += len;
+        if start < 0 {
+            if take < 0 {
+                take = 0;
+            } else {
+                take += start;
+            }
+            start = 0;
+        }
+    } else if start > 0 {
+        start -= 1;
+    } else if take > 0 {
+        take -= 1;
+    }
+    if take < 0 {
+        if take < -start {
+            take = start;
+        } else {
+            take = -take;
+        }
+        start -= take;
+    }
+    if start < 0 {
+        return None;
+    }
+    Some((start, take))
 }
 
 pub(crate) enum VectorOpMetric {
@@ -116,207 +286,4 @@ pub(crate) fn vector_distance_to_value(
         .distance(a, b)
         .map_err(|e| Error::UnsupportedSql(format!("vector distance: {e}")))?;
     Ok(SqlValue::Real(d as f64))
-}
-
-#[derive(Copy, Clone)]
-pub(crate) enum DateTimeKind {
-    Date,
-    Time,
-    Datetime,
-    JulianDay,
-    Unix,
-}
-
-pub(crate) fn datetime_function(values: &[SqlValue], kind: DateTimeKind) -> Result<SqlValue> {
-    let dt = parse_dt_args(values)?;
-    Ok(match kind {
-        DateTimeKind::Date => SqlValue::Text(Arc::from(dt.format_date())),
-        DateTimeKind::Time => SqlValue::Text(Arc::from(dt.format_time())),
-        DateTimeKind::Datetime => SqlValue::Text(Arc::from(dt.format_datetime())),
-        DateTimeKind::JulianDay => SqlValue::Real(dt.julian_day()),
-        DateTimeKind::Unix => SqlValue::Integer(dt.to_unix()),
-    })
-}
-
-pub(crate) fn strftime_function(values: &[SqlValue]) -> Result<SqlValue> {
-    if values.is_empty() {
-        return Err(Error::UnsupportedSql("strftime requires format".to_owned()));
-    }
-    let format = value_to_string(&values[0]);
-    let dt = parse_dt_args(&values[1..])?;
-    Ok(SqlValue::Text(Arc::from(crate::datetime::strftime(
-        &format, &dt,
-    ))))
-}
-
-fn parse_dt_args(values: &[SqlValue]) -> Result<crate::datetime::DateTime> {
-    let base = match values.first() {
-        Some(v) => value_to_string(v),
-        None => "now".to_owned(),
-    };
-    let dt = crate::datetime::parse_timestring(&base)?;
-    if values.len() <= 1 {
-        return Ok(dt);
-    }
-    let mods: Vec<String> = values[1..].iter().map(value_to_string).collect();
-    let refs: Vec<&str> = mods.iter().map(String::as_str).collect();
-    crate::datetime::apply_modifiers(dt, &refs)
-}
-
-/// SQLite-compatible `printf`/`format` implementation.
-///
-/// Supports the common subset used in practice:
-/// `%%`, `%s`, `%d`, `%i`, `%u`, `%f`, `%e`, `%E`, `%g`, `%G`,
-/// `%x`, `%X`, `%o`, `%q` (SQL-quote), `%c`.
-/// Width and precision fields are forwarded to Rust's format machinery
-/// where feasible; unrecognised specifiers emit the specifier unchanged.
-pub(crate) fn sqlite_printf(fmt: &str, args: &[SqlValue]) -> String {
-    let mut out = String::with_capacity(fmt.len() + args.len() * 8);
-    let mut arg_idx = 0usize;
-    let mut chars = fmt.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch != '%' {
-            out.push(ch);
-            continue;
-        }
-        // Consume optional flags, width, precision.
-        let mut spec = String::from('%');
-        // flags
-        while let Some(&f) = chars.peek() {
-            if matches!(f, '-' | '+' | ' ' | '0' | '#') {
-                spec.push(f);
-                chars.next();
-            } else {
-                break;
-            }
-        }
-        // width
-        while let Some(&d) = chars.peek() {
-            if d.is_ascii_digit() {
-                spec.push(d);
-                chars.next();
-            } else {
-                break;
-            }
-        }
-        // precision
-        if chars.peek() == Some(&'.') {
-            spec.push('.');
-            chars.next();
-            while let Some(&d) = chars.peek() {
-                if d.is_ascii_digit() {
-                    spec.push(d);
-                    chars.next();
-                } else {
-                    break;
-                }
-            }
-        }
-        let conv = match chars.next() {
-            None => break,
-            Some(c) => c,
-        };
-        let arg = args.get(arg_idx).unwrap_or(&SqlValue::Null);
-        match conv {
-            '%' => out.push('%'),
-            's' => {
-                arg_idx += 1;
-                out.push_str(&value_to_string(arg));
-            }
-            'd' | 'i' => {
-                arg_idx += 1;
-                let n = match arg {
-                    SqlValue::Integer(v) => *v,
-                    SqlValue::Real(v) => *v as i64,
-                    SqlValue::Null => 0,
-                    other => value_to_string(other).trim().parse::<i64>().unwrap_or(0),
-                };
-                out.push_str(&n.to_string());
-            }
-            'u' => {
-                arg_idx += 1;
-                let n = match arg {
-                    SqlValue::Integer(v) => *v as u64,
-                    SqlValue::Real(v) => *v as u64,
-                    SqlValue::Null => 0u64,
-                    other => value_to_string(other).trim().parse::<u64>().unwrap_or(0),
-                };
-                out.push_str(&n.to_string());
-            }
-            'f' | 'F' => {
-                arg_idx += 1;
-                let v = numeric_f64(arg);
-                out.push_str(&format!("{v:.6}"));
-            }
-            'e' => {
-                arg_idx += 1;
-                let v = numeric_f64(arg);
-                out.push_str(&format!("{v:e}"));
-            }
-            'E' => {
-                arg_idx += 1;
-                let v = numeric_f64(arg);
-                out.push_str(&format!("{v:E}"));
-            }
-            'g' | 'G' => {
-                arg_idx += 1;
-                let v = numeric_f64(arg);
-                // SQLite %g removes trailing zeros.
-                let s = format!("{v:e}");
-                // Simplify: just emit fixed notation with minimal precision.
-                out.push_str(&format!("{v}"));
-                let _ = s;
-            }
-            'x' => {
-                arg_idx += 1;
-                let n = int_arg(arg);
-                out.push_str(&format!("{n:x}"));
-            }
-            'X' => {
-                arg_idx += 1;
-                let n = int_arg(arg);
-                out.push_str(&format!("{n:X}"));
-            }
-            'o' => {
-                arg_idx += 1;
-                let n = int_arg(arg) as u64;
-                out.push_str(&format!("{n:o}"));
-            }
-            'c' => {
-                arg_idx += 1;
-                let cp = int_arg(arg) as u32;
-                out.push(char::from_u32(cp).unwrap_or(char::REPLACEMENT_CHARACTER));
-            }
-            'q' => {
-                // SQLite %q: escape single-quotes by doubling them.
-                arg_idx += 1;
-                let s = value_to_string(arg);
-                out.push_str(&s.replace('\'', "''"));
-            }
-            other => {
-                // Unknown specifier — emit it unchanged.
-                out.push_str(&spec);
-                out.push(other);
-            }
-        }
-    }
-    out
-}
-
-fn numeric_f64(v: &SqlValue) -> f64 {
-    match v {
-        SqlValue::Integer(n) => *n as f64,
-        SqlValue::Real(r) => *r,
-        SqlValue::Null => 0.0,
-        other => value_to_string(other).trim().parse::<f64>().unwrap_or(0.0),
-    }
-}
-
-fn int_arg(v: &SqlValue) -> i64 {
-    match v {
-        SqlValue::Integer(n) => *n,
-        SqlValue::Real(r) => *r as i64,
-        SqlValue::Null => 0,
-        other => value_to_string(other).trim().parse::<i64>().unwrap_or(0),
-    }
 }

@@ -12,17 +12,29 @@ pub(crate) fn bind_query(
         order_by,
         limit_clause,
         with,
-        ..
+        fetch,
+        locks,
+        for_clause,
+        settings,
+        format_clause,
+        pipe_operators,
     } = query;
     if let Some(with) = with {
-        // Lane SQL-D phase 10 Tier-2: WITH ... SELECT (CTE) parses but is
-        // not yet planner-integrated. We surface a structured error so SQL
-        // text round-trips without becoming a parse-error and so future
-        // planner work can swap this branch for a materialisation pass.
-        let _ = with.cte_tables.len();
-        return Err(Error::UnsupportedSql(
-            "CTEs (WITH clauses) are parsed-only; execution not yet implemented".to_owned(),
-        ));
+        // CTEs: materialize each CTE body (handling recursive references)
+        // and dispatch to the trailing query under an active CTE scope.
+        let trailing = Query {
+            with: None,
+            body,
+            order_by,
+            limit_clause,
+            fetch,
+            locks,
+            for_clause,
+            settings,
+            format_clause,
+            pipe_operators,
+        };
+        return crate::exec::cte::bind_with_query(conn, schema, schema_epoch, sql, with, trailing);
     }
     match *body {
         SetExpr::Query(query) => {
@@ -55,6 +67,7 @@ pub(crate) fn bind_query(
         SetExpr::Select(select) => {
             let mut params = ParamLayout::default();
             bind_simple_select_query(
+                conn,
                 schema,
                 schema_epoch,
                 sql,
@@ -80,6 +93,7 @@ pub(crate) struct UnionAllQueryContext<'a> {
 }
 
 pub(crate) fn bind_simple_select_query(
+    conn: &Connection,
     schema: Arc<SchemaSnapshot>,
     schema_epoch: SchemaEpoch,
     sql: &str,
@@ -102,7 +116,7 @@ pub(crate) fn bind_simple_select_query(
     let mut projection = Vec::new();
     let mut output_columns = Vec::new();
 
-    let (source, mut selection) = bind_select_from(&schema, select.from, params)?;
+    let (source, mut selection) = bind_select_from(conn, &schema, select.from, params)?;
 
     for item in select.projection {
         let item = normalize_select_item(item, params)?;
@@ -151,7 +165,7 @@ pub(crate) fn bind_simple_select_query(
         None => None,
     };
 
-    let order_by = match order_by {
+    let mut order_by = match order_by {
         Some(order_by) => match order_by.kind {
             OrderByKind::Expressions(exprs) => exprs
                 .into_iter()
@@ -174,6 +188,7 @@ pub(crate) fn bind_simple_select_query(
         },
         None => Vec::new(),
     };
+    resolve_order_by_positions(&mut order_by, &output_columns);
 
     let (limit, offset) = match limit_clause {
         Some(LimitClause::LimitOffset {
@@ -230,11 +245,30 @@ pub(crate) fn bind_union_all_query(
     left: SetExpr,
     right: SetExpr,
 ) -> Result<PreparedTemplate> {
-    if !matches!(op, SetOperator::Union) || !matches!(set_quantifier, SetQuantifier::All) {
-        return Err(Error::UnsupportedSql(
-            "only UNION ALL is supported".to_owned(),
-        ));
-    }
+    // Map (op, quantifier) to our internal compound shape. UNION ALL keeps
+    // its existing fast path; UNION (default DISTINCT), INTERSECT, EXCEPT
+    // route through the new `CompoundSet` source whose dedup semantics
+    // live in `crate::exec::set_ops`.
+    let compound_op: Option<crate::statement::CompoundSetOp> = match (op, set_quantifier) {
+        (SetOperator::Union, SetQuantifier::All) => None,
+        (SetOperator::Union, SetQuantifier::Distinct | SetQuantifier::None) => {
+            Some(crate::statement::CompoundSetOp::UnionDistinct)
+        }
+        (SetOperator::Intersect, SetQuantifier::Distinct | SetQuantifier::None) => {
+            Some(crate::statement::CompoundSetOp::Intersect)
+        }
+        (SetOperator::Except, SetQuantifier::Distinct | SetQuantifier::None) => {
+            Some(crate::statement::CompoundSetOp::Except)
+        }
+        (SetOperator::Intersect | SetOperator::Except, SetQuantifier::All) => {
+            return Err(Error::UnsupportedSql(format!("{op} ALL is not supported")));
+        }
+        (op, quant) => {
+            return Err(Error::UnsupportedSql(format!(
+                "unsupported set operation: {op} {quant}"
+            )));
+        }
+    };
 
     let left = bind_query(
         ctx.conn,
@@ -279,8 +313,13 @@ pub(crate) fn bind_union_all_query(
         ));
     }
 
+    // For ORDER BY column resolution we need names — use the LEFT branch
+    // names since SQL columns are positional in set ops, and SQLite reports
+    // the left side's names.
+    let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
+
     let mut tail_params = ParamLayout::default();
-    let order_by = match ctx.order_by {
+    let mut order_by = match ctx.order_by {
         Some(order_by) => match order_by.kind {
             OrderByKind::Expressions(exprs) => exprs
                 .into_iter()
@@ -303,6 +342,7 @@ pub(crate) fn bind_union_all_query(
         },
         None => Vec::new(),
     };
+    resolve_order_by_positions(&mut order_by, &left_columns_for_names);
     let (limit, offset) = match ctx.limit_clause {
         Some(LimitClause::LimitOffset {
             limit,
@@ -327,27 +367,31 @@ pub(crate) fn bind_union_all_query(
     };
     if tail_params.count() > 0 {
         return Err(Error::UnsupportedSql(
-            "UNION ALL with parameters is not supported yet".to_owned(),
+            "compound SELECT with parameters is not supported yet".to_owned(),
         ));
     }
 
+    let left_plan = match left.kind {
+        PreparedKind::Select(plan) => plan,
+        _ => unreachable!("compound branch is always a SELECT"),
+    };
+    let right_plan = match right.kind {
+        PreparedKind::Select(plan) => plan,
+        _ => unreachable!("compound branch is always a SELECT"),
+    };
+
     let projection = Vec::new();
+    let source = match compound_op {
+        None => SelectSource::CompoundAll(vec![left_plan, right_plan]),
+        Some(op) => SelectSource::CompoundSet {
+            op,
+            branches: vec![left_plan, right_plan],
+        },
+    };
     let mut output_columns = Vec::new();
-    push_projection_columns(
-        &SelectSource::CompoundAll(vec![
-            match &left.kind {
-                PreparedKind::Select(plan) => plan.clone(),
-                _ => unreachable!(),
-            },
-            match &right.kind {
-                PreparedKind::Select(plan) => plan.clone(),
-                _ => unreachable!(),
-            },
-        ]),
-        &mut output_columns,
-    );
-    if projection.is_empty() {
-        output_columns.clear();
+    push_projection_columns(&source, &mut output_columns);
+    if output_columns.is_empty() {
+        output_columns.extend(left_columns_for_names.iter().cloned());
     }
 
     Ok(PreparedTemplate {
@@ -359,16 +403,7 @@ pub(crate) fn bind_union_all_query(
         output_columns: output_columns.into(),
         readonly: true,
         kind: PreparedKind::Select(SelectPlan {
-            source: SelectSource::CompoundAll(vec![
-                match left.kind {
-                    PreparedKind::Select(plan) => plan,
-                    _ => unreachable!(),
-                },
-                match right.kind {
-                    PreparedKind::Select(plan) => plan,
-                    _ => unreachable!(),
-                },
-            ]),
+            source,
             distinct: false,
             projection,
             selection: None,
@@ -776,5 +811,104 @@ pub(crate) fn scan_sql_parameters(sql: &str, params: &mut ParamLayout) {
                 }
             }
         }
+    }
+}
+
+/// SQLite parity: a bare positive integer at the top of an `ORDER BY` term is a
+/// 1-based positional reference to the N-th output column, not the literal
+/// integer value. Rewrites matching terms to `Expr::Identifier(<column-name>)`
+/// so the existing column-lookup path (`crate::exec::expr::lookup_column`)
+/// resolves them. `ORDER BY 1+0`, `ORDER BY 1.5`, and `ORDER BY (1)` are left
+/// alone — only bare integer literals are positional in SQLite.
+fn resolve_order_by_positions(items: &mut [OrderByExpr], output_columns: &[String]) {
+    for item in items {
+        if let Some(idx) = top_level_positive_int(&item.expr)
+            && let Ok(pos) = usize::try_from(idx)
+            && pos >= 1
+            && pos <= output_columns.len()
+        {
+            let name = output_columns[pos - 1].clone();
+            item.expr = Expr::Identifier(Ident::new(name));
+        }
+    }
+}
+
+fn top_level_positive_int(expr: &Expr) -> Option<i64> {
+    match expr {
+        Expr::Value(v) => match &v.value {
+            Value::Number(n, _) => n.parse::<i64>().ok().filter(|n| *n > 0),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod order_by_position_tests {
+    use super::*;
+    use sqlparser::dialect::SQLiteDialect;
+    use sqlparser::parser::Parser as SqlParser;
+
+    fn parse_expr(text: &str) -> Expr {
+        let dialect = SQLiteDialect {};
+        SqlParser::new(&dialect)
+            .try_with_sql(text)
+            .expect("parser init")
+            .parse_expr()
+            .expect("parse expr")
+    }
+
+    #[test]
+    fn bare_positive_integer_resolves() {
+        assert_eq!(top_level_positive_int(&parse_expr("1")), Some(1));
+        assert_eq!(top_level_positive_int(&parse_expr("42")), Some(42));
+    }
+
+    #[test]
+    fn zero_and_negative_integers_are_not_positions() {
+        assert_eq!(top_level_positive_int(&parse_expr("0")), None);
+        // `-1` parses as UnaryOp(Minus, 1) — top-level isn't a literal.
+        assert_eq!(top_level_positive_int(&parse_expr("-1")), None);
+    }
+
+    #[test]
+    fn non_integer_literals_are_not_positions() {
+        assert_eq!(top_level_positive_int(&parse_expr("1.5")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("'1'")), None);
+    }
+
+    #[test]
+    fn nested_integer_is_not_a_position() {
+        // The key invariant: the rewrite must not descend into BinaryOp,
+        // Nested, or any other compound shape — only a bare top-level
+        // integer literal counts as a positional reference.
+        assert_eq!(top_level_positive_int(&parse_expr("1 + 1")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("(1)")), None);
+        assert_eq!(top_level_positive_int(&parse_expr("a + 1")), None);
+    }
+
+    #[test]
+    fn resolve_rewrites_matching_position_and_leaves_others() {
+        let cols = vec!["a".to_owned(), "b".to_owned()];
+        let mk = |sql: &str| OrderByExpr {
+            expr: parse_expr(sql),
+            options: sqlparser::ast::OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            },
+            with_fill: None,
+        };
+        let mut items = vec![mk("1"), mk("2"), mk("1 + 1"), mk("3"), mk("a")];
+        resolve_order_by_positions(&mut items, &cols);
+        // [0] 1 -> Identifier("a")
+        assert!(matches!(&items[0].expr, Expr::Identifier(id) if id.value == "a"));
+        // [1] 2 -> Identifier("b")
+        assert!(matches!(&items[1].expr, Expr::Identifier(id) if id.value == "b"));
+        // [2] `1 + 1` left as BinaryOp
+        assert!(matches!(&items[2].expr, Expr::BinaryOp { .. }));
+        // [3] 3 out of range -> left as Value
+        assert!(matches!(&items[3].expr, Expr::Value(_)));
+        // [4] `a` was already an Identifier
+        assert!(matches!(&items[4].expr, Expr::Identifier(id) if id.value == "a"));
     }
 }

@@ -9,7 +9,7 @@ use crate::{Error, Result};
 use super::{IndexRowRef, NON_TRANSACTIONAL_DELETE_TX};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Entry {
+pub(crate) enum Entry {
     Leaf {
         logical_key: Vec<u8>,
         row: IndexRowRef,
@@ -261,7 +261,9 @@ pub(super) fn entry_visible(
     else {
         return false;
     };
-    if *create_tx != TxId::ZERO && !tx_status.is_tx_visible(*create_tx, snapshot, owner) {
+    let create_check =
+        *create_tx != TxId::ZERO && !tx_status.is_tx_visible(*create_tx, snapshot, owner);
+    if create_check {
         return false;
     }
     if *delete_tx == NON_TRANSACTIONAL_DELETE_TX {

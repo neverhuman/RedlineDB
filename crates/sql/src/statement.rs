@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use redlinedb_kernel::catalog::{
-    AlterTableSpec, CreateIndexSpec, CreateTableSpec, DropIndexSpec, DropTableSpec, SchemaEpoch,
-    SqliteSchemaRow, TableDef,
+    AlterTableSpec, CreateIndexSpec, CreateTableSpec, CreateTriggerSpec, CreateViewSpec,
+    DropIndexSpec, DropTableSpec, DropTriggerSpec, DropViewSpec, SchemaEpoch, SqliteSchemaRow,
+    TableDef,
 };
 use redlinedb_kernel::engine::Txn;
 use redlinedb_kernel::format::RowId;
@@ -91,8 +92,12 @@ pub enum PreparedKind {
     Pragma(PragmaPlan),
     CreateTable(CreateTableSpec),
     CreateIndex(CreateIndexSpec),
+    CreateView(CreateViewSpec),
+    CreateTrigger(CreateTriggerSpec),
     DropTable(DropTableSpec),
     DropIndex(DropIndexSpec),
+    DropView(DropViewSpec),
+    DropTrigger(DropTriggerSpec),
     AlterTable(AlterTableSpec),
     Analyze(AnalyzePlan),
     Explain(ExplainPlan),
@@ -100,6 +105,9 @@ pub enum PreparedKind {
     Insert(InsertPlan),
     Update(UpdatePlan),
     Delete(DeletePlan),
+    /// ATTACH DATABASE 'path' AS alias / DETACH DATABASE alias — minimal
+    /// alias-map maintenance executed by [`crate::exec::attach::AttachPlan`].
+    Attach(crate::exec::attach::AttachPlan),
 }
 
 /// Sentinel SQL prefix used to tag `PreparedTemplate`s built for
@@ -140,6 +148,7 @@ pub struct ExplainPlan {
 pub enum PragmaPlan {
     SetForeignKeys(bool),
     SetUserVersion(i64),
+    SetRecursiveTriggers(bool),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -187,11 +196,37 @@ pub enum SelectSource {
     Tables(Vec<BoundTable>),
     Joined(JoinSource),
     CompoundAll(Vec<SelectPlan>),
+    /// `UNION` (distinct), `INTERSECT`, `EXCEPT` — implemented in
+    /// `crate::exec::set_ops`. Each branch is materialised, then combined
+    /// according to [`CompoundSetOp`].
+    CompoundSet {
+        op: CompoundSetOp,
+        branches: Vec<SelectPlan>,
+    },
     SqliteSchema,
     StaticRows {
         rows: Arc<[Vec<crate::value::SqlValue>]>,
     },
+    /// A CTE / named-subquery reference: pre-materialized rows whose
+    /// column names are tracked so projections can resolve identifiers
+    /// like `cte.col`. Produced by `crate::exec::cte`.
+    Cte {
+        name: Arc<str>,
+        alias: Option<Arc<str>>,
+        columns: Arc<[String]>,
+        rows: Arc<[Vec<crate::value::SqlValue>]>,
+    },
     Empty,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompoundSetOp {
+    /// `UNION` (distinct): dedup both sides, concatenate, dedup again.
+    UnionDistinct,
+    /// `INTERSECT`: rows in both sides (deduped).
+    Intersect,
+    /// `EXCEPT`: rows in left-not-in-right (deduped).
+    Except,
 }
 
 #[derive(Debug, Clone)]

@@ -49,7 +49,7 @@ pub(crate) fn hex_value(value: &SqlValue) -> String {
     let bytes: Vec<u8> = match value {
         SqlValue::Null => Vec::new(),
         SqlValue::Integer(v) => v.to_string().into_bytes(),
-        SqlValue::Real(v) => v.to_string().into_bytes(),
+        SqlValue::Real(v) => super::value::format_real_sqlite(*v).into_bytes(),
         SqlValue::Text(v) => v.as_bytes().to_vec(),
         SqlValue::Blob(v) => v.to_vec(),
     };
@@ -65,7 +65,7 @@ pub(crate) fn quote_value(value: &SqlValue) -> String {
     match value {
         SqlValue::Null => "NULL".to_owned(),
         SqlValue::Integer(v) => v.to_string(),
-        SqlValue::Real(v) => v.to_string(),
+        SqlValue::Real(v) => super::value::format_real_sqlite(*v),
         SqlValue::Text(v) => format!("'{}'", v.replace('\'', "''")),
         SqlValue::Blob(v) => {
             let mut out = String::from("X'");

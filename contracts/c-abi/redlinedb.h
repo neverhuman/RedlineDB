@@ -207,6 +207,136 @@ int sqlite3_checkpoint(sqlite3 *db);
 int sqlite3_vacuum(sqlite3 *db);
 int sqlite3_stats_json(sqlite3 *db, char **out_json);
 
+/* ---- B1 value / result / context family (UDF callback ABI) ----------- */
+typedef struct RldbValue sqlite3_value;
+typedef struct RldbContext sqlite3_context;
+
+int sqlite3_value_type(sqlite3_value *value);
+int sqlite3_value_int(sqlite3_value *value);
+int64_t sqlite3_value_int64(sqlite3_value *value);
+double sqlite3_value_double(sqlite3_value *value);
+const unsigned char *sqlite3_value_text(sqlite3_value *value);
+const void *sqlite3_value_blob(sqlite3_value *value);
+int sqlite3_value_bytes(sqlite3_value *value);
+
+void sqlite3_result_int(sqlite3_context *ctx, int value);
+void sqlite3_result_int64(sqlite3_context *ctx, int64_t value);
+void sqlite3_result_double(sqlite3_context *ctx, double value);
+void sqlite3_result_text(sqlite3_context *ctx, const char *text, int nbytes, void (*destructor)(void *));
+void sqlite3_result_blob(sqlite3_context *ctx, const void *data, int nbytes, void (*destructor)(void *));
+void sqlite3_result_null(sqlite3_context *ctx);
+void sqlite3_result_error(sqlite3_context *ctx, const char *msg, int nbytes);
+void sqlite3_result_error_code(sqlite3_context *ctx, int code);
+
+sqlite3 *sqlite3_context_db_handle(sqlite3_context *ctx);
+void *sqlite3_user_data(sqlite3_context *ctx);
+
+/* ---- B2 UDF + collation registration --------------------------------- */
+typedef void (*sqlite3_scalar_fn)(sqlite3_context *ctx, int argc, sqlite3_value **argv);
+typedef void (*sqlite3_step_fn)(sqlite3_context *ctx, int argc, sqlite3_value **argv);
+typedef void (*sqlite3_final_fn)(sqlite3_context *ctx);
+typedef void (*sqlite3_destroy_fn)(void *user_data);
+
+int sqlite3_create_function(
+    sqlite3 *db,
+    const char *name,
+    int narg,
+    int enc,
+    void *user_data,
+    sqlite3_scalar_fn func,
+    sqlite3_step_fn step,
+    sqlite3_final_fn final_func
+);
+int sqlite3_create_function_v2(
+    sqlite3 *db,
+    const char *name,
+    int narg,
+    int enc,
+    void *user_data,
+    sqlite3_scalar_fn func,
+    sqlite3_step_fn step,
+    sqlite3_final_fn final_func,
+    sqlite3_destroy_fn destroy
+);
+int sqlite3_create_function16(
+    sqlite3 *db,
+    const void *name_utf16,
+    int narg,
+    int enc,
+    void *user_data,
+    sqlite3_scalar_fn func,
+    sqlite3_step_fn step,
+    sqlite3_final_fn final_func
+);
+
+typedef int (*sqlite3_collation_fn)(void *user_data, int na, const void *a, int nb, const void *b);
+typedef void (*sqlite3_collation_needed_fn)(void *user_data, sqlite3 *db, int encoding, const char *name);
+
+int sqlite3_create_collation(
+    sqlite3 *db,
+    const char *name,
+    int enc,
+    void *user_data,
+    sqlite3_collation_fn compare
+);
+int sqlite3_create_collation_v2(
+    sqlite3 *db,
+    const char *name,
+    int enc,
+    void *user_data,
+    sqlite3_collation_fn compare,
+    sqlite3_destroy_fn destroy
+);
+int sqlite3_collation_needed(sqlite3 *db, void *user_data, sqlite3_collation_needed_fn cb);
+
+/* ---- B3 blob I/O API ------------------------------------------------- */
+typedef struct RldbBlob sqlite3_blob;
+
+int sqlite3_blob_open(
+    sqlite3 *db,
+    const char *database,
+    const char *table,
+    const char *column,
+    int64_t rowid,
+    int flags,
+    sqlite3_blob **out
+);
+int sqlite3_blob_read(sqlite3_blob *blob, void *buf, int nbytes, int offset);
+int sqlite3_blob_write(sqlite3_blob *blob, const void *buf, int nbytes, int offset);
+int sqlite3_blob_close(sqlite3_blob *blob);
+int sqlite3_blob_reopen(sqlite3_blob *blob, int64_t rowid);
+int sqlite3_blob_bytes(sqlite3_blob *blob);
+
+/* ---- B4 hooks + busy handler + authorizer ---------------------------- */
+typedef int (*sqlite3_commit_hook_fn)(void *user_data);
+typedef void (*sqlite3_rollback_hook_fn)(void *user_data);
+typedef void (*sqlite3_update_hook_fn)(
+    void *user_data,
+    int op,
+    const char *db_name,
+    const char *table,
+    int64_t rowid
+);
+typedef void (*sqlite3_trace_fn)(void *user_data, const char *sql);
+typedef void (*sqlite3_profile_fn)(void *user_data, const char *sql, uint64_t nanoseconds);
+typedef int (*sqlite3_busy_handler_fn)(void *user_data, int attempts);
+typedef int (*sqlite3_authorizer_fn)(
+    void *user_data,
+    int action,
+    const char *arg3,
+    const char *arg4,
+    const char *arg5,
+    const char *arg6
+);
+
+void *sqlite3_commit_hook(sqlite3 *db, sqlite3_commit_hook_fn cb, void *user_data);
+void *sqlite3_rollback_hook(sqlite3 *db, sqlite3_rollback_hook_fn cb, void *user_data);
+void *sqlite3_update_hook(sqlite3 *db, sqlite3_update_hook_fn cb, void *user_data);
+void *sqlite3_trace(sqlite3 *db, sqlite3_trace_fn cb, void *user_data);
+void *sqlite3_profile(sqlite3 *db, sqlite3_profile_fn cb, void *user_data);
+int sqlite3_busy_handler(sqlite3 *db, sqlite3_busy_handler_fn cb, void *user_data);
+int sqlite3_set_authorizer(sqlite3 *db, sqlite3_authorizer_fn cb, void *user_data);
+
 #ifdef __cplusplus
 }
 #endif

@@ -564,10 +564,10 @@ impl<'idx> IndexCursor<'idx> {
     }
 }
 
-#[path = "cursor/raw.rs"]
+#[path = "cursor/raw/mod.rs"]
 mod raw;
 
-pub use raw::RawIndexCursor;
+pub use raw::{RawIndexCursor, RawPointCursor};
 
 fn cached_tx_visible(
     tx_status: &ConcurrentTxStatus,

@@ -31,6 +31,41 @@ impl Params for &[Value] {
     }
 }
 
+macro_rules! tuple_params {
+    ($($name:ident),+) => {
+        impl<$($name),+> Params for ($($name,)+)
+        where
+            $($name: Into<Value>,)+
+        {
+            #[allow(non_snake_case)]
+            fn bind_into(self, stmt: &mut crate::Statement<'_>) -> Result<()> {
+                stmt.clear_bindings();
+                let ($($name,)+) = self;
+                let mut index = 1usize;
+                $(
+                    stmt.bind_value(index, $name.into())?;
+                    #[allow(unused_assignments)]
+                    { index += 1; }
+                )+
+                Ok(())
+            }
+        }
+    };
+}
+
+tuple_params!(A);
+tuple_params!(A, B);
+tuple_params!(A, B, C);
+tuple_params!(A, B, C, D);
+tuple_params!(A, B, C, D, E);
+tuple_params!(A, B, C, D, E, F);
+tuple_params!(A, B, C, D, E, F, G);
+tuple_params!(A, B, C, D, E, F, G, H);
+tuple_params!(A, B, C, D, E, F, G, H, I);
+tuple_params!(A, B, C, D, E, F, G, H, I, J);
+tuple_params!(A, B, C, D, E, F, G, H, I, J, K);
+tuple_params!(A, B, C, D, E, F, G, H, I, J, K, L);
+
 #[macro_export]
 macro_rules! params {
     () => {

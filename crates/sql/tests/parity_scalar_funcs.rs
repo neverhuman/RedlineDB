@@ -40,11 +40,8 @@ fn q1(conn: &Arc<Connection>, sql: &str) -> SqlValue {
 }
 
 // ── substr ────────────────────────────────────────────────────────────────────
-// substr/substring ignored: sqlparser parses them as ANSI Substring AST nodes
-// which are not yet handled in the redlinedb expression evaluator.
 
 #[test]
-#[ignore = "substr() parsed as ANSI SUBSTRING by sqlparser; Substring AST not yet implemented"]
 fn substr_basic_1based() {
     let (_d, c) = open();
     let v = q1(&c, "SELECT substr('hello', 2)");
@@ -52,7 +49,6 @@ fn substr_basic_1based() {
 }
 
 #[test]
-#[ignore = "substr() parsed as ANSI SUBSTRING by sqlparser; Substring AST not yet implemented"]
 fn substr_with_length() {
     let (_d, c) = open();
     let v = q1(&c, "SELECT substr('hello', 2, 3)");
@@ -60,7 +56,6 @@ fn substr_with_length() {
 }
 
 #[test]
-#[ignore = "substr() parsed as ANSI SUBSTRING by sqlparser; Substring AST not yet implemented"]
 fn substr_negative_start() {
     let (_d, c) = open();
     // Negative start counts from end: substr('hello', -3) → 'llo'
@@ -69,7 +64,6 @@ fn substr_negative_start() {
 }
 
 #[test]
-#[ignore = "substr() parsed as ANSI SUBSTRING by sqlparser; Substring AST not yet implemented"]
 fn substr_zero_start_acts_as_one() {
     let (_d, c) = open();
     // SQLite: start=0 is treated like 0 offset → 'he' (takes 2)
@@ -78,7 +72,6 @@ fn substr_zero_start_acts_as_one() {
 }
 
 #[test]
-#[ignore = "substr() parsed as ANSI SUBSTRING by sqlparser; Substring AST not yet implemented"]
 fn substr_null_propagates() {
     let (_d, c) = open();
     assert_eq!(q1(&c, "SELECT substr(NULL, 1)"), SqlValue::Null);
@@ -86,7 +79,6 @@ fn substr_null_propagates() {
 }
 
 #[test]
-#[ignore = "substring() parsed as ANSI SUBSTRING by sqlparser; Substring AST not yet implemented"]
 fn substr_alias_substring() {
     let (_d, c) = open();
     let v = q1(&c, "SELECT substring('hello', 2, 3)");
@@ -94,7 +86,6 @@ fn substr_alias_substring() {
 }
 
 #[test]
-#[ignore = "substr() parsed as ANSI SUBSTRING by sqlparser; Substring AST not yet implemented"]
 fn substr_beyond_length_returns_empty() {
     let (_d, c) = open();
     let v = q1(&c, "SELECT substr('hi', 10)");
@@ -132,11 +123,8 @@ fn instr_empty_needle_returns_one() {
 }
 
 // ── trim / ltrim / rtrim ───────────────────────────────────────────────────────
-// trim() ignored: sqlparser parses it as ANSI Trim AST node (not a function call).
-// ltrim/rtrim work because they are plain function calls.
 
 #[test]
-#[ignore = "trim() parsed as ANSI Trim AST node by sqlparser; Trim eval not yet implemented"]
 fn trim_whitespace() {
     let (_d, c) = open();
     let v = q1(&c, "SELECT trim('  hello  ')");
@@ -144,10 +132,9 @@ fn trim_whitespace() {
 }
 
 #[test]
-#[ignore = "trim() parsed as ANSI Trim AST node by sqlparser; Trim eval not yet implemented"]
 fn trim_custom_chars() {
     let (_d, c) = open();
-    let v = q1(&c, "SELECT trim('***hello***', '*')");
+    let v = q1(&c, "SELECT trim('*' FROM '***hello***')");
     assert_eq!(v, SqlValue::Text(Arc::from("hello")));
 }
 
@@ -166,7 +153,6 @@ fn rtrim_whitespace() {
 }
 
 #[test]
-#[ignore = "trim() parsed as ANSI Trim AST node by sqlparser; Trim eval not yet implemented"]
 fn trim_null_propagates() {
     let (_d, c) = open();
     assert_eq!(q1(&c, "SELECT trim(NULL)"), SqlValue::Null);
@@ -385,7 +371,6 @@ fn randomblob_produces_blob_of_right_size() {
 // ── functions in column expressions after INSERT ───────────────────────────────
 
 #[test]
-#[ignore = "trim() parsed as ANSI Trim AST node by sqlparser; Trim eval not yet implemented"]
 fn scalar_funcs_in_select_after_insert() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(name TEXT)").expect("create");
@@ -408,4 +393,48 @@ fn replace_in_where_clause() {
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0][0], SqlValue::Integer(1));
+}
+
+// ── real → text coercion parity (regression: fuzz seed=7 iter=286) ────────
+
+#[test]
+fn lower_upper_of_real_keeps_trailing_zero() {
+    // Direct repro of the fuzz divergence: RedlineDB used to emit
+    // Text("1") for `lower(1.0)` while SQLite emits Text("1.0").
+    let (_d, c) = open();
+    let oracle = rusqlite::Connection::open_in_memory().expect("oracle open");
+
+    let cases: &[(&str, f64)] = &[
+        ("one", 1.0),
+        ("twenty_two", 22.0),
+        ("seven", 7.0),
+        ("half", 1.5),
+        ("twelve_quarter", 12.25),
+    ];
+
+    for (label, v) in cases {
+        let sql = format!("SELECT lower(CAST({v} AS REAL))");
+        let red = q1(&c, &sql);
+        let oracle_val: String = oracle
+            .query_row(&sql, [], |row| row.get(0))
+            .expect("oracle query");
+        let expected = SqlValue::Text(Arc::from(oracle_val.as_str()));
+        assert_eq!(red, expected, "case {label}: redline ≠ oracle for {sql}");
+    }
+}
+
+#[test]
+fn cast_real_as_text_keeps_trailing_zero() {
+    let (_d, c) = open();
+    let oracle = rusqlite::Connection::open_in_memory().expect("oracle open");
+
+    for v in [1.0f64, 0.0, -3.0, 22.5, 100.0] {
+        let sql = format!("SELECT CAST(CAST({v} AS REAL) AS TEXT)");
+        let red = q1(&c, &sql);
+        let oracle_val: String = oracle
+            .query_row(&sql, [], |row| row.get(0))
+            .expect("oracle query");
+        let expected = SqlValue::Text(Arc::from(oracle_val.as_str()));
+        assert_eq!(red, expected, "redline ≠ oracle for {sql}");
+    }
 }

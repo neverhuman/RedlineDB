@@ -48,12 +48,17 @@ pub(crate) fn bind_create_table(
     for (ordinal, column) in create_table.columns.iter().enumerate() {
         column_lookup.insert(column.name.value.to_ascii_lowercase(), ordinal);
     }
+    let mut constraints = Vec::new();
 
     for (ordinal, column) in create_table.columns.into_iter().enumerate() {
-        columns.push(convert_column_def(column, ordinal, &column_lookup)?);
+        columns.push(convert_column_def(
+            column,
+            ordinal,
+            &column_lookup,
+            &mut constraints,
+        )?);
     }
 
-    let mut constraints = Vec::new();
     for constraint in create_table.constraints {
         constraints.push(convert_table_constraint(constraint, &column_lookup)?);
     }
@@ -107,37 +112,35 @@ pub(crate) fn bind_create_index(
     let (schema, name) = split_name(name)?;
     let table = parse_qualified_name(create_index.table_name)?;
     let mut columns = Vec::with_capacity(create_index.columns.len());
-    let mut has_expression_column = false;
     for column in create_index.columns {
         match convert_index_column(column.clone()) {
             Ok(c) => columns.push(c),
             Err(_) => {
-                // Lane SQL-D phase 10: parse-only acceptance of expression
-                // indexes. We record a synthetic column so the catalog
-                // operation can be rejected at execute time with a clear
-                // diagnostic, while CREATE INDEX still parses for tools that
-                // round-trip schema text.
-                has_expression_column = true;
+                // A6 SQL-D: expression-source index column. Stash the
+                // verbatim SQL fragment so the executor can re-parse
+                // and evaluate it per row, plus the set of referenced
+                // column ordinals for UPDATE re-emit decisions.
+                let expr_sql = column.column.expr.to_string();
+                let referenced =
+                    super::helpers::ddl::index_expr_referenced_cols(&column.column.expr);
                 columns.push(IndexColumnSpec {
                     name: DbName::new(format!("__expr_{}", columns.len())),
-                    sort_dir: SortDir::Asc,
+                    sort_dir: match column.column.options.asc {
+                        Some(false) => SortDir::Desc,
+                        _ => SortDir::Asc,
+                    },
                     collation: None,
+                    expr_sql: Some(expr_sql),
+                    expr_referenced_cols: referenced,
                 });
             }
         }
     }
 
-    let has_predicate = create_index.predicate.is_some();
-    if has_predicate || has_expression_column {
-        // Both partial and expression indexes are parser-only in this lane:
-        // the kernel does not yet thread the predicate / expression through
-        // index DML. Surface a clear unsupported error so callers know the
-        // syntax is recognised but not yet enforced.
-        return Err(Error::UnsupportedSql(
-            "partial and expression indexes are parsed-only; execution not yet implemented"
-                .to_owned(),
-        ));
-    }
+    // A6 SQL-D: thread the partial-index WHERE predicate through to
+    // the kernel as its verbatim SQL fragment; the executor re-parses
+    // it per DML so the predicate semantics match the catalog text.
+    let predicate_sql = create_index.predicate.as_ref().map(|p| p.to_string());
 
     Ok(PreparedTemplate {
         sql: Arc::from(sql),
@@ -155,6 +158,7 @@ pub(crate) fn bind_create_index(
             columns,
             origin: IndexOrigin::User,
             normalized_sql: Some(sql.to_owned()),
+            predicate_sql,
         }),
     })
 }
@@ -179,9 +183,12 @@ pub(crate) fn bind_drop(
         sqlparser::ast::ObjectType::Index => {
             PreparedKind::DropIndex(DropIndexSpec { name, if_exists })
         }
+        sqlparser::ast::ObjectType::View => {
+            PreparedKind::DropView(DropViewSpec { name, if_exists })
+        }
         _ => {
             return Err(Error::UnsupportedSql(
-                "only DROP TABLE and DROP INDEX are supported".to_owned(),
+                "only DROP TABLE, DROP INDEX, and DROP VIEW are supported".to_owned(),
             ));
         }
     };
@@ -244,7 +251,18 @@ pub(crate) fn bind_alter_table(
                     "ALTER TABLE ADD COLUMN position is not supported".to_owned(),
                 ));
             }
-            let column = convert_column_def(column_def, 0, &std::collections::HashMap::new())?;
+            let mut alter_constraints = Vec::new();
+            let column = convert_column_def(
+                column_def,
+                0,
+                &std::collections::HashMap::new(),
+                &mut alter_constraints,
+            )?;
+            if !alter_constraints.is_empty() {
+                return Err(Error::UnsupportedSql(
+                    "ALTER TABLE ADD COLUMN with FOREIGN KEY is not supported".to_owned(),
+                ));
+            }
             if column.constraints.iter().any(|constraint| {
                 !matches!(
                     constraint,
@@ -314,6 +332,173 @@ pub(crate) fn bind_alter_table(
             name: parse_qualified_name(name)?,
             if_exists,
             operation,
+        }),
+    })
+}
+
+/// Bind `CREATE [TEMP] VIEW [IF NOT EXISTS] name [(col, col)] AS SELECT ...`.
+///
+/// The body SELECT is re-emitted to canonical SQL via the sqlparser
+/// `Display` impl and stored verbatim on the [`CreateViewSpec`]. The
+/// kernel persists it as-is; at expansion time the SQL crate re-parses
+/// the body and binds it as a derived row source.
+///
+/// Rejects MySQL/Snowflake/Clickhouse modifiers that fresh SQLite-style
+/// applications do not need (materialized, secure, OR REPLACE,
+/// WITH NO SCHEMA BINDING, TO clause, CLUSTER BY, etc.).
+pub(crate) fn bind_create_view(
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    create_view: sqlparser::ast::CreateView,
+) -> Result<PreparedTemplate> {
+    if create_view.or_alter
+        || create_view.or_replace
+        || create_view.materialized
+        || create_view.secure
+        || create_view.with_no_schema_binding
+        || create_view.to.is_some()
+        || create_view.params.is_some()
+        || !create_view.cluster_by.is_empty()
+        || create_view.comment.is_some()
+    {
+        return Err(Error::UnsupportedSql(
+            "CREATE VIEW modifiers are not supported".to_owned(),
+        ));
+    }
+    let (schema, name) = split_name(create_view.name)?;
+    let columns = create_view
+        .columns
+        .into_iter()
+        .map(|col| DbName::new(col.name.value))
+        .collect();
+    // Render the body SELECT back to canonical SQL; the kernel persists
+    // it verbatim and the binder re-parses it on each view expansion.
+    let body_sql = create_view.query.to_string();
+    Ok(PreparedTemplate {
+        sql: Arc::from(sql),
+        schema_epoch,
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: ParamLayout::default(),
+        output_columns: Arc::from([]),
+        readonly: false,
+        kind: PreparedKind::CreateView(CreateViewSpec {
+            schema,
+            name,
+            if_not_exists: create_view.if_not_exists,
+            // SQLite `TEMP VIEW` modifier flag.
+            session_scoped: create_view.temporary,
+            columns,
+            body_sql,
+            normalized_sql: Some(sql.to_owned()),
+        }),
+    })
+}
+
+/// Bind `CREATE TRIGGER name {BEFORE|AFTER} {INSERT|UPDATE [OF col,...]|DELETE}
+/// ON table [FOR EACH ROW] [WHEN expr] BEGIN body END`.
+///
+/// The body's statement list is re-emitted to canonical SQL and stored
+/// verbatim on the [`CreateTriggerSpec`]; the fire-hook re-parses the
+/// body and runs it against an `OLD`/`NEW` row context at runtime.
+///
+/// Rejects modifiers that fresh SQLite-style applications do not need
+/// (`OR REPLACE`, `OR ALTER`, MSSQL/Postgres trigger function bodies,
+/// constraint triggers, `REFERENCING NEW TABLE AS ...`, etc.) plus
+/// `INSTEAD OF` (deferred to a followup task).
+pub(crate) fn bind_create_trigger(
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    create_trigger: sqlparser::ast::CreateTrigger,
+) -> Result<PreparedTemplate> {
+    if create_trigger.or_alter
+        || create_trigger.or_replace
+        || create_trigger.is_constraint
+        || create_trigger.referenced_table_name.is_some()
+        || !create_trigger.referencing.is_empty()
+        || create_trigger.exec_body.is_some()
+        || create_trigger.statements_as
+        || create_trigger.characteristics.is_some()
+    {
+        return Err(Error::UnsupportedSql(
+            "CREATE TRIGGER modifiers are not supported".to_owned(),
+        ));
+    }
+    let period = create_trigger.period.ok_or_else(|| {
+        Error::UnsupportedSql("CREATE TRIGGER requires BEFORE or AFTER".to_owned())
+    })?;
+    let when_time = match period {
+        sqlparser::ast::TriggerPeriod::Before => TriggerTimeKind::Before,
+        sqlparser::ast::TriggerPeriod::After => TriggerTimeKind::After,
+        sqlparser::ast::TriggerPeriod::InsteadOf => {
+            return Err(Error::UnsupportedSql(
+                "INSTEAD OF triggers on views are not yet supported (followup)".to_owned(),
+            ));
+        }
+        other => {
+            return Err(Error::UnsupportedSql(format!(
+                "CREATE TRIGGER period not supported: {other:?}"
+            )));
+        }
+    };
+    if create_trigger.events.len() != 1 {
+        return Err(Error::UnsupportedSql(
+            "CREATE TRIGGER requires exactly one event".to_owned(),
+        ));
+    }
+    let (when_event, when_cols) = match create_trigger
+        .events
+        .into_iter()
+        .next()
+        .expect("checked len")
+    {
+        sqlparser::ast::TriggerEvent::Insert => (TriggerEventKind::Insert, Vec::new()),
+        sqlparser::ast::TriggerEvent::Delete => (TriggerEventKind::Delete, Vec::new()),
+        sqlparser::ast::TriggerEvent::Update(cols) => (
+            TriggerEventKind::Update,
+            cols.into_iter().map(|c| DbName::new(c.value)).collect(),
+        ),
+        sqlparser::ast::TriggerEvent::Truncate => {
+            return Err(Error::UnsupportedSql(
+                "TRUNCATE triggers are not supported".to_owned(),
+            ));
+        }
+    };
+    let (schema, name) = split_name(create_trigger.name)?;
+    // We only persist the table name (not its schema). Multi-schema
+    // resolution is deferred to ATTACH/DETACH (A2).
+    let table = parse_qualified_name(create_trigger.table_name)?.name;
+    let when_predicate_sql = create_trigger
+        .condition
+        .as_ref()
+        .map(|expr| expr.to_string());
+    let body_sql = match create_trigger.statements {
+        Some(stmts) => stmts.to_string(),
+        None => {
+            return Err(Error::UnsupportedSql(
+                "CREATE TRIGGER requires a BEGIN ... END body".to_owned(),
+            ));
+        }
+    };
+    Ok(PreparedTemplate {
+        sql: Arc::from(sql),
+        schema_epoch,
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: ParamLayout::default(),
+        output_columns: Arc::from([]),
+        readonly: false,
+        kind: PreparedKind::CreateTrigger(CreateTriggerSpec {
+            schema,
+            name,
+            if_not_exists: false, // sqlparser does not surface this on CreateTrigger
+            table,
+            when_time,
+            when_event,
+            when_cols,
+            when_predicate_sql,
+            body_sql,
+            normalized_sql: Some(sql.to_owned()),
         }),
     })
 }

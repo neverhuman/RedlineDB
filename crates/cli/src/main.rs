@@ -1,14 +1,19 @@
 use std::env;
+use std::fs;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use std::process::exit;
 
 use clap::Parser;
 use redlinedb::{
-    ArchiveMode, BackupOptions, Database, PhysicalBackupOptions, RecoveryTarget, RestoreOptions,
-    Step, ValueRef,
+    ArchiveMode, BackupOptions, Database, OpenOptions, PhysicalBackupOptions, RecoveryTarget,
+    RestoreOptions, Step, ValueRef,
 };
 use serde_json::json;
+
+mod dot;
+
+use dot::{CliState, DotOutcome, OutputMode};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -82,18 +87,6 @@ struct Cli {
     sql: Option<String>,
 }
 
-#[derive(Debug, PartialEq)]
-enum OutputMode {
-    List,
-    Csv,
-    Json,
-    Line,
-    Markdown,
-    Quote,
-    Table,
-    Tabs,
-}
-
 fn main() {
     let mut args: Vec<String> = env::args().collect();
     if args.len() >= 2 {
@@ -158,15 +151,20 @@ fn main() {
         mode = OutputMode::Tabs;
     }
 
-    let separator = cli.separator.unwrap_or_else(|| match mode {
-        OutputMode::Tabs => "\t".to_string(),
-        OutputMode::Csv => ",".to_string(),
-        _ => "|".to_string(),
-    });
+    let separator = cli
+        .separator
+        .unwrap_or_else(|| mode.default_separator().to_owned());
 
     let show_header = cli.header && !cli.noheader;
 
-    let db_res = Database::open(&filename);
+    // `:memory:` and `""` open a fresh per-process ephemeral database, matching
+    // the SQLite shell semantics where in-memory state never spills to a real
+    // file. Other paths fall through to the regular on-disk open path.
+    let db_res = if filename == ":memory:" || filename.is_empty() {
+        Database::create_in_memory(OpenOptions::default())
+    } else {
+        Database::open(&filename)
+    };
     let db = match db_res {
         Ok(db) => db,
         Err(e) => {
@@ -175,20 +173,35 @@ fn main() {
         }
     };
 
+    let db_path = if filename == ":memory:" {
+        PathBuf::from(":memory:")
+    } else {
+        PathBuf::from(&filename)
+    };
+    let mut state = CliState::new(db, db_path, mode, separator, show_header);
+    state.bail = cli.bail;
+    state.echo = cli.echo;
+
     if let Some(cmd) = cli.cmd {
-        if let Err(e) = run_query_sqlite(&db, &cmd, &mode, &separator, show_header) {
+        if let Err(e) = run_input(&mut state, &cmd) {
             eprintln!("Error: {}", e);
-            if cli.bail {
+            if state.bail {
                 exit(1);
             }
         }
     }
 
     if let Some(sql) = cli.sql {
-        if cli.echo {
+        if state.echo {
             println!("{}", sql);
         }
-        if let Err(e) = run_query_sqlite(&db, &sql, &mode, &separator, show_header) {
+        if let Err(e) = run_query_sqlite(
+            &state.db,
+            &sql,
+            &state.mode,
+            &state.separator,
+            state.show_header,
+        ) {
             eprintln!("Error: {}", e);
             exit(1);
         }
@@ -205,15 +218,42 @@ fn main() {
         let mut buffer = String::new();
         for line in stdin.lock().lines() {
             let line = line.unwrap_or_default();
+            if buffer.is_empty() && line.trim_start().starts_with('.') {
+                match dot::dispatch(&mut state, line.trim()) {
+                    Ok(DotOutcome::Ok) => {}
+                    Ok(DotOutcome::ReadFile(path)) => {
+                        if let Err(e) = run_script_file(&mut state, &path) {
+                            eprintln!("Error: {}", e);
+                            if state.bail {
+                                exit(1);
+                            }
+                        }
+                    }
+                    Ok(DotOutcome::Exit(code)) => exit(code),
+                    Err(message) => {
+                        eprintln!("{}", message);
+                        if state.bail {
+                            exit(1);
+                        }
+                    }
+                }
+                continue;
+            }
             buffer.push_str(&line);
             buffer.push('\n');
             if line.trim_end().ends_with(';') {
-                if cli.echo {
+                if state.echo {
                     println!("{}", buffer.trim_end());
                 }
-                if let Err(e) = run_query_sqlite(&db, &buffer, &mode, &separator, show_header) {
+                if let Err(e) = run_query_sqlite(
+                    &state.db,
+                    &buffer,
+                    &state.mode,
+                    &state.separator,
+                    state.show_header,
+                ) {
                     eprintln!("Error: {}", e);
-                    if cli.bail {
+                    if state.bail {
                         exit(1);
                     }
                 }
@@ -221,9 +261,15 @@ fn main() {
             }
         }
         if !buffer.trim().is_empty() {
-            if let Err(e) = run_query_sqlite(&db, &buffer, &mode, &separator, show_header) {
+            if let Err(e) = run_query_sqlite(
+                &state.db,
+                &buffer,
+                &state.mode,
+                &state.separator,
+                state.show_header,
+            ) {
                 eprintln!("Error: {}", e);
-                if cli.bail {
+                if state.bail {
                     exit(1);
                 }
             }
@@ -252,7 +298,16 @@ fn main() {
                     }
 
                     if buffer.is_empty() && line.starts_with('.') {
-                        handle_dot_command(line);
+                        match dot::dispatch(&mut state, line) {
+                            Ok(DotOutcome::Ok) => {}
+                            Ok(DotOutcome::ReadFile(path)) => {
+                                if let Err(e) = run_script_file(&mut state, &path) {
+                                    eprintln!("Error: {}", e);
+                                }
+                            }
+                            Ok(DotOutcome::Exit(code)) => exit(code),
+                            Err(message) => eprintln!("{}", message),
+                        }
                         continue;
                     }
 
@@ -261,9 +316,13 @@ fn main() {
                     buffer.push('\n');
 
                     if line.ends_with(';') {
-                        if let Err(e) =
-                            run_query_sqlite(&db, &buffer, &mode, &separator, show_header)
-                        {
+                        if let Err(e) = run_query_sqlite(
+                            &state.db,
+                            &buffer,
+                            &state.mode,
+                            &state.separator,
+                            state.show_header,
+                        ) {
                             eprintln!("Error: {}", e);
                         }
                         buffer.clear();
@@ -284,19 +343,48 @@ fn main() {
     }
 }
 
-fn handle_dot_command(cmd: &str) {
-    if cmd == ".exit" || cmd == ".quit" {
-        exit(0);
-    } else if cmd == ".help" {
-        println!(".exit                  Exit this program");
-        println!(".help                  Show this message");
-        println!(".quit                  Exit this program");
-    } else {
-        println!(
-            "Error: unknown command or invalid arguments: \"{}\". Enter \".help\" for help",
-            cmd.split_whitespace().next().unwrap_or("")
-        );
+/// Drive a chunk of SQL with optional embedded dot-commands. Used by `--cmd`.
+fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
+    let mut buffer = String::new();
+    for raw_line in input.lines() {
+        if buffer.is_empty() && raw_line.trim_start().starts_with('.') {
+            match dot::dispatch(state, raw_line.trim())? {
+                DotOutcome::Ok => {}
+                DotOutcome::ReadFile(path) => run_script_file(state, &path)?,
+                DotOutcome::Exit(code) => exit(code),
+            }
+            continue;
+        }
+        buffer.push_str(raw_line);
+        buffer.push('\n');
+        if raw_line.trim_end().ends_with(';') {
+            run_query_sqlite(
+                &state.db,
+                &buffer,
+                &state.mode,
+                &state.separator,
+                state.show_header,
+            )?;
+            buffer.clear();
+        }
     }
+    if !buffer.trim().is_empty() {
+        run_query_sqlite(
+            &state.db,
+            &buffer,
+            &state.mode,
+            &state.separator,
+            state.show_header,
+        )?;
+    }
+    Ok(())
+}
+
+/// Execute `.read FILE` by streaming the file through [`run_input`].
+fn run_script_file(state: &mut CliState, path: &std::path::Path) -> Result<(), String> {
+    let contents = fs::read_to_string(path)
+        .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?;
+    run_input(state, &contents)
 }
 
 fn print_sqlite_help() {

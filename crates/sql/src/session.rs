@@ -49,13 +49,31 @@ pub struct SavepointFrame {
     pub implicit_tx: bool,
 }
 
-#[derive(Debug, Default)]
+/// A deferred FK check buffered until COMMIT. We capture just enough state
+/// to recompute the parent-row lookup at commit time: the child table and
+/// row id (so we can re-read the latest child values) plus the FK index
+/// inside `table.foreign_keys`. Resolving the parent table is done from the
+/// schema snapshot at commit time, which keeps replay/rollback semantics
+/// straightforward.
+#[derive(Debug, Clone)]
+pub struct DeferredFkCheck {
+    pub child_table_id: u64,
+    pub child_rowid: u64,
+    pub fk_index: usize,
+}
+
+#[derive(Debug)]
 pub struct SessionState {
     pub tx: Option<Txn>,
     pub failed: bool,
     pub changes: usize,
     pub total_changes: usize,
     pub foreign_keys: bool,
+    /// Mirrors SQLite's `PRAGMA recursive_triggers`. SQLite defaults this
+    /// to ON, so trigger bodies that fire DML matching another trigger
+    /// recurse up to the depth cap. When OFF, the executor skips firing
+    /// any trigger from within an existing trigger body.
+    pub recursive_triggers: bool,
     pub last_insert_rowid: Option<i64>,
     pub unique_guards: Vec<UniqueKeyGuard>,
     /// Kernel-level unique-key reservations held until end-of-transaction.
@@ -71,6 +89,30 @@ pub struct SessionState {
     /// True while the journal is being replayed; suppresses re-recording so
     /// replay does not feed itself.
     pub replay_in_progress: bool,
+    /// Pending FK checks for `DEFERRABLE INITIALLY DEFERRED` constraints.
+    /// Drained at COMMIT; if any entry still violates referential integrity
+    /// the commit is aborted with a `ConstraintViolation` mirroring SQLite.
+    pub deferred_fk_checks: Vec<DeferredFkCheck>,
+}
+
+impl Default for SessionState {
+    fn default() -> Self {
+        Self {
+            tx: None,
+            failed: false,
+            changes: 0,
+            total_changes: 0,
+            foreign_keys: false,
+            recursive_triggers: true,
+            last_insert_rowid: None,
+            unique_guards: Vec::new(),
+            kernel_unique_guards: Vec::new(),
+            journal: Vec::new(),
+            savepoints: Vec::new(),
+            replay_in_progress: false,
+            deferred_fk_checks: Vec::new(),
+        }
+    }
 }
 
 impl SessionState {
@@ -81,18 +123,21 @@ impl SessionState {
         self.changes = 0;
         self.total_changes = 0;
         self.foreign_keys = false;
+        self.recursive_triggers = true;
         self.last_insert_rowid = None;
         self.unique_guards.clear();
         self.kernel_unique_guards.clear();
         self.journal.clear();
         self.savepoints.clear();
         self.replay_in_progress = false;
+        self.deferred_fk_checks.clear();
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.
     pub fn clear_savepoints(&mut self) {
         self.journal.clear();
         self.savepoints.clear();
+        self.deferred_fk_checks.clear();
     }
 }
 

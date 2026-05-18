@@ -195,6 +195,7 @@ impl Database {
             db: Arc::clone(self),
             session: Mutex::new(SessionState::default()),
             local_cache: StatementCache::new(),
+            attach_map: crate::exec::attach::AttachMap::new(),
         })
     }
 

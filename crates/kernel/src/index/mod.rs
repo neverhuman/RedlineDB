@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, TryLockError};
+use std::time::{Duration, Instant};
 
 use smallvec::SmallVec;
 
@@ -9,11 +10,13 @@ use crate::format::{
     Page, PageGeneration, PageId, PageKind, RelId, TuplePtr, TxId, decode_opt_page_id,
 };
 use crate::storage::BufferPool;
+use crate::telemetry::Phase11Counters;
 use crate::wal::{WalCoordinator, WalPayload, WalRecordKind};
 use crate::{Error, Result};
 
 mod cells;
 mod cursor;
+mod latches;
 mod locks;
 mod lookup;
 mod maintenance;
@@ -21,8 +24,11 @@ mod mutate;
 mod scan;
 
 use cells::{Entry, InternalCell, LeafCell, LeafEntry};
+use latches::PageLatchTable;
 
-pub use cursor::{CursorYield, IndexCursor, KeyRange, RawIndexCursor, SnapshotView};
+pub use cursor::{
+    CursorYield, IndexCursor, KeyRange, RawIndexCursor, RawPointCursor, SnapshotView,
+};
 pub use locks::{UniqueKeyGuard, UniqueKeyLockTable, poly_hash_u64};
 
 pub const INDEX_SPECIAL_LEN: usize = 256;
@@ -160,7 +166,9 @@ pub(super) struct IndexInner {
     pub(super) desc: Mutex<IndexDescriptor>,
     pub(super) unique_locks: Arc<UniqueKeyLockTable>,
     pub(super) wal: Option<Arc<WalCoordinator>>,
+    pub(in crate::index) latches: PageLatchTable,
     pub(super) structure_lock: Mutex<()>,
+    pub(super) phase11_counters: RwLock<Option<Arc<Phase11Counters>>>,
     /// Lifetime counter of leaf pages pinned by `range_scan`. Updated even
     /// when the feature gate is off so `BtreeIndex::stats()` is callable
     /// in any build, then consumed by Lane KH P1 #6 tests to assert the
@@ -180,6 +188,23 @@ pub struct IndexStats {
 #[derive(Clone, Debug)]
 pub struct BtreeIndex {
     pub(super) inner: Arc<IndexInner>,
+}
+
+pub(in crate::index) struct StructureLockGuard<'a> {
+    _guard: MutexGuard<'a, ()>,
+    counters: Option<Arc<Phase11Counters>>,
+    hold_started: Instant,
+}
+
+impl Drop for StructureLockGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(counters) = &self.counters {
+            counters.index_structure_lock_hold_ns.fetch_add(
+                duration_ns(self.hold_started.elapsed()),
+                AtomicOrdering::Relaxed,
+            );
+        }
+    }
 }
 
 impl BtreeIndex {
@@ -250,7 +275,9 @@ impl BtreeIndex {
                 desc: Mutex::new(desc),
                 unique_locks: Arc::new(UniqueKeyLockTable::new(128)),
                 wal,
+                latches: PageLatchTable::new(256),
                 structure_lock: Mutex::new(()),
+                phase11_counters: RwLock::new(None),
                 range_scan_leaves_visited: AtomicU64::new(0),
             }),
         })
@@ -277,7 +304,9 @@ impl BtreeIndex {
                 desc: Mutex::new(desc),
                 unique_locks: Arc::new(UniqueKeyLockTable::new(128)),
                 wal,
+                latches: PageLatchTable::new(256),
                 structure_lock: Mutex::new(()),
+                phase11_counters: RwLock::new(None),
                 range_scan_leaves_visited: AtomicU64::new(0),
             }),
         };
@@ -298,6 +327,17 @@ impl BtreeIndex {
 
     pub fn lock_unique_key(&self, owner: u64, logical_key: &[u8]) -> Result<UniqueKeyGuard> {
         self.inner.unique_locks.lock(logical_key, owner)
+    }
+
+    pub fn set_phase11_counters(&self, counters: Arc<Phase11Counters>) {
+        self.inner
+            .unique_locks
+            .set_phase11_counters(Arc::clone(&counters));
+        *self
+            .inner
+            .phase11_counters
+            .write()
+            .expect("index phase11 sink poisoned") = Some(counters);
     }
 
     pub fn redo_page_image(&self, page: Page) -> Result<()> {
@@ -398,10 +438,13 @@ impl BtreeIndex {
         let mut path = Vec::new();
         loop {
             path.push(page_id);
+            let latch = self.inner.latches.get(page_id);
+            let _page_read = latch.read();
             let guard = self.inner.buffer.pin(page_id)?;
             let next = guard.with_page(|page| {
                 let header = Self::read_page_header(page)?;
                 if !header.high_key.is_empty() && key >= header.high_key.as_slice() {
+                    self.record_move_right();
                     return Ok(header.right);
                 }
                 if header.kind == PAGE_LEAF_KIND {
@@ -681,6 +724,77 @@ impl IndexRowRef {
     pub fn with_row_id(row_id: crate::format::RowId, tuple: TuplePtr) -> Self {
         Self { row_id, tuple }
     }
+}
+
+impl BtreeIndex {
+    pub(super) fn phase11_counters(&self) -> Option<Arc<Phase11Counters>> {
+        self.inner
+            .phase11_counters
+            .read()
+            .expect("index phase11 sink poisoned")
+            .as_ref()
+            .map(Arc::clone)
+    }
+
+    pub(in crate::index) fn lock_structure(&self) -> Result<StructureLockGuard<'_>> {
+        let counters = self.phase11_counters();
+        let wait_started = Instant::now();
+        let (guard, contended) = match self.inner.structure_lock.try_lock() {
+            Ok(guard) => (guard, false),
+            Err(TryLockError::WouldBlock) => {
+                if let Some(counters) = &counters {
+                    counters
+                        .index_structure_lock_contentions
+                        .fetch_add(1, AtomicOrdering::Relaxed);
+                }
+                let guard = self
+                    .inner
+                    .structure_lock
+                    .lock()
+                    .map_err(|_| Error::CorruptPage("index structure mutex poisoned"))?;
+                (guard, true)
+            }
+            Err(TryLockError::Poisoned(_)) => {
+                return Err(Error::CorruptPage("index structure mutex poisoned"));
+            }
+        };
+        let waited = wait_started.elapsed();
+        if let Some(counters) = &counters {
+            counters
+                .index_structure_lock_acquires
+                .fetch_add(1, AtomicOrdering::Relaxed);
+            if contended || waited > Duration::ZERO {
+                counters
+                    .index_structure_lock_wait_ns
+                    .fetch_add(duration_ns(waited), AtomicOrdering::Relaxed);
+            }
+        }
+        Ok(StructureLockGuard {
+            _guard: guard,
+            counters,
+            hold_started: Instant::now(),
+        })
+    }
+
+    pub(super) fn record_leaf_split(&self) {
+        if let Some(counters) = self.phase11_counters() {
+            counters
+                .index_leaf_splits
+                .fetch_add(1, AtomicOrdering::Relaxed);
+        }
+    }
+
+    fn record_move_right(&self) {
+        if let Some(counters) = self.phase11_counters() {
+            counters
+                .index_move_rights
+                .fetch_add(1, AtomicOrdering::Relaxed);
+        }
+    }
+}
+
+fn duration_ns(duration: Duration) -> u64 {
+    duration.as_nanos().min(u128::from(u64::MAX)) as u64
 }
 
 pub fn compare_physical_key(left: &[u8], right: &[u8]) -> Ordering {

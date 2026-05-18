@@ -116,6 +116,70 @@ pub(crate) fn parse_pragma_template(
                 rows,
             )
         }
+        "quick_check" => {
+            let rows = conn.integrity_check()?;
+            let rows = if rows.is_empty() {
+                vec![vec![SqlValue::Text(Arc::from("ok"))]]
+            } else {
+                rows.into_iter()
+                    .map(|error| vec![SqlValue::Text(Arc::from(error))])
+                    .collect()
+            };
+            pragma_static_select(sql, schema_epoch, vec![String::from("quick_check")], rows)
+        }
+        "wal_checkpoint" => {
+            let mode = match value {
+                None => String::from("PASSIVE"),
+                Some(v) => parse_pragma_object_name(&v)?,
+            };
+            let stats = conn.engine().checkpoint_with_stats()?;
+            let (busy, log, checkpointed) = match mode.to_ascii_uppercase().as_str() {
+                "PASSIVE" | "FULL" | "RESTART" | "TRUNCATE" => (
+                    0_i64,
+                    stats.control.page_count as i64,
+                    stats.flushed_pages as i64,
+                ),
+                other => {
+                    return Err(Error::UnsupportedSql(format!(
+                        "unsupported PRAGMA wal_checkpoint mode: {other}"
+                    )));
+                }
+            };
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![
+                    String::from("busy"),
+                    String::from("log"),
+                    String::from("checkpointed"),
+                ],
+                vec![vec![
+                    SqlValue::Integer(busy),
+                    SqlValue::Integer(log),
+                    SqlValue::Integer(checkpointed),
+                ]],
+            )
+        }
+        "auto_vacuum" => {
+            if value.is_some() {
+                // SQLite accepts setting the pragma, but the current engine
+                // does not persist an auto-vacuum mode. Treat it as a
+                // compatibility no-op so callers can probe the setting.
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("auto_vacuum")],
+                    vec![vec![SqlValue::Integer(0)]],
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("auto_vacuum")],
+                    vec![vec![SqlValue::Integer(0)]],
+                )
+            }
+        }
         "redline_index_check" => pragma_static_select(
             sql,
             schema_epoch,
@@ -344,9 +408,73 @@ pub(crate) fn parse_pragma_template(
                 pragma_foreign_key_list_rows(&table),
             )
         }
+        "recursive_triggers" => {
+            if let Some(value) = value {
+                let value = parse_pragma_bool(&value)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetRecursiveTriggers(value)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("recursive_triggers")],
+                    vec![vec![SqlValue::Integer(if conn.recursive_triggers() {
+                        1
+                    } else {
+                        0
+                    })]],
+                )
+            }
+        }
+        "compile_options" => {
+            if value.is_some() {
+                return Err(Error::UnsupportedSql(
+                    "PRAGMA compile_options does not accept arguments".to_owned(),
+                ));
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("compile_options")],
+                compile_options_rows(),
+            )
+        }
         _ => return Ok(None),
     };
     Ok(Some(template))
+}
+
+/// Static list of RedlineDB compile-time-enabled feature flags exposed
+/// through `PRAGMA compile_options` / `pragma_compile_options()`. Order
+/// is alphabetical to keep the surface diffable.
+pub(crate) fn pragma_compile_options_rows() -> Vec<Vec<SqlValue>> {
+    compile_options_rows()
+}
+
+fn compile_options_rows() -> Vec<Vec<SqlValue>> {
+    const OPTIONS: &[&str] = &[
+        "ENABLE_ATTACH",
+        "ENABLE_CTE",
+        "ENABLE_EXPRESSION_INDEX",
+        "ENABLE_FOREIGN_KEY",
+        "ENABLE_GENERATED_COLUMNS",
+        "ENABLE_JSON1",
+        "ENABLE_PARTIAL_INDEX",
+        "ENABLE_RECURSIVE_TRIGGERS",
+        "ENABLE_TRIGGERS",
+        "ENABLE_VIEWS",
+        "ENABLE_WINDOW_FUNCTIONS",
+        "REDLINEDB=1",
+        "THREADSAFE=1",
+    ];
+    OPTIONS
+        .iter()
+        .map(|opt| vec![SqlValue::Text(Arc::from(*opt))])
+        .collect()
 }
 
 fn pragma_static_select(
@@ -473,7 +601,9 @@ fn unquote_pragma_token(input: &str) -> Option<String> {
     }
 }
 
-fn pragma_table_info_rows(table: &redlinedb_kernel::catalog::TableDef) -> Vec<Vec<SqlValue>> {
+pub(crate) fn pragma_table_info_rows(
+    table: &redlinedb_kernel::catalog::TableDef,
+) -> Vec<Vec<SqlValue>> {
     pragma_column_rows(table, false)
 }
 
@@ -492,7 +622,9 @@ fn pragma_column_rows(
         }
     } else if let Some(index) = table.indexes.iter().find(|index| index.primary) {
         for (position, key) in index.keys.iter().enumerate() {
-            let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source;
+            let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source else {
+                continue;
+            };
             if let Some(slot) = pk.get_mut(*attnum as usize) {
                 *slot = (position + 1) as i64;
             }
@@ -537,7 +669,9 @@ fn pragma_table_list_rows(schema: &SchemaSnapshot) -> Vec<Vec<SqlValue>> {
         .collect()
 }
 
-fn pragma_index_list_rows(table: &redlinedb_kernel::catalog::TableDef) -> Vec<Vec<SqlValue>> {
+pub(crate) fn pragma_index_list_rows(
+    table: &redlinedb_kernel::catalog::TableDef,
+) -> Vec<Vec<SqlValue>> {
     table
         .indexes
         .iter()
@@ -559,7 +693,7 @@ fn pragma_index_list_rows(table: &redlinedb_kernel::catalog::TableDef) -> Vec<Ve
         .collect()
 }
 
-fn pragma_index_info_rows(
+pub(crate) fn pragma_index_info_rows(
     schema: &SchemaSnapshot,
     index: &Arc<redlinedb_kernel::catalog::IndexDef>,
 ) -> Result<Vec<Vec<SqlValue>>> {
@@ -573,7 +707,9 @@ fn pragma_index_info_rows(
     };
     let mut rows = Vec::with_capacity(index.keys.len());
     for (seqno, key) in index.keys.iter().enumerate() {
-        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source;
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source else {
+            continue;
+        };
         let column = match table.columns.get(*attnum as usize) {
             Some(c) => c,
             None => {
@@ -605,7 +741,9 @@ fn pragma_index_xinfo_rows(
     };
     let mut rows = Vec::with_capacity(index.keys.len());
     for (seqno, key) in index.keys.iter().enumerate() {
-        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source;
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source else {
+            continue;
+        };
         let column = match table.columns.get(*attnum as usize) {
             Some(c) => c,
             None => {
@@ -632,7 +770,7 @@ fn pragma_index_xinfo_rows(
     Ok(rows)
 }
 
-fn pragma_foreign_key_list_rows(
+pub(crate) fn pragma_foreign_key_list_rows(
     _table: &redlinedb_kernel::catalog::TableDef,
 ) -> Vec<Vec<SqlValue>> {
     Vec::new()

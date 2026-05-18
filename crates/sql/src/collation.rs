@@ -4,17 +4,24 @@
 //! executor can apply a collation when an explicit `COLLATE` clause appears
 //! or a column-level collation is declared. Comparisons fall back to the
 //! standard byte-wise compare in the absence of any collation.
+//!
+//! Custom collations registered through `sqlite3_create_collation*` flow
+//! through the `Custom { name }` variant and dispatch via
+//! `crate::udf::call_registered_collation` at compare time.
 
 use std::cmp::Ordering;
 
 use crate::value::SqlValue;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub enum Collation {
     #[default]
     Binary,
     NoCase,
     RTrim,
+    /// Externally registered collation looked up by name through the FFI
+    /// collation registry at compare time.
+    Custom(String),
 }
 
 impl Collation {
@@ -23,11 +30,11 @@ impl Collation {
             "BINARY" | "" => Some(Self::Binary),
             "NOCASE" => Some(Self::NoCase),
             "RTRIM" => Some(Self::RTrim),
-            _ => None,
+            other => Some(Self::Custom(other.to_owned())),
         }
     }
 
-    pub fn compare_text(self, a: &str, b: &str) -> Ordering {
+    pub fn compare_text(&self, a: &str, b: &str) -> Ordering {
         match self {
             Self::Binary => a.cmp(b),
             Self::NoCase => {
@@ -50,10 +57,16 @@ impl Collation {
                 }
             }
             Self::RTrim => a.trim_end_matches(' ').cmp(b.trim_end_matches(' ')),
+            Self::Custom(name) => {
+                match crate::udf::call_registered_collation(crate::udf::current_db(), name, a, b) {
+                    Some(ord) => ord,
+                    None => a.cmp(b),
+                }
+            }
         }
     }
 
-    pub fn compare_values(self, left: &SqlValue, right: &SqlValue) -> Option<Ordering> {
+    pub fn compare_values(&self, left: &SqlValue, right: &SqlValue) -> Option<Ordering> {
         match (left, right) {
             (SqlValue::Text(a), SqlValue::Text(b)) => Some(self.compare_text(a, b)),
             _ => None,

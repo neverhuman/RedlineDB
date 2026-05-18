@@ -24,11 +24,9 @@ pub const PHASE11_HISTOGRAM_BUCKETS: usize = 16;
 
 /// Engine-level aggregator for Phase 11 telemetry counters.
 ///
-/// Wave 0 only **defines** the counter surface; every field is
-/// initialised to `0` and stays at `0` for the entire bench run. Later
-/// waves will add `.fetch_add(_, Relaxed)` sites at the precise
-/// instrumentation points (leaf visits, prefetch hit/miss, heap
-/// rechecks, cursor batches emitted, WAL batch sizes, lock waits).
+/// The counter surface is additive. Some fields are wired by the
+/// index, buffer-pool, lock, WAL, and SQL executor hot paths; fields
+/// without an emission site stay at zero until their owning lane lands.
 ///
 /// All fields use `AtomicU64` with `Ordering::Relaxed` to match the
 /// existing `WalSyncCounters` style — counters are sampled cheaply by
@@ -55,6 +53,22 @@ pub struct Phase11Counters {
     /// Sum of rows returned by ordered LIMIT shortcuts after heap
     /// visibility rechecks and LIMIT/OFFSET early-stop.
     pub ordered_limit_rows_returned: AtomicU64,
+    /// Nanoseconds spent waiting to acquire the index structure mutex.
+    pub index_structure_lock_wait_ns: AtomicU64,
+    /// Nanoseconds spent holding the index structure mutex.
+    pub index_structure_lock_hold_ns: AtomicU64,
+    /// Number of index structure mutex acquisitions.
+    pub index_structure_lock_acquires: AtomicU64,
+    /// Number of index structure mutex acquisitions that observed contention.
+    pub index_structure_lock_contentions: AtomicU64,
+    /// Number of B-tree leaf splits performed by the index layer.
+    pub index_leaf_splits: AtomicU64,
+    /// Number of high-key/right-link move-right steps during index descent.
+    pub index_move_rights: AtomicU64,
+    /// Number of non-empty raw point cursor batches emitted.
+    pub index_raw_point_batches: AtomicU64,
+    /// Number of non-empty raw range cursor batches emitted.
+    pub index_raw_range_batches: AtomicU64,
     /// 16 power-of-two buckets indexed by
     /// `floor(log2(record_count))` saturated at 15. Bucket k covers
     /// `[2^k, 2^(k+1))` records (bucket 0 holds singleton WAL
@@ -78,6 +92,14 @@ impl Default for Phase11Counters {
             cursor_batches_emitted: AtomicU64::new(0),
             ordered_limit_path_hits: AtomicU64::new(0),
             ordered_limit_rows_returned: AtomicU64::new(0),
+            index_structure_lock_wait_ns: AtomicU64::new(0),
+            index_structure_lock_hold_ns: AtomicU64::new(0),
+            index_structure_lock_acquires: AtomicU64::new(0),
+            index_structure_lock_contentions: AtomicU64::new(0),
+            index_leaf_splits: AtomicU64::new(0),
+            index_move_rights: AtomicU64::new(0),
+            index_raw_point_batches: AtomicU64::new(0),
+            index_raw_range_batches: AtomicU64::new(0),
             // AtomicU64 is not Copy so the array literal must use
             // `from_fn`. 16 elements, fixed at compile time.
             wal_batch_size_buckets: std::array::from_fn(|_| AtomicU64::new(0)),
@@ -92,8 +114,7 @@ impl Phase11Counters {
         Self::default()
     }
 
-    /// Capture a relaxed snapshot of every counter. Cheap (16 + 5
-    /// scalar atomic loads + 16 histogram loads), safe to call from
+    /// Capture a relaxed snapshot of every counter. Safe to call from
     /// any thread without holding a mutex.
     pub fn snapshot(&self) -> Phase11CountersSnapshot {
         let mut wal_batch = [0_u64; PHASE11_HISTOGRAM_BUCKETS];
@@ -112,6 +133,14 @@ impl Phase11Counters {
             cursor_batches_emitted: self.cursor_batches_emitted.load(Relaxed),
             ordered_limit_path_hits: self.ordered_limit_path_hits.load(Relaxed),
             ordered_limit_rows_returned: self.ordered_limit_rows_returned.load(Relaxed),
+            index_structure_lock_wait_ns: self.index_structure_lock_wait_ns.load(Relaxed),
+            index_structure_lock_hold_ns: self.index_structure_lock_hold_ns.load(Relaxed),
+            index_structure_lock_acquires: self.index_structure_lock_acquires.load(Relaxed),
+            index_structure_lock_contentions: self.index_structure_lock_contentions.load(Relaxed),
+            index_leaf_splits: self.index_leaf_splits.load(Relaxed),
+            index_move_rights: self.index_move_rights.load(Relaxed),
+            index_raw_point_batches: self.index_raw_point_batches.load(Relaxed),
+            index_raw_range_batches: self.index_raw_range_batches.load(Relaxed),
             wal_batch_size_buckets: wal_batch,
             lock_wait_us_buckets: lock_wait,
         }
@@ -129,6 +158,14 @@ impl Phase11Counters {
         self.cursor_batches_emitted.store(0, Relaxed);
         self.ordered_limit_path_hits.store(0, Relaxed);
         self.ordered_limit_rows_returned.store(0, Relaxed);
+        self.index_structure_lock_wait_ns.store(0, Relaxed);
+        self.index_structure_lock_hold_ns.store(0, Relaxed);
+        self.index_structure_lock_acquires.store(0, Relaxed);
+        self.index_structure_lock_contentions.store(0, Relaxed);
+        self.index_leaf_splits.store(0, Relaxed);
+        self.index_move_rights.store(0, Relaxed);
+        self.index_raw_point_batches.store(0, Relaxed);
+        self.index_raw_range_batches.store(0, Relaxed);
         for slot in self.wal_batch_size_buckets.iter() {
             slot.store(0, Relaxed);
         }
@@ -159,6 +196,22 @@ pub struct Phase11CountersSnapshot {
     pub ordered_limit_path_hits: u64,
     #[serde(default)]
     pub ordered_limit_rows_returned: u64,
+    #[serde(default)]
+    pub index_structure_lock_wait_ns: u64,
+    #[serde(default)]
+    pub index_structure_lock_hold_ns: u64,
+    #[serde(default)]
+    pub index_structure_lock_acquires: u64,
+    #[serde(default)]
+    pub index_structure_lock_contentions: u64,
+    #[serde(default)]
+    pub index_leaf_splits: u64,
+    #[serde(default)]
+    pub index_move_rights: u64,
+    #[serde(default)]
+    pub index_raw_point_batches: u64,
+    #[serde(default)]
+    pub index_raw_range_batches: u64,
     /// 16 power-of-two buckets. See
     /// [`Phase11Counters::wal_batch_size_buckets`] for the shape.
     #[serde(default = "default_phase11_histogram")]
@@ -214,6 +267,14 @@ mod tests {
         assert_eq!(snap.cursor_batches_emitted, 0);
         assert_eq!(snap.ordered_limit_path_hits, 0);
         assert_eq!(snap.ordered_limit_rows_returned, 0);
+        assert_eq!(snap.index_structure_lock_wait_ns, 0);
+        assert_eq!(snap.index_structure_lock_hold_ns, 0);
+        assert_eq!(snap.index_structure_lock_acquires, 0);
+        assert_eq!(snap.index_structure_lock_contentions, 0);
+        assert_eq!(snap.index_leaf_splits, 0);
+        assert_eq!(snap.index_move_rights, 0);
+        assert_eq!(snap.index_raw_point_batches, 0);
+        assert_eq!(snap.index_raw_range_batches, 0);
         assert!(snap.wal_batch_size_buckets.iter().all(|&v| v == 0));
         assert!(snap.lock_wait_us_buckets.iter().all(|&v| v == 0));
     }
@@ -260,6 +321,14 @@ mod tests {
         counters.cursor_batches_emitted.store(11, Relaxed);
         counters.ordered_limit_path_hits.store(12, Relaxed);
         counters.ordered_limit_rows_returned.store(13, Relaxed);
+        counters.index_structure_lock_wait_ns.store(14, Relaxed);
+        counters.index_structure_lock_hold_ns.store(15, Relaxed);
+        counters.index_structure_lock_acquires.store(16, Relaxed);
+        counters.index_structure_lock_contentions.store(17, Relaxed);
+        counters.index_leaf_splits.store(18, Relaxed);
+        counters.index_move_rights.store(19, Relaxed);
+        counters.index_raw_point_batches.store(20, Relaxed);
+        counters.index_raw_range_batches.store(21, Relaxed);
         counters.wal_batch_size_buckets[3].store(12, Relaxed);
         counters.lock_wait_us_buckets[5].store(13, Relaxed);
         counters.reset();

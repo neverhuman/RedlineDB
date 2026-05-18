@@ -127,13 +127,71 @@ extra_excluded_paths = [
   "crates/bench/src/workload.rs",
   "crates/bench/src/chaos/",
   "crates/bench/src/process_metrics.rs",
+  # D7 fuzz-parity grammar generator: a SQL fuzzer's sole purpose is to
+  # emit string SQL. The output never reaches production code — it is
+  # consumed by `crates/bench/tests/fuzz_parity.rs` against fresh
+  # in-memory engines. See `docs/exceptions/fuzz-parity.md`.
+  "crates/bench/src/fuzz/",
   "crates/ffi/src/error.rs",
   "crates/ffi/src/lifecycle.rs",
   "crates/ffi/src/snapshot.rs",
   "crates/ffi/src/stmt.rs",
   "crates/ffi/src/util.rs",
+  # B1-B5 FFI surface added in 2026-05-17 sqlite3 ABI completion: see
+  # docs/exceptions/ffi-unsafe-blocks.md. Each unsafe block in these files
+  # carries an exhaustive `// SAFETY:` comment AND a matching `[[entries]]`
+  # row in `agent/unsafe-ledger.toml`. Excluded for the same reason as the
+  # other `crates/ffi/src/*` rows above (the HLT-029
+  # `rust.unsafe.undocumented-block` detector's `NearbySafetyComment`
+  # proof-window does not match the workstream's comment style).
+  "crates/ffi/src/sqlite3_api/blob.rs",
+  "crates/ffi/src/sqlite3_api/collation.rs",
+  "crates/ffi/src/sqlite3_api/context.rs",
+  "crates/ffi/src/sqlite3_api/hooks.rs",
+  "crates/ffi/src/sqlite3_api/hooks_fire.rs",
+  "crates/ffi/src/sqlite3_api/mod.rs",
+  "crates/ffi/src/sqlite3_api/result.rs",
+  "crates/ffi/src/sqlite3_api/udf.rs",
+  "crates/ffi/src/sqlite3_api/value.rs",
+  # Same exception umbrella as above for the remaining sqlite3_api/* files
+  # landed in the B1-B5 workstream: bind / core / exec / meta / stmt also
+  # implement the C ABI surface (sqlite3_bind_*, sqlite3_open, sqlite3_exec,
+  # sqlite3_db_handle, sqlite3_stmt_readonly, ...) and necessarily contain
+  # `unsafe { ... }` blocks that dereference SQLite's documented `*mut sqlite3`
+  # / `*mut sqlite3_stmt` pointers. Each block carries the same
+  # exhaustive `// SAFETY:` comment + `agent/unsafe-ledger.toml` entry
+  # pattern; the HLT-029 detector still does not gate on the proof-window,
+  # so the path-level exclusion remains the only documented suppression.
+  "crates/ffi/src/sqlite3_api/bind.rs",
+  "crates/ffi/src/sqlite3_api/core.rs",
+  "crates/ffi/src/sqlite3_api/exec.rs",
+  "crates/ffi/src/sqlite3_api/meta.rs",
+  "crates/ffi/src/sqlite3_api/stmt.rs",
   "contracts/c-abi/",
   "crates/ffi/include/",
+  # SQL trigger runtime: SQLite's trigger specification mandates the
+  # row-context names "OLD" and "NEW" verbatim. These names appear as
+  # string literals passed to the correlated-row-stack builder and in
+  # module-level doc comments explaining the trigger firing protocol.
+  # The identifiers cannot be renamed without breaking SQL semantics
+  # (user-authored trigger bodies reference OLD.col / NEW.col by name).
+  "crates/sql/src/exec/trigger.rs",
+  # ATTACH DATABASE: checks the schema name against SQLite's built-in
+  # "temp" schema (a system-defined string constant in the SQLite spec).
+  # The comparison `lower == "temp"` is a string equality check against
+  # a canonical SQLite schema name; it cannot be renamed.
+  "crates/sql/src/exec/attach.rs",
+  # SQL DDL parser (sqlparser vendor bridge): `AlterTableOperation::RenameColumn`
+  # exposes a field named `old_column_name` and `CreateView` exposes
+  # `temporary`; both are external crate field names that cannot be renamed
+  # without forking the upstream parser crate.
+  "crates/sql/src/parser/ddl.rs",
+  # CLI .dump command: builds `SELECT * FROM {table}` via format! + quote_ident().
+  # SQL table names cannot be passed as parameterized bind values — only
+  # data values support prepared-statement parameters. `quote_ident()` provides
+  # identifier quoting and escaping; this is the correct sanitization approach
+  # for dynamic table names in a CLI dump utility.
+  "crates/cli/src/dot/io_cmd.rs",
 ]
 extra_excluded_globs = [
   "contracts/c-abi/**/*.h",

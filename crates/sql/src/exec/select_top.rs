@@ -18,6 +18,21 @@ pub(super) fn execute_select(
     plan: &crate::statement::SelectPlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<SelectRuntime> {
+    // SQLite authorizer contract: consult before any access. We check
+    // every table referenced by the top-level source so DENY surfaces as
+    // the standard "not authorized" error before any rows are read.
+    // IGNORE on SELECT collapses the table to an empty source (SQLite's
+    // semantics is to substitute NULL columns; for table-level SELECT we
+    // surface zero rows, which is the closest analog).
+    if let Some(decision) = authorize_select_source(&plan.source) {
+        match decision {
+            crate::udf::AuthorizerDecision::Allow => {}
+            crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
+            crate::udf::AuthorizerDecision::Ignore => {
+                return Ok(empty_select_runtime(conn));
+            }
+        }
+    }
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
     let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
     let mut memory = QueryMemoryBroker::new(
@@ -124,6 +139,61 @@ pub(super) fn execute_select(
                 projection: Vec::new(),
                 limit,
                 offset,
+                seen: 0,
+                yielded: 0,
+                memory,
+            });
+        }
+
+        // Window-function fast-path: when the projection contains an
+        // `OVER (...)` call, route the entire SELECT through the window
+        // pipeline. The window post-processor handles materialization,
+        // partitioning, framing, projection, ORDER BY, and LIMIT/OFFSET
+        // in one pass so non-window items still evaluate per-row against
+        // the original row source.
+        if super::window::projection_has_window(&plan.projection) {
+            let base_rows = collect_select_rows(
+                conn,
+                conn.engine(),
+                tx.as_mut().expect("tx present"),
+                &plan.source,
+                &plan.selection,
+                bindings,
+            )?;
+            let filtered: Vec<SqlRow> = base_rows
+                .into_iter()
+                .filter_map(
+                    |row| match selection_passes(&plan.selection, &row, bindings) {
+                        Ok(true) => Some(Ok(row)),
+                        Ok(false) => None,
+                        Err(e) => Some(Err(e)),
+                    },
+                )
+                .collect::<Result<Vec<_>>>()?;
+            let mut projected =
+                super::window::evaluate_window_functions(&filtered, &plan.projection, bindings)?;
+            if !plan.order_by.is_empty() {
+                super::agg::sort_projected_rows_by_order_by(
+                    &mut projected,
+                    &plan.projection,
+                    &plan.order_by,
+                    bindings,
+                )?;
+            }
+            let projected: Vec<Vec<SqlValue>> =
+                projected.into_iter().skip(offset).take(limit).collect();
+            let runtime_tx = std::mem::replace(&mut tx, SelectRuntimeTx::Empty);
+            return Ok(SelectRuntime {
+                tx: runtime_tx,
+                restore_tx,
+                source: SelectRuntimeSource::StaticRows {
+                    rows: Arc::from(projected),
+                    cursor: 0,
+                },
+                selection: None,
+                projection: Vec::new(),
+                limit: usize::MAX,
+                offset: 0,
                 seen: 0,
                 yielded: 0,
                 memory,
@@ -322,11 +392,84 @@ pub(super) fn execute_select(
                     rows: Arc::clone(rows),
                     cursor: 0,
                 },
+                SelectSource::Cte {
+                    name,
+                    alias,
+                    columns,
+                    rows,
+                } => {
+                    // CTE rows go through the Batched path so projection /
+                    // selection / order-by can resolve column names. Pre-wrap
+                    // each row as `SqlRow::Cte` to retain column metadata.
+                    let sql_rows: Vec<SqlRow> = rows
+                        .iter()
+                        .cloned()
+                        .map(|values| {
+                            SqlRow::Cte(crate::exec::expr::scalar::row::CteRow {
+                                name: Arc::clone(name),
+                                alias: alias.clone(),
+                                columns: Arc::clone(columns),
+                                values,
+                            })
+                        })
+                        .collect();
+                    SelectRuntimeSource::Batched {
+                        node: MaterializeNode::new(order_and_project_rows(
+                            sql_rows,
+                            &plan.selection,
+                            &plan.order_by,
+                            bindings,
+                            &plan.projection,
+                            limit,
+                            offset,
+                            &mut memory,
+                        )?),
+                        ctx: ExecContext::new(
+                            conn.query_memory().work_mem_bytes,
+                            conn.query_memory().max_spill_bytes,
+                            temp_dir.clone(),
+                        ),
+                        batch: RowBatch::new(Arc::new(RowLayout {
+                            columns: Arc::from([]),
+                        })),
+                        cursor: 0,
+                    }
+                }
                 SelectSource::CompoundAll(branches) => {
+                    let column_names = compound_output_column_names(branches);
                     let rows = collect_compound_all_rows(conn, branches, bindings)?
                         .into_iter()
-                        .map(SqlRow::Static)
+                        .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
                         .collect::<Vec<_>>();
+                    SelectRuntimeSource::Batched {
+                        node: MaterializeNode::new(order_and_project_rows(
+                            rows,
+                            &plan.selection,
+                            &plan.order_by,
+                            bindings,
+                            &plan.projection,
+                            limit,
+                            offset,
+                            &mut memory,
+                        )?),
+                        ctx: ExecContext::new(
+                            conn.query_memory().work_mem_bytes,
+                            conn.query_memory().max_spill_bytes,
+                            temp_dir.clone(),
+                        ),
+                        batch: RowBatch::new(Arc::new(RowLayout {
+                            columns: Arc::from([]),
+                        })),
+                        cursor: 0,
+                    }
+                }
+                SelectSource::CompoundSet { op, branches } => {
+                    let column_names = compound_output_column_names(branches);
+                    let rows =
+                        super::set_ops::collect_compound_set_rows(conn, *op, branches, bindings)?
+                            .into_iter()
+                            .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
+                            .collect::<Vec<_>>();
                     SelectRuntimeSource::Batched {
                         node: MaterializeNode::new(order_and_project_rows(
                             rows,
@@ -462,6 +605,53 @@ pub(super) fn order_and_project_rows(
         }
     }
 
+    // Custom collation fallback: when any ORDER BY key carries a custom
+    // (FFI-registered) collation, bypass the heap/spill paths — the custom
+    // comparator is the only authoritative ordering, so we collect, project,
+    // and sort in-memory with `Vec::sort_by` invoking the comparator.
+    let order_collations: Vec<Option<crate::collation::Collation>> = order_by
+        .iter()
+        .map(|order| crate::exec::expr::coerce::collation_from_expr(&order.expr))
+        .collect();
+    let any_custom = order_collations
+        .iter()
+        .any(|c| matches!(c, Some(crate::collation::Collation::Custom(_))));
+    if any_custom && !order_by.is_empty() {
+        let directions = directions_from_order_by(order_by);
+        let mut keyed: Vec<(Vec<SqlValue>, Vec<SqlValue>)> = Vec::with_capacity(filtered.len());
+        for row in &filtered {
+            let mut keys = Vec::with_capacity(order_by.len());
+            for order in order_by {
+                keys.push(eval_scalar(&order.expr, &row.context(), bindings)?);
+            }
+            let projected = project_row(projection, row, bindings)?;
+            keyed.push((keys, projected));
+        }
+        keyed.sort_by(|a, b| {
+            for (idx, dir) in directions.iter().enumerate() {
+                let cmp = match (&order_collations[idx], &a.0[idx], &b.0[idx]) {
+                    (Some(col), SqlValue::Text(la), SqlValue::Text(rb)) => col.compare_text(la, rb),
+                    _ => crate::value::compare_values(&a.0[idx], &b.0[idx]),
+                };
+                let cmp = if matches!(dir, vec::SortDirection::Desc) {
+                    cmp.reverse()
+                } else {
+                    cmp
+                };
+                if cmp != std::cmp::Ordering::Equal {
+                    return cmp;
+                }
+            }
+            std::cmp::Ordering::Equal
+        });
+        return Ok(keyed
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|(_, projected)| projected)
+            .collect());
+    }
+
     // Lane VE top-K fast path: ORDER BY ... LIMIT k where k is small wants
     // a fixed-size heap, not a full sort. The threshold matches
     // `vec::TOPK_LIMIT_THRESHOLD`.
@@ -568,7 +758,7 @@ fn normalize_order_key(order: &OrderByExpr, value: SqlValue) -> Result<SqlValue>
     let Some(collation) = collation_from_expr(&order.expr) else {
         return Ok(value);
     };
-    Ok(match (collation, value) {
+    Ok(match (&collation, value) {
         (crate::collation::Collation::NoCase, SqlValue::Text(text)) => {
             SqlValue::Text(Arc::from(text.to_ascii_lowercase()))
         }
@@ -602,12 +792,35 @@ pub(super) fn collect_select_rows(
             .map(SqlRow::SqliteSchema)
             .collect()),
         SelectSource::StaticRows { rows } => Ok(rows.iter().cloned().map(SqlRow::Static).collect()),
+        SelectSource::Cte {
+            name,
+            alias,
+            columns,
+            rows,
+        } => Ok(rows
+            .iter()
+            .cloned()
+            .map(|values| {
+                SqlRow::Cte(crate::exec::expr::scalar::row::CteRow {
+                    name: Arc::clone(name),
+                    alias: alias.clone(),
+                    columns: Arc::clone(columns),
+                    values,
+                })
+            })
+            .collect()),
         SelectSource::CompoundAll(branches) => {
             Ok(collect_compound_all_rows(conn, branches, bindings)?
                 .into_iter()
                 .map(SqlRow::Static)
                 .collect())
         }
+        SelectSource::CompoundSet { op, branches } => Ok(
+            super::set_ops::collect_compound_set_rows(conn, *op, branches, bindings)?
+                .into_iter()
+                .map(SqlRow::Static)
+                .collect(),
+        ),
         SelectSource::Empty => Ok(vec![SqlRow::Empty]),
     }
 }
@@ -622,6 +835,40 @@ fn collect_compound_all_rows(
         out.extend(materialize_select_plan_rows(conn, branch, bindings)?);
     }
     Ok(out)
+}
+
+/// Derive an ordered list of column names that the *compound* query as a
+/// whole exposes. Falls back to "column1, column2, …" if the first branch's
+/// projection cannot yield a name.
+pub(super) fn compound_output_column_names(branches: &[SelectPlan]) -> Arc<[String]> {
+    let first = match branches.first() {
+        Some(p) => p,
+        None => return Arc::from([]),
+    };
+    let mut names = crate::parser::select_plan_output_names(first);
+    if names.is_empty() {
+        // Synthesise positional names so projection / ORDER BY can still
+        // reference rows by ordinal via `column1`, `column2`, …
+        names = (1..=branches
+            .first()
+            .map(|p| p.projection.len().max(1))
+            .unwrap_or(1))
+            .map(|i| format!("column{i}"))
+            .collect();
+    }
+    Arc::from(names)
+}
+
+/// Wrap a compound-result row as a `SqlRow::Cte` so identifier lookups in
+/// the compound query's ORDER BY / projection resolve against the column
+/// names derived from the first branch.
+pub(super) fn wrap_compound_row(values: Vec<SqlValue>, columns: Arc<[String]>) -> SqlRow {
+    SqlRow::Cte(crate::exec::expr::scalar::row::CteRow {
+        name: Arc::from("<compound>"),
+        alias: None,
+        columns,
+        values,
+    })
 }
 
 // ============================================================
@@ -676,7 +923,11 @@ fn covering_projection_for_index(
     let mut col_to_index_pos: std::collections::HashMap<usize, usize> =
         std::collections::HashMap::new();
     for (pos, key) in index.keys.iter().enumerate() {
-        let IndexKeySource::Column { attnum } = key.source;
+        let IndexKeySource::Column { attnum } = key.source else {
+            // A6 SQL-D: expression keys are not addressable by table
+            // column ordinal; skip from the covering map.
+            continue;
+        };
         col_to_index_pos.insert(attnum as usize, pos);
     }
     let mut out: Vec<index_access::OutputColumnSource> = Vec::with_capacity(projection.len());
@@ -750,7 +1001,9 @@ fn covering_order_satisfies(
     let Some(first_key) = index.keys.first() else {
         return false;
     };
-    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source;
+    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source else {
+        return false;
+    };
     table
         .columns
         .get(attnum as usize)
@@ -845,4 +1098,82 @@ fn try_ordered_index_limit_path(
         Some(take),
     )?;
     Ok(Some(rowids))
+}
+
+/// Consult the registered authorizer for every base table the SELECT
+/// reads. Returns the worst-case decision (Deny > Ignore > Allow) so
+/// the caller can take a single action. Returns `None` only when there
+/// is no authorizer installed (the cheap fast path).
+fn authorize_select_source(source: &SelectSource) -> Option<crate::udf::AuthorizerDecision> {
+    let mut found = false;
+    let mut worst = crate::udf::AuthorizerDecision::Allow;
+    let mut consider = |table: &str| {
+        found = true;
+        let d = crate::udf::authorize_table_access(crate::udf::AUTH_SELECT, table);
+        worst = match (worst, d) {
+            (crate::udf::AuthorizerDecision::Deny, _)
+            | (_, crate::udf::AuthorizerDecision::Deny) => crate::udf::AuthorizerDecision::Deny,
+            (crate::udf::AuthorizerDecision::Ignore, _)
+            | (_, crate::udf::AuthorizerDecision::Ignore) => crate::udf::AuthorizerDecision::Ignore,
+            _ => crate::udf::AuthorizerDecision::Allow,
+        };
+    };
+    match source {
+        SelectSource::Table(table) => consider(&table.name),
+        SelectSource::Tables(tables) => {
+            for bound in tables {
+                consider(&bound.table.name);
+            }
+        }
+        SelectSource::Joined(join) => {
+            consider(&join.base.table.name);
+            for step in &join.joins {
+                consider(&step.right.table.name);
+            }
+        }
+        SelectSource::CompoundAll(branches) => {
+            for branch in branches {
+                if let Some(d) = authorize_select_source(&branch.source) {
+                    found = true;
+                    worst = match (worst, d) {
+                        (crate::udf::AuthorizerDecision::Deny, _)
+                        | (_, crate::udf::AuthorizerDecision::Deny) => {
+                            crate::udf::AuthorizerDecision::Deny
+                        }
+                        (crate::udf::AuthorizerDecision::Ignore, _)
+                        | (_, crate::udf::AuthorizerDecision::Ignore) => {
+                            crate::udf::AuthorizerDecision::Ignore
+                        }
+                        _ => crate::udf::AuthorizerDecision::Allow,
+                    };
+                }
+            }
+        }
+        SelectSource::SqliteSchema
+        | SelectSource::StaticRows { .. }
+        | SelectSource::Empty
+        | SelectSource::CompoundSet { .. }
+        | SelectSource::Cte { .. } => {}
+    }
+    if found { Some(worst) } else { None }
+}
+
+/// Build a SELECT runtime that yields zero rows. Used when the
+/// authorizer returns IGNORE for the top-level source.
+fn empty_select_runtime(_conn: &Connection) -> SelectRuntime {
+    SelectRuntime {
+        tx: SelectRuntimeTx::Empty,
+        restore_tx: false,
+        source: SelectRuntimeSource::StaticRows {
+            rows: Arc::from(Vec::<Vec<SqlValue>>::new()),
+            cursor: 0,
+        },
+        selection: None,
+        projection: Vec::new(),
+        limit: 0,
+        offset: 0,
+        seen: 0,
+        yielded: 0,
+        memory: QueryMemoryBroker::new(0, 0, None),
+    }
 }

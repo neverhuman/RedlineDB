@@ -173,7 +173,7 @@ pub fn json_object(values: &[SqlValue]) -> Result<SqlValue> {
             }
             SqlValue::Text(s) => s.to_string(),
             SqlValue::Integer(n) => n.to_string(),
-            SqlValue::Real(f) => f.to_string(),
+            SqlValue::Real(f) => crate::exec::expr::scalar::value::format_real_sqlite(*f),
             SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
         };
         map.insert(key, sql_to_json_value(&pair[1]));

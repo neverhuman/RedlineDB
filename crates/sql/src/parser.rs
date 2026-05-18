@@ -2,9 +2,11 @@ use std::sync::Arc;
 
 #[allow(unused_imports)]
 use redlinedb_kernel::catalog::{
-    ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
-    DropIndexSpec, DropTableSpec, ExprAst, IndexColumnSpec, IndexOrigin, OwnedValue, QualifiedName,
-    SchemaEpoch, SchemaSnapshot, SortDir, TableConstraintSpec, lookup_index, lookup_table,
+    ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec,
+    CreateTriggerSpec, CreateViewSpec, DbName, DropIndexSpec, DropTableSpec, DropTriggerSpec,
+    DropViewSpec, ExprAst, IndexColumnSpec, IndexOrigin, OwnedValue, QualifiedName, SchemaEpoch,
+    SchemaSnapshot, SortDir, TableConstraintSpec, TriggerEventKind, TriggerTimeKind, lookup_index,
+    lookup_table,
 };
 #[allow(unused_imports)]
 use sqlparser::ast::{
@@ -37,7 +39,7 @@ pub(crate) use ddl::*;
 mod dml;
 #[allow(unused_imports)]
 pub(crate) use dml::*;
-mod pragma;
+pub(crate) mod pragma;
 #[allow(unused_imports)]
 pub(crate) use pragma::*;
 pub(crate) mod savepoint;
@@ -72,6 +74,15 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
     let mut i = 0usize;
     let len = bytes.len();
     let mut in_string: Option<u8> = None;
+    // Lane A5-triggers: `CREATE TRIGGER ... BEGIN ... END` bodies contain
+    // statement-terminating semicolons that must not split the outer
+    // statement. We track a balanced BEGIN/END nesting depth (matched
+    // case-insensitively on word boundaries) and only honour `;` at
+    // depth 0. We only treat `BEGIN` as a block opener when the current
+    // statement is a `CREATE TRIGGER`; bare `BEGIN [TRANSACTION]` and
+    // `BEGIN IMMEDIATE` outside a trigger context must still split.
+    let mut block_depth = 0usize;
+    let mut in_trigger = false;
     while i < len {
         let b = bytes[i];
         if let Some(quote) = in_string {
@@ -120,9 +131,27 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
                     i += 2;
                 }
             }
-            b';' => {
+            b';' if block_depth == 0 => {
                 let head_end = i + 1;
                 return (&sql[..head_end], &sql[head_end..]);
+            }
+            b';' => {
+                i += 1;
+            }
+            _ if is_word_boundary_keyword(bytes, i, b"TRIGGER") => {
+                in_trigger = true;
+                i += 7;
+            }
+            _ if in_trigger && is_word_boundary_keyword(bytes, i, b"BEGIN") => {
+                block_depth += 1;
+                i += 5;
+            }
+            _ if in_trigger && is_word_boundary_keyword(bytes, i, b"END") => {
+                block_depth = block_depth.saturating_sub(1);
+                if block_depth == 0 {
+                    in_trigger = false;
+                }
+                i += 3;
             }
             _ => {
                 i += 1;
@@ -130,6 +159,32 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
         }
     }
     (sql, "")
+}
+
+/// True if `bytes[i..]` starts with `kw` (case-insensitively) AND the
+/// surrounding characters form a word boundary — i.e. the preceding
+/// byte (if any) and the byte immediately after `kw` are not ASCII
+/// alphanumerics or underscore.
+fn is_word_boundary_keyword(bytes: &[u8], i: usize, kw: &[u8]) -> bool {
+    if i + kw.len() > bytes.len() {
+        return false;
+    }
+    for (offset, expected) in kw.iter().enumerate() {
+        if !bytes[i + offset].eq_ignore_ascii_case(expected) {
+            return false;
+        }
+    }
+    if i > 0 && is_ident_byte(bytes[i - 1]) {
+        return false;
+    }
+    if i + kw.len() < bytes.len() && is_ident_byte(bytes[i + kw.len()]) {
+        return false;
+    }
+    true
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 /// True if `sql` (after trimming whitespace and stripping comments) is empty.
@@ -243,6 +298,10 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
         return Ok(template);
     }
 
+    if let Some(template) = parse_detach_template(trimmed, schema_epoch) {
+        return Ok(template);
+    }
+
     let dialect = SQLiteDialect {};
     let mut statements = Parser::parse_sql(&dialect, sql)?;
     if statements.len() != 1 {
@@ -308,12 +367,27 @@ fn bind_statement(
         SqlStatement::ExplainTable { .. } => Err(Error::UnsupportedSql(
             "EXPLAIN TABLE is not supported".to_owned(),
         )),
-        SqlStatement::CreateView(_) => Err(Error::UnsupportedSql(
-            "CREATE VIEW is parsed-only; execution not yet implemented".to_owned(),
-        )),
-        SqlStatement::CreateTrigger(_) => Err(Error::UnsupportedSql(
-            "CREATE TRIGGER is parsed-only; execution not yet implemented".to_owned(),
-        )),
+        SqlStatement::AttachDatabase {
+            schema_name,
+            database_file_name,
+            ..
+        } => bind_attach(sql, schema_epoch, schema_name, database_file_name),
+        SqlStatement::CreateView(create_view) => bind_create_view(schema_epoch, sql, create_view),
+        SqlStatement::CreateTrigger(create_trigger) => {
+            bind_create_trigger(schema_epoch, sql, create_trigger)
+        }
+        SqlStatement::DropTrigger(drop_trigger) => {
+            let name = parse_qualified_name(drop_trigger.trigger_name)?;
+            Ok(template(
+                sql,
+                schema_epoch,
+                false,
+                PreparedKind::DropTrigger(DropTriggerSpec {
+                    name,
+                    if_exists: drop_trigger.if_exists,
+                }),
+            ))
+        }
         other => Err(Error::UnsupportedSql(format!(
             "statement not supported yet: {other:?}"
         ))),
@@ -336,4 +410,73 @@ fn template(
         readonly,
         kind,
     }
+}
+
+/// Build a `PreparedTemplate` for `ATTACH DATABASE 'path' AS alias`.
+/// Only literal string paths are supported (no expression evaluation at
+/// prepare time).
+fn bind_attach(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    schema_name: Ident,
+    file_name: Expr,
+) -> Result<PreparedTemplate> {
+    let path = match file_name {
+        Expr::Value(ValueWithSpan { value, .. }) => match value {
+            Value::SingleQuotedString(s)
+            | Value::DoubleQuotedString(s)
+            | Value::EscapedStringLiteral(s) => s,
+            other => {
+                return Err(Error::UnsupportedSql(format!(
+                    "ATTACH expects a string literal path, got {other:?}"
+                )));
+            }
+        },
+        other => {
+            return Err(Error::UnsupportedSql(format!(
+                "ATTACH expects a string literal path, got {other:?}"
+            )));
+        }
+    };
+    Ok(template(
+        sql,
+        schema_epoch,
+        false,
+        PreparedKind::Attach(crate::exec::attach::AttachPlan::Attach {
+            path: std::path::PathBuf::from(path),
+            alias: Arc::from(schema_name.value),
+        }),
+    ))
+}
+
+/// Detect a `DETACH [DATABASE] alias` statement before handing the SQL to
+/// sqlparser (which does not recognise the SQLite DETACH form). Returns
+/// `Some(template)` if the input matches the grammar, `None` otherwise.
+pub(crate) fn parse_detach_template(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+) -> Option<PreparedTemplate> {
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let rest = if let Some(rest) = lower.strip_prefix("detach database ") {
+        rest
+    } else if let Some(rest) = lower.strip_prefix("detach ") {
+        rest
+    } else {
+        return None;
+    };
+    let alias = rest.trim();
+    if alias.is_empty() {
+        return None;
+    }
+    // Reach back into the original (non-lowercased) text to preserve case.
+    let alias_orig = trimmed[trimmed.len() - alias.len()..].to_owned();
+    Some(template(
+        trimmed,
+        schema_epoch,
+        false,
+        PreparedKind::Attach(crate::exec::attach::AttachPlan::Detach {
+            alias: Arc::from(alias_orig),
+        }),
+    ))
 }
