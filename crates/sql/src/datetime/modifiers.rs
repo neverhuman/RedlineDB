@@ -15,6 +15,9 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
             dt.is_local = true;
             continue;
         }
+        if m == "unixepoch" || m == "julianday" || m == "auto" {
+            continue;
+        }
         if m == "start of month" {
             dt.day = 1;
             dt.hour = 0;
@@ -37,6 +40,19 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
             dt.minute = 0;
             dt.second = 0;
             dt.micro = 0;
+            continue;
+        }
+        if let Some(weekday) = m.strip_prefix("weekday ") {
+            let target: u32 = weekday
+                .trim()
+                .parse()
+                .map_err(|_| Error::UnsupportedSql(format!("invalid weekday modifier: {raw}")))?;
+            if target > 6 {
+                return Err(Error::UnsupportedSql(format!(
+                    "weekday must be in 0..=6: {raw}"
+                )));
+            }
+            dt = advance_to_weekday(dt, target);
             continue;
         }
         if let Some(arith) = apply_arithmetic_modifier(&dt, &m)? {
@@ -89,11 +105,23 @@ fn apply_arithmetic_modifier(dt: &DateTime, m: &str) -> Result<Option<DateTime>>
             let new_month = (total_months.rem_euclid(12) + 1) as u32;
             next.year = new_year;
             next.month = new_month;
-            next.day = next.day.min(days_in_month(new_year, new_month));
+            let secs = next.to_unix();
+            let normalised = DateTime::from_unix(secs, next.micro);
+            next.year = normalised.year;
+            next.month = normalised.month;
+            next.day = normalised.day;
+        }
+        "week" | "weeks" => {
+            let secs = next.to_unix() + (value * 7.0 * 86_400.0).round() as i64;
+            next = DateTime::from_unix(secs, next.micro);
         }
         "year" | "years" => {
             next.year += value.round() as i32;
-            next.day = next.day.min(days_in_month(next.year, next.month));
+            let secs = next.to_unix();
+            let normalised = DateTime::from_unix(secs, next.micro);
+            next.year = normalised.year;
+            next.month = normalised.month;
+            next.day = normalised.day;
         }
         _ => return Ok(None),
     }
@@ -101,14 +129,25 @@ fn apply_arithmetic_modifier(dt: &DateTime, m: &str) -> Result<Option<DateTime>>
     Ok(Some(next))
 }
 
-fn days_in_month(year: i32, month: u32) -> u32 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            let leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-            if leap { 29 } else { 28 }
-        }
-        _ => 30,
+fn advance_to_weekday(dt: DateTime, target: u32) -> DateTime {
+    // SQLite `weekday N`: advance forward (or stay) to the next occurrence.
+    let cur = day_of_week(&dt);
+    let delta = (target as i64 - cur as i64).rem_euclid(7);
+    if delta == 0 {
+        return dt;
     }
+    let secs = dt.to_unix() + delta * 86_400;
+    let mut next = DateTime::from_unix(secs, dt.micro);
+    next.is_local = dt.is_local;
+    next
 }
+
+fn day_of_week(dt: &DateTime) -> u32 {
+    let m = if dt.month < 3 { dt.month + 12 } else { dt.month };
+    let y = if dt.month < 3 { dt.year - 1 } else { dt.year };
+    let k = y % 100;
+    let j = y / 100;
+    let h = (dt.day as i32 + (13 * (m as i32 + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
+    ((h + 6) % 7) as u32
+}
+

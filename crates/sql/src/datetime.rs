@@ -117,6 +117,6 @@ impl DateTime {
     }
 
     pub fn format_datetime(&self) -> String {
-        format!("{} {}", self.format_date(), self.format_time(),)
+        format!("{} {}", self.format_date(), self.format_time())
     }
 }

@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:320f823cc6f0e6743e31c691f5934cc0489c9b475b62b67dddc72c3ad260ef04",
-  "input_fingerprint": "sha256:3dbc5005ae6ce3a4de57c4ba91216298c8d777fe3f02aebe93d97bc4fa267d0c",
+  "report_fingerprint": "sha256:17d82fbc4b2a02d7f4bcbfb86b24c12068a54e4d885890e4b624ad7696803145",
+  "input_fingerprint": "sha256:e7ea1a6719ed98ab8e336e18b988c4a535535a398ff6ca8a9b35b90953ccbb3e",
   "policy_fingerprint": "sha256:a2eb64c9162b94aa1cde5a376bdf2f1c1cedb0e2d2230a4a9d095b9771dbd229",
   "manifest_fingerprints": {
     "owner_map": "sha256:6a116832b8512c7dc7ee933250b3f28b889603dc300df9eb6fff4c7dbac6fe59",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:6c38f7e92693c9dec40e2694dc4ccd92d98627d83964dff57bdda137d98ec2de"
   },
   "dirty_worktree": true,
-  "generated_at": "1779058392",
+  "generated_at": "1779064104",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.8.0",
@@ -25,15 +25,15 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1779058392",
-  "started_at": "1779058392",
-  "elapsed_ms": 3834,
+  "run_id": "1779064104",
+  "started_at": "1779064104",
+  "elapsed_ms": 3596,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 92,
-  "raw_score": 92,
+  "score": 94,
+  "raw_score": 94,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
@@ -41,7 +41,7 @@
     "hard_findings": 0,
     "soft_findings": 2,
     "ratchet": {
-      "baseline_score": 92,
+      "baseline_score": 94,
       "allowed_drop": 0,
       "passed": true,
       "score_delta": 0,
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "a5e7534",
+    "head": "8f252e0",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -295,8 +295,7 @@
         "reference-profile cell `ops` has local AGENTS.md guidance",
         "root `README.md` routes to workspace layout",
         "owner map covers audited paths",
-        "test map covers audited paths",
-        "authored code file exceeds 500 LOC"
+        "test map covers audited paths"
       ],
       "notes": []
     },
@@ -347,7 +346,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1462",
+        "rust bad-behavior advisory signals: 1433",
         "ci bad-behavior advisory signals: 3",
         "gittools bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -357,11 +356,10 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 65,
-      "weighted_points": 7.8,
+      "score": 80,
+      "weighted_points": 9.6,
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/cte.rs (732 LOC)",
-        "code file exceeds 500 LOC",
+        "largest authored code file: crates/sql/src/parser/helpers/table/select.rs (487 LOC)",
         "most code files stay under 300 LOC",
         "copy-code advisory classes found: 36 (advisory only, no score impact)",
         "fallback soup marker found",
@@ -1057,7 +1055,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-17T22:53:08.403783+00:00",
+    "generated_at": "2026-05-18T00:28:20.950252+00:00",
     "repo": ".",
     "auditor_version": "1.4.1",
     "status": "review",
@@ -1095,65 +1093,22 @@
       ]
     },
     "summary": {
-      "files_scanned": 701,
-      "files_considered": 274,
-      "active_files": 274,
+      "files_scanned": 704,
+      "files_considered": 277,
+      "active_files": 277,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 40,
+      "warning_classes": 39,
       "hard_instances": 0,
-      "warning_instances": 99,
-      "duplicate_lines": 87,
-      "duplicate_tokens": 253,
-      "duplicate_bytes": 2408,
-      "total_redundant_lines": 117,
-      "total_redundant_tokens": 324,
-      "total_redundant_bytes": 3066
+      "warning_instances": 93,
+      "duplicate_lines": 81,
+      "duplicate_tokens": 234,
+      "duplicate_bytes": 2283,
+      "total_redundant_lines": 98,
+      "total_redundant_tokens": 265,
+      "total_redundant_bytes": 2619
     },
     "classes": [
-      {
-        "id": "copy-code-unit-rust-af4480328cf37d85",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "days_in_month",
-        "duplicate_lines": 10,
-        "duplicate_tokens": 34,
-        "duplicate_bytes": 259,
-        "instance_count": 3,
-        "total_redundant_lines": 20,
-        "total_redundant_tokens": 68,
-        "total_redundant_bytes": 518,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "7c0245052035cb51",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/sql/src/datetime.rs",
-            "language": "rust",
-            "start_line": 416,
-            "end_line": 426,
-            "unit_name": "days_in_month"
-          },
-          {
-            "path": "crates/sql/src/datetime/format.rs",
-            "language": "rust",
-            "start_line": 60,
-            "end_line": 70,
-            "unit_name": "days_in_month"
-          },
-          {
-            "path": "crates/sql/src/datetime/modifiers.rs",
-            "language": "rust",
-            "start_line": 104,
-            "end_line": 114,
-            "unit_name": "days_in_month"
-          }
-        ]
-      },
       {
         "id": "copy-code-unit-rust-012d89e6ee61ae7e",
         "kind": "exact_unit_same_name",
@@ -1177,8 +1132,8 @@
           {
             "path": "crates/sql/src/exec/cte.rs",
             "language": "rust",
-            "start_line": 172,
-            "end_line": 185,
+            "start_line": 131,
+            "end_line": 144,
             "unit_name": "infer_affinity"
           },
           {
@@ -1187,6 +1142,42 @@
             "start_line": 182,
             "end_line": 195,
             "unit_name": "infer_affinity"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-af4480328cf37d85",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "days_in_month",
+        "duplicate_lines": 10,
+        "duplicate_tokens": 34,
+        "duplicate_bytes": 259,
+        "instance_count": 2,
+        "total_redundant_lines": 10,
+        "total_redundant_tokens": 34,
+        "total_redundant_bytes": 259,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "3962ba4d33b36a4b",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/datetime/format.rs",
+            "language": "rust",
+            "start_line": 60,
+            "end_line": 70,
+            "unit_name": "days_in_month"
+          },
+          {
+            "path": "crates/sql/src/datetime/modifiers.rs",
+            "language": "rust",
+            "start_line": 104,
+            "end_line": 114,
+            "unit_name": "days_in_month"
           }
         ]
       },
@@ -1212,36 +1203,36 @@
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
-            "start_line": 40,
-            "end_line": 41,
+            "start_line": 43,
+            "end_line": 44,
             "unit_name": "as_ref"
           },
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
-            "start_line": 54,
-            "end_line": 55,
+            "start_line": 57,
+            "end_line": 58,
             "unit_name": "as_integer"
           },
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
-            "start_line": 61,
-            "end_line": 62,
+            "start_line": 64,
+            "end_line": 65,
             "unit_name": "as_real"
           },
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
-            "start_line": 68,
-            "end_line": 69,
+            "start_line": 71,
+            "end_line": 72,
             "unit_name": "as_text"
           },
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
-            "start_line": 75,
-            "end_line": 76,
+            "start_line": 78,
+            "end_line": 79,
             "unit_name": "as_blob"
           },
           {
@@ -1300,42 +1291,6 @@
             "start_line": 94,
             "end_line": 100,
             "unit_name": "select_item_contains_aggregate"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-unit-rust-737df16a9c5f9254",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "day_of_year",
-        "duplicate_lines": 6,
-        "duplicate_tokens": 19,
-        "duplicate_bytes": 125,
-        "instance_count": 2,
-        "total_redundant_lines": 6,
-        "total_redundant_tokens": 19,
-        "total_redundant_bytes": 125,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "6468746d346f1074",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/sql/src/datetime.rs",
-            "language": "rust",
-            "start_line": 567,
-            "end_line": 573,
-            "unit_name": "day_of_year"
-          },
-          {
-            "path": "crates/sql/src/datetime/format.rs",
-            "language": "rust",
-            "start_line": 39,
-            "end_line": 45,
-            "unit_name": "day_of_year"
           }
         ]
       },
@@ -1449,62 +1404,6 @@
             "start_line": 117,
             "end_line": 121,
             "unit_name": "lookup_qualified_column"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-61f4ae9f8609bd06",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 2,
-        "duplicate_bytes": 21,
-        "instance_count": 5,
-        "total_redundant_lines": 4,
-        "total_redundant_tokens": 8,
-        "total_redundant_bytes": 84,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "8b2add3b097ac3f5",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/redlinedb/src/statement.rs",
-            "language": "rust",
-            "start_line": 180,
-            "end_line": 181,
-            "unit_name": "bind_value"
-          },
-          {
-            "path": "crates/redlinedb/src/value.rs",
-            "language": "rust",
-            "start_line": 223,
-            "end_line": 224,
-            "unit_name": "from"
-          },
-          {
-            "path": "crates/redlinedb/src/value.rs",
-            "language": "rust",
-            "start_line": 335,
-            "end_line": 336,
-            "unit_name": "from"
-          },
-          {
-            "path": "crates/redlinedb/src/value.rs",
-            "language": "rust",
-            "start_line": 347,
-            "end_line": 348,
-            "unit_name": "from"
-          },
-          {
-            "path": "crates/redlinedb/src/value.rs",
-            "language": "rust",
-            "start_line": 359,
-            "end_line": 360,
-            "unit_name": "from"
           }
         ]
       },
@@ -2078,15 +1977,15 @@
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
-            "start_line": 587,
-            "end_line": 588,
+            "start_line": 331,
+            "end_line": 332,
             "unit_name": "try_from_signed_narrowing"
           },
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
-            "start_line": 599,
-            "end_line": 600,
+            "start_line": 343,
+            "end_line": 344,
             "unit_name": "try_from_unsigned_narrowing"
           }
         ]
@@ -2107,22 +2006,22 @@
         "total_redundant_bytes": 41,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "732814d191619dd0",
+        "fingerprint": "6c4486b96649364f",
         "reason": "same-name semantic unit copied across multiple files",
         "recommended_action": "keep the named unit in one owner and call it from the other sites",
         "instances": [
           {
-            "path": "crates/redlinedb/src/value.rs",
+            "path": "crates/redlinedb/src/value_conv.rs",
             "language": "rust",
-            "start_line": 390,
-            "end_line": 391,
+            "start_line": 163,
+            "end_line": 164,
             "unit_name": "try_from"
           },
           {
-            "path": "crates/redlinedb/src/value.rs",
+            "path": "crates/redlinedb/src/value_conv.rs",
             "language": "rust",
-            "start_line": 421,
-            "end_line": 422,
+            "start_line": 194,
+            "end_line": 195,
             "unit_name": "try_from"
           }
         ]
@@ -2284,23 +2183,23 @@
         "total_redundant_bytes": 30,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "a26a78f0a4d23cc9",
+        "fingerprint": "1b227a0c02bd7646",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
           {
             "path": "crates/redlinedb/src/value.rs",
             "language": "rust",
-            "start_line": 482,
-            "end_line": 483,
-            "unit_name": "try_from"
+            "start_line": 423,
+            "end_line": 424,
+            "unit_name": "decimal_round_trips_through_value_as_text"
           },
           {
-            "path": "crates/redlinedb/src/value.rs",
+            "path": "crates/redlinedb/src/value_conv.rs",
             "language": "rust",
-            "start_line": 679,
-            "end_line": 680,
-            "unit_name": "decimal_round_trips_through_value_as_text"
+            "start_line": 258,
+            "end_line": 259,
+            "unit_name": "try_from"
           }
         ]
       },
@@ -2662,6 +2561,41 @@
             "unit_name": "child_count"
           }
         ]
+      },
+      {
+        "id": "copy-code-body-rust-61f4ae9f8609bd06",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 2,
+        "duplicate_bytes": 21,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 2,
+        "total_redundant_bytes": 21,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "0dea0e4a4496265d",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb/src/statement.rs",
+            "language": "rust",
+            "start_line": 180,
+            "end_line": 181,
+            "unit_name": "bind_value"
+          },
+          {
+            "path": "crates/redlinedb/src/value.rs",
+            "language": "rust",
+            "start_line": 226,
+            "end_line": 227,
+            "unit_name": "from"
+          }
+        ]
       }
     ],
     "notes": [
@@ -2950,20 +2884,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 65 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 80 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/cte.rs (732 LOC)",
-        "code file exceeds 500 LOC",
+        "largest authored code file: crates/sql/src/parser/helpers/table/select.rs (487 LOC)",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 40 (advisory only, no score impact)"
+        "copy-code advisory classes found: 39 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 1433"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:8dea1dcf752e6adc6ac597b5d688e85eca11500144a3aab1145aa933e728fc1d",
+      "fingerprint": "sha256:6f17359b191d0a6c262b5de3b5faebac26a7fbb9e79854972063c1de980f2e5a",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3014,7 +2948,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 65 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 80 below the standard floor of 85"
     }
   ]
 }

@@ -23,7 +23,7 @@ impl BtreeIndex {
         })
     }
 
-    pub(super) fn point_lookup_filter(
+    pub(crate) fn point_lookup_filter(
         &self,
         logical_key: &[u8],
         mut visible: impl FnMut(&Entry) -> bool,
