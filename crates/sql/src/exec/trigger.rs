@@ -61,6 +61,15 @@ pub(crate) fn fire_triggers(
     if triggers.is_empty() {
         return Ok(());
     }
+    // `PRAGMA recursive_triggers = OFF` mirrors SQLite: top-level DML
+    // still fires triggers, but a trigger body's DML must not cascade
+    // into further triggers. The flag is read through the re-entrant
+    // session pointer because the session mutex is already held by the
+    // enclosing DML executor — calling `conn.recursive_triggers()`
+    // would re-lock and deadlock.
+    if tx.trigger_depth() > 0 && !current_recursive_triggers() {
+        return Ok(());
+    }
     for trigger in triggers {
         if event == TriggerEventKind::Update
             && !trigger.when_cols.is_empty()
@@ -89,6 +98,22 @@ fn any_column_in_filter(filter: &[Box<str>], changed: Option<&[String]>) -> bool
     filter
         .iter()
         .any(|f| changed.iter().any(|c| c.eq_ignore_ascii_case(f.as_ref())))
+}
+
+/// Read `session.recursive_triggers` without taking the session mutex.
+/// Falls back to SQLite's default (true) when no session is on the
+/// thread-local pointer (e.g. unit-test invocations that never went
+/// through `with_write_tx`).
+fn current_recursive_triggers() -> bool {
+    match crate::exec::current_session_ptr() {
+        Some(ptr) => {
+            // SAFETY: pointer installed by `with_write_tx`; valid for
+            // the strictly-synchronous scope of trigger firing.
+            let session: &crate::session::SessionState = unsafe { &*ptr };
+            session.recursive_triggers
+        }
+        None => true,
+    }
 }
 
 fn fire_one(

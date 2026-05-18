@@ -62,13 +62,18 @@ pub struct DeferredFkCheck {
     pub fk_index: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SessionState {
     pub tx: Option<Txn>,
     pub failed: bool,
     pub changes: usize,
     pub total_changes: usize,
     pub foreign_keys: bool,
+    /// Mirrors SQLite's `PRAGMA recursive_triggers`. SQLite defaults this
+    /// to ON, so trigger bodies that fire DML matching another trigger
+    /// recurse up to the depth cap. When OFF, the executor skips firing
+    /// any trigger from within an existing trigger body.
+    pub recursive_triggers: bool,
     pub last_insert_rowid: Option<i64>,
     pub unique_guards: Vec<UniqueKeyGuard>,
     /// Kernel-level unique-key reservations held until end-of-transaction.
@@ -90,6 +95,26 @@ pub struct SessionState {
     pub deferred_fk_checks: Vec<DeferredFkCheck>,
 }
 
+impl Default for SessionState {
+    fn default() -> Self {
+        Self {
+            tx: None,
+            failed: false,
+            changes: 0,
+            total_changes: 0,
+            foreign_keys: false,
+            recursive_triggers: true,
+            last_insert_rowid: None,
+            unique_guards: Vec::new(),
+            kernel_unique_guards: Vec::new(),
+            journal: Vec::new(),
+            savepoints: Vec::new(),
+            replay_in_progress: false,
+            deferred_fk_checks: Vec::new(),
+        }
+    }
+}
+
 impl SessionState {
     #[allow(dead_code)]
     pub fn clear(&mut self) {
@@ -98,6 +123,7 @@ impl SessionState {
         self.changes = 0;
         self.total_changes = 0;
         self.foreign_keys = false;
+        self.recursive_triggers = true;
         self.last_insert_rowid = None;
         self.unique_guards.clear();
         self.kernel_unique_guards.clear();

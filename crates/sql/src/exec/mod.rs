@@ -88,6 +88,10 @@ fn with_current_session<T>(ptr: *mut SessionState, f: impl FnOnce() -> T) -> T {
     })
 }
 
+pub(crate) fn current_session_ptr() -> Option<*mut SessionState> {
+    with_current_session_ptr()
+}
+
 fn with_current_session_ptr() -> Option<*mut SessionState> {
     CURRENT_SESSION.with(|cell| {
         let p = cell.get();
@@ -454,6 +458,10 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             Ok(())
         }
         PragmaPlan::SetUserVersion(value) => conn.set_user_version(*value),
+        PragmaPlan::SetRecursiveTriggers(value) => {
+            conn.set_recursive_triggers(*value);
+            Ok(())
+        }
     }
 }
 
