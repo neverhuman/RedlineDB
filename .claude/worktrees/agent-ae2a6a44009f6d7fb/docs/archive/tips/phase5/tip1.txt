@@ -1,0 +1,4972 @@
+Below is how I would build **Phase 5 only**: a pure-Rust SQL frontend and execution engine for RedlineDB that is fast, memory-disciplined, concurrency-friendly, and designed not to reintroduce SQLite’s single-writer bottleneck at the SQL layer.
+
+The key idea: **Phase 5 should not be “a parser glued to storage.”** It should be a compact prepared-statement engine with transactional session semantics, catalog snapshots, a binder, a rule planner, expression bytecode, streaming row operators, and brutally simple fast paths for the OLTP cases you care about.
+
+SQLite supports a broad SQL dialect and accepts semicolon-separated statement lists through several prepare/exec APIs; RedlineDB should explicitly implement only the supported subset first and test that subset against SQLite, instead of accidentally promising all SQLite syntax. ([SQLite][1])
+
+---
+
+# Phase 5 target architecture
+
+## Crate shape
+
+```text
+crates/
+  redlinedb_sql/
+    src/
+      lib.rs
+
+      value.rs              // SQL values, ValueRef, affinity, comparison, collation
+      error.rs              // SqlError, SqlState-ish codes, diagnostics
+      span.rs               // Source locations
+
+      lexer.rs              // Zero-copy lexer
+      parser/
+        mod.rs
+        ast.rs              // SQL AST
+        expr.rs             // Pratt expression parser
+        stmt.rs             // Statement parser
+
+      catalog/
+        mod.rs              // CatalogSnapshot adapter
+        names.rs            // Case-insensitive identifiers, interned names
+
+      binder/
+        mod.rs              // Name resolution, type/affinity resolution
+        scope.rs
+        params.rs
+        functions.rs
+        bound_ast.rs
+
+      planner/
+        mod.rs
+        logical.rs
+        physical.rs
+        rules.rs
+        index_match.rs
+
+      exec/
+        mod.rs
+        context.rs
+        statement.rs
+        operators.rs
+        expr_vm.rs
+        functions.rs
+        dml.rs
+        ddl.rs
+        sort.rs
+
+      session.rs            // Connection/session state, tx state, autocommit
+      api.rs                // Embedded Rust API
+      kernel.rs             // Traits expected from storage kernel
+
+    tests/
+      parser_golden.rs
+      sqllogic_subset.rs
+      sqlite_diff.rs
+      tx_semantics.rs
+      concurrency.rs
+      schema_invalidation.rs
+      fuzz_parser.rs
+```
+
+The SQL layer should depend on the storage kernel through narrow traits. That lets you build Phase 5 while the kernel/catalog/index internals continue evolving.
+
+---
+
+# Design principles
+
+## 1. No global SQL mutex
+
+SQLite itself documents that it supports multiple simultaneous readers but only one simultaneous writer. RedlineDB’s advantage should come from **not copying that SQL-level writer serialization** when the kernel can support disjoint row/index-key writes. ([SQLite][2])
+
+RedlineDB SQL should have:
+
+```text
+Arc<DatabaseEngine>
+  ├── Session 1: private tx state, private prepared statements
+  ├── Session 2: private tx state, private prepared statements
+  ├── Session 3: private tx state, private prepared statements
+  └── immutable shared catalog snapshots
+```
+
+Shared structures:
+
+```text
+Engine
+  - storage kernel
+  - sharded plan cache
+  - immutable function registry
+  - atomic schema epoch
+  - copy-on-write catalog snapshot
+```
+
+Private per session:
+
+```text
+Session
+  - transaction state
+  - isolation mode
+  - temporary scratch arena
+  - last_insert_rowid
+  - changes counter
+  - active statement cursors
+```
+
+Private per statement execution:
+
+```text
+StatementRuntime
+  - parameter values
+  - cursor/operator state
+  - expression stack
+  - output row buffer
+  - scratch memory budget
+```
+
+No shared lock should be held while:
+
+```text
+- scanning storage
+- evaluating expressions
+- waiting on row locks
+- committing
+- fsyncing WAL
+- producing result rows
+```
+
+---
+
+## 2. Prepare once, step many times
+
+For speed, Phase 5 must make this path cheap:
+
+```rust
+let mut stmt = conn.prepare("SELECT name FROM user WHERE id = ?")?;
+for id in ids {
+    stmt.reset()?;
+    stmt.bind_i64(1, id)?;
+    if let Step::Row(row) = stmt.step()? {
+        // use row
+    }
+}
+```
+
+`prepare()` should do all expensive work:
+
+```text
+SQL text
+  -> lexer
+  -> parser
+  -> AST
+  -> binder
+  -> logical plan
+  -> physical plan
+  -> expression bytecode
+  -> immutable CompiledStatement
+```
+
+`step()` should do almost no metadata work:
+
+```text
+check schema epoch
+check params bound
+initialize executor if needed
+pull next row / execute next DML chunk
+return Row or Done
+```
+
+---
+
+## 3. Use a hybrid executor
+
+Do **not** start with a huge SQLite-style VM for everything. Do **not** start with a fully dynamic volcano executor either.
+
+Use this hybrid:
+
+```text
+Physical plan tree for row movement:
+  TableScan
+  PointGet
+  IndexScan
+  Filter
+  Project
+  Sort
+  Limit
+  Insert
+  Update
+  Delete
+  Ddl
+
+Expression bytecode for scalar logic:
+  LoadColumn
+  LoadParam
+  Const
+  Eq
+  Lt
+  And
+  Or
+  Add
+  Function
+  Cast
+```
+
+This gives you:
+
+```text
+- clean operator boundaries for later vectorization
+- fast prepared expression evaluation
+- easy predicate/projection pushdown
+- simple DML integration
+- low allocation
+- easy testing
+```
+
+---
+
+# Phase 5 SQL subset
+
+Implement this first.
+
+## Statements
+
+```sql
+CREATE TABLE name (
+  col_name TYPE [PRIMARY KEY] [NOT NULL] [DEFAULT expr] [CHECK expr],
+  ...
+  [PRIMARY KEY (...)]
+);
+
+CREATE INDEX name ON table (col [, ...]);
+CREATE UNIQUE INDEX name ON table (col [, ...]);
+
+DROP TABLE name;
+DROP INDEX name;
+
+INSERT INTO table [(col, ...)] VALUES (...), (...);
+INSERT INTO table DEFAULT VALUES;
+INSERT INTO table [(col, ...)] SELECT ...;
+
+UPDATE table SET col = expr [, ...] WHERE expr;
+
+DELETE FROM table WHERE expr;
+
+SELECT expr [, ...]
+FROM table
+[WHERE expr]
+[ORDER BY expr [ASC|DESC] [, ...]]
+[LIMIT expr [OFFSET expr]];
+
+BEGIN [DEFERRED|IMMEDIATE|EXCLUSIVE];
+COMMIT;
+ROLLBACK;
+```
+
+SQLite’s `CREATE TABLE` defines names, column types, defaults, collations, primary keys, and constraints including `UNIQUE`, `NOT NULL`, `CHECK`, and foreign keys; Phase 5 should expose only the subset your catalog/kernel can enforce transactionally. ([SQLite][3])
+
+SQLite’s `INSERT` has three major forms: `VALUES`, `SELECT`, and `DEFAULT VALUES`; implement those forms early because they are benchmark-critical. ([SQLite][4])
+
+## Expressions
+
+Implement:
+
+```sql
+NULL
+TRUE
+FALSE
+integer literals
+real literals
+text literals
+blob literals
+? parameters
+?NNN parameters
+:name parameters
+@name parameters
+$name parameters
+
+column
+table.column
+
++expr
+-expr
+NOT expr
+
+expr + expr
+expr - expr
+expr * expr
+expr / expr
+expr % expr
+
+expr = expr
+expr == expr
+expr != expr
+expr <> expr
+expr < expr
+expr <= expr
+expr > expr
+expr >= expr
+
+expr IS NULL
+expr IS NOT NULL
+expr IS expr
+expr IS NOT expr
+
+expr AND expr
+expr OR expr
+
+expr BETWEEN expr AND expr
+expr IN (expr, ...)
+expr LIKE expr
+expr GLOB expr
+
+CAST(expr AS type)
+
+CASE
+  WHEN expr THEN expr
+  ELSE expr
+END
+
+CASE expr
+  WHEN expr THEN expr
+  ELSE expr
+END
+
+function(expr, ...)
+```
+
+Do **not** implement subqueries, CTEs, triggers, windows, virtual tables, foreign keys, generated columns, RETURNING, UPSERT, or compound SELECT in the first Phase 5 cut unless benchmarks force them.
+
+SQLite has a much wider grammar including CTEs, joins, compound SELECT, window clauses, UPSERT, RETURNING, triggers, views, virtual tables, and more; RedlineDB should treat these as explicitly unsupported until later phases. ([SQLite][5])
+
+---
+
+# Core storage/kernel interface expected by SQL
+
+Phase 5 should not know page formats, WAL internals, or heap tuple internals. It should talk to the kernel through narrow traits.
+
+```rust
+// redlinedb_sql/src/kernel.rs
+
+use std::sync::Arc;
+
+pub type TableId = u64;
+pub type IndexId = u64;
+pub type ColumnId = u16;
+pub type RowId = u64;
+pub type SchemaEpoch = u64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Isolation {
+    ReadCommitted,
+    Snapshot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TxAccess {
+    ReadOnly,
+    ReadWrite,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BeginOptions {
+    pub isolation: Isolation,
+    pub access: TxAccess,
+    pub explicit: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct TableMeta {
+    pub id: TableId,
+    pub name: String,
+    pub columns: Arc<[ColumnMeta]>,
+    pub primary_key: Option<PrimaryKeyMeta>,
+    pub indexes: Arc<[IndexMeta]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ColumnMeta {
+    pub id: ColumnId,
+    pub name: String,
+    pub declared_type: String,
+    pub affinity: crate::value::Affinity,
+    pub nullable: bool,
+    pub default_expr_sql: Option<String>,
+    pub collation: crate::value::Collation,
+}
+
+#[derive(Debug, Clone)]
+pub struct PrimaryKeyMeta {
+    pub columns: Arc<[ColumnId]>,
+    pub integer_rowid_alias: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexMeta {
+    pub id: IndexId,
+    pub name: String,
+    pub table_id: TableId,
+    pub columns: Arc<[ColumnId]>,
+    pub unique: bool,
+}
+
+#[derive(Debug)]
+pub struct CatalogSnapshot {
+    pub epoch: SchemaEpoch,
+    // Prefer immutable maps internally.
+    pub tables: Arc<[TableMeta]>,
+}
+
+impl CatalogSnapshot {
+    pub fn find_table(&self, name: &str) -> Option<&TableMeta> {
+        self.tables
+            .iter()
+            .find(|t| t.name.eq_ignore_ascii_case(name))
+    }
+}
+
+pub trait RowView<'a> {
+    fn rowid(&self) -> RowId;
+    fn get(&'a self, col: ColumnId) -> crate::value::ValueRef<'a>;
+}
+
+pub trait RowCursor {
+    fn next(&mut self) -> crate::error::Result<Option<RowBuf>>;
+}
+
+// Owned fallback row. Your kernel should later replace this with a page-pinned
+// zero-copy row view. The SQL layer can support both.
+#[derive(Debug, Clone)]
+pub struct RowBuf {
+    pub rowid: RowId,
+    pub values: Vec<crate::value::ValueBuf>,
+}
+
+pub struct Projection {
+    pub columns: Vec<ColumnId>,
+}
+
+pub enum PredicateHint {
+    None,
+    RowIdEq(crate::value::ValueBuf),
+    IndexRange {
+        index_id: IndexId,
+        low: Option<Vec<crate::value::ValueBuf>>,
+        high: Option<Vec<crate::value::ValueBuf>>,
+    },
+}
+
+pub trait KernelTx {
+    fn scan(
+        &mut self,
+        table_id: TableId,
+        projection: Projection,
+        hint: PredicateHint,
+    ) -> crate::error::Result<Box<dyn RowCursor + Send + '_>>;
+
+    fn point_get(
+        &mut self,
+        table_id: TableId,
+        rowid: RowId,
+        projection: Projection,
+    ) -> crate::error::Result<Option<RowBuf>>;
+
+    fn insert(
+        &mut self,
+        table_id: TableId,
+        values: &[crate::value::ValueBuf],
+    ) -> crate::error::Result<RowId>;
+
+    fn update(
+        &mut self,
+        table_id: TableId,
+        rowid: RowId,
+        values: &[crate::value::ValueBuf],
+    ) -> crate::error::Result<()>;
+
+    fn delete(
+        &mut self,
+        table_id: TableId,
+        rowid: RowId,
+    ) -> crate::error::Result<()>;
+
+    fn create_table(
+        &mut self,
+        spec: CreateTableSpec,
+    ) -> crate::error::Result<TableId>;
+
+    fn create_index(
+        &mut self,
+        spec: CreateIndexSpec,
+    ) -> crate::error::Result<IndexId>;
+
+    fn commit(self: Box<Self>) -> crate::error::Result<()>;
+    fn rollback(self: Box<Self>) -> crate::error::Result<()>;
+
+    // For statement-level atomicity inside explicit transactions.
+    fn begin_statement(&mut self) -> crate::error::Result<StatementMark>;
+    fn rollback_statement(&mut self, mark: StatementMark) -> crate::error::Result<()>;
+    fn release_statement(&mut self, mark: StatementMark) -> crate::error::Result<()>;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct StatementMark(pub u64);
+
+pub trait Kernel: Send + Sync + 'static {
+    fn begin(&self, opts: BeginOptions) -> crate::error::Result<Box<dyn KernelTx + Send>>;
+    fn catalog_snapshot(&self) -> Arc<CatalogSnapshot>;
+    fn schema_epoch(&self) -> SchemaEpoch;
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateTableSpec {
+    pub name: String,
+    pub columns: Vec<CreateColumnSpec>,
+    pub primary_key: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateColumnSpec {
+    pub name: String,
+    pub declared_type: String,
+    pub nullable: bool,
+    pub default_sql: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateIndexSpec {
+    pub name: String,
+    pub table: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
+}
+```
+
+This is intentionally conservative. In the real high-speed implementation, `RowBuf` should become something closer to:
+
+```rust
+pub struct RowPin<'a> {
+    rowid: RowId,
+    page_pin: PagePin<'a>,
+    tuple_offset: u16,
+    projection: &'a Projection,
+}
+```
+
+Then expression evaluation can decode only the requested columns without copying.
+
+---
+
+# SQL value model
+
+SQLite uses dynamic typing: the type belongs to the value, not rigidly to the column, and values use the storage classes `NULL`, `INTEGER`, `REAL`, `TEXT`, and `BLOB`. SQLite also treats booleans as integers, with `TRUE` and `FALSE` spelling integer values. ([SQLite][6])
+
+RedlineDB should mirror that for compatibility, while internally using stricter metadata and affinities.
+
+```rust
+// redlinedb_sql/src/value.rs
+
+use std::borrow::Cow;
+use std::cmp::Ordering;
+use std::sync::Arc;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Affinity {
+    Blob,
+    Text,
+    Numeric,
+    Integer,
+    Real,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Collation {
+    Binary,
+    NoCase,
+    RTrim,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValueBuf {
+    Null,
+    Int(i64),
+    Real(f64),
+    Text(Arc<str>),
+    Blob(Arc<[u8]>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ValueRef<'a> {
+    Null,
+    Int(i64),
+    Real(f64),
+    Text(&'a str),
+    Blob(&'a [u8]),
+}
+
+impl<'a> ValueRef<'a> {
+    #[inline]
+    pub fn storage_class(self) -> StorageClass {
+        match self {
+            ValueRef::Null => StorageClass::Null,
+            ValueRef::Int(_) => StorageClass::Integer,
+            ValueRef::Real(_) => StorageClass::Real,
+            ValueRef::Text(_) => StorageClass::Text,
+            ValueRef::Blob(_) => StorageClass::Blob,
+        }
+    }
+
+    #[inline]
+    pub fn to_owned_value(self) -> ValueBuf {
+        match self {
+            ValueRef::Null => ValueBuf::Null,
+            ValueRef::Int(v) => ValueBuf::Int(v),
+            ValueRef::Real(v) => ValueBuf::Real(v),
+            ValueRef::Text(v) => ValueBuf::Text(Arc::from(v)),
+            ValueRef::Blob(v) => ValueBuf::Blob(Arc::from(v)),
+        }
+    }
+}
+
+impl ValueBuf {
+    #[inline]
+    pub fn as_ref(&self) -> ValueRef<'_> {
+        match self {
+            ValueBuf::Null => ValueRef::Null,
+            ValueBuf::Int(v) => ValueRef::Int(*v),
+            ValueBuf::Real(v) => ValueRef::Real(*v),
+            ValueBuf::Text(v) => ValueRef::Text(v),
+            ValueBuf::Blob(v) => ValueRef::Blob(v),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StorageClass {
+    Null,
+    Integer,
+    Real,
+    Text,
+    Blob,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Truth {
+    True,
+    False,
+    Unknown,
+}
+
+impl Truth {
+    #[inline]
+    pub fn and(self, rhs: Truth) -> Truth {
+        match (self, rhs) {
+            (Truth::False, _) | (_, Truth::False) => Truth::False,
+            (Truth::Unknown, _) | (_, Truth::Unknown) => Truth::Unknown,
+            (Truth::True, Truth::True) => Truth::True,
+        }
+    }
+
+    #[inline]
+    pub fn or(self, rhs: Truth) -> Truth {
+        match (self, rhs) {
+            (Truth::True, _) | (_, Truth::True) => Truth::True,
+            (Truth::Unknown, _) | (_, Truth::Unknown) => Truth::Unknown,
+            (Truth::False, Truth::False) => Truth::False,
+        }
+    }
+
+    #[inline]
+    pub fn not(self) -> Truth {
+        match self {
+            Truth::True => Truth::False,
+            Truth::False => Truth::True,
+            Truth::Unknown => Truth::Unknown,
+        }
+    }
+
+    #[inline]
+    pub fn passes_where(self) -> bool {
+        matches!(self, Truth::True)
+    }
+}
+
+pub fn sqlite_truth(v: ValueRef<'_>) -> Truth {
+    match v {
+        ValueRef::Null => Truth::Unknown,
+        ValueRef::Int(i) => {
+            if i == 0 { Truth::False } else { Truth::True }
+        }
+        ValueRef::Real(f) => {
+            if f == 0.0 { Truth::False } else { Truth::True }
+        }
+        ValueRef::Text(s) => {
+            // SQLite casts boolean contexts numerically-ish.
+            match parse_numeric_prefix(s) {
+                Some(Numeric::Int(i)) => {
+                    if i == 0 { Truth::False } else { Truth::True }
+                }
+                Some(Numeric::Real(f)) => {
+                    if f == 0.0 { Truth::False } else { Truth::True }
+                }
+                None => Truth::False,
+            }
+        }
+        ValueRef::Blob(_) => Truth::False,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Numeric {
+    Int(i64),
+    Real(f64),
+}
+
+fn parse_numeric_prefix(s: &str) -> Option<Numeric> {
+    // Real implementation should match SQLite more closely:
+    // trim leading spaces, parse longest numeric prefix, distinguish int/real.
+    let t = s.trim_start();
+    if t.is_empty() {
+        return None;
+    }
+
+    if let Ok(i) = t.parse::<i64>() {
+        return Some(Numeric::Int(i));
+    }
+    if let Ok(f) = t.parse::<f64>() {
+        return Some(Numeric::Real(f));
+    }
+    None
+}
+```
+
+SQLite comparison and sort behavior is subtle: storage class order, numeric comparison between integer/real, text collation, blob `memcmp`, affinity conversion before comparison, and no affinity conversion for `ORDER BY` sorting. ([SQLite][6])
+
+```rust
+pub fn compare_for_sort(
+    a: ValueRef<'_>,
+    b: ValueRef<'_>,
+    collation: Collation,
+) -> Ordering {
+    use ValueRef::*;
+
+    match (a, b) {
+        (Null, Null) => Ordering::Equal,
+        (Null, _) => Ordering::Less,
+        (_, Null) => Ordering::Greater,
+
+        (Int(x), Int(y)) => x.cmp(&y),
+        (Real(x), Real(y)) => total_f64_cmp(x, y),
+        (Int(x), Real(y)) => total_f64_cmp(x as f64, y),
+        (Real(x), Int(y)) => total_f64_cmp(x, y as f64),
+
+        (Int(_) | Real(_), Text(_) | Blob(_)) => Ordering::Less,
+        (Text(_) | Blob(_), Int(_) | Real(_)) => Ordering::Greater,
+
+        (Text(x), Text(y)) => compare_text(x, y, collation),
+        (Text(_), Blob(_)) => Ordering::Less,
+        (Blob(_), Text(_)) => Ordering::Greater,
+        (Blob(x), Blob(y)) => x.cmp(y),
+    }
+}
+
+#[inline]
+fn total_f64_cmp(a: f64, b: f64) -> Ordering {
+    // SQLite does not use Rust's NaN semantics directly.
+    // Decide canonical NaN behavior and differential-test it.
+    a.partial_cmp(&b).unwrap_or_else(|| {
+        if a.is_nan() && b.is_nan() {
+            Ordering::Equal
+        } else if a.is_nan() {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
+    })
+}
+
+fn compare_text(a: &str, b: &str, collation: Collation) -> Ordering {
+    match collation {
+        Collation::Binary => a.as_bytes().cmp(b.as_bytes()),
+        Collation::NoCase => cmp_ascii_nocase(a.as_bytes(), b.as_bytes()),
+        Collation::RTrim => {
+            let aa = trim_ascii_space_right(a.as_bytes());
+            let bb = trim_ascii_space_right(b.as_bytes());
+            aa.cmp(bb)
+        }
+    }
+}
+
+fn cmp_ascii_nocase(a: &[u8], b: &[u8]) -> Ordering {
+    let n = a.len().min(b.len());
+    for i in 0..n {
+        let x = a[i].to_ascii_lowercase();
+        let y = b[i].to_ascii_lowercase();
+        match x.cmp(&y) {
+            Ordering::Equal => {}
+            non_eq => return non_eq,
+        }
+    }
+    a.len().cmp(&b.len())
+}
+
+fn trim_ascii_space_right(mut s: &[u8]) -> &[u8] {
+    while matches!(s.last(), Some(b' ')) {
+        s = &s[..s.len() - 1];
+    }
+    s
+}
+```
+
+SQLite has built-in collations `BINARY`, `NOCASE`, and `RTRIM`; implementing those three early avoids surprising compatibility failures. ([SQLite][6])
+
+---
+
+# Lexer
+
+The lexer should be zero-copy over the SQL string.
+
+Do not allocate strings for identifiers during lexing. Store spans and slices. Intern/canonicalize identifiers later during binding.
+
+```rust
+// redlinedb_sql/src/lexer.rs
+
+use crate::span::Span;
+use crate::error::{Result, SqlError};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keyword {
+    Select,
+    Insert,
+    Update,
+    Delete,
+    Create,
+    Table,
+    Index,
+    Unique,
+    Into,
+    Values,
+    Default,
+    From,
+    Where,
+    Order,
+    By,
+    Limit,
+    Offset,
+    Begin,
+    Deferred,
+    Immediate,
+    Exclusive,
+    Commit,
+    Rollback,
+    Primary,
+    Key,
+    Not,
+    Null,
+    Is,
+    And,
+    Or,
+    As,
+    Set,
+    Drop,
+    True,
+    False,
+    Check,
+    Cast,
+    Case,
+    When,
+    Then,
+    Else,
+    End,
+    In,
+    Between,
+    Like,
+    Glob,
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tok {
+    Eof,
+    Ident,
+    Keyword(Keyword),
+
+    Int,
+    Real,
+    String,
+    Blob,
+
+    ParamQuestion,     // ?
+    ParamNumbered,     // ?123
+    ParamNamed,        // :abc, @abc, $abc
+
+    LParen,
+    RParen,
+    Comma,
+    Dot,
+    Semi,
+    Star,
+    Plus,
+    Minus,
+    Slash,
+    Percent,
+
+    Eq,
+    EqEq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Token<'s> {
+    pub kind: Tok,
+    pub text: &'s str,
+    pub span: Span,
+}
+
+pub struct Lexer<'s> {
+    sql: &'s str,
+    pos: usize,
+}
+
+impl<'s> Lexer<'s> {
+    pub fn new(sql: &'s str) -> Self {
+        Self { sql, pos: 0 }
+    }
+
+    pub fn next(&mut self) -> Result<Token<'s>> {
+        self.skip_ws_and_comments();
+
+        let start = self.pos;
+        let Some(b) = self.peek_byte() else {
+            return Ok(Token {
+                kind: Tok::Eof,
+                text: "",
+                span: Span::new(start, start),
+            });
+        };
+
+        let tok = match b {
+            b'(' => self.one(Tok::LParen),
+            b')' => self.one(Tok::RParen),
+            b',' => self.one(Tok::Comma),
+            b'.' => self.one(Tok::Dot),
+            b';' => self.one(Tok::Semi),
+            b'*' => self.one(Tok::Star),
+            b'+' => self.one(Tok::Plus),
+            b'-' => self.one(Tok::Minus),
+            b'/' => self.one(Tok::Slash),
+            b'%' => self.one(Tok::Percent),
+
+            b'=' => {
+                self.pos += 1;
+                if self.consume_byte(b'=') {
+                    Tok::EqEq
+                } else {
+                    Tok::Eq
+                }
+            }
+
+            b'!' => {
+                self.pos += 1;
+                if self.consume_byte(b'=') {
+                    Tok::Ne
+                } else {
+                    return Err(SqlError::syntax("expected != operator", Span::new(start, self.pos)));
+                }
+            }
+
+            b'<' => {
+                self.pos += 1;
+                if self.consume_byte(b'=') {
+                    Tok::Le
+                } else if self.consume_byte(b'>') {
+                    Tok::Ne
+                } else {
+                    Tok::Lt
+                }
+            }
+
+            b'>' => {
+                self.pos += 1;
+                if self.consume_byte(b'=') {
+                    Tok::Ge
+                } else {
+                    Tok::Gt
+                }
+            }
+
+            b'\'' => return self.string_literal(),
+
+            b'?' => return self.question_param(),
+
+            b':' | b'@' | b'$' => return self.named_param(),
+
+            b'0'..=b'9' => return self.numeric(),
+
+            b'x' | b'X' if self.peek_next_byte() == Some(b'\'') => {
+                return self.blob_literal();
+            }
+
+            _ if is_ident_start(b) => return self.ident_or_keyword(),
+
+            _ => {
+                self.pos += 1;
+                return Err(SqlError::syntax("unexpected character", Span::new(start, self.pos)));
+            }
+        };
+
+        let end = self.pos;
+        Ok(Token {
+            kind: tok,
+            text: &self.sql[start..end],
+            span: Span::new(start, end),
+        })
+    }
+
+    fn skip_ws_and_comments(&mut self) {
+        loop {
+            while matches!(self.peek_byte(), Some(b' ' | b'\t' | b'\n' | b'\r')) {
+                self.pos += 1;
+            }
+
+            // -- comment
+            if self.peek_byte() == Some(b'-') && self.peek_next_byte() == Some(b'-') {
+                self.pos += 2;
+                while let Some(b) = self.peek_byte() {
+                    self.pos += 1;
+                    if b == b'\n' {
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            // /* comment */
+            if self.peek_byte() == Some(b'/') && self.peek_next_byte() == Some(b'*') {
+                self.pos += 2;
+                while self.pos + 1 < self.sql.len() {
+                    if self.sql.as_bytes()[self.pos] == b'*'
+                        && self.sql.as_bytes()[self.pos + 1] == b'/'
+                    {
+                        self.pos += 2;
+                        break;
+                    }
+                    self.pos += 1;
+                }
+                continue;
+            }
+
+            break;
+        }
+    }
+
+    fn one(&mut self, kind: Tok) -> Tok {
+        self.pos += 1;
+        kind
+    }
+
+    fn peek_byte(&self) -> Option<u8> {
+        self.sql.as_bytes().get(self.pos).copied()
+    }
+
+    fn peek_next_byte(&self) -> Option<u8> {
+        self.sql.as_bytes().get(self.pos + 1).copied()
+    }
+
+    fn consume_byte(&mut self, b: u8) -> bool {
+        if self.peek_byte() == Some(b) {
+            self.pos += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn ident_or_keyword(&mut self) -> Result<Token<'s>> {
+        let start = self.pos;
+        self.pos += 1;
+        while matches!(self.peek_byte(), Some(b) if is_ident_continue(b)) {
+            self.pos += 1;
+        }
+
+        let text = &self.sql[start..self.pos];
+        let kind = match_keyword(text).map_or(Tok::Ident, Tok::Keyword);
+
+        Ok(Token {
+            kind,
+            text,
+            span: Span::new(start, self.pos),
+        })
+    }
+
+    fn numeric(&mut self) -> Result<Token<'s>> {
+        let start = self.pos;
+
+        while matches!(self.peek_byte(), Some(b'0'..=b'9')) {
+            self.pos += 1;
+        }
+
+        let mut real = false;
+
+        if self.peek_byte() == Some(b'.') {
+            real = true;
+            self.pos += 1;
+            while matches!(self.peek_byte(), Some(b'0'..=b'9')) {
+                self.pos += 1;
+            }
+        }
+
+        if matches!(self.peek_byte(), Some(b'e' | b'E')) {
+            real = true;
+            self.pos += 1;
+            if matches!(self.peek_byte(), Some(b'+' | b'-')) {
+                self.pos += 1;
+            }
+            while matches!(self.peek_byte(), Some(b'0'..=b'9')) {
+                self.pos += 1;
+            }
+        }
+
+        Ok(Token {
+            kind: if real { Tok::Real } else { Tok::Int },
+            text: &self.sql[start..self.pos],
+            span: Span::new(start, self.pos),
+        })
+    }
+
+    fn string_literal(&mut self) -> Result<Token<'s>> {
+        let start = self.pos;
+        self.pos += 1; // opening quote
+
+        while let Some(b) = self.peek_byte() {
+            self.pos += 1;
+            if b == b'\'' {
+                if self.peek_byte() == Some(b'\'') {
+                    self.pos += 1; // escaped quote
+                } else {
+                    break;
+                }
+            }
+        }
+
+        Ok(Token {
+            kind: Tok::String,
+            text: &self.sql[start..self.pos],
+            span: Span::new(start, self.pos),
+        })
+    }
+
+    fn blob_literal(&mut self) -> Result<Token<'s>> {
+        let start = self.pos;
+        self.pos += 1; // x
+        let string = self.string_literal()?;
+        Ok(Token {
+            kind: Tok::Blob,
+            text: &self.sql[start..string.span.end],
+            span: Span::new(start, string.span.end),
+        })
+    }
+
+    fn question_param(&mut self) -> Result<Token<'s>> {
+        let start = self.pos;
+        self.pos += 1;
+        let mut numbered = false;
+        while matches!(self.peek_byte(), Some(b'0'..=b'9')) {
+            numbered = true;
+            self.pos += 1;
+        }
+
+        Ok(Token {
+            kind: if numbered { Tok::ParamNumbered } else { Tok::ParamQuestion },
+            text: &self.sql[start..self.pos],
+            span: Span::new(start, self.pos),
+        })
+    }
+
+    fn named_param(&mut self) -> Result<Token<'s>> {
+        let start = self.pos;
+        self.pos += 1;
+
+        if !matches!(self.peek_byte(), Some(b) if is_ident_start(b)) {
+            return Err(SqlError::syntax("expected parameter name", Span::new(start, self.pos)));
+        }
+
+        self.pos += 1;
+        while matches!(self.peek_byte(), Some(b) if is_ident_continue(b)) {
+            self.pos += 1;
+        }
+
+        Ok(Token {
+            kind: Tok::ParamNamed,
+            text: &self.sql[start..self.pos],
+            span: Span::new(start, self.pos),
+        })
+    }
+}
+
+fn is_ident_start(b: u8) -> bool {
+    b == b'_' || b.is_ascii_alphabetic()
+}
+
+fn is_ident_continue(b: u8) -> bool {
+    b == b'_' || b.is_ascii_alphanumeric()
+}
+
+fn match_keyword(s: &str) -> Option<Keyword> {
+    use Keyword::*;
+
+    // Match case-insensitively. For speed, real code should use length first.
+    if s.eq_ignore_ascii_case("SELECT") { Some(Select) }
+    else if s.eq_ignore_ascii_case("INSERT") { Some(Insert) }
+    else if s.eq_ignore_ascii_case("UPDATE") { Some(Update) }
+    else if s.eq_ignore_ascii_case("DELETE") { Some(Delete) }
+    else if s.eq_ignore_ascii_case("CREATE") { Some(Create) }
+    else if s.eq_ignore_ascii_case("TABLE") { Some(Table) }
+    else if s.eq_ignore_ascii_case("INDEX") { Some(Index) }
+    else if s.eq_ignore_ascii_case("UNIQUE") { Some(Unique) }
+    else if s.eq_ignore_ascii_case("INTO") { Some(Into) }
+    else if s.eq_ignore_ascii_case("VALUES") { Some(Values) }
+    else if s.eq_ignore_ascii_case("DEFAULT") { Some(Default) }
+    else if s.eq_ignore_ascii_case("FROM") { Some(From) }
+    else if s.eq_ignore_ascii_case("WHERE") { Some(Where) }
+    else if s.eq_ignore_ascii_case("ORDER") { Some(Order) }
+    else if s.eq_ignore_ascii_case("BY") { Some(By) }
+    else if s.eq_ignore_ascii_case("LIMIT") { Some(Limit) }
+    else if s.eq_ignore_ascii_case("OFFSET") { Some(Offset) }
+    else if s.eq_ignore_ascii_case("BEGIN") { Some(Begin) }
+    else if s.eq_ignore_ascii_case("DEFERRED") { Some(Deferred) }
+    else if s.eq_ignore_ascii_case("IMMEDIATE") { Some(Immediate) }
+    else if s.eq_ignore_ascii_case("EXCLUSIVE") { Some(Exclusive) }
+    else if s.eq_ignore_ascii_case("COMMIT") { Some(Commit) }
+    else if s.eq_ignore_ascii_case("ROLLBACK") { Some(Rollback) }
+    else if s.eq_ignore_ascii_case("PRIMARY") { Some(Primary) }
+    else if s.eq_ignore_ascii_case("KEY") { Some(Key) }
+    else if s.eq_ignore_ascii_case("NOT") { Some(Not) }
+    else if s.eq_ignore_ascii_case("NULL") { Some(Null) }
+    else if s.eq_ignore_ascii_case("IS") { Some(Is) }
+    else if s.eq_ignore_ascii_case("AND") { Some(And) }
+    else if s.eq_ignore_ascii_case("OR") { Some(Or) }
+    else if s.eq_ignore_ascii_case("AS") { Some(As) }
+    else if s.eq_ignore_ascii_case("SET") { Some(Set) }
+    else if s.eq_ignore_ascii_case("DROP") { Some(Drop) }
+    else if s.eq_ignore_ascii_case("TRUE") { Some(True) }
+    else if s.eq_ignore_ascii_case("FALSE") { Some(False) }
+    else if s.eq_ignore_ascii_case("CHECK") { Some(Check) }
+    else if s.eq_ignore_ascii_case("CAST") { Some(Cast) }
+    else if s.eq_ignore_ascii_case("CASE") { Some(Case) }
+    else if s.eq_ignore_ascii_case("WHEN") { Some(When) }
+    else if s.eq_ignore_ascii_case("THEN") { Some(Then) }
+    else if s.eq_ignore_ascii_case("ELSE") { Some(Else) }
+    else if s.eq_ignore_ascii_case("END") { Some(End) }
+    else if s.eq_ignore_ascii_case("IN") { Some(In) }
+    else if s.eq_ignore_ascii_case("BETWEEN") { Some(Between) }
+    else if s.eq_ignore_ascii_case("LIKE") { Some(Like) }
+    else if s.eq_ignore_ascii_case("GLOB") { Some(Glob) }
+    else if s.eq_ignore_ascii_case("ASC") { Some(Asc) }
+    else if s.eq_ignore_ascii_case("DESC") { Some(Desc) }
+    else { None }
+}
+```
+
+For production, replace the long keyword chain with:
+
+```text
+match length
+  2 => AS, BY, IN, IS, OR
+  3 => AND, NOT, SET
+  4 => FROM, INTO, NULL, TRUE, CASE, THEN, ELSE, GLOB, LIKE, DESC
+  ...
+```
+
+That is branch-friendly and avoids hashing every identifier.
+
+---
+
+# AST
+
+Keep the AST simple and source-spanned. Do not bake catalog facts into it.
+
+```rust
+// parser/ast.rs
+
+use crate::span::Span;
+use crate::value::ValueBuf;
+
+#[derive(Debug, Clone)]
+pub struct Spanned<T> {
+    pub value: T,
+    pub span: Span,
+}
+
+pub type Ident = Spanned<String>;
+
+#[derive(Debug, Clone)]
+pub enum Statement {
+    Select(SelectStmt),
+    Insert(InsertStmt),
+    Update(UpdateStmt),
+    Delete(DeleteStmt),
+    CreateTable(CreateTableStmt),
+    CreateIndex(CreateIndexStmt),
+    DropTable(DropTableStmt),
+    DropIndex(DropIndexStmt),
+    Begin(BeginStmt),
+    Commit,
+    Rollback,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectStmt {
+    pub projection: Vec<SelectItem>,
+    pub from: Option<TableRef>,
+    pub where_expr: Option<Expr>,
+    pub order_by: Vec<OrderItem>,
+    pub limit: Option<Expr>,
+    pub offset: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SelectItem {
+    Star(Span),
+    TableStar { table: Ident, span: Span },
+    Expr { expr: Expr, alias: Option<Ident> },
+}
+
+#[derive(Debug, Clone)]
+pub struct TableRef {
+    pub name: Ident,
+    pub alias: Option<Ident>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OrderItem {
+    pub expr: Expr,
+    pub desc: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct InsertStmt {
+    pub table: Ident,
+    pub columns: Vec<Ident>,
+    pub source: InsertSource,
+}
+
+#[derive(Debug, Clone)]
+pub enum InsertSource {
+    Values(Vec<Vec<Expr>>),
+    DefaultValues,
+    Select(Box<SelectStmt>),
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateStmt {
+    pub table: Ident,
+    pub assignments: Vec<Assignment>,
+    pub where_expr: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Assignment {
+    pub column: Ident,
+    pub expr: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteStmt {
+    pub table: Ident,
+    pub where_expr: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateTableStmt {
+    pub name: Ident,
+    pub columns: Vec<ColumnDef>,
+    pub table_constraints: Vec<TableConstraint>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ColumnDef {
+    pub name: Ident,
+    pub declared_type: Option<String>,
+    pub constraints: Vec<ColumnConstraint>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ColumnConstraint {
+    PrimaryKey,
+    NotNull,
+    Default(Expr),
+    Check(Expr),
+}
+
+#[derive(Debug, Clone)]
+pub enum TableConstraint {
+    PrimaryKey(Vec<Ident>),
+    Unique(Vec<Ident>),
+    Check(Expr),
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateIndexStmt {
+    pub name: Ident,
+    pub table: Ident,
+    pub columns: Vec<Ident>,
+    pub unique: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct DropTableStmt {
+    pub name: Ident,
+}
+
+#[derive(Debug, Clone)]
+pub struct DropIndexStmt {
+    pub name: Ident,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BeginKind {
+    Deferred,
+    Immediate,
+    Exclusive,
+}
+
+#[derive(Debug, Clone)]
+pub struct BeginStmt {
+    pub kind: BeginKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum Expr {
+    Literal(ValueBuf, Span),
+    Param(ParamRef, Span),
+    Column(ColumnName, Span),
+
+    Unary {
+        op: UnaryOp,
+        expr: Box<Expr>,
+        span: Span,
+    },
+
+    Binary {
+        op: BinaryOp,
+        left: Box<Expr>,
+        right: Box<Expr>,
+        span: Span,
+    },
+
+    IsNull {
+        expr: Box<Expr>,
+        not: bool,
+        span: Span,
+    },
+
+    Between {
+        expr: Box<Expr>,
+        low: Box<Expr>,
+        high: Box<Expr>,
+        not: bool,
+        span: Span,
+    },
+
+    InList {
+        expr: Box<Expr>,
+        list: Vec<Expr>,
+        not: bool,
+        span: Span,
+    },
+
+    Function {
+        name: Ident,
+        args: Vec<Expr>,
+        span: Span,
+    },
+
+    Cast {
+        expr: Box<Expr>,
+        type_name: String,
+        span: Span,
+    },
+
+    Case {
+        base: Option<Box<Expr>>,
+        arms: Vec<(Expr, Expr)>,
+        else_expr: Option<Box<Expr>>,
+        span: Span,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum ParamRef {
+    Next,
+    Numbered(usize),
+    Named(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct ColumnName {
+    pub table: Option<String>,
+    pub column: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum UnaryOp {
+    Plus,
+    Minus,
+    Not,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+
+    Is,
+    IsNot,
+
+    And,
+    Or,
+
+    Like,
+    Glob,
+}
+```
+
+---
+
+# Parser
+
+Use a Pratt parser for expressions. It is fast, small, and easy to extend.
+
+```rust
+// parser/expr.rs
+
+use crate::lexer::{Keyword, Tok, Token};
+use crate::parser::ast::*;
+use crate::error::{Result, SqlError};
+
+impl<'s> Parser<'s> {
+    pub fn parse_expr(&mut self) -> Result<Expr> {
+        self.parse_expr_bp(0)
+    }
+
+    fn parse_expr_bp(&mut self, min_bp: u8) -> Result<Expr> {
+        let mut lhs = self.parse_prefix()?;
+
+        loop {
+            let op_token = self.peek();
+
+            // Special postfix: IS NULL / IS NOT NULL
+            if self.peek_keyword(Keyword::Is) {
+                let start = lhs_span(&lhs).start;
+                self.bump();
+
+                let not = if self.peek_keyword(Keyword::Not) {
+                    self.bump();
+                    true
+                } else {
+                    false
+                };
+
+                if self.peek_keyword(Keyword::Null) {
+                    let end = self.bump().span.end;
+                    lhs = Expr::IsNull {
+                        expr: Box::new(lhs),
+                        not,
+                        span: crate::span::Span::new(start, end),
+                    };
+                    continue;
+                }
+
+                let rhs = self.parse_expr_bp(41)?;
+                let end = lhs_span(&rhs).end;
+                lhs = Expr::Binary {
+                    op: if not { BinaryOp::IsNot } else { BinaryOp::Is },
+                    left: Box::new(lhs),
+                    right: Box::new(rhs),
+                    span: crate::span::Span::new(start, end),
+                };
+                continue;
+            }
+
+            // BETWEEN has custom right side.
+            if self.peek_keyword(Keyword::Between) {
+                let (l_bp, r_bp) = (35, 36);
+                if l_bp < min_bp {
+                    break;
+                }
+
+                let start = lhs_span(&lhs).start;
+                self.bump();
+
+                let low = self.parse_expr_bp(r_bp)?;
+                self.expect_keyword(Keyword::And)?;
+                let high = self.parse_expr_bp(r_bp)?;
+                let end = lhs_span(&high).end;
+
+                lhs = Expr::Between {
+                    expr: Box::new(lhs),
+                    low: Box::new(low),
+                    high: Box::new(high),
+                    not: false,
+                    span: crate::span::Span::new(start, end),
+                };
+                continue;
+            }
+
+            // IN list
+            if self.peek_keyword(Keyword::In) {
+                let (l_bp, r_bp) = (35, 36);
+                if l_bp < min_bp {
+                    break;
+                }
+
+                let start = lhs_span(&lhs).start;
+                self.bump();
+                self.expect(Tok::LParen)?;
+
+                let mut list = Vec::new();
+                if !self.peek_tok(Tok::RParen) {
+                    loop {
+                        list.push(self.parse_expr_bp(0)?);
+                        if !self.consume(Tok::Comma) {
+                            break;
+                        }
+                    }
+                }
+
+                let end = self.expect(Tok::RParen)?.span.end;
+                lhs = Expr::InList {
+                    expr: Box::new(lhs),
+                    list,
+                    not: false,
+                    span: crate::span::Span::new(start, end),
+                };
+                continue;
+            }
+
+            let Some((l_bp, r_bp, op)) = infix_binding_power(op_token) else {
+                break;
+            };
+
+            if l_bp < min_bp {
+                break;
+            }
+
+            self.bump();
+            let rhs = self.parse_expr_bp(r_bp)?;
+            let span = crate::span::Span::new(lhs_span(&lhs).start, lhs_span(&rhs).end);
+
+            lhs = Expr::Binary {
+                op,
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+                span,
+            };
+        }
+
+        Ok(lhs)
+    }
+
+    fn parse_prefix(&mut self) -> Result<Expr> {
+        let token = self.bump();
+
+        match token.kind {
+            Tok::Int => {
+                let v = token.text.parse::<i64>()
+                    .map_err(|_| SqlError::syntax("invalid integer", token.span))?;
+                Ok(Expr::Literal(crate::value::ValueBuf::Int(v), token.span))
+            }
+
+            Tok::Real => {
+                let v = token.text.parse::<f64>()
+                    .map_err(|_| SqlError::syntax("invalid real", token.span))?;
+                Ok(Expr::Literal(crate::value::ValueBuf::Real(v), token.span))
+            }
+
+            Tok::String => {
+                let s = decode_sql_string(token.text)?;
+                Ok(Expr::Literal(crate::value::ValueBuf::Text(std::sync::Arc::from(s)), token.span))
+            }
+
+            Tok::Blob => {
+                let b = decode_sql_blob(token.text)?;
+                Ok(Expr::Literal(crate::value::ValueBuf::Blob(std::sync::Arc::from(b)), token.span))
+            }
+
+            Tok::Keyword(Keyword::Null) => {
+                Ok(Expr::Literal(crate::value::ValueBuf::Null, token.span))
+            }
+
+            Tok::Keyword(Keyword::True) => {
+                Ok(Expr::Literal(crate::value::ValueBuf::Int(1), token.span))
+            }
+
+            Tok::Keyword(Keyword::False) => {
+                Ok(Expr::Literal(crate::value::ValueBuf::Int(0), token.span))
+            }
+
+            Tok::ParamQuestion => {
+                Ok(Expr::Param(ParamRef::Next, token.span))
+            }
+
+            Tok::ParamNumbered => {
+                let n = token.text[1..].parse::<usize>()
+                    .map_err(|_| SqlError::syntax("invalid parameter number", token.span))?;
+                Ok(Expr::Param(ParamRef::Numbered(n), token.span))
+            }
+
+            Tok::ParamNamed => {
+                Ok(Expr::Param(ParamRef::Named(token.text.to_string()), token.span))
+            }
+
+            Tok::Plus => {
+                let rhs = self.parse_expr_bp(70)?;
+                Ok(Expr::Unary {
+                    op: UnaryOp::Plus,
+                    span: crate::span::Span::new(token.span.start, lhs_span(&rhs).end),
+                    expr: Box::new(rhs),
+                })
+            }
+
+            Tok::Minus => {
+                let rhs = self.parse_expr_bp(70)?;
+                Ok(Expr::Unary {
+                    op: UnaryOp::Minus,
+                    span: crate::span::Span::new(token.span.start, lhs_span(&rhs).end),
+                    expr: Box::new(rhs),
+                })
+            }
+
+            Tok::Keyword(Keyword::Not) => {
+                let rhs = self.parse_expr_bp(60)?;
+                Ok(Expr::Unary {
+                    op: UnaryOp::Not,
+                    span: crate::span::Span::new(token.span.start, lhs_span(&rhs).end),
+                    expr: Box::new(rhs),
+                })
+            }
+
+            Tok::Keyword(Keyword::Cast) => self.parse_cast(token),
+
+            Tok::Keyword(Keyword::Case) => self.parse_case(token),
+
+            Tok::Ident | Tok::Keyword(_) => {
+                self.parse_identifier_expr(token)
+            }
+
+            Tok::LParen => {
+                let expr = self.parse_expr_bp(0)?;
+                self.expect(Tok::RParen)?;
+                Ok(expr)
+            }
+
+            _ => Err(SqlError::syntax("expected expression", token.span)),
+        }
+    }
+}
+
+fn infix_binding_power(tok: Token<'_>) -> Option<(u8, u8, BinaryOp)> {
+    use BinaryOp::*;
+    use Keyword::*;
+    use Tok::*;
+
+    match tok.kind {
+        Keyword(Or) => Some((10, 11, BinaryOp::Or)),
+        Keyword(And) => Some((20, 21, BinaryOp::And)),
+
+        Eq | EqEq => Some((40, 41, Eq)),
+        Ne => Some((40, 41, Ne)),
+        Lt => Some((40, 41, Lt)),
+        Le => Some((40, 41, Le)),
+        Gt => Some((40, 41, Gt)),
+        Ge => Some((40, 41, Ge)),
+
+        Keyword(Like) => Some((40, 41, Like)),
+        Keyword(Glob) => Some((40, 41, Glob)),
+
+        Plus => Some((50, 51, Add)),
+        Minus => Some((50, 51, Sub)),
+
+        Star => Some((60, 61, Mul)),
+        Slash => Some((60, 61, Div)),
+        Percent => Some((60, 61, Rem)),
+
+        _ => None,
+    }
+}
+```
+
+---
+
+# Binder
+
+The binder does the work that makes execution fast.
+
+It resolves:
+
+```text
+- table names -> TableId
+- column names -> ColumnId and ordinal
+- * expansion
+- result column names
+- parameter numbers
+- function names -> FunctionId
+- column affinities
+- collations
+- schema epoch
+```
+
+It also rejects unsupported SQL early.
+
+```rust
+// binder/bound_ast.rs
+
+use crate::kernel::{TableId, ColumnId, IndexId, SchemaEpoch};
+use crate::value::{Affinity, Collation, ValueBuf};
+
+#[derive(Debug, Clone)]
+pub struct BoundStatement {
+    pub schema_epoch: SchemaEpoch,
+    pub param_count: usize,
+    pub kind: BoundStatementKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum BoundStatementKind {
+    Select(BoundSelect),
+    Insert(BoundInsert),
+    Update(BoundUpdate),
+    Delete(BoundDelete),
+    CreateTable(BoundCreateTable),
+    CreateIndex(BoundCreateIndex),
+    DropTable(BoundDropTable),
+    DropIndex(BoundDropIndex),
+    Begin(BoundBegin),
+    Commit,
+    Rollback,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundSelect {
+    pub table: Option<BoundTableRef>,
+    pub projection: Vec<BoundSelectItem>,
+    pub where_expr: Option<BoundExpr>,
+    pub order_by: Vec<BoundOrderItem>,
+    pub limit: Option<BoundExpr>,
+    pub offset: Option<BoundExpr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundTableRef {
+    pub table_id: TableId,
+    pub table_name: String,
+    pub alias: Option<String>,
+    pub columns: Vec<BoundColumnMeta>,
+    pub indexes: Vec<BoundIndexMeta>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundColumnMeta {
+    pub id: ColumnId,
+    pub ordinal: usize,
+    pub name: String,
+    pub affinity: Affinity,
+    pub collation: Collation,
+    pub nullable: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundIndexMeta {
+    pub id: IndexId,
+    pub columns: Vec<ColumnId>,
+    pub unique: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundSelectItem {
+    pub expr: BoundExpr,
+    pub output_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundOrderItem {
+    pub expr: BoundExpr,
+    pub desc: bool,
+    pub collation: Collation,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundInsert {
+    pub table: BoundTableRef,
+    pub target_columns: Vec<ColumnId>,
+    pub source: BoundInsertSource,
+}
+
+#[derive(Debug, Clone)]
+pub enum BoundInsertSource {
+    Values(Vec<Vec<BoundExpr>>),
+    DefaultValues,
+    Select(Box<BoundSelect>),
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundUpdate {
+    pub table: BoundTableRef,
+    pub assignments: Vec<BoundAssignment>,
+    pub where_expr: Option<BoundExpr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundAssignment {
+    pub column: ColumnId,
+    pub expr: BoundExpr,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundDelete {
+    pub table: BoundTableRef,
+    pub where_expr: Option<BoundExpr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundCreateTable {
+    pub name: String,
+    pub columns: Vec<BoundCreateColumn>,
+    pub primary_key: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundCreateColumn {
+    pub name: String,
+    pub declared_type: String,
+    pub affinity: Affinity,
+    pub nullable: bool,
+    pub default_expr: Option<BoundExpr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundCreateIndex {
+    pub name: String,
+    pub table: BoundTableRef,
+    pub columns: Vec<ColumnId>,
+    pub unique: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundDropTable {
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundDropIndex {
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct BoundBegin {
+    pub kind: crate::parser::ast::BeginKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum BoundExpr {
+    Literal(ValueBuf),
+    Param {
+        index: usize,
+    },
+    Column {
+        table_id: TableId,
+        column_id: ColumnId,
+        ordinal: usize,
+        affinity: Affinity,
+        collation: Collation,
+    },
+    Unary {
+        op: crate::parser::ast::UnaryOp,
+        expr: Box<BoundExpr>,
+    },
+    Binary {
+        op: crate::parser::ast::BinaryOp,
+        left: Box<BoundExpr>,
+        right: Box<BoundExpr>,
+        affinity: Affinity,
+        collation: Collation,
+    },
+    IsNull {
+        expr: Box<BoundExpr>,
+        not: bool,
+    },
+    Function {
+        function_id: FunctionId,
+        args: Vec<BoundExpr>,
+    },
+    Cast {
+        expr: Box<BoundExpr>,
+        affinity: Affinity,
+    },
+    Case {
+        base: Option<Box<BoundExpr>>,
+        arms: Vec<(BoundExpr, BoundExpr)>,
+        else_expr: Option<Box<BoundExpr>>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FunctionId(pub u16);
+```
+
+Binder parameter allocation should mimic SQLite ergonomics:
+
+```text
+?       -> next parameter number
+?12     -> explicit parameter 12
+:name   -> stable named parameter
+@name   -> stable named parameter
+$name   -> stable named parameter
+```
+
+But execution should never hash parameter names. Binder should map names to integer slots once.
+
+```rust
+// binder/params.rs
+
+use std::collections::HashMap;
+use crate::parser::ast::ParamRef;
+use crate::error::{Result, SqlError};
+
+#[derive(Default)]
+pub struct ParamBinder {
+    next: usize,
+    max: usize,
+    names: HashMap<String, usize>,
+}
+
+impl ParamBinder {
+    pub fn bind(&mut self, p: &ParamRef) -> Result<usize> {
+        match p {
+            ParamRef::Next => {
+                self.next += 1;
+                self.max = self.max.max(self.next);
+                Ok(self.next)
+            }
+
+            ParamRef::Numbered(n) => {
+                if *n == 0 {
+                    return Err(SqlError::bind("parameter numbers are 1-based"));
+                }
+                self.max = self.max.max(*n);
+                Ok(*n)
+            }
+
+            ParamRef::Named(name) => {
+                if let Some(&idx) = self.names.get(name) {
+                    return Ok(idx);
+                }
+
+                self.next += 1;
+                let idx = self.next;
+                self.max = self.max.max(idx);
+                self.names.insert(name.clone(), idx);
+                Ok(idx)
+            }
+        }
+    }
+
+    pub fn param_count(&self) -> usize {
+        self.max
+    }
+}
+```
+
+---
+
+# Type affinity
+
+SQLite column declarations determine affinity, not rigid type. SQLite’s affinities are `TEXT`, `NUMERIC`, `INTEGER`, `REAL`, and `BLOB`, and its docs define how inserted text/numeric values are converted. ([SQLite][6])
+
+Implement a compatibility mapping:
+
+```rust
+pub fn affinity_from_declared_type(declared: &str) -> Affinity {
+    let upper = declared.to_ascii_uppercase();
+
+    if upper.contains("INT") {
+        Affinity::Integer
+    } else if upper.contains("CHAR")
+        || upper.contains("CLOB")
+        || upper.contains("TEXT")
+    {
+        Affinity::Text
+    } else if upper.contains("BLOB") || upper.trim().is_empty() {
+        Affinity::Blob
+    } else if upper.contains("REAL")
+        || upper.contains("FLOA")
+        || upper.contains("DOUB")
+    {
+        Affinity::Real
+    } else {
+        Affinity::Numeric
+    }
+}
+
+pub fn apply_insert_affinity(v: ValueBuf, affinity: Affinity) -> ValueBuf {
+    match affinity {
+        Affinity::Blob => v,
+
+        Affinity::Text => match v {
+            ValueBuf::Int(i) => ValueBuf::Text(std::sync::Arc::from(i.to_string())),
+            ValueBuf::Real(f) => ValueBuf::Text(std::sync::Arc::from(format_sql_real(f))),
+            other => other,
+        },
+
+        Affinity::Numeric | Affinity::Integer => apply_numeric_affinity(v),
+
+        Affinity::Real => match apply_numeric_affinity(v) {
+            ValueBuf::Int(i) => ValueBuf::Real(i as f64),
+            other => other,
+        },
+    }
+}
+
+fn apply_numeric_affinity(v: ValueBuf) -> ValueBuf {
+    match v {
+        ValueBuf::Text(s) => {
+            if let Some(i) = parse_well_formed_i64(&s) {
+                ValueBuf::Int(i)
+            } else if let Some(f) = parse_well_formed_f64(&s) {
+                if f.fract() == 0.0 && f >= i64::MIN as f64 && f <= i64::MAX as f64 {
+                    ValueBuf::Int(f as i64)
+                } else {
+                    ValueBuf::Real(f)
+                }
+            } else {
+                ValueBuf::Text(s)
+            }
+        }
+        other => other,
+    }
+}
+
+fn parse_well_formed_i64(s: &str) -> Option<i64> {
+    s.trim().parse().ok()
+}
+
+fn parse_well_formed_f64(s: &str) -> Option<f64> {
+    s.trim().parse().ok()
+}
+
+fn format_sql_real(f: f64) -> String {
+    // Differential-test this against SQLite.
+    // This can later be replaced with a custom formatter.
+    format!("{f}")
+}
+```
+
+---
+
+# Function registry
+
+SQLite exposes many built-in scalar functions, including `abs`, `coalesce`, `ifnull`, `length`, `like`, `lower`, `upper`, `typeof`, `round`, `hex`, `quote`, `random`, and planner-hint-style functions like `likely` and `unlikely`. ([SQLite][7])
+
+Implement function lookup during binding, not execution.
+
+```rust
+// binder/functions.rs
+
+use crate::binder::bound_ast::FunctionId;
+
+#[derive(Debug, Clone, Copy)]
+pub enum Arity {
+    Exact(u8),
+    AtLeast(u8),
+    Any,
+}
+
+pub struct FunctionDef {
+    pub id: FunctionId,
+    pub name: &'static str,
+    pub arity: Arity,
+    pub deterministic: bool,
+    pub null_policy: NullPolicy,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum NullPolicy {
+    Custom,
+    NullIfAnyNull,
+}
+
+pub static FUNCTIONS: &[FunctionDef] = &[
+    FunctionDef {
+        id: FunctionId(1),
+        name: "abs",
+        arity: Arity::Exact(1),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(2),
+        name: "coalesce",
+        arity: Arity::AtLeast(2),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(3),
+        name: "ifnull",
+        arity: Arity::Exact(2),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(4),
+        name: "length",
+        arity: Arity::Exact(1),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(5),
+        name: "lower",
+        arity: Arity::Exact(1),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(6),
+        name: "upper",
+        arity: Arity::Exact(1),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(7),
+        name: "typeof",
+        arity: Arity::Exact(1),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(8),
+        name: "substr",
+        arity: Arity::AtLeast(2),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(9),
+        name: "likely",
+        arity: Arity::Exact(1),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+    FunctionDef {
+        id: FunctionId(10),
+        name: "unlikely",
+        arity: Arity::Exact(1),
+        deterministic: true,
+        null_policy: NullPolicy::Custom,
+    },
+];
+
+pub fn resolve_function(name: &str, argc: usize) -> Option<FunctionId> {
+    FUNCTIONS.iter()
+        .find(|f| {
+            f.name.eq_ignore_ascii_case(name) && match f.arity {
+                Arity::Exact(n) => argc == n as usize,
+                Arity::AtLeast(n) => argc >= n as usize,
+                Arity::Any => true,
+            }
+        })
+        .map(|f| f.id)
+}
+```
+
+`likely`, `unlikely`, and `likelihood` should be optimized away in the expression compiler: return the first argument unchanged. SQLite documents these as planner hints/no-op-ish at runtime. ([SQLite][7])
+
+---
+
+# Logical plan
+
+```rust
+// planner/logical.rs
+
+use crate::binder::bound_ast::*;
+use crate::kernel::{TableId, ColumnId};
+
+#[derive(Debug, Clone)]
+pub enum LogicalPlan {
+    Values {
+        rows: Vec<Vec<BoundExpr>>,
+    },
+
+    Scan {
+        table: BoundTableRef,
+        projection: Vec<ColumnId>,
+    },
+
+    Filter {
+        input: Box<LogicalPlan>,
+        predicate: BoundExpr,
+    },
+
+    Project {
+        input: Box<LogicalPlan>,
+        exprs: Vec<BoundSelectItem>,
+    },
+
+    Sort {
+        input: Box<LogicalPlan>,
+        order_by: Vec<BoundOrderItem>,
+    },
+
+    Limit {
+        input: Box<LogicalPlan>,
+        limit: Option<BoundExpr>,
+        offset: Option<BoundExpr>,
+    },
+
+    Insert {
+        table: BoundTableRef,
+        target_columns: Vec<ColumnId>,
+        source: Box<LogicalPlan>,
+    },
+
+    Update {
+        table: BoundTableRef,
+        assignments: Vec<BoundAssignment>,
+        input: Box<LogicalPlan>,
+    },
+
+    Delete {
+        table: BoundTableRef,
+        input: Box<LogicalPlan>,
+    },
+
+    Ddl(DdlPlan),
+
+    Tx(TxPlan),
+}
+
+#[derive(Debug, Clone)]
+pub enum DdlPlan {
+    CreateTable(BoundCreateTable),
+    CreateIndex(BoundCreateIndex),
+    DropTable(BoundDropTable),
+    DropIndex(BoundDropIndex),
+}
+
+#[derive(Debug, Clone)]
+pub enum TxPlan {
+    Begin(BoundBegin),
+    Commit,
+    Rollback,
+}
+```
+
+The initial planner should be rule-based, not cost-based. Phase 6 can replace it with a cost-based optimizer.
+
+Phase 5 rules:
+
+```text
+1. Push WHERE into scan where possible.
+2. Compute projection column set.
+3. Detect rowid / integer primary-key equality.
+4. Detect exact index prefix equality.
+5. Detect simple range predicates.
+6. Avoid sorting when scan order already satisfies ORDER BY.
+7. Convert ORDER BY + LIMIT into TopN where possible.
+8. For UPDATE/DELETE, read rowids first or lock/recheck rows to avoid Halloween bugs.
+```
+
+---
+
+# Physical plan
+
+```rust
+// planner/physical.rs
+
+use crate::kernel::{TableId, ColumnId, IndexId};
+use crate::exec::expr_vm::ExprProgram;
+use crate::value::{ValueBuf, Collation};
+
+#[derive(Debug, Clone)]
+pub struct PhysicalPlan {
+    pub root: PhysicalOp,
+    pub output: Vec<OutputColumn>,
+    pub param_count: usize,
+    pub schema_epoch: crate::kernel::SchemaEpoch,
+    pub readonly: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct OutputColumn {
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum PhysicalOp {
+    Empty,
+
+    ConstRows {
+        rows: Vec<Vec<ExprProgram>>,
+    },
+
+    TableScan {
+        table_id: TableId,
+        projection: Vec<ColumnId>,
+    },
+
+    PointGet {
+        table_id: TableId,
+        rowid_expr: ExprProgram,
+        projection: Vec<ColumnId>,
+    },
+
+    IndexScan {
+        table_id: TableId,
+        index_id: IndexId,
+        projection: Vec<ColumnId>,
+        low: Option<Vec<ExprProgram>>,
+        high: Option<Vec<ExprProgram>>,
+    },
+
+    Filter {
+        input: Box<PhysicalOp>,
+        predicate: ExprProgram,
+    },
+
+    Project {
+        input: Box<PhysicalOp>,
+        exprs: Vec<ExprProgram>,
+    },
+
+    Sort {
+        input: Box<PhysicalOp>,
+        keys: Vec<SortKeyProgram>,
+        limit_hint: Option<usize>,
+    },
+
+    Limit {
+        input: Box<PhysicalOp>,
+        limit: Option<ExprProgram>,
+        offset: Option<ExprProgram>,
+    },
+
+    Insert {
+        table_id: TableId,
+        target_columns: Vec<ColumnId>,
+        source: Box<PhysicalOp>,
+        full_column_count: usize,
+        defaults: Vec<Option<ExprProgram>>,
+        affinities: Vec<crate::value::Affinity>,
+        not_null: Vec<bool>,
+    },
+
+    Update {
+        table_id: TableId,
+        input: Box<PhysicalOp>,
+        assignments: Vec<(ColumnId, ExprProgram)>,
+        full_column_count: usize,
+        affinities: Vec<crate::value::Affinity>,
+        not_null: Vec<bool>,
+    },
+
+    Delete {
+        table_id: TableId,
+        input: Box<PhysicalOp>,
+    },
+
+    Ddl(PhysicalDdl),
+    Tx(PhysicalTx),
+}
+
+#[derive(Debug, Clone)]
+pub struct SortKeyProgram {
+    pub expr: ExprProgram,
+    pub desc: bool,
+    pub collation: Collation,
+}
+
+#[derive(Debug, Clone)]
+pub enum PhysicalDdl {
+    CreateTable(crate::kernel::CreateTableSpec),
+    CreateIndex(crate::kernel::CreateIndexSpec),
+    DropTable { name: String },
+    DropIndex { name: String },
+}
+
+#[derive(Debug, Clone)]
+pub enum PhysicalTx {
+    Begin(crate::parser::ast::BeginKind),
+    Commit,
+    Rollback,
+}
+```
+
+---
+
+# Expression bytecode
+
+This is critical. Do not evaluate AST recursively per row. Compile expressions once.
+
+```rust
+// exec/expr_vm.rs
+
+use crate::binder::bound_ast::FunctionId;
+use crate::kernel::ColumnId;
+use crate::value::{ValueBuf, ValueRef, Truth};
+
+#[derive(Debug, Clone)]
+pub struct ExprProgram {
+    pub ops: Vec<Op>,
+    pub max_stack: usize,
+}
+
+#[derive(Debug, Clone)]
+pub enum Op {
+    Const(ValueBuf),
+    LoadParam(usize),
+    LoadColumn {
+        ordinal: usize,
+        column_id: ColumnId,
+    },
+
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+
+    Neg,
+    Not,
+
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+
+    Is,
+    IsNot,
+    IsNull,
+    IsNotNull,
+
+    And,
+    Or,
+
+    Cast(crate::value::Affinity),
+
+    Function {
+        id: FunctionId,
+        argc: u8,
+    },
+}
+
+pub struct EvalCtx<'a> {
+    pub params: &'a crate::exec::statement::ParamSet,
+    pub row: Option<&'a crate::kernel::RowBuf>,
+    pub stack: Vec<ValueBuf>,
+}
+
+impl<'a> EvalCtx<'a> {
+    pub fn eval(&mut self, program: &ExprProgram) -> crate::error::Result<ValueBuf> {
+        self.stack.clear();
+        self.stack.reserve(program.max_stack);
+
+        for op in &program.ops {
+            match op {
+                Op::Const(v) => self.stack.push(v.clone()),
+
+                Op::LoadParam(idx) => {
+                    let v = self.params.get(*idx)?;
+                    self.stack.push(v.clone());
+                }
+
+                Op::LoadColumn { ordinal, .. } => {
+                    let row = self.row.ok_or_else(|| {
+                        crate::error::SqlError::exec("column reference outside row context")
+                    })?;
+
+                    let v = row.values
+                        .get(*ordinal)
+                        .ok_or_else(|| crate::error::SqlError::exec("column ordinal out of range"))?
+                        .clone();
+
+                    self.stack.push(v);
+                }
+
+                Op::Add => self.binary_numeric(|a, b| a + b)?,
+                Op::Sub => self.binary_numeric(|a, b| a - b)?,
+                Op::Mul => self.binary_numeric(|a, b| a * b)?,
+                Op::Div => self.div()?,
+                Op::Rem => self.rem()?,
+
+                Op::Neg => self.neg()?,
+                Op::Not => {
+                    let v = self.pop()?;
+                    let t = crate::value::sqlite_truth(v.as_ref()).not();
+                    self.stack.push(truth_value(t));
+                }
+
+                Op::Eq => self.compare_cmp(crate::parser::ast::BinaryOp::Eq)?,
+                Op::Ne => self.compare_cmp(crate::parser::ast::BinaryOp::Ne)?,
+                Op::Lt => self.compare_cmp(crate::parser::ast::BinaryOp::Lt)?,
+                Op::Le => self.compare_cmp(crate::parser::ast::BinaryOp::Le)?,
+                Op::Gt => self.compare_cmp(crate::parser::ast::BinaryOp::Gt)?,
+                Op::Ge => self.compare_cmp(crate::parser::ast::BinaryOp::Ge)?,
+
+                Op::Is => self.is_op(false)?,
+                Op::IsNot => self.is_op(true)?,
+
+                Op::IsNull => {
+                    let v = self.pop()?;
+                    self.stack.push(ValueBuf::Int(matches!(v, ValueBuf::Null) as i64));
+                }
+
+                Op::IsNotNull => {
+                    let v = self.pop()?;
+                    self.stack.push(ValueBuf::Int(!matches!(v, ValueBuf::Null) as i64));
+                }
+
+                Op::And => {
+                    let rhs = self.pop()?;
+                    let lhs = self.pop()?;
+                    let t = crate::value::sqlite_truth(lhs.as_ref())
+                        .and(crate::value::sqlite_truth(rhs.as_ref()));
+                    self.stack.push(truth_value(t));
+                }
+
+                Op::Or => {
+                    let rhs = self.pop()?;
+                    let lhs = self.pop()?;
+                    let t = crate::value::sqlite_truth(lhs.as_ref())
+                        .or(crate::value::sqlite_truth(rhs.as_ref()));
+                    self.stack.push(truth_value(t));
+                }
+
+                Op::Cast(affinity) => {
+                    let v = self.pop()?;
+                    self.stack.push(crate::value::apply_insert_affinity(v, *affinity));
+                }
+
+                Op::Function { id, argc } => {
+                    self.call_function(*id, *argc as usize)?;
+                }
+            }
+        }
+
+        if self.stack.len() != 1 {
+            return Err(crate::error::SqlError::exec("expression stack imbalance"));
+        }
+
+        Ok(self.pop()?)
+    }
+
+    fn pop(&mut self) -> crate::error::Result<ValueBuf> {
+        self.stack
+            .pop()
+            .ok_or_else(|| crate::error::SqlError::exec("expression stack underflow"))
+    }
+
+    fn binary_numeric<F>(&mut self, f: F) -> crate::error::Result<()>
+    where
+        F: FnOnce(f64, f64) -> f64,
+    {
+        let rhs = self.pop()?;
+        let lhs = self.pop()?;
+
+        if matches!(lhs, ValueBuf::Null) || matches!(rhs, ValueBuf::Null) {
+            self.stack.push(ValueBuf::Null);
+            return Ok(());
+        }
+
+        let a = to_f64(lhs.as_ref());
+        let b = to_f64(rhs.as_ref());
+
+        self.stack.push(ValueBuf::Real(f(a, b)));
+        Ok(())
+    }
+
+    fn div(&mut self) -> crate::error::Result<()> {
+        let rhs = self.pop()?;
+        let lhs = self.pop()?;
+
+        if matches!(lhs, ValueBuf::Null) || matches!(rhs, ValueBuf::Null) {
+            self.stack.push(ValueBuf::Null);
+            return Ok(());
+        }
+
+        let b = to_f64(rhs.as_ref());
+        if b == 0.0 {
+            self.stack.push(ValueBuf::Null);
+            return Ok(());
+        }
+
+        let a = to_f64(lhs.as_ref());
+        self.stack.push(ValueBuf::Real(a / b));
+        Ok(())
+    }
+
+    fn rem(&mut self) -> crate::error::Result<()> {
+        let rhs = self.pop()?;
+        let lhs = self.pop()?;
+
+        if matches!(lhs, ValueBuf::Null) || matches!(rhs, ValueBuf::Null) {
+            self.stack.push(ValueBuf::Null);
+            return Ok(());
+        }
+
+        let b = to_i64(rhs.as_ref());
+        if b == 0 {
+            self.stack.push(ValueBuf::Null);
+            return Ok(());
+        }
+
+        let a = to_i64(lhs.as_ref());
+        self.stack.push(ValueBuf::Int(a % b));
+        Ok(())
+    }
+
+    fn neg(&mut self) -> crate::error::Result<()> {
+        let v = self.pop()?;
+        match v {
+            ValueBuf::Null => self.stack.push(ValueBuf::Null),
+            ValueBuf::Int(i) => self.stack.push(ValueBuf::Int(i.saturating_neg())),
+            other => self.stack.push(ValueBuf::Real(-to_f64(other.as_ref()))),
+        }
+        Ok(())
+    }
+
+    fn compare_cmp(&mut self, op: crate::parser::ast::BinaryOp) -> crate::error::Result<()> {
+        let rhs = self.pop()?;
+        let lhs = self.pop()?;
+
+        if matches!(lhs, ValueBuf::Null) || matches!(rhs, ValueBuf::Null) {
+            self.stack.push(ValueBuf::Null);
+            return Ok(());
+        }
+
+        let ord = crate::value::compare_for_sort(
+            lhs.as_ref(),
+            rhs.as_ref(),
+            crate::value::Collation::Binary,
+        );
+
+        let pass = match op {
+            crate::parser::ast::BinaryOp::Eq => ord.is_eq(),
+            crate::parser::ast::BinaryOp::Ne => !ord.is_eq(),
+            crate::parser::ast::BinaryOp::Lt => ord.is_lt(),
+            crate::parser::ast::BinaryOp::Le => ord.is_le(),
+            crate::parser::ast::BinaryOp::Gt => ord.is_gt(),
+            crate::parser::ast::BinaryOp::Ge => ord.is_ge(),
+            _ => unreachable!(),
+        };
+
+        self.stack.push(ValueBuf::Int(pass as i64));
+        Ok(())
+    }
+
+    fn is_op(&mut self, negated: bool) -> crate::error::Result<()> {
+        let rhs = self.pop()?;
+        let lhs = self.pop()?;
+
+        let eq = match (&lhs, &rhs) {
+            (ValueBuf::Null, ValueBuf::Null) => true,
+            (ValueBuf::Null, _) | (_, ValueBuf::Null) => false,
+            _ => crate::value::compare_for_sort(
+                lhs.as_ref(),
+                rhs.as_ref(),
+                crate::value::Collation::Binary,
+            ).is_eq(),
+        };
+
+        self.stack.push(ValueBuf::Int((if negated { !eq } else { eq }) as i64));
+        Ok(())
+    }
+
+    fn call_function(&mut self, id: FunctionId, argc: usize) -> crate::error::Result<()> {
+        let base = self.stack.len()
+            .checked_sub(argc)
+            .ok_or_else(|| crate::error::SqlError::exec("function stack underflow"))?;
+
+        let args: Vec<ValueBuf> = self.stack.drain(base..).collect();
+
+        let out = crate::exec::functions::call(id, &args)?;
+        self.stack.push(out);
+
+        Ok(())
+    }
+}
+
+fn truth_value(t: Truth) -> ValueBuf {
+    match t {
+        Truth::True => ValueBuf::Int(1),
+        Truth::False => ValueBuf::Int(0),
+        Truth::Unknown => ValueBuf::Null,
+    }
+}
+
+fn to_f64(v: ValueRef<'_>) -> f64 {
+    match v {
+        ValueRef::Null => 0.0,
+        ValueRef::Int(i) => i as f64,
+        ValueRef::Real(f) => f,
+        ValueRef::Text(s) => s.trim().parse::<f64>().unwrap_or(0.0),
+        ValueRef::Blob(_) => 0.0,
+    }
+}
+
+fn to_i64(v: ValueRef<'_>) -> i64 {
+    match v {
+        ValueRef::Null => 0,
+        ValueRef::Int(i) => i,
+        ValueRef::Real(f) => f as i64,
+        ValueRef::Text(s) => s.trim().parse::<i64>().unwrap_or(0),
+        ValueRef::Blob(_) => 0,
+    }
+}
+```
+
+In production, optimize expression VM further:
+
+```text
+- Use SmallVec-like stack for <= 16 values.
+- Avoid Vec drain in function calls; pass stack slice.
+- Constant-fold deterministic functions.
+- Lower likely(x), unlikely(x), likelihood(x,y) to x.
+- Compile `col = ?` into direct comparison opcode.
+- Compile `WHERE col = ?` into scan hint and residual predicate.
+- Specialize arithmetic int/int.
+- Avoid Arc clone for small text/blob by adding inline storage.
+```
+
+---
+
+# Session and transaction semantics
+
+SQLite documents that commands accessing the database automatically start a transaction if one is not active, and automatically started transactions are committed when the last SQL statement finishes. It also documents `BEGIN DEFERRED`, `IMMEDIATE`, and `EXCLUSIVE` behavior. ([SQLite][2])
+
+RedlineDB should provide SQLite-like ergonomics while preserving RedlineDB concurrency.
+
+```rust
+// session.rs
+
+use std::sync::Arc;
+use crate::kernel::{Kernel, KernelTx, BeginOptions, Isolation, TxAccess};
+use crate::parser::ast::BeginKind;
+use crate::error::{Result, SqlError};
+
+pub struct Database<K: Kernel> {
+    kernel: Arc<K>,
+}
+
+impl<K: Kernel> Database<K> {
+    pub fn new(kernel: Arc<K>) -> Self {
+        Self { kernel }
+    }
+
+    pub fn connect(&self) -> Session<K> {
+        Session {
+            kernel: self.kernel.clone(),
+            tx_state: TxState::Idle,
+            isolation: Isolation::Snapshot,
+            last_insert_rowid: 0,
+            changes: 0,
+            memory_limit_bytes: 64 * 1024 * 1024,
+        }
+    }
+}
+
+pub struct Session<K: Kernel> {
+    pub(crate) kernel: Arc<K>,
+    tx_state: TxState,
+    isolation: Isolation,
+    last_insert_rowid: i64,
+    changes: u64,
+    memory_limit_bytes: usize,
+}
+
+enum TxState {
+    Idle,
+
+    // BEGIN DEFERRED has been issued, but no storage tx has started yet.
+    DeferredExplicit,
+
+    Active {
+        tx: Box<dyn KernelTx + Send>,
+        explicit: bool,
+        write_capable: bool,
+    },
+}
+
+pub enum StatementAccess {
+    ReadOnly,
+    ReadWrite,
+    Ddl,
+    TxControl,
+}
+
+impl<K: Kernel> Session<K> {
+    pub fn begin_explicit(&mut self, kind: BeginKind) -> Result<()> {
+        match self.tx_state {
+            TxState::Idle => {}
+            _ => return Err(SqlError::tx("transaction already active")),
+        }
+
+        match kind {
+            BeginKind::Deferred => {
+                self.tx_state = TxState::DeferredExplicit;
+            }
+
+            BeginKind::Immediate | BeginKind::Exclusive => {
+                // For RedlineDB, this starts a write-capable transaction,
+                // but should not acquire a process-global writer lock.
+                let tx = self.kernel.begin(BeginOptions {
+                    isolation: self.isolation,
+                    access: TxAccess::ReadWrite,
+                    explicit: true,
+                })?;
+
+                self.tx_state = TxState::Active {
+                    tx,
+                    explicit: true,
+                    write_capable: true,
+                };
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn commit(&mut self) -> Result<()> {
+        let state = std::mem::replace(&mut self.tx_state, TxState::Idle);
+
+        match state {
+            TxState::Idle => Err(SqlError::tx("no transaction is active")),
+
+            TxState::DeferredExplicit => {
+                // BEGIN; COMMIT; with no access.
+                Ok(())
+            }
+
+            TxState::Active { tx, .. } => tx.commit(),
+        }
+    }
+
+    pub fn rollback(&mut self) -> Result<()> {
+        let state = std::mem::replace(&mut self.tx_state, TxState::Idle);
+
+        match state {
+            TxState::Idle => Err(SqlError::tx("no transaction is active")),
+
+            TxState::DeferredExplicit => Ok(()),
+
+            TxState::Active { tx, .. } => tx.rollback(),
+        }
+    }
+
+    pub(crate) fn ensure_tx_for_statement(
+        &mut self,
+        access: StatementAccess,
+    ) -> Result<StatementTxGuard<'_>> {
+        let needs_write = matches!(access, StatementAccess::ReadWrite | StatementAccess::Ddl);
+
+        match self.tx_state {
+            TxState::Idle => {
+                let tx = self.kernel.begin(BeginOptions {
+                    isolation: self.isolation,
+                    access: if needs_write { TxAccess::ReadWrite } else { TxAccess::ReadOnly },
+                    explicit: false,
+                })?;
+
+                self.tx_state = TxState::Active {
+                    tx,
+                    explicit: false,
+                    write_capable: needs_write,
+                };
+            }
+
+            TxState::DeferredExplicit => {
+                let tx = self.kernel.begin(BeginOptions {
+                    isolation: self.isolation,
+                    access: if needs_write { TxAccess::ReadWrite } else { TxAccess::ReadOnly },
+                    explicit: true,
+                })?;
+
+                self.tx_state = TxState::Active {
+                    tx,
+                    explicit: true,
+                    write_capable: needs_write,
+                };
+            }
+
+            TxState::Active {
+                ref mut write_capable,
+                ..
+            } => {
+                if needs_write && !*write_capable {
+                    // Kernel should implement upgrade or return Busy/Conflict.
+                    *write_capable = true;
+                }
+            }
+        }
+
+        Ok(StatementTxGuard { session: self })
+    }
+}
+
+pub struct StatementTxGuard<'a> {
+    session: &'a mut dyn SessionTxAccess,
+}
+
+trait SessionTxAccess {
+    fn tx_mut(&mut self) -> &mut dyn KernelTx;
+    fn finish_statement(&mut self, success: bool) -> Result<()>;
+}
+```
+
+In real Rust, you will probably avoid this exact trait-object shape and instead structure `Session` around methods like:
+
+```rust
+session.with_statement_tx(access, |tx| {
+    // execute
+})
+```
+
+That avoids borrow-checker pain around guards.
+
+Transaction rules to implement:
+
+```text
+Autocommit SELECT:
+  - begin read tx
+  - stream rows
+  - commit when statement reset/finalized or exhausted
+
+Autocommit INSERT/UPDATE/DELETE:
+  - begin write tx
+  - execute
+  - commit at Done
+
+Explicit BEGIN:
+  - no autocommit after each statement
+  - statements share transaction snapshot for Snapshot isolation
+  - COMMIT/ROLLBACK ends tx
+
+Read committed:
+  - each statement sees fresh committed snapshot
+
+Snapshot:
+  - explicit tx sees stable snapshot
+  - autocommit statement sees statement snapshot
+
+Statement-level atomicity:
+  - inside explicit tx, a failed UPDATE rolls back only that statement unless kernel says full tx must abort
+```
+
+For throughput, default benchmark mode should be:
+
+```text
+BEGIN;
+many INSERT/UPDATE statements;
+COMMIT;
+```
+
+Autocommit should still be optimized by the kernel’s group commit.
+
+---
+
+# Prepared statement API
+
+```rust
+// api.rs
+
+use crate::value::{ValueBuf, ValueRef};
+
+pub enum StepResult<'a> {
+    Row(Row<'a>),
+    Done,
+}
+
+pub struct Row<'a> {
+    values: &'a [ValueBuf],
+}
+
+impl<'a> Row<'a> {
+    pub fn column_count(&self) -> usize {
+        self.values.len()
+    }
+
+    pub fn get(&self, i: usize) -> Option<ValueRef<'_>> {
+        self.values.get(i).map(|v| v.as_ref())
+    }
+}
+
+pub struct PreparedStatement<K: crate::kernel::Kernel> {
+    sql: String,
+    compiled: std::sync::Arc<crate::planner::physical::PhysicalPlan>,
+    params: crate::exec::statement::ParamSet,
+    runtime: Option<crate::exec::statement::StatementRuntime>,
+    _marker: std::marker::PhantomData<K>,
+}
+
+impl<K: crate::kernel::Kernel> PreparedStatement<K> {
+    pub fn bind_i64(&mut self, idx: usize, v: i64) -> crate::error::Result<()> {
+        self.params.set(idx, ValueBuf::Int(v))
+    }
+
+    pub fn bind_real(&mut self, idx: usize, v: f64) -> crate::error::Result<()> {
+        self.params.set(idx, ValueBuf::Real(v))
+    }
+
+    pub fn bind_text(&mut self, idx: usize, v: impl Into<std::sync::Arc<str>>) -> crate::error::Result<()> {
+        self.params.set(idx, ValueBuf::Text(v.into()))
+    }
+
+    pub fn bind_blob(&mut self, idx: usize, v: impl Into<std::sync::Arc<[u8]>>) -> crate::error::Result<()> {
+        self.params.set(idx, ValueBuf::Blob(v.into()))
+    }
+
+    pub fn bind_null(&mut self, idx: usize) -> crate::error::Result<()> {
+        self.params.set(idx, ValueBuf::Null)
+    }
+
+    pub fn reset(&mut self) -> crate::error::Result<()> {
+        self.runtime = None;
+        Ok(())
+    }
+
+    pub fn clear_bindings(&mut self) {
+        self.params.clear();
+    }
+}
+```
+
+Parameter set:
+
+```rust
+// exec/statement.rs
+
+use crate::value::ValueBuf;
+use crate::error::{Result, SqlError};
+
+pub struct ParamSet {
+    values: Vec<Option<ValueBuf>>,
+}
+
+impl ParamSet {
+    pub fn new(count: usize) -> Self {
+        Self {
+            values: vec![None; count + 1], // 1-based
+        }
+    }
+
+    pub fn set(&mut self, idx: usize, v: ValueBuf) -> Result<()> {
+        if idx == 0 || idx >= self.values.len() {
+            return Err(SqlError::bind("parameter index out of range"));
+        }
+        self.values[idx] = Some(v);
+        Ok(())
+    }
+
+    pub fn get(&self, idx: usize) -> Result<&ValueBuf> {
+        self.values
+            .get(idx)
+            .and_then(|v| v.as_ref())
+            .ok_or_else(|| SqlError::bind("parameter is not bound"))
+    }
+
+    pub fn clear(&mut self) {
+        for slot in &mut self.values {
+            *slot = None;
+        }
+    }
+}
+```
+
+---
+
+# Executor
+
+The executor should be pull-based:
+
+```text
+Statement::step()
+  -> root.next()
+  -> Row or Done
+```
+
+This streams naturally and keeps memory bounded.
+
+```rust
+// exec/operators.rs
+
+use crate::kernel::{KernelTx, RowBuf, Projection, PredicateHint};
+use crate::planner::physical::PhysicalOp;
+use crate::value::{ValueBuf, Truth};
+use crate::exec::expr_vm::{EvalCtx, ExprProgram};
+
+pub enum ExecStep {
+    Row(RowBuf),
+    Done,
+}
+
+pub trait Operator {
+    fn next(&mut self, ctx: &mut ExecCtx<'_>) -> crate::error::Result<ExecStep>;
+}
+
+pub struct ExecCtx<'a> {
+    pub tx: &'a mut dyn KernelTx,
+    pub params: &'a crate::exec::statement::ParamSet,
+    pub expr_stack: Vec<ValueBuf>,
+    pub changes: u64,
+    pub memory_used: usize,
+    pub memory_limit: usize,
+}
+
+pub struct TableScanExec<'a> {
+    cursor: Box<dyn crate::kernel::RowCursor + Send + 'a>,
+}
+
+impl<'a> Operator for TableScanExec<'a> {
+    fn next(&mut self, _ctx: &mut ExecCtx<'_>) -> crate::error::Result<ExecStep> {
+        match self.cursor.next()? {
+            Some(row) => Ok(ExecStep::Row(row)),
+            None => Ok(ExecStep::Done),
+        }
+    }
+}
+
+pub struct FilterExec {
+    input: Box<dyn Operator + Send>,
+    predicate: ExprProgram,
+}
+
+impl Operator for FilterExec {
+    fn next(&mut self, ctx: &mut ExecCtx<'_>) -> crate::error::Result<ExecStep> {
+        loop {
+            match self.input.next(ctx)? {
+                ExecStep::Done => return Ok(ExecStep::Done),
+                ExecStep::Row(row) => {
+                    let mut eval = EvalCtx {
+                        params: ctx.params,
+                        row: Some(&row),
+                        stack: std::mem::take(&mut ctx.expr_stack),
+                    };
+
+                    let v = eval.eval(&self.predicate)?;
+                    ctx.expr_stack = eval.stack;
+
+                    if crate::value::sqlite_truth(v.as_ref()).passes_where() {
+                        return Ok(ExecStep::Row(row));
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub struct ProjectExec {
+    input: Box<dyn Operator + Send>,
+    exprs: Vec<ExprProgram>,
+}
+
+impl Operator for ProjectExec {
+    fn next(&mut self, ctx: &mut ExecCtx<'_>) -> crate::error::Result<ExecStep> {
+        match self.input.next(ctx)? {
+            ExecStep::Done => Ok(ExecStep::Done),
+
+            ExecStep::Row(row) => {
+                let mut out = Vec::with_capacity(self.exprs.len());
+
+                for expr in &self.exprs {
+                    let mut eval = EvalCtx {
+                        params: ctx.params,
+                        row: Some(&row),
+                        stack: std::mem::take(&mut ctx.expr_stack),
+                    };
+
+                    let v = eval.eval(expr)?;
+                    ctx.expr_stack = eval.stack;
+                    out.push(v);
+                }
+
+                Ok(ExecStep::Row(RowBuf {
+                    rowid: row.rowid,
+                    values: out,
+                }))
+            }
+        }
+    }
+}
+
+pub struct LimitExec {
+    input: Box<dyn Operator + Send>,
+    limit: Option<u64>,
+    offset: u64,
+    produced: u64,
+    skipped: u64,
+}
+
+impl Operator for LimitExec {
+    fn next(&mut self, ctx: &mut ExecCtx<'_>) -> crate::error::Result<ExecStep> {
+        if let Some(limit) = self.limit {
+            if self.produced >= limit {
+                return Ok(ExecStep::Done);
+            }
+        }
+
+        loop {
+            match self.input.next(ctx)? {
+                ExecStep::Done => return Ok(ExecStep::Done),
+                ExecStep::Row(row) => {
+                    if self.skipped < self.offset {
+                        self.skipped += 1;
+                        continue;
+                    }
+
+                    self.produced += 1;
+                    return Ok(ExecStep::Row(row));
+                }
+            }
+        }
+    }
+}
+```
+
+In production, avoid `Box<dyn Operator>` for hot operators where possible. Use an enum executor:
+
+```rust
+pub enum ExecNode {
+    TableScan(TableScanState),
+    PointGet(PointGetState),
+    Filter(FilterState),
+    Project(ProjectState),
+    Limit(LimitState),
+    Sort(SortState),
+    Insert(InsertState),
+    Update(UpdateState),
+    Delete(DeleteState),
+}
+```
+
+An enum-based executor avoids dynamic dispatch and improves branch predictability. Use trait objects only initially or for low-frequency nodes.
+
+---
+
+# Fast path: point read
+
+This is the most important OLTP read path.
+
+SQL:
+
+```sql
+SELECT name, age FROM user WHERE id = ?;
+```
+
+Should compile into:
+
+```text
+PointGet {
+  table_id,
+  rowid_expr: LoadParam(1),
+  projection: [name_col, age_col]
+}
+```
+
+Runtime:
+
+```text
+param -> i64 rowid
+kernel.point_get(table_id, rowid, projection)
+project row
+return
+```
+
+No table scan. No WHERE expression. No row allocation beyond output.
+
+```rust
+pub struct PointGetExec {
+    table_id: crate::kernel::TableId,
+    rowid_expr: ExprProgram,
+    projection: Vec<crate::kernel::ColumnId>,
+    done: bool,
+}
+
+impl Operator for PointGetExec {
+    fn next(&mut self, ctx: &mut ExecCtx<'_>) -> crate::error::Result<ExecStep> {
+        if self.done {
+            return Ok(ExecStep::Done);
+        }
+        self.done = true;
+
+        let mut eval = EvalCtx {
+            params: ctx.params,
+            row: None,
+            stack: std::mem::take(&mut ctx.expr_stack),
+        };
+
+        let v = eval.eval(&self.rowid_expr)?;
+        ctx.expr_stack = eval.stack;
+
+        let rowid = match v {
+            ValueBuf::Int(i) if i >= 0 => i as u64,
+            _ => return Ok(ExecStep::Done),
+        };
+
+        match ctx.tx.point_get(
+            self.table_id,
+            rowid,
+            Projection {
+                columns: self.projection.clone(),
+            },
+        )? {
+            Some(row) => Ok(ExecStep::Row(row)),
+            None => Ok(ExecStep::Done),
+        }
+    }
+}
+```
+
+Further optimization:
+
+```text
+If rowid_expr is exactly LoadParam(1):
+  store PointGetKey::Param(1)
+  avoid expression VM entirely
+```
+
+---
+
+# INSERT executor
+
+`INSERT VALUES` is benchmark-critical.
+
+Do not execute it as a generic SELECT unless needed. Compile a dedicated row builder.
+
+```rust
+pub struct InsertExec {
+    table_id: crate::kernel::TableId,
+    source: Box<dyn Operator + Send>,
+    target_columns: Vec<crate::kernel::ColumnId>,
+    full_column_count: usize,
+    defaults: Vec<Option<ExprProgram>>,
+    affinities: Vec<crate::value::Affinity>,
+    not_null: Vec<bool>,
+    emitted_done: bool,
+}
+
+impl Operator for InsertExec {
+    fn next(&mut self, ctx: &mut ExecCtx<'_>) -> crate::error::Result<ExecStep> {
+        if self.emitted_done {
+            return Ok(ExecStep::Done);
+        }
+
+        loop {
+            match self.source.next(ctx)? {
+                ExecStep::Done => {
+                    self.emitted_done = true;
+                    return Ok(ExecStep::Done);
+                }
+
+                ExecStep::Row(input) => {
+                    let mut full = vec![ValueBuf::Null; self.full_column_count];
+
+                    for (i, col_id) in self.target_columns.iter().enumerate() {
+                        let ordinal = *col_id as usize;
+                        full[ordinal] = input.values[i].clone();
+                    }
+
+                    for col in 0..self.full_column_count {
+                        if matches!(full[col], ValueBuf::Null) {
+                            if let Some(default_prog) = &self.defaults[col] {
+                                let mut eval = EvalCtx {
+                                    params: ctx.params,
+                                    row: None,
+                                    stack: std::mem::take(&mut ctx.expr_stack),
+                                };
+
+                                full[col] = eval.eval(default_prog)?;
+                                ctx.expr_stack = eval.stack;
+                            }
+                        }
+
+                        full[col] = crate::value::apply_insert_affinity(
+                            std::mem::replace(&mut full[col], ValueBuf::Null),
+                            self.affinities[col],
+                        );
+
+                        if self.not_null[col] && matches!(full[col], ValueBuf::Null) {
+                            return Err(crate::error::SqlError::constraint("NOT NULL constraint failed"));
+                        }
+                    }
+
+                    let rowid = ctx.tx.insert(self.table_id, &full)?;
+                    ctx.changes += 1;
+
+                    // INSERT without RETURNING does not produce rows.
+                    // Continue until source is exhausted.
+                    let _ = rowid;
+                }
+            }
+        }
+    }
+}
+```
+
+For `INSERT INTO t VALUES (?, ?, ?)` specifically, generate a tighter plan:
+
+```text
+InsertConstValues {
+  rows: [
+    [LoadParam(1), LoadParam(2), LoadParam(3)]
+  ]
+}
+```
+
+Then execute directly without a `ConstRows` operator.
+
+---
+
+# UPDATE and DELETE correctness
+
+UPDATE and DELETE must avoid these bugs:
+
+```text
+- updating a row then seeing it again in the same scan
+- deleting while scan cursor is invalidated
+- stale predicate under ReadCommitted
+- lost update under concurrent writers
+- violating constraints after assignment
+- stale secondary indexes
+```
+
+Correct pattern:
+
+```text
+1. Scan candidate rowids with needed columns.
+2. For each candidate:
+   a. acquire row lock / update intent through kernel
+   b. re-read latest visible row if isolation requires it
+   c. re-evaluate WHERE predicate
+   d. build new row
+   e. apply affinity/default/check/not-null
+   f. update row through kernel
+3. On statement error, rollback statement mark.
+```
+
+For Phase 5, either:
+
+```text
+Option A:
+  collect candidate RowIds first, then update/delete by RowId.
+
+Option B:
+  kernel exposes update-safe cursor that guarantees Halloween safety.
+```
+
+Option A is simpler. Memory risk is solved by bounded chunks:
+
+```text
+candidate chunk size = min(4096 rowids, memory budget)
+for each chunk:
+  update/delete rows
+  clear chunk
+```
+
+```rust
+pub struct DeleteExec {
+    table_id: crate::kernel::TableId,
+    input: Box<dyn Operator + Send>,
+    rowid_buf: Vec<crate::kernel::RowId>,
+    done_input: bool,
+}
+
+impl Operator for DeleteExec {
+    fn next(&mut self, ctx: &mut ExecCtx<'_>) -> crate::error::Result<ExecStep> {
+        const CHUNK: usize = 4096;
+
+        loop {
+            self.rowid_buf.clear();
+
+            while self.rowid_buf.len() < CHUNK && !self.done_input {
+                match self.input.next(ctx)? {
+                    ExecStep::Row(row) => self.rowid_buf.push(row.rowid),
+                    ExecStep::Done => self.done_input = true,
+                }
+            }
+
+            if self.rowid_buf.is_empty() {
+                return Ok(ExecStep::Done);
+            }
+
+            for rowid in &self.rowid_buf {
+                ctx.tx.delete(self.table_id, *rowid)?;
+                ctx.changes += 1;
+            }
+
+            if self.done_input {
+                return Ok(ExecStep::Done);
+            }
+        }
+    }
+}
+```
+
+For `UPDATE`, collect rowids and original projected columns, or re-read each row before update.
+
+---
+
+# DDL executor
+
+DDL should be transactional. Do not special-case it outside WAL/MVCC.
+
+```rust
+pub fn execute_ddl(
+    tx: &mut dyn crate::kernel::KernelTx,
+    ddl: &crate::planner::physical::PhysicalDdl,
+) -> crate::error::Result<()> {
+    match ddl {
+        crate::planner::physical::PhysicalDdl::CreateTable(spec) => {
+            tx.create_table(spec.clone())?;
+        }
+
+        crate::planner::physical::PhysicalDdl::CreateIndex(spec) => {
+            tx.create_index(spec.clone())?;
+        }
+
+        crate::planner::physical::PhysicalDdl::DropTable { name: _ } => {
+            // Add kernel.drop_table(name) to trait.
+            todo!("drop table")
+        }
+
+        crate::planner::physical::PhysicalDdl::DropIndex { name: _ } => {
+            todo!("drop index")
+        }
+    }
+
+    Ok(())
+}
+```
+
+DDL locking rules:
+
+```text
+CREATE TABLE:
+  - acquire schema write lock
+  - validate no table/index name conflict
+  - write catalog rows
+  - create storage relation
+  - commit increments schema epoch
+
+CREATE INDEX:
+  - acquire schema write lock
+  - scan table snapshot
+  - build index transactionally
+  - validate uniqueness
+  - publish catalog row at commit
+
+DROP TABLE:
+  - acquire schema write lock
+  - mark table dropped in catalog
+  - schedule physical reclamation for later vacuum
+
+Prepared statements:
+  - each compiled plan stores schema_epoch
+  - on step, compare with current epoch
+  - if changed, either return SchemaChanged or auto-reprepare from saved SQL
+```
+
+For the Rust embedded API, I would return `SchemaChanged` first. For a later SQLite-like C ABI, auto-reprepare is friendlier.
+
+---
+
+# Schema invalidation
+
+```rust
+pub fn check_schema<K: crate::kernel::Kernel>(
+    kernel: &K,
+    plan: &crate::planner::physical::PhysicalPlan,
+) -> crate::error::Result<()> {
+    let current = kernel.schema_epoch();
+
+    if current != plan.schema_epoch {
+        return Err(crate::error::SqlError::schema_changed());
+    }
+
+    Ok(())
+}
+```
+
+Better:
+
+```text
+If current epoch differs:
+  - get current catalog snapshot
+  - if all referenced object IDs still exist and versions unchanged, continue
+  - else SchemaChanged
+```
+
+Use object-level versions later:
+
+```text
+TableMeta {
+  id,
+  schema_version,
+  storage_version,
+}
+```
+
+This prevents invalidating every prepared statement on unrelated DDL.
+
+---
+
+# Plan cache
+
+A plan cache helps high-concurrency workloads only if it does not become a bottleneck.
+
+Use sharding:
+
+```text
+PlanCache {
+  shards: [Mutex<HashMap<PlanKey, Weak<CompiledPlan>>>; 64]
+}
+```
+
+Key:
+
+```text
+normalized SQL bytes
+schema epoch
+connection SQL options
+isolation-sensitive flags
+```
+
+Do not normalize heavily at first. Hash raw SQL plus schema epoch. Normalization can come later.
+
+```rust
+pub struct PlanKey {
+    sql_hash: u64,
+    schema_epoch: crate::kernel::SchemaEpoch,
+}
+
+pub struct PlanCache {
+    shards: Vec<std::sync::Mutex<std::collections::HashMap<PlanKey, std::sync::Weak<crate::planner::physical::PhysicalPlan>>>>,
+}
+```
+
+Important:
+
+```text
+- lock cache only during prepare
+- never touch plan cache during step
+- compiled plans are immutable Arc
+- runtime state is never shared
+```
+
+---
+
+# Memory discipline
+
+## Per-connection quotas
+
+Each session should have a memory budget:
+
+```rust
+pub struct MemoryBudget {
+    limit: usize,
+    used: usize,
+}
+
+impl MemoryBudget {
+    pub fn reserve(&mut self, n: usize) -> crate::error::Result<()> {
+        if self.used + n > self.limit {
+            return Err(crate::error::SqlError::nomem("SQL memory limit exceeded"));
+        }
+        self.used += n;
+        Ok(())
+    }
+
+    pub fn release(&mut self, n: usize) {
+        self.used = self.used.saturating_sub(n);
+    }
+}
+```
+
+Track:
+
+```text
+- expression stack
+- sort buffers
+- rowid chunks
+- temporary rows
+- materialized VALUES rows
+- parser/binder scratch
+```
+
+## Streaming by default
+
+These must stream:
+
+```text
+SELECT without ORDER BY
+INSERT VALUES
+INSERT SELECT
+UPDATE
+DELETE
+```
+
+These may materialize:
+
+```text
+ORDER BY without usable index
+DISTINCT, GROUP BY, aggregates — Phase 6
+```
+
+For Phase 5 `ORDER BY`, implement:
+
+```text
+ORDER BY no LIMIT:
+  - bounded in-memory sort
+  - if exceeds limit, spill to temp storage or fail with clear error
+
+ORDER BY with LIMIT N:
+  - use TopN heap of size N + OFFSET
+```
+
+## Decode only needed columns
+
+For:
+
+```sql
+SELECT a FROM t WHERE b = ?;
+```
+
+Projection passed to kernel should be:
+
+```text
+needed columns = {a, b}
+```
+
+Not every column.
+
+For:
+
+```sql
+UPDATE t SET a = ? WHERE b = ?;
+```
+
+Needed columns:
+
+```text
+{all columns needed to reconstruct updated row}
+```
+
+If kernel supports partial update, only:
+
+```text
+{a, b, columns needed by constraints}
+```
+
+## Avoid per-row heap allocation
+
+Phase 5 starter may use `Vec<ValueBuf>`. Production should use:
+
+```text
+RowFrame {
+  fixed inline slots for <= 16 columns
+  spill Vec only for wider rows
+}
+
+ValueBuf {
+  Null
+  Int(i64)
+  Real(f64)
+  InlineText { len, bytes: [u8; 22] }
+  ArcText
+  InlineBlob { len, bytes: [u8; 22] }
+  ArcBlob
+}
+```
+
+Small text/blob inline storage dramatically improves SQLite-style OLTP workloads.
+
+---
+
+# Threading model
+
+## Types
+
+```text
+Database<K>: Send + Sync
+Session<K>: Send, not Sync
+PreparedStatement<K>: Send, not Sync
+CompiledPlan: Send + Sync
+CatalogSnapshot: Send + Sync
+FunctionRegistry: Send + Sync
+```
+
+Meaning:
+
+```text
+- many threads can own independent Sessions
+- one Session is used by one thread at a time
+- a CompiledPlan can be shared
+- a PreparedStatement runtime is not shared concurrently
+```
+
+## Catalog
+
+Use immutable snapshots:
+
+```text
+Arc<CatalogSnapshot>
+AtomicU64 schema_epoch
+RwLock only for publishing new snapshot
+```
+
+Read path:
+
+```text
+prepare:
+  snapshot = engine.catalog_snapshot()
+  bind against snapshot
+  plan.schema_epoch = snapshot.epoch
+```
+
+No catalog lock during `step()`.
+
+## DDL
+
+DDL gets a schema write lock:
+
+```text
+- blocks other DDL
+- does not block already-running readers
+- invalidates future statement use by epoch
+```
+
+---
+
+# Statement lifecycle
+
+```text
+prepare:
+  parse/bind/plan/compile
+  allocate ParamSet
+
+bind:
+  fill ParamSet slots
+
+step first time:
+  check schema
+  ensure transaction
+  create executor runtime
+  execute/pull
+
+step subsequent:
+  pull next
+
+Done:
+  close cursor
+  if implicit tx, commit
+  keep bindings
+
+reset:
+  close cursor
+  if implicit tx still open, commit/rollback depending state
+  keep bindings
+
+clear_bindings:
+  set all params to NULL/unbound, depending API policy
+
+finalize/drop:
+  reset
+  free runtime
+```
+
+SQLite’s docs tie implicit transaction finish to statement completion/reset/finalize; copying that behavior gives users familiar semantics. ([SQLite][2])
+
+---
+
+# Error model
+
+```rust
+// error.rs
+
+use crate::span::Span;
+
+pub type Result<T> = std::result::Result<T, SqlError>;
+
+#[derive(Debug)]
+pub struct SqlError {
+    pub code: ErrorCode,
+    pub message: String,
+    pub span: Option<Span>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorCode {
+    Syntax,
+    Bind,
+    Range,
+    Misuse,
+    SchemaChanged,
+    Busy,
+    Constraint,
+    NotNull,
+    Unique,
+    Check,
+    Tx,
+    Io,
+    NoMem,
+    Internal,
+    Unsupported,
+}
+
+impl SqlError {
+    pub fn syntax(msg: impl Into<String>, span: Span) -> Self {
+        Self {
+            code: ErrorCode::Syntax,
+            message: msg.into(),
+            span: Some(span),
+        }
+    }
+
+    pub fn bind(msg: impl Into<String>) -> Self {
+        Self {
+            code: ErrorCode::Bind,
+            message: msg.into(),
+            span: None,
+        }
+    }
+
+    pub fn tx(msg: impl Into<String>) -> Self {
+        Self {
+            code: ErrorCode::Tx,
+            message: msg.into(),
+            span: None,
+        }
+    }
+
+    pub fn exec(msg: impl Into<String>) -> Self {
+        Self {
+            code: ErrorCode::Internal,
+            message: msg.into(),
+            span: None,
+        }
+    }
+
+    pub fn constraint(msg: impl Into<String>) -> Self {
+        Self {
+            code: ErrorCode::Constraint,
+            message: msg.into(),
+            span: None,
+        }
+    }
+
+    pub fn schema_changed() -> Self {
+        Self {
+            code: ErrorCode::SchemaChanged,
+            message: "database schema changed".to_string(),
+            span: None,
+        }
+    }
+
+    pub fn nomem(msg: impl Into<String>) -> Self {
+        Self {
+            code: ErrorCode::NoMem,
+            message: msg.into(),
+            span: None,
+        }
+    }
+
+    pub fn unsupported(msg: impl Into<String>) -> Self {
+        Self {
+            code: ErrorCode::Unsupported,
+            message: msg.into(),
+            span: None,
+        }
+    }
+}
+```
+
+---
+
+# Planner fast-path rules
+
+## Rule: rowid equality
+
+Recognize:
+
+```sql
+WHERE rowid = ?
+WHERE _rowid_ = ?
+WHERE oid = ?
+WHERE integer_primary_key_col = ?
+```
+
+Generate `PointGet`.
+
+## Rule: unique index equality
+
+Recognize:
+
+```sql
+WHERE email = ?
+```
+
+If unique index on `email`, generate `IndexScan` with exact key and expect at most one row.
+
+## Rule: composite index prefix
+
+Index:
+
+```sql
+CREATE INDEX ix ON t(a, b, c);
+```
+
+Predicates:
+
+```sql
+WHERE a = ?                         -> prefix length 1
+WHERE a = ? AND b = ?               -> prefix length 2
+WHERE a = ? AND b > ?               -> prefix eq + range
+WHERE b = ?                         -> not usable by this index
+```
+
+## Rule: projection pushdown
+
+```sql
+SELECT a FROM t WHERE b = ? ORDER BY c;
+```
+
+Kernel projection:
+
+```text
+{a, b, c}
+```
+
+Final output projection:
+
+```text
+{a}
+```
+
+## Rule: sort avoidance
+
+If index scan order satisfies:
+
+```sql
+ORDER BY a ASC, b ASC
+```
+
+No Sort node.
+
+Phase 5 can implement a basic version:
+
+```text
+if using index on exact same leading columns and all ASC:
+  avoid sort
+else:
+  sort
+```
+
+Phase 6 can improve.
+
+---
+
+# Top-N ORDER BY
+
+For:
+
+```sql
+SELECT * FROM t ORDER BY score DESC LIMIT 10;
+```
+
+Do not sort the entire table. Use a heap of size 10.
+
+```text
+for row in input:
+  compute sort key
+  if heap size < N:
+    push
+  else if row better than heap worst:
+    replace worst
+final:
+  sort heap winners
+```
+
+Memory:
+
+```text
+O(limit + offset)
+```
+
+This is very important for benchmark workloads.
+
+---
+
+# SQL functions
+
+Start with these:
+
+```text
+typeof(x)
+length(x)
+lower(x)
+upper(x)
+abs(x)
+coalesce(x, y, ...)
+ifnull(x, y)
+nullif(x, y)
+substr(x, y)
+substr(x, y, z)
+round(x)
+round(x, y)
+hex(x)
+quote(x)
+random()
+like(pattern, value)
+glob(pattern, value)
+likely(x)
+unlikely(x)
+```
+
+Function implementation example:
+
+```rust
+// exec/functions.rs
+
+use std::sync::Arc;
+use crate::binder::bound_ast::FunctionId;
+use crate::value::ValueBuf;
+use crate::error::{Result, SqlError};
+
+pub fn call(id: FunctionId, args: &[ValueBuf]) -> Result<ValueBuf> {
+    match id.0 {
+        1 => abs_fn(args),
+        2 => coalesce_fn(args),
+        3 => ifnull_fn(args),
+        4 => length_fn(args),
+        5 => lower_fn(args),
+        6 => upper_fn(args),
+        7 => typeof_fn(args),
+        9 | 10 => Ok(args[0].clone()), // likely/unlikely
+        _ => Err(SqlError::unsupported("function not implemented")),
+    }
+}
+
+fn abs_fn(args: &[ValueBuf]) -> Result<ValueBuf> {
+    match &args[0] {
+        ValueBuf::Null => Ok(ValueBuf::Null),
+        ValueBuf::Int(i) => {
+            if *i == i64::MIN {
+                Err(SqlError::exec("integer overflow"))
+            } else {
+                Ok(ValueBuf::Int(i.abs()))
+            }
+        }
+        ValueBuf::Real(f) => Ok(ValueBuf::Real(f.abs())),
+        ValueBuf::Text(s) => {
+            let f = s.parse::<f64>().unwrap_or(0.0);
+            Ok(ValueBuf::Real(f.abs()))
+        }
+        ValueBuf::Blob(_) => Ok(ValueBuf::Real(0.0)),
+    }
+}
+
+fn coalesce_fn(args: &[ValueBuf]) -> Result<ValueBuf> {
+    for arg in args {
+        if !matches!(arg, ValueBuf::Null) {
+            return Ok(arg.clone());
+        }
+    }
+    Ok(ValueBuf::Null)
+}
+
+fn ifnull_fn(args: &[ValueBuf]) -> Result<ValueBuf> {
+    if !matches!(args[0], ValueBuf::Null) {
+        Ok(args[0].clone())
+    } else {
+        Ok(args[1].clone())
+    }
+}
+
+fn length_fn(args: &[ValueBuf]) -> Result<ValueBuf> {
+    match &args[0] {
+        ValueBuf::Null => Ok(ValueBuf::Null),
+        ValueBuf::Int(i) => Ok(ValueBuf::Int(i.to_string().chars().count() as i64)),
+        ValueBuf::Real(f) => Ok(ValueBuf::Int(f.to_string().chars().count() as i64)),
+        ValueBuf::Text(s) => Ok(ValueBuf::Int(s.chars().count() as i64)),
+        ValueBuf::Blob(b) => Ok(ValueBuf::Int(b.len() as i64)),
+    }
+}
+
+fn lower_fn(args: &[ValueBuf]) -> Result<ValueBuf> {
+    match &args[0] {
+        ValueBuf::Null => Ok(ValueBuf::Null),
+        ValueBuf::Text(s) => {
+            let lowered = s.bytes()
+                .map(|b| b.to_ascii_lowercase())
+                .collect::<Vec<u8>>();
+            Ok(ValueBuf::Text(Arc::from(String::from_utf8_lossy(&lowered).into_owned())))
+        }
+        other => Ok(ValueBuf::Text(Arc::from(format!("{:?}", other)))),
+    }
+}
+
+fn upper_fn(args: &[ValueBuf]) -> Result<ValueBuf> {
+    match &args[0] {
+        ValueBuf::Null => Ok(ValueBuf::Null),
+        ValueBuf::Text(s) => {
+            let uppered = s.bytes()
+                .map(|b| b.to_ascii_uppercase())
+                .collect::<Vec<u8>>();
+            Ok(ValueBuf::Text(Arc::from(String::from_utf8_lossy(&uppered).into_owned())))
+        }
+        other => Ok(ValueBuf::Text(Arc::from(format!("{:?}", other)))),
+    }
+}
+
+fn typeof_fn(args: &[ValueBuf]) -> Result<ValueBuf> {
+    let s: &'static str = match &args[0] {
+        ValueBuf::Null => "null",
+        ValueBuf::Int(_) => "integer",
+        ValueBuf::Real(_) => "real",
+        ValueBuf::Text(_) => "text",
+        ValueBuf::Blob(_) => "blob",
+    };
+    Ok(ValueBuf::Text(Arc::from(s)))
+}
+```
+
+SQLite’s `length` returns character count for text and byte count for blobs; match that behavior. ([SQLite][7])
+
+---
+
+# Compilation pipeline
+
+```rust
+pub fn prepare<K: crate::kernel::Kernel>(
+    kernel: &K,
+    sql: &str,
+) -> crate::error::Result<PreparedStatement<K>> {
+    let ast = crate::parser::Parser::new(sql).parse_one_statement()?;
+
+    let catalog = kernel.catalog_snapshot();
+
+    let bound = crate::binder::Binder::new(catalog)
+        .bind_statement(ast)?;
+
+    let logical = crate::planner::build_logical(bound)?;
+
+    let physical = crate::planner::build_physical(logical)?;
+
+    Ok(PreparedStatement {
+        sql: sql.to_string(),
+        params: crate::exec::statement::ParamSet::new(physical.param_count),
+        compiled: std::sync::Arc::new(physical),
+        runtime: None,
+        _marker: std::marker::PhantomData,
+    })
+}
+```
+
+---
+
+# How to avoid accidentally becoming slow
+
+## Bad
+
+```text
+parse every execute
+resolve columns every execute
+hold catalog lock while stepping
+return owned String/Vec for every column
+decode full row every scan
+generic HashMap lookup for every column
+generic HashMap lookup for every function call
+generic HashMap lookup for every named parameter
+global mutex around statement execution
+collect SELECT rows before returning
+sort full table for ORDER BY LIMIT 10
+```
+
+## Good
+
+```text
+prepare once
+bind once
+compiled integer column ordinals
+compiled integer param slots
+compiled integer function ids
+immutable Arc plan
+per-statement scratch reused
+stream rows
+projection pushdown
+rowid/index fast path
+TopN for ORDER BY LIMIT
+schema epoch check only
+```
+
+---
+
+# Differential testing against SQLite
+
+For supported SQL, build a test harness:
+
+```text
+for each test case:
+  run SQL on SQLite
+  run SQL on RedlineDB
+  normalize result values
+  compare rows and errors
+```
+
+Categories:
+
+```text
+parser:
+  SELECT 1
+  SELECT 1 + 2 * 3
+  SELECT * FROM t
+  SELECT a AS b FROM t WHERE c = ?
+
+types:
+  INSERT text into NUMERIC
+  INSERT int into TEXT
+  typeof()
+  CAST()
+  NULL comparisons
+
+DML:
+  INSERT VALUES
+  INSERT DEFAULT VALUES
+  UPDATE WHERE
+  DELETE WHERE
+
+transactions:
+  autocommit insert
+  explicit rollback
+  explicit commit
+  read snapshot
+  schema invalidation
+
+prepared statements:
+  bind by index
+  bind by name
+  reset and reuse
+  schema change invalidates
+
+concurrency:
+  many readers
+  disjoint writers
+  writer/readers
+  DDL vs prepared SELECT
+```
+
+SQLite should be the semantic oracle only for the supported subset. Unsupported SQL should produce deterministic `Unsupported` errors.
+
+---
+
+# Fuzzing
+
+## Lexer/parser fuzz
+
+Input arbitrary bytes/strings:
+
+```text
+property:
+  parser never panics
+  parser never loops forever
+  parser error spans are valid
+```
+
+## Expression differential fuzz
+
+Generate expressions:
+
+```text
+literals
+params
+arithmetic
+comparison
+AND/OR/NOT
+CAST
+functions
+```
+
+Run:
+
+```sql
+SELECT generated_expr;
+```
+
+Compare with SQLite for supported semantics.
+
+## Query differential fuzz
+
+Generate simple schemas:
+
+```sql
+CREATE TABLE t(a, b, c);
+```
+
+Generate rows with random:
+
+```text
+NULL, int, real, text, blob
+```
+
+Generate:
+
+```sql
+SELECT projection FROM t WHERE predicate ORDER BY expr LIMIT n;
+```
+
+Compare.
+
+---
+
+# Concurrency tests
+
+Use your existing kernel’s concurrency testing strategy, but test through SQL.
+
+## Disjoint writers
+
+```text
+Table t(id INTEGER PRIMARY KEY, v INTEGER)
+
+Thread 1:
+  UPDATE t SET v = v + 1 WHERE id BETWEEN 1 AND 1000
+
+Thread 2:
+  UPDATE t SET v = v + 1 WHERE id BETWEEN 1001 AND 2000
+
+Expected:
+  no global SQL writer lock
+  both make progress
+  final values correct
+```
+
+## Prepared statement shared plan
+
+```text
+100 threads:
+  each has its own Session
+  each prepares or obtains cached plan:
+    INSERT INTO t(id, v) VALUES (?, ?)
+  each inserts disjoint ids
+
+Expected:
+  no SQL-layer contention except plan-cache prepare
+```
+
+## Snapshot reader
+
+```text
+Session A:
+  BEGIN;
+  SELECT count-ish scan starts
+
+Session B:
+  UPDATE/INSERT/DELETE many rows;
+  COMMIT;
+
+Session A:
+  continues seeing its snapshot
+```
+
+## Schema invalidation
+
+```text
+Session A:
+  prepare SELECT a FROM t
+
+Session B:
+  ALTER/DROP/CREATE affecting t
+  COMMIT
+
+Session A:
+  step -> SchemaChanged
+```
+
+---
+
+# Benchmark targets inside Phase 5
+
+Before Phase 9, add microbenchmarks specifically for Phase 5 overhead.
+
+## Prepare overhead
+
+```text
+prepare SELECT ?;
+prepare SELECT a FROM t WHERE id = ?;
+prepare INSERT INTO t VALUES (?, ?, ?);
+```
+
+Measure:
+
+```text
+ns/op
+allocs/op
+bytes/op
+```
+
+## Step overhead without storage
+
+Use mock kernel:
+
+```text
+SELECT 1;
+SELECT ?;
+SELECT ? + ?;
+```
+
+This isolates expression VM overhead.
+
+## Point read
+
+```sql
+SELECT v FROM t WHERE id = ?;
+```
+
+Measure:
+
+```text
+Redline SQL overhead over direct kernel point_get
+```
+
+Target:
+
+```text
+SQL point read should be within ~15–25% of direct kernel point_get initially,
+then under ~10% after tuning.
+```
+
+## Insert
+
+```sql
+INSERT INTO t(id, v) VALUES (?, ?);
+```
+
+Measure:
+
+```text
+SQL overhead over direct kernel insert
+```
+
+## Concurrent connections
+
+```text
+N threads
+N sessions
+prepared INSERT/UPDATE with disjoint keys
+```
+
+Measure:
+
+```text
+throughput scaling until WAL/device/kernel contention
+```
+
+The SQL layer must not flatten this scaling curve.
+
+---
+
+# Implementation order
+
+## Step 1: Value, error, session shell
+
+Build:
+
+```text
+value.rs
+error.rs
+kernel.rs
+session.rs
+api.rs
+```
+
+Working goal:
+
+```rust
+let db = Database::new(kernel);
+let mut conn = db.connect();
+```
+
+## Step 2: Lexer/parser
+
+Support:
+
+```text
+SELECT literals
+CREATE TABLE
+INSERT VALUES
+UPDATE
+DELETE
+transactions
+```
+
+Goal:
+
+```rust
+Parser::new("SELECT 1 + ?").parse_one_statement()
+```
+
+## Step 3: Catalog adapter and binder
+
+Support:
+
+```text
+table lookup
+column lookup
+* expansion
+parameter indexing
+function lookup
+affinity
+collation
+```
+
+Goal:
+
+```text
+SELECT a FROM t WHERE id = ?
+  -> BoundSelect with TableId, ColumnId, Param(1)
+```
+
+## Step 4: Expression compiler and VM
+
+Support:
+
+```text
+literals
+params
+columns
+arithmetic
+comparison
+boolean
+functions
+casts
+```
+
+Goal:
+
+```text
+BoundExpr -> ExprProgram -> ValueBuf
+```
+
+## Step 5: SELECT single-table executor
+
+Support:
+
+```text
+TableScan
+PointGet
+Filter
+Project
+Limit
+Sort
+```
+
+Goal:
+
+```sql
+SELECT a FROM t WHERE id = ?;
+```
+
+## Step 6: INSERT
+
+Support:
+
+```text
+INSERT VALUES
+INSERT DEFAULT VALUES
+INSERT SELECT
+defaults
+affinity
+NOT NULL
+basic CHECK
+```
+
+Goal:
+
+```sql
+INSERT INTO t(a,b) VALUES (?,?);
+```
+
+## Step 7: UPDATE/DELETE
+
+Support:
+
+```text
+rowid chunking
+predicate recheck
+statement rollback mark
+constraints
+```
+
+Goal:
+
+```sql
+UPDATE t SET a = ? WHERE id = ?;
+DELETE FROM t WHERE id = ?;
+```
+
+## Step 8: DDL
+
+Support:
+
+```text
+CREATE TABLE
+CREATE INDEX
+DROP TABLE
+DROP INDEX
+schema epoch
+prepared statement invalidation
+```
+
+Goal:
+
+```sql
+CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);
+```
+
+## Step 9: Differential tests and concurrency tests
+
+Do not optimize deeply until this is green.
+
+---
+
+# What Phase 5 should not do yet
+
+Avoid these until Phase 6 or later unless a benchmark absolutely requires them:
+
+```text
+full cost-based optimizer
+hash joins
+aggregate engine
+GROUP BY
+DISTINCT
+window functions
+recursive CTEs
+views
+triggers
+foreign keys
+virtual tables
+UPSERT
+RETURNING
+ALTER TABLE
+full SQLite date/time compatibility
+JSON
+FTS
+```
+
+This keeps Phase 5 achievable and fast.
+
+---
+
+# The “brilliant simplicity” version
+
+The simplest high-performance Phase 5 architecture is:
+
+```text
+1. Handwritten lexer/parser.
+2. Immutable AST only during prepare.
+3. Binder resolves everything to IDs and ordinals.
+4. Rule planner chooses:
+   - PointGet
+   - IndexScan
+   - TableScan
+5. Expressions compile to bytecode.
+6. Executor streams rows.
+7. DML uses rowid chunks and statement savepoints.
+8. Session owns transaction state.
+9. Catalog is immutable snapshot + atomic epoch.
+10. Prepared plans are immutable Arc.
+```
+
+The most important engineering rule:
+
+```text
+The SQL layer must never serialize all writers.
+```
+
+If RedlineDB’s kernel can run disjoint writers concurrently, the SQL layer should preserve that by design:
+
+```text
+- no connection-global writer gate
+- no prepare/step shared mutex
+- no catalog read lock during execution
+- no plan-cache lock during execution
+- no function-registry lock during execution
+- no row materialization beyond needed columns
+```
+
+---
+
+# Phase 5 release gates
+
+I would call Phase 5 complete only when these pass:
+
+```text
+Parser:
+  supported grammar parses deterministically
+  unsupported grammar errors cleanly
+  fuzzing finds no panics
+
+Binder:
+  all names resolve correctly
+  ambiguous columns error
+  params are stable
+  schema epoch recorded
+
+Executor:
+  SELECT/INSERT/UPDATE/DELETE work through SQL API
+  autocommit works
+  explicit BEGIN/COMMIT/ROLLBACK works
+  prepared reset/rebind works
+  schema invalidation works
+
+Correctness:
+  sqllogictest-style subset green
+  SQLite differential tests green for supported SQL
+  transaction tests green
+  concurrency tests green
+
+Performance:
+  point-read fast path exists
+  insert fast path exists
+  projection pushdown exists
+  no per-step parse/bind
+  no SQL global writer lock
+  memory budgets enforced
+```
+
+That gives you a Phase 5 engine that is not merely “SQLite-shaped,” but positioned to exploit the concurrency advantages your kernel was built for.
+
+[1]: https://sqlite.org/lang.html "Query Language Understood by SQLite"
+[2]: https://sqlite.org/lang_transaction.html "Transaction"
+[3]: https://www.sqlite.org/lang_createtable.html "CREATE TABLE"
+[4]: https://sqlite.org/lang_insert.html "INSERT"
+[5]: https://sqlite.org/lang_select.html "SELECT"
+[6]: https://www.sqlite.org/datatype3.html "Datatypes In SQLite"
+[7]: https://sqlite.org/lang_corefunc.html "Built-In Scalar SQL Functions"
+

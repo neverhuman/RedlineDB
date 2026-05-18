@@ -1,0 +1,7 @@
+out_dir = "target/bench/xbabe1/connection-fixed-high"
+workloads = ["point-read-pk"]
+durabilities = ["strict", "normal"]
+threads = [128, 200]
+rows = 4096
+seconds = 2
+cache_mib = 32

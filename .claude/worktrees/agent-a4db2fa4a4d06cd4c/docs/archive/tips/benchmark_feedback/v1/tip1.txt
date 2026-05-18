@@ -1,0 +1,1233 @@
+# RedlineDB External Audit Report
+
+## Executive Summary
+
+### Audit basis and command status
+
+I audited the uploaded tarball directly at:
+
+```text
+/mnt/data/redline_audit/RedlineDB
+HEAD: 3d7c72f71d52ee670ac3cafee4aded500add2b66
+```
+
+The repository’s own README says RedlineDB is SQLite-like in public shape but does **not** claim SQLite file-format compatibility, and it lists the Rust facade, SQL engine, kernel, C ABI, CLI, server, and bench harness as current workspace components (`README.md:3-23`). The checked-in `rust-toolchain.toml` requires Rust `1.95.0`, but this container could not download that toolchain because DNS/network access to `static.rust-lang.org` failed. I was able to run:
+
+```text
+cargo +stable --version
+=> cargo 1.85.0
+
+cargo +stable fmt --check
+=> passed
+
+./scripts/check_file_sizes.sh
+=> passed with warnings:
+   1661 crates/kernel/src/index/mod.rs
+   1604 crates/sql/src/exec.rs
+   1794 crates/sql/tests/sql_smoke.rs
+```
+
+I could **not** honestly verify the requested `cargo check`, `clippy`, full tests, failpoint matrix, recovery matrix, or benchmark smoke commands in this environment. `cargo +stable check --workspace --locked --offline` failed because `crc32fast` was not available in the local crates.io cache.
+
+So this report is a **source audit plus benchmark-harness review**, not a proof that the current tree builds or passes tests.
+
+### Top 10 blockers
+
+1. **P0: Relation-qualified heap writes are still not relation-qualified internally.** Reads use `head_for_relation`, but `update_for_relation` and `delete_for_relation` still call `visible_tuple_for_write(..., row_id)` and `current_tuple(row_id)`, which use the global row directory. Two tables with the same explicit rowid can cross-contaminate writes (`crates/kernel/src/engine/page_heap.rs:159-169`, `206-212`, `596-633`).
+
+2. **P0: `SELECT ALL` is parsed as `DISTINCT`.** `Some(Distinct::Distinct) | Some(Distinct::All) => true` silently returns wrong results (`crates/sql/src/parser/select.rs:80-82`).
+
+3. **P0: Explicit `NULL` is replaced by a column default.** Redline applies defaults to any `SqlValue::Null`, not only omitted columns (`crates/sql/src/exec/tail.rs:553-575`). SQLite applies a column default when a column is omitted, not when the user explicitly inserts `NULL`.
+
+4. **P0: Physical secondary-index mutations are not kernel-transactional.** SQL keeps an inverse log because the kernel does not undo B-tree page mutations on rollback (`crates/sql/src/exec/index_dml.rs:28-33`). On commit failure, repair is best-effort and ignores replay/repair-commit errors (`crates/sql/src/exec.rs:332-378`).
+
+5. **P0: FFI has raw-pointer undefined behavior.** Many exported functions dereference raw C pointers before null checks, including `rldb_close`, `rldb_step`, `rldb_reset`, bind APIs, and column APIs (`crates/ffi/src/lib.rs:349-360`, `421-444`, `464-537`, `585-656`).
+
+6. **P1 but drop-in-critical: `sqlite3_prepare_v2` and `sqlite3_exec` do not implement SQLite script/tail behavior.** The parser rejects more than one statement (`crates/sql/src/parser.rs:101-106`), while FFI prepare sets `tail` to the end of the entire SQL string (`crates/ffi/src/lib.rs:410-414`). `sqlite3_exec` prepares once and does not loop over statements (`crates/ffi/src/lib.rs:660-713`).
+
+7. **P1: Conflict algorithms are parsed but not implemented correctly.** `ABORT`, `FAIL`, `ROLLBACK`, and default all map to the same constraint error path for unique conflicts (`crates/sql/src/exec/tail.rs:987-999`), and `INSERT OR IGNORE` cannot ignore NOT NULL/CHECK failures because constraints are checked before conflict handling (`crates/sql/src/exec/tail.rs:883-887`). SQLite defines materially different effects for `ROLLBACK`, `ABORT`, `FAIL`, `IGNORE`, and `REPLACE`. ([SQLite][1])
+
+8. **P1: SQLite type affinity, casts, comparisons, aggregate coercion, collations, and rowid semantics are materially incomplete.** SQLite’s rowid is a signed 64-bit integer and negative rowids are allowed, but Redline rejects negative rowids (`crates/sql/src/exec/tail.rs:1021-1065`). ([SQLite][2]) SQLite’s dynamic typing and type affinity are central compatibility behavior, not polish. ([SQLite][3])
+
+9. **P1: Planner can advertise physical paths the executor does not execute.** Planner emits `HashJoin` and `IndexNestedLoopJoin` (`crates/sql/src/planner.rs:651-655`, `727-731`, `753-775`), but executor materializes nested-loop joins (`crates/sql/src/exec/tail.rs:1093-1150`).
+
+10. **P1: Benchmark artifacts and headline performance claims are not yet supportable.** The harness has useful manifest/proof metadata, but I could not run it here; SQLite WAL bytes appear undercounted by using `bench.sqlite3` → `bench.sqlite3-wal` incorrectly as `with_extension("sqlite3-wal")`, which produces `bench.sqlite3-wal` only if the path stem behavior is what is intended? In Rust, `Path::with_extension("sqlite3-wal")` on `bench.sqlite3` yields `bench.sqlite3-wal`; that is correct. The bigger benchmark issue is that checksums are weak: `MAX(k)`, `MAX(version)`, and row count under a predicate are labeled as sums/bytes (`crates/bench/src/engine/sqlite.rs:146-153`, `crates/bench/src/engine/redline.rs:120-127`). This does not prove data equivalence.
+
+### Top 10 opportunities
+
+1. Move heap/catalog/index changes into one kernel transaction with WAL-backed redo/undo or MVCC-tagged index entries.
+2. Build a SQLite differential conformance suite for the supported subset, with SQLite as oracle.
+3. Harden the C ABI until common SQLite-using C/C++/Rust/Python/ORM libraries can compile and pass lifecycle tests.
+4. Implement a real `PRAGMA integrity_check` that validates heap, catalog, WAL, page checksums, B-tree structure, and heap-index equivalence.
+5. Add SQLite affinity/cast/collation/conflict/transaction semantics before marketing compatibility.
+6. Replace row-at-a-time materialization with vectorized/morsel execution. DuckDB’s execution format uses `DataChunk` collections of vectors, commonly around 2048 rows, as a practical model. ([DuckDB][4])
+7. Add group commit, bounded writer admission, lock-wait histograms, and hot-key contention management to beat SQLite on tail latency rather than only throughput.
+8. Add JSON text functions and a Redline-native binary JSON/BJSON. SQLite has JSONB since 3.45.0, so JSONB-style behavior is now a modern SQLite-adjacent expectation. ([SQLite][5])
+9. Add vector data/indexes: exact SIMD scan first, then HNSW, IVF, and disk-resident ANN. HNSW remains a core ANN reference, and DiskANN demonstrates billion-scale SSD-resident ANN on a single node. ([arXiv][6])
+10. Treat vector indexes as decoupled native structures with transactional metadata; recent PostgreSQL-V work argues for decoupling vector indexes from traditional page storage to close the performance gap with specialized vector databases. ([VLDB][7])
+
+### Is RedlineDB safe to market as SQLite-compatible?
+
+**No.**
+
+The honest current positioning is:
+
+> RedlineDB is an experimental Rust embedded database with a SQLite-like API/SQL subset and early compatibility scaffolding. It is not yet a SQLite drop-in replacement.
+
+It is also not yet safe to market as faster, lower-memory, or more concurrent than SQLite until raw Docker artifacts prove it under identical durability, filesystem, cache, and concurrency conditions. SQLite WAL already provides concurrent readers and a writer, with readers not blocking writers and a writer not blocking readers, so Redline’s benchmark claim needs to focus on writer contention, connection scaling, tail latency, and crash recovery rather than generic “SQLite is single-threaded” claims. ([SQLite][8])
+
+---
+
+## P0 Findings
+
+### Finding 1: Relation-qualified writes can use the wrong table row
+
+* **Severity:** P0
+* **Area:** Kernel heap / MVCC / multi-table correctness
+* **Files/lines:**
+
+  * `crates/kernel/src/engine/page_heap.rs:140-143`
+  * `crates/kernel/src/engine/page_heap.rs:159-169`
+  * `crates/kernel/src/engine/page_heap.rs:206-212`
+  * `crates/kernel/src/engine/page_heap.rs:596-633`
+* **Reproduction:**
+
+```sql
+CREATE TABLE a(id INTEGER PRIMARY KEY, v TEXT);
+CREATE TABLE b(id INTEGER PRIMARY KEY, v TEXT);
+
+INSERT INTO a(id, v) VALUES (1, 'a');
+INSERT INTO b(id, v) VALUES (1, 'b');
+
+UPDATE a SET v = 'aa' WHERE id = 1;
+
+SELECT id, v FROM a;
+SELECT id, v FROM b;
+```
+
+* **Expected:** Updating `a(id=1)` must not consult or mutate `b(id=1)`.
+* **Actual:** `insert_recovered_at` records both a global `set_head(row_id, ptr)` and relation head. Reads have a relation-specific path, but `update_for_relation` and `delete_for_relation` still call `visible_tuple_for_write(..., row_id)`, and that calls `current_tuple(row_id)`, which uses the global `head(row_id)`.
+* **Why it matters:** SQLite rowids are unique within a table, not globally. Redline’s current path can corrupt or mis-version data when two tables share explicit rowids.
+* **Suggested fix:** Remove the global row directory from relation-aware heap operations, or key every head/current/write path by `(RelId, RowId)`. Change `visible_tuple_for_write`, `current_tuple`, recovery replay, rollback, vacuum, and undo traversal to be relation-qualified.
+* **Tests to add:**
+
+  * Two-table same-rowid update/delete/rollback.
+  * Same-rowid index maintenance across two tables.
+  * Crash/recovery after cross-table same-rowid update.
+  * Random DDL/DML fuzzer that intentionally reuses explicit rowids across tables.
+
+---
+
+### Finding 2: `SELECT ALL` is parsed as `DISTINCT`
+
+* **Severity:** P0
+* **Area:** SQL parser / wrong result
+* **Files/lines:** `crates/sql/src/parser/select.rs:80-82`
+* **Reproduction:**
+
+```sql
+CREATE TABLE t(x INTEGER);
+INSERT INTO t VALUES (1), (1);
+SELECT ALL x FROM t;
+```
+
+* **Expected:** Two rows: `1`, `1`.
+* **Actual:** `SELECT ALL` sets `distinct = true`, so Redline can deduplicate rows.
+* **Why it matters:** This is a silent wrong-result bug for valid SQL.
+* **Suggested fix:** Map `Distinct::All` to `false`; map only `Distinct::Distinct` to `true`.
+* **Tests to add:**
+
+  * `SELECT x` vs `SELECT ALL x` vs `SELECT DISTINCT x`.
+  * `SELECT ALL` with NULLs and mixed types.
+  * SQLLogicTest differential cases against SQLite.
+
+---
+
+### Finding 3: Explicit `NULL` is replaced by column default
+
+* **Severity:** P0
+* **Area:** SQL DML semantics / SQLite compatibility
+* **Files/lines:** `crates/sql/src/exec/tail.rs:553-575`
+* **Reproduction:**
+
+```sql
+CREATE TABLE t(x INTEGER DEFAULT 5);
+INSERT INTO t(x) VALUES (NULL);
+SELECT x FROM t;
+```
+
+* **Expected:** SQLite returns `NULL`.
+* **Actual:** Redline’s `build_default_values` replaces any `SqlValue::Null` with the default.
+* **Why it matters:** This corrupts user intent and breaks common ORM behavior. Defaults apply to omitted columns, not explicit NULL values.
+* **Suggested fix:** Track an “omitted column” bitmap separately from the value vector. Apply defaults only to omitted columns or `DEFAULT VALUES`, not to explicit `NULL`.
+* **Tests to add:**
+
+  * Explicit NULL with default.
+  * Omitted column with default.
+  * `DEFAULT VALUES`.
+  * Multi-row insert mixing omitted/default/NULL.
+
+---
+
+### Finding 4: Secondary-index updates are not transactionally atomic with heap updates
+
+* **Severity:** P0
+* **Area:** Indexes / WAL / rollback / crash recovery
+* **Files/lines:**
+
+  * `crates/sql/src/exec/index_dml.rs:28-33`
+  * `crates/sql/src/exec.rs:268-378`
+* **Reproduction:** Inject a failpoint after heap mutation but before index inverse repair commits, especially around `index::insert`, `index::delete`, or `engine::commit::before_publish`.
+* **Expected:** Heap and every index must agree after statement error, rollback, commit failure, or crash.
+* **Actual:** SQL records inverse index operations because the kernel does not undo physical index page mutations. Repair after commit failure starts a fresh transaction and ignores replay/commit errors.
+* **Why it matters:** Best-effort repair is not an acceptable durability story for secondary indexes. It can produce stale unique witnesses, missing index entries, or indexed reads that disagree with heap scans.
+* **Suggested fix:** Move index maintenance into the kernel transaction system. Two good designs:
+
+  1. **MVCC-tagged index entries:** store insert/delete TxId or begin/end visibility in index entries; readers consult commit status; vacuum removes dead entries.
+  2. **Logical index WAL records:** log index insert/delete under the same TxId and make recovery/undo own heap and index together.
+* **Tests to add:**
+
+  * Random INSERT/UPDATE/DELETE/ROLLBACK with heap-vs-index audit after every operation.
+  * Crash after heap insert before index insert.
+  * Crash after index insert before commit.
+  * Commit failure after index mutation.
+  * Recovery plus `integrity_check`.
+
+---
+
+### Finding 5: C ABI exported functions dereference null pointers
+
+* **Severity:** P0
+* **Area:** FFI / C ABI memory safety
+* **Files/lines:**
+
+  * `crates/ffi/src/lib.rs:349-360`
+  * `crates/ffi/src/lib.rs:421-444`
+  * `crates/ffi/src/lib.rs:464-537`
+  * `crates/ffi/src/lib.rs:585-656`
+* **Reproduction:**
+
+```c
+#include "sqlite3.h"
+
+int main(void) {
+    sqlite3_step(NULL);
+    sqlite3_reset(NULL);
+    sqlite3_close(NULL);
+    return 0;
+}
+```
+
+* **Expected:** Defined error behavior such as `SQLITE_MISUSE`, never undefined behavior.
+* **Actual:** Several functions dereference raw pointers before checking for null.
+* **Why it matters:** C callers will misuse APIs. SQLite-compatible libraries rely on robust boundary behavior. `catch_unwind` cannot protect against undefined behavior from null dereference.
+* **Suggested fix:** Add `with_db`, `with_db_mut`, `with_stmt`, and `with_stmt_mut` helpers and use them for every exported function before any unsafe dereference. Remove or greatly narrow `#![allow(clippy::not_unsafe_ptr_arg_deref)]`.
+* **Tests to add:**
+
+  * C tests for null db/stmt pointers.
+  * Double finalize.
+  * Close with live statements.
+  * Reset/finalize/bind after close.
+  * ASAN/UBSAN/valgrind lane.
+
+---
+
+### Finding 6: `sqlite3_prepare_v2` and `sqlite3_exec` script behavior is incompatible
+
+* **Severity:** P0/P1
+* **Area:** SQLite C API drop-in
+* **Files/lines:**
+
+  * `crates/sql/src/parser.rs:101-106`
+  * `crates/ffi/src/lib.rs:369-417`
+  * `crates/ffi/src/lib.rs:660-713`
+* **Reproduction:**
+
+```c
+sqlite3_stmt *stmt = NULL;
+const char *tail = NULL;
+sqlite3_prepare_v2(db, "SELECT 1; SELECT 2;", -1, &stmt, &tail);
+```
+
+* **Expected:** SQLite prepares the first statement and sets `tail` to the uncompiled remainder.
+* **Actual:** Redline rejects multi-statement prepares and sets tail to the end of the full SQL string.
+* **Why it matters:** Many SQLite clients and migration scripts loop through SQL scripts using `pzTail` or `sqlite3_exec`.
+* **Suggested fix:** Implement tokenizer-level first-statement extraction, including semicolons inside strings/comments. Prepare only the first complete statement. Make `sqlite3_exec` loop over all statements and populate `errmsg`.
+* **Tests to add:**
+
+  * Multiple statements.
+  * Empty SQL/comments.
+  * Semicolons inside string literals.
+  * `sqlite3_exec` callback across multiple SELECTs.
+  * Error propagation and `errmsg` ownership.
+
+---
+
+### Finding 7: Conflict algorithms are parsed but not implemented
+
+* **Severity:** P1, but P0 for drop-in marketing
+* **Area:** Constraints / DML semantics
+* **Files/lines:**
+
+  * `crates/sql/src/parser/dml.rs:211-295`
+  * `crates/sql/src/exec/tail.rs:883-999`
+* **Reproduction:**
+
+```sql
+CREATE TABLE t(x INTEGER NOT NULL);
+INSERT OR IGNORE INTO t VALUES (NULL);
+```
+
+```sql
+CREATE TABLE u(x INTEGER UNIQUE);
+INSERT INTO u VALUES (1);
+BEGIN;
+INSERT OR ROLLBACK INTO u VALUES (1);
+```
+
+* **Expected:**
+
+  * `OR IGNORE` ignores applicable constraint violations.
+  * `OR ROLLBACK` rolls back the active transaction.
+  * `OR FAIL` preserves prior row changes within the same statement.
+    SQLite documents five distinct conflict algorithms with distinct effects. ([SQLite][1])
+* **Actual:** NOT NULL/CHECK are evaluated before the conflict algorithm; `ABORT`, `FAIL`, `ROLLBACK`, and default are grouped together for unique conflicts.
+* **Why it matters:** ORMs and SQLite users depend heavily on these exact semantics.
+* **Suggested fix:** Implement conflict handling at statement level with per-statement change tracking. `ABORT` must roll back the statement, `FAIL` must preserve prior row changes, `ROLLBACK` must roll back the transaction, `IGNORE` must skip the violating row, and `REPLACE` must delete conflicting rows with SQLite-compatible trigger/change-count behavior when triggers are added.
+* **Tests to add:**
+
+  * Multi-row `INSERT OR FAIL`.
+  * `UPDATE OR FAIL` on the 100th row.
+  * `INSERT OR ROLLBACK` inside explicit transaction.
+  * `INSERT OR IGNORE` for UNIQUE, NOT NULL, CHECK.
+  * `REPLACE` with rowid and index conflicts.
+
+---
+
+### Finding 8: `PRAGMA integrity_check` returns a static `ok`
+
+* **Severity:** P0/P1
+* **Area:** Corruption resistance / operator trust
+* **Files/lines:** `crates/sql/src/parser/pragma.rs:102-107`
+* **Reproduction:** Corrupt a page, catalog snapshot, or index entry, then run:
+
+```sql
+PRAGMA integrity_check;
+```
+
+* **Expected:** Validate page checksums, catalog CRC, heap tuple decode, WAL prefix, B-tree structure, and heap-index equivalence.
+* **Actual:** Redline returns one row containing `"ok"` without validation.
+* **Why it matters:** This is worse than a missing feature because it can falsely reassure users after corruption.
+* **Suggested fix:** Implement `Engine::integrity_check` and make the PRAGMA call it. At minimum check:
+
+  * page magic/version/checksum,
+  * catalog CRC,
+  * WAL CRC and LSN chain,
+  * tuple decode,
+  * relation row directory,
+  * index page order,
+  * index reachability,
+  * heap-to-index and index-to-heap equivalence.
+* **Tests to add:**
+
+  * Flip one byte in a page.
+  * Truncate WAL.
+  * Corrupt index leaf key order.
+  * Remove one index entry.
+  * Add stale index entry.
+  * Confirm `integrity_check` fails with useful diagnostics.
+
+---
+
+## Additional High-Severity Findings
+
+### Negative rowids are rejected
+
+* **Severity:** P1
+* **Area:** SQLite rowid compatibility
+* **Files/lines:** `crates/sql/src/exec/tail.rs:1021-1065`
+* **Reproduction:**
+
+```sql
+CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);
+INSERT INTO t(id, v) VALUES (-1, 'ok');
+SELECT id, v FROM t WHERE id = -1;
+```
+
+* **Expected:** SQLite accepts negative rowids; rowids are signed 64-bit integers. ([SQLite][2])
+* **Actual:** Redline rejects negative integer/real rowid aliases.
+* **Suggested fix:** Represent rowids as signed `i64`, or encode signed ordering internally while preserving SQLite SQL/API behavior.
+
+---
+
+### Grouped `ORDER BY` ignores requested sort expressions
+
+* **Severity:** P1
+* **Area:** SQL executor / wrong result
+* **Files/lines:** `crates/sql/src/exec.rs:1076-1079`
+* **Reproduction:**
+
+```sql
+CREATE TABLE t(a TEXT, b INTEGER);
+INSERT INTO t VALUES ('x', 1), ('x', 2), ('y', 10);
+SELECT a, count(*) AS c FROM t GROUP BY a ORDER BY c DESC;
+```
+
+* **Expected:** Row `x, 2` before `y, 1`.
+* **Actual:** Grouped queries sort on projected row comparison “for determinism,” not the requested `ORDER BY`.
+* **Suggested fix:** Carry sort-key expressions through group projection and evaluate them against the group/aggregate context. Support aliases and ordinal positions.
+
+---
+
+### Planner advertises hash/index joins that executor does not implement
+
+* **Severity:** P1
+* **Area:** Planner/executor correctness / EXPLAIN truthfulness
+* **Files/lines:**
+
+  * `crates/sql/src/planner.rs:651-655`
+  * `crates/sql/src/planner.rs:727-731`
+  * `crates/sql/src/planner.rs:753-775`
+  * `crates/sql/src/exec/tail.rs:1093-1150`
+* **Reproduction:**
+
+```sql
+EXPLAIN SELECT * FROM a JOIN b ON a.k = b.k;
+```
+
+* **Expected:** EXPLAIN should advertise only the physical path actually executed.
+* **Actual:** Planner can choose `HashJoin` or `IndexNestedLoopJoin`, but executor materializes nested-loop joins.
+* **Suggested fix:** Either implement the physical operators or downgrade the plan kinds to `NestedLoopJoin` until implemented. Add an assertion or execution dispatch by `PhysicalKind`.
+
+---
+
+### Scalar subquery behavior is stricter than SQLite
+
+* **Severity:** P1
+* **Area:** SQL expression semantics
+* **Files/lines:** `crates/sql/src/exec/expr.rs:280-290`
+* **Reproduction:**
+
+```sql
+SELECT (SELECT x FROM (SELECT 1 AS x UNION ALL SELECT 2));
+```
+
+* **Expected:** SQLite scalar subqueries return the first row’s first column; zero rows produce NULL.
+* **Actual:** Redline errors unless exactly one row and one column.
+* **Suggested fix:** For scalar subqueries, return NULL for no rows and the first column of the first row for one-or-more rows. Reject only multiple columns if unsupported.
+
+---
+
+### Type affinity, casts, arithmetic, functions, and comparisons diverge from SQLite
+
+* **Severity:** P1
+* **Area:** Type system / expression semantics
+* **Files/lines:**
+
+  * `crates/sql/src/value.rs:13-30`
+  * `crates/sql/src/exec/expr.rs:370-395`
+  * `crates/sql/src/exec/expr.rs:818-879`
+  * `crates/sql/src/exec/expr.rs:881-946`
+* **Examples:**
+
+  * `CAST('abc' AS INTEGER)` should return `0` in SQLite-style casting, not a datatype mismatch.
+  * `1 / 0` should not panic; SQLite returns NULL for division by zero behavior in practice.
+  * `length(NULL)` should return NULL, but Redline currently stringifies NULL to an empty string and returns 0.
+  * `random()` should produce signed 64-bit values, but Redline applies `wrapping_abs()` (`crates/sql/src/exec/expr.rs:749-764`).
+  * `avg()` coercion differs: SQLite treats strings/BLOBs that do not look numeric as 0 for `avg()`. ([SQLite][9])
+* **Suggested fix:** Create a dedicated SQLite compatibility semantics module:
+
+  * affinity on insert,
+  * comparison affinity,
+  * collation-aware ordering,
+  * cast rules,
+  * numeric coercion,
+  * aggregate coercion,
+  * NULL propagation,
+  * function-specific compatibility tests.
+
+---
+
+### LIKE/GLOB are partial and can be slow/pathological
+
+* **Severity:** P1/P2
+* **Area:** SQL expression semantics / performance
+* **Files/lines:** `crates/sql/src/exec/expr.rs:148-178`, `564-684`
+* **Issues:**
+
+  * `LIKE` and `ILIKE` both route through case-insensitive matching.
+  * Matching is ASCII-only via `to_ascii_lowercase`.
+  * Recursive `%` / `*` matching can blow up on adversarial patterns.
+  * `GLOB` supports only `*` and `?`, not SQLite bracket classes/ranges.
+* **Suggested fix:** Implement iterative wildcard matching, full SQLite pattern semantics for supported collations, and `PRAGMA case_sensitive_like` if supported.
+
+---
+
+### Named parameters are exposed but not fully resolved in expression execution
+
+* **Severity:** P1
+* **Area:** Prepared statements / API compatibility
+* **Files/lines:** `crates/sql/src/exec/expr.rs:968-979`
+* **Reproduction:**
+
+```sql
+SELECT :x;
+```
+
+Then bind `:x`.
+
+* **Expected:** SQLite accepts `?`, `?NNN`, `:VVV`, `@VVV`, and `$VVV` parameter forms. ([SQLite][10])
+* **Actual:** Expression binding resolution only accepts names starting with `?`.
+* **Suggested fix:** Normalize parameter names in parser/template layout and resolve all SQLite forms consistently across executor, planner constants, index access, Rust API, and FFI.
+
+---
+
+### `changes()` appears cumulative, not per-statement
+
+* **Severity:** P1
+* **Area:** API semantics
+* **Files/lines:** `crates/sql/src/exec.rs:103-188`, `crates/sql/src/connection.rs:421-426`
+* **Reproduction:**
+
+```sql
+CREATE TABLE t(x);
+INSERT INTO t VALUES (1);
+INSERT INTO t VALUES (2);
+```
+
+Then call `changes()` after the second insert.
+
+* **Expected:** SQLite `changes()` reports rows changed by the most recent statement; `total_changes()` is cumulative.
+* **Actual:** Redline increments `session.changes` and `session.total_changes` together, so `changes()` becomes cumulative.
+* **Suggested fix:** Reset `changes` at statement start; keep `total_changes` cumulative.
+
+---
+
+### `PRAGMA user_version` is memory-only
+
+* **Severity:** P1
+* **Area:** PRAGMA compatibility / schema metadata
+* **Files/lines:**
+
+  * `crates/sql/src/parser/pragma.rs:50-66`
+  * `crates/sql/src/connection.rs:154`, `313-319`
+* **Reproduction:**
+
+```sql
+PRAGMA user_version = 123;
+-- close and reopen
+PRAGMA user_version;
+```
+
+* **Expected:** `123`.
+* **Actual:** The value is stored in a `Mutex<i64>` initialized to 0 on open.
+* **Suggested fix:** Persist user version in the catalog/control metadata and WAL it with catalog snapshots.
+
+---
+
+### SELECT transaction lifecycle can detach the active transaction
+
+* **Severity:** P1
+* **Area:** Statement lifecycle / transaction state
+* **Files/lines:** `crates/sql/src/exec.rs:533-558`
+* **Issue:** `begin_select_tx` takes the session transaction out of `session.tx` while a SELECT runtime is active; `finish_select_runtime` restores it later. If the same connection interleaves another statement before finalizing the SELECT, that second statement may observe no active transaction and autocommit.
+* **Suggested fix:** Do not remove the transaction from session state for active SELECTs. Track active readers separately or use shared transaction handles with clear statement ownership rules.
+
+---
+
+## SQLite Compatibility Matrix
+
+| Feature                           |           Status | Files                                    | Tests                              | Notes                                                                                                          |
+| --------------------------------- | ---------------: | ---------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| One-statement prepare             |          Partial | `parser.rs:101-106`                      | Add C prepare-tail tests           | Rejects scripts/multiple statements.                                                                           |
+| `sqlite3_exec` scripts            |            Wrong | `ffi/src/lib.rs:660-713`                 | Add multi-statement exec tests     | Executes one prepared statement only.                                                                          |
+| Basic `SELECT`                    |          Partial | `parser/select.rs`, `exec.rs`            | Differential tests                 | Works for narrow subset.                                                                                       |
+| `SELECT ALL`                      |            Wrong | `parser/select.rs:80-82`                 | Add SQLLogicTest                   | Parsed as DISTINCT.                                                                                            |
+| `DISTINCT`                        |          Partial | `exec.rs`, `value.rs`                    | Add NULL/collation tests           | Equality/collation semantics incomplete.                                                                       |
+| `UNION ALL`                       |          Partial | `parser/select.rs:221-224`               | Add compound tests                 | Only `UNION ALL`; no `UNION`, `INTERSECT`, `EXCEPT`.                                                           |
+| CTE / recursive CTE               |          Missing | `parser/select.rs`                       | Add reject/diff tests              | Needed for common SQLite workloads.                                                                            |
+| Joins                             |    Partial/wrong | `planner.rs`, `exec/tail.rs`             | Add join oracle tests              | Executor nested-loop materializes; planner can advertise other joins.                                          |
+| LEFT JOIN                         |          Partial | `parser/helpers.rs:454-523`              | Add null-extension tests           | Limited source shapes.                                                                                         |
+| ORDER BY                          |    Partial/wrong | `exec.rs:1076-1079`                      | Add grouped ORDER BY tests         | Grouped ORDER BY wrong.                                                                                        |
+| GROUP BY / HAVING                 |          Partial | `exec.rs`                                | Add aggregate oracle tests         | Limited aggregate semantics.                                                                                   |
+| Aggregate functions               |    Partial/wrong | `exec.rs`, `expr.rs`                     | Add SQLite aggregate suite         | Coercions differ from SQLite.                                                                                  |
+| Window functions                  |          Missing | parser/executor                          | Add reject tests                   | Common modern SQLite feature.                                                                                  |
+| Scalar functions                  |          Partial | `exec/expr.rs:818-879`                   | Add function matrix                | Missing date/time, JSON, many string/math funcs.                                                               |
+| Date/time functions               |          Missing | `exec/expr.rs`                           | Add date/time suite                | SQLite stores date/time as text/real/int and exposes functions, not a native date storage class. ([SQLite][3]) |
+| Type affinity                     |    Partial/wrong | `value.rs`, catalog value                | Add `datatype3` differential tests | SQLite dynamic typing/affinity is central. ([SQLite][3])                                                       |
+| Cast/coercion                     |            Wrong | `exec/expr.rs:881-946`                   | Add cast tests                     | Errors where SQLite coerces.                                                                                   |
+| Rowid / INTEGER PRIMARY KEY       |    Partial/wrong | `exec/tail.rs:1021-1065`                 | Add negative rowid tests           | Negative rowids rejected.                                                                                      |
+| AUTOINCREMENT                     |  Missing/unclear | DDL/catalog                              | Add `sqlite_sequence` tests        | Needs SQLite-specific sequence semantics.                                                                      |
+| WITHOUT ROWID                     |  Missing/unclear | `parser/ddl.rs`                          | Add behavior tests                 | Flags captured, behavior not proven.                                                                           |
+| STRICT tables                     |  Missing/unclear | `parser/ddl.rs`                          | Add strict tests                   | Flag captured, strict enforcement not proven.                                                                  |
+| NOT NULL                          |          Partial | `exec/tail.rs`                           | Add conflict tests                 | `OR IGNORE` behavior wrong.                                                                                    |
+| CHECK                             |          Partial | parser/helpers + exec                    | Add expression tests               | Expression subset limited.                                                                                     |
+| UNIQUE                            |          Partial | index DML                                | Add race/NULL tests                | NULL behavior appears intentional; needs stress proof.                                                         |
+| FOREIGN KEY                       |          Missing | `parser/helpers.rs`, `pragma.rs:255-282` | Add FK tests                       | FK DDL unsupported; list returns empty.                                                                        |
+| Conflict algorithms               |            Wrong | `parser/dml.rs`, `exec/tail.rs`          | Add OR FAIL/ROLLBACK tests         | Distinct effects missing.                                                                                      |
+| UPSERT                            |          Partial | `parser/dml.rs`, `exec/tail.rs`          | Add SQLite diff tests              | Basic path exists; needs full target/action semantics.                                                         |
+| `INSERT ... SELECT`               |          Missing | `parser/dml.rs:29-44`                    | Add tests                          | Only VALUES.                                                                                                   |
+| UPDATE FROM / LIMIT               |          Missing | `parser/dml.rs:86-100`                   | Add tests                          | Unsupported.                                                                                                   |
+| DELETE ORDER BY / LIMIT           |          Missing | `parser/dml.rs:156-169`                  | Add tests                          | Unsupported.                                                                                                   |
+| Transactions                      |          Partial | `parser.rs:61-95`                        | Add state tests                    | Simple BEGIN/COMMIT/ROLLBACK only.                                                                             |
+| SAVEPOINT / RELEASE / ROLLBACK TO |          Missing | parser                                   | Add ORM tests                      | Critical for ORMs.                                                                                             |
+| PRAGMA coverage                   |    Partial/wrong | `parser/pragma.rs`                       | Add matrix                         | `integrity_check` static; `user_version` memory-only.                                                          |
+| `CREATE TABLE AS SELECT`          |          Missing | `parser/ddl.rs:8-11`                     | Add tests                          | Explicitly unsupported.                                                                                        |
+| Views                             |          Missing | parser                                   | Add schema tests                   | Common SQLite feature.                                                                                         |
+| Triggers                          |          Missing | parser                                   | Add trigger suite                  | Needed for many SQLite schemas.                                                                                |
+| Partial indexes                   |          Missing | `parser/ddl.rs:87-99`                    | Add tests                          | Predicate rejected.                                                                                            |
+| Expression indexes                |          Missing | `parser/helpers.rs:123-147`              | Add tests                          | Only column identifiers.                                                                                       |
+| Generated columns                 |          Missing | `parser/helpers.rs:21-75`                | Add tests                          | Column option unsupported.                                                                                     |
+| ALTER TABLE                       |          Partial | `parser/ddl.rs:168-262`                  | Add SQLite ALTER tests             | Rename/add only, constrained.                                                                                  |
+| ATTACH / DETACH                   |          Missing | parser                                   | Add tests                          | Expected by SQLite users.                                                                                      |
+| VACUUM                            | Partial/API only | FFI + facade                             | Add file-size tests                | No SQLite-compatible SQL VACUUM behavior proven.                                                               |
+| ANALYZE/statistics                |          Partial | planner/stats                            | Add planner tests                  | Needs persistence and plan proof.                                                                              |
+| JSON / JSONB                      |          Missing | `exec/expr.rs`                           | Add JSON1 tests                    | Modern SQLite has JSONB. ([SQLite][5])                                                                         |
+| FTS                               |          Missing | n/a                                      | Add roadmap tests                  | Major product opportunity.                                                                                     |
+| C API open/prepare/step/finalize  |    Partial/wrong | `ffi/src/lib.rs`                         | Add C ABI suite                    | Pointer safety and lifecycle semantics incomplete.                                                             |
+| Busy timeout/handler              |          Partial | FFI/session/locks                        | Add contention tests               | Kernel unique lock has unbounded wait.                                                                         |
+| SQLite shell expectations         |          Partial | `cli/src/main.rs:259-291`                | Add CLI golden tests               | One-shot query only; no `.tables`, `.schema`, `.mode`, `.read`, `.dump`.                                       |
+
+---
+
+## Performance And Benchmark Review
+
+### Good benchmark-harness work
+
+The harness has useful pieces:
+
+* Certification manifests include config hash, output hashes, git SHA/dirty, strace decision, PRAGMAs, checksums, process metrics, warmup count, and measured repetitions (`crates/bench/src/certify.rs:47-82`, `146-171`).
+* Scheduler builds warmup/measured jobs and dispatches in a core-aware way (`crates/bench/src/certify.rs:96-105`).
+* Summary CSV includes operations, failures, busy/locked/timeout counts, throughput, p50/p95/p99/p999/max latency, data bytes, and WAL bytes (`crates/bench/src/certify.rs:718-754`).
+* SQLite baseline opens with WAL, busy timeout, cache size, synchronous mode, and validates PRAGMA results (`crates/bench/src/engine/sqlite.rs:30-37`, `207-231`).
+* Redline snapshot captures internal WAL fsync/fdatasync/pwrite counters where available (`crates/bench/src/engine/redline.rs:90-117`).
+
+### Harness issues and fairness concerns
+
+1. **Benchmarks were not run in this audit.** No performance headline is justified from this report.
+
+2. **Checksum is too weak to prove equivalence.** Both SQLite and Redline checksum paths use `COUNT(*)`, `MAX(k)`, `MAX(version)`, and a count under `tenant >= 0` while naming fields `key_sum`, `version_sum`, and `payload_bytes` (`crates/bench/src/engine/sqlite.rs:146-153`, `crates/bench/src/engine/redline.rs:120-127`). That can miss many data corruptions.
+
+3. **SQLite syscall counters are intentionally absent.** SQLite `fsyncs_issued`, `fdatasyncs_issued`, and `pwrites_issued` are `None` and require process-level strace (`crates/bench/src/engine/sqlite.rs:123-143`). That is acceptable if clearly separated, but strace should not be used for headline latency because it changes timing.
+
+4. **SQLite and Redline checkpoint policies need explicit equivalence.** SQLite uses `wal_autocheckpoint=0` (`crates/bench/src/engine/sqlite.rs:207-216`); Redline has its own checkpoint path. Reports must label whether checkpointing is disabled, manual, periodic, or included in latency.
+
+5. **Thread count vs core count must be recorded.** The harness reserves four cores (`crates/bench/src/certify.rs:18-32`), but final artifacts should also include CPU model, logical CPUs, cpuset, NUMA node, governor, filesystem, mount options, Docker image digest, and cgroup limits.
+
+6. **Connection-limit workload must report failure mode, not only throughput.** Split BUSY, LOCKED, timeout, connection-open failure, memory exhaustion, and p99/p999 gate failure.
+
+7. **Benchmarks need raw histograms.** Percentiles in CSV are not enough for independent verification. Store HDR histograms or raw latency JSONL.
+
+### Suggested benchmark matrix
+
+Run under identical Docker/Linux conditions on the 128-core node:
+
+| Workload                           | What it proves                      | SQLite role           | Required artifacts                       |
+| ---------------------------------- | ----------------------------------- | --------------------- | ---------------------------------------- |
+| Single-writer insert/update/delete | Baseline overhead                   | Baseline              | latency histogram, fsync/pwrite, bytes   |
+| Many readers + one writer          | Snapshot/read-write interaction     | Baseline              | reader p99, writer p99, WAL growth       |
+| Many writers, distinct keys        | Writer scheduling and lock overhead | Baseline              | throughput vs threads, busy/locked split |
+| Hot-row update storm               | Contention control                  | Baseline              | final counter, p999/max, timeouts        |
+| Unique-key race                    | Unique lock correctness             | Oracle for semantics  | duplicate audit, lock waits              |
+| Tenant range scan + writes         | Index read/write interaction        | Baseline              | range latency, stale-entry audit         |
+| DDL + DML churn                    | Schema/data atomicity               | Baseline if supported | failure log, integrity proof             |
+| Crash/recover after commits        | Durability                          | Comparison target     | ack log, recovered count, integrity      |
+| Connection-limit binary search     | Stable capacity threshold           | Baseline              | max stable N, failure cause              |
+| Larger-than-memory sort/join       | Spill behavior                      | Baseline              | RSS, temp bytes, p99                     |
+
+### Claims currently justified
+
+* RedlineDB has a serious benchmark harness scaffold.
+* The harness records useful manifest and tail-latency fields.
+* There is explicit SQLite WAL PRAGMA setup and validation.
+
+### Claims not currently justified
+
+* “Faster than SQLite.”
+* “Lower memory than SQLite.”
+* “Higher concurrent connection capacity.”
+* “Lower tail latency.”
+* “Crash-safe under all acknowledged commits.”
+* “SQLite-compatible.”
+
+Preferred wording until raw artifacts prove stronger claims:
+
+> SQLite contention and tail-latency evidence.
+
+---
+
+## Crash/Recovery/Corruption Review
+
+### Positive findings
+
+Redline has real crash/corruption infrastructure:
+
+* WAL records have CRC32 validation (`crates/kernel/src/wal/record.rs:67-135`).
+* Pages have checksums and validation (`crates/kernel/src/format/page.rs:401-459`).
+* Catalog snapshots are written temp → fsync → rename → parent fsync and include CRC (`crates/kernel/src/catalog/store.rs:49-79`, `137-175`).
+* Control files use A/B generation and checksums (`crates/kernel/src/storage/control.rs:54-99`, `117-159`).
+* Failpoint matrix uses a fsynced ack log and verifies no lost acknowledged commits (`crates/bench/src/failpoint_matrix.rs:1-20`, `531-590`).
+* Failpoint action validation was improved to reject unknown actions like `abort` (`crates/kernel/src/failpoints/mod.rs:43-60`, `128-176`).
+
+### Gaps
+
+1. **`PRAGMA integrity_check` is not real.** It returns static `ok`.
+
+2. **Index consistency is not proven by the failpoint matrix.** The matrix verifies recovered row count (`crates/bench/src/failpoint_matrix.rs:464-504`), not payload equality, index equivalence, or unique-index witness correctness.
+
+3. **SQL-side index repair remains best-effort.** This is the largest crash-recovery design gap.
+
+4. **WAL segment creation/rotation lacks an explicit directory fsync API.** `FileSystem` has file sync but no directory fsync (`crates/kernel/src/io/fs.rs:7-25`, `53-97`). WAL create/rotate opens new segment files (`crates/kernel/src/wal/manager.rs:690-709`, `846-859`) without a visible parent-directory fsync.
+
+5. **Recovery proof artifacts are unverified in this audit.** The docs claim proof lanes are green (`docs/WORKPLAN_slam.md:19-24`, `93-100`), but I could not run them in this environment.
+
+6. **Index validation appears structural rather than semantic.** It needs heap↔index equivalence, uniqueness, reachability, separator checks, dead-entry rules, and page-generation checks.
+
+### New failpoints/tests to add
+
+* Crash after heap insert before index insert.
+* Crash after index insert before heap commit.
+* Crash during index split before/after page image WAL.
+* Crash during unique-key lock ownership.
+* Crash during catalog temp write, fsync, rename, and parent fsync.
+* Crash during WAL segment creation and rotation.
+* Crash after commit record fsync before publish.
+* Crash after publish before catalog save.
+* Disk-full on WAL append.
+* Disk-full on checkpoint/control file write.
+* Torn WAL record.
+* Torn page image.
+* Truncated catalog snapshot.
+* Random byte corruption in tuple body, page header, index leaf, and WAL payload.
+* Recovery idempotence: recover twice; second recovery must be a no-op.
+* `integrity_check` must fail on each injected corruption.
+
+---
+
+## API/FFI/Tooling Review
+
+### Rust API
+
+The Rust facade is the strongest public surface today. Prioritize:
+
+* Correct `changes()` vs `total_changes()`.
+* Persistent `user_version`.
+* `last_insert_rowid` with signed rowids.
+* Busy timeout propagation to every wait path.
+* Interrupt/cancellation for long scans and lock waits.
+* Statement metadata: readonly, expanded SQL, parameter names, column origin when possible.
+* Public `integrity_check`, `checkpoint`, `backup`, and `stats_json`.
+
+### C ABI
+
+The C ABI is not safe enough for drop-in claims.
+
+Important issues:
+
+* Null pointer UB in many functions.
+* `sqlite3_close_v2` just calls `rldb_close` (`crates/ffi/src/lib.rs:363-365`) and does not implement SQLite’s zombie-handle semantics.
+* `sqlite3_open_v2` rejects readonly opens and ignores VFS/most flags (`crates/ffi/src/lib.rs:941-965`).
+* `sqlite3_bind_text` and `sqlite3_bind_blob` return misuse on null value pointers (`crates/ffi/src/lib.rs:499-537`), but SQLite documents that a NULL pointer for text/blob binds SQL NULL. ([SQLite][11])
+* `sqlite3_prepare_v3` ignores flags and delegates to v2 (`crates/ffi/src/lib.rs:967-977`).
+* Unsupported SQL maps to `RLDB_MISUSE` (`crates/ffi/src/lib.rs:107-125`), but unsupported syntax should generally be `SQLITE_ERROR`, not library misuse.
+* Backup API is not SQLite-compatible: `rldb_backup_step` recursively copies the directory once (`crates/ffi/src/lib.rs:812-858`), and `rldb_backup_finish` does not free the object (`crates/ffi/src/lib.rs:861-877`).
+
+Minimal SQLite API set required to compile many common SQLite-using libraries:
+
+```text
+sqlite3_open
+sqlite3_open_v2
+sqlite3_close
+sqlite3_close_v2
+sqlite3_prepare_v2
+sqlite3_prepare_v3
+sqlite3_step
+sqlite3_reset
+sqlite3_finalize
+sqlite3_clear_bindings
+sqlite3_bind_null
+sqlite3_bind_int
+sqlite3_bind_int64
+sqlite3_bind_double
+sqlite3_bind_text
+sqlite3_bind_blob
+sqlite3_bind_parameter_count
+sqlite3_bind_parameter_name
+sqlite3_bind_parameter_index
+sqlite3_column_count
+sqlite3_column_name
+sqlite3_column_type
+sqlite3_column_int
+sqlite3_column_int64
+sqlite3_column_double
+sqlite3_column_text
+sqlite3_column_blob
+sqlite3_column_bytes
+sqlite3_exec
+sqlite3_errcode
+sqlite3_extended_errcode
+sqlite3_errmsg
+sqlite3_errstr
+sqlite3_free
+sqlite3_malloc
+sqlite3_realloc
+sqlite3_busy_timeout
+sqlite3_busy_handler
+sqlite3_extended_result_codes
+sqlite3_changes
+sqlite3_changes64
+sqlite3_total_changes
+sqlite3_total_changes64
+sqlite3_last_insert_rowid
+sqlite3_set_last_insert_rowid
+sqlite3_get_autocommit
+sqlite3_interrupt
+sqlite3_db_handle
+sqlite3_db_filename
+sqlite3_db_readonly
+sqlite3_libversion
+sqlite3_libversion_number
+sqlite3_sourceid
+sqlite3_threadsafe
+```
+
+### CLI
+
+The CLI currently supports backup, restore, archive-check, replication-slot commands, stats, and one-shot `redlinedb DB SQL` execution (`crates/cli/src/main.rs:25-39`, `235-291`). It is not yet a SQLite-like shell.
+
+SQLite-style users expect:
+
+```text
+.tables
+.schema
+.indexes
+.mode
+.headers
+.read
+.dump
+.backup
+.restore
+.import
+.once
+.output
+.explain
+.timer
+```
+
+Add golden tests for each shell command and script mode.
+
+### Server
+
+The server exposes a framed JSON-ish protocol with prepare/bind/step/reset/finalize/exec/begin/commit/rollback/interrupt/close (`crates/server/src/main.rs:13-45`, `206-376`). It allows only one active statement per connection (`crates/server/src/main.rs:189-221`, `301-315`) and requires finalization before exec/transaction commands.
+
+Recommendations:
+
+* Document the protocol.
+* Add client library tests.
+* Support multiple active statement IDs or explicitly document single-active-statement mode.
+* Add authentication/TLS disclaimers if this is ever used beyond local loopback.
+* Add backpressure and max request size.
+
+---
+
+## Major Upgrade Roadmap
+
+### JSON / BJSON / JSONB
+
+SQLite now stores its internal JSON parse tree as JSONB BLOBs beginning with 3.45.0, avoiding repeated parse/render overhead and using slightly less disk space than text JSON. ([SQLite][5]) Redline should not merely copy that; it can do better.
+
+**API shape**
+
+```sql
+SELECT json_extract(doc, '$.user.id') FROM events;
+SELECT jsonb_extract(docb, '$.user.id') FROM events;
+
+CREATE INDEX events_user_id_idx
+ON events(json_extract(doc, '$.user.id'));
+
+ALTER TABLE events
+ADD COLUMN user_id GENERATED ALWAYS AS (json_extract(doc, '$.user.id')) STORED;
+```
+
+**Storage format**
+
+* TEXT JSON remains compatible.
+* BJSON/JSONB stored as BLOB:
+
+  * magic/version,
+  * scalar type tags,
+  * varint lengths,
+  * object key dictionary,
+  * offset table,
+  * optional per-object key directory for O(1) or near-O(1) object lookup,
+  * page-level path Bloom filters for quick negative tests.
+
+**Indexing strategy**
+
+* Expression indexes over paths.
+* Generated stored columns over paths.
+* Optional inverted path index for containment/existence queries.
+* Partial indexes over JSON predicates.
+
+**Backward compatibility**
+
+* All text JSON functions accept text and binary JSON.
+* Binary JSON never pretends to be text.
+* Malformed binary JSON returns a clear error, never panics.
+
+**Tests**
+
+* SQLite JSON1 differential tests where functions overlap.
+* Malformed JSONB fuzzing.
+* Path lookup edge cases.
+* Update/index consistency tests.
+
+---
+
+### Vector search and vectorized execution
+
+**API shape**
+
+```sql
+CREATE TABLE items(
+  id INTEGER PRIMARY KEY,
+  tenant INTEGER,
+  embedding VECTOR<F32, 768>,
+  metadata JSONB
+);
+
+CREATE INDEX items_vec_hnsw
+ON items USING hnsw(embedding)
+WITH (metric = 'cosine', m = 32, ef_construction = 200);
+
+SELECT id
+FROM items
+WHERE tenant = 7
+ORDER BY embedding <=> vector('[...]')
+LIMIT 20;
+```
+
+**Phased implementation**
+
+1. **P0 vector path:** exact flat SIMD scan. This gives correctness and baseline performance.
+2. **P1 ANN:** HNSW for in-memory high-recall search. HNSW is graph-based and remains a standard high-performance ANN design. ([arXiv][6])
+3. **P2 larger-than-memory:** DiskANN/Vamana-style SSD-resident graph for large embeddings; DiskANN showed billion-point ANN on a single workstation with 64GB RAM and SSD. ([NeurIPS Papers][12])
+4. **P2/P3 filtered vector search:** plan between:
+
+   * pre-filter + flat SIMD scan,
+   * ANN then post-filter,
+   * inline-filtered ANN,
+   * hybrid candidate expansion.
+
+**Novel concept to test**
+
+A Redline-specific **filtered ANN cost model**:
+
+* Maintain per-segment tenant/filter bitmaps.
+* Maintain vector index segment stats.
+* Learn crossover points from live telemetry.
+* Choose exact SIMD scan for highly selective filters and ANN for low-selectivity filters.
+* Feed observed recall/latency back into planner stats.
+
+This is likely more valuable than blindly adding HNSW because SQL predicates plus vector search are the real workload.
+
+---
+
+### Vectorized execution
+
+Current execution frequently materializes rows in memory:
+
+* Joins build nested products (`crates/sql/src/exec/tail.rs:1093-1150`).
+* Sort/filter/project paths collect rows before limiting (`crates/sql/src/exec.rs:837-865`).
+* Spill infrastructure accounts but does not truly spill rows out of memory (`crates/sql/src/batch.rs:93-105`, `175-198`).
+
+Implement:
+
+* `DataChunk` / `RowBatch` with 1024–4096 rows.
+* Vectorized filters/projections.
+* Selection vectors.
+* SIMD comparisons.
+* Hash aggregation.
+* Hash join.
+* Top-N heap for `ORDER BY ... LIMIT`.
+* External sort spill.
+* Columnar side caches for repeated analytical scans.
+
+DuckDB’s `Vector`/`DataChunk` architecture is a proven model for reducing per-row overhead and improving CPU locality. ([DuckDB][4])
+
+---
+
+### Higher concurrency
+
+To beat SQLite meaningfully, Redline needs to win on many contending writers, connection storms, and tail latency. SQLite WAL already provides useful read/write concurrency, so the bar is high. ([SQLite][8])
+
+Recommended architecture:
+
+1. **MVCC-tagged heap and index entries.**
+2. **Single commit sequencer with group commit.**
+3. **Bounded writer admission queue.**
+4. **Lock wait timeouts everywhere.**
+5. **Interruptible waits and scans.**
+6. **Epoch-based reader tracking and reclamation.**
+7. **Fine-grained B-tree latching instead of broad per-index structure locks.**
+8. **Hot-key combiner** for commutative updates:
+
+   * Detect patterns like `UPDATE counters SET v = v + ? WHERE id = ?`.
+   * Combine deltas in a short-lived queue.
+   * Commit one physical update while preserving transaction boundaries where possible.
+9. **Contention-aware planner:**
+
+   * Track hot keys/ranges.
+   * Choose index/scan/write strategy based on lock-wait history, not only row counts.
+10. **Connection admission controller:**
+
+* Learn p99/p999 degradation points.
+* Reject or queue new writers before the system collapses.
+
+---
+
+### Extensions and UDFs
+
+**Rust API**
+
+```rust
+db.create_scalar_function("uuid_v7", 0, FunctionFlags::DETERMINISTIC, |args| { ... });
+db.create_aggregate_function("median", ...);
+db.create_collation("nocase_unicode", ...);
+```
+
+**C API**
+
+Eventually support SQLite-style function registration:
+
+```c
+sqlite3_create_function_v2(...)
+sqlite3_create_collation_v2(...)
+```
+
+**Safety requirements**
+
+* Panic boundaries around callbacks.
+* Lifetime-safe value objects.
+* Deterministic/direct-only/innocuous flags.
+* Batched UDF mode for vectorized execution.
+
+---
+
+### Observability
+
+Add:
+
+```sql
+PRAGMA redline_stats;
+PRAGMA redline_locks;
+PRAGMA redline_wal;
+PRAGMA redline_buffer_pool;
+PRAGMA redline_index_check('idx');
+PRAGMA redline_tx_status;
+```
+
+Expose:
+
+* active transaction count,
+* oldest snapshot,
+* WAL bytes pending checkpoint,
+* fsync/fdatasync/pwrite counts,
+* lock wait histograms,
+* page-cache hit rate,
+* index split counts,
+* B-tree dead-entry counts,
+* query memory/spill bytes,
+* per-query planning/execution time.
+
+---
+
+## Stress Tests To Add
+
+| Test family                            | Invariant                    | SQLite role           | Expected Redline behavior                   | Reproduction                                    | Artifact                 |
+| -------------------------------------- | ---------------------------- | --------------------- | ------------------------------------------- | ----------------------------------------------- | ------------------------ |
+| Multi-process writer contention        | No corruption; bounded waits | Baseline              | No hangs; BUSY/LOCKED split clear           | N processes, each own connection, random writes | JSONL ops + histograms   |
+| Long reader + checkpoint pressure      | Reader snapshot stable       | Baseline              | Checkpoint safe; no writer starvation cliff | Hold SELECT open, write/checkpoint loop         | WAL/checkpoint stats     |
+| Hot-row update storm                   | Final value correct          | Baseline              | Better p99/p999 under contention            | 1 counter row, 1–256 writers                    | final checksum + latency |
+| Unique index races                     | No duplicate non-NULL keys   | Oracle                | Correct conflict behavior and lock release  | Small unique-key domain                         | heap/index audit         |
+| CREATE INDEX while active              | DDL atomicity                | Baseline if supported | Block, snapshot, or reject clearly          | Writers + CREATE INDEX                          | integrity proof          |
+| Crash after commit before publish      | Acked commits durable        | Comparison target     | Recovered rows ≥ acked rows                 | failpoint after WAL fsync                       | fsynced ack log          |
+| Crash before/after WAL fsync           | WAL protocol correct         | Comparison target     | No lost acknowledged commit                 | failpoint `wal::flush`                          | recovery JSON            |
+| Crash during catalog save/rename/fsync | Catalog atomicity            | N/A                   | Old or new catalog, never corrupt mix       | failpoints in catalog save                      | catalog decode report    |
+| Crash during index mutation            | Heap/index agree             | N/A                   | No stale/missing index entries              | failpoint index insert/split/delete             | index audit              |
+| Disk-full / I/O error                  | Fail safely                  | N/A                   | No partial commit                           | injected ENOSPC/EIO                             | error + recovery report  |
+| Torn WAL/page writes                   | Corruption detected          | N/A                   | Recover prefix or reject                    | truncate/flip bytes                             | corruption report        |
+| DDL + DML churn                        | Schema/data atomicity        | Baseline              | No stale schema/prepared stmt corruption    | random DDL/DML                                  | differential log         |
+| Random SQL differential                | Supported SQL matches SQLite | Oracle                | Match or documented unsupported             | SQLSmith/SQLancer-style subset                  | sqllogictest output      |
+| Index consistency fuzzer               | Index equals heap scan       | N/A                   | Always consistent                           | random INSERT/UPDATE/DELETE/ROLLBACK            | index check JSON         |
+| Connection-limit binary search         | Stable threshold known       | Baseline              | Report max stable N                         | binary search connections                       | threshold artifact       |
+| Prepared-statement abuse               | Lifecycle safe               | Oracle-ish            | Defined errors, no UB                       | reset/finalize/rebind interleavings             | C test log               |
+| C API misuse                           | FFI boundary safe            | Oracle-ish            | No crash/UB                                 | null pointers/double close                      | ASAN/valgrind log        |
+| Memory/RSS ceiling                     | No unbounded growth          | Baseline              | Spill or fail clearly                       | joins/sorts over memory cap                     | RSS timeline             |
+
+---
+
+## Suggested PR Plan
+
+### PR 1: Fix immediate wrong-result SQL bugs
+
+* Fix `SELECT ALL`.
+* Fix explicit NULL vs DEFAULT.
+* Fix grouped `ORDER BY`.
+* Fix scalar subquery first-row/NULL behavior.
+* Fix division/modulo by zero behavior.
+* Fix `length(NULL)`, `random()`, and obvious function NULL propagation.
+* Add SQLLogicTest differential cases.
+
+### PR 2: Fix relation-qualified heap writes
+
+* Make write/current/undo paths relation-qualified.
+* Add same-rowid-across-tables tests.
+* Add crash/recovery same-rowid tests.
+* Audit every use of global row directory.
+
+### PR 3: Implement real integrity checks
+
+* Page checksum scan.
+* Catalog CRC scan.
+* WAL prefix scan.
+* Heap tuple decode.
+* Row-directory validation.
+* B-tree validation.
+* Heap↔index equivalence.
+* Wire into `PRAGMA integrity_check`.
+
+### PR 4: Replace SQL-side index undo with kernel transactional index maintenance
+
+* Add MVCC-tagged index entries or logical index WAL records.
+* Remove best-effort SQL repair.
+* Add index crash matrix and rollback fuzzer.
+
+### PR 5: FFI safety hardening
+
+* Null-check every pointer before dereference.
+* Fix bind null behavior.
+* Fix negative length handling.
+* Fix `sqlite3_close_v2`.
+* Fix error-code mapping.
+* Add C ABI misuse tests under ASAN/valgrind.
+
+### PR 6: SQLite prepare/exec lifecycle compatibility
+
+* Implement first-statement extraction and `pzTail`.
+* Make `sqlite3_exec` loop through scripts.
+* Populate `errmsg`.
+* Add semicolon/comment/string tests.
+* Add `sqlite3_prepare_v3` flag handling or documented rejection.
+
+### PR 7: SQLite conflict algorithms
+
+* Implement statement-level change tracking.
+* Correct `ABORT`, `FAIL`, `ROLLBACK`, `IGNORE`, `REPLACE`.
+* Extend to UPDATE/DELETE where applicable.
+* Add multi-row conflict tests.
+
+### PR 8: SQLite type-affinity module
+
+* Insert affinity.
+* Comparison affinity.
+* Cast rules.
+* Arithmetic coercion.
+* Aggregate coercion.
+* Collations.
+* Rowid signed behavior.
+* Import SQLite datatype examples as tests.
+
+### PR 9: Transaction and savepoint compatibility
+
+* Implement SAVEPOINT, RELEASE, ROLLBACK TO.
+* Support nested statement rollback.
+* Add ORM-style transaction tests.
+
+### PR 10: Benchmark proof cleanup
+
+* Replace weak checksum with:
+
+  * row count,
+  * `SUM(k)`,
+  * `SUM(version)`,
+  * `SUM(length(v))`,
+  * deterministic hash over ordered rows.
+* Store raw latency histograms.
+* Separate strace syscall lane from latency lane.
+* Add CPU/NUMA/filesystem/Docker metadata.
+* Run the 128-core Docker matrix and publish raw artifacts.
+
+### PR 11: Concurrency architecture
+
+* Add bounded lock waits to kernel unique locks.
+* Add lock-wait telemetry.
+* Add group commit.
+* Add writer admission control.
+* Add connection-limit binary search workload.
+
+### PR 12: Execution engine performance
+
+* Add vectorized `DataChunk`/`RowBatch`.
+* Add hash join and hash aggregate.
+* Add Top-N heap.
+* Add real spill to disk.
+* Ensure EXPLAIN only reports implemented physical operators.
+
+### PR 13: SQLite feature expansion
+
+* Foreign keys.
+* Views.
+* Triggers.
+* Partial/expression indexes.
+* Generated columns.
+* Broader PRAGMAs.
+* Date/time functions.
+* JSON1-compatible text functions.
+
+### PR 14: Product differentiation
+
+* Binary JSON/BJSON with path indexes.
+* Vector type.
+* Flat SIMD vector scan.
+* HNSW and IVF indexes.
+* Filtered vector-search planner.
+* Observability PRAGMAs.
+* Extension/UDF API.
+
+### PR 15: CLI/server/package polish
+
+* SQLite-like interactive shell.
+* `.schema`, `.tables`, `.read`, `.dump`, `.backup`, `.mode`, `.headers`.
+* C header/library install story.
+* `pkg-config` file.
+* Docker image.
+* Migration/import docs.
+* Supported-subset compatibility matrix in docs.
+
+---
+
+## Bottom Line
+
+RedlineDB has promising infrastructure: WAL CRCs, page checksums, catalog atomic-save machinery, a benchmark harness with manifests, failpoints, and a SQLite-like public shape. But the uploaded codebase is not yet close to a SQLite drop-in replacement. The most urgent work is not adding features; it is fixing **wrong results**, **relation-qualified write correctness**, **transactional index atomicity**, **FFI memory safety**, and **SQLite semantic compatibility**.
+
+The fastest path to a credible “better than SQLite for intense embedded workloads” story is:
+
+1. Make correctness non-negotiable.
+2. Prove crash recovery with non-vacuous heap+index+payload artifacts.
+3. Build a real SQLite differential suite for the supported subset.
+4. Then run Docker benchmarks on the 128-core node with raw artifacts and conservative wording.
+
+[1]: https://sqlite.org/lang_conflict.html?utm_source=chatgpt.com "The ON CONFLICT Clause"
+[2]: https://www.sqlite.org/version3.html?utm_source=chatgpt.com "SQLite Version 3 Overview"
+[3]: https://www.sqlite.org/datatype3.html?utm_source=chatgpt.com "Datatypes In SQLite"
+[4]: https://duckdb.org/docs/current/clients/c/data_chunk.html?utm_source=chatgpt.com "Data Chunks"
+[5]: https://sqlite.org/json1.html?utm_source=chatgpt.com "JSON Functions And Operators"
+[6]: https://arxiv.org/abs/1603.09320?utm_source=chatgpt.com "Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs"
+[7]: https://www.vldb.org/cidrdb/papers/2026/p2-liu.pdf?utm_source=chatgpt.com "Fast Vector Search in PostgreSQL: A Decoupled Approach"
+[8]: https://www.sqlite.org/wal.html?utm_source=chatgpt.com "Write-Ahead Logging"
+[9]: https://sqlite.org/lang_aggfunc.html?utm_source=chatgpt.com "Built-in Aggregate Functions"
+[10]: https://www2.sqlite.org/matrix/c3ref/bind_blob.html?utm_source=chatgpt.com "Binding Values To Prepared Statements"
+[11]: https://sqlite.org/c3ref/bind_blob.html?utm_source=chatgpt.com "Binding Values To Prepared Statements"
+[12]: https://papers.nips.cc/paper/9527-rand-nsg-fast-accurate-billion-point-nearest-neighbor-search-on-a-single-node?utm_source=chatgpt.com "DiskANN: Fast Accurate Billion-point Nearest Neighbor ..."
+

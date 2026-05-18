@@ -1,0 +1,3 @@
+CREATE TABLE t(id INTEGER);
+INSERT INTO t VALUES (1);
+PRAGMA integrity_check

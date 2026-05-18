@@ -1,0 +1,14 @@
+out_dir = "target/bench/xbabe1/phase10-v3-compare"
+engines = ["redline", "sqlite"]
+workloads = [
+  "json-path-extract",
+  "json-path-update",
+  "vector-flat-search",
+  "commit-storm-batched",
+  "large-sort-spill",
+]
+durabilities = ["strict", "normal"]
+threads = [1, 2, 4, 8, 16, 32, 64, 96, 128]
+rows = 100000
+seconds = 10
+cache_mib = 1024

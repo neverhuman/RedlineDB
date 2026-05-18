@@ -1,0 +1,60 @@
+name: release-build
+
+on:
+  release:
+    types: [published]
+
+# Build native binaries for every supported platform and attach them to the
+# published GitHub release as downloadable tarballs. Triggered automatically
+# when a release is published via the GitHub UI or `gh release create`.
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (${{ matrix.artifact }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-x86_64
+            lib_name: libredlinedb.so
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: macos-arm64
+            lib_name: libredlinedb.dylib
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: macos-x86_64
+            lib_name: libredlinedb.dylib
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+          targets: ${{ matrix.target }}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with:
+          key: ${{ matrix.target }}
+      - name: Build and Package
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          ARTIFACT: ${{ matrix.artifact }}
+          LIB_NAME: ${{ matrix.lib_name }}
+          TARGET: ${{ matrix.target }}
+        run: bash ops/ci/release-build.sh
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "${TAG}" "${PKG}.tar.gz" "${PKG}.tar.gz.sha256"

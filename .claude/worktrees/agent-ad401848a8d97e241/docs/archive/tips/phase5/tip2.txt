@@ -1,0 +1,4777 @@
+Below is how I would build **Phase 5: SQL Frontend and Execution Engine** in pure Rust, assuming your Phase 1 kernel is already solid and exposes MVCC heap access, row locks, WAL-backed transactions, CSN snapshots, relation metadata, and index primitives from earlier phases.
+
+The main idea: **do not clone SQLite’s whole VDBE design immediately.** Build a compact, Rust-native SQL pipeline:
+
+```text
+SQL text
+  -> lexer
+  -> parser AST
+  -> binder / name resolver
+  -> bound logical plan
+  -> simple rule planner
+  -> physical execution tree
+  -> expression bytecode VM
+  -> kernel cursors / transactions
+  -> rows
+```
+
+This keeps Phase 5 simple, fast, and extensible. You get prepared statements, autocommit, explicit transactions, MVCC semantics, row-oriented execution, and SQLite-compatible behavior for the subset you support. Later, Phase 6 can replace the rule planner with a cost-based optimizer without changing the public API.
+
+SQLite’s key concurrency limitation to beat is that, even in WAL mode, it still serializes writes: SQLite documents that there can only be a single writer at a time, although WAL mode permits simultaneous readers and writers with snapshot isolation. RedlineDB’s SQL layer must therefore never introduce a global SQL writer mutex; it should rely on the existing kernel’s row locks, key locks, MVCC, and WAL group commit instead. ([SQLite][1])
+
+---
+
+# 1. Phase 5 target
+
+Phase 5 should produce a crate like:
+
+```text
+redlinedb_sql
+```
+
+with these internal modules:
+
+```text
+redlinedb_sql/
+  src/
+    lib.rs
+    db.rs
+    session.rs
+    statement.rs
+
+    lexer.rs
+    parser/
+      mod.rs
+      ast.rs
+      expr.rs
+      select.rs
+      ddl.rs
+      dml.rs
+
+    bind/
+      mod.rs
+      scope.rs
+      names.rs
+      params.rs
+
+    catalog/
+      cache.rs
+      schema.rs
+
+    plan/
+      logical.rs
+      physical.rs
+      rules.rs
+      sargable.rs
+
+    exec/
+      mod.rs
+      ctx.rs
+      node.rs
+      scan.rs
+      index_scan.rs
+      filter.rs
+      project.rs
+      sort.rs
+      limit.rs
+      insert.rs
+      update.rs
+      delete.rs
+      ddl.rs
+
+    expr/
+      bytecode.rs
+      eval.rs
+      funcs.rs
+      compare.rs
+      affinity.rs
+      collation.rs
+
+    value.rs
+    row.rs
+    error.rs
+    mem.rs
+    testkit.rs
+```
+
+Phase 5 public surface should be small:
+
+```rust
+let db = RedlineDb::open("app.rldb")?;
+let mut conn = db.connect()?;
+
+conn.execute("CREATE TABLE user(id INTEGER PRIMARY KEY, name TEXT NOT NULL)", [])?;
+
+let mut stmt = conn.prepare("INSERT INTO user(id, name) VALUES (?, ?)")?;
+stmt.bind_i64(1, 1)?;
+stmt.bind_text(2, "Ada")?;
+stmt.step_done()?;
+
+let mut q = conn.prepare("SELECT name FROM user WHERE id = ?")?;
+q.bind_i64(1, 1)?;
+
+while let Some(row) = q.step()? {
+    println!("{}", row.get_text(0)?);
+}
+```
+
+Internally, the SQL layer should be aggressively allocation-aware:
+
+```text
+prepare-time allocations:
+  parser AST
+  bound plan
+  physical plan
+  expression bytecode
+  result metadata
+
+execution-time allocations:
+  one reusable expression stack
+  one reusable output row
+  bounded sort memory
+  optional temp spill buffers
+
+per-row allocations:
+  zero in the normal scan/filter/project path
+```
+
+---
+
+# 2. Hard design rules
+
+## Rule 1: The SQL layer must not serialize writers
+
+Do not do this:
+
+```rust
+// Bad
+static SQL_WRITE_LOCK: Mutex<()> = Mutex::new(());
+```
+
+The SQL engine should never say, “only one SQL writer at a time.” The kernel already has the real concurrency primitives: row locks, index key locks, MVCC snapshots, WAL group commit, and conflict detection.
+
+The SQL layer’s write path should look like this:
+
+```text
+UPDATE statement
+  -> open transaction
+  -> scan candidate rows through MVCC snapshot
+  -> lock candidate row only when needed
+  -> recheck current visible row
+  -> apply SET expressions
+  -> validate constraints
+  -> update heap
+  -> update indexes
+  -> release page latches quickly
+  -> hold logical row/key locks until transaction commit
+```
+
+DDL may need a schema lock, but DML should not.
+
+## Rule 2: Prepared plans are immutable
+
+A prepared statement should compile once into an immutable plan:
+
+```rust
+Arc<PreparedPlan>
+```
+
+Then every execution only supplies:
+
+```text
+session state
+transaction handle
+parameter values
+execution scratch
+```
+
+That lets many sessions reuse the same compiled plan later if you add a plan cache.
+
+## Rule 3: Use schema object IDs, not names, after binding
+
+Parser uses names. Binder resolves names to IDs.
+
+```rust
+TableName("users") -> TableId(42)
+ColumnName("users.name") -> ColumnId(3)
+IndexName("idx_users_email") -> IndexId(9)
+```
+
+Physical plans should not perform hash lookups by string during execution.
+
+## Rule 4: Row-oriented API, batch-aware internals
+
+The public API should feel like SQLite:
+
+```rust
+while let Some(row) = stmt.step()? {
+    // consume row
+}
+```
+
+But internally, table/index cursors should decode pages in small chunks where possible:
+
+```text
+page cursor
+  -> visible row iterator
+  -> lazy column decoder
+  -> expression VM
+  -> output row
+```
+
+Do not heap-allocate a `Vec<Row>` for every scan.
+
+## Rule 5: Compile expressions into bytecode
+
+Do not recursively walk expression ASTs per row. That is easy but slow.
+
+Instead:
+
+```text
+WHERE age > ? AND status = 'active'
+```
+
+becomes compact expression bytecode:
+
+```text
+COLUMN age
+PARAM 1
+GT_NUMERIC
+COLUMN status
+CONST 'active'
+EQ_TEXT_BINARY
+AND
+```
+
+The query executor can remain a physical tree, while expressions use a tiny VM. This is a good “brilliant simplicity” compromise before a full VDBE.
+
+---
+
+# 3. Kernel boundary assumed by Phase 5
+
+The SQL layer should not know page formats, WAL record formats, or buffer-pool internals. It should depend on a narrow storage API.
+
+Something like:
+
+```rust
+pub trait SqlKernel: Send + Sync + 'static {
+    fn begin_tx(&self, opts: TxOptions) -> Result<Box<dyn KernelTx>>;
+    fn current_schema_version(&self) -> SchemaVersion;
+    fn load_catalog_snapshot(&self) -> Result<CatalogSnapshot>;
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum TxAccess {
+    ReadOnly,
+    ReadWrite,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Isolation {
+    Snapshot,
+    ReadCommitted,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Durability {
+    Strict,
+    Normal,
+    Unsafe,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TxOptions {
+    pub access: TxAccess,
+    pub isolation: Isolation,
+    pub durability: Durability,
+    pub explicit: bool,
+}
+
+pub trait KernelTx {
+    fn snapshot_csn(&self) -> Csn;
+
+    fn open_table_scan(
+        &mut self,
+        table: TableId,
+        projection: ColumnSet,
+    ) -> Result<Box<dyn KernelRowCursor + '_>>;
+
+    fn open_index_scan(
+        &mut self,
+        index: IndexId,
+        bounds: IndexBounds,
+        projection: ColumnSet,
+    ) -> Result<Box<dyn KernelRowCursor + '_>>;
+
+    fn insert_row(
+        &mut self,
+        table: TableId,
+        encoded: EncodedRow,
+    ) -> Result<RowId>;
+
+    fn update_row(
+        &mut self,
+        table: TableId,
+        row_id: RowId,
+        expected_version: RowVersion,
+        encoded_new_row: EncodedRow,
+    ) -> Result<RowVersion>;
+
+    fn delete_row(
+        &mut self,
+        table: TableId,
+        row_id: RowId,
+        expected_version: RowVersion,
+    ) -> Result<()>;
+
+    fn lock_row_for_update(
+        &mut self,
+        table: TableId,
+        row_id: RowId,
+    ) -> Result<LockedRow>;
+
+    fn insert_index_entry(
+        &mut self,
+        index: IndexId,
+        key: EncodedKey,
+        row_id: RowId,
+        unique: bool,
+    ) -> Result<()>;
+
+    fn delete_index_entry(
+        &mut self,
+        index: IndexId,
+        key: EncodedKey,
+        row_id: RowId,
+    ) -> Result<()>;
+
+    fn begin_statement(&mut self) -> Result<StatementSavepoint>;
+    fn rollback_statement(&mut self, sp: StatementSavepoint) -> Result<()>;
+
+    fn commit(self: Box<Self>) -> Result<CommitInfo>;
+    fn rollback(self: Box<Self>) -> Result<()>;
+}
+```
+
+The critical API is `begin_statement()`. Phase 5 needs statement-level rollback. In an explicit transaction:
+
+```sql
+BEGIN;
+INSERT INTO t VALUES (1);
+INSERT INTO t VALUES (1); -- unique violation
+INSERT INTO t VALUES (2);
+COMMIT;
+```
+
+The failed statement should not necessarily destroy the whole transaction unless the kernel says the error is fatal. The SQL layer needs a savepoint or statement undo boundary.
+
+---
+
+# 4. Values, SQLite-style typing, and affinities
+
+SQLite’s supported storage classes are `NULL`, `INTEGER`, `REAL`, `TEXT`, and `BLOB`; SQLite also uses dynamic typing, where values carry storage classes and most columns can store values of any storage class. RedlineDB should mirror this for the SQLite-like subset, while keeping stricter internal metadata available for planning and constraints. ([SQLite][2])
+
+Core value type:
+
+```rust
+#[derive(Clone, Debug, PartialEq)]
+pub enum SqlValue {
+    Null,
+    Int(i64),
+    Real(f64),
+    Text(Box<str>),
+    Blob(Box<[u8]>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StorageClass {
+    Null,
+    Integer,
+    Real,
+    Text,
+    Blob,
+}
+
+impl SqlValue {
+    #[inline]
+    pub fn storage_class(&self) -> StorageClass {
+        match self {
+            SqlValue::Null => StorageClass::Null,
+            SqlValue::Int(_) => StorageClass::Integer,
+            SqlValue::Real(_) => StorageClass::Real,
+            SqlValue::Text(_) => StorageClass::Text,
+            SqlValue::Blob(_) => StorageClass::Blob,
+        }
+    }
+}
+```
+
+Use borrowed values internally:
+
+```rust
+#[derive(Clone, Copy, Debug)]
+pub enum SqlValueRef<'a> {
+    Null,
+    Int(i64),
+    Real(f64),
+    Text(&'a str),
+    Blob(&'a [u8]),
+}
+
+impl<'a> SqlValueRef<'a> {
+    #[inline]
+    pub fn to_owned_value(self) -> SqlValue {
+        match self {
+            SqlValueRef::Null => SqlValue::Null,
+            SqlValueRef::Int(v) => SqlValue::Int(v),
+            SqlValueRef::Real(v) => SqlValue::Real(v),
+            SqlValueRef::Text(v) => SqlValue::Text(v.into()),
+            SqlValueRef::Blob(v) => SqlValue::Blob(v.into()),
+        }
+    }
+}
+```
+
+Affinity:
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Affinity {
+    Blob,
+    Text,
+    Numeric,
+    Integer,
+    Real,
+}
+```
+
+SQLite determines column affinity from declared type strings using substring rules: `INT` gives integer affinity, `CHAR`/`CLOB`/`TEXT` gives text affinity, `BLOB` or no type gives blob affinity, `REAL`/`FLOA`/`DOUB` gives real affinity, and otherwise numeric affinity. RedlineDB should implement those rules exactly for compatibility tests. ([SQLite][2])
+
+```rust
+pub fn affinity_from_decl_type(decl: Option<&str>) -> Affinity {
+    let Some(decl) = decl else {
+        return Affinity::Blob;
+    };
+
+    let upper = decl.to_ascii_uppercase();
+
+    if upper.contains("INT") {
+        Affinity::Integer
+    } else if upper.contains("CHAR") || upper.contains("CLOB") || upper.contains("TEXT") {
+        Affinity::Text
+    } else if upper.contains("BLOB") {
+        Affinity::Blob
+    } else if upper.contains("REAL") || upper.contains("FLOA") || upper.contains("DOUB") {
+        Affinity::Real
+    } else {
+        Affinity::Numeric
+    }
+}
+```
+
+Affinity application on insert/update:
+
+```rust
+pub fn apply_affinity(v: SqlValue, affinity: Affinity) -> SqlValue {
+    match affinity {
+        Affinity::Blob => v,
+
+        Affinity::Text => match v {
+            SqlValue::Int(i) => SqlValue::Text(i.to_string().into_boxed_str()),
+            SqlValue::Real(f) => SqlValue::Text(sql_real_to_text(f).into_boxed_str()),
+            other => other,
+        },
+
+        Affinity::Numeric | Affinity::Integer => apply_numeric_affinity(v),
+
+        Affinity::Real => match apply_numeric_affinity(v) {
+            SqlValue::Int(i) => SqlValue::Real(i as f64),
+            other => other,
+        },
+    }
+}
+
+fn apply_numeric_affinity(v: SqlValue) -> SqlValue {
+    match v {
+        SqlValue::Text(s) => {
+            if let Some(i) = parse_well_formed_i64(&s) {
+                SqlValue::Int(i)
+            } else if let Some(f) = parse_well_formed_f64(&s) {
+                if f.is_finite() && f.fract() == 0.0 && f >= i64::MIN as f64 && f <= i64::MAX as f64 {
+                    SqlValue::Int(f as i64)
+                } else {
+                    SqlValue::Real(f)
+                }
+            } else {
+                SqlValue::Text(s)
+            }
+        }
+        other => other,
+    }
+}
+
+fn sql_real_to_text(f: f64) -> String {
+    // Production implementation should match SQLite-style formatting closely enough
+    // for differential tests. Start with this, then tune.
+    if f.fract() == 0.0 {
+        format!("{:.1}", f)
+    } else {
+        format!("{:.15}", f).trim_end_matches('0').trim_end_matches('.').to_string()
+    }
+}
+```
+
+Do not overdo this initially. Get compatibility for benchmark workloads first, then expand.
+
+---
+
+# 5. Three-valued SQL boolean logic
+
+SQL boolean logic is not Rust boolean logic.
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Truth {
+    True,
+    False,
+    Unknown,
+}
+
+impl Truth {
+    #[inline]
+    pub fn and(self, rhs: Truth) -> Truth {
+        match (self, rhs) {
+            (Truth::False, _) | (_, Truth::False) => Truth::False,
+            (Truth::True, Truth::True) => Truth::True,
+            _ => Truth::Unknown,
+        }
+    }
+
+    #[inline]
+    pub fn or(self, rhs: Truth) -> Truth {
+        match (self, rhs) {
+            (Truth::True, _) | (_, Truth::True) => Truth::True,
+            (Truth::False, Truth::False) => Truth::False,
+            _ => Truth::Unknown,
+        }
+    }
+
+    #[inline]
+    pub fn not(self) -> Truth {
+        match self {
+            Truth::True => Truth::False,
+            Truth::False => Truth::True,
+            Truth::Unknown => Truth::Unknown,
+        }
+    }
+
+    #[inline]
+    pub fn passes_where(self) -> bool {
+        self == Truth::True
+    }
+}
+```
+
+`WHERE NULL` does not pass. `CHECK` usually passes unless false, depending on chosen compatibility semantics.
+
+---
+
+# 6. Collation and comparison
+
+Start with three collations:
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Collation {
+    Binary,
+    NoCaseAscii,
+    RTrim,
+}
+```
+
+SQLite’s type comparison behavior is unusual and important: sort/comparison order groups `NULL`, numeric values, text, and blobs, and comparison affinity may be applied before comparisons. RedlineDB should encode this in one central module, not scatter conversions through the executor. ([SQLite][2])
+
+```rust
+use std::cmp::Ordering;
+
+pub fn compare_sort(a: SqlValueRef<'_>, b: SqlValueRef<'_>, coll: Collation) -> Ordering {
+    use SqlValueRef::*;
+
+    match (a, b) {
+        (Null, Null) => Ordering::Equal,
+        (Null, _) => Ordering::Less,
+        (_, Null) => Ordering::Greater,
+
+        (Int(x), Int(y)) => x.cmp(&y),
+        (Real(x), Real(y)) => compare_f64_sql(x, y),
+        (Int(x), Real(y)) => compare_f64_sql(x as f64, y),
+        (Real(x), Int(y)) => compare_f64_sql(x, y as f64),
+
+        (Int(_) | Real(_), Text(_) | Blob(_)) => Ordering::Less,
+        (Text(_) | Blob(_), Int(_) | Real(_)) => Ordering::Greater,
+
+        (Text(x), Text(y)) => compare_text(x, y, coll),
+        (Text(_), Blob(_)) => Ordering::Less,
+        (Blob(_), Text(_)) => Ordering::Greater,
+        (Blob(x), Blob(y)) => x.cmp(y),
+    }
+}
+
+fn compare_f64_sql(a: f64, b: f64) -> Ordering {
+    // SQLite does not store NaN as a normal REAL in the same way Rust does.
+    // Decide RedlineDB policy explicitly. For now:
+    a.partial_cmp(&b).unwrap_or(Ordering::Equal)
+}
+
+fn compare_text(a: &str, b: &str, coll: Collation) -> Ordering {
+    match coll {
+        Collation::Binary => a.as_bytes().cmp(b.as_bytes()),
+        Collation::NoCaseAscii => ascii_nocase_cmp(a.as_bytes(), b.as_bytes()),
+        Collation::RTrim => {
+            let ax = trim_ascii_space_right(a.as_bytes());
+            let bx = trim_ascii_space_right(b.as_bytes());
+            ax.cmp(bx)
+        }
+    }
+}
+
+fn ascii_nocase_cmp(a: &[u8], b: &[u8]) -> Ordering {
+    let n = a.len().min(b.len());
+    for i in 0..n {
+        let ca = a[i].to_ascii_lowercase();
+        let cb = b[i].to_ascii_lowercase();
+        match ca.cmp(&cb) {
+            Ordering::Equal => {}
+            non_eq => return non_eq,
+        }
+    }
+    a.len().cmp(&b.len())
+}
+
+fn trim_ascii_space_right(mut s: &[u8]) -> &[u8] {
+    while let Some((&last, rest)) = s.split_last() {
+        if last == b' ' {
+            s = rest;
+        } else {
+            break;
+        }
+    }
+    s
+}
+```
+
+For equality and ordering predicates, use comparison affinity:
+
+```rust
+pub fn compare_with_affinity(
+    left: SqlValueRef<'_>,
+    right: SqlValueRef<'_>,
+    left_aff: Option<Affinity>,
+    right_aff: Option<Affinity>,
+    coll: Collation,
+) -> Option<Ordering> {
+    if matches!(left, SqlValueRef::Null) || matches!(right, SqlValueRef::Null) {
+        return None;
+    }
+
+    let (l, r) = coerce_for_compare(left, right, left_aff, right_aff);
+    Some(compare_sort(l.as_ref(), r.as_ref(), coll))
+}
+```
+
+Use a small `MaybeOwnedValue` wrapper so coercion does not allocate unless needed.
+
+---
+
+# 7. Parser architecture
+
+Use a hand-written parser. It is not hard for the Phase 5 subset, and it will be faster and easier to control than a generic SQL parser.
+
+## Lexer goals
+
+The lexer should:
+
+```text
+- borrow string slices from the original SQL
+- not allocate for normal identifiers
+- preserve token spans for diagnostics
+- understand parameters: ?, ?NNN, :name, @name, $name
+- understand quoted identifiers
+- understand string literals
+- understand blob literals x'ABCD'
+- classify keywords case-insensitively
+```
+
+Token:
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Span {
+    pub start: u32,
+    pub end: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Token<'sql> {
+    pub kind: TokenKind<'sql>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TokenKind<'sql> {
+    Keyword(Keyword),
+    Ident(&'sql str),
+    QuotedIdent(&'sql str),
+
+    IntLit(&'sql str),
+    RealLit(&'sql str),
+    StringLit(&'sql str),
+    BlobLit(&'sql str),
+
+    Parameter(ParameterToken<'sql>),
+
+    LParen,
+    RParen,
+    Comma,
+    Dot,
+    Star,
+    Plus,
+    Minus,
+    Slash,
+    Percent,
+    Eq,
+    EqEq,
+    NotEq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    Semicolon,
+
+    Eof,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Keyword {
+    Select,
+    From,
+    Where,
+    Insert,
+    Into,
+    Values,
+    Update,
+    Set,
+    Delete,
+    Create,
+    Table,
+    Index,
+    Unique,
+    Primary,
+    Key,
+    Not,
+    Null,
+    Default,
+    Check,
+    Order,
+    By,
+    Asc,
+    Desc,
+    Limit,
+    Offset,
+    Begin,
+    Commit,
+    End,
+    Rollback,
+    Transaction,
+    Deferred,
+    Immediate,
+    Exclusive,
+    And,
+    Or,
+    Is,
+    In,
+    Like,
+    As,
+    True,
+    False,
+}
+```
+
+Parser shape:
+
+```rust
+pub struct Parser<'sql> {
+    sql: &'sql str,
+    tokens: Vec<Token<'sql>>,
+    pos: usize,
+    params: ParamCollector<'sql>,
+}
+
+impl<'sql> Parser<'sql> {
+    pub fn parse_statement(&mut self) -> Result<AstStatement<'sql>> {
+        match self.peek_keyword() {
+            Some(Keyword::Select) => self.parse_select().map(AstStatement::Select),
+            Some(Keyword::Insert) => self.parse_insert().map(AstStatement::Insert),
+            Some(Keyword::Update) => self.parse_update().map(AstStatement::Update),
+            Some(Keyword::Delete) => self.parse_delete().map(AstStatement::Delete),
+            Some(Keyword::Create) => self.parse_create(),
+            Some(Keyword::Begin) => self.parse_begin().map(AstStatement::Begin),
+            Some(Keyword::Commit) | Some(Keyword::End) => self.parse_commit().map(AstStatement::Commit),
+            Some(Keyword::Rollback) => self.parse_rollback().map(AstStatement::Rollback),
+            _ => Err(ParseError::new(self.peek_span(), "expected SQL statement").into()),
+        }
+    }
+}
+```
+
+Expression parser should be Pratt-style:
+
+```rust
+impl<'sql> Parser<'sql> {
+    fn parse_expr(&mut self) -> Result<AstExpr<'sql>> {
+        self.parse_expr_bp(0)
+    }
+
+    fn parse_expr_bp(&mut self, min_bp: u8) -> Result<AstExpr<'sql>> {
+        let mut lhs = self.parse_prefix_expr()?;
+
+        loop {
+            let Some(op) = self.peek_infix_op() else {
+                break;
+            };
+
+            let (l_bp, r_bp) = op.binding_power();
+
+            if l_bp < min_bp {
+                break;
+            }
+
+            self.bump();
+
+            let rhs = self.parse_expr_bp(r_bp)?;
+            lhs = AstExpr::Binary {
+                op,
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+            };
+        }
+
+        Ok(lhs)
+    }
+}
+```
+
+Expression grammar for Phase 5:
+
+```text
+literal
+parameter
+column reference
+function call
+unary +, -, NOT
+binary +, -, *, /, %
+=, ==, !=, <>, <, <=, >, >=
+IS NULL
+IS NOT NULL
+AND
+OR
+parentheses
+```
+
+Add `IN`, `BETWEEN`, `LIKE` after the first vertical slice.
+
+---
+
+# 8. AST
+
+Keep AST close to SQL text.
+
+```rust
+pub enum AstStatement<'sql> {
+    Select(AstSelect<'sql>),
+    Insert(AstInsert<'sql>),
+    Update(AstUpdate<'sql>),
+    Delete(AstDelete<'sql>),
+    CreateTable(AstCreateTable<'sql>),
+    CreateIndex(AstCreateIndex<'sql>),
+    Begin(AstBegin),
+    Commit,
+    Rollback,
+}
+
+pub struct AstSelect<'sql> {
+    pub projection: Vec<AstSelectItem<'sql>>,
+    pub from: Option<AstFrom<'sql>>,
+    pub where_clause: Option<AstExpr<'sql>>,
+    pub order_by: Vec<AstOrderExpr<'sql>>,
+    pub limit: Option<AstExpr<'sql>>,
+    pub offset: Option<AstExpr<'sql>>,
+}
+
+pub enum AstSelectItem<'sql> {
+    Star,
+    QualifiedStar(AstIdent<'sql>),
+    Expr {
+        expr: AstExpr<'sql>,
+        alias: Option<AstIdent<'sql>>,
+    },
+}
+
+pub struct AstFrom<'sql> {
+    pub table: AstIdent<'sql>,
+    pub alias: Option<AstIdent<'sql>>,
+}
+
+pub enum AstExpr<'sql> {
+    Null,
+    Bool(bool),
+    Int(&'sql str),
+    Real(&'sql str),
+    String(&'sql str),
+    Blob(&'sql str),
+
+    Parameter(ParamRef<'sql>),
+
+    Ident(AstIdent<'sql>),
+    QualifiedIdent {
+        table: AstIdent<'sql>,
+        column: AstIdent<'sql>,
+    },
+
+    Unary {
+        op: UnaryOp,
+        expr: Box<AstExpr<'sql>>,
+    },
+
+    Binary {
+        op: BinaryOp,
+        left: Box<AstExpr<'sql>>,
+        right: Box<AstExpr<'sql>>,
+    },
+
+    Function {
+        name: AstIdent<'sql>,
+        args: Vec<AstExpr<'sql>>,
+    },
+
+    IsNull {
+        expr: Box<AstExpr<'sql>>,
+        negated: bool,
+    },
+}
+```
+
+The AST can allocate freely at prepare time. It is not hot-path.
+
+---
+
+# 9. Binder
+
+The binder resolves:
+
+```text
+names
+table aliases
+columns
+parameters
+function overloads
+collations
+affinities
+result column names
+writable vs read-only statement class
+```
+
+Parser output:
+
+```sql
+SELECT name FROM users WHERE id = ?
+```
+
+Bound output:
+
+```text
+Project [
+  ColumnRef(table=TableId(7), column=ColumnId(2), slot=0)
+]
+Filter:
+  Eq(
+    ColumnRef(table=TableId(7), column=ColumnId(1), affinity=Integer),
+    Param(1)
+  )
+Scan TableId(7)
+Required columns: id, name
+```
+
+Binder context:
+
+```rust
+pub struct BindCtx<'a> {
+    pub schema: &'a SchemaCache,
+    pub funcs: &'a FunctionRegistry,
+    pub params: ParamRegistry,
+    pub scopes: Vec<Scope>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+pub struct Scope {
+    pub sources: Vec<SourceBinding>,
+}
+
+pub struct SourceBinding {
+    pub alias: IdentKey,
+    pub table_id: TableId,
+    pub columns: Box<[ColumnBinding]>,
+}
+
+pub struct ColumnBinding {
+    pub name: IdentKey,
+    pub column_id: ColumnId,
+    pub ordinal: u16,
+    pub affinity: Affinity,
+    pub collation: Collation,
+    pub nullable: bool,
+}
+```
+
+Bound expressions:
+
+```rust
+#[derive(Clone, Debug)]
+pub enum BoundExpr {
+    Const(SqlValue),
+
+    Param {
+        id: ParamId,
+    },
+
+    Column {
+        table_id: TableId,
+        column_id: ColumnId,
+        input_slot: u16,
+        affinity: Affinity,
+        collation: Collation,
+        nullable: bool,
+    },
+
+    Unary {
+        op: UnaryOp,
+        expr: Box<BoundExpr>,
+    },
+
+    Binary {
+        op: BinaryOp,
+        left: Box<BoundExpr>,
+        right: Box<BoundExpr>,
+        affinity: Option<Affinity>,
+        collation: Collation,
+    },
+
+    Function {
+        func_id: FunctionId,
+        args: Box<[BoundExpr]>,
+        deterministic: bool,
+    },
+
+    IsNull {
+        expr: Box<BoundExpr>,
+        negated: bool,
+    },
+}
+```
+
+Bound statements:
+
+```rust
+pub enum BoundStatement {
+    Select(BoundSelect),
+    Insert(BoundInsert),
+    Update(BoundUpdate),
+    Delete(BoundDelete),
+    CreateTable(BoundCreateTable),
+    CreateIndex(BoundCreateIndex),
+    Begin(BoundBegin),
+    Commit,
+    Rollback,
+}
+
+pub struct BoundSelect {
+    pub output: Box<[BoundOutputColumn]>,
+    pub source: Option<BoundTableSource>,
+    pub predicate: Option<BoundExpr>,
+    pub order_by: Box<[BoundOrderExpr]>,
+    pub limit: Option<BoundExpr>,
+    pub offset: Option<BoundExpr>,
+}
+
+pub struct BoundTableSource {
+    pub table_id: TableId,
+    pub table_name: IdentKey,
+    pub required_columns: ColumnSet,
+}
+```
+
+Important binder decisions:
+
+```text
+SELECT *:
+  expanded during binding, not execution.
+
+Ambiguous column:
+  bind error.
+
+Unknown table/column:
+  bind error.
+
+Parameter count:
+  stored in PreparedPlan.
+
+Function overload:
+  resolved at bind/compile time.
+
+Defaults:
+  parse and bind default expressions at DDL time, store compiled form in catalog if possible.
+```
+
+---
+
+# 10. Schema cache
+
+The schema cache should be immutable and swappable.
+
+```rust
+pub struct SchemaCache {
+    pub version: SchemaVersion,
+    pub tables_by_id: Vec<Arc<TableDef>>,
+    pub tables_by_name: HashMap<IdentKey, TableId>,
+    pub indexes_by_id: Vec<Arc<IndexDef>>,
+    pub indexes_by_name: HashMap<IdentKey, IndexId>,
+}
+
+pub struct TableDef {
+    pub id: TableId,
+    pub name: IdentKey,
+    pub columns: Box<[ColumnDef]>,
+    pub columns_by_name: HashMap<IdentKey, ColumnId>,
+    pub primary_key: Option<PrimaryKeyDef>,
+    pub indexes: Box<[IndexId]>,
+    pub constraints: Box<[ConstraintDef]>,
+    pub heap_relation: RelationId,
+}
+
+pub struct ColumnDef {
+    pub id: ColumnId,
+    pub ordinal: u16,
+    pub name: IdentKey,
+    pub declared_type: Option<Box<str>>,
+    pub affinity: Affinity,
+    pub collation: Collation,
+    pub nullable: bool,
+    pub default: Option<DefaultExpr>,
+    pub is_rowid_alias: bool,
+}
+
+pub struct IndexDef {
+    pub id: IndexId,
+    pub table_id: TableId,
+    pub name: IdentKey,
+    pub unique: bool,
+    pub columns: Box<[IndexColumn]>,
+    pub relation: RelationId,
+}
+
+pub struct IndexColumn {
+    pub column_id: ColumnId,
+    pub descending: bool,
+    pub collation: Collation,
+    pub affinity: Affinity,
+}
+```
+
+`Database` holds:
+
+```rust
+pub struct Database<K: SqlKernel> {
+    kernel: Arc<K>,
+    funcs: Arc<FunctionRegistry>,
+    schema: ArcSwapSchema,
+    config: DbConfig,
+}
+```
+
+You can implement `ArcSwapSchema` yourself initially:
+
+```rust
+use std::sync::{Arc, RwLock};
+
+pub struct ArcSwapSchema {
+    inner: RwLock<Arc<SchemaCache>>,
+}
+
+impl ArcSwapSchema {
+    pub fn load(&self) -> Arc<SchemaCache> {
+        self.inner.read().unwrap().clone()
+    }
+
+    pub fn store(&self, next: Arc<SchemaCache>) {
+        *self.inner.write().unwrap() = next;
+    }
+}
+```
+
+Later, replace with a lock-free `ArcSwap`-style structure if profiling shows schema reads contend. Since schema lookup is prepare-time, not per-row, `RwLock<Arc<_>>` is probably fine for Phase 5.
+
+Prepared plans should store the schema version:
+
+```rust
+pub struct PreparedPlan {
+    pub schema_version: SchemaVersion,
+    pub kind: StatementKind,
+    pub param_count: u16,
+    pub outputs: Box<[OutputColumnMeta]>,
+    pub root: PhysicalPlan,
+}
+```
+
+On execution:
+
+```rust
+if db.current_schema_version() != plan.schema_version {
+    // Reprepare once if original SQL is available.
+    // Otherwise return SchemaChanged.
+}
+```
+
+DDL publishes a new cache only after commit.
+
+---
+
+# 11. Logical planning
+
+Logical plans are simple semantic trees.
+
+```rust
+pub enum LogicalPlan {
+    Values {
+        rows: Box<[Box<[BoundExpr]>]>,
+    },
+
+    TableScan {
+        table_id: TableId,
+        required_columns: ColumnSet,
+    },
+
+    Filter {
+        input: Box<LogicalPlan>,
+        predicate: BoundExpr,
+    },
+
+    Project {
+        input: Box<LogicalPlan>,
+        exprs: Box<[BoundExpr]>,
+    },
+
+    Sort {
+        input: Box<LogicalPlan>,
+        keys: Box<[BoundOrderExpr]>,
+    },
+
+    Limit {
+        input: Box<LogicalPlan>,
+        limit: Option<BoundExpr>,
+        offset: Option<BoundExpr>,
+    },
+
+    Insert {
+        table_id: TableId,
+        input: Box<LogicalPlan>,
+        target_columns: Box<[ColumnId]>,
+    },
+
+    Update {
+        table_id: TableId,
+        assignments: Box<[Assignment]>,
+        predicate: Option<BoundExpr>,
+    },
+
+    Delete {
+        table_id: TableId,
+        predicate: Option<BoundExpr>,
+    },
+
+    CreateTable(BoundCreateTable),
+    CreateIndex(BoundCreateIndex),
+}
+```
+
+Phase 5 planner should be rule-based, not cost-based yet. But it should still use indexes for obvious cases.
+
+Example:
+
+```sql
+SELECT name FROM users WHERE id = ?;
+```
+
+Logical:
+
+```text
+Project(name)
+  Filter(id = ?)
+    TableScan(users)
+```
+
+Physical:
+
+```text
+Project(name)
+  IndexPointLookup(users_pk, key=?)
+```
+
+---
+
+# 12. Sargable predicate extraction
+
+This is the most important Phase 5 performance feature. Even before Phase 6’s optimizer, you need basic index selection.
+
+Represent extracted predicates:
+
+```rust
+pub enum SargablePredicate {
+    Eq {
+        column_id: ColumnId,
+        expr: BoundExpr,
+    },
+    Range {
+        column_id: ColumnId,
+        lower: Option<RangeBound>,
+        upper: Option<RangeBound>,
+    },
+    InList {
+        column_id: ColumnId,
+        values: Box<[BoundExpr]>,
+    },
+}
+
+pub struct PredicateSplit {
+    pub sargable: Vec<SargablePredicate>,
+    pub residual: Option<BoundExpr>,
+}
+```
+
+For this:
+
+```sql
+WHERE id = ? AND active = 1
+```
+
+If `id` is primary key:
+
+```text
+sargable: id = ?
+residual: active = 1
+```
+
+Planner rule:
+
+```rust
+fn choose_access_path(
+    table: &TableDef,
+    split: &PredicateSplit,
+    schema: &SchemaCache,
+) -> AccessPath {
+    if let Some(pk) = &table.primary_key {
+        if let Some(eq) = split.eq_for(pk.column_id()) {
+            return AccessPath::PrimaryKeyLookup {
+                table_id: table.id,
+                key_expr: eq.expr.clone(),
+            };
+        }
+    }
+
+    for index_id in table.indexes.iter().copied() {
+        let index = schema.index(index_id);
+
+        if let Some(path) = match_index(index, split) {
+            return path;
+        }
+    }
+
+    AccessPath::TableScan {
+        table_id: table.id,
+    }
+}
+```
+
+Access path:
+
+```rust
+pub enum AccessPath {
+    TableScan {
+        table_id: TableId,
+    },
+    PrimaryKeyLookup {
+        table_id: TableId,
+        key_expr: BoundExpr,
+    },
+    IndexPoint {
+        index_id: IndexId,
+        key_exprs: Box<[BoundExpr]>,
+    },
+    IndexRange {
+        index_id: IndexId,
+        lower: Option<IndexBoundExpr>,
+        upper: Option<IndexBoundExpr>,
+    },
+}
+```
+
+This alone makes point reads and simple indexed lookups competitive.
+
+---
+
+# 13. Physical plan
+
+Physical plans should be compact and execution-ready.
+
+```rust
+pub enum PhysicalPlan {
+    TableScan(TableScanPlan),
+    IndexScan(IndexScanPlan),
+    Filter(FilterPlan),
+    Project(ProjectPlan),
+    Sort(SortPlan),
+    Limit(LimitPlan),
+    Insert(InsertPlan),
+    Update(UpdatePlan),
+    Delete(DeletePlan),
+    CreateTable(CreateTablePlan),
+    CreateIndex(CreateIndexPlan),
+    Transaction(TransactionPlan),
+}
+
+pub struct TableScanPlan {
+    pub table_id: TableId,
+    pub projection: ColumnSet,
+}
+
+pub struct IndexScanPlan {
+    pub table_id: TableId,
+    pub index_id: IndexId,
+    pub bounds: CompiledIndexBounds,
+    pub projection: ColumnSet,
+    pub residual: Option<ExprProgram>,
+}
+
+pub struct FilterPlan {
+    pub input: Box<PhysicalPlan>,
+    pub predicate: ExprProgram,
+}
+
+pub struct ProjectPlan {
+    pub input: Box<PhysicalPlan>,
+    pub exprs: Box<[ExprProgram]>,
+}
+
+pub struct SortPlan {
+    pub input: Box<PhysicalPlan>,
+    pub keys: Box<[SortKeyProgram]>,
+    pub memory_limit: usize,
+}
+
+pub struct LimitPlan {
+    pub input: Box<PhysicalPlan>,
+    pub limit: Option<ExprProgram>,
+    pub offset: Option<ExprProgram>,
+}
+```
+
+For speed, execution should lower `PhysicalPlan` into a stateful `ExecNode` enum, avoiding trait-object dispatch on every row:
+
+```rust
+pub enum ExecNode {
+    TableScan(TableScanExec),
+    IndexScan(IndexScanExec),
+    Filter(FilterExec),
+    Project(ProjectExec),
+    Sort(SortExec),
+    Limit(LimitExec),
+    Insert(InsertExec),
+    Update(UpdateExec),
+    Delete(DeleteExec),
+    Ddl(DdlExec),
+    Transaction(TransactionExec),
+}
+
+impl ExecNode {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        match self {
+            ExecNode::TableScan(x) => x.next(ctx),
+            ExecNode::IndexScan(x) => x.next(ctx),
+            ExecNode::Filter(x) => x.next(ctx),
+            ExecNode::Project(x) => x.next(ctx),
+            ExecNode::Sort(x) => x.next(ctx),
+            ExecNode::Limit(x) => x.next(ctx),
+            ExecNode::Insert(x) => x.next(ctx),
+            ExecNode::Update(x) => x.next(ctx),
+            ExecNode::Delete(x) => x.next(ctx),
+            ExecNode::Ddl(x) => x.next(ctx),
+            ExecNode::Transaction(x) => x.next(ctx),
+        }
+    }
+}
+```
+
+`ExecStep`:
+
+```rust
+pub enum ExecStep {
+    Row(OutputRow),
+    Done {
+        rows_changed: u64,
+    },
+}
+```
+
+---
+
+# 14. Expression bytecode VM
+
+Expression bytecode is central to speed.
+
+```rust
+#[derive(Clone, Debug)]
+pub struct ExprProgram {
+    pub ops: Box<[ExprOp]>,
+    pub consts: Box<[SqlValue]>,
+    pub stack_max: u16,
+}
+
+#[derive(Clone, Debug)]
+pub enum ExprOp {
+    Const(ConstId),
+    Param(ParamId),
+    Column(InputSlot),
+
+    Null,
+    True,
+    False,
+
+    Not,
+    Neg,
+
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+
+    Eq {
+        affinity: Option<Affinity>,
+        collation: Collation,
+    },
+    Ne {
+        affinity: Option<Affinity>,
+        collation: Collation,
+    },
+    Lt {
+        affinity: Option<Affinity>,
+        collation: Collation,
+    },
+    Le {
+        affinity: Option<Affinity>,
+        collation: Collation,
+    },
+    Gt {
+        affinity: Option<Affinity>,
+        collation: Collation,
+    },
+    Ge {
+        affinity: Option<Affinity>,
+        collation: Collation,
+    },
+
+    IsNull,
+    IsNotNull,
+
+    And,
+    Or,
+
+    Function {
+        func_id: FunctionId,
+        argc: u8,
+    },
+}
+```
+
+Execution scratch:
+
+```rust
+pub struct ExprScratch {
+    stack: Vec<SqlValue>,
+}
+
+impl ExprScratch {
+    pub fn with_capacity(cap: usize) -> Self {
+        Self {
+            stack: Vec::with_capacity(cap),
+        }
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.stack.clear();
+    }
+}
+```
+
+Evaluator:
+
+```rust
+pub struct EvalCtx<'a, 'row> {
+    pub row: Option<RowView<'row>>,
+    pub params: &'a [SqlValue],
+    pub funcs: &'a FunctionRegistry,
+    pub session: &'a SessionState,
+}
+
+impl ExprProgram {
+    pub fn eval(
+        &self,
+        ctx: &EvalCtx<'_, '_>,
+        scratch: &mut ExprScratch,
+    ) -> Result<SqlValue> {
+        scratch.clear();
+
+        for op in self.ops.iter() {
+            match *op {
+                ExprOp::Const(id) => {
+                    scratch.stack.push(self.consts[id.0 as usize].clone());
+                }
+
+                ExprOp::Param(id) => {
+                    let v = ctx.params
+                        .get(id.zero_based() as usize)
+                        .ok_or(Error::UnboundParameter(id))?;
+                    scratch.stack.push(v.clone());
+                }
+
+                ExprOp::Column(slot) => {
+                    let row = ctx.row.ok_or(Error::Internal("column outside row context"))?;
+                    scratch.stack.push(row.get(slot)?.to_owned_value());
+                }
+
+                ExprOp::Null => scratch.stack.push(SqlValue::Null),
+                ExprOp::True => scratch.stack.push(SqlValue::Int(1)),
+                ExprOp::False => scratch.stack.push(SqlValue::Int(0)),
+
+                ExprOp::Not => {
+                    let v = pop(&mut scratch.stack)?;
+                    scratch.stack.push(match value_to_truth(&v).not() {
+                        Truth::True => SqlValue::Int(1),
+                        Truth::False => SqlValue::Int(0),
+                        Truth::Unknown => SqlValue::Null,
+                    });
+                }
+
+                ExprOp::Eq { affinity, collation } => {
+                    let r = pop(&mut scratch.stack)?;
+                    let l = pop(&mut scratch.stack)?;
+                    let out = cmp_pred(l.as_ref(), r.as_ref(), affinity, collation, |o| o == Ordering::Equal);
+                    scratch.stack.push(truth_to_value(out));
+                }
+
+                ExprOp::And => {
+                    let r = pop(&mut scratch.stack)?;
+                    let l = pop(&mut scratch.stack)?;
+                    let out = value_to_truth(&l).and(value_to_truth(&r));
+                    scratch.stack.push(truth_to_value(out));
+                }
+
+                ExprOp::Or => {
+                    let r = pop(&mut scratch.stack)?;
+                    let l = pop(&mut scratch.stack)?;
+                    let out = value_to_truth(&l).or(value_to_truth(&r));
+                    scratch.stack.push(truth_to_value(out));
+                }
+
+                ExprOp::Function { func_id, argc } => {
+                    let base = scratch.stack.len()
+                        .checked_sub(argc as usize)
+                        .ok_or(Error::ExpressionStackUnderflow)?;
+
+                    let args = &scratch.stack[base..];
+                    let result = ctx.funcs.call(func_id, args, ctx.session)?;
+                    scratch.stack.truncate(base);
+                    scratch.stack.push(result);
+                }
+
+                _ => todo!("remaining expression ops"),
+            }
+        }
+
+        if scratch.stack.len() != 1 {
+            return Err(Error::Internal("expression stack ended with wrong depth"));
+        }
+
+        Ok(scratch.stack.pop().unwrap())
+    }
+
+    pub fn eval_where(
+        &self,
+        ctx: &EvalCtx<'_, '_>,
+        scratch: &mut ExprScratch,
+    ) -> Result<bool> {
+        let v = self.eval(ctx, scratch)?;
+        Ok(value_to_truth(&v).passes_where())
+    }
+}
+
+fn pop(stack: &mut Vec<SqlValue>) -> Result<SqlValue> {
+    stack.pop().ok_or(Error::ExpressionStackUnderflow)
+}
+
+fn truth_to_value(t: Truth) -> SqlValue {
+    match t {
+        Truth::True => SqlValue::Int(1),
+        Truth::False => SqlValue::Int(0),
+        Truth::Unknown => SqlValue::Null,
+    }
+}
+```
+
+For the first version, `SqlValue` stack cloning is acceptable. Then optimize:
+
+```text
+v1:
+  Vec<SqlValue>
+
+v2:
+  Small fixed stack for common expressions
+  borrowed column refs
+  owned only for function/string arithmetic results
+
+v3:
+  specialized expression programs for common predicates:
+    col = param int
+    col = const int
+    col > param int
+```
+
+The planner can emit specialized filter nodes for ultra-common predicates.
+
+---
+
+# 15. Row representation
+
+Do not decode full rows unless needed.
+
+```rust
+pub struct RowView<'a> {
+    row_id: RowId,
+    version: RowVersion,
+    encoded: &'a EncodedRow,
+    layout: &'a RowLayout,
+    cache: ValueDecodeCache<'a>,
+}
+
+impl<'a> RowView<'a> {
+    #[inline]
+    pub fn row_id(&self) -> RowId {
+        self.row_id
+    }
+
+    #[inline]
+    pub fn version(&self) -> RowVersion {
+        self.version
+    }
+
+    pub fn get(&self, slot: InputSlot) -> Result<SqlValueRef<'a>> {
+        self.cache.get_or_decode(self.encoded, self.layout, slot)
+    }
+}
+```
+
+Decode cache:
+
+```rust
+pub struct ValueDecodeCache<'a> {
+    values: Vec<Option<SqlValueRef<'a>>>,
+}
+
+impl<'a> ValueDecodeCache<'a> {
+    pub fn get_or_decode(
+        &self,
+        encoded: &'a EncodedRow,
+        layout: &'a RowLayout,
+        slot: InputSlot,
+    ) -> Result<SqlValueRef<'a>> {
+        // Production implementation should use interior mutability or a per-row scratch
+        // to avoid &mut propagation through every operator.
+        todo!()
+    }
+}
+```
+
+For clean Rust borrowing, you may use per-row mutable scratch instead:
+
+```rust
+pub struct RowScratch<'a> {
+    decoded: Vec<Option<SqlValueRef<'a>>>,
+}
+```
+
+The important point: `TableScan` should request only the required columns:
+
+```rust
+projection: ColumnSet
+```
+
+That reduces page decode work.
+
+---
+
+# 16. Executor context
+
+```rust
+pub struct ExecCtx<'a> {
+    pub db: &'a DatabaseHandle,
+    pub tx: &'a mut dyn KernelTx,
+    pub session: &'a mut SessionState,
+    pub schema: Arc<SchemaCache>,
+    pub params: &'a [SqlValue],
+    pub expr_scratch: ExprScratch,
+    pub row_scratch: RowScratch,
+    pub memory: MemoryBudget,
+    pub interrupted: &'a AtomicBool,
+}
+```
+
+Memory budget:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct MemoryBudget {
+    pub statement_limit: usize,
+    pub sort_limit: usize,
+    pub temp_spill_limit: usize,
+    used: usize,
+}
+
+impl MemoryBudget {
+    pub fn reserve(&mut self, bytes: usize) -> Result<MemoryReservation> {
+        if self.used + bytes > self.statement_limit {
+            return Err(Error::MemoryLimitExceeded {
+                requested: bytes,
+                used: self.used,
+                limit: self.statement_limit,
+            });
+        }
+
+        self.used += bytes;
+
+        Ok(MemoryReservation { bytes })
+    }
+
+    pub fn release(&mut self, bytes: usize) {
+        self.used = self.used.saturating_sub(bytes);
+    }
+}
+```
+
+---
+
+# 17. Table scan executor
+
+```rust
+pub struct TableScanExec {
+    plan: TableScanPlan,
+    cursor: Option<Box<dyn KernelRowCursor>>,
+}
+
+impl TableScanExec {
+    pub fn open(plan: TableScanPlan) -> Self {
+        Self {
+            plan,
+            cursor: None,
+        }
+    }
+
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        if self.cursor.is_none() {
+            self.cursor = Some(ctx.tx.open_table_scan(
+                self.plan.table_id,
+                self.plan.projection,
+            )?);
+        }
+
+        let cursor = self.cursor.as_mut().unwrap();
+
+        match cursor.next()? {
+            Some(krow) => {
+                let row = OutputRow::from_kernel_row(krow)?;
+                Ok(ExecStep::Row(row))
+            }
+            None => Ok(ExecStep::Done { rows_changed: 0 }),
+        }
+    }
+}
+```
+
+For internal operators, `OutputRow` should not always own values. A more optimized executor uses:
+
+```rust
+ExecStep::BorrowedRow(RowView<'_>)
+```
+
+But Rust lifetimes make a fully borrowed pull executor more complex. A good compromise:
+
+```text
+TableScan emits compact InternalRow:
+  row id
+  version
+  encoded row handle
+  decoded projected cells in reusable scratch
+
+Project materializes only final OutputRow.
+```
+
+Start simple, then specialize hot paths.
+
+---
+
+# 18. Filter executor
+
+```rust
+pub struct FilterExec {
+    input: Box<ExecNode>,
+    predicate: ExprProgram,
+}
+
+impl FilterExec {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        loop {
+            match self.input.next(ctx)? {
+                ExecStep::Row(row) => {
+                    let eval_ctx = EvalCtx {
+                        row: Some(row.as_view()),
+                        params: ctx.params,
+                        funcs: ctx.db.functions(),
+                        session: ctx.session,
+                    };
+
+                    if self.predicate.eval_where(&eval_ctx, &mut ctx.expr_scratch)? {
+                        return Ok(ExecStep::Row(row));
+                    }
+                }
+
+                done @ ExecStep::Done { .. } => return Ok(done),
+            }
+        }
+    }
+}
+```
+
+Optimization: `FilterExec` should short-circuit `AND`/`OR`. Bytecode can support jump ops:
+
+```rust
+ExprOp::JumpIfFalse { target }
+ExprOp::JumpIfTrue { target }
+```
+
+Initial version can evaluate both sides; then optimize.
+
+---
+
+# 19. Project executor
+
+```rust
+pub struct ProjectExec {
+    input: Box<ExecNode>,
+    exprs: Box<[ExprProgram]>,
+}
+
+impl ProjectExec {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        match self.input.next(ctx)? {
+            ExecStep::Row(row) => {
+                let eval_ctx = EvalCtx {
+                    row: Some(row.as_view()),
+                    params: ctx.params,
+                    funcs: ctx.db.functions(),
+                    session: ctx.session,
+                };
+
+                let mut out = OutputRow::with_capacity(self.exprs.len());
+
+                for expr in self.exprs.iter() {
+                    let v = expr.eval(&eval_ctx, &mut ctx.expr_scratch)?;
+                    out.push(v);
+                }
+
+                Ok(ExecStep::Row(out))
+            }
+
+            done @ ExecStep::Done { .. } => Ok(done),
+        }
+    }
+}
+```
+
+Later optimize by reusing `OutputRow` allocation.
+
+---
+
+# 20. Limit executor
+
+```rust
+pub struct LimitExec {
+    input: Box<ExecNode>,
+    limit: Option<ExprProgram>,
+    offset: Option<ExprProgram>,
+    initialized: bool,
+    remaining: u64,
+    offset_remaining: u64,
+}
+
+impl LimitExec {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        if !self.initialized {
+            self.remaining = eval_limit_expr(self.limit.as_ref(), ctx)?.unwrap_or(u64::MAX);
+            self.offset_remaining = eval_limit_expr(self.offset.as_ref(), ctx)?.unwrap_or(0);
+            self.initialized = true;
+        }
+
+        while self.offset_remaining > 0 {
+            match self.input.next(ctx)? {
+                ExecStep::Row(_) => self.offset_remaining -= 1,
+                done @ ExecStep::Done { .. } => return Ok(done),
+            }
+        }
+
+        if self.remaining == 0 {
+            return Ok(ExecStep::Done { rows_changed: 0 });
+        }
+
+        match self.input.next(ctx)? {
+            ExecStep::Row(row) => {
+                self.remaining -= 1;
+                Ok(ExecStep::Row(row))
+            }
+            done @ ExecStep::Done { .. } => Ok(done),
+        }
+    }
+}
+```
+
+---
+
+# 21. Sort executor
+
+For Phase 5, implement both:
+
+```text
+ORDER BY without LIMIT:
+  memory-bounded full sort with spill
+
+ORDER BY with LIMIT:
+  top-N heap
+```
+
+This keeps memory controlled before Phase 6.
+
+```rust
+pub enum SortState {
+    DrainInput,
+    EmitMemory {
+        rows: Vec<SortableRow>,
+        pos: usize,
+    },
+    SpillRuns {
+        runs: Vec<TempRun>,
+    },
+    MergeRuns {
+        merger: RunMerger,
+    },
+    Done,
+}
+
+pub struct SortExec {
+    input: Box<ExecNode>,
+    keys: Box<[SortKeyProgram]>,
+    memory_limit: usize,
+    state: SortState,
+}
+```
+
+For `ORDER BY ... LIMIT 100`, never materialize the whole result:
+
+```rust
+pub struct TopN {
+    n: usize,
+    heap: BinaryHeap<ReverseSortableRow>,
+}
+```
+
+Planner rule:
+
+```text
+if ORDER BY and LIMIT constant small:
+    use TopNSort
+else:
+    use BoundedExternalSort
+```
+
+External sort can spill to a temp relation managed by the kernel or a temp file under RedlineDB’s temp directory. Keep the format simple:
+
+```text
+[sort key encoded][row encoded]
+```
+
+---
+
+# 22. Insert executor
+
+Insert pipeline:
+
+```text
+VALUES rows
+  -> evaluate each expression
+  -> apply defaults for missing columns
+  -> apply column affinity
+  -> check NOT NULL
+  -> check CHECK constraints
+  -> encode row
+  -> insert heap row
+  -> insert index entries
+  -> handle unique conflicts
+```
+
+```rust
+pub struct InsertExec {
+    plan: InsertPlan,
+    input: Box<ExecNode>,
+    done: bool,
+    rows_changed: u64,
+}
+
+impl InsertExec {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        if self.done {
+            return Ok(ExecStep::Done {
+                rows_changed: self.rows_changed,
+            });
+        }
+
+        let table = ctx.schema.table(self.plan.table_id)?;
+
+        loop {
+            match self.input.next(ctx)? {
+                ExecStep::Row(input_row) => {
+                    let full_row = build_insert_row(table, &self.plan, input_row, ctx)?;
+
+                    validate_not_null(table, &full_row)?;
+                    validate_checks(table, &full_row, ctx)?;
+
+                    let encoded = encode_storage_row(table, &full_row)?;
+                    let row_id = ctx.tx.insert_row(table.id, encoded)?;
+
+                    for index_id in table.indexes.iter().copied() {
+                        let index = ctx.schema.index(index_id)?;
+                        let key = encode_index_key(index, &full_row)?;
+                        ctx.tx.insert_index_entry(index.id, key, row_id, index.unique)?;
+                    }
+
+                    ctx.session.last_insert_rowid = Some(row_id);
+                    self.rows_changed += 1;
+                }
+
+                ExecStep::Done { .. } => {
+                    self.done = true;
+                    return Ok(ExecStep::Done {
+                        rows_changed: self.rows_changed,
+                    });
+                }
+            }
+        }
+    }
+}
+```
+
+Conflict behavior initially:
+
+```text
+default: ABORT statement
+later: OR IGNORE, OR REPLACE, ON CONFLICT
+```
+
+Even with only `ABORT`, the statement savepoint makes behavior usable.
+
+---
+
+# 23. Update executor
+
+Update is trickier than insert because of MVCC and lost updates.
+
+Correct write flow:
+
+```text
+1. Scan rows visible to statement snapshot.
+2. For each candidate, evaluate WHERE on snapshot row.
+3. Lock row for update.
+4. Fetch current row version visible to this transaction.
+5. Re-evaluate WHERE on current row.
+6. Evaluate SET expressions.
+7. Apply affinity and constraints.
+8. Update heap row.
+9. Maintain indexes.
+```
+
+The recheck is critical under concurrent writers.
+
+```rust
+pub struct UpdateExec {
+    plan: UpdatePlan,
+    scan: Box<ExecNode>,
+    done: bool,
+    rows_changed: u64,
+}
+
+impl UpdateExec {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        if self.done {
+            return Ok(ExecStep::Done {
+                rows_changed: self.rows_changed,
+            });
+        }
+
+        let table = ctx.schema.table(self.plan.table_id)?;
+
+        loop {
+            match self.scan.next(ctx)? {
+                ExecStep::Row(candidate) => {
+                    let row_id = candidate.row_id();
+
+                    let locked = ctx.tx.lock_row_for_update(table.id, row_id)?;
+                    let current = locked.current_row_view()?;
+
+                    if let Some(pred) = &self.plan.predicate {
+                        let eval_ctx = EvalCtx {
+                            row: Some(current),
+                            params: ctx.params,
+                            funcs: ctx.db.functions(),
+                            session: ctx.session,
+                        };
+
+                        if !pred.eval_where(&eval_ctx, &mut ctx.expr_scratch)? {
+                            continue;
+                        }
+                    }
+
+                    let old_full = materialize_full_row(table, current)?;
+                    let mut new_full = old_full.clone();
+
+                    for assignment in self.plan.assignments.iter() {
+                        let eval_ctx = EvalCtx {
+                            row: Some(current),
+                            params: ctx.params,
+                            funcs: ctx.db.functions(),
+                            session: ctx.session,
+                        };
+
+                        let raw = assignment.expr.eval(&eval_ctx, &mut ctx.expr_scratch)?;
+                        let col = table.column(assignment.column_id)?;
+                        new_full.set(
+                            assignment.column_id,
+                            apply_affinity(raw, col.affinity),
+                        );
+                    }
+
+                    validate_not_null(table, &new_full)?;
+                    validate_checks(table, &new_full, ctx)?;
+
+                    let encoded_new = encode_storage_row(table, &new_full)?;
+
+                    ctx.tx.update_row(
+                        table.id,
+                        row_id,
+                        locked.version(),
+                        encoded_new,
+                    )?;
+
+                    maintain_indexes_for_update(
+                        ctx.tx,
+                        &ctx.schema,
+                        table,
+                        row_id,
+                        &old_full,
+                        &new_full,
+                    )?;
+
+                    self.rows_changed += 1;
+                }
+
+                ExecStep::Done { .. } => {
+                    self.done = true;
+                    return Ok(ExecStep::Done {
+                        rows_changed: self.rows_changed,
+                    });
+                }
+            }
+        }
+    }
+}
+```
+
+Index maintenance optimization:
+
+```text
+For each index:
+  if no indexed column changed:
+      skip
+  else:
+      delete old key
+      insert new key
+```
+
+---
+
+# 24. Delete executor
+
+Delete is similar to update but simpler.
+
+```rust
+pub struct DeleteExec {
+    plan: DeletePlan,
+    scan: Box<ExecNode>,
+    done: bool,
+    rows_changed: u64,
+}
+
+impl DeleteExec {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        if self.done {
+            return Ok(ExecStep::Done {
+                rows_changed: self.rows_changed,
+            });
+        }
+
+        let table = ctx.schema.table(self.plan.table_id)?;
+
+        loop {
+            match self.scan.next(ctx)? {
+                ExecStep::Row(candidate) => {
+                    let row_id = candidate.row_id();
+
+                    let locked = ctx.tx.lock_row_for_update(table.id, row_id)?;
+                    let current = locked.current_row_view()?;
+
+                    if let Some(pred) = &self.plan.predicate {
+                        let eval_ctx = EvalCtx {
+                            row: Some(current),
+                            params: ctx.params,
+                            funcs: ctx.db.functions(),
+                            session: ctx.session,
+                        };
+
+                        if !pred.eval_where(&eval_ctx, &mut ctx.expr_scratch)? {
+                            continue;
+                        }
+                    }
+
+                    let old_full = materialize_full_row(table, current)?;
+
+                    for index_id in table.indexes.iter().copied() {
+                        let index = ctx.schema.index(index_id)?;
+                        let key = encode_index_key(index, &old_full)?;
+                        ctx.tx.delete_index_entry(index.id, key, row_id)?;
+                    }
+
+                    ctx.tx.delete_row(table.id, row_id, locked.version())?;
+                    self.rows_changed += 1;
+                }
+
+                ExecStep::Done { .. } => {
+                    self.done = true;
+                    return Ok(ExecStep::Done {
+                        rows_changed: self.rows_changed,
+                    });
+                }
+            }
+        }
+    }
+}
+```
+
+---
+
+# 25. Transaction and session behavior
+
+SQLite automatically starts transactions for SQL statements that access the database, and implicit transactions are committed when the last active statement finishes. It also distinguishes deferred, immediate, and exclusive transactions; in WAL mode, immediate and exclusive behave similarly for write-start behavior. RedlineDB should implement the user-visible subset cleanly while still using its stronger kernel concurrency model. ([SQLite][3])
+
+Session state:
+
+```rust
+pub struct Connection {
+    db: Arc<DatabaseHandle>,
+    state: SessionState,
+}
+
+pub struct SessionState {
+    pub autocommit: bool,
+    pub explicit_tx: Option<ExplicitTx>,
+    pub default_isolation: Isolation,
+    pub durability: Durability,
+    pub last_insert_rowid: Option<RowId>,
+    pub changes: u64,
+    pub total_changes: u64,
+    pub active_statements: u32,
+    pub busy_timeout: Duration,
+}
+
+pub struct ExplicitTx {
+    pub mode: TxMode,
+    pub tx: Box<dyn KernelTx>,
+    pub started_write: bool,
+    pub abort_only: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum TxMode {
+    Deferred,
+    Immediate,
+    Exclusive,
+}
+```
+
+Statement kind:
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StatementKind {
+    Read,
+    Write,
+    Ddl,
+    TransactionControl,
+}
+```
+
+Transaction rules:
+
+```rust
+BEGIN:
+  - fail if explicit transaction already active
+  - DEFERRED: create session marker, but do not open kernel tx until first read/write
+  - IMMEDIATE: open read-write kernel tx now
+  - EXCLUSIVE: same as IMMEDIATE in RedlineDB embedded MVCC mode for now
+
+SELECT outside explicit tx:
+  - open implicit read tx
+  - keep it alive until statement reset/finalize/exhausted
+  - commit/close automatically
+
+INSERT/UPDATE/DELETE outside explicit tx:
+  - open implicit write tx
+  - begin statement savepoint
+  - execute
+  - commit on success
+  - rollback on error
+
+SELECT inside explicit tx:
+  - use existing tx or open read tx if deferred
+  - keep tx until COMMIT/ROLLBACK
+
+WRITE inside explicit tx:
+  - upgrade/open write tx
+  - begin statement savepoint
+  - rollback statement on statement error
+  - keep tx active
+
+COMMIT:
+  - commit explicit tx
+  - publish schema cache if DDL changed
+  - fail if abort_only
+
+ROLLBACK:
+  - rollback explicit tx
+```
+
+Implicit transaction guard:
+
+```rust
+pub enum TxLease<'a> {
+    Explicit {
+        tx: &'a mut dyn KernelTx,
+    },
+    Implicit {
+        tx: Box<dyn KernelTx>,
+        commit_on_finish: bool,
+    },
+}
+```
+
+Cleaner structure:
+
+```rust
+impl Connection {
+    fn with_statement_tx<R>(
+        &mut self,
+        kind: StatementKind,
+        f: impl FnOnce(&mut dyn KernelTx, &mut SessionState) -> Result<R>,
+    ) -> Result<R> {
+        if matches!(kind, StatementKind::TransactionControl) {
+            return Err(Error::Internal("transaction control should not use statement tx"));
+        }
+
+        if self.state.explicit_tx.is_some() {
+            return self.with_explicit_tx(kind, f);
+        }
+
+        let access = match kind {
+            StatementKind::Read => TxAccess::ReadOnly,
+            StatementKind::Write | StatementKind::Ddl => TxAccess::ReadWrite,
+            StatementKind::TransactionControl => unreachable!(),
+        };
+
+        let mut tx = self.db.kernel.begin_tx(TxOptions {
+            access,
+            isolation: self.state.default_isolation,
+            durability: self.state.durability,
+            explicit: false,
+        })?;
+
+        let sp = if matches!(kind, StatementKind::Write | StatementKind::Ddl) {
+            Some(tx.begin_statement()?)
+        } else {
+            None
+        };
+
+        let result = f(tx.as_mut(), &mut self.state);
+
+        match result {
+            Ok(v) => {
+                tx.commit()?;
+                Ok(v)
+            }
+            Err(e) => {
+                if let Some(sp) = sp {
+                    let _ = tx.rollback_statement(sp);
+                }
+                let _ = tx.rollback();
+                Err(e)
+            }
+        }
+    }
+}
+```
+
+For `SELECT`, the transaction cannot commit until the cursor is exhausted or reset. Therefore `Statement::step()` should own the implicit transaction while running.
+
+---
+
+# 26. Statement lifecycle
+
+```rust
+pub struct Statement {
+    db: Arc<DatabaseHandle>,
+    sql: Arc<str>,
+    plan: Arc<PreparedPlan>,
+    params: Vec<SqlValue>,
+    state: StatementRuntime,
+}
+
+pub enum StatementRuntime {
+    Prepared,
+    Running(RunningStatement),
+    Done,
+    Failed,
+}
+
+pub struct RunningStatement {
+    tx: RunningTx,
+    root: ExecNode,
+    rows_changed: u64,
+}
+
+pub enum RunningTx {
+    Explicit,
+    Implicit(Box<dyn KernelTx>),
+}
+```
+
+Step:
+
+```rust
+impl Statement {
+    pub fn step(&mut self, conn: &mut Connection) -> Result<Option<RowRef<'_>>> {
+        if matches!(self.state, StatementRuntime::Prepared) {
+            self.start(conn)?;
+        }
+
+        let StatementRuntime::Running(running) = &mut self.state else {
+            return Ok(None);
+        };
+
+        let mut ctx = running.make_ctx(conn, &self.params)?;
+
+        match running.root.next(&mut ctx)? {
+            ExecStep::Row(row) => {
+                self.store_current_row(row);
+                Ok(Some(self.current_row_ref()))
+            }
+
+            ExecStep::Done { rows_changed } => {
+                running.rows_changed += rows_changed;
+                self.finish_success(conn)?;
+                Ok(None)
+            }
+        }
+    }
+
+    pub fn reset(&mut self, conn: &mut Connection) -> Result<()> {
+        match std::mem::replace(&mut self.state, StatementRuntime::Prepared) {
+            StatementRuntime::Running(mut running) => {
+                running.close(conn)?;
+            }
+            _ => {}
+        }
+
+        self.clear_current_row();
+        Ok(())
+    }
+}
+```
+
+Public API should make it hard to misuse the same connection concurrently. In Rust:
+
+```rust
+impl Connection {
+    pub fn prepare(&mut self, sql: &str) -> Result<Statement>;
+}
+```
+
+Then `Statement::step(&mut self, conn: &mut Connection)` is awkward but safe.
+
+Better ergonomic design:
+
+```rust
+pub struct Statement<'conn> {
+    conn: &'conn mut Connection,
+    inner: StatementInner,
+}
+```
+
+That prevents using the connection while the statement is alive.
+
+But SQLite allows multiple prepared statements on one connection. To support that later, use interior session handles carefully. For Phase 5, I would choose correctness and simplicity:
+
+```rust
+let mut stmt = conn.prepare("SELECT ...")?;
+while let Some(row) = stmt.step()? {}
+```
+
+`Statement` borrows the connection mutably. Multiple concurrent statements require multiple connections, which is exactly what you want for concurrent workloads.
+
+---
+
+# 27. Prepared statement invalidation
+
+Prepared statement contains:
+
+```rust
+pub struct PreparedPlan {
+    pub sql: Arc<str>,
+    pub schema_version: SchemaVersion,
+    pub kind: StatementKind,
+    pub param_count: u16,
+    pub outputs: Box<[OutputColumnMeta]>,
+    pub root: PhysicalPlan,
+}
+```
+
+Execution start:
+
+```rust
+fn ensure_plan_current(&mut self) -> Result<()> {
+    let current = self.db.schema().version;
+
+    if current == self.plan.schema_version {
+        return Ok(());
+    }
+
+    // Reprepare once.
+    let new_plan = self.db.prepare_inner(&self.sql)?;
+
+    if new_plan.param_count != self.plan.param_count {
+        return Err(Error::SchemaChanged);
+    }
+
+    self.plan = Arc::new(new_plan);
+    Ok(())
+}
+```
+
+Do not hold schema locks during query execution. Hold an `Arc<SchemaCache>` pin:
+
+```rust
+let schema = db.schema.load();
+```
+
+The old schema cache remains alive while old statements use it.
+
+Dropped tables/indexes must not have physical pages reclaimed until no old snapshot/schema pin can reference them. That is a storage-horizon problem shared with Phase 2/4.
+
+---
+
+# 28. DDL execution
+
+DDL is transactional.
+
+`CREATE TABLE`:
+
+```text
+parse DDL
+bind and validate
+open write tx
+write catalog rows
+allocate relation storage
+create implicit primary-key index if needed
+commit
+publish new schema cache
+```
+
+Executor:
+
+```rust
+pub struct CreateTableExec {
+    plan: CreateTablePlan,
+    done: bool,
+}
+
+impl CreateTableExec {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        if self.done {
+            return Ok(ExecStep::Done { rows_changed: 0 });
+        }
+
+        let mutation = CatalogMutation::CreateTable {
+            table: self.plan.table_def.clone(),
+        };
+
+        ctx.tx.apply_catalog_mutation(mutation)?;
+
+        ctx.session.schema_dirty = true;
+        self.done = true;
+
+        Ok(ExecStep::Done { rows_changed: 0 })
+    }
+}
+```
+
+`CREATE INDEX` on existing table:
+
+```text
+1. write catalog intent row: index exists but not ready
+2. scan table at transaction snapshot
+3. insert index entries
+4. mark index ready
+5. commit
+6. publish schema
+```
+
+If crash occurs mid-build, recovery should see either:
+
+```text
+index not committed
+```
+
+or:
+
+```text
+index committed and ready
+```
+
+Never expose a half-built ready index.
+
+For Phase 5, it is acceptable for `CREATE INDEX` to block writes to that table while building. Do not block unrelated tables.
+
+---
+
+# 29. Function registry
+
+```rust
+pub struct FunctionRegistry {
+    funcs_by_name: HashMap<IdentKey, Vec<FunctionDef>>,
+}
+
+pub struct FunctionDef {
+    pub id: FunctionId,
+    pub name: IdentKey,
+    pub min_args: u8,
+    pub max_args: u8,
+    pub flags: FunctionFlags,
+    pub implementation: ScalarFunc,
+}
+
+pub type ScalarFunc = fn(&[SqlValue], &SessionState) -> Result<SqlValue>;
+
+#[derive(Clone, Copy, Debug)]
+pub struct FunctionFlags {
+    pub deterministic: bool,
+    pub null_if_any_null: bool,
+    pub needs_session: bool,
+}
+```
+
+Implement first:
+
+```text
+typeof(x)
+length(x)
+abs(x)
+lower(x)
+upper(x)
+coalesce(...)
+ifnull(x, y)
+nullif(x, y)
+substr(x, start, len)
+hex(x)
+quote(x)
+random()
+last_insert_rowid()
+changes()
+total_changes()
+```
+
+Example:
+
+```rust
+fn func_typeof(args: &[SqlValue], _: &SessionState) -> Result<SqlValue> {
+    let s = match args.first().unwrap_or(&SqlValue::Null) {
+        SqlValue::Null => "null",
+        SqlValue::Int(_) => "integer",
+        SqlValue::Real(_) => "real",
+        SqlValue::Text(_) => "text",
+        SqlValue::Blob(_) => "blob",
+    };
+
+    Ok(SqlValue::Text(s.into()))
+}
+
+fn func_ifnull(args: &[SqlValue], _: &SessionState) -> Result<SqlValue> {
+    if args.len() != 2 {
+        return Err(Error::WrongArgCount);
+    }
+
+    if matches!(args[0], SqlValue::Null) {
+        Ok(args[1].clone())
+    } else {
+        Ok(args[0].clone())
+    }
+}
+```
+
+---
+
+# 30. Parameters and binding
+
+Support:
+
+```text
+?
+?NNN
+:name
+@name
+$name
+```
+
+Parameter registry:
+
+```rust
+pub struct ParamRegistry {
+    by_name: HashMap<Box<str>, ParamId>,
+    count: u16,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ParamId(u16);
+
+impl ParamId {
+    pub fn one_based(self) -> u16 {
+        self.0
+    }
+
+    pub fn zero_based(self) -> u16 {
+        self.0 - 1
+    }
+}
+```
+
+Statement binding:
+
+```rust
+impl Statement {
+    pub fn bind_null(&mut self, idx: u16) -> Result<()> {
+        self.bind(idx, SqlValue::Null)
+    }
+
+    pub fn bind_i64(&mut self, idx: u16, v: i64) -> Result<()> {
+        self.bind(idx, SqlValue::Int(v))
+    }
+
+    pub fn bind_f64(&mut self, idx: u16, v: f64) -> Result<()> {
+        self.bind(idx, SqlValue::Real(v))
+    }
+
+    pub fn bind_text(&mut self, idx: u16, v: impl AsRef<str>) -> Result<()> {
+        self.bind(idx, SqlValue::Text(v.as_ref().into()))
+    }
+
+    pub fn bind_blob(&mut self, idx: u16, v: impl AsRef<[u8]>) -> Result<()> {
+        self.bind(idx, SqlValue::Blob(v.as_ref().into()))
+    }
+
+    fn bind(&mut self, idx: u16, value: SqlValue) -> Result<()> {
+        if idx == 0 || idx > self.plan.param_count {
+            return Err(Error::ParameterOutOfRange(idx));
+        }
+
+        self.params[idx as usize - 1] = value;
+        Ok(())
+    }
+}
+```
+
+Before execution:
+
+```rust
+for param in params {
+    if param.is_unbound() {
+        return Err(Error::UnboundParameter(param_id));
+    }
+}
+```
+
+SQLite treats unbound parameters as NULL in many contexts. For RedlineDB, I would initially choose explicit errors for safety, then add compatibility mode:
+
+```rust
+ParamMode::UnboundIsNull
+ParamMode::UnboundIsError
+```
+
+---
+
+# 31. Public Rust API
+
+Even though Phase 7 formalizes APIs, Phase 5 should use the API shape from day one.
+
+```rust
+pub struct RedlineDb {
+    inner: Arc<DatabaseHandle>,
+}
+
+impl RedlineDb {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        todo!()
+    }
+
+    pub fn connect(&self) -> Connection {
+        Connection::new(self.inner.clone())
+    }
+}
+
+pub struct Connection {
+    db: Arc<DatabaseHandle>,
+    state: SessionState,
+}
+
+impl Connection {
+    pub fn prepare<'conn>(&'conn mut self, sql: &str) -> Result<Statement<'conn>> {
+        let plan = self.db.prepare(sql)?;
+        Ok(Statement {
+            conn: self,
+            plan,
+            params: vec![SqlValue::Null; plan.param_count as usize],
+            runtime: StatementRuntime::Prepared,
+            current_row: None,
+        })
+    }
+
+    pub fn execute(&mut self, sql: &str, params: impl IntoParams) -> Result<u64> {
+        let mut stmt = self.prepare(sql)?;
+        params.bind_into(&mut stmt)?;
+        stmt.step_done()
+    }
+
+    pub fn query_row<T>(
+        &mut self,
+        sql: &str,
+        params: impl IntoParams,
+        f: impl FnOnce(&Row<'_>) -> Result<T>,
+    ) -> Result<T> {
+        let mut stmt = self.prepare(sql)?;
+        params.bind_into(&mut stmt)?;
+
+        match stmt.step()? {
+            Some(row) => f(&row),
+            None => Err(Error::QueryReturnedNoRows),
+        }
+    }
+}
+```
+
+Statement:
+
+```rust
+pub struct Statement<'conn> {
+    conn: &'conn mut Connection,
+    plan: Arc<PreparedPlan>,
+    params: Vec<SqlValue>,
+    runtime: StatementRuntime,
+    current_row: Option<OutputRow>,
+}
+
+impl<'conn> Statement<'conn> {
+    pub fn step(&mut self) -> Result<Option<Row<'_>>> {
+        // start runtime on first call
+        // execute root.next()
+        // store current row
+        todo!()
+    }
+
+    pub fn step_done(&mut self) -> Result<u64> {
+        let mut changed = 0;
+
+        while let Some(_) = self.step()? {
+            return Err(Error::ExpectedNoRows);
+        }
+
+        if let StatementRuntime::DoneWithChanges(n) = self.runtime {
+            changed = n;
+        }
+
+        Ok(changed)
+    }
+
+    pub fn reset(&mut self) -> Result<()> {
+        todo!()
+    }
+}
+```
+
+Row:
+
+```rust
+pub struct Row<'stmt> {
+    inner: &'stmt OutputRow,
+}
+
+impl<'stmt> Row<'stmt> {
+    pub fn column_count(&self) -> usize {
+        self.inner.values.len()
+    }
+
+    pub fn get_i64(&self, idx: usize) -> Result<i64> {
+        match self.inner.values.get(idx) {
+            Some(SqlValue::Int(v)) => Ok(*v),
+            Some(v) => Err(Error::TypeMismatch {
+                expected: "integer",
+                actual: v.storage_class(),
+            }),
+            None => Err(Error::ColumnOutOfRange(idx)),
+        }
+    }
+
+    pub fn get_text(&self, idx: usize) -> Result<&str> {
+        match self.inner.values.get(idx) {
+            Some(SqlValue::Text(v)) => Ok(v),
+            Some(v) => Err(Error::TypeMismatch {
+                expected: "text",
+                actual: v.storage_class(),
+            }),
+            None => Err(Error::ColumnOutOfRange(idx)),
+        }
+    }
+
+    pub fn get_value(&self, idx: usize) -> Result<&SqlValue> {
+        self.inner.values.get(idx).ok_or(Error::ColumnOutOfRange(idx))
+    }
+}
+```
+
+---
+
+# 32. Error model
+
+```rust
+#[derive(Debug)]
+pub enum Error {
+    Parse(ParseError),
+    Bind(BindError),
+    Plan(PlanError),
+
+    NoSuchTable(Box<str>),
+    NoSuchColumn(Box<str>),
+    AmbiguousColumn(Box<str>),
+    NoSuchFunction(Box<str>),
+
+    Constraint(ConstraintError),
+    UniqueViolation {
+        index: Box<str>,
+    },
+    NotNullViolation {
+        table: Box<str>,
+        column: Box<str>,
+    },
+    CheckViolation {
+        table: Box<str>,
+        constraint: Option<Box<str>>,
+    },
+
+    Busy,
+    BusySnapshot,
+    Deadlock,
+    SchemaChanged,
+
+    ParameterOutOfRange(u16),
+    UnboundParameter(ParamId),
+
+    TypeMismatch {
+        expected: &'static str,
+        actual: StorageClass,
+    },
+
+    MemoryLimitExceeded {
+        requested: usize,
+        used: usize,
+        limit: usize,
+    },
+
+    Io(std::io::Error),
+    Kernel(KernelError),
+
+    Internal(&'static str),
+}
+```
+
+Severity:
+
+```rust
+pub enum ErrorSeverity {
+    StatementRollback,
+    TransactionAbort,
+    ConnectionPoison,
+}
+```
+
+The SQL layer should ask the kernel which errors are fatal:
+
+```rust
+impl Error {
+    pub fn severity(&self) -> ErrorSeverity {
+        match self {
+            Error::Io(_) => ErrorSeverity::TransactionAbort,
+            Error::Kernel(e) => e.severity(),
+            Error::MemoryLimitExceeded { .. } => ErrorSeverity::TransactionAbort,
+            Error::Internal(_) => ErrorSeverity::ConnectionPoison,
+            _ => ErrorSeverity::StatementRollback,
+        }
+    }
+}
+```
+
+---
+
+# 33. Memory strategy
+
+## Prepare path
+
+Use normal allocation. It is not hot compared to stepping millions of rows.
+
+Still, avoid pathological behavior:
+
+```text
+- AST nodes allocated in arena or Vec-backed boxes
+- identifiers normalized once
+- bound plans store compact IDs
+- physical plans compile expression bytecode
+```
+
+## Execute path
+
+Execution should allocate almost nothing.
+
+Per statement:
+
+```rust
+pub struct StatementScratch {
+    expr: ExprScratch,
+    row: RowScratch,
+    output: OutputRow,
+    sort: SortScratch,
+}
+```
+
+Reuse it across resets.
+
+Memory caps:
+
+```rust
+pub struct SqlMemoryConfig {
+    pub statement_memory_limit: usize,
+    pub sort_memory_limit: usize,
+    pub max_result_row_bytes: usize,
+    pub max_sql_length: usize,
+    pub max_expression_depth: usize,
+    pub max_columns: usize,
+    pub max_params: usize,
+}
+```
+
+Use bounded external sort. Do not let:
+
+```sql
+SELECT * FROM huge_table ORDER BY huge_text_col;
+```
+
+consume unbounded memory.
+
+## String/blob policy
+
+Internal:
+
+```text
+- Borrow from row storage during expression evaluation.
+- Own values only when:
+  - result row is returned to user
+  - expression creates new text/blob
+  - parameter stores text/blob
+  - sort materializes rows
+```
+
+## Column decoding
+
+Use required-column bitsets:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct ColumnSet {
+    words: Box<[u64]>,
+}
+```
+
+The binder/planner computes exactly which columns are needed for:
+
+```text
+WHERE
+projection
+ORDER BY
+SET expressions
+CHECK constraints
+index keys
+```
+
+Table scan asks kernel only for those.
+
+---
+
+# 34. Threading strategy
+
+Public rule:
+
+```text
+Database: Send + Sync
+Connection: Send, not Sync
+Statement: tied to mutable Connection, not Send while active
+PreparedPlan: Send + Sync
+SchemaCache: immutable Arc
+FunctionRegistry: immutable Arc
+```
+
+This is important.
+
+```rust
+pub struct RedlineDb {
+    inner: Arc<DatabaseHandle>,
+}
+
+// Safe to clone and send to threads.
+impl Clone for RedlineDb {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+```
+
+Each thread should use its own connection:
+
+```rust
+let db = RedlineDb::open(path)?;
+
+std::thread::scope(|s| {
+    for shard in 0..8 {
+        let db = db.clone();
+        s.spawn(move || {
+            let mut conn = db.connect();
+
+            let mut stmt = conn.prepare(
+                "UPDATE counter SET value = value + 1 WHERE id = ?"
+            ).unwrap();
+
+            for i in 0..100_000 {
+                stmt.bind_i64(1, shard).unwrap();
+                stmt.step_done().unwrap();
+                stmt.reset().unwrap();
+            }
+        });
+    }
+});
+```
+
+No SQL-level global mutex. Contention should be:
+
+```text
+same row:
+  row lock contention
+
+same unique key:
+  key lock contention
+
+same WAL device:
+  WAL append/group commit contention
+
+same schema:
+  DDL schema lock contention
+```
+
+Everything else should scale.
+
+---
+
+# 35. Isolation behavior
+
+Support two isolation modes:
+
+```rust
+pub enum Isolation {
+    Snapshot,
+    ReadCommitted,
+}
+```
+
+Snapshot:
+
+```text
+BEGIN;
+SELECT ...;  -- establishes snapshot
+SELECT ...;  -- same snapshot
+COMMIT;
+```
+
+Read committed:
+
+```text
+BEGIN;
+SELECT ...;  -- statement snapshot A
+SELECT ...;  -- statement snapshot B
+COMMIT;
+```
+
+Default should be snapshot isolation for SQLite WAL-like behavior, because SQLite WAL readers see an unchanging snapshot from the start of the read transaction. ([SQLite][1])
+
+For write transactions, RedlineDB should use kernel conflict detection:
+
+```text
+read row version V
+concurrent writer commits V+1
+this tx tries update based on V
+  -> conflict or recheck depending isolation/write policy
+```
+
+For Phase 5, choose:
+
+```text
+UPDATE/DELETE:
+  lock current row
+  recheck predicate
+  write current row
+```
+
+This gives good read committed write behavior. For strict snapshot isolation, kernel may return serialization/conflict errors.
+
+---
+
+# 36. SQL subset implementation order
+
+Build Phase 5 as vertical slices.
+
+## Slice 1: Values, parser, simple SELECT constants
+
+Support:
+
+```sql
+SELECT 1;
+SELECT 1 + 2;
+SELECT NULL;
+SELECT typeof(123);
+SELECT ?;
+```
+
+No storage yet.
+
+Needed:
+
+```text
+lexer
+parser
+expression binder
+expression bytecode
+project executor
+parameter binding
+row output API
+```
+
+## Slice 2: CREATE TABLE and INSERT
+
+Support:
+
+```sql
+CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+INSERT INTO t(id, name) VALUES (?, ?);
+```
+
+Needed:
+
+```text
+DDL binder
+catalog mutation
+insert executor
+defaults
+affinity
+NOT NULL
+primary key uniqueness
+```
+
+## Slice 3: Table scan SELECT
+
+Support:
+
+```sql
+SELECT id, name FROM t;
+SELECT * FROM t;
+SELECT name FROM t WHERE id = 1;
+```
+
+Needed:
+
+```text
+schema cache
+table scan
+filter
+projection
+column binding
+```
+
+## Slice 4: Index lookup
+
+Support:
+
+```sql
+CREATE INDEX idx_t_name ON t(name);
+SELECT id FROM t WHERE name = ?;
+```
+
+Needed:
+
+```text
+sargable extraction
+index scan
+heap recheck
+residual predicate
+```
+
+## Slice 5: UPDATE and DELETE
+
+Support:
+
+```sql
+UPDATE t SET name = ? WHERE id = ?;
+DELETE FROM t WHERE id = ?;
+```
+
+Needed:
+
+```text
+row locking
+current row recheck
+index maintenance
+statement savepoints
+```
+
+## Slice 6: ORDER BY and LIMIT
+
+Support:
+
+```sql
+SELECT * FROM t WHERE name > ? ORDER BY name LIMIT 100;
+```
+
+Needed:
+
+```text
+sort
+top-N heap
+external sort spill
+```
+
+## Slice 7: Transactions
+
+Support:
+
+```sql
+BEGIN;
+INSERT ...
+COMMIT;
+
+BEGIN IMMEDIATE;
+UPDATE ...
+ROLLBACK;
+```
+
+Needed:
+
+```text
+explicit tx state
+deferred/immediate modes
+implicit tx state
+statement reset/finalize behavior
+```
+
+## Slice 8: Differential testing against SQLite
+
+Run all supported SQL against both engines and compare results.
+
+---
+
+# 37. Parser examples
+
+`CREATE TABLE` AST:
+
+```rust
+pub struct AstCreateTable<'sql> {
+    pub if_not_exists: bool,
+    pub name: AstIdent<'sql>,
+    pub columns: Vec<AstColumnDef<'sql>>,
+    pub constraints: Vec<AstTableConstraint<'sql>>,
+}
+
+pub struct AstColumnDef<'sql> {
+    pub name: AstIdent<'sql>,
+    pub type_name: Option<&'sql str>,
+    pub constraints: Vec<AstColumnConstraint<'sql>>,
+}
+
+pub enum AstColumnConstraint<'sql> {
+    PrimaryKey,
+    NotNull,
+    Unique,
+    Default(AstExpr<'sql>),
+    Check(AstExpr<'sql>),
+}
+
+pub enum AstTableConstraint<'sql> {
+    PrimaryKey {
+        columns: Vec<AstIdent<'sql>>,
+    },
+    Unique {
+        columns: Vec<AstIdent<'sql>>,
+    },
+    Check {
+        expr: AstExpr<'sql>,
+    },
+}
+```
+
+`INSERT` AST:
+
+```rust
+pub struct AstInsert<'sql> {
+    pub table: AstIdent<'sql>,
+    pub columns: Option<Vec<AstIdent<'sql>>>,
+    pub source: AstInsertSource<'sql>,
+}
+
+pub enum AstInsertSource<'sql> {
+    Values(Vec<Vec<AstExpr<'sql>>>),
+    Select(Box<AstSelect<'sql>>),
+}
+```
+
+`UPDATE` AST:
+
+```rust
+pub struct AstUpdate<'sql> {
+    pub table: AstIdent<'sql>,
+    pub assignments: Vec<AstAssignment<'sql>>,
+    pub where_clause: Option<AstExpr<'sql>>,
+}
+
+pub struct AstAssignment<'sql> {
+    pub column: AstIdent<'sql>,
+    pub expr: AstExpr<'sql>,
+}
+```
+
+`DELETE` AST:
+
+```rust
+pub struct AstDelete<'sql> {
+    pub table: AstIdent<'sql>,
+    pub where_clause: Option<AstExpr<'sql>>,
+}
+```
+
+---
+
+# 38. Name normalization
+
+Identifiers should be normalized once:
+
+```rust
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct IdentKey(Box<str>);
+
+impl IdentKey {
+    pub fn new_unquoted(s: &str) -> Self {
+        Self(s.to_ascii_lowercase().into_boxed_str())
+    }
+
+    pub fn new_quoted(s: &str) -> Self {
+        // SQLite is generally case-insensitive for identifiers even if quoted.
+        // Store original display separately if desired.
+        Self(s.to_ascii_lowercase().into_boxed_str())
+    }
+}
+```
+
+Keep display name separately:
+
+```rust
+pub struct Ident {
+    pub key: IdentKey,
+    pub display: Box<str>,
+}
+```
+
+---
+
+# 39. `SELECT` result metadata
+
+Prepared statement should expose result metadata before execution:
+
+```rust
+pub struct OutputColumnMeta {
+    pub name: Box<str>,
+    pub table_id: Option<TableId>,
+    pub column_id: Option<ColumnId>,
+    pub affinity: Option<Affinity>,
+    pub nullable: bool,
+}
+
+impl Statement<'_> {
+    pub fn column_count(&self) -> usize {
+        self.plan.outputs.len()
+    }
+
+    pub fn column_name(&self, i: usize) -> Option<&str> {
+        self.plan.outputs.get(i).map(|c| c.name.as_ref())
+    }
+}
+```
+
+Projection naming:
+
+```text
+SELECT col             -> "col"
+SELECT table.col       -> "col"
+SELECT expr AS alias   -> "alias"
+SELECT 1 + 2           -> "1 + 2" or generated display
+```
+
+---
+
+# 40. Constraint enforcement
+
+Column constraints:
+
+```text
+NOT NULL:
+  after default and affinity
+
+DEFAULT:
+  when column omitted
+
+CHECK:
+  after full row assembled
+
+PRIMARY KEY / UNIQUE:
+  via unique index insert
+```
+
+Constraint pipeline:
+
+```rust
+fn build_insert_row(
+    table: &TableDef,
+    plan: &InsertPlan,
+    input: OutputRow,
+    ctx: &mut ExecCtx<'_>,
+) -> Result<FullRow> {
+    let mut row = FullRow::nulls(table.columns.len());
+
+    for col in table.columns.iter() {
+        if let Some(default) = &col.default {
+            row.set(col.id, eval_default(default, ctx)?);
+        }
+    }
+
+    for (target_col, input_value) in plan.target_columns.iter().zip(input.values) {
+        let col = table.column(*target_col)?;
+        row.set(*target_col, apply_affinity(input_value, col.affinity));
+    }
+
+    Ok(row)
+}
+```
+
+NOT NULL:
+
+```rust
+fn validate_not_null(table: &TableDef, row: &FullRow) -> Result<()> {
+    for col in table.columns.iter() {
+        if !col.nullable && matches!(row.get(col.id), SqlValue::Null) {
+            return Err(Error::NotNullViolation {
+                table: table.name.display().into(),
+                column: col.name.display().into(),
+            });
+        }
+    }
+
+    Ok(())
+}
+```
+
+CHECK:
+
+```rust
+fn validate_checks(
+    table: &TableDef,
+    row: &FullRow,
+    ctx: &mut ExecCtx<'_>,
+) -> Result<()> {
+    let row_view = RowView::from_full_row(row);
+
+    for constraint in table.constraints.iter() {
+        if let ConstraintDef::Check { name, expr } = constraint {
+            let eval_ctx = EvalCtx {
+                row: Some(row_view),
+                params: ctx.params,
+                funcs: ctx.db.functions(),
+                session: ctx.session,
+            };
+
+            let v = expr.eval(&eval_ctx, &mut ctx.expr_scratch)?;
+            let truth = value_to_truth(&v);
+
+            if truth == Truth::False {
+                return Err(Error::CheckViolation {
+                    table: table.name.display().into(),
+                    constraint: name.as_ref().map(|n| n.display().into()),
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+---
+
+# 41. `CREATE TABLE` binder
+
+```rust
+fn bind_create_table(
+    ctx: &mut BindCtx<'_>,
+    ast: AstCreateTable<'_>,
+) -> Result<BoundCreateTable> {
+    let table_name = bind_ident(ast.name);
+
+    if ctx.schema.table_by_name(&table_name).is_some() && !ast.if_not_exists {
+        return Err(Error::TableAlreadyExists(table_name.display().into()));
+    }
+
+    let mut columns = Vec::new();
+    let mut seen = HashSet::new();
+
+    for (ordinal, c) in ast.columns.into_iter().enumerate() {
+        let name = bind_ident(c.name);
+
+        if !seen.insert(name.key().clone()) {
+            return Err(Error::DuplicateColumn(name.display().into()));
+        }
+
+        let affinity = affinity_from_decl_type(c.type_name);
+        let mut nullable = true;
+        let mut default = None;
+        let mut primary_key = false;
+        let mut unique = false;
+        let mut checks = Vec::new();
+
+        for constraint in c.constraints {
+            match constraint {
+                AstColumnConstraint::PrimaryKey => {
+                    primary_key = true;
+                    nullable = false;
+                }
+                AstColumnConstraint::NotNull => nullable = false,
+                AstColumnConstraint::Unique => unique = true,
+                AstColumnConstraint::Default(expr) => {
+                    default = Some(bind_default_expr(ctx, expr)?);
+                }
+                AstColumnConstraint::Check(expr) => {
+                    checks.push(bind_check_expr(ctx, expr)?);
+                }
+            }
+        }
+
+        columns.push(BoundColumnDef {
+            name,
+            ordinal: ordinal as u16,
+            declared_type: c.type_name.map(Into::into),
+            affinity,
+            nullable,
+            default,
+            primary_key,
+            unique,
+            checks,
+        });
+    }
+
+    Ok(BoundCreateTable {
+        name: table_name,
+        columns: columns.into_boxed_slice(),
+        table_constraints: bind_table_constraints(ctx, ast.constraints)?,
+    })
+}
+```
+
+---
+
+# 42. `SELECT` binder
+
+For one-table Phase 5:
+
+```rust
+fn bind_select(ctx: &mut BindCtx<'_>, ast: AstSelect<'_>) -> Result<BoundSelect> {
+    let source = if let Some(from) = ast.from {
+        let table_name = bind_ident(from.table);
+        let table = ctx.schema
+            .table_by_name(&table_name)
+            .ok_or_else(|| Error::NoSuchTable(table_name.display().into()))?
+            .clone();
+
+        let alias = from.alias
+            .map(bind_ident)
+            .unwrap_or_else(|| table.name.clone());
+
+        ctx.scopes.push(Scope::from_table(alias, table.clone()));
+
+        Some(BoundTableSource {
+            table_id: table.id,
+            table_name: table.name.clone(),
+            required_columns: ColumnSet::empty(table.columns.len()),
+        })
+    } else {
+        None
+    };
+
+    let predicate = match ast.where_clause {
+        Some(expr) => Some(bind_expr(ctx, expr)?),
+        None => None,
+    };
+
+    let mut outputs = Vec::new();
+
+    for item in ast.projection {
+        match item {
+            AstSelectItem::Star => {
+                expand_star(ctx, &mut outputs)?;
+            }
+            AstSelectItem::QualifiedStar(q) => {
+                expand_qualified_star(ctx, q, &mut outputs)?;
+            }
+            AstSelectItem::Expr { expr, alias } => {
+                let bound = bind_expr(ctx, expr)?;
+                let name = alias
+                    .map(bind_ident)
+                    .map(|i| i.display().into())
+                    .unwrap_or_else(|| derive_output_name(&bound));
+                outputs.push(BoundOutputColumn { name, expr: bound });
+            }
+        }
+    }
+
+    let order_by = ast.order_by
+        .into_iter()
+        .map(|o| bind_order_expr(ctx, o))
+        .collect::<Result<Vec<_>>>()?;
+
+    let limit = ast.limit.map(|e| bind_expr(ctx, e)).transpose()?;
+    let offset = ast.offset.map(|e| bind_expr(ctx, e)).transpose()?;
+
+    ctx.scopes.pop();
+
+    Ok(BoundSelect {
+        output: outputs.into_boxed_slice(),
+        source,
+        predicate,
+        order_by: order_by.into_boxed_slice(),
+        limit,
+        offset,
+    })
+}
+```
+
+After binding, walk all expressions and mark required columns.
+
+---
+
+# 43. Planning SELECT
+
+```rust
+fn plan_select(bound: BoundSelect, schema: &SchemaCache) -> Result<PhysicalPlan> {
+    let mut plan = if let Some(source) = bound.source {
+        let table = schema.table(source.table_id)?;
+
+        let split = bound.predicate
+            .as_ref()
+            .map(split_predicate)
+            .unwrap_or_default();
+
+        let access = choose_access_path(table, &split, schema);
+
+        let mut p = access_path_to_physical(access, source.required_columns, schema)?;
+
+        if let Some(residual) = split.residual {
+            p = PhysicalPlan::Filter(FilterPlan {
+                input: Box::new(p),
+                predicate: compile_expr(residual)?,
+            });
+        }
+
+        p
+    } else {
+        PhysicalPlan::Values(ValuesPlan {
+            rows: Box::new([Box::new([])]),
+        })
+    };
+
+    if !bound.output.is_empty() {
+        let exprs = bound.output
+            .iter()
+            .map(|o| compile_expr(o.expr.clone()))
+            .collect::<Result<Vec<_>>>()?
+            .into_boxed_slice();
+
+        plan = PhysicalPlan::Project(ProjectPlan {
+            input: Box::new(plan),
+            exprs,
+        });
+    }
+
+    if !bound.order_by.is_empty() {
+        plan = PhysicalPlan::Sort(SortPlan {
+            input: Box::new(plan),
+            keys: compile_sort_keys(bound.order_by)?,
+            memory_limit: schema.config.sort_memory_limit,
+        });
+    }
+
+    if bound.limit.is_some() || bound.offset.is_some() {
+        plan = PhysicalPlan::Limit(LimitPlan {
+            input: Box::new(plan),
+            limit: bound.limit.map(compile_expr).transpose()?,
+            offset: bound.offset.map(compile_expr).transpose()?,
+        });
+    }
+
+    Ok(plan)
+}
+```
+
+Optimization: `ORDER BY` should be before `Project` unless order expressions reference output aliases. Internally, keep hidden columns until sort.
+
+Better physical order:
+
+```text
+Scan
+Filter
+Sort
+Project
+Limit or Limit before Project depending expressions
+```
+
+For `ORDER BY ... LIMIT`, push limit into sort.
+
+---
+
+# 44. Fast index path
+
+Special-case primary key lookups:
+
+```rust
+pub struct PrimaryKeyLookupExec {
+    table_id: TableId,
+    key: ExprProgram,
+    opened: bool,
+    emitted: bool,
+    cursor: Option<Box<dyn KernelRowCursor>>,
+}
+
+impl PrimaryKeyLookupExec {
+    pub fn next(&mut self, ctx: &mut ExecCtx<'_>) -> Result<ExecStep> {
+        if self.emitted {
+            return Ok(ExecStep::Done { rows_changed: 0 });
+        }
+
+        if !self.opened {
+            let eval_ctx = EvalCtx {
+                row: None,
+                params: ctx.params,
+                funcs: ctx.db.functions(),
+                session: ctx.session,
+            };
+
+            let key_value = self.key.eval(&eval_ctx, &mut ctx.expr_scratch)?;
+            let encoded = encode_pk_key(key_value)?;
+
+            self.cursor = Some(ctx.tx.open_index_scan(
+                primary_index_for(self.table_id),
+                IndexBounds::point(encoded),
+                self.projection,
+            )?);
+
+            self.opened = true;
+        }
+
+        let cursor = self.cursor.as_mut().unwrap();
+
+        match cursor.next()? {
+            Some(row) => {
+                self.emitted = true;
+                Ok(ExecStep::Row(OutputRow::from_kernel_row(row)?))
+            }
+            None => {
+                self.emitted = true;
+                Ok(ExecStep::Done { rows_changed: 0 })
+            }
+        }
+    }
+}
+```
+
+For `SELECT ... WHERE rowid = ?`, this should be extremely fast.
+
+---
+
+# 45. Compatibility vs RedlineDB-specific behavior
+
+Implement SQLite-like behavior where it matters for common workloads:
+
+```text
+dynamic values
+affinity
+NULL semantics
+autocommit
+BEGIN/COMMIT/ROLLBACK
+prepared parameters
+last_insert_rowid()
+changes()
+basic scalar functions
+```
+
+But do not chase every SQLite edge case in Phase 5:
+
+```text
+no virtual tables
+no triggers
+no views initially
+no recursive CTEs
+no window functions
+no generated columns initially
+no partial indexes initially
+no foreign keys initially unless Phase 4 already did them
+```
+
+Be explicit in docs and compatibility tests.
+
+---
+
+# 46. Differential testing
+
+Create a test harness:
+
+```rust
+pub struct DifferentialCase {
+    pub name: &'static str,
+    pub sql: &'static [&'static str],
+}
+
+#[test]
+fn diff_basic_insert_select() {
+    diff(DifferentialCase {
+        name: "basic insert select",
+        sql: &[
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)",
+            "INSERT INTO t VALUES (1, 'a')",
+            "INSERT INTO t VALUES (2, 'b')",
+            "SELECT id, name FROM t ORDER BY id",
+        ],
+    });
+}
+```
+
+Comparison rules:
+
+```text
+- compare column count
+- compare row count
+- compare storage classes
+- compare values
+- normalize floating display if needed
+- require deterministic ORDER BY for row order
+```
+
+Categories:
+
+```text
+parser:
+  literals
+  quoted strings
+  identifiers
+  parameters
+
+types:
+  affinity conversion
+  typeof()
+  NULL comparisons
+  text/integer comparisons
+
+DML:
+  insert
+  update
+  delete
+
+transactions:
+  autocommit
+  explicit commit
+  rollback
+  statement error rollback
+
+indexes:
+  primary key lookup
+  secondary lookup
+  unique violation
+
+prepared:
+  bind/reset/reuse
+  schema invalidation
+
+concurrency:
+  readers while writer commits
+  disjoint writers
+  conflicting writers
+```
+
+---
+
+# 47. SQL logic tests
+
+Also add non-SQLite differential tests because RedlineDB will have stronger concurrent writer behavior.
+
+Example: disjoint update scale test.
+
+```rust
+#[test]
+fn concurrent_disjoint_updates() {
+    let db = RedlineDb::open_temp().unwrap();
+
+    {
+        let mut c = db.connect();
+        c.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER)", []).unwrap();
+
+        for i in 0..64 {
+            c.execute("INSERT INTO t(id, v) VALUES (?, 0)", [i]).unwrap();
+        }
+    }
+
+    std::thread::scope(|s| {
+        for worker in 0..8 {
+            let db = db.clone();
+
+            s.spawn(move || {
+                let mut c = db.connect();
+                let mut stmt = c.prepare("UPDATE t SET v = v + 1 WHERE id = ?").unwrap();
+
+                for _ in 0..10_000 {
+                    for id in (worker * 8)..((worker + 1) * 8) {
+                        stmt.bind_i64(1, id).unwrap();
+                        stmt.step_done().unwrap();
+                        stmt.reset().unwrap();
+                    }
+                }
+            });
+        }
+    });
+
+    let mut c = db.connect();
+    let sum: i64 = c.query_row("SELECT sum(v) FROM t", [], |r| r.get_i64(0)).unwrap();
+
+    assert_eq!(sum, 64 * 10_000);
+}
+```
+
+`sum()` is an aggregate, which Phase 6 formally expands, but you can use a test helper or add simple aggregates late in Phase 5.
+
+---
+
+# 48. Benchmarks to run during Phase 5
+
+Even before Phase 9, Phase 5 should have smoke benchmarks:
+
+```text
+prepare SELECT 1
+step SELECT 1
+insert autocommit single row
+insert explicit transaction batch
+point read primary key
+point read secondary index
+range scan secondary index
+update by primary key
+delete by primary key
+100 readers + 1 writer
+8 disjoint writers
+prepared statement reuse
+schema invalidation
+ORDER BY LIMIT top-N
+```
+
+Key metrics:
+
+```text
+allocations per step
+bytes allocated per 1M rows scanned
+rows/sec table scan
+point reads/sec
+updates/sec with disjoint writers
+p50/p95/p99 latency
+WAL commits/sec
+schema cache reload count
+```
+
+Use allocation counters in tests. For hot SELECT stepping, target:
+
+```text
+0 heap allocations per returned row
+```
+
+---
+
+# 49. The most important performance tricks
+
+## 1. Precompute everything at prepare time
+
+Do not compute this per row:
+
+```text
+column name lookup
+function name lookup
+operator dispatch from AST
+affinity of column
+collation of comparison
+required column set
+index choice
+parameter position
+```
+
+## 2. Use IDs and ordinals
+
+Per row, use:
+
+```text
+InputSlot(0)
+InputSlot(1)
+```
+
+not:
+
+```text
+"users.name"
+```
+
+## 3. Use expression bytecode
+
+Avoid recursive expression evaluation.
+
+## 4. Use specialized physical nodes
+
+Do not make a primary-key lookup pass through generic table scan machinery.
+
+## 5. Keep latches short
+
+SQL execution must not hold page latches while:
+
+```text
+evaluating user expressions
+waiting on row locks
+waiting on WAL fsync
+sorting
+calling functions
+```
+
+Kernel cursors should copy or pin what is needed, release page latch, then return row view.
+
+## 6. Make autocommit cheap
+
+Autocommit insert is common. The path should be:
+
+```text
+prepare cached insert
+bind values
+begin tx
+encode row
+insert heap
+insert indexes
+commit via group commit
+reset
+```
+
+No schema lookup. No parser. No planner. No per-row heap churn.
+
+## 7. Separate DDL locks from DML locks
+
+A schema lock is fine for:
+
+```text
+CREATE TABLE
+DROP TABLE
+CREATE INDEX
+DROP INDEX
+```
+
+It is not fine for:
+
+```text
+INSERT
+UPDATE
+DELETE
+SELECT
+```
+
+DML should run against an immutable schema snapshot.
+
+---
+
+# 50. Minimal end-to-end compile pipeline
+
+```rust
+impl DatabaseHandle {
+    pub fn prepare(&self, sql: &str) -> Result<Arc<PreparedPlan>> {
+        if sql.len() > self.config.max_sql_length {
+            return Err(Error::SqlTooLong);
+        }
+
+        let schema = self.schema.load();
+
+        let tokens = lexer::lex(sql)?;
+        let ast = parser::parse_one(sql, tokens)?;
+        let bound = bind::bind_statement(&schema, &self.functions, ast)?;
+        let logical = plan::logical::build(bound)?;
+        let physical = plan::rules::plan(logical, &schema)?;
+
+        Ok(Arc::new(PreparedPlan {
+            sql: Arc::from(sql),
+            schema_version: schema.version,
+            kind: physical.statement_kind(),
+            param_count: physical.param_count(),
+            outputs: physical.output_columns(),
+            root: physical,
+        }))
+    }
+}
+```
+
+---
+
+# 51. End-to-end execution path
+
+```rust
+impl<'conn> Statement<'conn> {
+    pub fn step(&mut self) -> Result<Option<Row<'_>>> {
+        self.ensure_started()?;
+
+        let runtime = match &mut self.runtime {
+            StatementRuntime::Running(r) => r,
+            StatementRuntime::Done => return Ok(None),
+            StatementRuntime::Prepared => unreachable!(),
+            StatementRuntime::Failed => return Err(Error::StatementFailed),
+        };
+
+        let step = runtime.root.next(&mut runtime.ctx)?;
+
+        match step {
+            ExecStep::Row(row) => {
+                self.current_row = Some(row);
+                Ok(Some(Row {
+                    inner: self.current_row.as_ref().unwrap(),
+                }))
+            }
+
+            ExecStep::Done { rows_changed } => {
+                self.conn.state.changes = rows_changed;
+                self.conn.state.total_changes += rows_changed;
+
+                runtime.finish_success(&mut self.conn.state)?;
+                self.runtime = StatementRuntime::Done;
+
+                Ok(None)
+            }
+        }
+    }
+}
+```
+
+---
+
+# 52. Transaction control statements
+
+`BEGIN` executor:
+
+```rust
+fn exec_begin(conn: &mut Connection, mode: TxMode) -> Result<()> {
+    if conn.state.explicit_tx.is_some() {
+        return Err(Error::TransactionAlreadyActive);
+    }
+
+    match mode {
+        TxMode::Deferred => {
+            conn.state.explicit_tx = Some(ExplicitTx::deferred());
+        }
+
+        TxMode::Immediate | TxMode::Exclusive => {
+            let tx = conn.db.kernel.begin_tx(TxOptions {
+                access: TxAccess::ReadWrite,
+                isolation: conn.state.default_isolation,
+                durability: conn.state.durability,
+                explicit: true,
+            })?;
+
+            conn.state.explicit_tx = Some(ExplicitTx {
+                mode,
+                tx,
+                started_write: true,
+                abort_only: false,
+            });
+        }
+    }
+
+    conn.state.autocommit = false;
+    Ok(())
+}
+```
+
+`COMMIT`:
+
+```rust
+fn exec_commit(conn: &mut Connection) -> Result<()> {
+    let Some(explicit) = conn.state.explicit_tx.take() else {
+        return Err(Error::NoActiveTransaction);
+    };
+
+    if explicit.abort_only {
+        explicit.tx.rollback()?;
+        conn.state.autocommit = true;
+        return Err(Error::TransactionAbort);
+    }
+
+    let schema_dirty = conn.state.schema_dirty;
+
+    explicit.tx.commit()?;
+    conn.state.autocommit = true;
+
+    if schema_dirty {
+        conn.db.reload_schema_cache()?;
+        conn.state.schema_dirty = false;
+    }
+
+    Ok(())
+}
+```
+
+`ROLLBACK`:
+
+```rust
+fn exec_rollback(conn: &mut Connection) -> Result<()> {
+    let Some(explicit) = conn.state.explicit_tx.take() else {
+        return Err(Error::NoActiveTransaction);
+    };
+
+    explicit.tx.rollback()?;
+    conn.state.autocommit = true;
+    conn.state.schema_dirty = false;
+
+    Ok(())
+}
+```
+
+---
+
+# 53. Concurrency examples RedlineDB should pass
+
+## Readers should not block writers
+
+```sql
+-- conn 1
+BEGIN;
+SELECT * FROM t WHERE id BETWEEN 1 AND 100000;
+
+-- conn 2
+UPDATE t SET v = v + 1 WHERE id = 999999;
+COMMIT;
+```
+
+Expected:
+
+```text
+conn 1 continues on old snapshot
+conn 2 commits
+no global writer/read lock conflict
+```
+
+## Disjoint writers should proceed concurrently
+
+```sql
+-- conn 1
+UPDATE t SET v = v + 1 WHERE id = 1;
+
+-- conn 2
+UPDATE t SET v = v + 1 WHERE id = 2;
+```
+
+Expected:
+
+```text
+both can be active
+WAL append serializes only physical logging, ideally via group commit
+row locks do not conflict
+```
+
+## Conflicting writers should serialize only on row/key
+
+```sql
+-- conn 1
+UPDATE t SET v = v + 1 WHERE id = 1;
+
+-- conn 2
+UPDATE t SET v = v + 1 WHERE id = 1;
+```
+
+Expected:
+
+```text
+conn 2 waits, returns busy, or detects conflict depending lock policy
+no unrelated table/index blocked
+```
+
+---
+
+# 54. Build gates for Phase 5
+
+Phase 5 is done when these pass:
+
+```text
+Parser:
+  - supported SQL parses with spans
+  - unsupported SQL gives good errors
+  - fuzz parser does not panic
+
+Binder:
+  - columns/tables/functions resolve correctly
+  - ambiguous names fail
+  - result metadata correct
+  - parameters counted correctly
+
+Execution:
+  - SELECT constants
+  - table scan
+  - WHERE
+  - ORDER BY
+  - LIMIT/OFFSET
+  - INSERT
+  - UPDATE
+  - DELETE
+  - CREATE TABLE
+  - CREATE INDEX
+  - BEGIN/COMMIT/ROLLBACK
+
+Typing:
+  - storage classes
+  - affinity on insert/update
+  - NULL logic
+  - comparison rules
+  - typeof()
+
+Prepared statements:
+  - bind/reset/reuse
+  - schema invalidation
+  - parameter errors
+  - cursor cleanup on drop
+
+Transactions:
+  - implicit commit on statement finish
+  - rollback on statement error
+  - explicit commit
+  - explicit rollback
+  - long reader sees stable snapshot
+  - own writes visible in same transaction
+
+Concurrency:
+  - many readers
+  - disjoint writers
+  - conflicting writers
+  - DDL invalidates prepared statements safely
+
+Memory:
+  - no per-row heap allocation in point read
+  - bounded ORDER BY memory
+  - statement memory limits enforced
+
+Differential:
+  - supported SQL compared against SQLite
+```
+
+---
+
+# 55. What I would deliberately not implement yet
+
+To keep Phase 5 fast and finishable:
+
+```text
+Do not implement full SQLite grammar.
+Do not implement triggers.
+Do not implement virtual tables.
+Do not implement views.
+Do not implement recursive CTEs.
+Do not implement window functions.
+Do not implement generated columns.
+Do not implement partial indexes.
+Do not implement full ALTER TABLE.
+Do not implement full foreign keys unless Phase 4 already provides them.
+Do not build a full cost optimizer.
+Do not build a full VDBE yet.
+```
+
+The Phase 5 mission is:
+
+```text
+common embedded SQL workloads
+prepared statements
+fast point/range access
+correct MVCC integration
+good transaction behavior
+differential correctness for supported SQL
+```
+
+---
+
+# 56. The concise internal architecture
+
+```text
+RedlineDb
+  Arc<DatabaseHandle>
+    Arc<Kernel>
+    Arc<FunctionRegistry>
+    ArcSwap<SchemaCache>
+    DbConfig
+
+Connection
+  SessionState
+  no global locks
+
+Statement
+  Arc<PreparedPlan>
+  params Vec<SqlValue>
+  runtime ExecNode
+  scratch memory
+
+PreparedPlan
+  schema_version
+  param_count
+  output columns
+  PhysicalPlan
+
+PhysicalPlan
+  immutable
+  expression bytecode
+  table/index IDs
+  column ordinals
+
+ExecNode
+  stateful
+  pulls rows
+  talks to KernelTx
+```
+
+That design keeps the SQL layer boring in the best way: immutable plans, explicit execution state, no hidden global locks, no page knowledge, no unbounded memory surprises, and no unnecessary per-row allocation.
+
+---
+
+# 57. Practical “first commit” implementation target
+
+The first serious implementation should support this complete script:
+
+```sql
+CREATE TABLE users(
+    id INTEGER PRIMARY KEY,
+    email TEXT NOT NULL,
+    age INTEGER DEFAULT 0,
+    active INTEGER DEFAULT 1
+);
+
+CREATE UNIQUE INDEX users_email ON users(email);
+
+BEGIN;
+INSERT INTO users(id, email, age) VALUES (1, 'a@example.com', 30);
+INSERT INTO users(id, email, age) VALUES (2, 'b@example.com', 40);
+COMMIT;
+
+SELECT email FROM users WHERE id = ?;
+
+UPDATE users SET age = age + 1 WHERE email = ?;
+
+DELETE FROM users WHERE id = ?;
+
+SELECT id, email, age
+FROM users
+WHERE active = 1
+ORDER BY age DESC
+LIMIT 10;
+```
+
+Once that script works through parser → binder → planner → executor → kernel → recovery tests, Phase 5 has its foundation. Everything else becomes controlled expansion.
+
+[1]: https://sqlite.org/isolation.html "Isolation In SQLite"
+[2]: https://www.sqlite.org/datatype3.html "Datatypes In SQLite"
+[3]: https://www.sqlite.org/lang_transaction.html "Transaction"
+

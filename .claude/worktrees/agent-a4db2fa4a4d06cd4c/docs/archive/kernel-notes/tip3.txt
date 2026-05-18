@@ -1,0 +1,1886 @@
+This is the kernel I’d build and bet the company on: **a Rust-native, embedded, transactional ordered-KV storage kernel** that SQL tables, indexes, catalogs, and constraints all compile down into. Do **not** start with a SQL table engine. Start with an insanely good transactional ordered key-value engine, then build SQL on top.
+
+The core thesis:
+
+> **Beat SQLite by removing the single-writer bottleneck, but keep SQLite’s embeddability.
+> Match Postgres-style MVCC behavior, but with a smaller, Rust-native, page-cache-first storage kernel.**
+
+SQLite WAL is excellent, but its own docs state that because there is only one WAL file, “there can only be one writer at a time.” That is the ceiling you are trying to break. PostgreSQL’s MVCC model, by contrast, is designed so reading does not block writing and writing does not block reading, including under Serializable Snapshot Isolation. That concurrency property is the north star. ([SQLite][1])
+
+## The design in one sentence
+
+Build a **page-oriented B+tree storage engine** with **latest-version-in-place MVCC**, **persistent undo chains**, **ARIES-style physiological WAL**, **fuzzy checkpoints**, **group commit**, **short page latches**, **row-level write locks**, **snapshot reads**, and **SSI-ready range conflict tracking**.
+
+Call the kernel something like:
+
+```text
+oxide-kernel
+```
+
+or:
+
+```text
+kestrel-storage
+```
+
+The storage kernel should expose this abstraction:
+
+```rust
+trait TxnKv {
+    fn begin(&self, isolation: Isolation) -> Result<Txn>;
+    fn get(&self, tx: &mut Txn, space: KeyspaceId, key: &[u8]) -> Result<Option<Bytes>>;
+    fn put(&self, tx: &mut Txn, space: KeyspaceId, key: &[u8], val: &[u8]) -> Result<()>;
+    fn delete(&self, tx: &mut Txn, space: KeyspaceId, key: &[u8]) -> Result<()>;
+    fn scan(&self, tx: &mut Txn, space: KeyspaceId, range: KeyRange) -> Result<Cursor>;
+    fn commit(&self, tx: Txn) -> Result<CommitOutcome>;
+    fn rollback(&self, tx: Txn) -> Result<()>;
+}
+```
+
+The SQL layer later maps everything into ordered keyspaces:
+
+```text
+keyspace 1: system catalog
+keyspace 2: table users primary rows
+keyspace 3: index users.email
+keyspace 4: index users.created_at
+keyspace 5: table orders primary rows
+...
+```
+
+That gives you one deeply optimized transactional substrate instead of separate machinery for tables, indexes, metadata, and constraints.
+
+---
+
+# 1. Brutal architecture choice
+
+## Do not clone SQLite’s file-concurrency model
+
+SQLite is astonishingly good, but the “many independent processes all poking the same database file” model forces conservative locking. For this project, make the strongest architecture choice early:
+
+```text
+One writable engine instance owns the database directory.
+Many concurrent connections share that engine inside one process.
+External clients use the Postgres wire server later.
+```
+
+In other words:
+
+```text
+Embedded mode:
+    app process
+      └── Arc<Engine>
+            ├── connection 1
+            ├── connection 2
+            ├── connection 3
+            └── worker pool
+
+Server mode:
+    postgres-wire listener
+      └── same Arc<Engine>
+```
+
+Allow multiple processes only as:
+
+```text
+1. read-only immutable snapshot readers, or
+2. clients talking to the owning process, or
+3. explicitly unsupported for writable access at first.
+```
+
+That is how you get Postgres-like concurrency without inheriting SQLite’s global file-level writer bottleneck.
+
+---
+
+# 2. Top-level kernel components
+
+```text
+oxide-kernel/
+  env/
+    device.rs              // portable file/device abstraction
+    direct_io.rs           // optional O_DIRECT / aligned I/O
+    uring.rs               // optional Linux io_uring backend
+    fsync.rs               // durability barriers
+    fault_injection.rs     // deterministic crash testing hooks
+
+  format/
+    page.rs                // page headers, checksums, slotted page layout
+    wal_format.rs          // WAL record encoding
+    manifest.rs            // database identity, root map, checkpoint pointer
+    checksum.rs            // page + WAL checksums
+
+  wal/
+    log_manager.rs         // LSN reservation, append, flush
+    segment.rs             // WAL segment lifecycle
+    group_commit.rs        // commit batching
+    wal_reader.rs          // recovery scanner
+
+  buf/
+    buffer_pool.rs         // fixed-size page cache
+    frame.rs               // page frame metadata
+    page_table.rs          // page_id -> frame lookup
+    latch.rs               // optimistic/exclusive page latches
+    replacer.rs            // CLOCK-Pro / 2Q replacement
+    cleaner.rs             // dirty page writer
+
+  txn/
+    txn_manager.rs         // begin/commit/abort
+    txn_table.rs           // active/committed/aborted transaction states
+    timestamp.rs           // commit timestamps, epochs
+    lock_table.rs          // row/key/range locks
+    snapshot.rs            // snapshot construction
+    ssi.rs                 // serializable snapshot isolation metadata
+
+  store/
+    keyspace.rs            // logical namespaces
+    btree.rs               // B+tree access method
+    node.rs                // inner/leaf node layout
+    cursor.rs              // snapshot-aware range scans
+    undo.rs                // persistent undo/version store
+    free_space.rs          // page allocation, free lists
+    overflow.rs            // large values
+
+  recovery/
+    analysis.rs
+    redo.rs
+    undo.rs
+    checkpoint.rs
+
+  gc/
+    epoch.rs               // reader epoch tracking
+    version_gc.rs          // undo reclamation
+    page_gc.rs             // page/free-space reclamation
+
+  tests/
+    model.rs               // reference BTreeMap MVCC model
+    crash.rs               // crash-at-every-write testing
+    isolation.rs           // anomaly tests
+    concurrency.rs         // loom/shuttle tests
+```
+
+The storage kernel is not SQL-aware. It only knows:
+
+```text
+keyspace id
+ordered binary key
+binary value
+transaction
+snapshot
+range
+```
+
+That keeps the kernel small and savagely optimizable.
+
+---
+
+# 3. Storage layout
+
+Use a **database directory**, not one monolithic file, for the serious engine:
+
+```text
+mydb.odb/
+  MANIFEST.0
+  MANIFEST.1
+  LOCK
+  data/
+    data-0000000000000000.dat
+    data-0000000000000001.dat
+  wal/
+    wal-0000000000000000.log
+    wal-0000000000000001.log
+  tmp/
+  checkpoints/
+```
+
+A single-file compatibility wrapper can come later. For the real engine, directory layout is cleaner, faster, easier to checkpoint, easier to test, and easier to recover.
+
+## Manifest
+
+Two alternating manifest copies:
+
+```rust
+#[repr(C)]
+struct Manifest {
+    magic: u64,
+    format_version: u32,
+    page_size: u32,
+    db_uuid: [u8; 16],
+    generation: u64,
+    checkpoint_lsn: Lsn,
+    root_map_page: PageId,
+    oldest_required_wal: Lsn,
+    frozen_txn_horizon: TxnId,
+    crc32c: u32,
+}
+```
+
+Rules:
+
+```text
+1. Write MANIFEST.next.
+2. fsync MANIFEST.next.
+3. fsync directory.
+4. New generation wins if checksum is valid.
+```
+
+This makes metadata updates crash-safe.
+
+---
+
+# 4. Page format
+
+Use fixed-size pages, configurable at database creation:
+
+```text
+default: 8 KiB
+high-random-NVMe mode: 4 KiB
+large analytical scan mode: 16 KiB
+```
+
+LeanStore’s recent storage-engine work is a useful reference point here: modern NVMe + multicore systems need careful buffer management, I/O scheduling, B-trees, MVCC, logging, checkpoints, and recovery; the paper specifically argues that modern SSD performance changes the CPU budget and I/O design assumptions. 
+
+## Page header
+
+```rust
+#[repr(C)]
+struct PageHeader {
+    magic: u32,
+    kind: PageKind,
+    page_id: PageId,
+    page_lsn: Lsn,
+    checksum: u32,
+
+    generation: u32,
+    keyspace_id: KeyspaceId,
+
+    lower: u16,             // start of free space
+    upper: u16,             // end of free space
+    slot_count: u16,
+    free_frag_bytes: u16,
+
+    right_sibling: PageId,  // B-link tree support
+    high_fence_len: u16,
+    low_fence_len: u16,
+
+    flags: u32,
+}
+```
+
+## Leaf page layout
+
+```text
++------------------------------------------------------+
+| PageHeader                                           |
++------------------------------------------------------+
+| low fence key                                        |
+| high fence key                                       |
++------------------------------------------------------+
+| Slot[0]                                              |
+| Slot[1]                                              |
+| Slot[2]                                              |
+| ...                                                  |
++------------------ free space ------------------------+
+| tuple bytes                                          |
+| tuple bytes                                          |
+| tuple bytes                                          |
++------------------------------------------------------+
+```
+
+## Slot
+
+```rust
+#[repr(C)]
+struct Slot {
+    offset: u16,
+    key_len: u16,
+    val_len: u32,
+    tuple_flags: u16,
+    prefix_len: u16,
+}
+```
+
+## Tuple header
+
+```rust
+#[repr(C)]
+struct TupleHeader {
+    birth: TsRef,       // CommitTs or provisional TxnId
+    undo: UndoPtr,      // previous version
+    flags: TupleFlags,  // normal / tombstone / overflow / relocated
+    schema_version: u32,
+}
+```
+
+`TsRef` is critical:
+
+```rust
+enum TsRef {
+    Committed(CommitTs),
+    Txn(TxnId),
+}
+```
+
+This lets updates install versions before commit, while readers resolve visibility through the transaction table.
+
+---
+
+# 5. Core storage model
+
+Use **latest-version-in-place MVCC**.
+
+That means the B+tree stores only the newest physical version of each key. Older versions live in an undo/version store.
+
+For a key:
+
+```text
+current B+tree tuple:
+    key = users/42
+    value = latest value
+    birth = txid 9001 or commit_ts 10000077
+    undo = pointer to previous version
+
+undo record:
+    previous value
+    previous birth timestamp
+    previous undo pointer
+```
+
+This is much more memory- and space-efficient than storing every version as a separate B+tree entry. Common reads hit the latest version directly. Older snapshots pay the undo-chain cost only when needed.
+
+## Version chain
+
+```text
+B+tree latest tuple
+  birth = 105
+  value = "alice v3"
+  undo ───────────────┐
+                      ↓
+                 UndoRecord
+                   birth = 88
+                   value = "alice v2"
+                   undo ───────┐
+                                ↓
+                           UndoRecord
+                             birth = 41
+                             value = "alice v1"
+```
+
+Visibility for snapshot `S`:
+
+```text
+if latest.birth <= S:
+    return latest
+else:
+    walk undo chain until version.birth <= S
+```
+
+Deletes are tombstone versions:
+
+```text
+latest tuple:
+    key = users/42
+    flags = TOMBSTONE
+    birth = delete_commit_ts
+    undo = previous live version
+```
+
+The tuple can be physically removed only when:
+
+```text
+delete_commit_ts < global_oldest_snapshot
+and all secondary index cleanup is complete
+```
+
+---
+
+# 6. MVCC transaction state
+
+## Transaction table
+
+```rust
+struct TxnTableEntry {
+    txid: TxnId,
+    state: AtomicTxnState,
+
+    snapshot_ts: CommitTs,
+    commit_ts: AtomicU64,
+
+    first_lsn: AtomicU64,
+    last_lsn: AtomicU64,
+    commit_lsn: AtomicU64,
+
+    undo_head: AtomicU64,
+    write_set_head: AtomicU64,
+}
+```
+
+States:
+
+```text
+Active
+Preparing
+CommitPending
+Committed
+Aborting
+Aborted
+```
+
+## Snapshot
+
+```rust
+struct Snapshot {
+    read_ts: CommitTs,
+    xmin: TxnId,
+    active_txns: SmallVec<TxnId>,
+}
+```
+
+For high performance, avoid huge active transaction arrays. Use a commit timestamp visibility rule first, then consult transaction state only for provisional `TxnId` markers.
+
+## Isolation levels
+
+Support these in the kernel:
+
+```rust
+enum Isolation {
+    ReadCommitted,
+    Snapshot,
+    Serializable,
+}
+```
+
+Mapping later:
+
+```text
+SQL READ COMMITTED  -> Isolation::ReadCommitted
+SQL REPEATABLE READ -> Isolation::Snapshot
+SQL SERIALIZABLE    -> Isolation::Serializable
+```
+
+PostgreSQL’s docs describe Repeatable Read as Snapshot Isolation and Serializable as Snapshot Isolation plus checks for serialization anomalies. That exact layering is the right model here. ([PostgreSQL][2])
+
+---
+
+# 7. Write path
+
+## Update algorithm
+
+```text
+put(tx, key, value):
+
+1. Locate leaf page with optimistic B+tree descent.
+2. Acquire logical row/key write lock from lock table.
+3. Re-locate key because page may have split.
+4. Verify write conflict:
+       if latest committed version birth > tx.snapshot_ts:
+           abort with WriteConflict
+5. Reserve WAL LSN for undo + page update.
+6. Append undo record containing previous tuple.
+7. Latch page exclusively.
+8. Install latest tuple with birth = Txn(txid), undo = undo_ptr.
+9. Set page.page_lsn = update_lsn.
+10. Add key to tx.write_set.
+11. Release page latch.
+12. Keep logical row lock until commit/abort.
+```
+
+The important part:
+
+```text
+Many writers can update different rows concurrently.
+Only writers touching the same logical key conflict.
+Page latches are held for micro-critical sections only.
+```
+
+That is how you escape SQLite’s single-writer limit.
+
+## Insert
+
+```text
+insert(tx, key, value):
+
+1. Acquire key lock.
+2. Search visible version.
+3. If visible live version exists: duplicate key error.
+4. Insert tuple birth = Txn(txid).
+5. WAL-log insert.
+```
+
+## Delete
+
+```text
+delete(tx, key):
+
+1. Acquire key lock.
+2. Verify visible live version exists.
+3. Create undo record for previous live value.
+4. Replace latest tuple with tombstone birth = Txn(txid).
+5. WAL-log delete.
+```
+
+---
+
+# 8. Commit protocol
+
+Use **group commit**.
+
+A transaction is not visible until its commit record is durable under strict mode.
+
+```text
+commit(tx):
+
+1. Validate isolation.
+2. Assign commit_ts.
+3. Reserve commit WAL record.
+4. Append COMMIT(txid, commit_ts, write_set_summary).
+5. Enter CommitPending.
+6. Group commit flusher fsyncs WAL through commit_lsn.
+7. Mark tx Committed.
+8. Release row locks.
+9. Wake waiters.
+```
+
+Configurable durability:
+
+```rust
+enum SyncMode {
+    Full,       // commit visible only after WAL fsync
+    Normal,     // commit visible after WAL write; fsync by checkpoint/group policy
+    Unsafe,     // benchmark/dev only
+}
+```
+
+Default should be:
+
+```text
+SyncMode::Full
+```
+
+because this engine should be serious.
+
+## Group commit pipeline
+
+```text
+workers
+  └── append WAL records into private buffers
+        └── reserve global LSN ranges atomically
+              └── publish ready ranges
+                    └── WAL writer writes contiguous ranges
+                          └── fsync every batch
+                                └── publish durable_lsn
+                                      └── wake committed txns
+```
+
+Do **not** have every transaction call `fsync` alone. That will murder throughput.
+
+---
+
+# 9. WAL design
+
+Use an **ARIES-inspired physiological WAL**. ARIES is the classic recovery design for fine-granularity locking, partial rollbacks, and WAL-based recovery; IBM’s publication page notes ARIES was implemented in systems including DB2 and related database/storage systems. ([IBM Research][3])
+
+## WAL segment
+
+```text
+wal-0000000000000000.log
+wal-0000000000000001.log
+...
+```
+
+Segment size:
+
+```text
+default: 64 MiB
+large system: 256 MiB
+```
+
+Preallocate segments where supported.
+
+## WAL record header
+
+```rust
+#[repr(C)]
+struct WalRecordHeader {
+    magic: u32,
+    version: u16,
+    kind: WalKind,
+    header_len: u16,
+
+    lsn: Lsn,
+    prev_txn_lsn: Lsn,
+    txid: TxnId,
+
+    page_id: PageId,
+    page_lsn_before: Lsn,
+
+    payload_len: u32,
+    crc32c: u32,
+}
+```
+
+## WAL record kinds
+
+```rust
+enum WalKind {
+    Begin,
+    Insert,
+    Update,
+    Delete,
+
+    BtreeSplit,
+    BtreeMerge,
+    BtreeRootChange,
+
+    AllocPage,
+    FreePage,
+
+    UndoRecord,
+    Commit,
+    Abort,
+    Compensation,
+
+    CheckpointBegin,
+    CheckpointEnd,
+
+    FullPageImage,
+}
+```
+
+## WAL rules
+
+Non-negotiable:
+
+```text
+1. Every dirty page has page_lsn.
+2. A data page may not be flushed unless page.page_lsn <= durable_lsn.
+3. Commit is durable only when COMMIT record is fsynced.
+4. WAL records are checksummed.
+5. WAL scanner truncates at first invalid/torn record.
+6. First modification of a page after checkpoint emits a full-page image.
+```
+
+The full-page-image rule is for torn-page safety. It is expensive but robust. You can later optimize with storage-specific atomic-write detection.
+
+---
+
+# 10. Recovery
+
+Recovery has three phases:
+
+```text
+1. Analysis
+2. Redo
+3. Undo
+```
+
+## Analysis
+
+Starting from the last valid checkpoint:
+
+```text
+rebuild dirty page table
+rebuild active transaction table
+find winner transactions
+find loser transactions
+find redo start LSN = min(rec_lsn of dirty pages)
+```
+
+## Redo
+
+```text
+for record in WAL from redo_start:
+    if record.page_lsn > page.page_lsn:
+        apply redo
+        page.page_lsn = record.lsn
+```
+
+Redo is idempotent.
+
+## Undo
+
+For loser transactions:
+
+```text
+walk transaction log chain backward
+undo each change
+write Compensation Log Record
+continue until BEGIN
+mark transaction Aborted
+```
+
+## Crash cases
+
+```text
+update written, no commit:
+    redo may replay update
+    undo removes it
+
+commit record written, fsynced:
+    transaction survives
+
+commit record written, not fsynced:
+    WAL scan may not see it
+    transaction is loser and undone
+
+dirty data page flushed before commit:
+    allowed only if WAL update record was durable
+    loser undo fixes it
+
+torn WAL record:
+    truncate WAL at last valid record
+
+torn data page:
+    restore from full-page image or redo from prior checkpoint
+```
+
+---
+
+# 11. Checkpointing
+
+Use **fuzzy checkpoints**.
+
+Checkpoint must not stop the world.
+
+```text
+checkpoint thread:
+
+1. Emit CHECKPOINT_BEGIN.
+2. Snapshot dirty page table.
+3. Snapshot transaction table.
+4. Flush dirty pages whose page_lsn <= durable_lsn.
+5. Emit CHECKPOINT_END with:
+       dirty page table
+       active txn table
+       root map
+       allocation map summary
+       frozen txid horizon
+6. fsync WAL.
+7. Update manifest checkpoint_lsn.
+8. Recycle WAL segments older than oldest_required_lsn.
+```
+
+Important rule:
+
+```text
+Do not truncate WAL past any transaction id that still appears as TsRef::Txn in a page or undo record.
+```
+
+A background freezer converts old `TxnId` markers into `CommitTs` markers:
+
+```text
+birth = Txn(9001)
+txn table says committed at 123456
+background freezer rewrites:
+birth = Committed(123456)
+```
+
+Only after that can old transaction-status WAL be discarded.
+
+---
+
+# 12. Buffer manager
+
+Do **not** use `mmap` for the primary engine.
+
+Use an explicit page cache.
+
+Reasons:
+
+```text
+1. You control eviction.
+2. You control WAL-before-data ordering.
+3. You control checksums.
+4. You control direct I/O later.
+5. You avoid OS memory-pressure surprises.
+6. You can test crash behavior deterministically.
+```
+
+## Frame
+
+```rust
+struct Frame {
+    page_id: AtomicU64,
+    state: AtomicU64,
+
+    latch: PageLatch,
+    page_lsn: AtomicU64,
+    rec_lsn: AtomicU64,
+
+    pin_count: AtomicU32,
+    usage_count: AtomicU8,
+
+    data: UnsafeCell<AlignedPage>,
+}
+```
+
+`UnsafeCell` is acceptable here, but isolate all unsafe code inside `buf/frame.rs` and `format/page.rs`.
+
+## Page latch
+
+Use optimistic read latches:
+
+```rust
+struct PageLatch {
+    version: AtomicU64,
+}
+```
+
+Protocol:
+
+```text
+optimistic read:
+    v1 = version.load(Acquire)
+    if v1 is odd: retry
+    read page
+    v2 = version.load(Acquire)
+    if v1 != v2: retry
+
+exclusive write:
+    CAS even -> odd
+    modify page
+    version.store(even + 2, Release)
+```
+
+Readers should almost never block.
+
+## Replacement policy
+
+Use:
+
+```text
+CLOCK-Pro or segmented 2Q
+```
+
+Avoid one global LRU mutex. Use sharded replacement queues.
+
+```text
+buffer pool shards = number of CPU cores or NUMA-local groups
+page table shards = 256 or 1024
+```
+
+## Dirty page cleaner
+
+Background cleaner writes pages where:
+
+```text
+page_lsn <= durable_lsn
+and page not pinned
+and page not exclusively latched
+```
+
+Cleaner should prefer:
+
+```text
+old rec_lsn pages first
+cold dirty pages second
+sequential-ish page ids when possible
+```
+
+---
+
+# 13. B+tree design
+
+Use a **B-link B+tree** with optimistic lock coupling.
+
+Do not start with a fully lock-free Bw-tree. It is intellectually tempting, but the recovery and memory-reclamation complexity will slow the project badly. Start with a high-performance latch-coupled B+tree and make page latches extremely short.
+
+## Node features
+
+```text
+variable-length keys
+prefix compression
+fence keys
+right sibling pointers
+high key
+slot directory
+compact leaf storage
+overflow values
+```
+
+## Search
+
+```text
+1. Start at root.
+2. Optimistic-read node.
+3. Binary search separators.
+4. Descend.
+5. Validate node version.
+6. If invalid, restart from root or parent.
+```
+
+## Insert/update/delete
+
+```text
+1. Descend optimistically.
+2. Acquire X latch only at leaf if safe.
+3. If leaf has space, modify leaf.
+4. If leaf unsafe, perform split with parent protocol.
+5. Use right-sibling links to tolerate concurrent splits.
+```
+
+## Hot-page contention
+
+A problem with page-oriented B+trees is false contention: two hot rows on one page fight for the same page latch.
+
+Mitigations:
+
+```text
+1. Logical row locks are separate from page latches.
+2. Page X latch is held only while copying bytes.
+3. Hot pages split early.
+4. Hot pages use lower fill factor.
+5. Background page rebalancer can split contention-heavy pages.
+6. Leaf update path avoids heap allocation.
+```
+
+Track:
+
+```rust
+struct PageContentionStats {
+    x_latch_failed: AtomicU64,
+    optimistic_restarts: AtomicU64,
+    split_recommendation_score: AtomicU64,
+}
+```
+
+When contention crosses threshold:
+
+```text
+split even if page is not full
+```
+
+That is how you keep unrelated hot keys from fighting.
+
+---
+
+# 14. Locking model
+
+Separate **logical locks** from **physical latches**.
+
+```text
+Logical locks:
+    row/key/range transaction conflicts
+    held until commit/abort
+
+Physical latches:
+    protect in-memory page bytes
+    held for micro-critical sections
+```
+
+## Lock table
+
+```rust
+struct LockTable {
+    shards: Vec<LockShard>,
+}
+
+struct LockShard {
+    mutex: parking_lot::Mutex<LockShardState>,
+}
+
+struct LockKey {
+    keyspace_id: KeyspaceId,
+    key_hash: u64,
+    full_key: Option<InlineKey>,
+}
+```
+
+For memory efficiency:
+
+```text
+Only locked keys exist in the lock table.
+No permanent lock object per row.
+```
+
+## Write lock modes
+
+```text
+KeyExclusive      // update/delete one key
+InsertIntent      // insert key if absent
+RangeInsertGuard  // serializable/predicate protection
+```
+
+For Snapshot Isolation:
+
+```text
+writers conflict with writers on same key
+readers do not block writers
+writers do not block readers
+```
+
+For Serializable:
+
+```text
+range reads register SIREAD predicates
+writes check overlapping SIREAD predicates
+dangerous structures cause aborts
+```
+
+---
+
+# 15. Serializable Snapshot Isolation
+
+Implement Serializable later, but design hooks now.
+
+PostgreSQL’s Serializable level uses SSI-style checks for serialization anomalies, with non-blocking predicate locks used to detect when a write would have affected a previous read. ([PostgreSQL][2])
+
+Kernel hooks:
+
+```rust
+fn register_point_read(tx: &Txn, space: KeyspaceId, key: &[u8]);
+fn register_range_read(tx: &Txn, space: KeyspaceId, range: &KeyRange);
+fn register_write(tx: &Txn, space: KeyspaceId, key: &[u8]);
+```
+
+SSI metadata:
+
+```rust
+struct SsiTxnState {
+    txid: TxnId,
+    snapshot_ts: CommitTs,
+    commit_ts: Option<CommitTs>,
+
+    in_conflict: bool,
+    out_conflict: bool,
+
+    read_only: bool,
+    committed: bool,
+}
+```
+
+Predicate lock granularity:
+
+```text
+exact key
+page range
+B+tree fence range
+whole keyspace fallback
+```
+
+Memory bounding:
+
+```text
+if too many exact locks:
+    summarize to page-level
+
+if too many page locks:
+    summarize to keyspace-level
+
+if summarized:
+    false-positive serialization failures are acceptable
+    false-negative anomalies are not
+```
+
+---
+
+# 16. Undo/version store
+
+Undo records are append-only.
+
+```rust
+#[repr(C)]
+struct UndoRecord {
+    magic: u32,
+    len: u32,
+    txid: TxnId,
+    prev_undo: UndoPtr,
+
+    keyspace_id: KeyspaceId,
+    key_len: u16,
+    val_len: u32,
+
+    previous_birth: TsRef,
+    previous_flags: TupleFlags,
+
+    payload_crc: u32,
+    payload: [u8],
+}
+```
+
+Undo store can initially live inside WAL records, then evolve into dedicated undo segments:
+
+```text
+simple MVP:
+    undo payload is in WAL
+
+production:
+    undo segments for long-running snapshots
+    WAL contains undo-segment allocation/update records
+```
+
+Garbage collection:
+
+```text
+global_oldest_snapshot = min(active tx.snapshot_ts)
+
+undo record can be reclaimed if:
+    version_end_ts < global_oldest_snapshot
+```
+
+Long-running readers are dangerous. Add guardrails:
+
+```text
+max_snapshot_age
+max_version_store_bytes
+warning callbacks
+optional forced abort for stale read txns
+```
+
+---
+
+# 17. Key encoding
+
+All SQL-visible structures should compile into ordered byte keys.
+
+Use big-endian encodings so byte order equals logical order.
+
+```text
+table row:
+    [space_id][primary_key]
+
+secondary index:
+    [space_id][index_key][primary_key]
+
+unique index:
+    [space_id][index_key] -> primary_key
+
+catalog:
+    [catalog_space][object_type][object_id]
+```
+
+Example:
+
+```text
+users table primary:
+    keyspace 20
+    key = be_i64(user_id)
+
+users.email unique index:
+    keyspace 21
+    key = normalized_email || 0x00 || be_i64(user_id)
+```
+
+The storage kernel does not know uniqueness. It gives the SQL/index layer transactional `get/put/scan` and conflict-safe insert intents.
+
+---
+
+# 18. Large values
+
+Do not store huge values directly in leaf pages.
+
+Use overflow chains or blob trees:
+
+```text
+small value:
+    stored inline
+
+medium value:
+    stored in overflow pages
+
+huge value:
+    stored in chunked blob tree
+```
+
+Tuple stores:
+
+```rust
+enum ValueRef {
+    Inline,
+    Overflow { first_page: PageId, len: u64 },
+    BlobTree { root_page: PageId, len: u64 },
+}
+```
+
+Large-value update should be copy-on-write at chunk granularity.
+
+---
+
+# 19. Page allocation
+
+Page allocator must be transactional.
+
+```text
+ALLOC_PAGE WAL record
+FREE_PAGE WAL record
+```
+
+Never reuse a freed page until:
+
+```text
+1. freeing transaction committed
+2. oldest snapshot cannot see old contents
+3. free record is durable
+```
+
+Use page generations:
+
+```rust
+struct PageId {
+    file_no: u32,
+    page_no: u48,
+    generation: u16,
+}
+```
+
+Generation numbers catch stale references after reuse.
+
+---
+
+# 20. I/O layer
+
+Define a strict interface:
+
+```rust
+trait Device: Send + Sync {
+    fn read_page(&self, page_id: PageId, dst: &mut [u8]) -> Result<()>;
+    fn write_page(&self, page_id: PageId, src: &[u8]) -> Result<()>;
+
+    fn append_wal(&self, offset: u64, bufs: &[IoSlice<'_>]) -> Result<usize>;
+    fn sync_wal(&self) -> Result<()>;
+    fn sync_data(&self) -> Result<()>;
+    fn sync_dir(&self) -> Result<()>;
+
+    fn punch_hole(&self, offset: u64, len: u64) -> Result<()>;
+    fn preallocate(&self, offset: u64, len: u64) -> Result<()>;
+}
+```
+
+Backends:
+
+```text
+portable:
+    pread/pwrite/fsync
+
+Linux high-performance:
+    io_uring
+    optional O_DIRECT
+    aligned page buffers
+
+future:
+    SPDK-like backend
+```
+
+Do not make async Rust the core storage primitive. Use internal worker threads and explicit I/O queues. Async SQL clients can await above the kernel.
+
+---
+
+# 21. Rust safety architecture
+
+Be extremely strict.
+
+```text
+unsafe allowed only in:
+    buf/frame.rs
+    format/aligned.rs
+    env/direct_io.rs
+    env/uring.rs
+```
+
+Every other crate:
+
+```rust
+#![forbid(unsafe_code)]
+```
+
+Rules:
+
+```text
+1. Never transmute disk bytes directly into trusted structs.
+2. Validate magic/version/length/checksum before parsing.
+3. On-disk structs use explicit little-endian encoding.
+4. Page references cannot outlive page guards.
+5. No user-facing API returns raw references into pages.
+6. No async suspension while holding page latch or transaction lock.
+```
+
+Use page guards:
+
+```rust
+struct PageReadGuard<'a> {
+    frame: &'a Frame,
+    version: u64,
+}
+
+struct PageWriteGuard<'a> {
+    frame: &'a Frame,
+}
+```
+
+---
+
+# 22. Critical pseudocode
+
+## Begin transaction
+
+```rust
+fn begin(isolation: Isolation) -> Txn {
+    let txid = txn_id_alloc.next();
+
+    let snapshot_ts = match isolation {
+        Isolation::ReadCommitted => CommitTs::ZERO,
+        Isolation::Snapshot | Isolation::Serializable => commit_clock.safe_read_ts(),
+    };
+
+    txn_table.insert(TxnTableEntry {
+        txid,
+        state: Active,
+        snapshot_ts,
+        commit_ts: 0,
+        first_lsn: 0,
+        last_lsn: 0,
+        commit_lsn: 0,
+    });
+
+    Txn {
+        txid,
+        isolation,
+        snapshot_ts,
+        read_set: Default::default(),
+        write_set: Default::default(),
+        undo_head: UndoPtr::NULL,
+    }
+}
+```
+
+## Read visibility
+
+```rust
+fn visible_value(tx: &Txn, tuple: &Tuple) -> Result<Option<Value>> {
+    let mut current = VersionRef::Latest(tuple);
+
+    loop {
+        let birth = resolve_tsref(current.birth());
+
+        match birth {
+            ResolvedTs::OwnTxn => {
+                return Ok(current.value_if_not_tombstone());
+            }
+
+            ResolvedTs::ActiveOther => {
+                current = current.undo_version()?;
+            }
+
+            ResolvedTs::Aborted => {
+                current = current.undo_version()?;
+            }
+
+            ResolvedTs::Committed(ts) => {
+                let read_ts = tx.current_read_ts();
+
+                if ts <= read_ts {
+                    return Ok(current.value_if_not_tombstone());
+                }
+
+                current = current.undo_version()?;
+            }
+        }
+    }
+}
+```
+
+## Commit
+
+```rust
+fn commit(mut tx: Txn) -> Result<()> {
+    txn_table.set_state(tx.txid, Preparing);
+
+    if tx.isolation == Isolation::Serializable {
+        ssi.validate(&tx)?;
+    }
+
+    let commit_ts = commit_clock.assign();
+
+    let commit_lsn = wal.append_commit(tx.txid, commit_ts, tx.last_lsn)?;
+
+    txn_table.set_commit_lsn(tx.txid, commit_lsn);
+    txn_table.set_commit_ts(tx.txid, commit_ts);
+    txn_table.set_state(tx.txid, CommitPending);
+
+    wal.wait_durable(commit_lsn)?;
+
+    txn_table.set_state(tx.txid, Committed);
+
+    lock_table.release_all(tx.txid);
+
+    gc.publish_completed_txn(tx.txid, commit_ts);
+
+    Ok(())
+}
+```
+
+## Abort
+
+```rust
+fn rollback(tx: Txn) -> Result<()> {
+    txn_table.set_state(tx.txid, Aborting);
+
+    let mut undo = tx.undo_head;
+
+    while undo != UndoPtr::NULL {
+        let rec = undo_store.read(undo)?;
+
+        wal.append_clr(tx.txid, rec)?;
+
+        apply_undo(rec)?;
+
+        undo = rec.prev_undo;
+    }
+
+    wal.append_abort(tx.txid)?;
+
+    txn_table.set_state(tx.txid, Aborted);
+
+    lock_table.release_all(tx.txid);
+
+    Ok(())
+}
+```
+
+---
+
+# 23. Build order for an engineering agent
+
+## Phase 0: storage format and tests
+
+Deliver:
+
+```text
+page encoder/decoder
+WAL encoder/decoder
+manifest reader/writer
+checksums
+fault-injected file abstraction
+```
+
+Done when:
+
+```text
+corrupt page is detected
+torn WAL record is truncated
+manifest generation fallback works
+```
+
+## Phase 1: non-transactional B+tree
+
+Deliver:
+
+```text
+create keyspace
+put
+get
+delete
+scan
+split
+root split
+right sibling traversal
+```
+
+Done when:
+
+```text
+10M random inserts pass
+all scans match std::collections::BTreeMap
+crash disabled
+single-thread only
+```
+
+## Phase 2: WAL + recovery
+
+Deliver:
+
+```text
+physiological WAL
+page_lsn
+redo
+full-page images
+checkpoint
+manifest checkpoint pointer
+```
+
+Done when:
+
+```text
+crash after every WAL write recovers
+crash after every page write recovers
+reference model matches after restart
+```
+
+## Phase 3: MVCC
+
+Deliver:
+
+```text
+transaction table
+snapshot reads
+undo records
+commit/abort
+write conflict detection
+version GC
+```
+
+Done when:
+
+```text
+readers do not block writers
+writers on different keys commit concurrently
+aborted data never visible
+snapshot repeatability holds
+```
+
+## Phase 4: concurrent writers
+
+Deliver:
+
+```text
+lock table
+optimistic page latches
+group commit
+buffer pool shards
+dirty page cleaner
+```
+
+Done when:
+
+```text
+N writer threads update disjoint keys with near-linear scaling until WAL/device limit
+hot-key contention aborts/waits correctly
+no page corruption under stress
+```
+
+## Phase 5: Serializable
+
+Deliver:
+
+```text
+SSI read tracking
+range predicate locks
+write conflict graph
+dangerous-structure abort
+memory summarization
+```
+
+Done when classic anomalies fail correctly:
+
+```text
+write skew
+phantoms
+read-only anomaly
+range insert anomaly
+```
+
+## Phase 6: SQL integration substrate
+
+Deliver:
+
+```text
+catalog keyspace
+table key encoding
+secondary index key encoding
+unique insert-intent protocol
+```
+
+---
+
+# 24. Testing strategy
+
+This is where the engine becomes real.
+
+## Deterministic model
+
+Reference model:
+
+```rust
+BTreeMap<KeyspaceId, BTreeMap<Vec<u8>, Vec<Version>>>
+```
+
+Every randomized operation runs against:
+
+```text
+real kernel
+reference model
+```
+
+Compare after every transaction.
+
+## Crash testing
+
+Wrap every I/O operation:
+
+```rust
+fault_injection.maybe_crash("after_wal_write");
+fault_injection.maybe_crash("after_data_write");
+fault_injection.maybe_crash("after_manifest_write");
+fault_injection.maybe_crash("before_fsync");
+fault_injection.maybe_crash("after_fsync");
+```
+
+Run:
+
+```text
+for seed in 0..1_000_000:
+    generate workload
+    crash at every possible injection point
+    reopen
+    compare to durable reference model
+```
+
+## Concurrency testing
+
+Use deterministic scheduling tools for small cases and stress testing for large cases.
+
+Test invariants:
+
+```text
+no committed value disappears
+no aborted value appears
+snapshot reads are stable
+read committed never sees uncommitted data
+write-write conflicts resolve correctly
+range scans do not miss keys across splits
+WAL replay is idempotent
+page_lsn rule is never violated
+```
+
+## Isolation testing
+
+Run known anomalies:
+
+```text
+lost update
+dirty read
+non-repeatable read
+phantom
+write skew
+read-only anomaly
+```
+
+Expected:
+
+```text
+ReadCommitted:
+    no dirty reads
+
+Snapshot:
+    repeatable snapshot
+    write skew possible
+
+Serializable:
+    write skew prevented
+    phantoms prevented
+```
+
+---
+
+# 25. Performance design targets
+
+Do not promise absolute numbers yet. Promise architectural targets:
+
+```text
+reads:
+    no transaction lock
+    no WAL touch
+    optimistic page latch only
+    latest version usually direct
+
+writes:
+    row/key lock only
+    short page X latch
+    WAL append sequential
+    group commit
+
+memory:
+    fixed-size page cache
+    no per-row heap allocation
+    no permanent row locks
+    compressed keys
+    undo reclaimed by oldest snapshot
+
+recovery:
+    bounded by checkpoint interval
+    redo idempotent
+    undo only loser txns
+```
+
+Expected bottlenecks by workload:
+
+```text
+read-heavy:
+    CPU cache + page cache hit rate
+
+write-heavy disjoint keys:
+    WAL bandwidth / fsync batching
+
+hot key:
+    logical lock contention
+
+hot page with many keys:
+    page latch contention, mitigated by early hot-page split
+
+long snapshots:
+    undo/version-store growth
+```
+
+---
+
+# 26. Default configuration
+
+```rust
+struct EngineConfig {
+    page_size: usize,              // default 8192
+    cache_bytes: usize,            // default explicit, e.g. 64 MiB
+    wal_segment_bytes: usize,      // default 64 MiB
+
+    sync_mode: SyncMode,           // default Full
+    checkpoint_interval_bytes: u64,
+    checkpoint_interval_seconds: u64,
+
+    max_dirty_pages_pct: u8,
+    max_version_store_bytes: u64,
+    max_snapshot_age_ms: u64,
+
+    io_backend: IoBackend,
+    direct_io: bool,
+
+    worker_threads: usize,
+    buffer_pool_shards: usize,
+    lock_table_shards: usize,
+}
+```
+
+Suggested defaults:
+
+```text
+page_size = 8192
+wal_segment_bytes = 64 MiB
+sync_mode = Full
+checkpoint_interval_bytes = 512 MiB
+checkpoint_interval_seconds = 30
+max_dirty_pages_pct = 40
+lock_table_shards = 4096
+buffer_pool_shards = num_cpus
+worker_threads = num_cpus
+```
+
+For tiny embedded apps:
+
+```text
+cache_bytes = 16-64 MiB
+```
+
+For serious OLTP:
+
+```text
+cache_bytes = explicit operator setting
+```
+
+Never silently consume huge memory just because RAM exists. That is how you beat SQLite on memory discipline.
+
+---
+
+# 27. Design choices I would avoid
+
+## Avoid LSM as the primary SQL storage kernel
+
+LSM trees are fantastic for write-heavy KV workloads, but for a SQLite/Postgres-like SQL engine they make several things harder:
+
+```text
+range scans
+secondary indexes
+space amplification
+compaction stalls
+transactional point updates
+predictable latency
+foreign-key/index maintenance
+```
+
+Use B+trees first.
+
+## Avoid full lock-free B+tree first
+
+A latch-free tree is seductive, but the hard parts are:
+
+```text
+memory reclamation
+page consolidation
+crash recovery
+delta-chain cleanup
+range scans
+debuggability
+```
+
+Optimistic latch coupling with short latches is the better first world-class implementation.
+
+## Avoid mmap-first
+
+Mmap makes demos easy and production recovery harder.
+
+Use explicit page cache.
+
+## Avoid multi-process writable file sharing at first
+
+That path leads directly into SQLite’s hardest constraints.
+
+Give users:
+
+```text
+embedded shared Arc<Engine>
+or
+Postgres wire server
+```
+
+---
+
+# 28. The killer implementation detail
+
+The biggest unlock is this:
+
+```text
+Do not serialize writers at transaction granularity.
+Serialize only:
+    same-key logical conflicts
+    tiny physical page modifications
+    WAL LSN assignment
+    fsync batches
+```
+
+That gives you:
+
+```text
+SQLite-like embeddability
+Postgres-like MVCC reads
+multi-writer OLTP
+bounded memory
+real crash recovery
+a clean SQL substrate
+```
+
+The MVP should be:
+
+```text
+transactional ordered KV
+B+tree
+MVCC
+WAL
+recovery
+multi-threaded writers
+snapshot isolation
+```
+
+Then add:
+
+```text
+Serializable Snapshot Isolation
+secondary index protocols
+SQL executor
+optimizer
+Postgres wire
+replication
+dialect depth
+```
+
+If the storage kernel is built this way, every later layer has a serious foundation instead of fighting the pager forever.
+
+[1]: https://www.sqlite.org/wal.html "Write-Ahead Logging"
+[2]: https://www.postgresql.org/docs/current/transaction-iso.html "PostgreSQL: Documentation: 18: 13.2. Transaction Isolation"
+[3]: https://research.ibm.com/publications/aries-a-transaction-recovery-method-supporting-fine-granularity-locking-and-partial-rollbacks-using-write-ahead-logging "ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging for ACM Transactions on Database Systems (TODS) - IBM Research"
+

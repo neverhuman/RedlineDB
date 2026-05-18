@@ -1,0 +1,10 @@
+component,redlinedb_loc,notes
+kernel,12883,storage + WAL + B-tree + MVCC
+sql,11615,parser + planner + executor
+redlinedb,2975,public Rust facade
+ffi,1478,C ABI shim
+bench,5144,benchmark harness
+total_active_source,34999,excludes tests (find crates -name '*.rs' -not -path '*/tests/*')
+total_with_tests,42304,all Rust source under crates/
+sqlite_amalgamation_c,250000,SQLite amalgamation reference (~250k C LOC; https://www.sqlite.org/footprint.html)
+sqlite_test_corpus,92600000,SQLite test corpus reference (~92.6M test lines; https://www.sqlite.org/testing.html)

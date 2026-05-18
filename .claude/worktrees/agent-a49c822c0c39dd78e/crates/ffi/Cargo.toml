@@ -1,0 +1,14 @@
+[package]
+name = "redlinedb-ffi"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "redlinedb"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+redlinedb-kernel = { path = "../kernel" }
+redlinedb-sql = { path = "../sql" }

@@ -1,0 +1,3324 @@
+## Phase 6 only: build the RedlineDB optimizer/statistics/performance layer
+
+I’d build Phase 6 around one principle:
+
+**Do the simplest optimizer that can be fast, explainable, deterministic, memory-bounded, and hard to outgrow.**
+
+That means **not** starting with a giant Cascades optimizer. For RedlineDB’s SQLite-class replacement goal, I would build:
+
+1. **Persistent statistics + in-memory immutable stats snapshots**
+2. **A Selinger-style cost-based optimizer**
+3. **Exact dynamic-programming join enumeration for normal joins**
+4. **Beam/N-nearest-neighbor fallback for large joins**
+5. **Physical-property tracking for ordering, covering, projection, and limits**
+6. **A batch-capable executor with row API compatibility**
+7. **Plan inspection, deterministic test hooks, and real benchmark feedback**
+
+This directly targets the Phase 6 requirements: statistics, index selection, join order, predicate pushdown, projection pruning, sort avoidance, joins, aggregates, sorting, range scans, covering index reads, and deterministic plan testing.
+
+The competitive angle matters. SQLite’s query planner is already very good, but SQLite’s own docs state that joins are implemented as nested loops and that join planning mainly decomposes into choosing loop order and choosing indexes for each loop. RedlineDB can compete by keeping SQLite-like fast planning while adding hash joins, indexed joins, multi-index intersection, more concurrency-friendly execution, and memory-bounded batch operators. ([SQLite][1])
+
+---
+
+# 1. Target Phase 6 module layout
+
+I would add these crates/modules:
+
+```text
+redlinedb_sql/
+  src/
+    logical/
+      expr.rs
+      plan.rs
+      rewrite.rs
+      equivalence.rs
+      required_cols.rs
+
+    stats/
+      catalog.rs
+      snapshot.rs
+      analyze.rs
+      sketches.rs
+      histogram.rs
+      estimator.rs
+      feedback.rs
+
+    opt/
+      optimizer.rs
+      access_path.rs
+      join_order.rs
+      properties.rs
+      cost.rs
+      rules.rs
+      memo_lite.rs
+
+    exec/
+      physical.rs
+      scan.rs
+      index_scan.rs
+      join.rs
+      aggregate.rs
+      sort.rs
+      limit.rs
+      project.rs
+      filter.rs
+      memory.rs
+      batch.rs
+      spill.rs
+
+    explain/
+      text.rs
+      json.rs
+      analyze.rs
+
+    testhooks/
+      stats_inject.rs
+      plan_forcing.rs
+      deterministic.rs
+
+redlinedb_bench/
+  src/
+    workloads/
+      point_read.rs
+      range_scan.rs
+      indexed_lookup.rs
+      joins.rs
+      aggregate.rs
+      order_by_limit.rs
+      mixed_oltp.rs
+```
+
+The optimizer should sit between the binder and executor:
+
+```text
+SQL text
+  -> parser
+  -> binder
+  -> logical plan
+  -> logical normalization/rewrite
+  -> statistics snapshot
+  -> cost-based physical planning
+  -> compiled physical plan
+  -> executor
+```
+
+The important design choice: **planning reads immutable metadata snapshots**. No planner path should grab a global catalog lock, stats lock, or buffer-pool latch. Sessions should clone cheap `Arc` snapshots and plan independently.
+
+---
+
+# 2. Competitive thesis against SQLite
+
+SQLite’s docs describe SQL as declarative: the user says what they want, and the query planner chooses how to retrieve it. They also note that a single SQL statement may have hundreds, thousands, or millions of possible algorithms. ([SQLite][2])
+
+RedlineDB needs to beat SQLite by being better in these places:
+
+| Area                   |                              SQLite-class baseline | RedlineDB Phase 6 strategy                                                 |
+| ---------------------- | -------------------------------------------------: | -------------------------------------------------------------------------- |
+| Point lookup           |                                        Very strong | Match with B+tree/rowid lookup and low decode cost                         |
+| Range scan             |                                        Very strong | Match with ordered index scans and projection pruning                      |
+| Covering index         |                                             Strong | Match, but with MVCC-safe header-only visibility checks                    |
+| Join algorithms        |                                       Nested loops | Add indexed nested loop and hash join                                      |
+| Multi-index predicates |                                            Limited | Add AND intersection and OR union where cost-effective                     |
+| Concurrent connections |              SQLite limited by single-writer model | Keep planning/execution lock-light and avoid global write/read bottlenecks |
+| Stats                  | `ANALYZE`, `sqlite_stat1`, optional `sqlite_stat4` | More explicit relation, column, index, and extended stats                  |
+| Sorting                |                          Index/order optimizations | Add required-order properties, Top-N sort, external sort                   |
+| Memory                 |                              Small and predictable | Keep memory grants explicit and spilling deterministic                     |
+
+SQLite can use covering indexes to avoid looking up the original table row when all needed values are present in the index, and it attempts to use indexes for `ORDER BY`, `GROUP BY`, and `DISTINCT` where possible. RedlineDB should match those basics before chasing exotic optimizer features. ([SQLite][3])
+
+One useful opportunity: SQLite’s optimizer overview says each table in the `FROM` clause can use at most one index, except for OR-clause optimization. RedlineDB can selectively implement multi-index row-id intersection for `AND` predicates, which is often valuable for ad-hoc embedded workloads with several selective predicates. ([SQLite][3])
+
+---
+
+# 3. Phase 6 release gates
+
+I would not call Phase 6 complete until these gates pass:
+
+```text
+Statistics gates:
+  - ANALYZE produces stable, durable stats.
+  - Stats cache reloads atomically.
+  - Estimates are deterministic under fixed seed.
+  - Corrupt/missing stats degrade to safe defaults.
+
+Planner gates:
+  - Indexed point/range queries choose indexes.
+  - ORDER BY avoids sort when index order satisfies it.
+  - LIMIT affects startup-cost-sensitive planning.
+  - Projection pruning prevents decoding unused columns.
+  - Join order changes based on stats.
+  - Hash join chosen for large equijoins when cheaper.
+  - Indexed nested loop chosen for selective outer + indexed inner.
+  - Plans are schema-version safe.
+
+Executor gates:
+  - Operators honor memory budgets.
+  - Sort and hash join spill instead of OOM.
+  - No operator holds page latches across blocking waits.
+  - Long scans yield to cancellation.
+  - EXPLAIN ANALYZE reports real rows and timings.
+
+Benchmark gates:
+  - Match SQLite on indexed point reads.
+  - Match SQLite on indexed range scans.
+  - Beat SQLite on concurrent read-heavy sessions.
+  - Beat SQLite on large equijoins where SQLite nested loops are disadvantaged.
+  - Stay inside configured memory ceiling.
+```
+
+---
+
+# 4. Statistics system
+
+## 4.1 Persistent catalog tables
+
+SQLite’s `ANALYZE` stores planner statistics in internal tables and recommends periodically using `PRAGMA optimize`; SQLite also documents that stats are not automatically updated as data changes and should be refreshed after significant changes. ([SQLite][4])
+
+RedlineDB should use explicit system catalog tables, not hidden ad-hoc blobs only.
+
+```sql
+CREATE TABLE redline_stat_relation (
+    schema_id       INTEGER NOT NULL,
+    relation_id     INTEGER NOT NULL,
+    stat_epoch      INTEGER NOT NULL,
+    schema_version  INTEGER NOT NULL,
+
+    live_rows       INTEGER NOT NULL,
+    dead_rows       INTEGER NOT NULL,
+    total_pages     INTEGER NOT NULL,
+    leaf_pages      INTEGER NOT NULL,
+    overflow_pages  INTEGER NOT NULL,
+    avg_row_bytes   INTEGER NOT NULL,
+
+    sample_rows     INTEGER NOT NULL,
+    sampled_pages   INTEGER NOT NULL,
+    full_scan       BOOLEAN NOT NULL,
+
+    created_csn     INTEGER NOT NULL,
+    PRIMARY KEY (relation_id, stat_epoch)
+);
+
+CREATE TABLE redline_stat_column (
+    relation_id      INTEGER NOT NULL,
+    column_id        INTEGER NOT NULL,
+    stat_epoch       INTEGER NOT NULL,
+
+    null_frac        REAL NOT NULL,
+    distinct_est     REAL NOT NULL,
+    avg_width        REAL NOT NULL,
+
+    min_value        BLOB,
+    max_value        BLOB,
+
+    mcv_blob         BLOB,
+    histogram_blob   BLOB,
+    sketch_blob      BLOB,
+
+    PRIMARY KEY (relation_id, column_id, stat_epoch)
+);
+
+CREATE TABLE redline_stat_index (
+    index_id         INTEGER NOT NULL,
+    relation_id      INTEGER NOT NULL,
+    stat_epoch       INTEGER NOT NULL,
+
+    entries          INTEGER NOT NULL,
+    leaf_pages       INTEGER NOT NULL,
+    internal_pages   INTEGER NOT NULL,
+    height           INTEGER NOT NULL,
+    avg_leaf_fill    REAL NOT NULL,
+
+    key_prefix_ndv   BLOB NOT NULL,
+    key_histogram    BLOB,
+    correlation      REAL,
+
+    PRIMARY KEY (index_id, stat_epoch)
+);
+
+CREATE TABLE redline_stat_extended (
+    relation_id      INTEGER NOT NULL,
+    stat_id          INTEGER NOT NULL,
+    stat_epoch       INTEGER NOT NULL,
+
+    column_ids       BLOB NOT NULL,
+    kind             INTEGER NOT NULL,
+    payload          BLOB NOT NULL,
+
+    PRIMARY KEY (relation_id, stat_id, stat_epoch)
+);
+```
+
+Keep stats versioned by `stat_epoch`. Planning reads the latest stats compatible with its schema version.
+
+PostgreSQL’s planner statistics include relation row/page counts and per-column statistics such as most-common values and histograms; PostgreSQL also treats these values as approximate and not updated on every row change. That is the right model for RedlineDB: stats are advisory, durable, and cheap to read, not transaction-critical truth. ([PostgreSQL][5])
+
+---
+
+## 4.2 In-memory stats snapshot
+
+Planning must not query catalog tables directly. Load stats into an immutable snapshot:
+
+```rust
+use std::sync::Arc;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RelationId(pub u32);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ColumnId(pub u32);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct IndexId(pub u32);
+
+#[derive(Clone, Copy, Debug)]
+pub struct StatsEpoch(pub u64);
+
+#[derive(Clone, Debug)]
+pub struct StatsSnapshot {
+    pub epoch: StatsEpoch,
+    pub schema_version: u64,
+    pub relations: Arc<[RelationStats]>,
+    pub columns: Arc<[ColumnStats]>,
+    pub indexes: Arc<[IndexStats]>,
+    pub extended: Arc<[ExtendedStats]>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RelationStats {
+    pub relation_id: RelationId,
+    pub live_rows: f64,
+    pub dead_rows: f64,
+    pub total_pages: u64,
+    pub leaf_pages: u64,
+    pub overflow_pages: u64,
+    pub avg_row_bytes: f64,
+    pub sample_rows: u64,
+    pub sampled_pages: u64,
+    pub full_scan: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct ColumnStats {
+    pub relation_id: RelationId,
+    pub column_id: ColumnId,
+
+    pub null_frac: f64,
+    pub distinct_est: f64,
+    pub avg_width: f64,
+
+    pub min_value: Option<ScalarKey>,
+    pub max_value: Option<ScalarKey>,
+
+    pub mcv: Arc<[McvEntry]>,
+    pub histogram: Arc<[ScalarKey]>,
+    pub sketch: Option<Arc<[u8]>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct McvEntry {
+    pub value: ScalarKey,
+    pub freq: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct IndexStats {
+    pub index_id: IndexId,
+    pub relation_id: RelationId,
+
+    pub entries: f64,
+    pub leaf_pages: u64,
+    pub internal_pages: u64,
+    pub height: u8,
+    pub avg_leaf_fill: f64,
+
+    // distinct counts for (k1), (k1,k2), ..., composite prefixes
+    pub prefix_distinct: Arc<[f64]>,
+
+    // correlation between logical key order and heap/page order
+    pub correlation: Option<f64>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ExtendedStatsKind {
+    Ndv,
+    McvTuple,
+    FunctionalDependency,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExtendedStats {
+    pub relation_id: RelationId,
+    pub columns: Arc<[ColumnId]>,
+    pub kind: ExtendedStatsKind,
+    pub payload: Arc<[u8]>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ScalarKey {
+    Null,
+    Int(i64),
+    UInt(u64),
+    Float(OrderedF64),
+    TextPrefix(Box<[u8]>),
+    BlobPrefix(Box<[u8]>),
+    Bool(bool),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OrderedF64(pub f64);
+```
+
+For hot planning paths, do not use string names. Everything should be numeric IDs. Names are for binder and EXPLAIN only.
+
+The snapshot lookup should be pre-indexed:
+
+```rust
+pub struct StatsLookup {
+    snapshot: Arc<StatsSnapshot>,
+
+    // Dense arrays if IDs are compact; otherwise fixed-seed hash maps.
+    relation_by_id: Vec<Option<usize>>,
+    column_by_pair: Vec<ColumnSlot>,
+    index_by_id: Vec<Option<usize>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ColumnSlot {
+    first: usize,
+    len: usize,
+}
+```
+
+The optimizer gets:
+
+```rust
+pub struct PlanContext<'a> {
+    pub schema_version: u64,
+    pub stats: &'a StatsLookup,
+    pub cost_model: &'a CostModel,
+    pub config: &'a OptimizerConfig,
+}
+```
+
+---
+
+## 4.3 Stats collection strategy
+
+Use two paths:
+
+```text
+Small table:
+  - Full scan.
+  - Exact row count.
+  - Exact null fraction.
+  - Exact NDV if cheap enough.
+  - Exact min/max.
+
+Large table:
+  - Page-level sampling.
+  - Bounded row reservoir.
+  - Approximate NDV sketch.
+  - Top-K MCV sketch.
+  - Equi-depth histogram from sample.
+```
+
+I would implement `ANALYZE` as a normal transactional operation that writes new stats rows and then atomically advances the stats epoch. Stats do not need to be exact; they need to be **stable, bounded, and useful**.
+
+```rust
+#[derive(Clone, Debug)]
+pub struct AnalyzeConfig {
+    pub target_rows: usize,          // e.g. 8192 default
+    pub target_mcv: usize,           // e.g. 64
+    pub target_histogram: usize,     // e.g. 128 boundaries
+    pub max_memory_bytes: usize,
+    pub deterministic_seed: u64,
+    pub full_scan_row_limit: u64,
+}
+
+pub struct AnalyzeJob {
+    pub relation_id: RelationId,
+    pub columns: Vec<ColumnId>,
+    pub indexes: Vec<IndexId>,
+    pub config: AnalyzeConfig,
+}
+
+pub struct AnalyzeResult {
+    pub relation: RelationStats,
+    pub columns: Vec<ColumnStats>,
+    pub indexes: Vec<IndexStats>,
+    pub extended: Vec<ExtendedStats>,
+}
+```
+
+A good collector does all columns in one scan:
+
+```rust
+pub fn analyze_relation(
+    storage: &dyn AnalyzeStorage,
+    job: AnalyzeJob,
+) -> anyhow::Result<AnalyzeResult> {
+    let rel_meta = storage.relation_metadata(job.relation_id)?;
+
+    let full_scan = rel_meta.estimated_rows <= job.config.full_scan_row_limit;
+    let mut row_count = 0_u64;
+    let mut dead_count = 0_u64;
+
+    let mut col_collectors = job.columns
+        .iter()
+        .map(|&col| ColumnCollector::new(col, &job.config))
+        .collect::<Vec<_>>();
+
+    let mut reservoir = RowReservoir::new(
+        job.config.target_rows,
+        job.config.deterministic_seed,
+    );
+
+    let page_iter = if full_scan {
+        storage.scan_pages(job.relation_id)?
+    } else {
+        storage.sample_pages(job.relation_id, job.config.target_rows)?
+    };
+
+    for page in page_iter {
+        let rows = storage.visible_rows_for_analyze(page)?;
+        for row in rows {
+            row_count += 1;
+
+            if row.is_dead_for_analyze() {
+                dead_count += 1;
+                continue;
+            }
+
+            if full_scan || reservoir.accept(row_count) {
+                for collector in &mut col_collectors {
+                    if let Some(value) = row.get_value(collector.column_id) {
+                        collector.observe(value);
+                    } else {
+                        collector.observe_null();
+                    }
+                }
+            }
+        }
+    }
+
+    let relation = RelationStats {
+        relation_id: job.relation_id,
+        live_rows: (row_count - dead_count) as f64,
+        dead_rows: dead_count as f64,
+        total_pages: rel_meta.total_pages,
+        leaf_pages: rel_meta.leaf_pages,
+        overflow_pages: rel_meta.overflow_pages,
+        avg_row_bytes: rel_meta.avg_row_bytes,
+        sample_rows: reservoir.accepted() as u64,
+        sampled_pages: rel_meta.sampled_pages,
+        full_scan,
+    };
+
+    let columns = col_collectors
+        .into_iter()
+        .map(|c| c.finish(relation.live_rows))
+        .collect();
+
+    let indexes = analyze_indexes(storage, &job, &relation)?;
+
+    Ok(AnalyzeResult {
+        relation,
+        columns,
+        indexes,
+        extended: Vec::new(),
+    })
+}
+```
+
+---
+
+## 4.4 Column collector
+
+The collector should use bounded memory:
+
+```rust
+pub struct ColumnCollector {
+    column_id: ColumnId,
+    seen: u64,
+    nulls: u64,
+
+    min: Option<ScalarKey>,
+    max: Option<ScalarKey>,
+
+    width_sum: u64,
+
+    // Approximate top-K.
+    mcv: SpaceSaving,
+
+    // Approximate distinct.
+    ndv: HllSketch,
+
+    // Values retained for histogram.
+    sample: Vec<ScalarKey>,
+    histogram_target: usize,
+}
+
+impl ColumnCollector {
+    pub fn new(column_id: ColumnId, cfg: &AnalyzeConfig) -> Self {
+        Self {
+            column_id,
+            seen: 0,
+            nulls: 0,
+            min: None,
+            max: None,
+            width_sum: 0,
+            mcv: SpaceSaving::new(cfg.target_mcv),
+            ndv: HllSketch::new(),
+            sample: Vec::with_capacity(cfg.target_rows.min(8192)),
+            histogram_target: cfg.target_histogram,
+        }
+    }
+
+    pub fn observe_null(&mut self) {
+        self.seen += 1;
+        self.nulls += 1;
+    }
+
+    pub fn observe(&mut self, value: ValueRef<'_>) {
+        self.seen += 1;
+
+        let key = ScalarKey::from_value_lossy(value);
+        self.width_sum += value.encoded_len() as u64;
+
+        self.ndv.insert(&key);
+        self.mcv.observe(&key);
+
+        match &self.min {
+            None => self.min = Some(key.clone()),
+            Some(min) if key < *min => self.min = Some(key.clone()),
+            _ => {}
+        }
+
+        match &self.max {
+            None => self.max = Some(key.clone()),
+            Some(max) if key > *max => self.max = Some(key.clone()),
+            _ => {}
+        }
+
+        // Keep bounded sample. For ANALYZE, input is already sampled,
+        // so this can just collect until target.
+        if self.sample.len() < self.histogram_target * 64 {
+            self.sample.push(key);
+        }
+    }
+
+    pub fn finish(mut self, rel_rows: f64) -> ColumnStats {
+        let non_null = self.seen.saturating_sub(self.nulls);
+        let null_frac = if self.seen == 0 {
+            0.0
+        } else {
+            self.nulls as f64 / self.seen as f64
+        };
+
+        let mut mcv = self.mcv.finish(self.seen);
+        mcv.sort_by(|a, b| b.freq.partial_cmp(&a.freq).unwrap());
+
+        let histogram = build_equi_depth_histogram(
+            &mut self.sample,
+            &mcv,
+            self.histogram_target,
+        );
+
+        ColumnStats {
+            relation_id: RelationId(0), // filled by caller
+            column_id: self.column_id,
+            null_frac,
+            distinct_est: self.ndv.estimate().min(rel_rows.max(1.0)),
+            avg_width: if non_null == 0 {
+                0.0
+            } else {
+                self.width_sum as f64 / non_null as f64
+            },
+            min_value: self.min,
+            max_value: self.max,
+            mcv: mcv.into(),
+            histogram: histogram.into(),
+            sketch: None,
+        }
+    }
+}
+```
+
+For `SpaceSaving`, implement a small top-K structure. Do not allocate per observed value.
+
+```rust
+pub struct SpaceSaving {
+    cap: usize,
+    entries: Vec<SsEntry>,
+}
+
+#[derive(Clone)]
+struct SsEntry {
+    key: ScalarKey,
+    count: u64,
+    error: u64,
+}
+
+impl SpaceSaving {
+    pub fn new(cap: usize) -> Self {
+        Self {
+            cap,
+            entries: Vec::with_capacity(cap),
+        }
+    }
+
+    pub fn observe(&mut self, key: &ScalarKey) {
+        if let Some(e) = self.entries.iter_mut().find(|e| e.key == *key) {
+            e.count += 1;
+            return;
+        }
+
+        if self.entries.len() < self.cap {
+            self.entries.push(SsEntry {
+                key: key.clone(),
+                count: 1,
+                error: 0,
+            });
+            return;
+        }
+
+        let min_idx = self.entries
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, e)| e.count)
+            .map(|(i, _)| i)
+            .unwrap();
+
+        let old = self.entries[min_idx].count;
+        self.entries[min_idx] = SsEntry {
+            key: key.clone(),
+            count: old + 1,
+            error: old,
+        };
+    }
+
+    pub fn finish(self, total: u64) -> Vec<McvEntry> {
+        if total == 0 {
+            return Vec::new();
+        }
+
+        self.entries
+            .into_iter()
+            .map(|e| McvEntry {
+                value: e.key,
+                freq: e.count as f64 / total as f64,
+            })
+            .collect()
+    }
+}
+```
+
+The exact sketch implementation can be replaced later, but the interface should not change:
+
+```rust
+pub struct HllSketch {
+    registers: [u8; 1024],
+}
+
+impl HllSketch {
+    pub fn new() -> Self {
+        Self { registers: [0; 1024] }
+    }
+
+    pub fn insert(&mut self, key: &ScalarKey) {
+        let hash = stable_hash64(key);
+        let bucket = (hash as usize) & 1023;
+        let w = hash >> 10;
+        let rank = w.leading_zeros() as u8 + 1;
+        self.registers[bucket] = self.registers[bucket].max(rank);
+    }
+
+    pub fn estimate(&self) -> f64 {
+        // Placeholder: implement HLL bias correction later.
+        // This keeps the interface stable.
+        let m = self.registers.len() as f64;
+        let z: f64 = self.registers
+            .iter()
+            .map(|&r| 2.0_f64.powi(-(r as i32)))
+            .sum();
+
+        0.7213 / (1.0 + 1.079 / m) * m * m / z
+    }
+}
+```
+
+For histograms, build equi-depth boundaries from non-MCV sampled values:
+
+```rust
+pub fn build_equi_depth_histogram(
+    sample: &mut [ScalarKey],
+    mcv: &[McvEntry],
+    target: usize,
+) -> Vec<ScalarKey> {
+    if sample.is_empty() || target == 0 {
+        return Vec::new();
+    }
+
+    sample.sort();
+
+    let mut filtered = Vec::with_capacity(sample.len());
+    'outer: for key in sample.iter() {
+        for hot in mcv.iter().take(16) {
+            if *key == hot.value {
+                continue 'outer;
+            }
+        }
+        filtered.push(key.clone());
+    }
+
+    if filtered.is_empty() {
+        return Vec::new();
+    }
+
+    let buckets = target.min(filtered.len());
+    let mut out = Vec::with_capacity(buckets + 1);
+
+    for i in 0..=buckets {
+        let pos = i * (filtered.len() - 1) / buckets;
+        out.push(filtered[pos].clone());
+    }
+
+    out.dedup();
+    out
+}
+```
+
+PostgreSQL docs explicitly call out the tradeoff: more statistics entries can improve estimates for irregular distributions, but take more space and time to compute. RedlineDB should make that tradeoff user-configurable per database, per table, and later per column. ([PostgreSQL][5])
+
+---
+
+## 4.5 Extended statistics
+
+Regular per-column stats fail on correlated predicates:
+
+```sql
+WHERE city = 'Denver' AND state = 'CO'
+```
+
+Independent selectivity would multiply `city` selectivity by `state` selectivity, often underestimating badly.
+
+PostgreSQL’s docs describe exactly this problem: individual column stats cannot capture cross-column correlation, and multivariate stats are useful but impractical to compute for every possible column group. ([PostgreSQL][5])
+
+RedlineDB should collect extended stats in two ways:
+
+```text
+Automatic:
+  - For every composite index, collect prefix NDV:
+      (a), (a,b), (a,b,c)
+  - For every composite index, optionally collect tuple MCVs.
+
+Manual/future:
+  - CREATE STATISTICS name ON (a,b,c) FROM table;
+  - ANALYZE collects NDV, MCV tuple list, and dependency scores.
+```
+
+For Phase 6, automatic composite-index stats are enough to get big wins.
+
+```rust
+#[derive(Clone, Debug)]
+pub struct CompositePrefixStats {
+    pub index_id: IndexId,
+    pub columns: Arc<[ColumnId]>,
+    pub prefix_ndv: Arc<[f64]>,
+    pub tuple_mcv: Arc<[TupleMcvEntry]>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TupleMcvEntry {
+    pub values: Arc<[ScalarKey]>,
+    pub freq: f64,
+}
+```
+
+Use these when estimating:
+
+```sql
+WHERE a = ? AND b = ?
+```
+
+If `(a,b)` is a composite index prefix, prefer its prefix NDV over multiplying independent selectivities.
+
+---
+
+# 5. Selectivity estimation
+
+The selectivity estimator must be small, explicit, and heavily tested. This is one of the most important files in Phase 6.
+
+```rust
+#[derive(Clone, Copy, Debug)]
+pub struct Selectivity(pub f64);
+
+impl Selectivity {
+    pub const ONE: Self = Self(1.0);
+    pub const ZERO: Self = Self(0.0);
+
+    pub fn clamp(self) -> Self {
+        Self(self.0.clamp(0.0, 1.0))
+    }
+
+    pub fn and(self, other: Self) -> Self {
+        Self((self.0 * other.0).clamp(0.0, 1.0))
+    }
+
+    pub fn or(self, other: Self) -> Self {
+        // Inclusion-exclusion.
+        Self((self.0 + other.0 - self.0 * other.0).clamp(0.0, 1.0))
+    }
+}
+```
+
+## 5.1 Equality
+
+```rust
+pub fn eq_selectivity(col: &ColumnStats, value: &ScalarKey) -> Selectivity {
+    if matches!(value, ScalarKey::Null) {
+        return Selectivity(col.null_frac).clamp();
+    }
+
+    for m in col.mcv.iter() {
+        if &m.value == value {
+            return Selectivity(m.freq).clamp();
+        }
+    }
+
+    let mcv_mass: f64 = col.mcv.iter().map(|m| m.freq).sum();
+    let remaining_mass = (1.0 - col.null_frac - mcv_mass).max(0.0);
+    let remaining_ndv = (col.distinct_est - col.mcv.len() as f64).max(1.0);
+
+    Selectivity(remaining_mass / remaining_ndv).clamp()
+}
+```
+
+## 5.2 Range
+
+```rust
+pub fn range_selectivity(
+    col: &ColumnStats,
+    lower: Option<&ScalarKey>,
+    upper: Option<&ScalarKey>,
+) -> Selectivity {
+    let non_null_mass = 1.0 - col.null_frac;
+
+    if col.histogram.len() < 2 {
+        return fallback_range_selectivity(lower, upper, non_null_mass);
+    }
+
+    let lo_frac = lower
+        .map(|v| histogram_cdf(&col.histogram, v))
+        .unwrap_or(0.0);
+
+    let hi_frac = upper
+        .map(|v| histogram_cdf(&col.histogram, v))
+        .unwrap_or(1.0);
+
+    Selectivity(((hi_frac - lo_frac).max(0.0)) * non_null_mass).clamp()
+}
+
+fn histogram_cdf(bounds: &[ScalarKey], value: &ScalarKey) -> f64 {
+    if bounds.is_empty() {
+        return 0.5;
+    }
+
+    match bounds.binary_search(value) {
+        Ok(i) => i as f64 / (bounds.len() - 1).max(1) as f64,
+        Err(i) => i as f64 / (bounds.len() - 1).max(1) as f64,
+    }
+}
+
+fn fallback_range_selectivity(
+    lower: Option<&ScalarKey>,
+    upper: Option<&ScalarKey>,
+    non_null_mass: f64,
+) -> Selectivity {
+    let base = match (lower, upper) {
+        (Some(_), Some(_)) => 0.10,
+        (Some(_), None) | (None, Some(_)) => 0.33,
+        (None, None) => 1.0,
+    };
+
+    Selectivity(base * non_null_mass).clamp()
+}
+```
+
+## 5.3 IN-list
+
+```rust
+pub fn in_selectivity(col: &ColumnStats, values: &[ScalarKey]) -> Selectivity {
+    let mut sel = Selectivity::ZERO;
+
+    for value in values {
+        sel = sel.or(eq_selectivity(col, value));
+    }
+
+    sel.clamp()
+}
+```
+
+## 5.4 AND/OR/NOT
+
+```rust
+pub fn predicate_selectivity(
+    stats: &StatsLookup,
+    rel: RelationId,
+    expr: ExprId,
+    arena: &ExprArena,
+) -> Selectivity {
+    match arena.get(expr) {
+        Expr::Eq(col, lit) => {
+            let col_stats = stats.column(rel, col.column_id);
+            col_stats
+                .map(|s| eq_selectivity(s, lit))
+                .unwrap_or(Selectivity(0.10))
+        }
+
+        Expr::Between(col, lo, hi) => {
+            let col_stats = stats.column(rel, col.column_id);
+            col_stats
+                .map(|s| range_selectivity(s, Some(lo), Some(hi)))
+                .unwrap_or(Selectivity(0.10))
+        }
+
+        Expr::IsNull(col) => {
+            let col_stats = stats.column(rel, col.column_id);
+            col_stats
+                .map(|s| Selectivity(s.null_frac).clamp())
+                .unwrap_or(Selectivity(0.01))
+        }
+
+        Expr::And(a, b) => {
+            let sa = predicate_selectivity(stats, rel, *a, arena);
+            let sb = predicate_selectivity(stats, rel, *b, arena);
+            sa.and(sb)
+        }
+
+        Expr::Or(a, b) => {
+            let sa = predicate_selectivity(stats, rel, *a, arena);
+            let sb = predicate_selectivity(stats, rel, *b, arena);
+            sa.or(sb)
+        }
+
+        Expr::Not(x) => {
+            let sx = predicate_selectivity(stats, rel, *x, arena);
+            Selectivity(1.0 - sx.0).clamp()
+        }
+
+        _ => Selectivity(0.25),
+    }
+}
+```
+
+## 5.5 Equijoin estimation
+
+```rust
+pub fn equijoin_rows(
+    left_rows: f64,
+    right_rows: f64,
+    left_col: Option<&ColumnStats>,
+    right_col: Option<&ColumnStats>,
+    left_unique: bool,
+    right_unique: bool,
+) -> f64 {
+    if left_rows <= 0.0 || right_rows <= 0.0 {
+        return 0.0;
+    }
+
+    if right_unique {
+        return left_rows.min(left_rows * (1.0 - right_col.map(|c| c.null_frac).unwrap_or(0.0)));
+    }
+
+    if left_unique {
+        return right_rows.min(right_rows * (1.0 - left_col.map(|c| c.null_frac).unwrap_or(0.0)));
+    }
+
+    let l_ndv = left_col.map(|c| c.distinct_est).unwrap_or(left_rows).max(1.0);
+    let r_ndv = right_col.map(|c| c.distinct_est).unwrap_or(right_rows).max(1.0);
+
+    let null_adj =
+        (1.0 - left_col.map(|c| c.null_frac).unwrap_or(0.0)) *
+        (1.0 - right_col.map(|c| c.null_frac).unwrap_or(0.0));
+
+    (left_rows * right_rows / l_ndv.max(r_ndv)) * null_adj
+}
+```
+
+---
+
+# 6. Cost model
+
+Use a small cost model with both scalar comparison and explainable components.
+
+```rust
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Cost {
+    pub startup: f64,
+    pub total: f64,
+
+    pub cpu: f64,
+    pub seq_io: f64,
+    pub rand_io: f64,
+
+    pub memory: f64,
+    pub spill: f64,
+}
+
+impl Cost {
+    pub fn plus(self, rhs: Cost) -> Cost {
+        Cost {
+            startup: self.startup + rhs.startup,
+            total: self.total + rhs.total,
+            cpu: self.cpu + rhs.cpu,
+            seq_io: self.seq_io + rhs.seq_io,
+            rand_io: self.rand_io + rhs.rand_io,
+            memory: self.memory.max(rhs.memory),
+            spill: self.spill + rhs.spill,
+        }
+    }
+
+    pub fn scale(self, n: f64) -> Cost {
+        Cost {
+            startup: self.startup * n,
+            total: self.total * n,
+            cpu: self.cpu * n,
+            seq_io: self.seq_io * n,
+            rand_io: self.rand_io * n,
+            memory: self.memory,
+            spill: self.spill * n,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CostModel {
+    pub cpu_tuple: f64,
+    pub cpu_expr: f64,
+    pub cpu_compare: f64,
+
+    pub seq_page: f64,
+    pub rand_page: f64,
+
+    pub btree_descent: f64,
+    pub hash_build: f64,
+    pub hash_probe: f64,
+
+    pub memory_byte: f64,
+    pub spill_page: f64,
+
+    pub cache_hit_discount: f64,
+}
+```
+
+Suggested defaults:
+
+```rust
+impl Default for CostModel {
+    fn default() -> Self {
+        Self {
+            cpu_tuple: 1.0,
+            cpu_expr: 0.2,
+            cpu_compare: 0.1,
+
+            seq_page: 4.0,
+            rand_page: 12.0,
+
+            btree_descent: 3.0,
+            hash_build: 1.4,
+            hash_probe: 1.1,
+
+            memory_byte: 0.000001,
+            spill_page: 20.0,
+
+            cache_hit_discount: 0.35,
+        }
+    }
+}
+```
+
+Use estimated rows and width everywhere:
+
+```rust
+#[derive(Clone, Copy, Debug)]
+pub struct Estimate {
+    pub rows: f64,
+    pub width: f64,
+    pub cost: Cost,
+}
+```
+
+## 6.1 Sequential scan cost
+
+```rust
+pub fn cost_seq_scan(
+    cm: &CostModel,
+    rel: &RelationStats,
+    output_rows: f64,
+    predicates: usize,
+) -> Cost {
+    let pages = rel.leaf_pages.max(rel.total_pages) as f64;
+    let input_rows = rel.live_rows.max(1.0);
+
+    let io = pages * cm.seq_page;
+    let cpu = input_rows * cm.cpu_tuple
+        + input_rows * predicates as f64 * cm.cpu_expr;
+
+    Cost {
+        startup: 0.0,
+        total: io + cpu,
+        cpu,
+        seq_io: io,
+        rand_io: 0.0,
+        memory: 0.0,
+        spill: 0.0,
+    }
+}
+```
+
+## 6.2 Index range scan cost
+
+```rust
+pub fn cost_index_scan(
+    cm: &CostModel,
+    rel: &RelationStats,
+    idx: &IndexStats,
+    estimated_rows: f64,
+    covering: bool,
+    output_width: f64,
+) -> Cost {
+    let descent = idx.height as f64 * cm.btree_descent;
+
+    let leaf_fraction = (estimated_rows / idx.entries.max(1.0)).clamp(0.0, 1.0);
+    let leaf_pages = (idx.leaf_pages as f64 * leaf_fraction).ceil();
+
+    let index_io = descent + leaf_pages * cm.seq_page;
+
+    let heap_io = if covering {
+        // Still may need header-only visibility checks under MVCC.
+        estimated_rows * cm.rand_page * 0.10
+    } else {
+        let corr = idx.correlation.unwrap_or(0.0).abs();
+        let rand_factor = 1.0 - corr * 0.7;
+        estimated_rows * cm.rand_page * rand_factor
+    };
+
+    let cpu = estimated_rows * cm.cpu_tuple
+        + estimated_rows * output_width * cm.memory_byte;
+
+    Cost {
+        startup: descent,
+        total: index_io + heap_io + cpu,
+        cpu,
+        seq_io: leaf_pages * cm.seq_page,
+        rand_io: heap_io,
+        memory: 0.0,
+        spill: 0.0,
+    }
+}
+```
+
+## 6.3 Sort cost
+
+```rust
+pub fn cost_sort(
+    cm: &CostModel,
+    rows: f64,
+    width: f64,
+    memory_limit: usize,
+    limit: Option<u64>,
+) -> Cost {
+    let row_bytes = width.max(8.0);
+    let total_bytes = rows * row_bytes;
+
+    if let Some(k) = limit {
+        let k = k as f64;
+        let cpu = rows * k.max(2.0).log2() * cm.cpu_compare;
+        let mem = k * row_bytes;
+
+        return Cost {
+            startup: cpu,
+            total: cpu,
+            cpu,
+            memory: mem,
+            ..Default::default()
+        };
+    }
+
+    let cpu = rows * rows.max(2.0).log2() * cm.cpu_compare;
+    let mem = total_bytes.min(memory_limit as f64);
+
+    let spill = if total_bytes > memory_limit as f64 {
+        let pages = total_bytes / 4096.0;
+        pages * cm.spill_page
+    } else {
+        0.0
+    };
+
+    Cost {
+        startup: cpu + spill * 0.5,
+        total: cpu + spill,
+        cpu,
+        memory: mem,
+        spill,
+        ..Default::default()
+    }
+}
+```
+
+The cost model must be calibrated by benchmarks, but it should be deliberately simple. If it has 50 knobs, nobody will trust it.
+
+---
+
+# 7. Logical rewriting
+
+Before cost-based planning, normalize the query.
+
+## 7.1 Required rewrite passes
+
+```text
+Pass 1: Constant folding
+  - 1 = 1 -> TRUE
+  - x AND TRUE -> x
+  - x AND FALSE -> FALSE
+  - deterministic scalar folding
+
+Pass 2: CNF extraction
+  - WHERE predicates become flat Vec<PredicateId>
+  - Classify single-table, join, post-join predicates
+
+Pass 3: Equivalence classes
+  - a.id = b.a_id
+  - b.a_id = c.a_id
+  - infer a.id = c.a_id
+  - propagate constants: a.id = b.a_id AND a.id = 5 => b.a_id = 5
+
+Pass 4: Predicate pushdown
+  - Push single-table predicates to scans
+  - Push join predicates to earliest valid join
+  - Respect outer join null-extension boundaries
+
+Pass 5: Projection pruning
+  - Compute required columns bottom-up
+  - Scan only predicate columns + output columns + join columns
+  - Decode only required fields
+
+Pass 6: Subquery simplification
+  - Flatten safe FROM subqueries
+  - Convert simple EXISTS/IN to semi-joins if supported
+
+Pass 7: Physical property derivation
+  - Required order from ORDER BY
+  - Interesting orders from GROUP BY, DISTINCT, merge candidates
+  - Limit/offset awareness
+```
+
+SQLite’s optimizer documentation discusses flattening subqueries and using indexes to satisfy `ORDER BY`, `GROUP BY`, and `DISTINCT`; RedlineDB should implement these as explicit logical/physical property passes rather than burying them inside scan selection. ([SQLite][3])
+
+## 7.2 Expression arena
+
+Avoid recursive heap allocation for every expression node.
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ExprId(pub u32);
+
+pub struct ExprArena {
+    nodes: Vec<Expr>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Expr {
+    Column(ColumnRef),
+    Literal(ScalarKey),
+
+    Eq(ColumnRef, ScalarKey),
+    EqCols(ColumnRef, ColumnRef),
+
+    Lt(ColumnRef, ScalarKey),
+    Le(ColumnRef, ScalarKey),
+    Gt(ColumnRef, ScalarKey),
+    Ge(ColumnRef, ScalarKey),
+    Between(ColumnRef, ScalarKey, ScalarKey),
+    InList(ColumnRef, Arc<[ScalarKey]>),
+    IsNull(ColumnRef),
+
+    And(ExprId, ExprId),
+    Or(ExprId, ExprId),
+    Not(ExprId),
+
+    Func {
+        func_id: u32,
+        args: Arc<[ExprId]>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ColumnRef {
+    pub rel: RelAlias,
+    pub column_id: ColumnId,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RelAlias(pub u16);
+```
+
+## 7.3 Predicate classification
+
+```rust
+#[derive(Clone, Debug)]
+pub struct Predicate {
+    pub expr: ExprId,
+    pub rels: RelSet,
+    pub kind: PredicateKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PredicateKind {
+    SingleTable,
+    Join,
+    Residual,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RelSet(pub u64);
+
+impl RelSet {
+    pub fn singleton(i: usize) -> Self {
+        Self(1_u64 << i)
+    }
+
+    pub fn contains(self, i: usize) -> bool {
+        self.0 & (1_u64 << i) != 0
+    }
+
+    pub fn union(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+
+    pub fn is_subset_of(self, rhs: Self) -> bool {
+        self.0 & !rhs.0 == 0
+    }
+
+    pub fn len(self) -> u32 {
+        self.0.count_ones()
+    }
+}
+```
+
+---
+
+# 8. Physical properties
+
+This is the difference between a naïve optimizer and one that avoids unnecessary work.
+
+```rust
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PhysicalProps {
+    pub order: OrderProp,
+    pub unique_keys: Arc<[KeySet]>,
+    pub columns: ColumnSet,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OrderProp {
+    None,
+    Ordered(Arc<[OrderKey]>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OrderKey {
+    pub column: ColumnRef,
+    pub direction: Direction,
+    pub nulls: NullOrder,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Direction {
+    Asc,
+    Desc,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NullOrder {
+    First,
+    Last,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct KeySet {
+    pub columns: Arc<[ColumnRef]>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ColumnSet {
+    pub bits: Vec<u64>,
+}
+```
+
+Use properties for:
+
+```text
+ORDER BY:
+  - If plan output order satisfies required order, no sort.
+
+GROUP BY:
+  - If input is grouped by key order, use streaming aggregate.
+  - Otherwise hash aggregate or sort aggregate.
+
+DISTINCT:
+  - If input ordered by distinct keys, streaming distinct.
+  - Otherwise hash distinct.
+
+LIMIT:
+  - Prefer low startup cost and ordered index scans.
+  - Use Top-N sort instead of full sort.
+```
+
+---
+
+# 9. Access path generation
+
+For each base relation, generate candidate paths:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct Path {
+    pub rels: RelSet,
+    pub plan: PhysExprId,
+    pub rows: f64,
+    pub width: f64,
+    pub cost: Cost,
+    pub props: PhysicalProps,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PhysExprId(pub u32);
+```
+
+Base access paths:
+
+```text
+SeqScan:
+  - Always available.
+  - Good for tiny tables, unselective predicates, covering impossible.
+
+RowIdLookup:
+  - rowid = constant
+  - rowid IN (...)
+  - primary key lookup if rowid-like.
+
+IndexScan:
+  - equality prefix
+  - optional one range column after equality prefix
+  - residual predicates evaluated after lookup.
+
+CoveringIndexScan:
+  - all required output columns available from index payload
+  - still perform MVCC visibility check unless visibility proven.
+
+IndexIntersection:
+  - multiple selective indexes produce sorted rowid streams
+  - intersect rowids
+  - fetch heap rows once
+  - only if estimated rowid set is small enough.
+
+IndexUnion:
+  - OR predicates
+  - union rowid streams
+  - de-duplicate rowids
+```
+
+## 9.1 Index predicate matching
+
+```rust
+#[derive(Clone, Debug)]
+pub struct IndexCandidate {
+    pub index_id: IndexId,
+    pub equality_prefix: usize,
+    pub range_column: Option<usize>,
+    pub estimated_rows: f64,
+    pub covering: bool,
+    pub residual_predicates: Vec<PredicateId>,
+    pub order: OrderProp,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PredicateId(pub u32);
+
+pub fn match_index(
+    index: &IndexDef,
+    predicates: &[Predicate],
+    required_cols: &ColumnSet,
+    stats: &StatsLookup,
+    rel_rows: f64,
+) -> Option<IndexCandidate> {
+    let mut equality_prefix = 0;
+    let mut range_column = None;
+    let mut selectivity = Selectivity::ONE;
+
+    for (i, key_col) in index.key_columns.iter().enumerate() {
+        if let Some(pred) = find_equality_predicate(predicates, *key_col) {
+            equality_prefix += 1;
+            selectivity = selectivity.and(estimate_predicate(stats, pred));
+            continue;
+        }
+
+        if let Some(pred) = find_range_predicate(predicates, *key_col) {
+            range_column = Some(i);
+            selectivity = selectivity.and(estimate_predicate(stats, pred));
+        }
+
+        break;
+    }
+
+    if equality_prefix == 0 && range_column.is_none() {
+        return None;
+    }
+
+    let estimated_rows = (rel_rows * selectivity.0).max(1.0);
+
+    let covering = index_covers(index, required_cols);
+
+    Some(IndexCandidate {
+        index_id: index.index_id,
+        equality_prefix,
+        range_column,
+        estimated_rows,
+        covering,
+        residual_predicates: residuals_for_index(index, predicates),
+        order: order_from_index(index, equality_prefix),
+    })
+}
+```
+
+## 9.2 Access path builder
+
+```rust
+pub fn build_base_paths(
+    ctx: &PlanContext<'_>,
+    rel: &BaseRelation,
+    predicates: &[Predicate],
+    required_cols: &ColumnSet,
+    out: &mut Vec<Path>,
+    phys: &mut PhysArena,
+) {
+    let rel_stats = ctx.stats.relation(rel.relation_id)
+        .unwrap_or_else(|| ctx.stats.default_relation(rel.relation_id));
+
+    let seq_sel = combined_single_table_selectivity(
+        ctx.stats,
+        rel.relation_id,
+        predicates,
+    );
+
+    let seq_rows = (rel_stats.live_rows * seq_sel.0).max(1.0);
+    let seq_width = estimate_width(ctx.stats, rel.relation_id, required_cols);
+
+    let seq_cost = cost_seq_scan(
+        ctx.cost_model,
+        rel_stats,
+        seq_rows,
+        predicates.len(),
+    );
+
+    let seq_plan = phys.push(PhysicalExpr::SeqScan {
+        relation_id: rel.relation_id,
+        alias: rel.alias,
+        predicates: predicates.iter().map(|p| p.expr).collect(),
+        columns: required_cols.clone(),
+    });
+
+    out.push(Path {
+        rels: RelSet::singleton(rel.alias.0 as usize),
+        plan: seq_plan,
+        rows: seq_rows,
+        width: seq_width,
+        cost: seq_cost,
+        props: PhysicalProps {
+            order: OrderProp::None,
+            unique_keys: Arc::new([]),
+            columns: required_cols.clone(),
+        },
+    });
+
+    for index in rel.indexes.iter() {
+        if let Some(cand) = match_index(
+            index,
+            predicates,
+            required_cols,
+            ctx.stats,
+            rel_stats.live_rows,
+        ) {
+            let idx_stats = ctx.stats.index(cand.index_id);
+            let idx_cost = cost_index_scan(
+                ctx.cost_model,
+                rel_stats,
+                idx_stats,
+                cand.estimated_rows,
+                cand.covering,
+                seq_width,
+            );
+
+            let plan = phys.push(PhysicalExpr::IndexScan {
+                relation_id: rel.relation_id,
+                index_id: cand.index_id,
+                alias: rel.alias,
+                predicates: predicates.iter().map(|p| p.expr).collect(),
+                residual_predicates: cand.residual_predicates,
+                columns: required_cols.clone(),
+                covering: cand.covering,
+            });
+
+            out.push(Path {
+                rels: RelSet::singleton(rel.alias.0 as usize),
+                plan,
+                rows: cand.estimated_rows,
+                width: seq_width,
+                cost: idx_cost,
+                props: PhysicalProps {
+                    order: cand.order,
+                    unique_keys: unique_keys_from_index(index),
+                    columns: required_cols.clone(),
+                },
+            });
+        }
+    }
+
+    maybe_add_index_intersections(ctx, rel, predicates, required_cols, out, phys);
+}
+```
+
+---
+
+# 10. Join optimization
+
+The canonical optimizer idea is old but still correct: System R introduced dynamic-programming join order optimization and “interesting orders,” according to the database systems literature. ([Springer][6])
+
+For RedlineDB, use:
+
+```text
+1 to 10/12 joined relations:
+  - Exact DP over subsets.
+  - Keep cheapest path plus paths with useful physical orderings.
+
+More than 10/12 relations:
+  - Beam/N3-style search.
+  - Star-schema heuristic.
+  - Greedy fallback with local swaps.
+```
+
+SQLite’s NGQP documentation describes an “N Nearest Neighbors” approach that keeps the N best paths at each step, with O(K*N) time and O(N) storage, as a practical alternative to exhaustive search for large joins. RedlineDB can use exact DP for ordinary embedded queries and a similar beam strategy only when the join count is too large. ([SQLite][1])
+
+## 10.1 Join graph
+
+```rust
+#[derive(Clone, Debug)]
+pub struct JoinGraph {
+    pub rel_count: usize,
+    pub predicates: Vec<JoinPredicate>,
+    pub outer_join_constraints: Vec<JoinConstraint>,
+}
+
+#[derive(Clone, Debug)]
+pub struct JoinPredicate {
+    pub expr: ExprId,
+    pub left: RelSet,
+    pub right: RelSet,
+    pub kind: JoinPredicateKind,
+}
+
+#[derive(Clone, Debug)]
+pub enum JoinPredicateKind {
+    Equi {
+        left_col: ColumnRef,
+        right_col: ColumnRef,
+    },
+    Range,
+    Residual,
+}
+
+#[derive(Clone, Debug)]
+pub struct JoinConstraint {
+    pub must_preserve_left: RelSet,
+    pub nullable_side: RelSet,
+}
+```
+
+## 10.2 DP table
+
+Keep only a few alternatives per subset:
+
+```rust
+pub struct JoinDp {
+    buckets: Vec<PathSet>,
+    rel_count: usize,
+    max_paths_per_subset: usize,
+}
+
+#[derive(Default)]
+pub struct PathSet {
+    paths: Vec<Path>,
+}
+
+impl PathSet {
+    pub fn insert_pruned(&mut self, path: Path, max_paths: usize) {
+        if self.paths.iter().any(|p| dominates(p, &path)) {
+            return;
+        }
+
+        self.paths.retain(|p| !dominates(&path, p));
+        self.paths.push(path);
+
+        self.paths.sort_by(|a, b| {
+            a.cost.total
+                .partial_cmp(&b.cost.total)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        self.paths.truncate(max_paths);
+    }
+}
+
+fn dominates(a: &Path, b: &Path) -> bool {
+    a.cost.total <= b.cost.total
+        && a.rows <= b.rows * 1.05
+        && props_dominate(&a.props, &b.props)
+}
+```
+
+## 10.3 Join enumeration
+
+```rust
+pub fn optimize_joins_dp(
+    ctx: &PlanContext<'_>,
+    base_paths: Vec<Vec<Path>>,
+    graph: &JoinGraph,
+    phys: &mut PhysArena,
+) -> Path {
+    let n = graph.rel_count;
+    assert!(n <= 20);
+
+    let total_subsets = 1_usize << n;
+    let mut dp = JoinDp {
+        buckets: (0..total_subsets).map(|_| PathSet::default()).collect(),
+        rel_count: n,
+        max_paths_per_subset: ctx.config.max_paths_per_subset,
+    };
+
+    for (i, paths) in base_paths.into_iter().enumerate() {
+        let subset = 1_usize << i;
+        for p in paths {
+            dp.buckets[subset].insert_pruned(p, ctx.config.max_paths_per_subset);
+        }
+    }
+
+    for size in 2..=n {
+        for subset in subsets_of_size(n, size) {
+            let mut left = (subset - 1) & subset;
+
+            while left != 0 {
+                let right = subset ^ left;
+
+                if right == 0 {
+                    left = (left - 1) & subset;
+                    continue;
+                }
+
+                // Avoid symmetric duplicates.
+                if left > right {
+                    left = (left - 1) & subset;
+                    continue;
+                }
+
+                let left_set = RelSet(left as u64);
+                let right_set = RelSet(right as u64);
+
+                if !join_allowed(left_set, right_set, graph) {
+                    left = (left - 1) & subset;
+                    continue;
+                }
+
+                let join_preds = predicates_between(left_set, right_set, graph);
+
+                if join_preds.is_empty() && !ctx.config.allow_cross_joins {
+                    left = (left - 1) & subset;
+                    continue;
+                }
+
+                let left_paths = dp.buckets[left].paths.clone();
+                let right_paths = dp.buckets[right].paths.clone();
+
+                for lp in &left_paths {
+                    for rp in &right_paths {
+                        for jp in build_join_paths(ctx, lp, rp, &join_preds, phys) {
+                            dp.buckets[subset].insert_pruned(
+                                jp,
+                                ctx.config.max_paths_per_subset,
+                            );
+                        }
+                    }
+                }
+
+                left = (left - 1) & subset;
+            }
+        }
+    }
+
+    let full = total_subsets - 1;
+    dp.buckets[full]
+        .paths
+        .iter()
+        .min_by(|a, b| {
+            a.cost.total
+                .partial_cmp(&b.cost.total)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .cloned()
+        .expect("at least one join plan")
+}
+```
+
+## 10.4 Join path construction
+
+```rust
+pub fn build_join_paths(
+    ctx: &PlanContext<'_>,
+    left: &Path,
+    right: &Path,
+    preds: &[JoinPredicate],
+    phys: &mut PhysArena,
+) -> Vec<Path> {
+    let mut out = Vec::new();
+
+    // 1. Nested loop.
+    out.push(build_nested_loop(ctx, left, right, preds, phys));
+
+    // 2. Indexed nested loop if right side has usable parameterized index.
+    if let Some(path) = build_index_nested_loop(ctx, left, right, preds, phys) {
+        out.push(path);
+    }
+
+    // Also consider reverse direction.
+    if let Some(path) = build_index_nested_loop(ctx, right, left, preds, phys) {
+        out.push(path);
+    }
+
+    // 3. Hash join for equijoins.
+    if preds.iter().any(|p| matches!(p.kind, JoinPredicateKind::Equi { .. })) {
+        out.push(build_hash_join(ctx, left, right, preds, phys));
+        out.push(build_hash_join(ctx, right, left, preds, phys));
+    }
+
+    out
+}
+```
+
+---
+
+# 11. Join algorithms
+
+## 11.1 Nested loop
+
+Good for:
+
+```text
+- tiny outer
+- no usable hash condition
+- LIMIT 1 / EXISTS
+- already parameterized execution
+```
+
+```rust
+pub fn cost_nested_loop(
+    cm: &CostModel,
+    left: &Path,
+    right: &Path,
+    output_rows: f64,
+    pred_count: usize,
+) -> Cost {
+    let repeated_right = right.cost.scale(left.rows);
+    let cpu = left.rows * right.rows * pred_count as f64 * cm.cpu_expr;
+
+    Cost {
+        startup: left.cost.startup + right.cost.startup,
+        total: left.cost.total + repeated_right.total + cpu,
+        cpu,
+        memory: 0.0,
+        ..Default::default()
+    }
+}
+```
+
+## 11.2 Indexed nested loop
+
+Good for:
+
+```text
+- left side small/selective
+- right side has index on join key
+- right side lookup is cheap
+- LIMIT favors low startup
+```
+
+```rust
+pub fn cost_index_nested_loop(
+    cm: &CostModel,
+    outer: &Path,
+    inner_index_height: u8,
+    probes: f64,
+    matches_per_probe: f64,
+) -> Cost {
+    let descent = inner_index_height as f64 * cm.btree_descent;
+    let probe_cost = descent + cm.rand_page + matches_per_probe * cm.cpu_tuple;
+
+    let total = outer.cost.total + probes * probe_cost;
+
+    Cost {
+        startup: outer.cost.startup + descent,
+        total,
+        cpu: probes * matches_per_probe * cm.cpu_tuple,
+        rand_io: probes * cm.rand_page,
+        memory: 0.0,
+        ..Default::default()
+    }
+}
+```
+
+## 11.3 Hash join
+
+Good for:
+
+```text
+- large equijoins
+- no selective index on inner
+- both sides scanned anyway
+- unordered output acceptable
+```
+
+Hash join is a major RedlineDB opportunity because SQLite’s joins are nested-loop-based. ([SQLite][1])
+
+```rust
+pub fn cost_hash_join(
+    cm: &CostModel,
+    build: &Path,
+    probe: &Path,
+    output_rows: f64,
+    memory_limit: usize,
+) -> Cost {
+    let build_bytes = build.rows * build.width.max(8.0);
+    let probe_bytes = probe.rows * probe.width.max(8.0);
+
+    let build_cpu = build.rows * cm.hash_build;
+    let probe_cpu = probe.rows * cm.hash_probe;
+
+    let spill = if build_bytes > memory_limit as f64 {
+        ((build_bytes + probe_bytes) / 4096.0) * cm.spill_page
+    } else {
+        0.0
+    };
+
+    Cost {
+        startup: build.cost.total + build_cpu,
+        total: build.cost.total + probe.cost.total + build_cpu + probe_cpu + spill,
+        cpu: build_cpu + probe_cpu,
+        memory: build_bytes.min(memory_limit as f64),
+        spill,
+        ..Default::default()
+    }
+}
+```
+
+Executor skeleton:
+
+```rust
+pub struct HashJoinExec {
+    build: Box<dyn ExecOp>,
+    probe: Box<dyn ExecOp>,
+    build_key: ExprId,
+    probe_key: ExprId,
+    join_type: JoinType,
+
+    table: Option<HashTable>,
+    memory: MemoryTracker,
+}
+
+impl ExecOp for HashJoinExec {
+    fn open(&mut self, ctx: &mut ExecContext) -> ExecResult<()> {
+        self.build.open(ctx)?;
+        self.probe.open(ctx)?;
+
+        let mut table = HashTable::new(ctx.memory.child("hash_join_build"));
+
+        while let Some(batch) = self.build.next_batch(ctx)? {
+            for row in batch.rows() {
+                let key = eval_key(self.build_key, row)?;
+                table.insert(key, row.copy_compact())?;
+
+                if table.memory_used() > ctx.memory_limit_for_operator() {
+                    table.spill_partition()?;
+                }
+            }
+        }
+
+        self.table = Some(table);
+        Ok(())
+    }
+
+    fn next_batch(&mut self, ctx: &mut ExecContext) -> ExecResult<Option<RowBatch>> {
+        let table = self.table.as_mut().unwrap();
+
+        while let Some(probe_batch) = self.probe.next_batch(ctx)? {
+            let mut out = RowBatch::with_capacity(ctx.batch_size);
+
+            for row in probe_batch.rows() {
+                let key = eval_key(self.probe_key, row)?;
+                for build_row in table.lookup(&key)? {
+                    out.push(join_rows(build_row, row)?);
+
+                    if out.len() == ctx.batch_size {
+                        return Ok(Some(out));
+                    }
+                }
+            }
+
+            if !out.is_empty() {
+                return Ok(Some(out));
+            }
+        }
+
+        Ok(None)
+    }
+}
+```
+
+---
+
+# 12. Executor: row API outside, batches inside
+
+Phase 5 may have a row-oriented executor. For Phase 6 performance, keep the public/session `step()` API row-based but make physical operators internally batch-capable.
+
+```rust
+pub trait ExecOp {
+    fn open(&mut self, ctx: &mut ExecContext) -> ExecResult<()>;
+    fn next_batch(&mut self, ctx: &mut ExecContext) -> ExecResult<Option<RowBatch>>;
+    fn close(&mut self, ctx: &mut ExecContext) -> ExecResult<()>;
+}
+
+pub struct RowBatch {
+    rows: Vec<CompactRow>,
+}
+
+impl RowBatch {
+    pub fn with_capacity(cap: usize) -> Self {
+        Self {
+            rows: Vec::with_capacity(cap),
+        }
+    }
+
+    pub fn push(&mut self, row: CompactRow) {
+        self.rows.push(row);
+    }
+
+    pub fn rows(&self) -> &[CompactRow] {
+        &self.rows
+    }
+
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+}
+```
+
+Then expose a row stepping adapter:
+
+```rust
+pub struct StepAdapter {
+    root: Box<dyn ExecOp>,
+    current: Option<RowBatch>,
+    offset: usize,
+}
+
+impl StepAdapter {
+    pub fn step(&mut self, ctx: &mut ExecContext) -> ExecResult<Option<RowView<'_>>> {
+        loop {
+            if let Some(batch) = &self.current {
+                if self.offset < batch.len() {
+                    let row = RowView::new(&batch.rows()[self.offset]);
+                    self.offset += 1;
+                    return Ok(Some(row));
+                }
+            }
+
+            self.current = self.root.next_batch(ctx)?;
+            self.offset = 0;
+
+            if self.current.is_none() {
+                return Ok(None);
+            }
+        }
+    }
+}
+```
+
+This gives you vectorization-like wins without forcing a full columnar engine.
+
+---
+
+# 13. Memory accounting
+
+Every query gets a budget. Every memory-heavy operator gets a child tracker.
+
+```rust
+#[derive(Clone)]
+pub struct MemoryTracker {
+    used: Arc<std::sync::atomic::AtomicUsize>,
+    limit: usize,
+}
+
+impl MemoryTracker {
+    pub fn try_reserve(&self, bytes: usize) -> ExecResult<MemoryReservation> {
+        let old = self.used.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+
+        if old + bytes > self.limit {
+            self.used.fetch_sub(bytes, std::sync::atomic::Ordering::Relaxed);
+            return Err(ExecError::MemoryLimit {
+                requested: bytes,
+                used: old,
+                limit: self.limit,
+            });
+        }
+
+        Ok(MemoryReservation {
+            tracker: self.clone(),
+            bytes,
+        })
+    }
+
+    pub fn child(&self, _name: &'static str) -> MemoryTracker {
+        self.clone()
+    }
+}
+
+pub struct MemoryReservation {
+    tracker: MemoryTracker,
+    bytes: usize,
+}
+
+impl Drop for MemoryReservation {
+    fn drop(&mut self) {
+        self.tracker
+            .used
+            .fetch_sub(self.bytes, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+```
+
+Operator behavior:
+
+```text
+Hash join:
+  - Build smaller side.
+  - If build exceeds memory, spill partitions.
+  - Never grow unbounded Vec<HashBucket>.
+
+Hash aggregate:
+  - Use in-memory hash table until budget.
+  - Spill partitions by hash if needed.
+  - Finalize partition by partition.
+
+Sort:
+  - If rows fit memory, in-memory unstable sort.
+  - If ORDER BY LIMIT K, use Top-K heap.
+  - If too large, external merge sort with bounded run size.
+
+Index intersection:
+  - If estimated rowids <= threshold, materialize small sorted rowid vec.
+  - Otherwise streaming merge intersection.
+```
+
+---
+
+# 14. Sorting and ORDER BY
+
+## 14.1 Avoid sort first
+
+A plan satisfies order if its `OrderProp` has the requested keys as a prefix.
+
+```rust
+pub fn order_satisfies(provided: &OrderProp, required: &[OrderKey]) -> bool {
+    match provided {
+        OrderProp::None => required.is_empty(),
+        OrderProp::Ordered(keys) => {
+            if keys.len() < required.len() {
+                return false;
+            }
+
+            keys.iter().zip(required).all(|(a, b)| a == b)
+        }
+    }
+}
+```
+
+## 14.2 Top-N sort
+
+For:
+
+```sql
+SELECT ...
+FROM t
+WHERE ...
+ORDER BY score DESC
+LIMIT 10;
+```
+
+Use a bounded heap, not a full sort.
+
+```rust
+pub struct TopNExec {
+    input: Box<dyn ExecOp>,
+    order: Arc<[OrderKey]>,
+    limit: usize,
+    heap: BinaryHeap<HeapRow>,
+    emitted: Vec<CompactRow>,
+    pos: usize,
+}
+
+impl ExecOp for TopNExec {
+    fn open(&mut self, ctx: &mut ExecContext) -> ExecResult<()> {
+        self.input.open(ctx)?;
+
+        while let Some(batch) = self.input.next_batch(ctx)? {
+            for row in batch.rows() {
+                let key = sort_key(row, &self.order)?;
+
+                if self.heap.len() < self.limit {
+                    self.heap.push(HeapRow { key, row: row.clone() });
+                } else if key < self.heap.peek().unwrap().key {
+                    self.heap.pop();
+                    self.heap.push(HeapRow { key, row: row.clone() });
+                }
+            }
+        }
+
+        self.emitted = self.heap
+            .drain()
+            .map(|h| h.row)
+            .collect();
+
+        self.emitted.sort_by(|a, b| compare_rows(a, b, &self.order));
+        self.pos = 0;
+
+        Ok(())
+    }
+
+    fn next_batch(&mut self, ctx: &mut ExecContext) -> ExecResult<Option<RowBatch>> {
+        if self.pos >= self.emitted.len() {
+            return Ok(None);
+        }
+
+        let mut out = RowBatch::with_capacity(ctx.batch_size);
+
+        while self.pos < self.emitted.len() && out.len() < ctx.batch_size {
+            out.push(self.emitted[self.pos].clone());
+            self.pos += 1;
+        }
+
+        Ok(Some(out))
+    }
+}
+```
+
+---
+
+# 15. Aggregates
+
+Implement three physical aggregate forms:
+
+```text
+StreamingAggregate:
+  - Input ordered by group keys.
+  - O(1) group memory.
+  - Best for index-ordered scans and sorted input.
+
+HashAggregate:
+  - Input unordered.
+  - Memory-bound.
+  - Spillable.
+
+ScalarAggregate:
+  - No GROUP BY.
+  - Single aggregate state.
+```
+
+Planner rule:
+
+```rust
+pub fn choose_aggregate(
+    input: Path,
+    group_keys: &[OrderKey],
+    ctx: &PlanContext<'_>,
+    phys: &mut PhysArena,
+) -> Path {
+    if order_satisfies(&input.props.order, group_keys) {
+        build_streaming_aggregate(input, group_keys, phys)
+    } else {
+        let hash = build_hash_aggregate(input.clone(), group_keys, ctx, phys);
+
+        let sorted = if ctx.config.enable_sort_aggregate {
+            Some(build_sort_then_streaming_aggregate(input, group_keys, ctx, phys))
+        } else {
+            None
+        };
+
+        match sorted {
+            Some(s) if s.cost.total < hash.cost.total => s,
+            _ => hash,
+        }
+    }
+}
+```
+
+Aggregate state layout should avoid dynamic dispatch per row:
+
+```rust
+#[derive(Clone, Debug)]
+pub enum AggKind {
+    Count,
+    SumInt,
+    SumFloat,
+    Min,
+    Max,
+    Avg,
+}
+
+pub struct AggStateLayout {
+    slots: Vec<AggSlot>,
+}
+
+pub struct AggSlot {
+    kind: AggKind,
+    offset: usize,
+    width: usize,
+}
+
+pub struct AggRow {
+    bytes: Box<[u8]>,
+}
+```
+
+---
+
+# 16. Covering index reads under MVCC
+
+This is subtle.
+
+SQLite covering indexes can skip the original table lookup when the index contains everything the query needs. ([SQLite][3])
+
+RedlineDB has MVCC. A secondary index entry may be physically stale. Therefore:
+
+```text
+CoveringIndexScan is allowed to avoid full row decode.
+CoveringIndexScan is not automatically allowed to avoid visibility checks.
+```
+
+I would implement three levels:
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CoveringMode {
+    None,
+
+    // Index provides all requested payload columns,
+    // but heap tuple header must be checked for MVCC visibility.
+    PayloadCoveringHeaderRecheck,
+
+    // Future: visibility map proves all rows on target page visible
+    // for the query snapshot.
+    TrueIndexOnly,
+}
+```
+
+Executor behavior:
+
+```text
+Non-covering index scan:
+  index -> rowid -> heap page -> visibility check -> decode required columns
+
+Covering with header recheck:
+  index -> rowid -> heap page header only -> if visible, return index payload columns
+
+True index-only:
+  index -> return payload, no heap access
+```
+
+Phase 6 should implement `PayloadCoveringHeaderRecheck`. True index-only scans need an all-visible/visibility-map mechanism and careful interaction with vacuum horizons.
+
+```rust
+pub struct IndexScanExec {
+    index: IndexHandle,
+    heap: HeapHandle,
+    snapshot: Snapshot,
+    covering_mode: CoveringMode,
+    required_columns: ColumnSet,
+}
+
+impl ExecOp for IndexScanExec {
+    fn next_batch(&mut self, ctx: &mut ExecContext) -> ExecResult<Option<RowBatch>> {
+        let mut out = RowBatch::with_capacity(ctx.batch_size);
+
+        while out.len() < ctx.batch_size {
+            let Some(entry) = self.index.next_entry()? else {
+                break;
+            };
+
+            match self.covering_mode {
+                CoveringMode::None => {
+                    let tuple = self.heap.fetch_visible(entry.row_id, self.snapshot)?;
+                    if let Some(tuple) = tuple {
+                        out.push(tuple.decode_columns(&self.required_columns)?);
+                    }
+                }
+
+                CoveringMode::PayloadCoveringHeaderRecheck => {
+                    if self.heap.visible_header_only(entry.row_id, self.snapshot)? {
+                        out.push(entry.decode_payload(&self.required_columns)?);
+                    }
+                }
+
+                CoveringMode::TrueIndexOnly => {
+                    out.push(entry.decode_payload(&self.required_columns)?);
+                }
+            }
+        }
+
+        if out.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(out))
+        }
+    }
+}
+```
+
+---
+
+# 17. Multi-index intersection
+
+This is a high-value RedlineDB feature.
+
+Example:
+
+```sql
+SELECT *
+FROM events
+WHERE tenant_id = ?
+  AND status = ?
+  AND created_at BETWEEN ? AND ?;
+```
+
+If there are separate indexes on `tenant_id`, `status`, and `created_at`, SQLite usually chooses one index and applies the rest as filters, except for OR-specific cases. RedlineDB can cost an intersection.
+
+```rust
+pub enum RowIdSetStrategy {
+    MaterializeSmall,
+    StreamingMerge,
+    RejectTooLarge,
+}
+
+pub fn maybe_add_index_intersections(
+    ctx: &PlanContext<'_>,
+    rel: &BaseRelation,
+    predicates: &[Predicate],
+    required_cols: &ColumnSet,
+    out: &mut Vec<Path>,
+    phys: &mut PhysArena,
+) {
+    if !ctx.config.enable_index_intersection {
+        return;
+    }
+
+    let candidates = single_index_rowid_candidates(ctx, rel, predicates);
+
+    if candidates.len() < 2 {
+        return;
+    }
+
+    let mut sorted = candidates;
+    sorted.sort_by(|a, b| {
+        a.estimated_rows
+            .partial_cmp(&b.estimated_rows)
+            .unwrap()
+    });
+
+    let best_two = &sorted[..2.min(sorted.len())];
+
+    let est_rows = best_two
+        .iter()
+        .map(|c| c.estimated_rows)
+        .fold(rel.estimated_rows(), |a, b| a.min(b))
+        * 0.25;
+
+    if est_rows > ctx.config.max_index_intersection_rows as f64 {
+        return;
+    }
+
+    let plan = phys.push(PhysicalExpr::IndexIntersection {
+        relation_id: rel.relation_id,
+        indexes: best_two.iter().map(|c| c.index_id).collect(),
+        predicates: predicates.iter().map(|p| p.expr).collect(),
+        columns: required_cols.clone(),
+    });
+
+    let cost = cost_index_intersection(ctx, rel, best_two, est_rows);
+
+    out.push(Path {
+        rels: RelSet::singleton(rel.alias.0 as usize),
+        plan,
+        rows: est_rows.max(1.0),
+        width: estimate_width(ctx.stats, rel.relation_id, required_cols),
+        cost,
+        props: PhysicalProps {
+            order: OrderProp::None,
+            unique_keys: Arc::new([]),
+            columns: required_cols.clone(),
+        },
+    });
+}
+```
+
+Execution can be either sorted rowid merge or small-side materialization:
+
+```rust
+pub struct IndexIntersectionExec {
+    streams: Vec<Box<dyn RowIdStream>>,
+    heap: HeapHandle,
+    snapshot: Snapshot,
+}
+
+impl ExecOp for IndexIntersectionExec {
+    fn next_batch(&mut self, ctx: &mut ExecContext) -> ExecResult<Option<RowBatch>> {
+        let mut out = RowBatch::with_capacity(ctx.batch_size);
+
+        while out.len() < ctx.batch_size {
+            let Some(row_id) = next_intersection_rowid(&mut self.streams)? else {
+                break;
+            };
+
+            if let Some(row) = self.heap.fetch_visible(row_id, self.snapshot)? {
+                out.push(row);
+            }
+        }
+
+        if out.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(out))
+        }
+    }
+}
+```
+
+---
+
+# 18. Plan cache and schema/stat invalidation
+
+Prepared statements should cache:
+
+```text
+- parsed AST
+- bound logical plan
+- physical plan if schema version and relevant stat epoch still valid
+```
+
+Use two invalidation levels:
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlanCacheKey {
+    pub statement_hash: u64,
+    pub schema_version: u64,
+    pub stats_epoch: u64,
+    pub settings_hash: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ReplanReason {
+    SchemaChanged,
+    StatsChanged,
+    CostSettingsChanged,
+    ParameterSensitivePlan,
+}
+```
+
+Parameter-sensitive planning matters:
+
+```sql
+WHERE created_at BETWEEN ? AND ?
+```
+
+For unknown params, use generic selectivity. After first execution, if bound literals are highly selective, create a custom plan.
+
+```text
+Generic plan:
+  - Stable, reusable.
+  - Uses fallback selectivity for parameters.
+
+Custom plan:
+  - Built when parameter values materially change selectivity.
+  - Cached in small LRU per prepared statement.
+```
+
+---
+
+# 19. Threading model
+
+Do **not** burn threads inside every query by default. RedlineDB’s strategic advantage is many concurrent sessions sharing one engine, not necessarily one query using all cores.
+
+## 19.1 Planning
+
+```text
+- Planning is single-threaded.
+- Planning reads immutable Arc snapshots.
+- No global lock.
+- No catalog I/O.
+```
+
+## 19.2 Execution
+
+```text
+Default:
+  - One session executes its query on its own thread.
+  - Operators use batches.
+  - Scans cooperate with buffer pool.
+
+Optional parallelism:
+  - Parallel full scans for large analytical queries.
+  - Parallel hash aggregate.
+  - Parallel index build/analyze.
+  - Config-gated, memory-gated, and worker-pool-gated.
+```
+
+## 19.3 Worker pool
+
+```rust
+pub struct QueryWorkerPool {
+    queue: crossbeam_queue::SegQueue<Task>,
+    permits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+pub struct ParallelismConfig {
+    pub max_workers_global: usize,
+    pub max_workers_per_query: usize,
+    pub parallel_scan_min_pages: u64,
+    pub parallel_hash_min_rows: u64,
+}
+```
+
+Parallelism should be denied if the system is already busy:
+
+```rust
+pub fn choose_parallelism(
+    cfg: &ParallelismConfig,
+    query_memory: usize,
+    estimated_pages: u64,
+    active_sessions: usize,
+) -> usize {
+    if estimated_pages < cfg.parallel_scan_min_pages {
+        return 1;
+    }
+
+    if active_sessions > cfg.max_workers_global / 2 {
+        return 1;
+    }
+
+    if query_memory < 16 * 1024 * 1024 {
+        return 1;
+    }
+
+    cfg.max_workers_per_query.min(cfg.max_workers_global)
+}
+```
+
+---
+
+# 20. Physical plan enum
+
+```rust
+#[derive(Clone, Debug)]
+pub enum PhysicalExpr {
+    SeqScan {
+        relation_id: RelationId,
+        alias: RelAlias,
+        predicates: Vec<ExprId>,
+        columns: ColumnSet,
+    },
+
+    IndexScan {
+        relation_id: RelationId,
+        index_id: IndexId,
+        alias: RelAlias,
+        predicates: Vec<ExprId>,
+        residual_predicates: Vec<PredicateId>,
+        columns: ColumnSet,
+        covering: bool,
+    },
+
+    IndexIntersection {
+        relation_id: RelationId,
+        indexes: Vec<IndexId>,
+        predicates: Vec<ExprId>,
+        columns: ColumnSet,
+    },
+
+    Filter {
+        input: PhysExprId,
+        predicate: ExprId,
+    },
+
+    Project {
+        input: PhysExprId,
+        expressions: Vec<ExprId>,
+    },
+
+    NestedLoopJoin {
+        left: PhysExprId,
+        right: PhysExprId,
+        join_type: JoinType,
+        predicates: Vec<ExprId>,
+    },
+
+    IndexNestedLoopJoin {
+        outer: PhysExprId,
+        inner_relation: RelationId,
+        inner_index: IndexId,
+        join_type: JoinType,
+        parameter_bindings: Vec<(ColumnRef, ColumnRef)>,
+        residual_predicates: Vec<ExprId>,
+    },
+
+    HashJoin {
+        build: PhysExprId,
+        probe: PhysExprId,
+        join_type: JoinType,
+        build_keys: Vec<ExprId>,
+        probe_keys: Vec<ExprId>,
+        residual_predicates: Vec<ExprId>,
+    },
+
+    HashAggregate {
+        input: PhysExprId,
+        group_keys: Vec<ExprId>,
+        aggregates: Vec<AggregateExpr>,
+    },
+
+    StreamingAggregate {
+        input: PhysExprId,
+        group_keys: Vec<ExprId>,
+        aggregates: Vec<AggregateExpr>,
+    },
+
+    Sort {
+        input: PhysExprId,
+        order: Vec<OrderKey>,
+    },
+
+    TopN {
+        input: PhysExprId,
+        order: Vec<OrderKey>,
+        limit: u64,
+    },
+
+    Limit {
+        input: PhysExprId,
+        limit: Option<u64>,
+        offset: u64,
+    },
+}
+
+pub struct PhysArena {
+    nodes: Vec<PhysicalExpr>,
+}
+
+impl PhysArena {
+    pub fn push(&mut self, node: PhysicalExpr) -> PhysExprId {
+        let id = PhysExprId(self.nodes.len() as u32);
+        self.nodes.push(node);
+        id
+    }
+
+    pub fn get(&self, id: PhysExprId) -> &PhysicalExpr {
+        &self.nodes[id.0 as usize]
+    }
+}
+```
+
+---
+
+# 21. Optimizer top-level flow
+
+```rust
+pub fn optimize_select(
+    bound: BoundSelect,
+    ctx: &PlanContext<'_>,
+) -> OptimizedPlan {
+    let mut exprs = bound.exprs;
+    let mut logical = bound.logical;
+
+    normalize_logical_plan(&mut logical, &mut exprs);
+
+    let required = compute_required_columns(&logical, &exprs);
+
+    let predicates = classify_predicates(&logical, &exprs);
+    let join_graph = build_join_graph(&logical, &predicates);
+
+    let mut phys = PhysArena { nodes: Vec::new() };
+
+    let mut base_paths = Vec::new();
+
+    for base in logical.base_relations() {
+        let base_preds = predicates
+            .iter()
+            .filter(|p| p.kind == PredicateKind::SingleTable)
+            .filter(|p| p.rels.contains(base.alias.0 as usize))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let mut paths = Vec::new();
+
+        build_base_paths(
+            ctx,
+            base,
+            &base_preds,
+            required.for_relation(base.alias),
+            &mut paths,
+            &mut phys,
+        );
+
+        base_paths.push(paths);
+    }
+
+    let joined = if base_paths.len() == 1 {
+        choose_best_base_path(base_paths.remove(0))
+    } else if base_paths.len() <= ctx.config.exact_join_dp_limit {
+        optimize_joins_dp(ctx, base_paths, &join_graph, &mut phys)
+    } else {
+        optimize_joins_beam(ctx, base_paths, &join_graph, &mut phys)
+    };
+
+    let with_post_filters = add_post_join_filters(
+        joined,
+        &predicates,
+        &mut phys,
+        ctx,
+    );
+
+    let with_agg = add_aggregate_if_needed(
+        with_post_filters,
+        &logical,
+        &mut phys,
+        ctx,
+    );
+
+    let with_sort = add_sort_if_needed(
+        with_agg,
+        logical.order_by(),
+        logical.limit(),
+        &mut phys,
+        ctx,
+    );
+
+    let final_path = add_projection_and_limit(
+        with_sort,
+        &logical,
+        &mut phys,
+        ctx,
+    );
+
+    OptimizedPlan {
+        root: final_path.plan,
+        arena: phys,
+        estimated_rows: final_path.rows,
+        estimated_cost: final_path.cost,
+        schema_version: ctx.schema_version,
+        stats_epoch: ctx.stats.snapshot().epoch,
+    }
+}
+```
+
+---
+
+# 22. EXPLAIN and deterministic hooks
+
+Plan inspection is a Phase 6 requirement. Implement both:
+
+```sql
+EXPLAIN SELECT ...
+EXPLAIN ANALYZE SELECT ...
+EXPLAIN FORMAT JSON SELECT ...
+```
+
+Text example:
+
+```text
+Limit  (cost=12.4..13.1 rows=10 width=48)
+  -> IndexScan using idx_orders_customer_created
+     on orders o
+     covering: yes, visibility: header-recheck
+     index cond: customer_id = ? AND created_at >= ?
+     rows=10 cost=12.4..201.9 order=o.created_at DESC
+```
+
+JSON example:
+
+```json
+{
+  "node": "Limit",
+  "estimated_rows": 10,
+  "estimated_cost": {
+    "startup": 12.4,
+    "total": 13.1
+  },
+  "children": [
+    {
+      "node": "IndexScan",
+      "relation": "orders",
+      "index": "idx_orders_customer_created",
+      "covering": true,
+      "visibility": "header-recheck",
+      "estimated_rows": 1082,
+      "order": ["created_at DESC"]
+    }
+  ]
+}
+```
+
+Test hooks:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct OptimizerTestHooks {
+    pub fixed_stats_seed: Option<u64>,
+    pub force_stats_epoch: Option<u64>,
+
+    pub disable_seq_scan: bool,
+    pub disable_index_scan: bool,
+    pub disable_hash_join: bool,
+    pub disable_nested_loop: bool,
+    pub disable_index_intersection: bool,
+
+    pub force_join_order: Option<Vec<RelAlias>>,
+    pub force_index: Option<(RelationId, IndexId)>,
+
+    pub deterministic_costs: bool,
+}
+```
+
+Expose:
+
+```sql
+PRAGMA redline_debug_optimizer = true;
+PRAGMA redline_disable_hash_join = true;
+PRAGMA redline_force_index('orders', 'idx_orders_customer_created');
+```
+
+The goal is not user-facing hints first. The goal is deterministic regression tests.
+
+---
+
+# 23. Differential testing against SQLite
+
+For supported SQL:
+
+```text
+1. Generate schema.
+2. Insert random data.
+3. Run query on SQLite.
+4. Run query on RedlineDB.
+5. Compare result sets.
+6. For unordered queries, sort canonical result.
+7. For floats, compare according to SQLite-compatible coercion rules.
+```
+
+Planner tests should not merely assert “the query returns correct rows.” They should assert plan shape when stats are injected:
+
+```rust
+#[test]
+fn chooses_covering_index_for_order_by_limit() {
+    let db = TestDb::new();
+    db.exec("CREATE TABLE orders(id INTEGER PRIMARY KEY, customer_id INT, created_at INT, total INT)");
+    db.exec("CREATE INDEX idx ON orders(customer_id, created_at DESC, total)");
+
+    db.inject_stats(stats! {
+        table orders rows 1_000_000 pages 20_000;
+        index idx entries 1_000_000 leaf_pages 8_000 height 3 prefix_ndv [100_000, 1_000_000];
+        column orders.customer_id ndv 100_000 null 0.0;
+    });
+
+    let plan = db.explain(
+        "SELECT total FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 10"
+    );
+
+    assert!(plan.contains("IndexScan"));
+    assert!(plan.contains("covering: yes"));
+    assert!(!plan.contains("Sort"));
+}
+```
+
+---
+
+# 24. Benchmark suite for Phase 6
+
+Phase 6 benchmark categories:
+
+```text
+Single table:
+  - full scan, projected 1 column
+  - full scan, projected all columns
+  - indexed equality
+  - indexed range
+  - covering index point lookup
+  - non-covering index point lookup
+  - ORDER BY indexed
+  - ORDER BY LIMIT Top-N
+  - multi-index AND intersection
+
+Joins:
+  - tiny outer + indexed inner
+  - large equijoin hash join
+  - 3-way join selective dimension
+  - 8-way star join
+  - bad-stats fallback
+
+Aggregates:
+  - COUNT(*)
+  - GROUP BY ordered input
+  - GROUP BY hash aggregate
+  - GROUP BY spill
+
+Concurrency:
+  - many read sessions planning concurrently
+  - many read sessions executing point lookups
+  - mixed readers and writers with prepared statements
+  - stats refresh while other sessions plan
+
+Memory:
+  - hash join under memory cap
+  - sort under memory cap
+  - aggregate under memory cap
+```
+
+Metrics:
+
+```text
+- throughput
+- p50/p95/p99 latency
+- prepare/plan latency
+- rows/sec
+- pages read
+- buffer hits/misses
+- decoded columns/row
+- bytes allocated/query
+- peak query memory
+- spill bytes
+- plan chosen
+- estimated rows vs actual rows
+```
+
+---
+
+# 25. The “brilliant simplicity” implementation order
+
+I would implement Phase 6 in this order:
+
+```text
+Step 1:
+  Stats catalogs + immutable StatsSnapshot.
+
+Step 2:
+  ANALYZE full-scan for small tables.
+
+Step 3:
+  Single-column stats:
+    row count, pages, null fraction, NDV, MCV, histogram, avg width.
+
+Step 4:
+  Cost model + selectivity estimator.
+
+Step 5:
+  Access path generation:
+    seq scan, rowid lookup, index equality, index range, covering flag.
+
+Step 6:
+  Required-column analysis and projection pruning.
+
+Step 7:
+  ORDER BY property tracking and sort avoidance.
+
+Step 8:
+  Top-N sort.
+
+Step 9:
+  DP join order for inner joins.
+
+Step 10:
+  Indexed nested loop join.
+
+Step 11:
+  Hash join with memory accounting.
+
+Step 12:
+  Hash aggregate and streaming aggregate.
+
+Step 13:
+  External sort/spill.
+
+Step 14:
+  Composite index prefix stats.
+
+Step 15:
+  Multi-index intersection.
+
+Step 16:
+  EXPLAIN, EXPLAIN JSON, EXPLAIN ANALYZE.
+
+Step 17:
+  Deterministic stats injection and plan regression tests.
+
+Step 18:
+  Bench RedlineDB vs SQLite WAL mode.
+```
+
+No step requires rewriting the whole optimizer later.
+
+---
+
+# 26. Final minimum viable Phase 6 API surface
+
+Rust API:
+
+```rust
+pub struct OptimizeOptions {
+    pub enable_hash_join: bool,
+    pub enable_index_intersection: bool,
+    pub enable_topn: bool,
+    pub exact_join_dp_limit: usize,
+    pub max_paths_per_subset: usize,
+    pub memory_limit_bytes: usize,
+}
+
+pub struct OptimizedPlan {
+    pub root: PhysExprId,
+    pub arena: PhysArena,
+    pub estimated_rows: f64,
+    pub estimated_cost: Cost,
+    pub schema_version: u64,
+    pub stats_epoch: StatsEpoch,
+}
+
+pub trait Optimizer {
+    fn optimize(
+        &self,
+        logical: BoundLogicalPlan,
+        options: OptimizeOptions,
+    ) -> anyhow::Result<OptimizedPlan>;
+}
+
+pub trait Explain {
+    fn explain_text(&self, plan: &OptimizedPlan) -> String;
+    fn explain_json(&self, plan: &OptimizedPlan) -> serde_json::Value;
+}
+```
+
+SQL/API additions:
+
+```sql
+ANALYZE;
+ANALYZE table_name;
+PRAGMA optimize;
+EXPLAIN SELECT ...;
+EXPLAIN ANALYZE SELECT ...;
+```
+
+Debug-only:
+
+```sql
+PRAGMA redline_optimizer_trace = true;
+PRAGMA redline_disable_hash_join = true;
+PRAGMA redline_disable_index_intersection = true;
+PRAGMA redline_exact_join_dp_limit = 12;
+```
+
+---
+
+# 27. What I would deliberately not build yet
+
+Avoid these until the above is fast and benchmarked:
+
+```text
+- Full Cascades optimizer
+- Learned cardinality estimator
+- Adaptive query execution
+- Parallel query everywhere
+- True index-only scans without visibility infrastructure
+- Exotic join algorithms before hash/indexed nested loop are excellent
+- Cost model with dozens of knobs
+- User-facing hints as a substitute for good planning
+```
+
+The first production optimizer should be boring, transparent, and fast.
+
+---
+
+# 28. Summary blueprint
+
+The Phase 6 architecture I would build is:
+
+```text
+Stats:
+  durable catalog stats
+  immutable in-memory snapshot
+  ANALYZE full/sampled
+  MCV + NDV + histogram + index prefix stats
+  optional extended stats
+
+Optimizer:
+  logical rewrite
+  predicate pushdown
+  projection pruning
+  access path generation
+  physical property tracking
+  exact DP join planning for normal joins
+  beam/N3 fallback for large joins
+  costed sort/hash/index/nested-loop choices
+
+Executor:
+  batch internally, row API externally
+  memory-accounted hash join
+  indexed nested loop
+  streaming/hash aggregate
+  Top-N sort
+  external spill
+  covering index with MVCC-safe header recheck
+
+Testing:
+  deterministic stats injection
+  EXPLAIN shape assertions
+  SQLite differential correctness
+  benchmark-driven cost calibration
+```
+
+This is the shortest path to a Phase 6 that is fast, memory-smart, concurrency-friendly, and still simple enough to maintain.
+
+[1]: https://www.sqlite.org/queryplanner-ng.html "The Next-Generation Query Planner"
+[2]: https://sqlite.org/queryplanner.html "Query Planning"
+[3]: https://www.sqlite.org/optoverview.html "The SQLite Query Optimizer Overview"
+[4]: https://sqlite.org/lang_analyze.html "ANALYZE"
+[5]: https://www.postgresql.org/docs/current/planner-stats.html "PostgreSQL: Documentation: 18: 14.2. Statistics Used by the Planner"
+[6]: https://link.springer.com/rwe/10.1007/978-1-4614-8265-9_293 "Query Optimization (in Relational Databases) | Springer Nature Link"
+

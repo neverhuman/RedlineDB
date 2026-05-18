@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS compat_items
+
+statement ok
+CREATE TABLE compat_items(id INTEGER PRIMARY KEY, name TEXT)
+
+statement ok
+INSERT INTO compat_items(id, name) VALUES (1, 'ada')
+
+query
+SELECT id, name FROM compat_items ORDER BY id
+----
+1|ada

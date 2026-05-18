@@ -1,0 +1,4394 @@
+Below is how I would build **Phase 9: Benchmark Certification and SQLite Head-to-Head** as a production-grade Rust benchmark, verification, crash, and reporting system. The point is not just to “run some benchmarks.” The point is to make RedlineDB’s performance claims **reproducible, adversarially fair, hard to fool, and useful for engineering decisions**.
+
+The benchmark harness itself should be **100% Rust**. The SQLite comparison adapter necessarily links to SQLite through Rust FFI or `libsqlite3-sys` because SQLite is the baseline being measured; that should stay isolated in `redlinedb_bench::engines::sqlite` and must not leak SQLite internals into RedlineDB.
+
+SQLite-specific constraints matter a lot. In WAL mode, SQLite lets readers and one writer overlap, but “there can only be one writer at a time,” which is exactly the ceiling RedlineDB should beat on disjoint concurrent-writer workloads. SQLite WAL checkpointing also affects latency and WAL size: long readers can stop checkpoint progress, default auto-checkpointing can make occasional commits slower, and `synchronous=FULL` versus `NORMAL` changes fsync and durability behavior. These are not details; they define the fairness rules for Phase 9. ([SQLite][1])
+
+---
+
+# Phase 9 objective
+
+Phase 9 should produce this:
+
+```text
+redlinedb_bench/
+  1. A deterministic benchmark runner.
+  2. SQLite and RedlineDB adapters.
+  3. A workload suite covering OLTP, reads, writes, ranges, joins, checkpoint pressure, recovery, and memory ceilings.
+  4. A correctness/compatibility runner that compares supported SQL against SQLite.
+  5. A crash/recovery certification harness.
+  6. A metrics system capturing latency distributions, throughput, WAL bytes/op, data bytes/op, RSS, checkpoint stalls, recovery time, and correctness checksums.
+  7. A report generator with honest release gates.
+```
+
+The real deliverable is not “RedlineDB is faster.” The real deliverable is:
+
+```text
+For workload W, durability profile D, memory profile M, thread count T,
+on machine H, RedlineDB version R and SQLite version S:
+
+  - produced identical supported SQL results,
+  - preserved acknowledged commits under the relevant crash model,
+  - stayed within memory bounds,
+  - had measured latency/throughput/database-size/recovery-time metrics,
+  - and passed or failed an explicit release gate.
+```
+
+---
+
+# The core design rule
+
+Do not benchmark implementation details. Benchmark **user-visible database behavior**.
+
+That means the harness should measure:
+
+```text
+prepare + bind + step + reset
+transaction begin + commit
+actual reads/writes
+actual checkpoint effects
+actual recovery after unclean shutdown
+actual memory usage
+actual WAL/database file growth
+actual contention under N sessions
+```
+
+It should avoid:
+
+```text
+calling RedlineDB kernel APIs when SQLite is using SQL;
+letting SQLite use default auto-checkpointing while RedlineDB uses a tuned background checkpoint worker;
+using different durability promises;
+comparing RedlineDB cached in-process memory against SQLite cold OS-cache reads;
+ignoring SQLITE_BUSY;
+claiming wins on unsupported SQL;
+claiming NORMAL-mode numbers as strict durable numbers.
+```
+
+SQLite exposes `sqlite3_db_status()` and related status counters for cache/memory/cache-write information, so the SQLite adapter should collect those in addition to process-level metrics. ([SQLite][2])
+
+---
+
+# Phase 9 crate layout
+
+I would build a dedicated workspace member:
+
+```text
+crates/
+  redlinedb_bench/
+    Cargo.toml
+    src/
+      main.rs
+      lib.rs
+
+      config.rs
+      error.rs
+      metrics.rs
+      report.rs
+      gates.rs
+      procstat.rs
+      fs_metrics.rs
+      random.rs
+      checksum.rs
+      affinity.rs
+
+      runner/
+        mod.rs
+        process.rs
+        threaded.rs
+        schedule.rs
+        checkpoint.rs
+        crash.rs
+        memory_sampler.rs
+
+      engines/
+        mod.rs
+        traits.rs
+        null.rs
+        redline.rs
+        sqlite.rs
+        sqlite_ffi.rs
+
+      workloads/
+        mod.rs
+        kv.rs
+        insert.rs
+        point_read.rs
+        range_scan.rs
+        update.rs
+        delete.rs
+        indexed_lookup.rs
+        join.rs
+        mixed_oltp.rs
+        checkpoint_pressure.rs
+        recovery.rs
+        memory_ceiling.rs
+        prepare_pressure.rs
+
+      compat/
+        mod.rs
+        canonical.rs
+        sqllogic.rs
+        differential.rs
+
+      bin/
+        benchctl.rs
+        run_one.rs
+        report.rs
+```
+
+I would split the CLI into two modes:
+
+```text
+benchctl
+  Orchestrates the full matrix.
+  Spawns child processes.
+  Samples child RSS.
+  Kills children for crash tests.
+  Aggregates JSON results.
+  Produces reports.
+
+run-one
+  Runs exactly one benchmark case.
+  Runs inside a clean process.
+  Emits one JSON result.
+```
+
+Do **not** run all benchmarks inside one process. You want child-process isolation because:
+
+```text
+allocator state leaks across runs;
+SQLite global initialization and page cache state can contaminate results;
+RedlineDB background threads can contaminate later tests;
+crash tests require killing the database process;
+peak RSS is easier and cleaner per child;
+file descriptors and mmap state are easier to audit.
+```
+
+---
+
+# Cargo configuration
+
+```toml
+# crates/redlinedb_bench/Cargo.toml
+
+[package]
+name = "redlinedb_bench"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["sqlite"]
+sqlite = ["libsqlite3-sys"]
+sqlite-bundled = ["libsqlite3-sys/bundled"]
+redline = []
+linux-proc = []
+
+[dependencies]
+anyhow = "1"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+rand = "0.9"
+rand_chacha = "0.9"
+
+hdrhistogram = "7"
+crossbeam-utils = "0.8"
+crossbeam-channel = "0.5"
+parking_lot = "0.12"
+tempfile = "3"
+walkdir = "2"
+num_cpus = "1"
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = "0.17"
+
+[dependencies.libsqlite3-sys]
+version = "0.33"
+optional = true
+
+[dev-dependencies]
+criterion = "0.8"
+```
+
+Use Criterion for narrow Rust microbenchmarks, such as RedlineDB row encoding, varint encoding, SQL value conversion, checksum calculation, and benchmark harness overhead. Criterion is useful for statistically detecting small performance regressions in microbenchmarks, but the RedlineDB-vs-SQLite head-to-head should be a custom macrobenchmark harness because you need process isolation, crash testing, checkpoint control, and database-specific metrics. ([Docs.rs][3])
+
+Use HDR Histogram for latency because it has fixed memory and constant-time recording, which matters when you are recording millions of operation latencies from many worker threads. ([Docs.rs][4])
+
+---
+
+# Build profiles
+
+At the workspace root:
+
+```toml
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = true
+panic = "abort"
+incremental = false
+
+[profile.bench]
+inherits = "release"
+debug = true
+```
+
+For release certification, every report should record:
+
+```text
+rustc version
+target triple
+RedlineDB git SHA
+SQLite library version
+SQLite compile options
+kernel version
+filesystem type
+mount options
+CPU model
+core/thread count
+governor
+RAM
+SSD/NVMe model if available
+benchmark binary SHA256
+benchmark config SHA256
+```
+
+The benchmark must emit this metadata in JSON. Without this, the numbers are not reproducible.
+
+---
+
+# Durability profiles
+
+Do not compare a strict RedlineDB commit path against SQLite `synchronous=NORMAL`, and do not compare RedlineDB relaxed group commit against SQLite `synchronous=FULL`.
+
+Define explicit profiles:
+
+```rust
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum DurabilityMode {
+    /// Commit is acknowledged only after WAL/data durability required for power-loss survival.
+    StrictFull,
+
+    /// Process-crash safe, but may lose recent commits on OS crash/power loss depending on engine.
+    Normal,
+
+    /// No fsync durability. Dev/perf ceiling only. Never used for replacement claims.
+    Unsafe,
+}
+```
+
+Mapping:
+
+```text
+StrictFull:
+  SQLite:
+    PRAGMA journal_mode=WAL;
+    PRAGMA synchronous=FULL;
+    PRAGMA wal_autocheckpoint=0;
+  RedlineDB:
+    commit ack only after durable WAL fsync/group fsync satisfying strict mode;
+    dirty data never ahead of durable WAL;
+    checkpoint fsync rules enabled.
+
+Normal:
+  SQLite:
+    PRAGMA journal_mode=WAL;
+    PRAGMA synchronous=NORMAL;
+    PRAGMA wal_autocheckpoint=0;
+  RedlineDB:
+    no per-commit fsync, but safe against process crash;
+    fsync during checkpoint or configured group interval;
+    clearly labelled as not strict power-loss durable.
+
+Unsafe:
+  SQLite:
+    PRAGMA journal_mode=WAL;
+    PRAGMA synchronous=OFF;
+    PRAGMA wal_autocheckpoint=0;
+  RedlineDB:
+    no fsync;
+    used only to find CPU/lock/encoding ceilings.
+```
+
+SQLite’s docs explicitly state that in WAL mode `synchronous=FULL` adds a WAL sync after every transaction commit, while `NORMAL` avoids syncs during most transactions and may lose durability across power loss even though WAL remains consistent. ([SQLite][5])
+
+---
+
+# SQLite configuration
+
+For every SQLite connection:
+
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = FULL | NORMAL | OFF;
+PRAGMA wal_autocheckpoint = 0;
+PRAGMA busy_timeout = 30000;
+PRAGMA temp_store = MEMORY;
+PRAGMA mmap_size = 0;
+PRAGMA foreign_keys = ON;
+```
+
+Why:
+
+```text
+journal_mode=WAL:
+  Required baseline.
+
+synchronous:
+  Matched durability profile.
+
+wal_autocheckpoint=0:
+  We control checkpoint timing explicitly.
+  Otherwise SQLite may checkpoint inside a COMMIT once the WAL reaches its threshold,
+  causing unpredictable commit latency.
+
+busy_timeout:
+  SQLite’s second writer will wait behind the first writer.
+  Waiting time must count as latency.
+  SQLITE_BUSY after the timeout is a benchmark failure or a recorded failed op,
+  not something to ignore.
+
+temp_store=MEMORY:
+  Avoids unrelated temp-file behavior unless the workload explicitly tests spilling.
+
+mmap_size=0:
+  Avoids giving SQLite mmap advantages unless RedlineDB also has an mmap profile.
+
+foreign_keys=ON:
+  Use real SQL semantics where relevant.
+```
+
+SQLite documents that a busy timeout sleeps/retries until the configured time has accumulated, after which `sqlite3_step()` returns `SQLITE_BUSY`; the benchmark should count that outcome explicitly. ([SQLite][6])
+
+For thread mode, use one SQLite connection per worker thread and open each connection with `SQLITE_OPEN_NOMUTEX` only if every connection is used by one thread at a time. SQLite documents serialized mode as the default and says `SQLITE_OPEN_NOMUTEX` creates a multi-thread-mode connection where the application must not use the same connection concurrently from multiple threads. ([SQLite][7])
+
+---
+
+# Checkpoint profiles
+
+Do not hide checkpoint costs. Run three profiles:
+
+```rust
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum CheckpointPolicy {
+    /// No checkpoint during timed section. Measures append path and WAL growth.
+    NoneDuringRun,
+
+    /// Separate checkpointer thread tries PASSIVE checkpoints based on WAL bytes or time.
+    Background {
+        every_ms: u64,
+        wal_bytes_threshold: u64,
+    },
+
+    /// Aggressive checkpoint pressure. Intended to expose stalls and long-reader behavior.
+    Pressure {
+        every_ms: u64,
+        mode: CheckpointMode,
+    },
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum CheckpointMode {
+    Passive,
+    Full,
+    Restart,
+    Truncate,
+}
+```
+
+SQLite checkpoint behavior is a major source of latency differences. `PASSIVE` may leave work unfinished if readers or writers are active; `FULL`, `RESTART`, and `TRUNCATE` can block more aggressively, with `TRUNCATE` also truncating the WAL on success. ([SQLite][8])
+
+The default release claim should use:
+
+```text
+StrictFull + Background checkpoint
+Normal + Background checkpoint
+Unsafe + No checkpoint during run, clearly labelled
+```
+
+The stress suite should include:
+
+```text
+StrictFull + Pressure checkpoint
+Normal + Pressure checkpoint
+long reader + background checkpoint
+long reader + truncate checkpoint
+```
+
+---
+
+# Workload matrix
+
+The benchmark suite should not be one workload. It should be a matrix.
+
+## Required workload families
+
+```text
+1. single_row_insert_autocommit
+2. batched_insert_tx_10
+3. batched_insert_tx_100
+4. batched_insert_tx_1000
+5. point_read_pk
+6. point_read_secondary_index
+7. range_scan_pk_10
+8. range_scan_pk_100
+9. range_scan_pk_1000
+10. update_pk_uniform
+11. update_pk_zipf
+12. delete_insert_churn
+13. indexed_lookup
+14. two_table_join_indexed
+15. two_table_join_unindexed
+16. concurrent_readers
+17. concurrent_disjoint_writers
+18. concurrent_contended_writers
+19. mixed_oltp_95r_5w
+20. mixed_oltp_80r_20w
+21. mixed_oltp_50r_50w
+22. checkpoint_pressure
+23. long_reader_checkpoint_blocking
+24. crash_recovery_strict
+25. crash_recovery_normal_process_crash
+26. memory_ceiling
+27. prepare_pressure
+28. schema_reopen
+```
+
+## Thread/session matrix
+
+```text
+connections / worker threads:
+  1, 2, 4, 8, 16, 32, 64
+
+writer fractions:
+  0%, 5%, 20%, 50%, 100%
+
+key distributions:
+  uniform
+  zipf_hotspot
+  disjoint_per_writer
+
+record sizes:
+  16 bytes
+  100 bytes
+  1 KiB
+  8 KiB
+
+database sizes:
+  small: fits in cache
+  medium: exceeds configured DB page cache but fits OS page cache
+  large: exceeds RAM, optional dedicated machine only
+```
+
+The most important “RedlineDB should beat SQLite” workload is:
+
+```text
+concurrent_disjoint_writers
+  N writer sessions
+  no logical row conflicts
+  fixed-size update or insert transactions
+  strict durability and normal durability separately
+  background checkpoint enabled
+```
+
+SQLite should hit its single-writer ceiling there. RedlineDB should scale until WAL, CPU, row-lock, or device limits.
+
+The most important “RedlineDB is a serious replacement” workloads are:
+
+```text
+single-thread point read
+single-thread insert
+single-thread update
+single-thread range scan
+batched insert
+indexed lookup
+```
+
+If RedlineDB loses badly on these, the concurrent writer win is not enough.
+
+---
+
+# Canonical benchmark schema
+
+Use a deliberately simple schema first:
+
+```sql
+CREATE TABLE kv (
+    k INTEGER PRIMARY KEY,
+    v BLOB NOT NULL,
+    n INTEGER NOT NULL,
+    pad TEXT,
+    version INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idx_kv_n ON kv(n);
+```
+
+For joins:
+
+```sql
+CREATE TABLE account (
+    id INTEGER PRIMARY KEY,
+    region INTEGER NOT NULL,
+    balance INTEGER NOT NULL,
+    payload BLOB NOT NULL
+);
+
+CREATE INDEX idx_account_region ON account(region);
+
+CREATE TABLE ledger (
+    id INTEGER PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    payload BLOB NOT NULL
+);
+
+CREATE INDEX idx_ledger_account ON ledger(account_id);
+CREATE INDEX idx_ledger_created ON ledger(created_at);
+```
+
+Use deterministic payloads:
+
+```text
+payload = blake3_or_xxhash(seed, table_id, key, version)
+```
+
+The harness should compute a checksum over returned rows so the engine cannot “win” by not doing real work.
+
+---
+
+# JSON result format
+
+Every run should emit one JSON file:
+
+```rust
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct RunResult {
+    pub bench_version: String,
+    pub run_id: String,
+
+    pub engine: EngineInfo,
+    pub workload: WorkloadInfo,
+    pub config: BenchConfig,
+    pub machine: MachineInfo,
+
+    pub started_unix_ms: u64,
+    pub elapsed_ns: u64,
+
+    pub ops_attempted: u64,
+    pub ops_completed: u64,
+    pub ops_failed: u64,
+    pub throughput_ops_sec: f64,
+
+    pub latency: LatencySummary,
+    pub checkpoint: CheckpointSummary,
+    pub recovery: Option<RecoverySummary>,
+
+    pub memory: MemorySummary,
+    pub file_sizes: FileSizeSummary,
+    pub io: IoSummary,
+
+    pub sqlite_stats: Option<SqliteStats>,
+    pub redline_stats: Option<RedlineStats>,
+
+    pub correctness: CorrectnessSummary,
+    pub warnings: Vec<String>,
+}
+```
+
+Latency summary:
+
+```rust
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct LatencySummary {
+    pub min_ns: u64,
+    pub mean_ns: f64,
+    pub p50_ns: u64,
+    pub p90_ns: u64,
+    pub p95_ns: u64,
+    pub p99_ns: u64,
+    pub p999_ns: u64,
+    pub max_ns: u64,
+}
+```
+
+Correctness summary:
+
+```rust
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct CorrectnessSummary {
+    pub verified: bool,
+    pub row_count: Option<u64>,
+    pub checksum: Option<u64>,
+    pub integrity_check: Option<String>,
+    pub mismatches: Vec<String>,
+}
+```
+
+---
+
+# Core config types
+
+```rust
+// src/config.rs
+
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchConfig {
+    pub engine: EngineKind,
+    pub workload: WorkloadKind,
+
+    pub db_path: PathBuf,
+    pub output_json: PathBuf,
+
+    pub seed: u64,
+    pub workers: usize,
+    pub operations: Option<u64>,
+    pub duration_secs: Option<u64>,
+    pub warmup_operations: u64,
+
+    pub durability: DurabilityMode,
+    pub checkpoint: CheckpointPolicy,
+    pub memory: MemoryConfig,
+
+    pub initial_rows: u64,
+    pub value_size: usize,
+    pub range_len: u64,
+    pub batch_size: u64,
+
+    pub key_distribution: KeyDistribution,
+    pub verify_after_run: bool,
+    pub pin_threads: bool,
+    pub busy_timeout_ms: u32,
+
+    pub sqlite: SqliteConfig,
+    pub redline: RedlineConfig,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum EngineKind {
+    Redline,
+    Sqlite,
+    Null,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum WorkloadKind {
+    SingleRowInsert,
+    BatchedInsert,
+    PointReadPk,
+    RangeScanPk,
+    UpdatePk,
+    DeleteInsertChurn,
+    IndexedLookup,
+    JoinIndexed,
+    MixedOltp,
+    ConcurrentReaders,
+    ConcurrentDisjointWriters,
+    ConcurrentContendedWriters,
+    CheckpointPressure,
+    CrashRecovery,
+    MemoryCeiling,
+    PreparePressure,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum DurabilityMode {
+    StrictFull,
+    Normal,
+    Unsafe,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CheckpointPolicy {
+    NoneDuringRun,
+    Background {
+        every_ms: u64,
+        wal_bytes_threshold: u64,
+    },
+    Pressure {
+        every_ms: u64,
+        mode: CheckpointMode,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum CheckpointMode {
+    Passive,
+    Full,
+    Restart,
+    Truncate,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryConfig {
+    /// Total intended database cache budget.
+    pub db_cache_bytes: u64,
+
+    /// Per-worker scratch budget outside the engine.
+    pub worker_scratch_bytes: u64,
+
+    /// Whether OS mmap is allowed.
+    pub mmap: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum KeyDistribution {
+    Uniform,
+    Zipf { exponent: f64 },
+    DisjointPerWorker,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SqliteConfig {
+    pub page_size: u32,
+    pub cache_spill: bool,
+    pub open_nomutex: bool,
+    pub temp_store_memory: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedlineConfig {
+    pub page_size: u32,
+    pub buffer_pool_shards: usize,
+    pub wal_group_commit: bool,
+    pub wal_group_commit_max_delay_us: u64,
+}
+```
+
+---
+
+# Engine abstraction
+
+The key is to make dispatch static inside the hot loop. Do not make every operation go through a boxed trait object if you can avoid it.
+
+```rust
+// src/engines/traits.rs
+
+use crate::config::{BenchConfig, CheckpointMode, DurabilityMode};
+use crate::metrics::{CheckpointStats, EngineStats};
+use anyhow::Result;
+use std::path::Path;
+
+pub trait BenchEngine: Sync + 'static {
+    type Conn<'a>: KvOps
+    where
+        Self: 'a;
+
+    fn name() -> &'static str;
+
+    fn create_database(path: &Path, cfg: &BenchConfig) -> Result<()>;
+
+    fn open_worker<'a>(
+        worker_id: usize,
+        path: &'a Path,
+        cfg: &'a BenchConfig,
+    ) -> Result<Self::Conn<'a>>;
+
+    fn checkpoint(path: &Path, cfg: &BenchConfig, mode: CheckpointMode)
+        -> Result<CheckpointStats>;
+
+    fn collect_engine_stats(path: &Path, cfg: &BenchConfig) -> Result<EngineStats>;
+
+    fn integrity_check(path: &Path, cfg: &BenchConfig) -> Result<String>;
+}
+
+pub trait KvOps {
+    fn setup_schema(&mut self) -> Result<()>;
+    fn prepare_kv_statements(&mut self) -> Result<()>;
+
+    fn begin(&mut self) -> Result<()>;
+    fn commit(&mut self) -> Result<()>;
+    fn rollback(&mut self) -> Result<()>;
+
+    fn insert_kv(&mut self, key: i64, value: &[u8], n: i64) -> Result<()>;
+    fn update_kv(&mut self, key: i64, value: &[u8]) -> Result<u64>;
+    fn delete_kv(&mut self, key: i64) -> Result<u64>;
+
+    /// Returns checksum contribution, not the raw value, to avoid allocation.
+    fn point_read_kv(&mut self, key: i64) -> Result<Option<u64>>;
+
+    /// Returns number of rows and checksum.
+    fn range_scan_kv(&mut self, start_key: i64, limit: u64) -> Result<(u64, u64)>;
+
+    fn indexed_lookup_n(&mut self, n: i64, limit: u64) -> Result<(u64, u64)>;
+
+    fn row_count(&mut self, table: &str) -> Result<u64>;
+    fn table_checksum(&mut self, table: &str) -> Result<u64>;
+}
+```
+
+This abstraction gives you:
+
+```text
+same workload logic;
+engine-specific optimized prepared statements;
+no dynamic dispatch in the inner loop if run as run::<SqliteEngine, Workload>();
+easy NullEngine harness-overhead measurement.
+```
+
+---
+
+# Metrics types
+
+```rust
+// src/metrics.rs
+
+use hdrhistogram::Histogram;
+use serde::{Deserialize, Serialize};
+use std::time::{Duration, Instant};
+
+#[derive(Debug)]
+pub struct WorkerMetrics {
+    pub ops_attempted: u64,
+    pub ops_completed: u64,
+    pub ops_failed: u64,
+    pub checksum: u64,
+    pub latency: Histogram<u64>,
+}
+
+impl WorkerMetrics {
+    pub fn new() -> Self {
+        Self {
+            ops_attempted: 0,
+            ops_completed: 0,
+            ops_failed: 0,
+            checksum: 0,
+            latency: Histogram::new_with_bounds(1, 3_600_000_000_000, 3)
+                .expect("valid histogram bounds"),
+        }
+    }
+
+    #[inline]
+    pub fn record_success(&mut self, elapsed: Duration, checksum_delta: u64) {
+        self.ops_attempted += 1;
+        self.ops_completed += 1;
+        self.checksum ^= checksum_delta.rotate_left((self.ops_completed % 63) as u32);
+        let ns = elapsed.as_nanos().min(u64::MAX as u128) as u64;
+        let _ = self.latency.record(ns.max(1));
+    }
+
+    #[inline]
+    pub fn record_failure(&mut self, elapsed: Duration) {
+        self.ops_attempted += 1;
+        self.ops_failed += 1;
+        let ns = elapsed.as_nanos().min(u64::MAX as u128) as u64;
+        let _ = self.latency.record(ns.max(1));
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LatencySummary {
+    pub min_ns: u64,
+    pub mean_ns: f64,
+    pub p50_ns: u64,
+    pub p90_ns: u64,
+    pub p95_ns: u64,
+    pub p99_ns: u64,
+    pub p999_ns: u64,
+    pub max_ns: u64,
+}
+
+impl LatencySummary {
+    pub fn from_histogram(h: &Histogram<u64>) -> Self {
+        Self {
+            min_ns: h.min(),
+            mean_ns: h.mean(),
+            p50_ns: h.value_at_quantile(0.50),
+            p90_ns: h.value_at_quantile(0.90),
+            p95_ns: h.value_at_quantile(0.95),
+            p99_ns: h.value_at_quantile(0.99),
+            p999_ns: h.value_at_quantile(0.999),
+            max_ns: h.max(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CheckpointStats {
+    pub calls: u64,
+    pub completed: u64,
+    pub blocked_or_busy: u64,
+    pub total_frames: u64,
+    pub checkpointed_frames: u64,
+    pub total_ns: u64,
+    pub max_ns: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct EngineStats {
+    pub wal_bytes_written: Option<u64>,
+    pub data_bytes_written: Option<u64>,
+    pub cache_hits: Option<u64>,
+    pub cache_misses: Option<u64>,
+    pub dirty_pages: Option<u64>,
+    pub checkpoint_count: Option<u64>,
+    pub custom: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MemorySummary {
+    pub peak_rss_bytes: u64,
+    pub peak_vms_bytes: u64,
+    pub engine_cache_bytes: Option<u64>,
+    pub sqlite_cache_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FileSizeSummary {
+    pub db_file_bytes: u64,
+    pub wal_file_bytes: u64,
+    pub shm_file_bytes: u64,
+    pub total_allocated_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct IoSummary {
+    pub read_bytes: Option<u64>,
+    pub write_bytes: Option<u64>,
+    pub fsync_count: Option<u64>,
+}
+```
+
+---
+
+# Fast deterministic random input
+
+Use a splittable deterministic seed per worker.
+
+```rust
+// src/random.rs
+
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
+
+pub struct WorkerRng {
+    rng: ChaCha8Rng,
+}
+
+impl WorkerRng {
+    pub fn new(global_seed: u64, worker_id: usize) -> Self {
+        let seed = splitmix64(global_seed ^ ((worker_id as u64).wrapping_mul(0x9e3779b97f4a7c15)));
+        Self {
+            rng: ChaCha8Rng::seed_from_u64(seed),
+        }
+    }
+
+    #[inline]
+    pub fn uniform_key(&mut self, max_key: u64) -> i64 {
+        self.rng.random_range(1..=max_key) as i64
+    }
+
+    #[inline]
+    pub fn disjoint_key(&mut self, worker_id: usize, workers: usize, max_key: u64) -> i64 {
+        let per_worker = max_key / workers as u64;
+        let start = worker_id as u64 * per_worker + 1;
+        let end = if worker_id + 1 == workers {
+            max_key
+        } else {
+            start + per_worker - 1
+        };
+        self.rng.random_range(start..=end) as i64
+    }
+
+    #[inline]
+    pub fn bool_ratio(&mut self, numerator: u32, denominator: u32) -> bool {
+        self.rng.random_range(0..denominator) < numerator
+    }
+}
+
+#[inline]
+pub fn splitmix64(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9e3779b97f4a7c15);
+    let mut z = x;
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+    z ^ (z >> 31)
+}
+```
+
+For the highest-fidelity runs, pre-generate request streams outside the timed section:
+
+```text
+worker_0.requests.bin
+worker_1.requests.bin
+...
+```
+
+Then both engines replay identical operations.
+
+---
+
+# Payload and checksum
+
+```rust
+// src/checksum.rs
+
+#[inline]
+pub fn make_payload(seed: u64, key: i64, version: u64, out: &mut [u8]) {
+    let mut x = seed ^ key as u64 ^ version.rotate_left(17);
+    for chunk in out.chunks_mut(8) {
+        x = splitmix64(x);
+        let bytes = x.to_le_bytes();
+        let n = chunk.len();
+        chunk.copy_from_slice(&bytes[..n]);
+    }
+}
+
+#[inline]
+pub fn hash_bytes(bytes: &[u8]) -> u64 {
+    // Simple fast non-cryptographic checksum. Replace with xxhash-rust if desired.
+    let mut h = 0xcbf29ce484222325u64;
+    for &b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
+
+#[inline]
+pub fn hash_i64(x: i64) -> u64 {
+    splitmix64(x as u64)
+}
+
+#[inline]
+pub fn mix(a: u64, b: u64) -> u64 {
+    splitmix64(a ^ b.rotate_left(31))
+}
+
+#[inline]
+fn splitmix64(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9e3779b97f4a7c15);
+    let mut z = x;
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+    z ^ (z >> 31)
+}
+```
+
+---
+
+# Threaded runner
+
+This is the core benchmark loop. It uses:
+
+```text
+one connection per worker;
+barrier start;
+per-worker histograms;
+no global latency lock;
+one atomic operation counter;
+optional duration stop flag;
+checkpoint worker outside the hot path;
+verification after run.
+```
+
+```rust
+// src/runner/threaded.rs
+
+use crate::config::{BenchConfig, KeyDistribution};
+use crate::engines::traits::{BenchEngine, KvOps};
+use crate::metrics::{LatencySummary, WorkerMetrics};
+use crate::random::WorkerRng;
+use anyhow::{Context, Result};
+use crossbeam_utils::CachePadded;
+use hdrhistogram::Histogram;
+use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Barrier,
+};
+use std::thread;
+use std::time::{Duration, Instant};
+
+pub trait Workload<E: BenchEngine>: Sync {
+    fn name(&self) -> &'static str;
+
+    fn setup(&self, conn: &mut E::Conn<'_>, cfg: &BenchConfig) -> Result<()>;
+
+    fn warmup(
+        &self,
+        conn: &mut E::Conn<'_>,
+        cfg: &BenchConfig,
+        worker_id: usize,
+    ) -> Result<()> {
+        let mut rng = WorkerRng::new(cfg.seed ^ 0xfeed_beef, worker_id);
+        let mut scratch = vec![0u8; cfg.value_size];
+        for i in 0..cfg.warmup_operations {
+            self.execute_one(conn, cfg, worker_id, i, &mut rng, &mut scratch)?;
+        }
+        Ok(())
+    }
+
+    fn execute_one(
+        &self,
+        conn: &mut E::Conn<'_>,
+        cfg: &BenchConfig,
+        worker_id: usize,
+        op_index: u64,
+        rng: &mut WorkerRng,
+        scratch: &mut [u8],
+    ) -> Result<u64>;
+
+    fn verify(&self, conn: &mut E::Conn<'_>, cfg: &BenchConfig) -> Result<VerifyResult>;
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VerifyResult {
+    pub verified: bool,
+    pub row_count: Option<u64>,
+    pub checksum: Option<u64>,
+    pub details: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ThreadedRunSummary {
+    pub elapsed_ns: u64,
+    pub ops_attempted: u64,
+    pub ops_completed: u64,
+    pub ops_failed: u64,
+    pub throughput_ops_sec: f64,
+    pub checksum: u64,
+    pub latency: LatencySummary,
+    pub verify: VerifyResult,
+}
+
+pub fn run_threaded<E, W>(db_path: &Path, cfg: &BenchConfig, workload: &W) -> Result<ThreadedRunSummary>
+where
+    E: BenchEngine,
+    W: Workload<E>,
+{
+    E::create_database(db_path, cfg)?;
+
+    {
+        let mut admin = E::open_worker(usize::MAX, db_path, cfg)?;
+        workload.setup(&mut admin, cfg)?;
+    }
+
+    let next_op = Arc::new(CachePadded::new(AtomicU64::new(0)));
+    let stop = Arc::new(AtomicBool::new(false));
+    let start_barrier = Arc::new(Barrier::new(cfg.workers + 1));
+
+    let operation_limit = cfg.operations.unwrap_or(u64::MAX);
+    let duration = cfg.duration_secs.map(Duration::from_secs);
+
+    let mut reports = Vec::with_capacity(cfg.workers);
+    let global_start = Instant::now();
+
+    thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(cfg.workers);
+
+        for worker_id in 0..cfg.workers {
+            let next_op = Arc::clone(&next_op);
+            let stop = Arc::clone(&stop);
+            let start_barrier = Arc::clone(&start_barrier);
+            let db_path = db_path.to_path_buf();
+
+            handles.push(scope.spawn(move || -> Result<WorkerMetrics> {
+                if cfg.pin_threads {
+                    crate::affinity::pin_current_thread(worker_id).ok();
+                }
+
+                let mut conn = E::open_worker(worker_id, &db_path, cfg)
+                    .with_context(|| format!("open worker connection {worker_id}"))?;
+
+                conn.prepare_kv_statements()?;
+                workload.warmup(&mut conn, cfg, worker_id)?;
+
+                let mut metrics = WorkerMetrics::new();
+                let mut rng = WorkerRng::new(cfg.seed, worker_id);
+                let mut scratch = vec![0u8; cfg.value_size];
+
+                start_barrier.wait();
+
+                loop {
+                    if stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    let op_index = next_op.fetch_add(1, Ordering::Relaxed);
+                    if op_index >= operation_limit {
+                        break;
+                    }
+
+                    let t0 = Instant::now();
+                    match workload.execute_one(
+                        &mut conn,
+                        cfg,
+                        worker_id,
+                        op_index,
+                        &mut rng,
+                        &mut scratch,
+                    ) {
+                        Ok(checksum_delta) => metrics.record_success(t0.elapsed(), checksum_delta),
+                        Err(_) => metrics.record_failure(t0.elapsed()),
+                    }
+                }
+
+                Ok(metrics)
+            }));
+        }
+
+        start_barrier.wait();
+
+        if let Some(duration) = duration {
+            thread::sleep(duration);
+            stop.store(true, Ordering::Relaxed);
+        }
+
+        for handle in handles {
+            reports.push(handle.join().expect("worker thread panicked")?);
+        }
+
+        Ok::<_, anyhow::Error>(())
+    })?;
+
+    let elapsed = global_start.elapsed();
+
+    let mut merged_hist = Histogram::<u64>::new_with_bounds(1, 3_600_000_000_000, 3)?;
+    let mut ops_attempted = 0;
+    let mut ops_completed = 0;
+    let mut ops_failed = 0;
+    let mut checksum = 0;
+
+    for r in reports {
+        ops_attempted += r.ops_attempted;
+        ops_completed += r.ops_completed;
+        ops_failed += r.ops_failed;
+        checksum ^= r.checksum;
+        merged_hist.add(&r.latency)?;
+    }
+
+    let verify = if cfg.verify_after_run {
+        let mut admin = E::open_worker(usize::MAX - 1, db_path, cfg)?;
+        workload.verify(&mut admin, cfg)?
+    } else {
+        VerifyResult {
+            verified: false,
+            row_count: None,
+            checksum: None,
+            details: vec!["verification disabled".to_string()],
+        }
+    };
+
+    Ok(ThreadedRunSummary {
+        elapsed_ns: elapsed.as_nanos() as u64,
+        ops_attempted,
+        ops_completed,
+        ops_failed,
+        throughput_ops_sec: ops_completed as f64 / elapsed.as_secs_f64(),
+        checksum,
+        latency: LatencySummary::from_histogram(&merged_hist),
+        verify,
+    })
+}
+```
+
+---
+
+# KV workloads
+
+## Insert workload
+
+```rust
+// src/workloads/insert.rs
+
+use crate::checksum::{hash_i64, make_payload};
+use crate::config::BenchConfig;
+use crate::engines::traits::{BenchEngine, KvOps};
+use crate::random::WorkerRng;
+use crate::runner::threaded::{VerifyResult, Workload};
+use anyhow::Result;
+
+pub struct SingleRowInsert;
+
+impl<E: BenchEngine> Workload<E> for SingleRowInsert {
+    fn name(&self) -> &'static str {
+        "single_row_insert"
+    }
+
+    fn setup(&self, conn: &mut E::Conn<'_>, cfg: &BenchConfig) -> Result<()> {
+        conn.setup_schema()?;
+
+        if cfg.initial_rows > 0 {
+            let mut payload = vec![0u8; cfg.value_size];
+            conn.begin()?;
+            for k in 1..=cfg.initial_rows as i64 {
+                make_payload(cfg.seed, k, 0, &mut payload);
+                conn.insert_kv(k, &payload, k % 1024)?;
+            }
+            conn.commit()?;
+        }
+
+        Ok(())
+    }
+
+    fn execute_one(
+        &self,
+        conn: &mut E::Conn<'_>,
+        cfg: &BenchConfig,
+        worker_id: usize,
+        op_index: u64,
+        _rng: &mut WorkerRng,
+        scratch: &mut [u8],
+    ) -> Result<u64> {
+        let key = cfg.initial_rows as i64
+            + 1
+            + (worker_id as i64 * 1_000_000_000)
+            + op_index as i64;
+
+        make_payload(cfg.seed, key, 0, scratch);
+        conn.insert_kv(key, scratch, key % 1024)?;
+        Ok(hash_i64(key))
+    }
+
+    fn verify(&self, conn: &mut E::Conn<'_>, _cfg: &BenchConfig) -> Result<VerifyResult> {
+        let rows = conn.row_count("kv")?;
+        let checksum = conn.table_checksum("kv")?;
+
+        Ok(VerifyResult {
+            verified: true,
+            row_count: Some(rows),
+            checksum: Some(checksum),
+            details: vec![],
+        })
+    }
+}
+```
+
+## Point read workload
+
+```rust
+// src/workloads/point_read.rs
+
+use crate::config::{BenchConfig, KeyDistribution};
+use crate::engines::traits::{BenchEngine, KvOps};
+use crate::random::WorkerRng;
+use crate::runner::threaded::{VerifyResult, Workload};
+use anyhow::Result;
+
+pub struct PointReadPk;
+
+impl<E: BenchEngine> Workload<E> for PointReadPk {
+    fn name(&self) -> &'static str {
+        "point_read_pk"
+    }
+
+    fn setup(&self, conn: &mut E::Conn<'_>, cfg: &BenchConfig) -> Result<()> {
+        crate::workloads::kv::load_initial_kv(conn, cfg)
+    }
+
+    fn execute_one(
+        &self,
+        conn: &mut E::Conn<'_>,
+        cfg: &BenchConfig,
+        worker_id: usize,
+        _op_index: u64,
+        rng: &mut WorkerRng,
+        _scratch: &mut [u8],
+    ) -> Result<u64> {
+        let key = match cfg.key_distribution {
+            KeyDistribution::Uniform => rng.uniform_key(cfg.initial_rows),
+            KeyDistribution::DisjointPerWorker => {
+                rng.disjoint_key(worker_id, cfg.workers, cfg.initial_rows)
+            }
+            KeyDistribution::Zipf { .. } => {
+                // Replace with real Zipf sampler. Keep deterministic.
+                rng.uniform_key(cfg.initial_rows.min(10_000))
+            }
+        };
+
+        Ok(conn.point_read_kv(key)?.unwrap_or(0))
+    }
+
+    fn verify(&self, conn: &mut E::Conn<'_>, _cfg: &BenchConfig) -> Result<VerifyResult> {
+        Ok(VerifyResult {
+            verified: true,
+            row_count: Some(conn.row_count("kv")?),
+            checksum: Some(conn.table_checksum("kv")?),
+            details: vec![],
+        })
+    }
+}
+```
+
+## Mixed OLTP workload
+
+```rust
+// src/workloads/mixed_oltp.rs
+
+use crate::checksum::{hash_i64, make_payload};
+use crate::config::{BenchConfig, KeyDistribution};
+use crate::engines::traits::{BenchEngine, KvOps};
+use crate::random::WorkerRng;
+use crate::runner::threaded::{VerifyResult, Workload};
+use anyhow::Result;
+
+#[derive(Debug, Clone, Copy)]
+pub struct MixedOltp {
+    pub read_pct: u32,
+    pub update_pct: u32,
+    pub insert_pct: u32,
+    pub range_pct: u32,
+}
+
+impl MixedOltp {
+    fn choose_key(cfg: &BenchConfig, worker_id: usize, rng: &mut WorkerRng) -> i64 {
+        match cfg.key_distribution {
+            KeyDistribution::Uniform => rng.uniform_key(cfg.initial_rows),
+            KeyDistribution::DisjointPerWorker => {
+                rng.disjoint_key(worker_id, cfg.workers, cfg.initial_rows)
+            }
+            KeyDistribution::Zipf { .. } => rng.uniform_key(cfg.initial_rows.min(10_000)),
+        }
+    }
+}
+
+impl<E: BenchEngine> Workload<E> for MixedOltp {
+    fn name(&self) -> &'static str {
+        "mixed_oltp"
+    }
+
+    fn setup(&self, conn: &mut E::Conn<'_>, cfg: &BenchConfig) -> Result<()> {
+        crate::workloads::kv::load_initial_kv(conn, cfg)
+    }
+
+    fn execute_one(
+        &self,
+        conn: &mut E::Conn<'_>,
+        cfg: &BenchConfig,
+        worker_id: usize,
+        op_index: u64,
+        rng: &mut WorkerRng,
+        scratch: &mut [u8],
+    ) -> Result<u64> {
+        let x = (crate::random::splitmix64(op_index ^ worker_id as u64) % 100) as u32;
+
+        if x < self.read_pct {
+            let key = Self::choose_key(cfg, worker_id, rng);
+            Ok(conn.point_read_kv(key)?.unwrap_or(0))
+        } else if x < self.read_pct + self.update_pct {
+            let key = Self::choose_key(cfg, worker_id, rng);
+            make_payload(cfg.seed, key, op_index, scratch);
+            let rows = conn.update_kv(key, scratch)?;
+            Ok(hash_i64(key) ^ rows)
+        } else if x < self.read_pct + self.update_pct + self.insert_pct {
+            let key = cfg.initial_rows as i64
+                + 1
+                + (worker_id as i64 * 1_000_000_000)
+                + op_index as i64;
+            make_payload(cfg.seed, key, 0, scratch);
+            conn.insert_kv(key, scratch, key % 1024)?;
+            Ok(hash_i64(key))
+        } else {
+            let key = Self::choose_key(cfg, worker_id, rng);
+            let (_rows, checksum) = conn.range_scan_kv(key, cfg.range_len)?;
+            Ok(checksum)
+        }
+    }
+
+    fn verify(&self, conn: &mut E::Conn<'_>, _cfg: &BenchConfig) -> Result<VerifyResult> {
+        Ok(VerifyResult {
+            verified: true,
+            row_count: Some(conn.row_count("kv")?),
+            checksum: Some(conn.table_checksum("kv")?),
+            details: vec![],
+        })
+    }
+}
+```
+
+---
+
+# SQLite adapter using direct FFI
+
+For benchmark fidelity, I would avoid `rusqlite` in the hot path and use `libsqlite3-sys` directly:
+
+```text
+sqlite3_open_v2
+sqlite3_prepare_v3
+sqlite3_bind_*
+sqlite3_step
+sqlite3_reset
+sqlite3_clear_bindings
+sqlite3_finalize
+sqlite3_close_v2
+sqlite3_wal_checkpoint_v2
+sqlite3_db_status64
+```
+
+The point is to measure SQLite, not a high-level wrapper’s allocations.
+
+## SQLite FFI helpers
+
+```rust
+// src/engines/sqlite_ffi.rs
+
+#![cfg(feature = "sqlite")]
+
+use anyhow::{anyhow, bail, Result};
+use libsqlite3_sys as ffi;
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_int};
+use std::path::Path;
+use std::ptr;
+use std::time::Instant;
+
+pub struct RawSqlite {
+    db: *mut ffi::sqlite3,
+}
+
+pub struct RawStmt {
+    stmt: *mut ffi::sqlite3_stmt,
+}
+
+impl RawSqlite {
+    pub fn open(path: &Path, nomutex: bool) -> Result<Self> {
+        let path = CString::new(path.to_string_lossy().as_bytes())?;
+        let mut db: *mut ffi::sqlite3 = ptr::null_mut();
+
+        let mut flags = ffi::SQLITE_OPEN_READWRITE | ffi::SQLITE_OPEN_CREATE;
+        if nomutex {
+            flags |= ffi::SQLITE_OPEN_NOMUTEX;
+        } else {
+            flags |= ffi::SQLITE_OPEN_FULLMUTEX;
+        }
+
+        let rc = unsafe {
+            ffi::sqlite3_open_v2(path.as_ptr(), &mut db, flags, ptr::null())
+        };
+
+        if rc != ffi::SQLITE_OK {
+            let msg = if db.is_null() {
+                "sqlite3_open_v2 failed".to_string()
+            } else {
+                unsafe { error_message(db) }
+            };
+            if !db.is_null() {
+                unsafe { ffi::sqlite3_close_v2(db) };
+            }
+            bail!(msg);
+        }
+
+        unsafe {
+            ffi::sqlite3_extended_result_codes(db, 1);
+        }
+
+        Ok(Self { db })
+    }
+
+    pub fn exec(&mut self, sql: &str) -> Result<()> {
+        let sql = CString::new(sql)?;
+        let mut errmsg: *mut c_char = ptr::null_mut();
+
+        let rc = unsafe {
+            ffi::sqlite3_exec(
+                self.db,
+                sql.as_ptr(),
+                None,
+                ptr::null_mut(),
+                &mut errmsg,
+            )
+        };
+
+        if rc != ffi::SQLITE_OK {
+            let msg = unsafe {
+                if errmsg.is_null() {
+                    error_message(self.db)
+                } else {
+                    let s = CStr::from_ptr(errmsg).to_string_lossy().into_owned();
+                    ffi::sqlite3_free(errmsg as *mut _);
+                    s
+                }
+            };
+            bail!(msg);
+        }
+
+        Ok(())
+    }
+
+    pub fn prepare(&mut self, sql: &str) -> Result<RawStmt> {
+        let sql = CString::new(sql)?;
+        let mut stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
+
+        let rc = unsafe {
+            ffi::sqlite3_prepare_v3(
+                self.db,
+                sql.as_ptr(),
+                -1,
+                ffi::SQLITE_PREPARE_PERSISTENT as u32,
+                &mut stmt,
+                ptr::null_mut(),
+            )
+        };
+
+        if rc != ffi::SQLITE_OK {
+            bail!(unsafe { error_message(self.db) });
+        }
+
+        Ok(RawStmt { stmt })
+    }
+
+    pub fn busy_timeout(&mut self, ms: u32) -> Result<()> {
+        let rc = unsafe { ffi::sqlite3_busy_timeout(self.db, ms as c_int) };
+        if rc != ffi::SQLITE_OK {
+            bail!(unsafe { error_message(self.db) });
+        }
+        Ok(())
+    }
+
+    pub fn checkpoint(&mut self, mode: crate::config::CheckpointMode) -> Result<(i32, i32)> {
+        let mode = match mode {
+            crate::config::CheckpointMode::Passive => ffi::SQLITE_CHECKPOINT_PASSIVE,
+            crate::config::CheckpointMode::Full => ffi::SQLITE_CHECKPOINT_FULL,
+            crate::config::CheckpointMode::Restart => ffi::SQLITE_CHECKPOINT_RESTART,
+            crate::config::CheckpointMode::Truncate => ffi::SQLITE_CHECKPOINT_TRUNCATE,
+        };
+
+        let mut log_frames = 0;
+        let mut ckpt_frames = 0;
+
+        let rc = unsafe {
+            ffi::sqlite3_wal_checkpoint_v2(
+                self.db,
+                ptr::null(),
+                mode,
+                &mut log_frames,
+                &mut ckpt_frames,
+            )
+        };
+
+        if rc != ffi::SQLITE_OK && rc != ffi::SQLITE_BUSY {
+            bail!(unsafe { error_message(self.db) });
+        }
+
+        Ok((log_frames, ckpt_frames))
+    }
+
+    pub fn db_status64(&mut self, op: c_int, reset: bool) -> Result<(i64, i64)> {
+        let mut cur: ffi::sqlite3_int64 = 0;
+        let mut hi: ffi::sqlite3_int64 = 0;
+
+        let rc = unsafe {
+            ffi::sqlite3_db_status64(
+                self.db,
+                op,
+                &mut cur,
+                &mut hi,
+                if reset { 1 } else { 0 },
+            )
+        };
+
+        if rc != ffi::SQLITE_OK {
+            bail!(unsafe { error_message(self.db) });
+        }
+
+        Ok((cur as i64, hi as i64))
+    }
+}
+
+impl RawStmt {
+    #[inline]
+    pub fn bind_i64(&mut self, idx: c_int, value: i64) -> Result<()> {
+        let rc = unsafe { ffi::sqlite3_bind_int64(self.stmt, idx, value) };
+        if rc != ffi::SQLITE_OK {
+            bail!("sqlite bind_i64 failed: rc={rc}");
+        }
+        Ok(())
+    }
+
+    #[inline]
+    pub fn bind_blob_transient(&mut self, idx: c_int, bytes: &[u8]) -> Result<()> {
+        let rc = unsafe {
+            ffi::sqlite3_bind_blob64(
+                self.stmt,
+                idx,
+                bytes.as_ptr() as *const _,
+                bytes.len() as u64,
+                sqlite_transient(),
+            )
+        };
+
+        if rc != ffi::SQLITE_OK {
+            bail!("sqlite bind_blob failed: rc={rc}");
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn step_done(&mut self) -> Result<()> {
+        let rc = unsafe { ffi::sqlite3_step(self.stmt) };
+        match rc {
+            ffi::SQLITE_DONE => Ok(()),
+            ffi::SQLITE_BUSY => bail!("SQLITE_BUSY"),
+            ffi::SQLITE_LOCKED => bail!("SQLITE_LOCKED"),
+            _ => bail!("sqlite step_done failed: rc={rc}"),
+        }
+    }
+
+    #[inline]
+    pub fn step_row_or_done(&mut self) -> Result<c_int> {
+        let rc = unsafe { ffi::sqlite3_step(self.stmt) };
+        match rc {
+            ffi::SQLITE_ROW | ffi::SQLITE_DONE => Ok(rc),
+            ffi::SQLITE_BUSY => bail!("SQLITE_BUSY"),
+            ffi::SQLITE_LOCKED => bail!("SQLITE_LOCKED"),
+            _ => bail!("sqlite step failed: rc={rc}"),
+        }
+    }
+
+    #[inline]
+    pub fn column_i64(&self, idx: c_int) -> i64 {
+        unsafe { ffi::sqlite3_column_int64(self.stmt, idx) }
+    }
+
+    #[inline]
+    pub fn column_blob_hash(&self, idx: c_int) -> u64 {
+        let ptr = unsafe { ffi::sqlite3_column_blob(self.stmt, idx) };
+        let len = unsafe { ffi::sqlite3_column_bytes(self.stmt, idx) };
+
+        if ptr.is_null() || len <= 0 {
+            return 0;
+        }
+
+        let bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, len as usize) };
+        crate::checksum::hash_bytes(bytes)
+    }
+
+    #[inline]
+    pub fn reset_clear(&mut self) -> Result<()> {
+        let rc1 = unsafe { ffi::sqlite3_reset(self.stmt) };
+        let rc2 = unsafe { ffi::sqlite3_clear_bindings(self.stmt) };
+
+        if rc1 != ffi::SQLITE_OK {
+            bail!("sqlite reset failed: rc={rc1}");
+        }
+        if rc2 != ffi::SQLITE_OK {
+            bail!("sqlite clear_bindings failed: rc={rc2}");
+        }
+
+        Ok(())
+    }
+
+    pub fn finalize(&mut self) {
+        if !self.stmt.is_null() {
+            unsafe {
+                ffi::sqlite3_finalize(self.stmt);
+            }
+            self.stmt = ptr::null_mut();
+        }
+    }
+}
+
+impl Drop for RawStmt {
+    fn drop(&mut self) {
+        self.finalize();
+    }
+}
+
+impl Drop for RawSqlite {
+    fn drop(&mut self) {
+        if !self.db.is_null() {
+            unsafe {
+                ffi::sqlite3_close_v2(self.db);
+            }
+            self.db = ptr::null_mut();
+        }
+    }
+}
+
+unsafe fn error_message(db: *mut ffi::sqlite3) -> String {
+    CStr::from_ptr(ffi::sqlite3_errmsg(db))
+        .to_string_lossy()
+        .into_owned()
+}
+
+#[inline]
+unsafe fn sqlite_transient() -> ffi::sqlite3_destructor_type {
+    // SQLITE_TRANSIENT is ((sqlite3_destructor_type)-1).
+    std::mem::transmute::<isize, ffi::sqlite3_destructor_type>(-1)
+}
+```
+
+---
+
+# SQLite engine implementation
+
+```rust
+// src/engines/sqlite.rs
+
+#![cfg(feature = "sqlite")]
+
+use crate::checksum::{hash_i64, mix};
+use crate::config::{BenchConfig, CheckpointMode, DurabilityMode};
+use crate::engines::sqlite_ffi::{RawSqlite, RawStmt};
+use crate::engines::traits::{BenchEngine, KvOps};
+use crate::metrics::{CheckpointStats, EngineStats};
+use anyhow::{Context, Result};
+use libsqlite3_sys as ffi;
+use std::path::Path;
+use std::time::Instant;
+
+pub struct SqliteEngine;
+
+pub struct SqliteConn<'a> {
+    db: RawSqlite,
+    cfg: &'a BenchConfig,
+
+    insert_kv: Option<RawStmt>,
+    update_kv: Option<RawStmt>,
+    delete_kv: Option<RawStmt>,
+    point_read: Option<RawStmt>,
+    range_scan: Option<RawStmt>,
+    indexed_lookup: Option<RawStmt>,
+    row_count_stmt: Option<RawStmt>,
+    checksum_stmt: Option<RawStmt>,
+}
+
+impl BenchEngine for SqliteEngine {
+    type Conn<'a> = SqliteConn<'a>;
+
+    fn name() -> &'static str {
+        "sqlite"
+    }
+
+    fn create_database(path: &Path, cfg: &BenchConfig) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let mut db = RawSqlite::open(path, cfg.sqlite.open_nomutex)?;
+        db.busy_timeout(cfg.busy_timeout_ms)?;
+
+        // Page size must be set before WAL and before schema creation for a fresh DB.
+        db.exec(&format!("PRAGMA page_size = {};", cfg.sqlite.page_size))?;
+
+        apply_sqlite_pragmas(&mut db, cfg)?;
+
+        Ok(())
+    }
+
+    fn open_worker<'a>(
+        _worker_id: usize,
+        path: &'a Path,
+        cfg: &'a BenchConfig,
+    ) -> Result<Self::Conn<'a>> {
+        let mut db = RawSqlite::open(path, cfg.sqlite.open_nomutex)?;
+        db.busy_timeout(cfg.busy_timeout_ms)?;
+        apply_sqlite_pragmas(&mut db, cfg)?;
+
+        Ok(SqliteConn {
+            db,
+            cfg,
+            insert_kv: None,
+            update_kv: None,
+            delete_kv: None,
+            point_read: None,
+            range_scan: None,
+            indexed_lookup: None,
+            row_count_stmt: None,
+            checksum_stmt: None,
+        })
+    }
+
+    fn checkpoint(
+        path: &Path,
+        cfg: &BenchConfig,
+        mode: CheckpointMode,
+    ) -> Result<CheckpointStats> {
+        let mut db = RawSqlite::open(path, cfg.sqlite.open_nomutex)?;
+        db.busy_timeout(cfg.busy_timeout_ms)?;
+
+        let t0 = Instant::now();
+        let (log, ckpt) = db.checkpoint(mode)?;
+        let elapsed = t0.elapsed().as_nanos() as u64;
+
+        Ok(CheckpointStats {
+            calls: 1,
+            completed: if log >= 0 && ckpt >= 0 && log == ckpt { 1 } else { 0 },
+            blocked_or_busy: if log != ckpt { 1 } else { 0 },
+            total_frames: log.max(0) as u64,
+            checkpointed_frames: ckpt.max(0) as u64,
+            total_ns: elapsed,
+            max_ns: elapsed,
+        })
+    }
+
+    fn collect_engine_stats(path: &Path, cfg: &BenchConfig) -> Result<EngineStats> {
+        let mut db = RawSqlite::open(path, cfg.sqlite.open_nomutex)?;
+
+        let (cache_used, _) = db.db_status64(ffi::SQLITE_DBSTATUS_CACHE_USED, false)?;
+        let (cache_hit, _) = db.db_status64(ffi::SQLITE_DBSTATUS_CACHE_HIT, false)?;
+        let (cache_miss, _) = db.db_status64(ffi::SQLITE_DBSTATUS_CACHE_MISS, false)?;
+        let (cache_write, _) = db.db_status64(ffi::SQLITE_DBSTATUS_CACHE_WRITE, false)?;
+
+        Ok(EngineStats {
+            wal_bytes_written: Some(cache_write.max(0) as u64 * cfg.sqlite.page_size as u64),
+            data_bytes_written: None,
+            cache_hits: Some(cache_hit.max(0) as u64),
+            cache_misses: Some(cache_miss.max(0) as u64),
+            dirty_pages: None,
+            checkpoint_count: None,
+            custom: serde_json::json!({
+                "sqlite_cache_used_bytes": cache_used,
+                "sqlite_cache_write_pages": cache_write,
+            }),
+        })
+    }
+
+    fn integrity_check(path: &Path, cfg: &BenchConfig) -> Result<String> {
+        let mut db = RawSqlite::open(path, cfg.sqlite.open_nomutex)?;
+        apply_sqlite_pragmas(&mut db, cfg)?;
+
+        let mut stmt = db.prepare("PRAGMA integrity_check;")?;
+        let rc = stmt.step_row_or_done()?;
+
+        if rc == ffi::SQLITE_ROW {
+            // Simplified. Add column_text helper for real code.
+            stmt.reset_clear()?;
+            Ok("ok".to_string())
+        } else {
+            Ok("no rows from integrity_check".to_string())
+        }
+    }
+}
+
+fn apply_sqlite_pragmas(db: &mut RawSqlite, cfg: &BenchConfig) -> Result<()> {
+    db.exec("PRAGMA journal_mode = WAL;")?;
+
+    match cfg.durability {
+        DurabilityMode::StrictFull => db.exec("PRAGMA synchronous = FULL;")?,
+        DurabilityMode::Normal => db.exec("PRAGMA synchronous = NORMAL;")?,
+        DurabilityMode::Unsafe => db.exec("PRAGMA synchronous = OFF;")?,
+    }
+
+    db.exec("PRAGMA wal_autocheckpoint = 0;")?;
+    db.exec(&format!("PRAGMA busy_timeout = {};", cfg.busy_timeout_ms))?;
+
+    if cfg.sqlite.temp_store_memory {
+        db.exec("PRAGMA temp_store = MEMORY;")?;
+    }
+
+    if cfg.memory.mmap {
+        db.exec("PRAGMA mmap_size = 268435456;")?;
+    } else {
+        db.exec("PRAGMA mmap_size = 0;")?;
+    }
+
+    let per_conn_cache_kib = (cfg.memory.db_cache_bytes / cfg.workers.max(1) as u64) / 1024;
+    db.exec(&format!("PRAGMA cache_size = -{};", per_conn_cache_kib.max(64)))?;
+
+    if cfg.sqlite.cache_spill {
+        db.exec("PRAGMA cache_spill = ON;")?;
+    } else {
+        db.exec("PRAGMA cache_spill = OFF;")?;
+    }
+
+    db.exec("PRAGMA foreign_keys = ON;")?;
+
+    Ok(())
+}
+
+impl<'a> KvOps for SqliteConn<'a> {
+    fn setup_schema(&mut self) -> Result<()> {
+        self.db.exec(
+            r#"
+            CREATE TABLE IF NOT EXISTS kv (
+                k INTEGER PRIMARY KEY,
+                v BLOB NOT NULL,
+                n INTEGER NOT NULL,
+                pad TEXT,
+                version INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_kv_n ON kv(n);
+            "#,
+        )?;
+        Ok(())
+    }
+
+    fn prepare_kv_statements(&mut self) -> Result<()> {
+        self.insert_kv = Some(self.db.prepare(
+            "INSERT INTO kv(k, v, n, version) VALUES(?1, ?2, ?3, 0);"
+        )?);
+
+        self.update_kv = Some(self.db.prepare(
+            "UPDATE kv SET v = ?2, version = version + 1 WHERE k = ?1;"
+        )?);
+
+        self.delete_kv = Some(self.db.prepare(
+            "DELETE FROM kv WHERE k = ?1;"
+        )?);
+
+        self.point_read = Some(self.db.prepare(
+            "SELECT v, version FROM kv WHERE k = ?1;"
+        )?);
+
+        self.range_scan = Some(self.db.prepare(
+            "SELECT k, v, version FROM kv WHERE k >= ?1 ORDER BY k LIMIT ?2;"
+        )?);
+
+        self.indexed_lookup = Some(self.db.prepare(
+            "SELECT k, v, version FROM kv WHERE n = ?1 ORDER BY k LIMIT ?2;"
+        )?);
+
+        Ok(())
+    }
+
+    fn begin(&mut self) -> Result<()> {
+        self.db.exec("BEGIN IMMEDIATE;")
+    }
+
+    fn commit(&mut self) -> Result<()> {
+        self.db.exec("COMMIT;")
+    }
+
+    fn rollback(&mut self) -> Result<()> {
+        self.db.exec("ROLLBACK;")
+    }
+
+    fn insert_kv(&mut self, key: i64, value: &[u8], n: i64) -> Result<()> {
+        let stmt = self.insert_kv.as_mut().context("insert statement not prepared")?;
+        stmt.bind_i64(1, key)?;
+        stmt.bind_blob_transient(2, value)?;
+        stmt.bind_i64(3, n)?;
+        let result = stmt.step_done();
+        stmt.reset_clear()?;
+        result
+    }
+
+    fn update_kv(&mut self, key: i64, value: &[u8]) -> Result<u64> {
+        let stmt = self.update_kv.as_mut().context("update statement not prepared")?;
+        stmt.bind_i64(1, key)?;
+        stmt.bind_blob_transient(2, value)?;
+        let result = stmt.step_done();
+        stmt.reset_clear()?;
+        result?;
+        Ok(1)
+    }
+
+    fn delete_kv(&mut self, key: i64) -> Result<u64> {
+        let stmt = self.delete_kv.as_mut().context("delete statement not prepared")?;
+        stmt.bind_i64(1, key)?;
+        let result = stmt.step_done();
+        stmt.reset_clear()?;
+        result?;
+        Ok(1)
+    }
+
+    fn point_read_kv(&mut self, key: i64) -> Result<Option<u64>> {
+        let stmt = self.point_read.as_mut().context("point read not prepared")?;
+        stmt.bind_i64(1, key)?;
+
+        let rc = stmt.step_row_or_done()?;
+        let out = if rc == ffi::SQLITE_ROW {
+            let value_hash = stmt.column_blob_hash(0);
+            let version = stmt.column_i64(1);
+            Some(mix(value_hash, version as u64))
+        } else {
+            None
+        };
+
+        stmt.reset_clear()?;
+        Ok(out)
+    }
+
+    fn range_scan_kv(&mut self, start_key: i64, limit: u64) -> Result<(u64, u64)> {
+        let stmt = self.range_scan.as_mut().context("range scan not prepared")?;
+        stmt.bind_i64(1, start_key)?;
+        stmt.bind_i64(2, limit as i64)?;
+
+        let mut rows = 0u64;
+        let mut checksum = 0u64;
+
+        loop {
+            let rc = stmt.step_row_or_done()?;
+            if rc == ffi::SQLITE_DONE {
+                break;
+            }
+
+            let k = stmt.column_i64(0);
+            let v = stmt.column_blob_hash(1);
+            let version = stmt.column_i64(2);
+
+            rows += 1;
+            checksum ^= mix(hash_i64(k), mix(v, version as u64));
+        }
+
+        stmt.reset_clear()?;
+        Ok((rows, checksum))
+    }
+
+    fn indexed_lookup_n(&mut self, n: i64, limit: u64) -> Result<(u64, u64)> {
+        let stmt = self.indexed_lookup.as_mut().context("indexed lookup not prepared")?;
+        stmt.bind_i64(1, n)?;
+        stmt.bind_i64(2, limit as i64)?;
+
+        let mut rows = 0u64;
+        let mut checksum = 0u64;
+
+        loop {
+            let rc = stmt.step_row_or_done()?;
+            if rc == ffi::SQLITE_DONE {
+                break;
+            }
+
+            let k = stmt.column_i64(0);
+            let v = stmt.column_blob_hash(1);
+            let version = stmt.column_i64(2);
+
+            rows += 1;
+            checksum ^= mix(hash_i64(k), mix(v, version as u64));
+        }
+
+        stmt.reset_clear()?;
+        Ok((rows, checksum))
+    }
+
+    fn row_count(&mut self, table: &str) -> Result<u64> {
+        let sql = format!("SELECT COUNT(*) FROM {table};");
+        let mut stmt = self.db.prepare(&sql)?;
+        let rc = stmt.step_row_or_done()?;
+        let count = if rc == ffi::SQLITE_ROW {
+            stmt.column_i64(0) as u64
+        } else {
+            0
+        };
+        stmt.reset_clear()?;
+        Ok(count)
+    }
+
+    fn table_checksum(&mut self, table: &str) -> Result<u64> {
+        let sql = format!("SELECT k, v, version FROM {table} ORDER BY k;");
+        let mut stmt = self.db.prepare(&sql)?;
+
+        let mut checksum = 0u64;
+
+        loop {
+            let rc = stmt.step_row_or_done()?;
+            if rc == ffi::SQLITE_DONE {
+                break;
+            }
+
+            let k = stmt.column_i64(0);
+            let v = stmt.column_blob_hash(1);
+            let version = stmt.column_i64(2);
+            checksum ^= mix(hash_i64(k), mix(v, version as u64));
+        }
+
+        stmt.reset_clear()?;
+        Ok(checksum)
+    }
+}
+```
+
+---
+
+# RedlineDB adapter shape
+
+This depends on the actual current RedlineDB API, but this is what I would make the target shape look like:
+
+```rust
+// src/engines/redline.rs
+
+use crate::config::{BenchConfig, CheckpointMode, DurabilityMode};
+use crate::engines::traits::{BenchEngine, KvOps};
+use crate::metrics::{CheckpointStats, EngineStats};
+use anyhow::Result;
+use std::path::Path;
+
+pub struct RedlineEngine;
+
+pub struct RedlineConn<'a> {
+    cfg: &'a BenchConfig,
+
+    // Example placeholders.
+    // db: redlinedb::Database,
+    // session: redlinedb::Session,
+    // prepared: RedlinePreparedSet,
+}
+
+impl BenchEngine for RedlineEngine {
+    type Conn<'a> = RedlineConn<'a>;
+
+    fn name() -> &'static str {
+        "redline"
+    }
+
+    fn create_database(path: &Path, cfg: &BenchConfig) -> Result<()> {
+        /*
+        let opts = redlinedb::Options {
+            page_size: cfg.redline.page_size,
+            buffer_pool_bytes: cfg.memory.db_cache_bytes,
+            buffer_pool_shards: cfg.redline.buffer_pool_shards,
+            durability: match cfg.durability {
+                DurabilityMode::StrictFull => redlinedb::Durability::Strict,
+                DurabilityMode::Normal => redlinedb::Durability::Normal,
+                DurabilityMode::Unsafe => redlinedb::Durability::Unsafe,
+            },
+            wal_group_commit: cfg.redline.wal_group_commit,
+            wal_group_commit_max_delay_us: cfg.redline.wal_group_commit_max_delay_us,
+            mmap: cfg.memory.mmap,
+        };
+
+        redlinedb::Database::create_or_open(path, opts)?.close()?;
+        */
+        Ok(())
+    }
+
+    fn open_worker<'a>(
+        worker_id: usize,
+        path: &'a Path,
+        cfg: &'a BenchConfig,
+    ) -> Result<Self::Conn<'a>> {
+        /*
+        let db = redlinedb::Database::open(path)?;
+        let session = db.connect(redlinedb::SessionOptions {
+            name: Some(format!("bench-worker-{worker_id}")),
+            read_isolation: redlinedb::Isolation::Snapshot,
+        })?;
+        */
+        Ok(RedlineConn { cfg })
+    }
+
+    fn checkpoint(path: &Path, cfg: &BenchConfig, mode: CheckpointMode) -> Result<CheckpointStats> {
+        /*
+        let db = redlinedb::Database::open(path)?;
+        let t0 = std::time::Instant::now();
+        let s = db.checkpoint(match mode {
+            CheckpointMode::Passive => redlinedb::CheckpointMode::Passive,
+            CheckpointMode::Full => redlinedb::CheckpointMode::Full,
+            CheckpointMode::Restart => redlinedb::CheckpointMode::Restart,
+            CheckpointMode::Truncate => redlinedb::CheckpointMode::Truncate,
+        })?;
+        */
+        Ok(CheckpointStats::default())
+    }
+
+    fn collect_engine_stats(path: &Path, cfg: &BenchConfig) -> Result<EngineStats> {
+        /*
+        let db = redlinedb::Database::open(path)?;
+        let s = db.stats();
+        Ok(EngineStats {
+            wal_bytes_written: Some(s.wal.bytes_written),
+            data_bytes_written: Some(s.data.bytes_written),
+            cache_hits: Some(s.buffer_pool.hits),
+            cache_misses: Some(s.buffer_pool.misses),
+            dirty_pages: Some(s.buffer_pool.dirty_pages),
+            checkpoint_count: Some(s.checkpoint.completed),
+            custom: serde_json::to_value(s)?,
+        })
+        */
+        Ok(EngineStats::default())
+    }
+
+    fn integrity_check(path: &Path, cfg: &BenchConfig) -> Result<String> {
+        /*
+        let db = redlinedb::Database::open(path)?;
+        db.integrity_check()?.to_string()
+        */
+        Ok("ok".to_string())
+    }
+}
+
+impl<'a> KvOps for RedlineConn<'a> {
+    fn setup_schema(&mut self) -> Result<()> {
+        /*
+        self.session.execute_batch("
+            CREATE TABLE IF NOT EXISTS kv (
+                k INTEGER PRIMARY KEY,
+                v BLOB NOT NULL,
+                n INTEGER NOT NULL,
+                pad TEXT,
+                version INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_kv_n ON kv(n);
+        ")?;
+        */
+        Ok(())
+    }
+
+    fn prepare_kv_statements(&mut self) -> Result<()> {
+        /*
+        self.prepared.insert_kv = self.session.prepare(
+            "INSERT INTO kv(k, v, n, version) VALUES(?1, ?2, ?3, 0)"
+        )?;
+        ...
+        */
+        Ok(())
+    }
+
+    fn begin(&mut self) -> Result<()> {
+        // self.session.begin()?;
+        Ok(())
+    }
+
+    fn commit(&mut self) -> Result<()> {
+        // self.session.commit()?;
+        Ok(())
+    }
+
+    fn rollback(&mut self) -> Result<()> {
+        // self.session.rollback()?;
+        Ok(())
+    }
+
+    fn insert_kv(&mut self, key: i64, value: &[u8], n: i64) -> Result<()> {
+        /*
+        self.prepared.insert_kv
+            .bind_i64(1, key)
+            .bind_blob(2, value)
+            .bind_i64(3, n)
+            .execute()?;
+        */
+        Ok(())
+    }
+
+    fn update_kv(&mut self, key: i64, value: &[u8]) -> Result<u64> {
+        Ok(1)
+    }
+
+    fn delete_kv(&mut self, key: i64) -> Result<u64> {
+        Ok(1)
+    }
+
+    fn point_read_kv(&mut self, key: i64) -> Result<Option<u64>> {
+        Ok(None)
+    }
+
+    fn range_scan_kv(&mut self, start_key: i64, limit: u64) -> Result<(u64, u64)> {
+        Ok((0, 0))
+    }
+
+    fn indexed_lookup_n(&mut self, n: i64, limit: u64) -> Result<(u64, u64)> {
+        Ok((0, 0))
+    }
+
+    fn row_count(&mut self, table: &str) -> Result<u64> {
+        Ok(0)
+    }
+
+    fn table_checksum(&mut self, table: &str) -> Result<u64> {
+        Ok(0)
+    }
+}
+```
+
+Important: for RedlineDB, benchmark stats should come from the engine itself:
+
+```rust
+pub struct RedlineBenchStats {
+    pub wal_bytes_appended: u64,
+    pub wal_fsync_count: u64,
+    pub wal_group_commit_batches: u64,
+    pub wal_group_commit_avg_batch: f64,
+    pub wal_queue_max_depth: u64,
+
+    pub buffer_hits: u64,
+    pub buffer_misses: u64,
+    pub dirty_pages: u64,
+    pub evictions: u64,
+
+    pub row_lock_wait_ns: u64,
+    pub row_lock_wait_count: u64,
+    pub page_latch_wait_ns: u64,
+    pub page_latch_wait_count: u64,
+
+    pub checkpoint_count: u64,
+    pub checkpoint_pages_written: u64,
+    pub checkpoint_wait_reader_ns: u64,
+
+    pub vacuum_pages_reclaimed: u64,
+}
+```
+
+These counters will tell you **why** RedlineDB won or lost.
+
+---
+
+# Checkpoint worker
+
+```rust
+// src/runner/checkpoint.rs
+
+use crate::config::{BenchConfig, CheckpointMode, CheckpointPolicy};
+use crate::engines::traits::BenchEngine;
+use crate::metrics::CheckpointStats;
+use anyhow::Result;
+use parking_lot::Mutex;
+use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::thread;
+use std::time::{Duration, Instant};
+
+pub struct CheckpointWorker {
+    stop: Arc<AtomicBool>,
+    stats: Arc<Mutex<CheckpointStats>>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl CheckpointWorker {
+    pub fn start<E: BenchEngine>(
+        db_path: PathBuf,
+        cfg: BenchConfig,
+    ) -> Result<Option<Self>> {
+        let policy = cfg.checkpoint.clone();
+
+        let (every_ms, mode) = match policy {
+            CheckpointPolicy::NoneDuringRun => return Ok(None),
+            CheckpointPolicy::Background { every_ms, .. } => {
+                (every_ms, CheckpointMode::Passive)
+            }
+            CheckpointPolicy::Pressure { every_ms, mode } => {
+                (every_ms, mode)
+            }
+        };
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let stats = Arc::new(Mutex::new(CheckpointStats::default()));
+
+        let thread_stop = Arc::clone(&stop);
+        let thread_stats = Arc::clone(&stats);
+
+        let handle = thread::spawn(move || {
+            while !thread_stop.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_millis(every_ms));
+
+                let t0 = Instant::now();
+                match E::checkpoint(&db_path, &cfg, mode) {
+                    Ok(s) => {
+                        let mut guard = thread_stats.lock();
+                        guard.calls += s.calls;
+                        guard.completed += s.completed;
+                        guard.blocked_or_busy += s.blocked_or_busy;
+                        guard.total_frames += s.total_frames;
+                        guard.checkpointed_frames += s.checkpointed_frames;
+                        guard.total_ns += s.total_ns;
+                        guard.max_ns = guard.max_ns.max(s.max_ns);
+                    }
+                    Err(_) => {
+                        let mut guard = thread_stats.lock();
+                        guard.calls += 1;
+                        guard.blocked_or_busy += 1;
+                        guard.max_ns = guard.max_ns.max(t0.elapsed().as_nanos() as u64);
+                    }
+                }
+            }
+        });
+
+        Ok(Some(Self {
+            stop,
+            stats,
+            handle: Some(handle),
+        }))
+    }
+
+    pub fn stop(mut self) -> CheckpointStats {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+        self.stats.lock().clone()
+    }
+}
+```
+
+---
+
+# Process-level runner
+
+Parent process:
+
+```text
+benchctl run-matrix --config bench.toml
+```
+
+For each case:
+
+```text
+spawn run-one --case-json /tmp/case.json
+sample RSS
+wait
+parse result JSON
+repeat N times
+aggregate
+```
+
+```rust
+// src/runner/process.rs
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChildRunSpec {
+    pub case_json: PathBuf,
+    pub output_json: PathBuf,
+    pub timeout_secs: u64,
+}
+
+pub fn run_child(run_one_bin: &Path, spec: &ChildRunSpec) -> Result<()> {
+    let mut child = Command::new(run_one_bin)
+        .arg("--case-json")
+        .arg(&spec.case_json)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("spawn run-one")?;
+
+    let start = Instant::now();
+
+    loop {
+        if let Some(status) = child.try_wait()? {
+            let output = child.wait_with_output()?;
+            if !status.success() {
+                anyhow::bail!(
+                    "child failed: status={status:?}\nstdout={}\nstderr={}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            return Ok(());
+        }
+
+        if start.elapsed() > Duration::from_secs(spec.timeout_secs) {
+            let _ = child.kill();
+            anyhow::bail!("child timeout after {}s", spec.timeout_secs);
+        }
+
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+```
+
+---
+
+# Memory sampling
+
+For Linux, sample `/proc/<pid>/status` or `/proc/<pid>/smaps_rollup`.
+
+```rust
+// src/procstat.rs
+
+use anyhow::Result;
+use std::fs;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ProcMemory {
+    pub rss_bytes: u64,
+    pub vms_bytes: u64,
+    pub peak_rss_bytes: u64,
+}
+
+pub fn read_proc_status(pid: u32) -> Result<ProcMemory> {
+    let path = PathBuf::from(format!("/proc/{pid}/status"));
+    let text = fs::read_to_string(path)?;
+
+    let mut out = ProcMemory::default();
+
+    for line in text.lines() {
+        if let Some(v) = line.strip_prefix("VmRSS:") {
+            out.rss_bytes = parse_kib_line(v) * 1024;
+        } else if let Some(v) = line.strip_prefix("VmSize:") {
+            out.vms_bytes = parse_kib_line(v) * 1024;
+        } else if let Some(v) = line.strip_prefix("VmHWM:") {
+            out.peak_rss_bytes = parse_kib_line(v) * 1024;
+        }
+    }
+
+    Ok(out)
+}
+
+fn parse_kib_line(s: &str) -> u64 {
+    s.split_whitespace()
+        .next()
+        .and_then(|x| x.parse::<u64>().ok())
+        .unwrap_or(0)
+}
+```
+
+For release reports, show both:
+
+```text
+peak RSS including benchmark harness;
+engine-reported cache usage;
+SQLite db_status cache usage;
+RedlineDB buffer pool usage.
+```
+
+The benchmark harness overhead should be measured with `NullEngine`.
+
+---
+
+# File size metrics
+
+```rust
+// src/fs_metrics.rs
+
+use crate::metrics::FileSizeSummary;
+use anyhow::Result;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+pub fn collect_file_sizes(db_path: &Path) -> Result<FileSizeSummary> {
+    let db_file_bytes = file_len(db_path);
+    let wal_file_bytes = file_len(&sqlite_style_suffix(db_path, "-wal"));
+    let shm_file_bytes = file_len(&sqlite_style_suffix(db_path, "-shm"));
+
+    Ok(FileSizeSummary {
+        db_file_bytes,
+        wal_file_bytes,
+        shm_file_bytes,
+        total_allocated_bytes: None,
+    })
+}
+
+fn file_len(path: &Path) -> u64 {
+    fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+}
+
+fn sqlite_style_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(suffix);
+    PathBuf::from(s)
+}
+```
+
+For RedlineDB, add its own WAL/data/manifest file size collector.
+
+---
+
+# Crash/recovery certification
+
+Crash/recovery must separate:
+
+```text
+process crash:
+  SIGKILL database process;
+  OS page cache remains;
+  SQLite NORMAL should preserve transactions acknowledged before app crash.
+
+simulated power-loss:
+  requires fault-injection or block-device/fsync simulation;
+  should rely on RedlineDB Phase 1 fault injection, not normal OS kill alone.
+```
+
+For Phase 9, do both where possible:
+
+```text
+1. process-kill recovery benchmark for both SQLite and RedlineDB;
+2. RedlineDB-specific fault-injection certification for strict durability;
+3. optional SQLite process-kill sanity baseline.
+```
+
+## Ack protocol
+
+The child must tell the parent which commits were acknowledged.
+
+```text
+child:
+  begin tx
+  write row key = seq
+  commit returns
+  send ACK(seq, key, value_hash) over pipe
+  continue
+
+parent:
+  receive ACK
+  append to ack.log
+  fsync ack.log
+  randomly SIGKILL child
+  reopen DB
+  verify every ACK exists
+```
+
+Do not let the child keep the only list of acknowledged commits. If the child dies, you lose the truth.
+
+```rust
+// src/runner/crash.rs
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
+use std::os::unix::process::ExitStatusExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Ack {
+    pub seq: u64,
+    pub key: i64,
+    pub value_hash: u64,
+}
+
+pub fn append_ack_log(path: &Path, ack: &Ack) -> Result<()> {
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+
+    serde_json::to_writer(&mut f, ack)?;
+    f.write_all(b"\n")?;
+    f.sync_data()?;
+    Ok(())
+}
+
+pub fn read_ack_log(path: &Path) -> Result<Vec<Ack>> {
+    let f = File::open(path)?;
+    let reader = BufReader::new(f);
+    let mut out = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        out.push(serde_json::from_str(&line)?);
+    }
+
+    Ok(out)
+}
+
+pub fn crash_child_after_acks(
+    run_one_bin: &Path,
+    case_json: &Path,
+    ack_log: &Path,
+    min_acks: usize,
+    max_runtime: Duration,
+) -> Result<()> {
+    let mut child = Command::new(run_one_bin)
+        .arg("--case-json")
+        .arg(case_json)
+        .arg("--crash-ack-mode")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("spawn crash child")?;
+
+    let stdout = child.stdout.take().context("child stdout")?;
+    let mut reader = BufReader::new(stdout);
+
+    let start = Instant::now();
+    let mut ack_count = 0usize;
+    let mut line = String::new();
+
+    while start.elapsed() < max_runtime {
+        line.clear();
+        if reader.read_line(&mut line)? == 0 {
+            break;
+        }
+
+        if let Some(json) = line.strip_prefix("ACK ") {
+            let ack: Ack = serde_json::from_str(json.trim())?;
+            append_ack_log(ack_log, &ack)?;
+            ack_count += 1;
+
+            if ack_count >= min_acks {
+                let _ = child.kill();
+                let status = child.wait()?;
+                if status.signal().is_some() {
+                    return Ok(());
+                }
+                anyhow::bail!("child exited without signal: {status:?}");
+            }
+        }
+    }
+
+    let _ = child.kill();
+    anyhow::bail!("did not receive enough ACKs before timeout");
+}
+```
+
+## Recovery metric
+
+Record:
+
+```text
+time to reopen
+time to replay WAL
+time to first successful query
+time to full integrity check
+number of acked commits verified
+number of missing acked commits
+database size before/after recovery
+WAL size before/after recovery
+```
+
+Strict gate:
+
+```text
+missing_acked_commits == 0
+integrity_check == ok
+reopen_time <= configured bound
+```
+
+---
+
+# Compatibility testing
+
+Use two layers.
+
+## Layer 1: sqllogictest subset
+
+SQL Logic Test is designed to verify database result correctness by comparing identical queries against database engines; it focuses on correct results, not performance, indexing efficiency, memory, transactions, or concurrency. That makes it useful for Phase 9 compatibility, but not sufficient for performance certification. ([SQLite][9])
+
+Create:
+
+```text
+compat/slt/
+  core_select.slt
+  expressions.slt
+  nulls.slt
+  order_by_limit.slt
+  inserts_updates_deletes.slt
+  indexes_visible_results.slt
+  transactions.slt
+  constraints.slt
+```
+
+Only include SQL RedlineDB supports. Unsupported SQLite features should be marked and reported, not hidden.
+
+Example:
+
+```text
+statement ok
+CREATE TABLE t1(a INTEGER PRIMARY KEY, b TEXT, c INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES(1, 'x', 10)
+
+statement ok
+INSERT INTO t1 VALUES(2, 'y', 20)
+
+query III rowsort
+SELECT a, b, c FROM t1 WHERE c >= 10
+----
+1 x 10
+2 y 20
+```
+
+## Layer 2: differential randomized SQL
+
+Generate random but supported SQL:
+
+```text
+CREATE TABLE with simple types
+INSERT deterministic rows
+CREATE INDEX random subset
+SELECT with predicates
+ORDER BY / LIMIT
+UPDATE
+DELETE
+transaction sequences
+```
+
+Run against SQLite and RedlineDB, canonicalize results, compare.
+
+Canonicalizer:
+
+```rust
+// src/compat/canonical.rs
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CanonValue {
+    Null,
+    Integer(i64),
+    Real(String),    // canonical decimal or hex float string
+    Text(String),
+    Blob(String),    // lowercase hex
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonResult {
+    pub rows: Vec<Vec<CanonValue>>,
+}
+
+pub fn canonicalize_sqlite_value(/* sqlite col */) -> CanonValue {
+    todo!("convert SQLite dynamic value to canonical representation")
+}
+
+pub fn canonicalize_redline_value(/* redline value */) -> CanonValue {
+    todo!("convert RedlineDB value to canonical representation")
+}
+```
+
+Rules:
+
+```text
+Only compare deterministic queries.
+Require ORDER BY unless using rowsort.
+Normalize integer/text/blob.
+Use careful float policy: either exclude floats initially or compare exact canonical strings for supported operations.
+Normalize NULL.
+Normalize errors into classes, not raw messages.
+Track unsupported syntax explicitly.
+```
+
+Compatibility report:
+
+```text
+supported tests passed
+supported tests failed
+unsupported tests skipped
+SQLite behavior intentionally not matched
+known RedlineDB gaps
+```
+
+---
+
+# Release gates
+
+Phase 9 should define gates in order. Do not let speed claims bypass correctness.
+
+## Gate 0: benchmark harness sanity
+
+```text
+NullEngine overhead < 2% of measured DB latency for target workloads,
+or benchmark reports overhead separately.
+
+Identical seeds produce identical operation streams.
+
+SQLite version and compile options recorded.
+
+All result JSON validates schema.
+
+Each benchmark creates fresh DB directory unless explicitly testing reopen.
+
+Every workload has post-run row count/checksum verification.
+```
+
+## Gate 1: SQL correctness
+
+```text
+100% pass on supported sqllogictest files.
+
+100% pass on deterministic differential SQL subset.
+
+No silent unsupported behavior.
+
+Every supported error class matches expected behavior.
+
+All benchmark workloads verify final checksums.
+```
+
+## Gate 2: durability/recovery
+
+```text
+Strict mode:
+  zero missing acknowledged commits after process kill;
+  zero corruption after reopen;
+  bounded recovery time;
+  integrity check passes.
+
+Normal mode:
+  process-kill recovery preserves acknowledged commits;
+  report clearly states power-loss durability caveat.
+
+Unsafe mode:
+  never used in replacement claims.
+```
+
+## Gate 3: single-thread parity
+
+For replacement status, RedlineDB should be close to SQLite before claiming victory:
+
+```text
+single-thread point read:
+  RedlineDB throughput >= 0.90x SQLite
+  RedlineDB p99 <= 1.25x SQLite
+
+single-thread insert strict:
+  RedlineDB throughput >= 0.90x SQLite
+  RedlineDB p99 <= 1.25x SQLite
+
+single-thread range scan:
+  RedlineDB throughput >= 0.90x SQLite
+
+database size:
+  RedlineDB <= 1.25x SQLite for equivalent rows/indexes
+```
+
+These thresholds can be tightened later. The important point is to prevent “we beat SQLite only at 64 writers” from hiding poor basic embedded performance.
+
+## Gate 4: concurrent-writer advantage
+
+For disjoint writer workloads:
+
+```text
+workers = 4:
+  RedlineDB throughput >= 1.5x SQLite
+
+workers = 8:
+  RedlineDB throughput >= 2.0x SQLite
+
+workers = 16:
+  RedlineDB throughput >= 3.0x SQLite
+
+p99 latency:
+  RedlineDB p99 <= SQLite p99 under same mode
+
+failures:
+  zero failed operations
+```
+
+The exact multipliers should be tuned after the first full baseline, but RedlineDB should clearly win here if its architecture avoids SQLite’s single-writer bottleneck.
+
+## Gate 5: memory discipline
+
+```text
+Configured DB cache is honored.
+
+Peak RSS <= configured cache + benchmark scratch + engine overhead allowance.
+
+No unbounded WAL growth under background checkpoint with no long readers.
+
+With long readers, WAL growth is explained and bounded by configured retention or reported as blocked.
+```
+
+## Gate 6: checkpoint behavior
+
+```text
+Background checkpoint:
+  no catastrophic p99.9 spikes under normal workload.
+
+Checkpoint pressure:
+  stalls are measured and reported.
+
+Long reader:
+  checkpoint blocked/partial progress is detected.
+```
+
+## Gate 7: report honesty
+
+Every release report must include:
+
+```text
+unsupported SQLite features;
+durability profile;
+SQLite settings;
+RedlineDB settings;
+machine metadata;
+raw JSON artifacts;
+number of repetitions;
+median and spread;
+all failed/skipped tests;
+known caveats.
+```
+
+---
+
+# Benchmark matrix example
+
+```toml
+# bench/full.toml
+
+seed = 12648430
+repeats = 7
+warmup_operations = 10000
+operations = 1000000
+verify_after_run = true
+pin_threads = true
+busy_timeout_ms = 30000
+
+engines = ["sqlite", "redline"]
+durability = ["strict_full", "normal"]
+workers = [1, 2, 4, 8, 16, 32]
+
+workloads = [
+  "single_row_insert",
+  "batched_insert_100",
+  "point_read_pk",
+  "range_scan_pk_100",
+  "update_pk_uniform",
+  "indexed_lookup",
+  "mixed_oltp_80r_20w",
+  "concurrent_disjoint_writers",
+  "checkpoint_pressure"
+]
+
+initial_rows = 1000000
+value_sizes = [100, 1024]
+key_distributions = ["uniform", "disjoint_per_worker"]
+
+[memory]
+db_cache_bytes = 268435456
+worker_scratch_bytes = 1048576
+mmap = false
+
+[sqlite]
+page_size = 4096
+cache_spill = true
+open_nomutex = true
+temp_store_memory = true
+
+[redline]
+page_size = 4096
+buffer_pool_shards = 64
+wal_group_commit = true
+wal_group_commit_max_delay_us = 200
+
+[checkpoint]
+policy = "background"
+every_ms = 100
+wal_bytes_threshold = 67108864
+```
+
+---
+
+# CLI shape
+
+```rust
+// src/main.rs
+
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+#[derive(Parser)]
+#[command(name = "redlinedb-bench")]
+pub struct Cli {
+    #[command(subcommand)]
+    cmd: Command,
+}
+
+#[derive(Subcommand)]
+pub enum Command {
+    RunOne {
+        #[arg(long)]
+        case_json: PathBuf,
+    },
+
+    RunMatrix {
+        #[arg(long)]
+        config: PathBuf,
+
+        #[arg(long)]
+        out_dir: PathBuf,
+
+        #[arg(long, default_value_t = 7)]
+        repeats: usize,
+    },
+
+    Report {
+        #[arg(long)]
+        results_dir: PathBuf,
+
+        #[arg(long)]
+        out_md: PathBuf,
+    },
+
+    Compat {
+        #[arg(long)]
+        engine: String,
+
+        #[arg(long)]
+        test_dir: PathBuf,
+    },
+
+    Crash {
+        #[arg(long)]
+        engine: String,
+
+        #[arg(long)]
+        case_json: PathBuf,
+    },
+}
+
+fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+
+    match cli.cmd {
+        Command::RunOne { case_json } => {
+            redlinedb_bench::runner::run_one_from_json(&case_json)
+        }
+        Command::RunMatrix { config, out_dir, repeats } => {
+            redlinedb_bench::runner::run_matrix(&config, &out_dir, repeats)
+        }
+        Command::Report { results_dir, out_md } => {
+            redlinedb_bench::report::render_markdown(&results_dir, &out_md)
+        }
+        Command::Compat { engine, test_dir } => {
+            redlinedb_bench::compat::run_compat(&engine, &test_dir)
+        }
+        Command::Crash { engine, case_json } => {
+            redlinedb_bench::runner::crash::run_crash_case(&engine, &case_json)
+        }
+    }
+}
+```
+
+Example commands:
+
+```bash
+cargo build -p redlinedb_bench --release --features sqlite-bundled,redline
+
+target/release/redlinedb-bench run-matrix \
+  --config bench/full.toml \
+  --out-dir target/bench-results/full \
+  --repeats 7
+
+target/release/redlinedb-bench report \
+  --results-dir target/bench-results/full \
+  --out-md target/bench-results/full/report.md
+
+target/release/redlinedb-bench compat \
+  --engine redline \
+  --test-dir crates/redlinedb_bench/compat/slt
+```
+
+---
+
+# Report format
+
+The Markdown report should start with:
+
+```text
+# RedlineDB vs SQLite Benchmark Report
+
+Date:
+Machine:
+Filesystem:
+SQLite version:
+SQLite compile options:
+RedlineDB git SHA:
+Benchmark git SHA:
+Durability profiles:
+Memory profiles:
+Checkpoint profiles:
+```
+
+Then tables:
+
+```text
+## Correctness Summary
+
+| Suite | Passed | Failed | Skipped | Notes |
+|---|---:|---:|---:|---|
+
+## Strict Durability Summary
+
+| Engine | Crash cases | Missing ACKs | Corruptions | Median recovery ms | P99 recovery ms |
+|---|---:|---:|---:|---:|---:|
+
+## Single-thread Performance
+
+| Workload | Engine | ops/s | p50 us | p95 us | p99 us | WAL B/op | RSS MB | DB MB |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+
+## Concurrent Writers
+
+| Workers | Engine | ops/s | speedup vs 1 | p99 us | failed ops | WAL B/op |
+|---:|---|---:|---:|---:|---:|---:|
+
+## Memory Ceiling
+
+| Engine | Configured cache MB | Peak RSS MB | Engine cache MB | Pass |
+|---|---:|---:|---:|---|
+```
+
+The report should show:
+
+```text
+median of repeats;
+min/max or MAD;
+not just best run;
+failed operations;
+all warnings.
+```
+
+---
+
+# Gate evaluator
+
+```rust
+// src/gates.rs
+
+use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GateDecision {
+    pub name: String,
+    pub passed: bool,
+    pub reason: String,
+}
+
+pub fn ratio_at_least(name: &str, redline: f64, sqlite: f64, min_ratio: f64) -> GateDecision {
+    let ratio = redline / sqlite.max(1e-9);
+    GateDecision {
+        name: name.to_string(),
+        passed: ratio >= min_ratio,
+        reason: format!(
+            "redline={redline:.3}, sqlite={sqlite:.3}, ratio={ratio:.3}, required={min_ratio:.3}"
+        ),
+    }
+}
+
+pub fn latency_at_most_ratio(
+    name: &str,
+    redline_ns: u64,
+    sqlite_ns: u64,
+    max_ratio: f64,
+) -> GateDecision {
+    let ratio = redline_ns as f64 / (sqlite_ns.max(1) as f64);
+    GateDecision {
+        name: name.to_string(),
+        passed: ratio <= max_ratio,
+        reason: format!(
+            "redline_ns={redline_ns}, sqlite_ns={sqlite_ns}, ratio={ratio:.3}, required<={max_ratio:.3}"
+        ),
+    }
+}
+
+pub fn require_all(decisions: &[GateDecision]) -> Result<()> {
+    let failed: Vec<_> = decisions.iter().filter(|d| !d.passed).collect();
+
+    if !failed.is_empty() {
+        for f in &failed {
+            eprintln!("FAILED {}: {}", f.name, f.reason);
+        }
+        bail!("{} gates failed", failed.len());
+    }
+
+    Ok(())
+}
+```
+
+---
+
+# SQLite anti-cheat settings to record
+
+Every SQLite run should record:
+
+```sql
+PRAGMA journal_mode;
+PRAGMA synchronous;
+PRAGMA wal_autocheckpoint;
+PRAGMA page_size;
+PRAGMA cache_size;
+PRAGMA cache_spill;
+PRAGMA mmap_size;
+PRAGMA temp_store;
+PRAGMA locking_mode;
+PRAGMA foreign_keys;
+PRAGMA compile_options;
+SELECT sqlite_version();
+```
+
+Also record whether the adapter used:
+
+```text
+SQLITE_OPEN_NOMUTEX or SQLITE_OPEN_FULLMUTEX
+bundled SQLite or system SQLite
+```
+
+This matters because SQLite’s threading mode and compile options can change CPU overhead and memory behavior. SQLite’s default threading mode is serialized, while `SQLITE_OPEN_NOMUTEX` chooses multi-thread mode for a connection if single-thread mode was not selected globally. ([SQLite][7])
+
+---
+
+# Benchmarking RedlineDB fairly
+
+RedlineDB gets to use its architecture, but not secret benchmark-only paths.
+
+Allowed:
+
+```text
+shared sharded buffer pool;
+many sessions in one owner process;
+row locks;
+MVCC snapshots;
+group commit if durability promises are preserved;
+background checkpoint worker;
+prepared statements;
+internal stats;
+Rust-native API if SQLite comparison also uses equivalent prepared SQL API.
+```
+
+Not allowed for headline replacement claims:
+
+```text
+kernel API path that bypasses SQL while SQLite uses SQL;
+different row payloads;
+different indexes;
+different transaction boundaries;
+different durability promise;
+preloaded data visible only to RedlineDB;
+skipping constraint checks that SQLite performs;
+not counting failed/conflicted writes;
+ignoring checkpoint/vacuum work.
+```
+
+Useful separate categories:
+
+```text
+SQL API head-to-head:
+  RedlineDB SQL frontend vs SQLite SQL.
+
+Storage-kernel exploratory:
+  RedlineDB kernel API vs synthetic baseline.
+  Not used for SQLite replacement claims.
+
+Unsafe ceiling:
+  both engines no fsync.
+  Not used for durability claims.
+```
+
+---
+
+# Workload-specific details
+
+## 1. Single-row insert autocommit
+
+SQL:
+
+```sql
+INSERT INTO kv(k, v, n, version) VALUES(?1, ?2, ?3, 0);
+```
+
+Measures:
+
+```text
+parser excluded if prepared;
+bind/execute/commit included;
+WAL append path;
+commit overhead;
+single-thread insert latency.
+```
+
+Variants:
+
+```text
+strict_full
+normal
+unsafe
+value_size = 100, 1024
+```
+
+## 2. Batched insert
+
+SQL:
+
+```sql
+BEGIN IMMEDIATE;
+INSERT ...
+INSERT ...
+COMMIT;
+```
+
+Batch sizes:
+
+```text
+10, 100, 1000
+```
+
+Measures:
+
+```text
+transaction amortization;
+WAL bytes/op;
+B-tree append behavior;
+commit amortization.
+```
+
+## 3. Point read
+
+SQL:
+
+```sql
+SELECT v, version FROM kv WHERE k = ?1;
+```
+
+Measures:
+
+```text
+PK lookup;
+buffer hit behavior;
+prepared statement overhead;
+MVCC visibility overhead.
+```
+
+Variants:
+
+```text
+warm cache;
+cache smaller than table;
+uniform;
+hotspot.
+```
+
+## 4. Range scan
+
+SQL:
+
+```sql
+SELECT k, v, version
+FROM kv
+WHERE k >= ?1
+ORDER BY k
+LIMIT ?2;
+```
+
+Measures:
+
+```text
+ordered storage;
+cursor movement;
+page locality;
+row decoding;
+checksum over returned rows.
+```
+
+Range sizes:
+
+```text
+10, 100, 1000
+```
+
+## 5. Update
+
+SQL:
+
+```sql
+UPDATE kv
+SET v = ?2, version = version + 1
+WHERE k = ?1;
+```
+
+Measures:
+
+```text
+MVCC write path;
+row locks;
+WAL record size;
+index maintenance if indexed column changes;
+contention behavior.
+```
+
+Variants:
+
+```text
+disjoint_per_worker;
+uniform;
+zipf_hotspot.
+```
+
+## 6. Delete/insert churn
+
+SQL:
+
+```sql
+DELETE FROM kv WHERE k = ?1;
+INSERT INTO kv(k, v, n, version) VALUES(?1, ?2, ?3, 0);
+```
+
+Measures:
+
+```text
+space reuse;
+free lists;
+vacuum side effects;
+index delete markers;
+WAL growth.
+```
+
+## 7. Indexed lookup
+
+SQL:
+
+```sql
+SELECT k, v, version
+FROM kv
+WHERE n = ?1
+ORDER BY k
+LIMIT ?2;
+```
+
+Measures:
+
+```text
+secondary index lookup;
+heap recheck / row-id lookup;
+covering-index opportunity;
+stale index filtering.
+```
+
+## 8. Mixed OLTP
+
+Example 80/20:
+
+```text
+80% point read
+15% update
+3% range scan
+2% insert
+```
+
+Measures:
+
+```text
+realistic session behavior;
+latency under mixed readers/writers;
+lock waits;
+checkpoint interference.
+```
+
+## 9. Concurrent disjoint writers
+
+```text
+worker i updates keys in partition i only.
+```
+
+This is the headline scalability workload.
+
+Expected:
+
+```text
+SQLite serializes writers.
+RedlineDB should scale until WAL/device/CPU limit.
+```
+
+SQLite WAL’s one-writer property is the reason this test exists. ([SQLite][1])
+
+## 10. Long reader checkpoint blocking
+
+Worker A:
+
+```sql
+BEGIN;
+SELECT ... large scan but consume slowly;
+```
+
+Workers B-N:
+
+```text
+continue writes
+```
+
+Checkpoint worker:
+
+```text
+PASSIVE every 100 ms
+TRUNCATE pressure variant
+```
+
+Measures:
+
+```text
+WAL growth;
+checkpoint blocked frames;
+writer stalls;
+reader snapshot behavior.
+```
+
+SQLite documents that checkpoints can stop when they reach WAL content newer than a reader’s end mark, and long-running reads can prevent checkpointer progress. ([SQLite][1])
+
+---
+
+# `run_one` dispatch
+
+```rust
+// src/runner/mod.rs
+
+use crate::config::{BenchConfig, EngineKind, WorkloadKind};
+use anyhow::Result;
+use std::fs;
+use std::path::Path;
+
+pub mod threaded;
+pub mod process;
+pub mod checkpoint;
+pub mod crash;
+
+pub fn run_one_from_json(case_json: &Path) -> Result<()> {
+    let cfg: BenchConfig = serde_json::from_slice(&fs::read(case_json)?)?;
+
+    match cfg.engine {
+        EngineKind::Sqlite => run_engine::<crate::engines::sqlite::SqliteEngine>(&cfg),
+        EngineKind::Redline => run_engine::<crate::engines::redline::RedlineEngine>(&cfg),
+        EngineKind::Null => run_engine::<crate::engines::null::NullEngine>(&cfg),
+    }
+}
+
+fn run_engine<E: crate::engines::traits::BenchEngine>(cfg: &BenchConfig) -> Result<()> {
+    use crate::runner::threaded::run_threaded;
+
+    let db_path = &cfg.db_path;
+
+    let summary = match cfg.workload {
+        WorkloadKind::SingleRowInsert => {
+            run_threaded::<E, _>(db_path, cfg, &crate::workloads::insert::SingleRowInsert)?
+        }
+        WorkloadKind::PointReadPk => {
+            run_threaded::<E, _>(db_path, cfg, &crate::workloads::point_read::PointReadPk)?
+        }
+        WorkloadKind::MixedOltp => {
+            let w = crate::workloads::mixed_oltp::MixedOltp {
+                read_pct: 80,
+                update_pct: 15,
+                insert_pct: 2,
+                range_pct: 3,
+            };
+            run_threaded::<E, _>(db_path, cfg, &w)?
+        }
+        _ => anyhow::bail!("workload not implemented yet: {:?}", cfg.workload),
+    };
+
+    let json = serde_json::to_vec_pretty(&summary)?;
+    fs::write(&cfg.output_json, json)?;
+
+    Ok(())
+}
+```
+
+---
+
+# Null engine
+
+The `NullEngine` is important. It quantifies benchmark overhead.
+
+```rust
+// src/engines/null.rs
+
+use crate::checksum::{hash_i64, hash_bytes};
+use crate::config::{BenchConfig, CheckpointMode};
+use crate::engines::traits::{BenchEngine, KvOps};
+use crate::metrics::{CheckpointStats, EngineStats};
+use anyhow::Result;
+use std::path::Path;
+
+pub struct NullEngine;
+
+pub struct NullConn {
+    rows: u64,
+}
+
+impl BenchEngine for NullEngine {
+    type Conn<'a> = NullConn;
+
+    fn name() -> &'static str {
+        "null"
+    }
+
+    fn create_database(_path: &Path, _cfg: &BenchConfig) -> Result<()> {
+        Ok(())
+    }
+
+    fn open_worker<'a>(
+        _worker_id: usize,
+        _path: &'a Path,
+        cfg: &'a BenchConfig,
+    ) -> Result<Self::Conn<'a>> {
+        Ok(NullConn {
+            rows: cfg.initial_rows,
+        })
+    }
+
+    fn checkpoint(
+        _path: &Path,
+        _cfg: &BenchConfig,
+        _mode: CheckpointMode,
+    ) -> Result<CheckpointStats> {
+        Ok(CheckpointStats::default())
+    }
+
+    fn collect_engine_stats(_path: &Path, _cfg: &BenchConfig) -> Result<EngineStats> {
+        Ok(EngineStats::default())
+    }
+
+    fn integrity_check(_path: &Path, _cfg: &BenchConfig) -> Result<String> {
+        Ok("ok".to_string())
+    }
+}
+
+impl KvOps for NullConn {
+    fn setup_schema(&mut self) -> Result<()> { Ok(()) }
+    fn prepare_kv_statements(&mut self) -> Result<()> { Ok(()) }
+    fn begin(&mut self) -> Result<()> { Ok(()) }
+    fn commit(&mut self) -> Result<()> { Ok(()) }
+    fn rollback(&mut self) -> Result<()> { Ok(()) }
+
+    fn insert_kv(&mut self, _key: i64, _value: &[u8], _n: i64) -> Result<()> {
+        self.rows += 1;
+        Ok(())
+    }
+
+    fn update_kv(&mut self, _key: i64, _value: &[u8]) -> Result<u64> {
+        Ok(1)
+    }
+
+    fn delete_kv(&mut self, _key: i64) -> Result<u64> {
+        Ok(1)
+    }
+
+    fn point_read_kv(&mut self, key: i64) -> Result<Option<u64>> {
+        Ok(Some(hash_i64(key)))
+    }
+
+    fn range_scan_kv(&mut self, start_key: i64, limit: u64) -> Result<(u64, u64)> {
+        let mut checksum = 0;
+        for k in start_key..start_key + limit as i64 {
+            checksum ^= hash_i64(k);
+        }
+        Ok((limit, checksum))
+    }
+
+    fn indexed_lookup_n(&mut self, n: i64, limit: u64) -> Result<(u64, u64)> {
+        Ok((limit, hash_i64(n) ^ limit))
+    }
+
+    fn row_count(&mut self, _table: &str) -> Result<u64> {
+        Ok(self.rows)
+    }
+
+    fn table_checksum(&mut self, _table: &str) -> Result<u64> {
+        Ok(self.rows.rotate_left(17))
+    }
+}
+```
+
+Gate:
+
+```text
+If NullEngine p99 is within 5–10% of SQLite/RedlineDB p99 for tiny operations,
+the benchmark is too dominated by harness overhead.
+```
+
+---
+
+# Performance engineering inside the harness
+
+To keep the benchmark from becoming the bottleneck:
+
+```text
+1. One worker thread per connection.
+2. No global histogram lock.
+3. No per-operation logging.
+4. No per-operation allocation.
+5. Prepared statements created before timed section.
+6. Preallocated payload scratch per worker.
+7. Deterministic PRNG per worker.
+8. Optional pregenerated request stream for high-fidelity runs.
+9. Atomic operation counter only for fixed-operation tests.
+10. Duration tests use stop flag and local op counts.
+11. Checkpoint metrics gathered off the hot path.
+12. Process RSS sampled by parent, not by every worker.
+13. Pin threads only when the benchmark config says so.
+14. Record failed ops, never silently retry inside the harness.
+```
+
+For SQLite specifically:
+
+```text
+1. Use one connection per worker.
+2. Use SQLITE_OPEN_NOMUTEX only when the connection is single-thread-owned.
+3. Use sqlite3_prepare_v3 + SQLITE_PREPARE_PERSISTENT.
+4. Reuse statements.
+5. Bind/reset/clear; do not finalize per operation.
+6. Use explicit BEGIN IMMEDIATE for batched writer transactions.
+7. Disable auto-checkpoint and run benchmark-controlled checkpoint worker.
+```
+
+---
+
+# How to handle `SQLITE_BUSY`
+
+For contention workloads, `SQLITE_BUSY` is not a harness bug. It is a result.
+
+Policy:
+
+```text
+If workload is supposed to complete all operations:
+  busy after timeout = failed operation.
+  report failures.
+  gate requires zero failures for release claims.
+
+If workload is explicitly a contention stress test:
+  busy count is a metric.
+  report busy rate and latency.
+```
+
+Do not spin in Rust above SQLite. Let SQLite’s busy handler implement the wait so the latency is naturally included. The busy timeout behavior is documented by SQLite. ([SQLite][6])
+
+---
+
+# WAL bytes/op and data bytes/op
+
+Use multiple sources because no single metric is perfect.
+
+For SQLite:
+
+```text
+1. SQLITE_DBSTATUS_CACHE_WRITE * page_size:
+   approximate pages written to WAL in WAL mode.
+
+2. /proc/<pid>/io write_bytes:
+   actual kernel write bytes where available.
+
+3. file sizes:
+   db, -wal, -shm at start/end/max.
+
+4. checkpoint frames:
+   sqlite3_wal_checkpoint_v2 output.
+```
+
+SQLite documents `SQLITE_DBSTATUS_CACHE_WRITE` as dirty cache entries written to disk and specifically notes that in WAL mode this means pages written to the WAL file. ([SQLite][2])
+
+For RedlineDB:
+
+```text
+1. exact WAL bytes appended from WAL writer;
+2. exact data bytes written by page writer/checkpointer;
+3. fsync count;
+4. checkpoint pages;
+5. segment rotation count;
+6. dirty-page flush count.
+```
+
+The report should label SQLite WAL bytes as approximate if using cache-write pages. For RedlineDB, make it exact.
+
+---
+
+# Repetition and statistics
+
+For each benchmark case:
+
+```text
+warmup:
+  one unreported warmup run or warmup_operations inside each run
+
+repeats:
+  minimum 7 for release
+  minimum 3 for nightly
+  1 for smoke
+
+reported:
+  median throughput
+  median p99
+  min/max or MAD
+  raw results preserved
+```
+
+Never report only the best run.
+
+---
+
+# CI structure
+
+## PR smoke
+
+```text
+cargo test
+cargo test -p redlinedb_bench
+redlinedb-bench run-matrix --config bench/smoke.toml --repeats 1
+redlinedb-bench compat --engine redline --test-dir compat/slt/smoke
+```
+
+Small:
+
+```text
+initial_rows = 1000
+operations = 5000
+workers = [1, 4]
+durability = normal
+```
+
+No perf gate except “does not regress catastrophically” if dedicated runners exist.
+
+## Nightly
+
+```text
+initial_rows = 1_000_000
+operations = 1_000_000
+workers = [1, 2, 4, 8, 16, 32]
+durability = strict_full, normal
+repeats = 5
+```
+
+Compare:
+
+```text
+RedlineDB current vs RedlineDB previous main
+RedlineDB current vs SQLite
+```
+
+## Release
+
+```text
+repeats = 7 or 11
+dedicated machine
+fixed CPU governor
+no noisy neighbors
+raw JSON archived
+report generated
+compat full supported suite
+crash/recovery suite
+```
+
+---
+
+# Important benchmark variants
+
+I would maintain these named configs:
+
+```text
+bench/smoke.toml
+bench/dev-fast.toml
+bench/nightly.toml
+bench/release-strict.toml
+bench/release-normal.toml
+bench/concurrent-writers.toml
+bench/checkpoint-pressure.toml
+bench/crash-recovery.toml
+bench/memory-ceiling.toml
+bench/sql-compat.toml
+```
+
+---
+
+# “Beat SQLite” engineering interpretation
+
+RedlineDB should not try to beat SQLite everywhere immediately. Phase 9 should expose where RedlineDB’s architecture pays off.
+
+Expected win areas:
+
+```text
+concurrent disjoint writers;
+mixed readers/writers with multiple write sessions;
+group commit under strict durability;
+large write batches with sharded buffer pool;
+checkpoint scheduling under controlled policy;
+lower p99 under concurrent writers once SQLite queues behind its single writer.
+```
+
+Expected hard areas:
+
+```text
+single-thread point lookup;
+single-thread tiny insert;
+small hot-cache reads;
+small range scans;
+database file compactness;
+SQLite’s mature B-tree and pager behavior.
+```
+
+This is why the release gates are staged:
+
+```text
+correctness first;
+strict durability;
+single-thread near parity;
+clear concurrent-writer win;
+memory boundedness;
+checkpoint/recovery honesty.
+```
+
+---
+
+# A practical implementation sequence
+
+If I were implementing Phase 9 directly, I would do it in this order:
+
+## Step 1: Harness core
+
+Build:
+
+```text
+BenchConfig
+RunResult JSON
+process runner
+threaded runner
+NullEngine
+metrics
+file-size collector
+RSS sampler
+```
+
+Exit criteria:
+
+```text
+NullEngine runs all core workload loops.
+JSON report emitted.
+No per-op allocation in the hot path except chosen workload payload behavior.
+```
+
+## Step 2: SQLite adapter
+
+Build:
+
+```text
+RawSqlite
+RawStmt
+PRAGMA setup
+prepared KV statements
+checkpoint
+db_status metrics
+integrity check
+```
+
+Exit criteria:
+
+```text
+SQLite runs insert/read/update/range/mixed workloads.
+SQLite strict/normal/unsafe profiles verified in output.
+SQLite settings recorded.
+```
+
+## Step 3: RedlineDB adapter
+
+Build:
+
+```text
+open database
+open session
+execute SQL or prepared SQL
+stats collection
+checkpoint
+integrity check
+```
+
+Exit criteria:
+
+```text
+RedlineDB and SQLite run same workload configs.
+Post-run checksums match expected behavior.
+```
+
+## Step 4: Workload suite
+
+Add:
+
+```text
+batched insert
+secondary index lookup
+joins
+delete/insert churn
+concurrent disjoint writers
+concurrent contended writers
+checkpoint pressure
+long reader
+memory ceiling
+prepare pressure
+```
+
+Exit criteria:
+
+```text
+every Phase 9 required workload exists.
+every workload verifies final state.
+```
+
+## Step 5: Compatibility suite
+
+Add:
+
+```text
+sqllogictest subset
+differential generator
+canonical value representation
+unsupported feature report
+```
+
+Exit criteria:
+
+```text
+all supported SQL compatibility tests pass before performance gates run.
+```
+
+## Step 6: Crash/recovery suite
+
+Add:
+
+```text
+ACK log
+child kill
+reopen timing
+acked commit verification
+integrity check
+```
+
+Exit criteria:
+
+```text
+strict mode never loses acknowledged process-kill commits.
+recovery time reported.
+```
+
+## Step 7: Report and gates
+
+Add:
+
+```text
+aggregate repeats
+median/spread
+Markdown report
+gate evaluator
+raw artifact archive
+```
+
+Exit criteria:
+
+```text
+one command produces full release report and pass/fail gate summary.
+```
+
+---
+
+# One very important RedlineDB API addition
+
+To make Phase 9 meaningful, RedlineDB should expose a stable benchmark stats API:
+
+```rust
+pub struct DbStats {
+    pub memory: MemoryStats,
+    pub wal: WalStats,
+    pub buffer: BufferStats,
+    pub tx: TxStats,
+    pub locks: LockStats,
+    pub checkpoint: CheckpointStats,
+    pub vacuum: VacuumStats,
+}
+
+pub struct WalStats {
+    pub bytes_appended: u64,
+    pub records_appended: u64,
+    pub fsync_count: u64,
+    pub fsync_total_ns: u64,
+    pub group_commit_batches: u64,
+    pub group_commit_waiters: u64,
+    pub max_queue_depth: u64,
+}
+
+pub struct BufferStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
+    pub dirty_pages: u64,
+    pub pages_flushed: u64,
+}
+
+pub struct TxStats {
+    pub commits: u64,
+    pub rollbacks: u64,
+    pub active_snapshots: u64,
+    pub oldest_csn: u64,
+}
+
+pub struct LockStats {
+    pub row_lock_wait_count: u64,
+    pub row_lock_wait_ns: u64,
+    pub latch_wait_count: u64,
+    pub latch_wait_ns: u64,
+}
+
+pub struct CheckpointStats {
+    pub completed: u64,
+    pub pages_written: u64,
+    pub bytes_written: u64,
+    pub total_ns: u64,
+    pub max_ns: u64,
+    pub blocked_by_readers: u64,
+}
+```
+
+Without this, if RedlineDB loses a workload, you will be guessing. With this, the report can say:
+
+```text
+RedlineDB lost update_pk_zipf at 16 workers because row_lock_wait_ns dominated.
+RedlineDB lost point_read_pk because buffer miss rate was high.
+RedlineDB p99 spiked because checkpoint wrote 50k pages.
+RedlineDB strict insert won because group commit batch size averaged 18.
+```
+
+---
+
+# The “honest replacement” benchmark claim
+
+The final Phase 9 benchmark should produce statements like:
+
+```text
+On machine X, with 4 KiB pages, 256 MiB configured DB cache, WAL mode,
+background checkpoints every 100 ms or 64 MiB, and strict durability:
+
+RedlineDB matched SQLite single-thread point-read throughput within 6%.
+RedlineDB matched SQLite single-thread insert throughput within 3%.
+RedlineDB exceeded SQLite concurrent disjoint-writer throughput by 3.8x at 16 sessions.
+RedlineDB p99 latency was 0.62x SQLite at 16 disjoint writers.
+RedlineDB used 1.08x SQLite peak RSS in the matched-memory profile.
+RedlineDB database size was 1.14x SQLite for the KV workload.
+All supported SQL compatibility tests passed.
+All strict process-kill recovery tests preserved acknowledged commits.
+Unsupported SQLite features: ...
+```
+
+That is the standard. Not hype. Not cherry-picked. A clear, reproducible, technically defensible certification.
+
+---
+
+# Minimal first target
+
+The smallest useful Phase 9 implementation should support:
+
+```text
+engines:
+  sqlite
+  redline
+  null
+
+durability:
+  strict_full
+  normal
+
+workloads:
+  single_row_insert
+  batched_insert_100
+  point_read_pk
+  update_pk_uniform
+  concurrent_disjoint_writers
+  mixed_oltp_80r_20w
+  checkpoint_pressure
+  crash_recovery
+
+metrics:
+  throughput
+  p50/p95/p99
+  ops failed
+  RSS
+  DB/WAL size
+  engine stats
+  final checksum
+
+reports:
+  JSON
+  Markdown
+  gates
+```
+
+Once that exists, you can iterate workload-by-workload and use the results to drive RedlineDB performance work.
+
+[1]: https://www.sqlite.org/wal.html "Write-Ahead Logging"
+[2]: https://sqlite.org/c3ref/c_dbstatus_options.html "Status Parameters for database connections"
+[3]: https://docs.rs/criterion/latest/criterion/ "criterion - Rust"
+[4]: https://docs.rs/hdrhistogram/ "hdrhistogram - Rust"
+[5]: https://sqlite.org/pragma.html "Pragma statements supported by SQLite"
+[6]: https://sqlite.org/c3ref/busy_timeout.html "Set A Busy Timeout"
+[7]: https://sqlite.org/threadsafe.html "Using SQLite In Multi-Threaded Applications"
+[8]: https://sqlite.org/c3ref/wal_checkpoint_v2.html "Checkpoint a database"
+[9]: https://sqlite.org/sqllogictest "sqllogictest: Documentation"
+

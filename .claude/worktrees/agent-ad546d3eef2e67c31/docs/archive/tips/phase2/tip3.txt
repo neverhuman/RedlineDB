@@ -1,0 +1,2295 @@
+Below is the Phase 2 implementation I would build: **durable page allocation + relation/page directory + free-space map + physical vacuum + horizon tracking + background checkpoint/vacuum + stats**, designed specifically so RedlineDB’s future SQL layer can sustain many concurrent writer sessions without degenerating into a global-writer bottleneck.
+
+The strategic point: RedlineDB should not copy SQLite’s WAL snapshot model. SQLite WAL allows readers and one writer to run concurrently, but the official docs state that because there is one WAL file “there can only be one writer at a time,” and checkpointing has to stop at the end mark of any current reader. Long readers can therefore prevent checkpoints from completing and can let the WAL grow. ([SQLite][1]) RedlineDB already has MVCC heap semantics, so Phase 2 should exploit that: **checkpoints should not be blocked by long readers; vacuum/reuse should be blocked by long readers.** That is the central design choice.
+
+# Phase 2 goal
+
+Phase 2 should make this true:
+
+> Foreground transactions can allocate pages, reuse space, dirty pages, and commit without taking a global storage lock. Background checkpoint and vacuum keep WAL, memory, and disk growth bounded. Long readers preserve old versions but do not prevent WAL checkpoint progress. Physical reuse is delayed until horizons prove it is safe.
+
+The Phase 2 kernel should expose these subsystems:
+
+```text
+redlinedb_storage
+├── space/
+│   ├── allocator.rs        // durable page/extent allocator
+│   ├── relation_dir.rs     // relation page directory + FSM summaries
+│   ├── lifecycle.rs        // active/retired/quarantine/reusable state machine
+│   ├── horizon.rs          // CSN/LSN retention horizons
+│   ├── vacuum.rs           // page prune, undo cleanup, empty-page retirement
+│   └── stats.rs            // counters, gauges, histograms
+├── checkpoint/
+│   ├── worker.rs           // bounded background checkpointing
+│   └── dirty_queue.rs      // page-LSN ordered dirty writeback
+└── workers/
+    ├── coordinator.rs      // wakeups, budgets, shutdown
+    └── config.rs
+```
+
+The important architectural rule is:
+
+```text
+Exact and durable:
+- page allocation state
+- relation/page membership
+- page lifecycle
+- page generation
+- WAL retention horizons
+- checkpoint durable LSN
+
+Approximate and repairable:
+- free-space hints
+- dead-byte hints
+- vacuum priority hints
+- relation statistics
+```
+
+That gives you speed without compromising correctness.
+
+# 1. Core Phase 2 data model
+
+## 1.1 Page identity
+
+Use a global physical page id. Do not create one file per table yet. One main data file keeps file descriptor count low and makes checkpoint sorting simple.
+
+```rust
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct PageId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct RelId(pub u32);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct Lsn(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct Csn(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct TxnId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct PageGeneration(pub u32);
+```
+
+Future row locators should include generation:
+
+```rust
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct RowPtr {
+    pub page_id: PageId,
+    pub slot: u16,
+    pub generation: PageGeneration,
+}
+```
+
+That is critical. Once Phase 3 indexes exist, a stale index entry must never accidentally point into a reused page and return a wrong row. The heap recheck must verify:
+
+```text
+page.header.rel_id == expected_rel_id
+page.header.generation == row_ptr.generation
+slot still exists
+tuple visibility passes snapshot check
+```
+
+## 1.2 Page lifecycle
+
+Use a small, explicit state machine:
+
+```rust
+#[repr(u8)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum PageState {
+    NeverAllocated = 0,
+
+    // Allocator owns the page, but it is not currently part of a relation.
+    Reusable = 1,
+
+    // Page is part of a relation and may contain visible or dead tuples.
+    Active = 2,
+
+    // Relation no longer wants the page. The old page image is still protected
+    // until horizons prove no active reader/scan can observe it.
+    Retired = 3,
+
+    // Safe from MVCC point of view, waiting for durable free-list transition.
+    Quarantined = 4,
+
+    // Corruption / recovery sentinel. Never normally persisted.
+    Invalid = 255,
+}
+```
+
+Lifecycle transitions:
+
+```text
+NeverAllocated
+  -> Active             allocation + relation directory insert
+
+Reusable
+  -> Active             page reuse, generation incremented
+
+Active
+  -> Retired            vacuum proves page is empty and no old tuple is needed
+
+Retired
+  -> Quarantined        oldest snapshot has crossed retire CSN
+
+Quarantined
+  -> Reusable           FreePageBatch WAL record is durable
+
+Reusable
+  -> Active             future allocation
+```
+
+Do **not** reuse a retired page immediately. The delay is not only about tuple visibility; it also protects table scans that may have copied a page-directory entry before the page was retired. Generation checks make this safe, but the quarantine delay makes bugs dramatically less likely.
+
+## 1.3 Page header
+
+Keep the on-disk page header fixed-size, little-endian, and manually encoded. Do **not** write `repr(C)` structs directly to disk. That risks padding, endian, and layout problems.
+
+```rust
+pub const PAGE_MAGIC: u32 = 0x5244_5047; // "RDPG"
+pub const PAGE_LAYOUT_VERSION: u16 = 2;
+pub const PAGE_HEADER_LEN: usize = 128;
+
+#[repr(u16)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum PageKind {
+    Heap = 1,
+    Undo = 2,
+    RelationDir = 3,
+    AllocatorMeta = 4,
+    CheckpointMeta = 5,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct PageHeader {
+    pub magic: u32,
+    pub layout_version: u16,
+    pub kind: PageKind,
+
+    pub page_id: PageId,
+    pub rel_id: RelId,
+    pub generation: PageGeneration,
+
+    pub page_lsn: Lsn,
+
+    pub flags: u32,
+    pub lower: u16,
+    pub upper: u16,
+    pub special: u16,
+
+    pub free_bytes_hint: u16,
+    pub free_class_hint: u8,
+
+    // Minimum CSN of dead data on page, or u64::MAX if no known dead data.
+    pub oldest_dead_csn_hint: Csn,
+
+    // Page lifecycle metadata.
+    pub state: PageState,
+    pub retire_csn: Csn,
+
+    // Existing Phase 1 checksum field can cover header except checksum itself.
+    pub checksum: u32,
+}
+
+impl PageHeader {
+    pub fn encode_into(&self, dst: &mut [u8]) {
+        assert!(dst.len() >= PAGE_HEADER_LEN);
+
+        dst[..PAGE_HEADER_LEN].fill(0);
+
+        put_u32(dst, 0, self.magic);
+        put_u16(dst, 4, self.layout_version);
+        put_u16(dst, 6, self.kind as u16);
+
+        put_u64(dst, 8, self.page_id.0);
+        put_u32(dst, 16, self.rel_id.0);
+        put_u32(dst, 20, self.generation.0);
+
+        put_u64(dst, 24, self.page_lsn.0);
+
+        put_u32(dst, 32, self.flags);
+        put_u16(dst, 36, self.lower);
+        put_u16(dst, 38, self.upper);
+        put_u16(dst, 40, self.special);
+
+        put_u16(dst, 42, self.free_bytes_hint);
+        dst[44] = self.free_class_hint;
+
+        put_u64(dst, 48, self.oldest_dead_csn_hint.0);
+
+        dst[56] = self.state as u8;
+        put_u64(dst, 64, self.retire_csn.0);
+
+        put_u32(dst, 124, self.checksum);
+    }
+}
+
+#[inline]
+fn put_u16(dst: &mut [u8], off: usize, v: u16) {
+    dst[off..off + 2].copy_from_slice(&v.to_le_bytes());
+}
+
+#[inline]
+fn put_u32(dst: &mut [u8], off: usize, v: u32) {
+    dst[off..off + 4].copy_from_slice(&v.to_le_bytes());
+}
+
+#[inline]
+fn put_u64(dst: &mut [u8], off: usize, v: u64) {
+    dst[off..off + 8].copy_from_slice(&v.to_le_bytes());
+}
+```
+
+# 2. Combine relation page directory and free-space map
+
+This is the most important simplification.
+
+Do **not** build a separate relation metadata tree, page directory, FSM tree, vacuum queue tree, and page visibility tree. Build one relation page directory tree whose leaf entries are exact for page membership/lifecycle and approximate for free/dead hints.
+
+## 2.1 Relation directory entry
+
+Each relation has a persistent directory. The directory maps a relation’s page slots to physical pages.
+
+```rust
+#[derive(Copy, Clone, Debug)]
+pub struct RelPageEntry {
+    pub page_id: PageId,
+    pub generation: PageGeneration,
+    pub kind: PageKind,
+    pub state: PageState,
+
+    // Approximate. Used for insert page search.
+    pub free_class: u8,
+
+    // Approximate. Used for vacuum prioritization.
+    pub dead_bytes_hint: u32,
+    pub oldest_dead_csn_hint: Csn,
+
+    // Exact once state >= Retired.
+    pub retire_csn: Csn,
+}
+```
+
+A compact on-disk entry can be 32 bytes:
+
+```text
+offset size field
+0      8    page_id
+8      4    generation
+12     1    kind
+13     1    state
+14     1    free_class
+15     1    flags
+16     4    dead_bytes_hint
+20     4    reserved
+24     8    oldest_dead_csn_or_retire_csn
+```
+
+With 16 KiB pages:
+
+```text
+16 KiB relation-dir leaf / 32 B entry = 512 heap pages covered
+512 heap pages * 16 KiB = 8 MiB heap coverage per dir leaf
+```
+
+Metadata overhead is roughly:
+
+```text
+16 KiB directory leaf / 8 MiB heap coverage = 0.195%
+```
+
+That is small enough.
+
+## 2.2 Internal directory summaries
+
+Each internal directory node stores summaries:
+
+```rust
+#[derive(Copy, Clone, Debug)]
+pub struct RelDirSummary {
+    pub max_free_class: u8,
+    pub max_dead_bytes: u32,
+    pub oldest_dead_csn: Csn,
+    pub active_pages: u32,
+    pub retired_pages: u32,
+}
+```
+
+This lets you do three things with one tree:
+
+```text
+Insert path:
+  descend by max_free_class >= needed_class
+
+Vacuum path:
+  descend by oldest_dead_csn <= horizon or max_dead_bytes >= threshold
+
+Scan path:
+  iterate active entries, skipping retired/reusable entries
+```
+
+This is a major memory and code-size win.
+
+## 2.3 Free-space classes
+
+Use coarse classes. Do not track exact bytes in global metadata.
+
+```rust
+pub const FREE_CLASS_QUANTUM: usize = 256;
+pub const MAX_FREE_CLASS: u8 = 63;
+
+#[inline]
+pub fn free_class(free_bytes: usize) -> u8 {
+    let c = free_bytes / FREE_CLASS_QUANTUM;
+    c.min(MAX_FREE_CLASS as usize) as u8
+}
+
+#[inline]
+pub fn needed_class(bytes_needed: usize) -> u8 {
+    let c = bytes_needed.div_ceil(FREE_CLASS_QUANTUM);
+    c.min(MAX_FREE_CLASS as usize) as u8
+}
+```
+
+The directory/FSM can lie in the safe direction or be stale:
+
+```text
+FSM says page has room, but it does not:
+  harmless; latch page, fail validation, repair hint, retry.
+
+FSM says page has no room, but it does:
+  harmless; worse space reuse until vacuum/scrub repairs hint.
+
+Allocator says page is reusable, but it is not:
+  catastrophic; never allow approximate allocator state.
+```
+
+# 3. Durable page allocator
+
+## 3.1 Allocation strategy
+
+Use extents internally, but allocate pages individually to relations.
+
+Recommended defaults:
+
+```rust
+pub const DEFAULT_PAGE_SIZE: usize = 16 * 1024;
+pub const EXTENT_PAGES: u64 = 64; // 1 MiB at 16 KiB pages
+pub const ALLOCATOR_SHARDS: usize = 64;
+pub const HOT_FREE_CACHE_PER_SHARD: usize = 256;
+```
+
+Why 16 KiB pages?
+
+```text
+Pros:
+- fewer page headers
+- better sequential scan throughput
+- better checkpoint batching
+- fewer FSM entries
+- good for row-oriented OLTP with moderate rows
+
+Cons:
+- more write amplification for tiny updates
+- more memory per pinned page
+
+Make it configurable, but benchmark 4 KiB, 8 KiB, 16 KiB, 32 KiB.
+```
+
+## 3.2 Sharded allocator
+
+Do not use one global allocator mutex.
+
+```rust
+#[repr(align(64))]
+pub struct CachePadded<T>(pub T);
+
+pub struct PageAllocator {
+    shards: Box<[CachePadded<AllocatorShard>]>,
+    next_page: std::sync::atomic::AtomicU64,
+
+    // Only used when extending the file/high-water mark.
+    extend_lock: std::sync::Mutex<()>,
+
+    wal: std::sync::Arc<dyn SpaceWal>,
+    pager: std::sync::Arc<dyn PagerIo>,
+}
+
+pub struct AllocatorShard {
+    lock: std::sync::Mutex<AllocatorShardState>,
+}
+
+pub struct AllocatorShardState {
+    // In-memory only. Rebuilt from durable metadata during open/recovery.
+    hot_free: Vec<PageId>,
+
+    // Extents with at least one reusable page.
+    partial_extents: Vec<ExtentId>,
+
+    // Pages retired but not yet reusable.
+    quarantine: Vec<QuarantinePage>,
+
+    stats: AllocShardStats,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ExtentId(pub u64);
+
+#[derive(Copy, Clone, Debug)]
+pub struct QuarantinePage {
+    pub page_id: PageId,
+    pub generation: PageGeneration,
+    pub safe_after_csn: Csn,
+    pub retire_lsn: Lsn,
+}
+```
+
+Shard selection:
+
+```rust
+#[inline]
+fn allocator_shard(page_id: PageId) -> usize {
+    (page_id.0 as usize) & (ALLOCATOR_SHARDS - 1)
+}
+
+#[inline]
+fn relation_alloc_shard(rel_id: RelId, thread_salt: u64) -> usize {
+    let x = rel_id.0 as u64 ^ thread_salt.rotate_left(17);
+    (mix64(x) as usize) & (ALLOCATOR_SHARDS - 1)
+}
+
+#[inline]
+fn mix64(mut x: u64) -> u64 {
+    x ^= x >> 33;
+    x = x.wrapping_mul(0xff51afd7ed558ccd);
+    x ^= x >> 33;
+    x = x.wrapping_mul(0xc4ceb9fe1a85ec53);
+    x ^ (x >> 33)
+}
+```
+
+## 3.3 WAL records for allocator
+
+Allocator metadata must be redo-idempotent.
+
+```rust
+#[derive(Clone, Debug)]
+pub enum SpaceWalRecord {
+    AllocExtent {
+        shard: u16,
+        start_page: PageId,
+        page_count: u32,
+        allocator_epoch: u64,
+    },
+
+    AllocPage {
+        page_id: PageId,
+        rel_id: RelId,
+        kind: PageKind,
+        generation: PageGeneration,
+        allocator_epoch: u64,
+    },
+
+    RelDirInsert {
+        rel_id: RelId,
+        dir_slot: u64,
+        entry: RelPageEntry,
+    },
+
+    RelDirUpdate {
+        rel_id: RelId,
+        dir_slot: u64,
+        expected_generation: PageGeneration,
+        new_entry: RelPageEntry,
+    },
+
+    RetirePage {
+        rel_id: RelId,
+        page_id: PageId,
+        generation: PageGeneration,
+        retire_csn: Csn,
+    },
+
+    FreePageBatch {
+        pages: Vec<FreedPage>,
+        allocator_epoch: u64,
+    },
+
+    FsmHintUpdate {
+        rel_id: RelId,
+        dir_slot: u64,
+        page_id: PageId,
+        generation: PageGeneration,
+        free_class: u8,
+        dead_bytes_hint: u32,
+        oldest_dead_csn_hint: Csn,
+    },
+
+    PageImageCas {
+        page_id: PageId,
+        expected_lsn: Lsn,
+        new_lsn: Lsn,
+        image: Box<[u8]>,
+    },
+
+    UndoSegmentFree {
+        segment_id: u64,
+        first_page: PageId,
+        page_count: u32,
+        max_csn: Csn,
+    },
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct FreedPage {
+    pub page_id: PageId,
+    pub generation: PageGeneration,
+}
+```
+
+The `PageImageCas` record is extremely useful for background vacuum. It says:
+
+```text
+Apply this page image only if the current page_lsn equals expected_lsn.
+If some foreground writer changed the page after vacuum copied it, skip.
+```
+
+This lets vacuum copy a page, release the latch, append WAL, then reacquire and apply only if the page did not change. That avoids holding a page latch across WAL append or any possible blocking path.
+
+## 3.4 Allocating a page
+
+The allocation fast path should be:
+
+```text
+1. Try relation insert ring / FSM first.
+2. If no existing page has space, ask allocator for a page.
+3. Allocator pops from shard hot_free cache if possible.
+4. Else shard lock finds a reusable page in partial extent.
+5. Else extend file by one extent.
+6. Append AllocPage WAL record.
+7. Format page in buffer pool with page_lsn = alloc_lsn.
+8. Insert relation directory entry.
+9. Return page.
+```
+
+Skeleton:
+
+```rust
+pub trait SpaceWal: Send + Sync {
+    fn append(&self, rec: SpaceWalRecord) -> anyhow::Result<Lsn>;
+    fn durable_lsn(&self) -> Lsn;
+}
+
+pub trait PagerIo: Send + Sync {
+    fn format_new_page(
+        &self,
+        page_id: PageId,
+        header: PageHeader,
+    ) -> anyhow::Result<()>;
+}
+
+impl PageAllocator {
+    pub fn allocate_page(
+        &self,
+        rel_id: RelId,
+        kind: PageKind,
+        thread_salt: u64,
+    ) -> anyhow::Result<(PageId, PageGeneration, Lsn)> {
+        let shard_idx = relation_alloc_shard(rel_id, thread_salt);
+
+        let page_id = {
+            let shard = &self.shards[shard_idx].0;
+            let mut st = shard.lock.lock().unwrap();
+
+            if let Some(page_id) = st.hot_free.pop() {
+                page_id
+            } else if let Some(page_id) = self.alloc_from_partial_extent(&mut st)? {
+                page_id
+            } else {
+                drop(st);
+                self.extend_and_take_page(shard_idx)?
+            }
+        };
+
+        // Generation is read from allocator metadata. For simplicity here:
+        let generation = self.next_generation_for(page_id)?;
+
+        let rec = SpaceWalRecord::AllocPage {
+            page_id,
+            rel_id,
+            kind,
+            generation,
+            allocator_epoch: self.current_epoch(),
+        };
+
+        let lsn = self.wal.append(rec)?;
+
+        let header = PageHeader {
+            magic: PAGE_MAGIC,
+            layout_version: PAGE_LAYOUT_VERSION,
+            kind,
+            page_id,
+            rel_id,
+            generation,
+            page_lsn: lsn,
+            flags: 0,
+            lower: PAGE_HEADER_LEN as u16,
+            upper: DEFAULT_PAGE_SIZE as u16,
+            special: 0,
+            free_bytes_hint: (DEFAULT_PAGE_SIZE - PAGE_HEADER_LEN) as u16,
+            free_class_hint: free_class(DEFAULT_PAGE_SIZE - PAGE_HEADER_LEN),
+            oldest_dead_csn_hint: Csn(u64::MAX),
+            state: PageState::Active,
+            retire_csn: Csn(u64::MAX),
+            checksum: 0,
+        };
+
+        self.pager.format_new_page(page_id, header)?;
+
+        Ok((page_id, generation, lsn))
+    }
+
+    fn alloc_from_partial_extent(
+        &self,
+        _st: &mut AllocatorShardState,
+    ) -> anyhow::Result<Option<PageId>> {
+        // Real implementation:
+        // - inspect extent bitmap
+        // - find zero bit
+        // - mark allocated in memory
+        // - durable bitmap change is covered by AllocPage redo
+        Ok(None)
+    }
+
+    fn extend_and_take_page(&self, shard_idx: usize) -> anyhow::Result<PageId> {
+        let _g = self.extend_lock.lock().unwrap();
+
+        let start = self.next_page.fetch_add(
+            EXTENT_PAGES,
+            std::sync::atomic::Ordering::AcqRel,
+        );
+
+        let start_page = PageId(start);
+
+        let rec = SpaceWalRecord::AllocExtent {
+            shard: shard_idx as u16,
+            start_page,
+            page_count: EXTENT_PAGES as u32,
+            allocator_epoch: self.current_epoch(),
+        };
+
+        let _lsn = self.wal.append(rec)?;
+
+        // File::set_len can be done here or during redo/open.
+        // Recovery must tolerate WAL records beyond EOF and extend.
+        Ok(start_page)
+    }
+
+    fn next_generation_for(&self, _page_id: PageId) -> anyhow::Result<PageGeneration> {
+        // Read allocator metadata / page directory entry.
+        // Increment on reuse, preserve on first allocation.
+        Ok(PageGeneration(1))
+    }
+
+    fn current_epoch(&self) -> u64 {
+        1
+    }
+}
+```
+
+## 3.5 Freeing a page
+
+Physical free is a two-stage process:
+
+```text
+Retire:
+  relation no longer uses page
+  page remains protected
+
+Reap:
+  page becomes allocator-reusable
+```
+
+Retire happens under vacuum after the page is empty.
+
+Reap happens when horizons say it is safe.
+
+```rust
+impl PageAllocator {
+    pub fn enqueue_quarantine(
+        &self,
+        page_id: PageId,
+        generation: PageGeneration,
+        safe_after_csn: Csn,
+        retire_lsn: Lsn,
+    ) {
+        let shard_idx = allocator_shard(page_id);
+        let shard = &self.shards[shard_idx].0;
+        let mut st = shard.lock.lock().unwrap();
+
+        st.quarantine.push(QuarantinePage {
+            page_id,
+            generation,
+            safe_after_csn,
+            retire_lsn,
+        });
+    }
+
+    pub fn reap_quarantine(
+        &self,
+        horizons: RetentionSnapshot,
+        max_pages: usize,
+    ) -> anyhow::Result<usize> {
+        let mut freed_total = 0;
+
+        for shard in self.shards.iter() {
+            if freed_total >= max_pages {
+                break;
+            }
+
+            let mut batch = Vec::new();
+
+            {
+                let mut st = shard.0.lock.lock().unwrap();
+
+                let mut i = 0;
+                while i < st.quarantine.len() && batch.len() < max_pages - freed_total {
+                    let q = st.quarantine[i];
+
+                    let csn_ok = horizons.oldest_snapshot_csn.0 > q.safe_after_csn.0;
+                    let lsn_ok = horizons.oldest_required_lsn.0 > q.retire_lsn.0;
+
+                    if csn_ok && lsn_ok {
+                        let q = st.quarantine.swap_remove(i);
+                        batch.push(FreedPage {
+                            page_id: q.page_id,
+                            generation: q.generation,
+                        });
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+
+            if batch.is_empty() {
+                continue;
+            }
+
+            let rec = SpaceWalRecord::FreePageBatch {
+                pages: batch.clone(),
+                allocator_epoch: self.current_epoch(),
+            };
+
+            let _lsn = self.wal.append(rec)?;
+
+            let mut st = shard.0.lock.lock().unwrap();
+            for p in batch {
+                if st.hot_free.len() < HOT_FREE_CACHE_PER_SHARD {
+                    st.hot_free.push(p.page_id);
+                } else {
+                    // Put back into extent bitmap free pool.
+                    // Hot cache is only a front cache.
+                }
+                freed_total += 1;
+            }
+        }
+
+        Ok(freed_total)
+    }
+}
+```
+
+# 4. Horizon tracking
+
+Phase 2 needs a real horizon manager. Vacuum, undo cleanup, checkpoint, WAL recycling, backup, and replication all consult it.
+
+## 4.1 Horizons to track
+
+```rust
+#[derive(Copy, Clone, Debug)]
+pub struct RetentionSnapshot {
+    // Oldest active MVCC snapshot. Vacuum cannot remove versions needed by this.
+    pub oldest_snapshot_csn: Csn,
+
+    // Oldest active transaction start CSN. Undo/rollback may need this.
+    pub oldest_txn_start_csn: Csn,
+
+    // Lowest LSN needed by active backups, replication slots, or recovery.
+    pub oldest_required_lsn: Lsn,
+
+    // Highest LSN known durable in data file after checkpoint.
+    pub durable_checkpoint_lsn: Lsn,
+
+    // WAL can recycle below this only when also checkpointed.
+    pub wal_recycle_lsn: Lsn,
+
+    // Pages retired at or before this CSN may move toward reuse.
+    pub reusable_page_csn: Csn,
+}
+```
+
+## 4.2 Active snapshot slots
+
+Use fixed slots. Avoid allocating on every read transaction.
+
+```rust
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+const MAX_SNAPSHOT_SLOTS: usize = 4096;
+
+#[repr(align(64))]
+pub struct SnapshotSlot {
+    active: AtomicBool,
+    csn: AtomicU64,
+    lsn: AtomicU64,
+}
+
+pub struct HorizonTracker {
+    slots: Box<[SnapshotSlot]>,
+
+    free_slots: std::sync::Mutex<Vec<usize>>,
+
+    cached_oldest_csn: AtomicU64,
+    cached_oldest_lsn: AtomicU64,
+
+    backup_required_lsn: AtomicU64,
+    replica_required_lsn: AtomicU64,
+    durable_checkpoint_lsn: AtomicU64,
+}
+
+pub struct SnapshotGuard<'a> {
+    tracker: &'a HorizonTracker,
+    slot: usize,
+}
+
+impl HorizonTracker {
+    pub fn new() -> Self {
+        let mut slots = Vec::with_capacity(MAX_SNAPSHOT_SLOTS);
+        for _ in 0..MAX_SNAPSHOT_SLOTS {
+            slots.push(SnapshotSlot {
+                active: AtomicBool::new(false),
+                csn: AtomicU64::new(u64::MAX),
+                lsn: AtomicU64::new(u64::MAX),
+            });
+        }
+
+        let free_slots = (0..MAX_SNAPSHOT_SLOTS).rev().collect();
+
+        Self {
+            slots: slots.into_boxed_slice(),
+            free_slots: std::sync::Mutex::new(free_slots),
+            cached_oldest_csn: AtomicU64::new(u64::MAX),
+            cached_oldest_lsn: AtomicU64::new(u64::MAX),
+            backup_required_lsn: AtomicU64::new(u64::MAX),
+            replica_required_lsn: AtomicU64::new(u64::MAX),
+            durable_checkpoint_lsn: AtomicU64::new(0),
+        }
+    }
+
+    pub fn enter_snapshot(&self, csn: Csn, read_lsn: Lsn) -> SnapshotGuard<'_> {
+        let slot = self.free_slots
+            .lock()
+            .unwrap()
+            .pop()
+            .expect("too many concurrent snapshots");
+
+        let s = &self.slots[slot];
+
+        // Publish payload first.
+        s.csn.store(csn.0, Ordering::Relaxed);
+        s.lsn.store(read_lsn.0, Ordering::Relaxed);
+
+        // Then publish active with Release.
+        s.active.store(true, Ordering::Release);
+
+        // Fast approximate lowering of cached min.
+        self.cached_oldest_csn.fetch_min(csn.0, Ordering::AcqRel);
+        self.cached_oldest_lsn.fetch_min(read_lsn.0, Ordering::AcqRel);
+
+        SnapshotGuard {
+            tracker: self,
+            slot,
+        }
+    }
+
+    fn exit_snapshot(&self, slot: usize) {
+        let s = &self.slots[slot];
+
+        s.active.store(false, Ordering::Release);
+        s.csn.store(u64::MAX, Ordering::Relaxed);
+        s.lsn.store(u64::MAX, Ordering::Relaxed);
+
+        self.free_slots.lock().unwrap().push(slot);
+    }
+
+    pub fn recompute(&self, current_csn: Csn, current_lsn: Lsn) -> RetentionSnapshot {
+        let mut oldest_csn = current_csn.0;
+        let mut oldest_lsn = current_lsn.0;
+
+        for s in self.slots.iter() {
+            if s.active.load(Ordering::Acquire) {
+                let csn = s.csn.load(Ordering::Acquire);
+                let lsn = s.lsn.load(Ordering::Acquire);
+                oldest_csn = oldest_csn.min(csn);
+                oldest_lsn = oldest_lsn.min(lsn);
+            }
+        }
+
+        self.cached_oldest_csn.store(oldest_csn, Ordering::Release);
+        self.cached_oldest_lsn.store(oldest_lsn, Ordering::Release);
+
+        let backup_lsn = self.backup_required_lsn.load(Ordering::Acquire);
+        let replica_lsn = self.replica_required_lsn.load(Ordering::Acquire);
+        let checkpoint_lsn = self.durable_checkpoint_lsn.load(Ordering::Acquire);
+
+        let oldest_required_lsn = oldest_lsn.min(backup_lsn).min(replica_lsn);
+
+        RetentionSnapshot {
+            oldest_snapshot_csn: Csn(oldest_csn),
+            oldest_txn_start_csn: Csn(oldest_csn),
+            oldest_required_lsn: Lsn(oldest_required_lsn),
+            durable_checkpoint_lsn: Lsn(checkpoint_lsn),
+            wal_recycle_lsn: Lsn(checkpoint_lsn.min(oldest_required_lsn)),
+            reusable_page_csn: Csn(oldest_csn),
+        }
+    }
+
+    pub fn cached_oldest_snapshot_csn(&self) -> Csn {
+        Csn(self.cached_oldest_csn.load(Ordering::Acquire))
+    }
+}
+
+impl Drop for SnapshotGuard<'_> {
+    fn drop(&mut self) {
+        self.tracker.exit_snapshot(self.slot);
+    }
+}
+```
+
+This is conservative and fast. Reads only pay one slot acquisition at transaction start and one release at end.
+
+# 5. MVCC vacuum design
+
+Phase 2 vacuum has four jobs:
+
+```text
+1. Prune dead tuple versions inside heap pages.
+2. Compact page-local fragmented space.
+3. Retire empty heap pages.
+4. Free obsolete undo segments/pages.
+```
+
+It must not do these:
+
+```text
+- must not move live rows between pages yet
+- must not update indexes, because indexes are Phase 3
+- must not hold page latches during fsync
+- must not block normal readers
+- must not consume unbounded memory
+```
+
+## 5.1 Vacuum safety rule
+
+A tuple version may be physically removed only if:
+
+```text
+version is not visible to any possible active snapshot
+AND transaction outcome is durable
+AND rollback no longer needs it
+```
+
+For a deleted version:
+
+```text
+delete_csn < oldest_snapshot_csn
+```
+
+For an old update version:
+
+```text
+next_version_exists
+AND end_csn < oldest_snapshot_csn
+```
+
+For undo:
+
+```text
+undo_record.max_csn < oldest_snapshot_csn
+AND undo_record.txn is committed/aborted durably
+AND no active rollback chain references it
+```
+
+## 5.2 Vacuum queue
+
+Foreground writers should not do heavy vacuum bookkeeping. They only update hints.
+
+```rust
+#[derive(Copy, Clone, Debug)]
+pub enum VacuumReason {
+    DeadTupleBytes,
+    EmptyCandidate,
+    UndoSegmentCandidate,
+    FsmRepair,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct VacuumTask {
+    pub rel_id: RelId,
+    pub page_id: PageId,
+    pub generation: PageGeneration,
+    pub reason: VacuumReason,
+    pub min_dead_csn: Csn,
+    pub estimated_dead_bytes: u32,
+}
+```
+
+Queue policy:
+
+```text
+- bounded queue
+- duplicate suppression via per-page queued bit or atomic epoch
+- if queue full, drop hints; background directory scan will find pages later
+```
+
+Dropping a vacuum hint must never affect correctness.
+
+## 5.3 Vacuum with PageImageCas
+
+This is the safest high-concurrency pattern.
+
+```text
+1. Try-latch page.
+2. Copy page image and page_lsn.
+3. Release latch.
+4. Compute prune/compact result on private scratch buffer.
+5. Append PageImageCas { expected_lsn, new_lsn, image }.
+6. Reacquire page latch.
+7. If current page_lsn == expected_lsn, install image.
+8. Else skip; foreground changed page, vacuum work is stale.
+```
+
+That avoids holding the page latch while appending WAL.
+
+```rust
+pub struct VacuumWorker {
+    wal: std::sync::Arc<dyn SpaceWal>,
+    pager: std::sync::Arc<dyn BufferPool>,
+    rels: std::sync::Arc<RelationDirectory>,
+    allocator: std::sync::Arc<PageAllocator>,
+    horizons: std::sync::Arc<HorizonTracker>,
+    stats: std::sync::Arc<StorageStats>,
+    config: VacuumConfig,
+}
+
+pub trait BufferPool: Send + Sync {
+    fn try_copy_page(&self, page_id: PageId) -> anyhow::Result<Option<CopiedPage>>;
+    fn try_install_page_image(
+        &self,
+        page_id: PageId,
+        expected_lsn: Lsn,
+        new_lsn: Lsn,
+        image: &[u8],
+    ) -> anyhow::Result<bool>;
+}
+
+pub struct CopiedPage {
+    pub page_id: PageId,
+    pub page_lsn: Lsn,
+    pub bytes: Box<[u8]>,
+}
+
+#[derive(Copy, Clone)]
+pub struct VacuumConfig {
+    pub max_pages_per_batch: usize,
+    pub max_wal_bytes_per_batch: usize,
+    pub min_dead_bytes_to_prune: usize,
+    pub retire_empty_pages: bool,
+}
+
+impl VacuumWorker {
+    pub fn vacuum_one(&self, task: VacuumTask, current_csn: Csn, current_lsn: Lsn)
+        -> anyhow::Result<VacuumOutcome>
+    {
+        let h = self.horizons.recompute(current_csn, current_lsn);
+
+        if task.min_dead_csn.0 >= h.oldest_snapshot_csn.0 {
+            return Ok(VacuumOutcome::SkippedTooNew);
+        }
+
+        let Some(copy) = self.pager.try_copy_page(task.page_id)? else {
+            return Ok(VacuumOutcome::SkippedContended);
+        };
+
+        let plan = HeapPrunePlan::build(
+            &copy.bytes,
+            h.oldest_snapshot_csn,
+            self.config.min_dead_bytes_to_prune,
+        )?;
+
+        if plan.is_empty() {
+            self.repair_fsm_hint(task.rel_id, task.page_id, task.generation, &copy.bytes)?;
+            return Ok(VacuumOutcome::NothingToDo);
+        }
+
+        let mut new_image = copy.bytes.clone();
+        let after = plan.apply(&mut new_image)?;
+
+        let provisional_new_lsn = Lsn(0);
+
+        let rec = SpaceWalRecord::PageImageCas {
+            page_id: task.page_id,
+            expected_lsn: copy.page_lsn,
+            new_lsn: provisional_new_lsn,
+            image: new_image.clone(),
+        };
+
+        let new_lsn = self.wal.append(rec)?;
+
+        patch_page_lsn(&mut new_image, new_lsn);
+        patch_page_checksum(&mut new_image);
+
+        let installed = self.pager.try_install_page_image(
+            task.page_id,
+            copy.page_lsn,
+            new_lsn,
+            &new_image,
+        )?;
+
+        if !installed {
+            self.stats.vacuum_stale_cas.fetch_add(1);
+            return Ok(VacuumOutcome::SkippedStale);
+        }
+
+        self.repair_fsm_after_prune(
+            task.rel_id,
+            task.page_id,
+            task.generation,
+            after.free_bytes,
+            after.dead_bytes,
+            after.oldest_dead_csn,
+        )?;
+
+        if after.is_empty && self.config.retire_empty_pages {
+            self.try_retire_empty_page(
+                task.rel_id,
+                task.page_id,
+                task.generation,
+                h.oldest_snapshot_csn,
+            )?;
+        }
+
+        Ok(VacuumOutcome::Pruned {
+            removed_versions: after.removed_versions,
+            reclaimed_bytes: after.reclaimed_bytes,
+        })
+    }
+
+    fn repair_fsm_hint(
+        &self,
+        _rel_id: RelId,
+        _page_id: PageId,
+        _generation: PageGeneration,
+        _page: &[u8],
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn repair_fsm_after_prune(
+        &self,
+        rel_id: RelId,
+        page_id: PageId,
+        generation: PageGeneration,
+        free_bytes: usize,
+        dead_bytes: usize,
+        oldest_dead_csn: Csn,
+    ) -> anyhow::Result<()> {
+        let rec = SpaceWalRecord::FsmHintUpdate {
+            rel_id,
+            dir_slot: 0, // resolved by relation directory
+            page_id,
+            generation,
+            free_class: free_class(free_bytes),
+            dead_bytes_hint: dead_bytes as u32,
+            oldest_dead_csn_hint: oldest_dead_csn,
+        };
+
+        let _lsn = self.wal.append(rec)?;
+        Ok(())
+    }
+
+    fn try_retire_empty_page(
+        &self,
+        rel_id: RelId,
+        page_id: PageId,
+        generation: PageGeneration,
+        current_safe_csn: Csn,
+    ) -> anyhow::Result<()> {
+        let rec = SpaceWalRecord::RetirePage {
+            rel_id,
+            page_id,
+            generation,
+            retire_csn: current_safe_csn,
+        };
+
+        let retire_lsn = self.wal.append(rec)?;
+
+        self.rels.mark_retired(
+            rel_id,
+            page_id,
+            generation,
+            current_safe_csn,
+            retire_lsn,
+        )?;
+
+        self.allocator.enqueue_quarantine(
+            page_id,
+            generation,
+            current_safe_csn,
+            retire_lsn,
+        );
+
+        Ok(())
+    }
+}
+
+pub enum VacuumOutcome {
+    Pruned {
+        removed_versions: usize,
+        reclaimed_bytes: usize,
+    },
+    NothingToDo,
+    SkippedTooNew,
+    SkippedContended,
+    SkippedStale,
+}
+
+pub struct HeapPrunePlan;
+
+impl HeapPrunePlan {
+    pub fn build(
+        _page: &[u8],
+        _oldest_snapshot_csn: Csn,
+        _min_dead_bytes: usize,
+    ) -> anyhow::Result<Self> {
+        Ok(Self)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+
+    pub fn apply(&self, _page: &mut [u8]) -> anyhow::Result<HeapPruneResult> {
+        Ok(HeapPruneResult {
+            free_bytes: 4096,
+            dead_bytes: 0,
+            oldest_dead_csn: Csn(u64::MAX),
+            is_empty: false,
+            removed_versions: 1,
+            reclaimed_bytes: 128,
+        })
+    }
+}
+
+pub struct HeapPruneResult {
+    pub free_bytes: usize,
+    pub dead_bytes: usize,
+    pub oldest_dead_csn: Csn,
+    pub is_empty: bool,
+    pub removed_versions: usize,
+    pub reclaimed_bytes: usize,
+}
+
+fn patch_page_lsn(_page: &mut [u8], _lsn: Lsn) {}
+fn patch_page_checksum(_page: &mut [u8]) {}
+```
+
+In the real WAL implementation, avoid the provisional `new_lsn` issue by reserving an LSN first:
+
+```text
+wal.reserve(record_len) -> ReservedWalSlot { lsn, mutable_bytes }
+fill record using reserved lsn
+publish slot
+```
+
+That gives `PageImageCas` the actual `new_lsn` before serialization.
+
+# 6. Undo cleanup
+
+Phase 2 should not free undo records one by one. Use undo segments.
+
+```rust
+#[derive(Copy, Clone, Debug)]
+pub struct UndoSegmentId(pub u64);
+
+#[derive(Copy, Clone, Debug)]
+pub struct UndoSegmentMeta {
+    pub id: UndoSegmentId,
+    pub first_page: PageId,
+    pub page_count: u32,
+
+    pub min_csn: Csn,
+    pub max_csn: Csn,
+
+    pub live_records_hint: u32,
+    pub state: UndoSegmentState,
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum UndoSegmentState {
+    Open = 1,
+    Sealed = 2,
+    Obsolete = 3,
+    Freed = 4,
+}
+```
+
+Cleanup rule:
+
+```text
+If segment.state == Sealed
+AND segment.max_csn < oldest_snapshot_csn
+AND no active transaction rollback references it
+THEN mark Obsolete
+THEN WAL-log UndoSegmentFree
+THEN return segment pages to allocator quarantine/reuse
+```
+
+Do not scan the whole undo space every time. Maintain:
+
+```text
+per-shard undo segment queues ordered by max_csn
+```
+
+Then cleanup is:
+
+```rust
+while queue.front().max_csn < oldest_snapshot_csn {
+    free_segment(front)
+}
+```
+
+# 7. Background checkpoint worker
+
+SQLite WAL has modes where commit behavior and sync behavior vary; in WAL `synchronous=FULL`, SQLite syncs WAL on each transaction commit, while in `NORMAL`, syncs happen around checkpoints and not most transactions. ([SQLite][2]) RedlineDB should expose similar durability modes later, but Phase 2 should implement the storage plumbing so strict durability and normal durability both have clean behavior.
+
+The checkpoint worker should:
+
+```text
+1. Observe durable WAL LSN.
+2. Select dirty pages with page_lsn <= durable_wal_lsn.
+3. Copy page image under latch.
+4. Release latch.
+5. Write copied pages to data file, sorted by page_id.
+6. fsync/fdatasync data file according to durability mode.
+7. Persist checkpoint metadata in double-buffered checkpoint slots.
+8. Recycle WAL segments below min(checkpoint_lsn, backup_lsn, replica_lsn).
+```
+
+Critically:
+
+```text
+Checkpoint does not consult oldest_snapshot_csn for normal heap pages.
+
+Reason:
+  RedlineDB readers use MVCC versions in heap pages.
+  Old tuple versions remain physically present until vacuum horizon advances.
+  Therefore flushing a newer page image does not destroy old-reader visibility.
+
+Vacuum consults snapshot CSN.
+Checkpoint consults durable WAL LSN.
+WAL recycling consults checkpoint LSN + backup/replication LSN.
+```
+
+That is how RedlineDB avoids the classic long-reader checkpoint starvation problem that SQLite documents for WAL mode. ([SQLite][1])
+
+## 7.1 Dirty page writeback
+
+A dirty page frame should track:
+
+```rust
+pub struct BufferFrameMeta {
+    pub page_id: PageId,
+    pub dirty: std::sync::atomic::AtomicBool,
+    pub dirty_lsn: std::sync::atomic::AtomicU64,
+    pub pin_count: std::sync::atomic::AtomicU32,
+}
+```
+
+Checkpoint copy logic:
+
+```text
+copy page with page_lsn = X
+write copy to disk
+after write:
+  if frame.dirty_lsn == X:
+      mark clean
+  else:
+      leave dirty; writer changed it again
+```
+
+Skeleton:
+
+```rust
+pub trait DirtyPageSource: Send + Sync {
+    fn collect_dirty_before(
+        &self,
+        max_lsn: Lsn,
+        max_pages: usize,
+        out: &mut Vec<DirtyCandidate>,
+    );
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct DirtyCandidate {
+    pub page_id: PageId,
+    pub dirty_lsn: Lsn,
+}
+
+pub trait DataFile: Send + Sync {
+    fn write_page_at(&self, page_id: PageId, bytes: &[u8]) -> anyhow::Result<()>;
+    fn sync_data(&self) -> anyhow::Result<()>;
+}
+
+pub struct CheckpointWorker {
+    wal: std::sync::Arc<dyn SpaceWal>,
+    dirty: std::sync::Arc<dyn DirtyPageSource>,
+    pager: std::sync::Arc<dyn BufferPool>,
+    data: std::sync::Arc<dyn DataFile>,
+    ckpt: std::sync::Arc<CheckpointMeta>,
+    horizons: std::sync::Arc<HorizonTracker>,
+    stats: std::sync::Arc<StorageStats>,
+    config: CheckpointConfig,
+}
+
+#[derive(Copy, Clone)]
+pub struct CheckpointConfig {
+    pub max_pages_per_batch: usize,
+    pub target_wal_bytes: u64,
+    pub hard_wal_bytes: u64,
+    pub sync_every_batch: bool,
+}
+
+impl CheckpointWorker {
+    pub fn run_once(&self, current_csn: Csn, current_lsn: Lsn) -> anyhow::Result<usize> {
+        let durable_wal_lsn = self.wal.durable_lsn();
+
+        let mut candidates = Vec::with_capacity(self.config.max_pages_per_batch);
+        self.dirty.collect_dirty_before(
+            durable_wal_lsn,
+            self.config.max_pages_per_batch,
+            &mut candidates,
+        );
+
+        candidates.sort_unstable_by_key(|c| c.page_id.0);
+
+        let mut written = 0usize;
+        let mut max_flushed_lsn = Lsn(0);
+
+        for c in candidates {
+            let Some(copy) = self.pager.try_copy_page(c.page_id)? else {
+                continue;
+            };
+
+            if copy.page_lsn.0 > durable_wal_lsn.0 {
+                continue;
+            }
+
+            self.data.write_page_at(copy.page_id, &copy.bytes)?;
+
+            self.pager.try_mark_clean_if_lsn(copy.page_id, copy.page_lsn)?;
+            max_flushed_lsn = Lsn(max_flushed_lsn.0.max(copy.page_lsn.0));
+            written += 1;
+        }
+
+        if written == 0 {
+            return Ok(0);
+        }
+
+        if self.config.sync_every_batch {
+            self.data.sync_data()?;
+        }
+
+        self.ckpt.publish_checkpoint(max_flushed_lsn)?;
+
+        let h = self.horizons.recompute(current_csn, current_lsn);
+        self.ckpt.recycle_wal_before(h.wal_recycle_lsn)?;
+
+        self.stats.checkpoint_pages_written.fetch_add(written as u64);
+
+        Ok(written)
+    }
+}
+```
+
+Add this to the buffer pool trait:
+
+```rust
+pub trait BufferPool: Send + Sync {
+    fn try_copy_page(&self, page_id: PageId) -> anyhow::Result<Option<CopiedPage>>;
+
+    fn try_install_page_image(
+        &self,
+        page_id: PageId,
+        expected_lsn: Lsn,
+        new_lsn: Lsn,
+        image: &[u8],
+    ) -> anyhow::Result<bool>;
+
+    fn try_mark_clean_if_lsn(
+        &self,
+        page_id: PageId,
+        copied_lsn: Lsn,
+    ) -> anyhow::Result<bool>;
+}
+```
+
+# 8. Worker threading model
+
+Use a small fixed set of background workers:
+
+```text
+WAL writer          already Phase 1
+Checkpoint worker   Phase 2
+Vacuum worker(s)    Phase 2, usually 1 initially, configurable
+Reaper worker        can be part of vacuum worker
+Stats sampler        optional, can be passive
+```
+
+Do not spawn a thread per relation or per connection.
+
+## 8.1 Worker coordinator
+
+Use atomic event bits instead of allocating messages for every wakeup.
+
+```rust
+pub const EV_CHECKPOINT: u32 = 1 << 0;
+pub const EV_VACUUM: u32 = 1 << 1;
+pub const EV_REAPER: u32 = 1 << 2;
+pub const EV_SHUTDOWN: u32 = 1 << 31;
+
+pub struct WorkerCoordinator {
+    events: std::sync::atomic::AtomicU32,
+    lock: std::sync::Mutex<()>,
+    cv: std::sync::Condvar,
+}
+
+impl WorkerCoordinator {
+    pub fn notify(&self, bits: u32) {
+        self.events.fetch_or(bits, std::sync::atomic::Ordering::Release);
+        self.cv.notify_all();
+    }
+
+    pub fn wait(&self) -> u32 {
+        let mut g = self.lock.lock().unwrap();
+
+        loop {
+            let bits = self.events.swap(0, std::sync::atomic::Ordering::AcqRel);
+            if bits != 0 {
+                return bits;
+            }
+
+            g = self.cv.wait(g).unwrap();
+        }
+    }
+}
+```
+
+Foreground threads notify checkpoint when:
+
+```text
+dirty_bytes > checkpoint_dirty_low_water
+WAL bytes since checkpoint > target_wal_bytes
+buffer pool approaches eviction pressure
+```
+
+Foreground threads notify vacuum when:
+
+```text
+page dead_bytes crosses threshold
+relation dead_bytes crosses threshold
+undo sealed segment max_csn crosses horizon
+allocator quarantine length crosses threshold
+```
+
+## 8.2 Budget every worker
+
+Never let vacuum run unbounded.
+
+```rust
+#[derive(Copy, Clone)]
+pub struct WorkBudget {
+    pub max_pages: usize,
+    pub max_wal_bytes: usize,
+    pub max_micros: u64,
+    pub max_scratch_bytes: usize,
+}
+```
+
+Vacuum batch defaults:
+
+```text
+max_pages: 64
+max_wal_bytes: 4 MiB
+max_micros: 2_000 to 5_000
+max_scratch_bytes: 2 * page_size
+```
+
+Checkpoint batch defaults:
+
+```text
+max_pages: 256 or 1024 depending on page size
+sort by page_id
+one fsync/fdatasync per batch in strict checkpoint mode
+```
+
+# 9. Memory discipline
+
+Phase 2 should make memory explicit and observable.
+
+## 9.1 Fixed memory budgets
+
+Config:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct StorageConfig {
+    pub page_size: usize,
+
+    pub buffer_pool_pages: usize,
+    pub metadata_cache_pages: usize,
+
+    pub max_dirty_pages: usize,
+    pub dirty_checkpoint_low_water: usize,
+    pub dirty_checkpoint_high_water: usize,
+
+    pub max_wal_bytes_before_checkpoint: u64,
+    pub max_wal_bytes_hard: u64,
+
+    pub vacuum_queue_capacity: usize,
+    pub vacuum_batch_pages: usize,
+
+    pub allocator_hot_free_per_shard: usize,
+}
+```
+
+Memory formulas:
+
+```text
+buffer pool memory:
+  buffer_pool_pages * page_size
+
+relation-dir cache memory:
+  metadata_cache_pages * page_size
+
+allocator hot free memory:
+  ALLOCATOR_SHARDS * HOT_FREE_CACHE_PER_SHARD * 8 bytes
+
+snapshot slots:
+  MAX_SNAPSHOT_SLOTS * one cache line
+```
+
+For example:
+
+```text
+page_size = 16 KiB
+buffer_pool_pages = 8192
+buffer pool = 128 MiB
+
+metadata_cache_pages = 512
+metadata cache = 8 MiB
+
+allocator hot free:
+64 shards * 256 pages * 8 B = 128 KiB
+
+snapshot slots:
+4096 * 64 B = 256 KiB
+```
+
+This is acceptable and predictable.
+
+## 9.2 Avoid unbounded structures
+
+Do not allow these to grow without caps:
+
+```text
+vacuum task queue
+per-relation insert candidate rings
+checkpoint copied-page batch
+allocator hot-free caches
+stats histories
+relation cache
+```
+
+Per-relation insert rings:
+
+```rust
+pub const INSERT_RING_CLASSES: usize = 64;
+pub const INSERT_RING_PER_CLASS: usize = 32;
+
+pub struct InsertRings {
+    rings: Vec<std::sync::Mutex<ArrayRing<PageId, INSERT_RING_PER_CLASS>>>,
+}
+```
+
+If you do not want const-generic ring code yet, use `VecDeque` with hard cap.
+
+# 10. Relation insert path
+
+The future SQL executor’s insert should eventually hit this path:
+
+```text
+insert tuple:
+  1. compute required bytes
+  2. find candidate page from relation rings/FSM
+  3. try-latch page
+  4. validate rel/generation/state/free space
+  5. insert tuple
+  6. WAL-log heap insert
+  7. mark page dirty
+  8. update free/dead hints
+  9. if no candidate, allocate page and retry
+```
+
+Important: relation FSM lookup must not serialize all insert writers.
+
+Use per-thread salt and per-relation rings so disjoint writers spread across pages.
+
+```rust
+pub struct RelationSpace {
+    pub rel_id: RelId,
+    pub dir: RelationDirectoryHandle,
+    pub insert_rings: InsertRings,
+    pub stats: RelationSpaceStats,
+}
+
+impl RelationSpace {
+    pub fn find_insert_page(
+        &self,
+        bytes_needed: usize,
+        thread_salt: u64,
+    ) -> anyhow::Result<Option<PageId>> {
+        let class = needed_class(bytes_needed);
+
+        if let Some(page_id) = self.insert_rings.pop_candidate(class, thread_salt) {
+            return Ok(Some(page_id));
+        }
+
+        self.dir.find_page_with_free_class(class)
+    }
+
+    pub fn observe_page_free_space(
+        &self,
+        page_id: PageId,
+        generation: PageGeneration,
+        free_bytes: usize,
+    ) {
+        let class = free_class(free_bytes);
+
+        if class > 0 {
+            self.insert_rings.push_candidate(class, page_id);
+        }
+
+        self.dir.update_fsm_hint_async(page_id, generation, class);
+    }
+}
+```
+
+# 11. Recovery rules
+
+Phase 2 recovery must make allocator/relation/vacuum idempotent.
+
+On open:
+
+```text
+1. Read superblock/checkpoint metadata.
+2. Load allocator metadata root.
+3. Load relation metadata roots.
+4. Replay WAL from checkpoint_lsn.
+5. Rebuild in-memory allocator shard caches.
+6. Rebuild relation insert rings from directory summaries lazily.
+7. Recompute horizon defaults.
+8. Schedule scrub if metadata hints are stale.
+```
+
+Redo rules:
+
+```text
+AllocExtent:
+  if extent already exists with same epoch, skip
+  if EOF smaller than extent end, extend file
+  mark extent known
+
+AllocPage:
+  if page already allocated to same rel/kind/generation, skip
+  if page free/reusable, mark allocated
+  if page allocated to different generation with lower LSN, corruption unless tail
+
+RelDirInsert:
+  if entry already present and equal, skip
+  if empty slot, insert
+  if conflicting entry, corruption
+
+FsmHintUpdate:
+  if generation matches, update hint
+  else skip stale hint
+
+PageImageCas:
+  read page header
+  if page_lsn == expected_lsn, install image
+  if page_lsn == new_lsn, skip
+  if page_lsn > expected_lsn, skip stale vacuum image
+  else corruption
+
+RetirePage:
+  if dir entry active with same generation, mark retired
+  if already retired, skip
+  if generation differs, skip stale retire
+
+FreePageBatch:
+  for each page:
+    if already reusable with same generation, skip
+    if retired/quarantined and generation matches, mark reusable
+    if active, corruption
+```
+
+This makes recovery safe under repeated redo.
+
+# 12. Stats API
+
+Expose cheap snapshots.
+
+```rust
+pub struct StorageStats {
+    pub buffer_pages_total: AtomicCounter,
+    pub buffer_pages_used: AtomicCounter,
+    pub buffer_pages_dirty: AtomicCounter,
+    pub buffer_pages_pinned: AtomicCounter,
+
+    pub wal_bytes_written: AtomicCounter,
+    pub wal_bytes_durable: AtomicCounter,
+    pub wal_segments_live: AtomicCounter,
+    pub wal_recycle_lsn: AtomicCounter,
+
+    pub checkpoint_pages_written: AtomicCounter,
+    pub checkpoint_batches: AtomicCounter,
+    pub checkpoint_syncs: AtomicCounter,
+    pub checkpoint_last_lsn: AtomicCounter,
+
+    pub vacuum_pages_scanned: AtomicCounter,
+    pub vacuum_pages_pruned: AtomicCounter,
+    pub vacuum_pages_retired: AtomicCounter,
+    pub vacuum_pages_freed: AtomicCounter,
+    pub vacuum_stale_cas: AtomicCounter,
+    pub vacuum_bytes_reclaimed: AtomicCounter,
+
+    pub allocator_pages_allocated: AtomicCounter,
+    pub allocator_pages_reused: AtomicCounter,
+    pub allocator_pages_quarantined: AtomicCounter,
+    pub allocator_pages_free: AtomicCounter,
+
+    pub fsm_searches: AtomicCounter,
+    pub fsm_hits: AtomicCounter,
+    pub fsm_false_positives: AtomicCounter,
+    pub fsm_repairs: AtomicCounter,
+}
+
+#[repr(align(64))]
+pub struct AtomicCounter(std::sync::atomic::AtomicU64);
+
+impl AtomicCounter {
+    pub fn fetch_add(&self, v: u64) {
+        self.0.fetch_add(v, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn load(&self) -> u64 {
+        self.0.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+```
+
+Snapshot type:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct StorageStatsSnapshot {
+    pub buffer_pages_total: u64,
+    pub buffer_pages_used: u64,
+    pub buffer_pages_dirty: u64,
+    pub buffer_pages_pinned: u64,
+
+    pub wal_bytes_written: u64,
+    pub wal_bytes_durable: u64,
+    pub wal_segments_live: u64,
+    pub wal_recycle_lsn: u64,
+
+    pub checkpoint_pages_written: u64,
+    pub checkpoint_batches: u64,
+    pub checkpoint_syncs: u64,
+    pub checkpoint_last_lsn: u64,
+
+    pub vacuum_pages_scanned: u64,
+    pub vacuum_pages_pruned: u64,
+    pub vacuum_pages_retired: u64,
+    pub vacuum_pages_freed: u64,
+    pub vacuum_stale_cas: u64,
+    pub vacuum_bytes_reclaimed: u64,
+
+    pub allocator_pages_allocated: u64,
+    pub allocator_pages_reused: u64,
+    pub allocator_pages_quarantined: u64,
+    pub allocator_pages_free: u64,
+
+    pub fsm_searches: u64,
+    pub fsm_hits: u64,
+    pub fsm_false_positives: u64,
+    pub fsm_repairs: u64,
+}
+```
+
+The SQL layer later should expose this through pragmas or virtual tables:
+
+```sql
+SELECT * FROM redlinedb_storage_stats;
+SELECT * FROM redlinedb_checkpoint_stats;
+SELECT * FROM redlinedb_vacuum_stats;
+```
+
+# 13. Worker interaction
+
+The runtime should look like this:
+
+```text
+Foreground writer:
+  heap insert/update/delete
+  append WAL
+  dirty page
+  update approximate hints
+  notify checkpoint/vacuum if thresholds crossed
+
+WAL writer:
+  serialize/group commit WAL records
+  publish durable_lsn
+
+Checkpoint worker:
+  flush dirty pages whose page_lsn <= durable_lsn
+  publish checkpoint_lsn
+  recycle WAL segments allowed by retention
+
+Vacuum worker:
+  prune dead tuple versions using oldest_snapshot_csn
+  retire empty pages
+  clean undo segments
+  repair FSM hints
+
+Allocator reaper:
+  move retired/quarantined pages to reusable free pool
+```
+
+No global writer lock should appear anywhere in Phase 2. Contention points should be:
+
+```text
+- one page latch for the page being modified
+- one allocator shard lock on rare allocation/reuse path
+- one relation directory page latch when updating metadata
+- WAL append reservation/group commit path
+```
+
+# 14. Phase 2 testing plan
+
+## 14.1 Allocator model tests
+
+Model page states with a simple Rust `HashMap<PageId, ModelState>` and compare implementation against it.
+
+Operations:
+
+```text
+allocate
+retire
+quarantine
+reap
+reuse
+crash/recover
+redo same WAL twice
+drop tail record
+corrupt middle record
+```
+
+Invariants:
+
+```text
+no page active in two relations
+no reusable page active in a relation
+generation increases on reuse
+retired pages are not returned before horizon
+redo is idempotent
+free is idempotent
+conflicting allocator metadata fails loudly
+```
+
+## 14.2 FSM property tests
+
+Generate random page free-space changes.
+
+Invariants:
+
+```text
+FSM false positives are allowed
+FSM false negatives are allowed temporarily
+FSM must never cause wrong tuple visibility
+FSM repair eventually converges to page header truth
+insert either finds a page or allocates one
+```
+
+## 14.3 Long-reader vacuum tests
+
+Test:
+
+```text
+1. Insert rows.
+2. Start snapshot S1.
+3. Delete all rows and commit.
+4. Run vacuum.
+5. S1 still reads old rows.
+6. End S1.
+7. Run vacuum again.
+8. Pages become retired/quarantined/reusable.
+9. Reuse pages.
+10. Stale RowPtr generation check fails.
+```
+
+## 14.4 Checkpoint under long reader
+
+Test:
+
+```text
+1. Start long snapshot.
+2. Run many updates/deletes/inserts.
+3. Checkpoint repeatedly.
+4. WAL remains bounded if no backup/replication slot pins it.
+5. Vacuum cannot reclaim old versions until snapshot ends.
+6. Snapshot still sees correct data.
+```
+
+This is the core differentiator.
+
+## 14.5 Crash matrix
+
+Inject crashes after:
+
+```text
+AllocExtent WAL append
+AllocPage WAL append
+page format before/after dirty mark
+RelDirInsert WAL append
+HeapInsert WAL append
+FsmHintUpdate WAL append
+PageImageCas WAL append
+PageImageCas install
+RetirePage WAL append
+FreePageBatch WAL append
+checkpoint data page write
+checkpoint data fsync
+checkpoint metadata publish
+WAL segment recycle
+```
+
+Expected:
+
+```text
+acknowledged committed data remains visible
+uncommitted data invisible
+allocator has no double allocation
+page directory has no conflicting ownership
+FSM may be stale but repairable
+retired pages are not prematurely reused
+```
+
+## 14.6 Concurrency tests
+
+Add loom/shuttle-style tests for:
+
+```text
+snapshot slot enter/exit vs horizon recompute
+allocator shard allocation/free/reap
+vacuum PageImageCas vs foreground page update
+checkpoint copy/mark-clean vs foreground update
+relation directory hint update vs page reuse
+```
+
+Important lock-order rule:
+
+```text
+Never acquire locks in this order:
+  page latch -> blocking WAL fsync
+  page latch -> transaction wait
+  allocator shard -> relation directory -> page latch
+
+Preferred order:
+  relation directory latch, short
+  allocator shard latch, short
+  page latch, short
+  WAL reserve/append without page latch when possible
+```
+
+For foreground heap writes, WAL append while holding a page latch may be acceptable only if the append path is an in-memory reservation that cannot fsync or block behind durability. Otherwise use the CAS pattern.
+
+# 15. Implementation order
+
+Build Phase 2 in this order:
+
+## Step 1: Page lifecycle fields
+
+Add to page header:
+
+```text
+state
+generation
+retire_csn
+oldest_dead_csn_hint
+free_class_hint
+```
+
+Add validation:
+
+```text
+page_id matches expected
+rel_id matches expected
+generation matches expected
+page_lsn monotonic
+checksum valid
+```
+
+## Step 2: Relation directory + FSM summaries
+
+Implement relation directory as the single source for:
+
+```text
+relation page membership
+page lifecycle
+free-space hints
+dead-space hints
+vacuum summaries
+```
+
+Do this before allocator reuse. A reusable allocator without relation metadata is dangerous.
+
+## Step 3: Durable allocator
+
+Implement:
+
+```text
+AllocExtent
+AllocPage
+FreePageBatch
+allocator shard caches
+recovery rebuild
+```
+
+Initially, allow allocation and reuse only after explicit tests pass.
+
+## Step 4: Horizon tracker
+
+Implement active snapshot slots, backup/replica placeholders, and cached minima.
+
+Even if replication/backup is Phase 8, put the retention slots in Phase 2 now. Otherwise you will redesign vacuum later.
+
+## Step 5: Physical vacuum
+
+Implement:
+
+```text
+heap page prune
+page-local compaction
+FSM repair
+empty-page retire
+quarantine
+reap
+```
+
+Start with full-page `PageImageCas` WAL records for vacuum. Optimize to deltas only after correctness and benchmarks.
+
+## Step 6: Background checkpoint worker
+
+Implement:
+
+```text
+dirty page collection by LSN
+copy-writeback-mark-clean
+data sync
+checkpoint metadata publish
+WAL recycling
+```
+
+Make checkpoint independent of active snapshots.
+
+## Step 7: Stats
+
+Expose all counters. Add tests that assert stats move as expected.
+
+# 16. “Done” criteria for Phase 2
+
+Phase 2 is done when these are true:
+
+```text
+Allocator:
+  no double allocation under crash/recovery/property tests
+  aborted allocations do not leak forever
+  reusable pages get generation bumps
+  allocator redo is idempotent
+
+Relation directory/FSM:
+  table scans enumerate the right pages
+  insert finds reusable space without global locks
+  stale FSM hints self-repair
+  relation metadata recovers after crash
+
+Vacuum:
+  long readers preserve old versions
+  dead tuples are physically pruned after horizon advances
+  empty pages become reusable
+  undo segments are freed after horizon advances
+  vacuum never blocks readers and only briefly contends with writers
+
+Checkpoint:
+  dirty pages never flush ahead of durable WAL
+  checkpoint progresses during long readers
+  WAL recycling obeys checkpoint/backup/replica retention
+  memory usage remains bounded
+
+Stats:
+  memory, dirty pages, WAL, checkpoint, allocator, and vacuum are observable
+
+Concurrency:
+  no global writer lock introduced
+  disjoint writers mostly contend only on WAL reservation/device bandwidth
+```
+
+# 17. The key design choices I would not compromise
+
+1. **Checkpoint and vacuum must be separate concepts.** Checkpoint is about making WAL replay unnecessary. Vacuum is about making old versions physically unnecessary.
+
+2. **Long readers must block physical reuse, not checkpoint progress.** This is one of RedlineDB’s future advantages over SQLite-style WAL behavior.
+
+3. **Allocator state must be exact. FSM state can be approximate.** Mixing those up causes corruption.
+
+4. **Every reused page needs a generation bump.** This protects future secondary indexes from stale row locators.
+
+5. **Vacuum should use CAS-style page images first.** Full-page vacuum WAL records are not the most compact, but they are simple, idempotent, and keep latches away from blocking WAL paths.
+
+6. **Use one relation directory tree as page directory + FSM + vacuum summary.** That is the “brilliant simplicity” move for Phase 2. It avoids three metadata systems and keeps memory predictable.
+
+7. **Background work must be budgeted.** RedlineDB should never surprise an embedded application with an unbounded vacuum or checkpoint stall.
+
+8. **Expose stats early.** Performance work without allocator/FSM/vacuum/checkpoint counters is guessing.
+
+This Phase 2 gives the later SQL engine a storage substrate that is fast, bounded, observable, and ready for concurrent writers.
+
+[1]: https://www.sqlite.org/wal.html "Write-Ahead Logging"
+[2]: https://sqlite.org/pragma.html?utm_source=chatgpt.com "Pragma statements supported by SQLite"
+

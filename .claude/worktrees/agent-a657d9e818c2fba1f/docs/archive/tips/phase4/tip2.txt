@@ -1,0 +1,2930 @@
+Phase 4 is where RedlineDB stops being “a fast kernel with heap/index APIs” and becomes a database system with **stable meaning**: names, schemas, row layouts, type coercions, constraints, transactional DDL, and prepared-statement invalidation. The fastest design is also the simplest correct one:
+
+**Catalogs are ordinary MVCC relations. Schema snapshots are immutable `Arc`s. DDL is transactional catalog DML. DML never reads catalog tables on the hot path. Constraints and row encoders are precompiled into table-local plans.**
+
+SQLite compatibility should be intentional, not accidental. For the SQLite-like default mode, RedlineDB should model the five SQLite storage classes `NULL`, `INTEGER`, `REAL`, `TEXT`, and `BLOB`, and use affinity as a coercion preference rather than as a hard type restriction. SQLite’s own docs describe its dynamic typing as associating type with the value rather than with the column, and its affinity rules are based on declared type strings such as `INT`, `TEXT`, `BLOB`, `REAL`, and fallback `NUMERIC`. ([SQLite][1]) Defaults, `PRIMARY KEY`, `UNIQUE`, `CHECK`, and `NOT NULL` rules should be implemented from the start because they affect row encoding, index maintenance, and write concurrency. SQLite’s `CREATE TABLE` docs define these clauses, default-expression behavior, rowid behavior, and constraint enforcement rules. ([SQLite][2]) Unique index behavior should also follow SQLite’s important rule that `NULL` values are distinct for uniqueness purposes. ([SQLite][3])
+
+---
+
+# Phase 4 target architecture
+
+The Phase 4 crate split I would build:
+
+```text
+crates/
+  redlinedb_core/
+    src/
+      value/
+        mod.rs              // SqlValue, ValueRef, affinity, collation
+        affinity.rs
+        compare.rs
+      row/
+        mod.rs              // compact row encoding / zero-copy RowRef
+        encode.rs
+        decode.rs
+      catalog/
+        mod.rs              // catalog table definitions and DDL writes
+        bootstrap.rs
+        ids.rs
+        rows.rs
+        load.rs
+      schema/
+        mod.rs              // immutable SchemaSnapshot
+        cache.rs             // ArcSwap-backed schema cache
+        defs.rs              // TableDef, ColumnDef, IndexDef, ConstraintDef
+        locks.rs             // DDL-vs-DML schema gates
+      expr/
+        mod.rs              // compiled defaults and CHECK expressions
+        bytecode.rs
+        eval.rs
+      ddl/
+        mod.rs              // typed DDL API
+        create_table.rs
+        drop_table.rs
+        create_index.rs
+        drop_index.rs
+      constraint/
+        mod.rs              // enforcement path for inserts/updates
+      error.rs
+```
+
+Phase 4 should not wait for the full SQL frontend. I would expose a typed DDL AST/API now and let Phase 5’s parser lower SQL text into the same AST later:
+
+```rust
+pub enum DdlStmt {
+    CreateTable(CreateTable),
+    DropTable(DropTable),
+    CreateIndex(CreateIndex),
+    DropIndex(DropIndex),
+}
+```
+
+That lets you finish the storage-facing semantics immediately while keeping the parser/binder work separate.
+
+---
+
+# Core rule: catalogs are normal MVCC tables
+
+Do **not** store schema metadata in an ad hoc side file. Use the same heap/index/MVCC/WAL machinery as user tables.
+
+You still need a tiny bootstrap anchor in the database header or checkpoint metadata, but only for locating the reserved catalog relations. Everything else lives in catalog tables.
+
+## Reserved catalog relation IDs
+
+```rust
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[repr(transparent)]
+pub struct RelId(pub u64);
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[repr(transparent)]
+pub struct ObjId(pub u64);
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[repr(transparent)]
+pub struct ConstraintId(pub u64);
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[repr(transparent)]
+pub struct ExprId(pub u64);
+
+pub mod sysrel {
+    use super::RelId;
+
+    pub const RL_META: RelId        = RelId(1);
+    pub const RL_NAMESPACE: RelId   = RelId(2);
+    pub const RL_CLASS: RelId       = RelId(3);
+    pub const RL_ATTRIBUTE: RelId   = RelId(4);
+    pub const RL_INDEX: RelId       = RelId(5);
+    pub const RL_INDEX_KEY: RelId   = RelId(6);
+    pub const RL_CONSTRAINT: RelId  = RelId(7);
+    pub const RL_EXPR: RelId        = RelId(8);
+    pub const RL_DEPEND: RelId      = RelId(9);
+    pub const RL_COLLATION: RelId   = RelId(10);
+    pub const RL_PENDING_DROP: RelId = RelId(11);
+}
+```
+
+The catalog tables themselves use static definitions compiled into the binary, because you need to decode the catalog before the catalog can describe itself. But their storage is still ordinary storage.
+
+---
+
+# System catalog schema
+
+I would use these catalog tables.
+
+## `rl_meta`
+
+Stores global catalog/config keys.
+
+```sql
+rl_meta(
+    key TEXT PRIMARY KEY,
+    int_value INTEGER,
+    blob_value BLOB
+)
+```
+
+Important rows:
+
+```text
+catalog_format_version -> 1
+schema_epoch           -> monotonically increasing u64
+next_rel_id            -> durable allocator watermark
+next_obj_id            -> durable allocator watermark
+next_constraint_id     -> durable allocator watermark
+next_expr_id           -> durable allocator watermark
+database_uuid          -> 128-bit random blob
+```
+
+The `schema_epoch` is bumped inside the same transaction as every DDL change.
+
+## `rl_namespace`
+
+```sql
+rl_namespace(
+    ns_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL UNIQUE
+)
+```
+
+For now, you can start with one namespace:
+
+```text
+main
+```
+
+`name` preserves spelling. `name_key` is a normalized identifier key, probably ASCII lowercase at first.
+
+## `rl_class`
+
+One row per schema object with storage identity.
+
+```sql
+rl_class(
+    obj_id INTEGER PRIMARY KEY,
+    ns_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    kind INTEGER NOT NULL,
+    storage_rel_id INTEGER,
+    row_format_id INTEGER NOT NULL,
+    flags INTEGER NOT NULL,
+    generation INTEGER NOT NULL,
+    root_version INTEGER NOT NULL
+)
+```
+
+`kind`:
+
+```rust
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum ClassKind {
+    Table = 1,
+    Index = 2,
+    SystemTable = 3,
+    SystemIndex = 4,
+    Sequence = 5,
+}
+```
+
+Useful unique catalog indexes:
+
+```text
+UNIQUE(ns_id, name_key)
+UNIQUE(storage_rel_id)
+```
+
+Use a single namespace for tables and indexes unless you deliberately want separate name spaces. SQLite-like users expect table/index names to be schema objects, not random internal names.
+
+## `rl_attribute`
+
+One row per logical column.
+
+```sql
+rl_attribute(
+    table_id INTEGER NOT NULL,
+    attnum INTEGER NOT NULL,
+    storage_slot INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    declared_type TEXT,
+    affinity INTEGER NOT NULL,
+    collation_id INTEGER NOT NULL,
+    flags INTEGER NOT NULL,
+    default_expr_id INTEGER,
+    generation INTEGER NOT NULL,
+
+    PRIMARY KEY(table_id, attnum),
+    UNIQUE(table_id, name_key)
+)
+```
+
+`storage_slot` matters for `INTEGER PRIMARY KEY` rowid aliases. Logical column `id INTEGER PRIMARY KEY` should not have to be stored redundantly in the row payload. Store it as the heap rowid and set:
+
+```text
+storage_slot = -1
+flags |= ROWID_ALIAS
+```
+
+Every normal stored column gets a dense zero-based storage slot.
+
+## `rl_index`
+
+```sql
+rl_index(
+    index_id INTEGER PRIMARY KEY,
+    table_id INTEGER NOT NULL,
+    index_rel_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    is_unique INTEGER NOT NULL,
+    is_primary INTEGER NOT NULL,
+    is_constraint_backed INTEGER NOT NULL,
+    predicate_expr_id INTEGER,
+    is_ready INTEGER NOT NULL,
+    is_valid INTEGER NOT NULL,
+    flags INTEGER NOT NULL,
+    generation INTEGER NOT NULL
+)
+```
+
+For Phase 4, `is_ready = true` and `is_valid = true` at commit. Keep the fields anyway because they make future concurrent index builds easy.
+
+## `rl_index_key`
+
+```sql
+rl_index_key(
+    index_id INTEGER NOT NULL,
+    key_ordinal INTEGER NOT NULL,
+    table_attnum INTEGER,
+    expr_id INTEGER,
+    collation_id INTEGER NOT NULL,
+    sort_dir INTEGER NOT NULL,
+    null_order INTEGER NOT NULL,
+
+    PRIMARY KEY(index_id, key_ordinal)
+)
+```
+
+For Phase 4, allow only column indexes. Keep `expr_id` for future expression indexes.
+
+## `rl_constraint`
+
+```sql
+rl_constraint(
+    constraint_id INTEGER PRIMARY KEY,
+    table_id INTEGER NOT NULL,
+    name TEXT,
+    name_key TEXT,
+    kind INTEGER NOT NULL,
+    columns_blob BLOB,
+    expr_id INTEGER,
+    index_id INTEGER,
+    conflict_action INTEGER NOT NULL,
+    flags INTEGER NOT NULL
+)
+```
+
+Constraint kinds:
+
+```rust
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum ConstraintKind {
+    PrimaryKey = 1,
+    Unique = 2,
+    NotNull = 3,
+    Check = 4,
+}
+```
+
+Foreign keys can be parsed into the catalog later, but I would not enforce them in Phase 4 unless you want the scope to explode.
+
+## `rl_expr`
+
+Stores compiled expressions for defaults and `CHECK`.
+
+```sql
+rl_expr(
+    expr_id INTEGER PRIMARY KEY,
+    kind INTEGER NOT NULL,
+    sql_text TEXT,
+    bytecode BLOB NOT NULL,
+    referenced_cols BLOB NOT NULL,
+    flags INTEGER NOT NULL,
+    deterministic INTEGER NOT NULL
+)
+```
+
+Never serialize Rust enums directly using derived `serde`/`bincode` for on-disk expression bytecode. Use a hand-versioned binary format.
+
+## `rl_depend`
+
+Dependency graph for safe drops.
+
+```sql
+rl_depend(
+    dependent_obj INTEGER NOT NULL,
+    referenced_obj INTEGER NOT NULL,
+    dep_kind INTEGER NOT NULL,
+
+    PRIMARY KEY(dependent_obj, referenced_obj, dep_kind)
+)
+```
+
+Examples:
+
+```text
+index depends on table
+constraint depends on table
+constraint depends on backing unique index
+default/check expr depends on table columns
+```
+
+## `rl_pending_drop`
+
+Physical reclamation is deferred.
+
+```sql
+rl_pending_drop(
+    obj_id INTEGER PRIMARY KEY,
+    storage_rel_id INTEGER NOT NULL,
+    drop_csn INTEGER NOT NULL,
+    kind INTEGER NOT NULL
+)
+```
+
+`DROP TABLE` and `DROP INDEX` should remove catalog visibility immediately at commit, but physical pages should only be freed after the MVCC horizon proves no old reader, old prepared statement, checkpoint, backup, or replication slot can still need them.
+
+---
+
+# Schema cache design
+
+Catalog tables are not on the DML hot path.
+
+At open:
+
+1. Run kernel recovery.
+2. Load latest committed `schema_epoch`.
+3. Scan system catalogs using a committed snapshot.
+4. Build one immutable `SchemaSnapshot`.
+5. Publish it atomically.
+
+At runtime:
+
+```rust
+pub struct SchemaManager {
+    current: arc_swap::ArcSwap<SchemaSnapshot>,
+    ddl_mutex: parking_lot::Mutex<()>,
+    table_gates: TableGateMap,
+}
+```
+
+The hot path does this:
+
+```rust
+let schema = db.schema.current.load_full();
+let table = schema.table_by_id(table_id).unwrap();
+```
+
+No catalog scan. No global read lock. No system table lookup.
+
+## Immutable schema definitions
+
+```rust
+use std::sync::Arc;
+use hashbrown::HashMap;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct SchemaEpoch(pub u64);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct NameKey(Box<str>);
+
+#[derive(Debug)]
+pub struct SchemaSnapshot {
+    pub epoch: SchemaEpoch,
+    pub namespaces: Box<[NamespaceDef]>,
+
+    by_id: HashMap<ObjId, Arc<ClassDef>>,
+    table_by_id: HashMap<RelId, Arc<TableDef>>,
+    object_by_name: HashMap<(ObjId, NameKey), Arc<ClassDef>>,
+}
+
+#[derive(Debug)]
+pub struct NamespaceDef {
+    pub ns_id: ObjId,
+    pub name: Box<str>,
+    pub name_key: NameKey,
+}
+
+#[derive(Debug)]
+pub struct ClassDef {
+    pub obj_id: ObjId,
+    pub ns_id: ObjId,
+    pub name: Box<str>,
+    pub name_key: NameKey,
+    pub kind: ClassKind,
+    pub storage_rel_id: Option<RelId>,
+    pub generation: u64,
+}
+
+#[derive(Debug)]
+pub struct TableDef {
+    pub obj: Arc<ClassDef>,
+    pub rel_id: RelId,
+    pub row_format_id: u32,
+    pub columns: Box<[ColumnDef]>,
+    pub checks: Box<[CheckDef]>,
+    pub indexes: Box<[IndexDef]>,
+    pub primary_key: Option<ConstraintId>,
+
+    // Hot-path precomputed data.
+    pub storage_col_count: u16,
+    pub rowid_alias_attnum: Option<u16>,
+    pub nonnull_storage_slots: Box<[u16]>,
+    pub defaulted_attnums: Box<[u16]>,
+}
+
+#[derive(Debug)]
+pub struct ColumnDef {
+    pub attnum: u16,
+    pub storage_slot: i16,
+    pub name: Box<str>,
+    pub name_key: NameKey,
+    pub declared_type: Option<Box<str>>,
+    pub affinity: Affinity,
+    pub collation: CollationId,
+    pub default: Option<Arc<CompiledExpr>>,
+    pub flags: ColumnFlags,
+    pub generation: u64,
+}
+
+#[derive(Debug)]
+pub struct IndexDef {
+    pub obj: Arc<ClassDef>,
+    pub index_rel_id: RelId,
+    pub table_id: RelId,
+    pub keys: Box<[IndexKeyDef]>,
+    pub unique: bool,
+    pub primary: bool,
+    pub constraint_backed: bool,
+    pub predicate: Option<Arc<CompiledExpr>>,
+    pub generation: u64,
+}
+
+#[derive(Debug)]
+pub struct IndexKeyDef {
+    pub ordinal: u16,
+    pub source: IndexKeySource,
+    pub collation: CollationId,
+    pub sort_dir: SortDir,
+    pub null_order: NullOrder,
+}
+
+#[derive(Debug)]
+pub enum IndexKeySource {
+    Column { attnum: u16, storage_slot: i16 },
+    Expr(Arc<CompiledExpr>),
+}
+
+#[derive(Debug)]
+pub struct CheckDef {
+    pub constraint_id: ConstraintId,
+    pub name: Option<Box<str>>,
+    pub expr: Arc<CompiledExpr>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct CollationId(pub u32);
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SortDir {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum NullOrder {
+    First,
+    Last,
+}
+```
+
+This is the rule: **compiled plans own `Arc<TableDef>`, not table names.**
+
+Names are only for binding. Execution uses IDs and precompiled metadata.
+
+---
+
+# DDL-vs-DML locking
+
+This is critical. Without it, `CREATE INDEX` can commit while an old writer still uses a stale table definition and fails to maintain the new index.
+
+Use a **schema gate** per table:
+
+```text
+DML writers take shared gate.
+DDL that changes table write semantics takes exclusive gate.
+Readers take no gate.
+```
+
+This does not serialize writers. It only prevents DDL from changing index/constraint requirements while writers are active.
+
+```rust
+pub trait SchemaGate {
+    type SharedGuard;
+    type ExclusiveGuard;
+
+    fn dml_write_guard(&self, rel: RelId) -> Self::SharedGuard;
+    fn ddl_exclusive_guard(&self, rel: RelId) -> Self::ExclusiveGuard;
+}
+```
+
+Rules:
+
+| Operation               | Gate                                 |
+| ----------------------- | ------------------------------------ |
+| `SELECT`                | none                                 |
+| `INSERT/UPDATE/DELETE`  | shared table write gate              |
+| `CREATE TABLE`          | namespace/name lock                  |
+| `DROP TABLE`            | exclusive table gate                 |
+| `CREATE INDEX`          | exclusive table gate                 |
+| `DROP INDEX`            | exclusive table gate on owning table |
+| `ADD CONSTRAINT` future | exclusive table gate                 |
+| `ALTER TABLE` future    | exclusive table gate                 |
+
+This gives brilliant simplicity:
+
+```text
+DML writers remain concurrent with each other.
+DDL waits for writers.
+New writers wait for DDL.
+Readers can keep old snapshots.
+Physical drops are deferred.
+```
+
+---
+
+# Transactional DDL protocol
+
+Every DDL statement is a normal write transaction touching catalog rows and relation metadata.
+
+## `CREATE TABLE`
+
+Protocol:
+
+```text
+1. Acquire global DDL mutex briefly or namespace DDL lock.
+2. Resolve name in current schema.
+3. Validate AST.
+4. Allocate durable object IDs and relation IDs.
+5. Create heap relation through kernel transaction.
+6. Create backing indexes for PRIMARY KEY / UNIQUE constraints.
+7. Insert rl_class row for table.
+8. Insert rl_attribute rows.
+9. Insert rl_constraint rows.
+10. Insert rl_index / rl_index_key rows for backing indexes.
+11. Insert rl_depend rows.
+12. Bump rl_meta.schema_epoch.
+13. Install transaction-local schema overlay.
+14. Commit.
+15. Publish new SchemaSnapshot before returning success.
+```
+
+The “transaction-local schema overlay” matters because this must work:
+
+```sql
+BEGIN;
+CREATE TABLE t(a INT);
+INSERT INTO t VALUES (1);
+COMMIT;
+```
+
+The session should see its own uncommitted DDL without rebuilding the global schema cache.
+
+## `DROP TABLE`
+
+Protocol:
+
+```text
+1. Resolve table.
+2. Acquire exclusive table schema gate.
+3. Verify dependencies or choose CASCADE behavior.
+4. Delete/tombstone rl_class row.
+5. Delete/tombstone rl_attribute rows.
+6. Delete/tombstone rl_constraint rows.
+7. Delete/tombstone indexes and dependencies.
+8. Insert rl_pending_drop rows for table heap and indexes.
+9. Bump schema_epoch.
+10. Commit.
+11. Publish schema snapshot without the table.
+12. Vacuum frees physical pages after horizon.
+```
+
+## `CREATE INDEX`
+
+For Phase 4, make non-concurrent index creation safe and fast:
+
+```text
+1. Resolve table.
+2. Acquire exclusive table schema gate. This blocks writers, not readers.
+3. Allocate index relation.
+4. Scan visible heap rows at transaction snapshot.
+5. Build index entries.
+6. For UNIQUE index, detect duplicate non-NULL keys.
+7. Insert rl_class / rl_index / rl_index_key / rl_depend rows.
+8. Bump schema_epoch.
+9. Commit.
+10. Publish new schema snapshot.
+```
+
+For big tables, do not insert index entries one-by-one if your B+tree supports bulk loading. Use chunked sort:
+
+```text
+memory_budget = e.g. 64 MiB
+
+scan heap
+  encode key
+  push entry into in-memory run
+  if run > memory_budget:
+      sort run
+      spill run to temp relation/file
+
+merge sorted runs
+bulk-build B+tree leaves
+build upper levels
+```
+
+For a unique index, duplicate check is a sorted-run merge problem:
+
+```text
+if previous_key == current_key
+   and key_has_no_nulls
+then unique violation
+```
+
+## `DROP INDEX`
+
+```text
+1. Resolve index and owner table.
+2. Reject if index backs PRIMARY KEY or UNIQUE constraint unless DROP CONSTRAINT exists.
+3. Acquire exclusive owner table schema gate.
+4. Delete/tombstone rl_index / rl_index_key / rl_class rows.
+5. Insert rl_pending_drop for index relation.
+6. Bump schema_epoch.
+7. Commit.
+8. Publish snapshot.
+```
+
+---
+
+# Durable ID allocation
+
+IDs may have gaps. They must never duplicate after crash.
+
+Use durable range leasing:
+
+```rust
+pub struct DurableIdAllocator {
+    next: std::sync::atomic::AtomicU64,
+    lease_end: std::sync::atomic::AtomicU64,
+    kind: IdKind,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum IdKind {
+    Rel,
+    Obj,
+    Constraint,
+    Expr,
+}
+```
+
+When local range is exhausted:
+
+```text
+1. Acquire allocator mutex.
+2. Read current durable next_* from rl_meta.
+3. new_next = old_next + 4096.
+4. WAL-log/update rl_meta.next_* = new_next in a tiny system transaction.
+5. Publish local range [old_next, new_next).
+```
+
+If you crash after reserving but before using IDs, you lose a range. That is fine. Never reuse object IDs quickly; object ID reuse creates stale prepared-statement bugs.
+
+---
+
+# Value model
+
+SQLite-like storage classes:
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+pub enum OwnedValue {
+    Null,
+    Int(i64),
+    Real(f64),
+    Text(Box<str>),
+    Blob(Box<[u8]>),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ValueRef<'a> {
+    Null,
+    Int(i64),
+    Real(f64),
+    Text(&'a str),
+    Blob(&'a [u8]),
+}
+
+impl<'a> ValueRef<'a> {
+    pub fn storage_class(self) -> StorageClass {
+        match self {
+            ValueRef::Null => StorageClass::Null,
+            ValueRef::Int(_) => StorageClass::Integer,
+            ValueRef::Real(_) => StorageClass::Real,
+            ValueRef::Text(_) => StorageClass::Text,
+            ValueRef::Blob(_) => StorageClass::Blob,
+        }
+    }
+
+    pub fn to_owned_value(self) -> OwnedValue {
+        match self {
+            ValueRef::Null => OwnedValue::Null,
+            ValueRef::Int(v) => OwnedValue::Int(v),
+            ValueRef::Real(v) => OwnedValue::Real(v),
+            ValueRef::Text(v) => OwnedValue::Text(v.into()),
+            ValueRef::Blob(v) => OwnedValue::Blob(v.into()),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum StorageClass {
+    Null,
+    Integer,
+    Real,
+    Text,
+    Blob,
+}
+```
+
+No boolean storage class. Store booleans as integers `0` and `1`.
+
+---
+
+# Affinity
+
+```rust
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum Affinity {
+    Blob = 0,
+    Text = 1,
+    Numeric = 2,
+    Integer = 3,
+    Real = 4,
+}
+```
+
+Declared type to affinity:
+
+```rust
+impl Affinity {
+    pub fn from_declared_type(declared: Option<&str>) -> Self {
+        let Some(s) = declared else {
+            return Affinity::Blob;
+        };
+
+        if ascii_contains_ci(s, b"INT") {
+            Affinity::Integer
+        } else if ascii_contains_ci(s, b"CHAR")
+            || ascii_contains_ci(s, b"CLOB")
+            || ascii_contains_ci(s, b"TEXT")
+        {
+            Affinity::Text
+        } else if ascii_contains_ci(s, b"BLOB") || s.trim().is_empty() {
+            Affinity::Blob
+        } else if ascii_contains_ci(s, b"REAL")
+            || ascii_contains_ci(s, b"FLOA")
+            || ascii_contains_ci(s, b"DOUB")
+        {
+            Affinity::Real
+        } else {
+            Affinity::Numeric
+        }
+    }
+
+    pub fn apply(self, v: OwnedValue) -> OwnedValue {
+        match self {
+            Affinity::Blob => v,
+            Affinity::Text => apply_text_affinity(v),
+            Affinity::Numeric | Affinity::Integer => apply_numeric_affinity(v),
+            Affinity::Real => apply_real_affinity(v),
+        }
+    }
+}
+
+fn ascii_contains_ci(haystack: &str, needle_upper: &[u8]) -> bool {
+    let bytes = haystack.as_bytes();
+    if needle_upper.is_empty() {
+        return true;
+    }
+    bytes.windows(needle_upper.len()).any(|w| {
+        w.iter()
+            .zip(needle_upper)
+            .all(|(&a, &b)| a.to_ascii_uppercase() == b)
+    })
+}
+
+fn apply_text_affinity(v: OwnedValue) -> OwnedValue {
+    match v {
+        OwnedValue::Int(i) => OwnedValue::Text(i.to_string().into_boxed_str()),
+        OwnedValue::Real(f) => OwnedValue::Text(format_sql_real(f).into_boxed_str()),
+        other => other,
+    }
+}
+
+fn apply_numeric_affinity(v: OwnedValue) -> OwnedValue {
+    match v {
+        OwnedValue::Text(s) => parse_sql_numeric(&s).unwrap_or(OwnedValue::Text(s)),
+        OwnedValue::Real(f) if f.is_finite() && f.fract() == 0.0 => {
+            if f >= i64::MIN as f64 && f <= i64::MAX as f64 {
+                OwnedValue::Int(f as i64)
+            } else {
+                OwnedValue::Real(f)
+            }
+        }
+        other => other,
+    }
+}
+
+fn apply_real_affinity(v: OwnedValue) -> OwnedValue {
+    match apply_numeric_affinity(v) {
+        OwnedValue::Int(i) => OwnedValue::Real(i as f64),
+        other => other,
+    }
+}
+
+fn parse_sql_numeric(s: &str) -> Option<OwnedValue> {
+    let trimmed = s.trim();
+
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(i) = trimmed.parse::<i64>() {
+        return Some(OwnedValue::Int(i));
+    }
+
+    if let Ok(f) = trimmed.parse::<f64>() {
+        if f.is_finite() && f.fract() == 0.0 && f >= i64::MIN as f64 && f <= i64::MAX as f64 {
+            return Some(OwnedValue::Int(f as i64));
+        }
+        return Some(OwnedValue::Real(f));
+    }
+
+    None
+}
+
+fn format_sql_real(f: f64) -> String {
+    if f.is_nan() {
+        "NaN".to_string()
+    } else if f.is_infinite() {
+        if f.is_sign_negative() {
+            "-Inf".to_string()
+        } else {
+            "Inf".to_string()
+        }
+    } else {
+        // Good enough for Phase 4. You can replace with ryu later.
+        let mut s = f.to_string();
+        if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+            s.push_str(".0");
+        }
+        s
+    }
+}
+```
+
+For production performance, replace float formatting/parsing with dedicated pure-Rust fast paths later, but keep the semantic boundary here.
+
+---
+
+# Compact row encoding
+
+You want row decoding to be zero-copy and predictable.
+
+I would use a simple **column directory + packed payload** format.
+
+```text
+byte 0      row format version
+bytes 1..3  n_storage_cols: u16 little-endian
+then        n_storage_cols entries:
+              tag: u8
+              end_offset: u32 little-endian
+then        payload bytes
+```
+
+Each column entry stores the end offset of its value payload. The start offset is the previous column’s end offset. `NULL` has no payload.
+
+This gives:
+
+```text
+O(1) column lookup
+zero-copy TEXT/BLOB
+fast projection
+no per-row heap allocation during reads
+simple compatibility story
+```
+
+## Tags
+
+```rust
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum CellTag {
+    Null = 0,
+    Int8 = 1,
+    Int16 = 2,
+    Int32 = 3,
+    Int64 = 4,
+    Real64 = 5,
+    Text = 6,
+    Blob = 7,
+}
+```
+
+## Encoder
+
+```rust
+pub const ROW_FORMAT_V1: u8 = 1;
+const META_SIZE: usize = 5;
+
+#[derive(Debug)]
+pub enum RowError {
+    TooManyColumns,
+    TooLarge,
+    Corrupt,
+    Utf8,
+}
+
+pub fn encode_row(values: &[ValueRef<'_>], out: &mut Vec<u8>) -> Result<(), RowError> {
+    if values.len() > u16::MAX as usize {
+        return Err(RowError::TooManyColumns);
+    }
+
+    out.clear();
+    out.push(ROW_FORMAT_V1);
+    out.extend_from_slice(&(values.len() as u16).to_le_bytes());
+
+    let meta_start = out.len();
+    out.resize(meta_start + values.len() * META_SIZE, 0);
+
+    let payload_start = out.len();
+
+    for (i, value) in values.iter().copied().enumerate() {
+        let tag = write_cell_payload(value, out)?;
+
+        let end = out.len() - payload_start;
+        if end > u32::MAX as usize {
+            return Err(RowError::TooLarge);
+        }
+
+        let m = meta_start + i * META_SIZE;
+        out[m] = tag as u8;
+        out[m + 1..m + 5].copy_from_slice(&(end as u32).to_le_bytes());
+    }
+
+    Ok(())
+}
+
+fn write_cell_payload(value: ValueRef<'_>, out: &mut Vec<u8>) -> Result<CellTag, RowError> {
+    match value {
+        ValueRef::Null => Ok(CellTag::Null),
+        ValueRef::Int(i) => {
+            if i >= i8::MIN as i64 && i <= i8::MAX as i64 {
+                out.push(i as i8 as u8);
+                Ok(CellTag::Int8)
+            } else if i >= i16::MIN as i64 && i <= i16::MAX as i64 {
+                out.extend_from_slice(&(i as i16).to_le_bytes());
+                Ok(CellTag::Int16)
+            } else if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
+                out.extend_from_slice(&(i as i32).to_le_bytes());
+                Ok(CellTag::Int32)
+            } else {
+                out.extend_from_slice(&i.to_le_bytes());
+                Ok(CellTag::Int64)
+            }
+        }
+        ValueRef::Real(f) => {
+            out.extend_from_slice(&f.to_le_bytes());
+            Ok(CellTag::Real64)
+        }
+        ValueRef::Text(s) => {
+            out.extend_from_slice(s.as_bytes());
+            Ok(CellTag::Text)
+        }
+        ValueRef::Blob(b) => {
+            out.extend_from_slice(b);
+            Ok(CellTag::Blob)
+        }
+    }
+}
+```
+
+## Decoder
+
+```rust
+pub struct RowRef<'a> {
+    bytes: &'a [u8],
+    ncols: usize,
+    meta_start: usize,
+    payload_start: usize,
+}
+
+impl<'a> RowRef<'a> {
+    pub fn new(bytes: &'a [u8]) -> Result<Self, RowError> {
+        if bytes.len() < 3 || bytes[0] != ROW_FORMAT_V1 {
+            return Err(RowError::Corrupt);
+        }
+
+        let ncols = u16::from_le_bytes([bytes[1], bytes[2]]) as usize;
+        let meta_start = 3;
+        let payload_start = meta_start + ncols.checked_mul(META_SIZE).ok_or(RowError::Corrupt)?;
+
+        if payload_start > bytes.len() {
+            return Err(RowError::Corrupt);
+        }
+
+        Ok(Self {
+            bytes,
+            ncols,
+            meta_start,
+            payload_start,
+        })
+    }
+
+    pub fn ncols(&self) -> usize {
+        self.ncols
+    }
+
+    pub fn get(&self, storage_slot: u16) -> Result<ValueRef<'a>, RowError> {
+        let i = storage_slot as usize;
+        if i >= self.ncols {
+            return Err(RowError::Corrupt);
+        }
+
+        let m = self.meta_start + i * META_SIZE;
+        let tag = self.bytes[m];
+
+        let end = u32::from_le_bytes([
+            self.bytes[m + 1],
+            self.bytes[m + 2],
+            self.bytes[m + 3],
+            self.bytes[m + 4],
+        ]) as usize;
+
+        let start = if i == 0 {
+            0
+        } else {
+            let pm = self.meta_start + (i - 1) * META_SIZE;
+            u32::from_le_bytes([
+                self.bytes[pm + 1],
+                self.bytes[pm + 2],
+                self.bytes[pm + 3],
+                self.bytes[pm + 4],
+            ]) as usize
+        };
+
+        let payload_len = self.bytes.len() - self.payload_start;
+        if start > end || end > payload_len {
+            return Err(RowError::Corrupt);
+        }
+
+        let payload = &self.bytes[self.payload_start + start..self.payload_start + end];
+
+        match tag {
+            0 => Ok(ValueRef::Null),
+            1 if payload.len() == 1 => Ok(ValueRef::Int(payload[0] as i8 as i64)),
+            2 if payload.len() == 2 => {
+                Ok(ValueRef::Int(i16::from_le_bytes([payload[0], payload[1]]) as i64))
+            }
+            3 if payload.len() == 4 => {
+                Ok(ValueRef::Int(i32::from_le_bytes([
+                    payload[0], payload[1], payload[2], payload[3],
+                ]) as i64))
+            }
+            4 if payload.len() == 8 => {
+                Ok(ValueRef::Int(i64::from_le_bytes([
+                    payload[0], payload[1], payload[2], payload[3],
+                    payload[4], payload[5], payload[6], payload[7],
+                ])))
+            }
+            5 if payload.len() == 8 => {
+                Ok(ValueRef::Real(f64::from_le_bytes([
+                    payload[0], payload[1], payload[2], payload[3],
+                    payload[4], payload[5], payload[6], payload[7],
+                ])))
+            }
+            6 => {
+                let s = std::str::from_utf8(payload).map_err(|_| RowError::Utf8)?;
+                Ok(ValueRef::Text(s))
+            }
+            7 => Ok(ValueRef::Blob(payload)),
+            _ => Err(RowError::Corrupt),
+        }
+    }
+}
+```
+
+## Rowid alias access
+
+A logical row view should be separate from the raw payload row:
+
+```rust
+pub struct LogicalRowRef<'a> {
+    pub table: &'a TableDef,
+    pub rowid: i64,
+    pub row: RowRef<'a>,
+}
+
+impl<'a> LogicalRowRef<'a> {
+    pub fn get_attnum(&self, attnum: u16) -> Result<ValueRef<'a>, RowError> {
+        let col = &self.table.columns[(attnum - 1) as usize];
+
+        if col.flags.rowid_alias {
+            return Ok(ValueRef::Int(self.rowid));
+        }
+
+        if col.storage_slot < 0 {
+            return Err(RowError::Corrupt);
+        }
+
+        self.row.get(col.storage_slot as u16)
+    }
+}
+```
+
+This saves payload bytes and avoids inconsistency between heap key and `INTEGER PRIMARY KEY`.
+
+---
+
+# Column flags
+
+```rust
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct ColumnFlags {
+    bits: u32,
+}
+
+impl ColumnFlags {
+    pub const NOT_NULL: u32     = 1 << 0;
+    pub const ROWID_ALIAS: u32  = 1 << 1;
+    pub const HIDDEN: u32       = 1 << 2;
+    pub const GENERATED: u32    = 1 << 3;
+
+    pub fn empty() -> Self {
+        Self { bits: 0 }
+    }
+
+    pub fn contains(&self, flag: u32) -> bool {
+        self.bits & flag != 0
+    }
+
+    pub fn insert(&mut self, flag: u32) {
+        self.bits |= flag;
+    }
+
+    pub fn not_null(&self) -> bool {
+        self.contains(Self::NOT_NULL)
+    }
+
+    pub fn rowid_alias(&self) -> bool {
+        self.contains(Self::ROWID_ALIAS)
+    }
+}
+```
+
+---
+
+# Constraint lowering
+
+DDL AST:
+
+```rust
+pub struct CreateTable {
+    pub if_not_exists: bool,
+    pub name: QualifiedName,
+    pub columns: Vec<CreateColumn>,
+    pub table_constraints: Vec<TableConstraint>,
+    pub options: TableOptions,
+}
+
+pub struct CreateColumn {
+    pub name: String,
+    pub declared_type: Option<String>,
+    pub constraints: Vec<ColumnConstraint>,
+}
+
+pub enum ColumnConstraint {
+    PrimaryKey {
+        name: Option<String>,
+        conflict: ConflictAction,
+        sort_dir: Option<SortDir>,
+        autoincrement: bool,
+    },
+    NotNull {
+        name: Option<String>,
+        conflict: ConflictAction,
+    },
+    Unique {
+        name: Option<String>,
+        conflict: ConflictAction,
+    },
+    Check {
+        name: Option<String>,
+        expr: ExprAst,
+    },
+    Default {
+        expr: ExprAst,
+    },
+    Collate {
+        collation: String,
+    },
+}
+
+pub enum TableConstraint {
+    PrimaryKey {
+        name: Option<String>,
+        columns: Vec<IndexedColumnAst>,
+        conflict: ConflictAction,
+    },
+    Unique {
+        name: Option<String>,
+        columns: Vec<IndexedColumnAst>,
+        conflict: ConflictAction,
+    },
+    Check {
+        name: Option<String>,
+        expr: ExprAst,
+    },
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ConflictAction {
+    Rollback,
+    Abort,
+    Fail,
+    Ignore,
+    Replace,
+}
+
+impl Default for ConflictAction {
+    fn default() -> Self {
+        ConflictAction::Abort
+    }
+}
+```
+
+For Phase 4, I would implement only `Abort` behavior but store all conflict actions for future. That lets the catalog format remain stable.
+
+---
+
+# `CREATE TABLE` validation rules
+
+Validation should reject corrupt schemas before any catalog write.
+
+Checklist:
+
+```text
+1. Table name is valid and not duplicate.
+2. Column count > 0.
+3. No duplicate column names after identifier normalization.
+4. At most one PRIMARY KEY.
+5. PRIMARY KEY columns exist.
+6. UNIQUE columns exist.
+7. CHECK expressions contain no subqueries.
+8. CHECK expressions reference only this table.
+9. DEFAULT expressions are constant or supported current-time keywords.
+10. DEFAULT expressions do not contain column refs, subqueries, or parameters.
+11. Collations exist.
+12. Unsupported features produce explicit errors, not silent behavior.
+13. WITHOUT ROWID rejected or marked future.
+14. Generated columns rejected or marked future.
+15. Foreign keys rejected or stored-unenforced behind feature flag.
+```
+
+SQLite says defaults may be constants, parenthesized constant expressions, or current date/time keywords, and `CHECK` expressions are evaluated on insert/update and treated as violations only when the numeric cast is zero; `NULL` check results pass. ([SQLite][2])
+
+---
+
+# Primary keys and rowid
+
+For SQLite-like mode:
+
+```text
+INTEGER PRIMARY KEY on a rowid table aliases the rowid.
+Other PRIMARY KEY forms create a unique index.
+```
+
+SQLite’s docs describe rowid tables, the hidden rowid aliases, and the special `INTEGER PRIMARY KEY` alias behavior. ([SQLite][2])
+
+RedlineDB implementation:
+
+```rust
+pub enum PrimaryKeyPlan {
+    RowIdAlias {
+        attnum: u16,
+        constraint_id: ConstraintId,
+    },
+    UniqueIndex {
+        columns: Box<[u16]>,
+        constraint_id: ConstraintId,
+        index_rel_id: RelId,
+    },
+}
+```
+
+For `INTEGER PRIMARY KEY`:
+
+```text
+column.storage_slot = -1
+column.flags |= ROWID_ALIAS | NOT_NULL
+no separate unique index needed
+heap key enforces uniqueness
+```
+
+For composite or non-integer primary key:
+
+```text
+create unique backing index
+```
+
+SQLite historically allows `NULL` in many non-integer primary-key columns unless `NOT NULL`, `STRICT`, or `WITHOUT ROWID` applies. You have two choices:
+
+```text
+sqlite_compat mode:
+    allow NULL in non-rowid primary key unless explicit NOT NULL
+    uniqueness treats NULLs as distinct
+
+redline_strict mode:
+    PRIMARY KEY implies NOT NULL
+```
+
+I would default to `sqlite_compat` for SQLite comparison, and provide strict mode later.
+
+---
+
+# Insert/update enforcement pipeline
+
+For every `INSERT`:
+
+```text
+1. Load compiled TableDef from plan.
+2. Build logical column vector.
+3. Fill omitted columns with defaults or NULL.
+4. Resolve rowid alias:
+   a. omitted or NULL -> allocate rowid
+   b. integer -> use as rowid
+   c. losslessly coercible text/real -> integer
+   d. otherwise datatype mismatch
+5. Apply column affinity.
+6. Enforce NOT NULL.
+7. Evaluate CHECK constraints.
+8. Encode payload row.
+9. Precompute index keys.
+10. Acquire unique key locks in deterministic order.
+11. Check unique conflicts.
+12. Insert heap row.
+13. Insert index entries.
+```
+
+For every `UPDATE`:
+
+```text
+1. Read old row.
+2. Build new logical values.
+3. Apply affinity to changed values.
+4. Resolve rowid change if any.
+5. Enforce NOT NULL and CHECK.
+6. Compute old/new index keys.
+7. Acquire unique locks for changed unique keys.
+8. Check conflicts.
+9. Write heap update.
+10. Delete-mark old index entries / insert new index entries.
+```
+
+---
+
+# Insert row builder
+
+```rust
+pub struct InsertInput<'a> {
+    // Indexed by logical attnum - 1.
+    pub values: Vec<Option<ValueRef<'a>>>,
+}
+
+pub struct RowBuildScratch {
+    logical: Vec<OwnedValue>,
+    storage: Vec<OwnedValue>,
+    encoded: Vec<u8>,
+}
+
+impl RowBuildScratch {
+    pub fn new() -> Self {
+        Self {
+            logical: Vec::new(),
+            storage: Vec::new(),
+            encoded: Vec::new(),
+        }
+    }
+}
+
+pub struct BuiltRow<'a> {
+    pub rowid: i64,
+    pub encoded: &'a [u8],
+}
+
+pub fn build_insert_row<'a>(
+    table: &TableDef,
+    input: InsertInput<'_>,
+    rowid_alloc: &mut dyn RowIdAllocator,
+    eval: &mut EvalCtx<'_>,
+    scratch: &'a mut RowBuildScratch,
+) -> Result<BuiltRow<'a>, DbError> {
+    scratch.logical.clear();
+    scratch.storage.clear();
+    scratch.encoded.clear();
+
+    let n = table.columns.len();
+    scratch.logical.resize(n, OwnedValue::Null);
+
+    for i in 0..n {
+        let col = &table.columns[i];
+
+        let value = match input.values.get(i).and_then(|v| *v) {
+            Some(v) => v.to_owned_value(),
+            None => match &col.default {
+                Some(expr) => eval.eval_default(expr)?,
+                None => OwnedValue::Null,
+            },
+        };
+
+        scratch.logical[i] = value;
+    }
+
+    let rowid = resolve_rowid(table, &mut scratch.logical, rowid_alloc)?;
+
+    for col in table.columns.iter() {
+        if col.flags.rowid_alias() {
+            continue;
+        }
+
+        let logical_idx = (col.attnum - 1) as usize;
+        let mut v = std::mem::replace(&mut scratch.logical[logical_idx], OwnedValue::Null);
+        v = col.affinity.apply(v);
+
+        if col.flags.not_null() && matches!(v, OwnedValue::Null) {
+            return Err(DbError::ConstraintViolation {
+                table: table.obj.name.clone(),
+                constraint: None,
+                kind: ConstraintKind::NotNull,
+                detail: format!("column {} may not be NULL", col.name),
+            });
+        }
+
+        scratch.storage.push(v);
+    }
+
+    enforce_checks(table, rowid, &scratch.storage, eval)?;
+
+    let refs: Vec<ValueRef<'_>> = scratch.storage.iter().map(|v| value_ref(v)).collect();
+    encode_row(&refs, &mut scratch.encoded).map_err(DbError::Row)?;
+
+    Ok(BuiltRow {
+        rowid,
+        encoded: &scratch.encoded,
+    })
+}
+
+fn value_ref(v: &OwnedValue) -> ValueRef<'_> {
+    match v {
+        OwnedValue::Null => ValueRef::Null,
+        OwnedValue::Int(i) => ValueRef::Int(*i),
+        OwnedValue::Real(f) => ValueRef::Real(*f),
+        OwnedValue::Text(s) => ValueRef::Text(s),
+        OwnedValue::Blob(b) => ValueRef::Blob(b),
+    }
+}
+```
+
+## Rowid resolution
+
+```rust
+pub trait RowIdAllocator {
+    fn next_rowid(&mut self, table: RelId) -> Result<i64, DbError>;
+}
+
+fn resolve_rowid(
+    table: &TableDef,
+    logical: &mut [OwnedValue],
+    alloc: &mut dyn RowIdAllocator,
+) -> Result<i64, DbError> {
+    let Some(attnum) = table.rowid_alias_attnum else {
+        return alloc.next_rowid(table.rel_id);
+    };
+
+    let idx = (attnum - 1) as usize;
+
+    match &logical[idx] {
+        OwnedValue::Null => {
+            let rowid = alloc.next_rowid(table.rel_id)?;
+            logical[idx] = OwnedValue::Int(rowid);
+            Ok(rowid)
+        }
+        OwnedValue::Int(i) => Ok(*i),
+        OwnedValue::Real(f) if f.is_finite() && f.fract() == 0.0 => {
+            if *f >= i64::MIN as f64 && *f <= i64::MAX as f64 {
+                let rowid = *f as i64;
+                logical[idx] = OwnedValue::Int(rowid);
+                Ok(rowid)
+            } else {
+                Err(DbError::DatatypeMismatch("rowid out of range".into()))
+            }
+        }
+        OwnedValue::Text(s) => {
+            let parsed = s.trim().parse::<i64>()
+                .map_err(|_| DbError::DatatypeMismatch("rowid must be integer".into()))?;
+            logical[idx] = OwnedValue::Int(parsed);
+            Ok(parsed)
+        }
+        _ => Err(DbError::DatatypeMismatch("rowid must be integer".into())),
+    }
+}
+```
+
+---
+
+# CHECK expression engine
+
+Do not interpret SQL ASTs during row writes. Lower defaults and checks into compact bytecode.
+
+```rust
+#[derive(Debug)]
+pub struct CompiledExpr {
+    pub expr_id: ExprId,
+    pub bytecode: Box<[ExprOp]>,
+    pub referenced_cols: ColumnBitmap,
+    pub deterministic: bool,
+    pub result_hint: TypeHint,
+}
+
+#[derive(Debug, Clone)]
+pub enum ExprOp {
+    Const(OwnedValue),
+    ColumnByAttnum(u16),
+    IsNull,
+    IsNotNull,
+    Not,
+    And,
+    Or,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    CastNumeric,
+    FunctionBuiltin(BuiltinFnId, u8),
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum TypeHint {
+    Any,
+    Bool,
+    Int,
+    Real,
+    Text,
+    Blob,
+}
+```
+
+CHECK enforcement:
+
+```rust
+fn enforce_checks(
+    table: &TableDef,
+    rowid: i64,
+    storage_values: &[OwnedValue],
+    eval: &mut EvalCtx<'_>,
+) -> Result<(), DbError> {
+    for check in table.checks.iter() {
+        let result = eval.eval_check_expr(table, rowid, storage_values, &check.expr)?;
+        if !check_result_passes(result.as_ref()) {
+            return Err(DbError::ConstraintViolation {
+                table: table.obj.name.clone(),
+                constraint: check.name.clone(),
+                kind: ConstraintKind::Check,
+                detail: "CHECK constraint failed".into(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn check_result_passes(v: ValueRef<'_>) -> bool {
+    match cast_to_numeric_for_check(v) {
+        OwnedValue::Null => true,
+        OwnedValue::Int(i) => i != 0,
+        OwnedValue::Real(f) => f != 0.0,
+        OwnedValue::Text(_) | OwnedValue::Blob(_) => false,
+    }
+}
+
+fn cast_to_numeric_for_check(v: ValueRef<'_>) -> OwnedValue {
+    match v {
+        ValueRef::Null => OwnedValue::Null,
+        ValueRef::Int(i) => OwnedValue::Int(i),
+        ValueRef::Real(f) => OwnedValue::Real(f),
+        ValueRef::Text(s) => parse_sql_numeric(s).unwrap_or(OwnedValue::Int(0)),
+        ValueRef::Blob(b) => match std::str::from_utf8(b) {
+            Ok(s) => parse_sql_numeric(s).unwrap_or(OwnedValue::Int(0)),
+            Err(_) => OwnedValue::Int(0),
+        },
+    }
+}
+```
+
+SQLite evaluates `CHECK` on writes, casts the result to numeric, treats zero as violation, and treats `NULL` as passing. ([SQLite][2])
+
+---
+
+# Default expressions
+
+Represent defaults separately for speed:
+
+```rust
+#[derive(Debug)]
+pub enum DefaultPlan {
+    Null,
+    Constant(OwnedValue),
+    CurrentDate,
+    CurrentTime,
+    CurrentTimestamp,
+    Expr(Arc<CompiledExpr>),
+}
+```
+
+For most defaults, no expression VM should run:
+
+```rust
+impl EvalCtx<'_> {
+    pub fn eval_default(&mut self, expr: &CompiledExpr) -> Result<OwnedValue, DbError> {
+        // If expr is a constant, this should be a single clone.
+        self.eval_expr(expr)
+    }
+}
+```
+
+Recommended lowering:
+
+```text
+DEFAULT NULL              -> DefaultPlan::Null
+DEFAULT 123               -> Constant(Int(123))
+DEFAULT 'abc'             -> Constant(Text("abc"))
+DEFAULT x'ABCD'           -> Constant(Blob)
+DEFAULT CURRENT_TIMESTAMP -> CurrentTimestamp
+DEFAULT (<constant expr>) -> Expr(bytecode)
+```
+
+---
+
+# Unique constraints and key locks
+
+Unique constraints must be concurrency-safe.
+
+For each unique index:
+
+```text
+1. Build unique key.
+2. If any key part is NULL and SQLite-compatible mode is active:
+      skip duplicate check, but still insert physical index entry with rowid suffix.
+3. Else acquire key-level lock on (index_rel_id, encoded_key).
+4. Probe index for visible conflicting row.
+5. If found, constraint violation.
+```
+
+Locks must be taken in deterministic order:
+
+```text
+sort by index_rel_id, then key bytes
+```
+
+This prevents deadlock when multiple unique indexes exist.
+
+```rust
+pub struct UniqueKey {
+    pub index_rel_id: RelId,
+    pub constraint_id: Option<ConstraintId>,
+    pub bytes: Vec<u8>,
+    pub contains_null: bool,
+}
+
+pub fn insert_with_constraints(
+    tx: &mut dyn TableWriteTxn,
+    table: &TableDef,
+    rowid: i64,
+    encoded_row: &[u8],
+    logical_row: &LogicalInsertView<'_>,
+) -> Result<(), DbError> {
+    let _schema_guard = tx.acquire_dml_schema_guard(table.rel_id)?;
+
+    let mut unique_keys = Vec::new();
+
+    for idx in table.indexes.iter().filter(|i| i.unique) {
+        let key = encode_index_key(idx, logical_row)?;
+
+        if !key.contains_null {
+            unique_keys.push(UniqueKey {
+                index_rel_id: idx.index_rel_id,
+                constraint_id: None,
+                bytes: key.bytes,
+                contains_null: false,
+            });
+        }
+    }
+
+    unique_keys.sort_by(|a, b| {
+        a.index_rel_id
+            .cmp(&b.index_rel_id)
+            .then_with(|| a.bytes.cmp(&b.bytes))
+    });
+
+    for key in &unique_keys {
+        tx.lock_unique_key(key.index_rel_id, &key.bytes)?;
+
+        if let Some(conflict) = tx.unique_probe(table.rel_id, key.index_rel_id, &key.bytes)? {
+            if conflict.rowid != rowid {
+                return Err(DbError::ConstraintViolation {
+                    table: table.obj.name.clone(),
+                    constraint: None,
+                    kind: ConstraintKind::Unique,
+                    detail: "duplicate key".into(),
+                });
+            }
+        }
+    }
+
+    tx.heap_insert(table.rel_id, rowid, encoded_row)?;
+
+    for idx in table.indexes.iter() {
+        let key = encode_index_key(idx, logical_row)?;
+        tx.index_insert(idx.index_rel_id, &key.bytes, rowid)?;
+    }
+
+    Ok(())
+}
+```
+
+The index entry should include rowid as a physical suffix even for non-unique indexes:
+
+```text
+logical key parts || rowid
+```
+
+For unique indexes:
+
+```text
+if key contains NULL:
+    physical key = logical key parts || rowid
+else:
+    physical key = logical key parts
+    payload or posting stores rowid
+```
+
+This preserves the “NULLs are distinct” uniqueness rule.
+
+---
+
+# Index key encoding
+
+For Phase 4, correctness is more important than a perfect bytewise memcomparable encoding. You can use a comparator that decodes key parts. But to go fast, I would still encode compact typed parts.
+
+```rust
+pub struct EncodedIndexKey {
+    pub bytes: Vec<u8>,
+    pub contains_null: bool,
+}
+
+pub fn encode_index_key(
+    index: &IndexDef,
+    row: &LogicalInsertView<'_>,
+) -> Result<EncodedIndexKey, DbError> {
+    let mut out = Vec::with_capacity(64);
+    let mut contains_null = false;
+
+    for key in index.keys.iter() {
+        let v = match &key.source {
+            IndexKeySource::Column { attnum, .. } => row.get_attnum(*attnum)?,
+            IndexKeySource::Expr(expr) => row.eval_expr(expr)?,
+        };
+
+        if matches!(v, ValueRef::Null) {
+            contains_null = true;
+        }
+
+        encode_key_part(v, key, &mut out)?;
+    }
+
+    Ok(EncodedIndexKey {
+        bytes: out,
+        contains_null,
+    })
+}
+```
+
+Initial key part format:
+
+```text
+type tag
+length if varlen
+payload
+```
+
+Comparator rules should implement:
+
+```text
+NULL < numeric < TEXT < BLOB
+INTEGER and REAL compare numerically
+TEXT uses collation
+BLOB uses byte order
+```
+
+SQLite documents this general storage-class sort order and comparison behavior. ([SQLite][1])
+
+For maximum future speed, later replace comparator-decoding with memcomparable encodings for numeric/text/blob, but do not block Phase 4 on that.
+
+---
+
+# Collations
+
+Start with:
+
+```rust
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u32)]
+pub enum BuiltinCollation {
+    Binary = 1,
+    NoCase = 2,
+    RTrim = 3,
+}
+```
+
+Implement:
+
+```rust
+pub trait Collation: Send + Sync + 'static {
+    fn compare(&self, a: &str, b: &str) -> std::cmp::Ordering;
+}
+
+pub struct BinaryCollation;
+
+impl Collation for BinaryCollation {
+    fn compare(&self, a: &str, b: &str) -> std::cmp::Ordering {
+        a.as_bytes().cmp(b.as_bytes())
+    }
+}
+```
+
+For `NOCASE`, do ASCII case folding first. Do not implement full Unicode collation in Phase 4. It will hurt speed and complicate deterministic index order.
+
+Catalog every collation with a numeric ID so indexes can store collation IDs, not strings.
+
+---
+
+# Prepared statement invalidation
+
+Every prepared statement must store schema dependencies.
+
+```rust
+pub struct PlanDeps {
+    pub schema_epoch: SchemaEpoch,
+    pub table_generations: Box<[(RelId, u64)]>,
+    pub index_generations: Box<[(RelId, u64)]>,
+}
+
+impl PlanDeps {
+    pub fn still_valid(&self, schema: &SchemaSnapshot) -> bool {
+        for (rel, expected_gen) in self.table_generations.iter().copied() {
+            let Some(table) = schema.table_by_id.get(&rel) else {
+                return false;
+            };
+            if table.obj.generation != expected_gen {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+```
+
+Execution rule:
+
+```text
+autocommit statement:
+    validate against current schema
+    if invalid, reprepare or return SchemaChanged
+
+explicit transaction:
+    use transaction-pinned schema snapshot
+    write statements must also check table generation before first write
+```
+
+Reads can safely keep old schema snapshots. Writes must not continue with stale index/constraint metadata.
+
+---
+
+# Schema publishing
+
+DDL commit must publish the schema before returning success.
+
+```rust
+impl SchemaManager {
+    pub fn publish_after_ddl_commit(
+        &self,
+        committed_epoch: SchemaEpoch,
+        delta: CatalogDelta,
+    ) -> Result<(), DbError> {
+        let old = self.current.load_full();
+
+        let new_snapshot = if old.epoch.0 + 1 == committed_epoch.0 {
+            apply_delta(&old, delta)?
+        } else {
+            // Fallback for missed epochs or recovery-like reload.
+            self.reload_from_catalog(committed_epoch)?
+        };
+
+        self.current.store(Arc::new(new_snapshot));
+        Ok(())
+    }
+}
+```
+
+For simplicity, a full rebuild from catalog after every DDL is acceptable at first. DDL is rare. But implement the interface so you can switch to delta application later.
+
+---
+
+# Create table implementation skeleton
+
+```rust
+pub struct CatalogManager {
+    schema: Arc<SchemaManager>,
+    ddl_mutex: parking_lot::Mutex<()>,
+}
+
+impl CatalogManager {
+    pub fn create_table(
+        &self,
+        session: &mut Session,
+        ast: CreateTable,
+    ) -> Result<(), DbError> {
+        let _ddl = self.ddl_mutex.lock();
+
+        let base_schema = session.schema_for_ddl();
+        let lowered = lower_create_table(&base_schema, ast)?;
+
+        if base_schema.resolve_object(&lowered.ns_name, &lowered.table_name).is_some() {
+            if lowered.if_not_exists {
+                return Ok(());
+            }
+            return Err(DbError::DuplicateObject(lowered.table_name.to_string()));
+        }
+
+        let mut tx = session.begin_catalog_write()?;
+
+        tx.lock_schema_name(&lowered.ns_name, &lowered.table_name)?;
+
+        let table_obj_id = tx.alloc_obj_id()?;
+        let table_rel_id = tx.alloc_rel_id()?;
+
+        tx.create_heap_relation(table_rel_id)?;
+
+        let mut catalog_delta = CatalogDelta::new();
+
+        write_class_row(
+            &mut tx,
+            table_obj_id,
+            table_rel_id,
+            &lowered,
+            ClassKind::Table,
+        )?;
+
+        for col in lowered.columns.iter() {
+            write_attribute_row(&mut tx, table_obj_id, col)?;
+        }
+
+        for expr in lowered.expressions.iter() {
+            write_expr_row(&mut tx, expr)?;
+        }
+
+        for constraint in lowered.constraints.iter() {
+            write_constraint_row(&mut tx, table_obj_id, constraint)?;
+        }
+
+        for index in lowered.backing_indexes.iter() {
+            let index_obj_id = tx.alloc_obj_id()?;
+            let index_rel_id = tx.alloc_rel_id()?;
+
+            tx.create_index_relation(index_rel_id)?;
+
+            write_class_row_for_index(&mut tx, index_obj_id, index_rel_id, index)?;
+            write_index_row(&mut tx, index_obj_id, table_obj_id, index)?;
+            write_index_key_rows(&mut tx, index_obj_id, index)?;
+            write_depend_rows_for_index(&mut tx, index_obj_id, table_obj_id, index)?;
+        }
+
+        let new_epoch = tx.bump_schema_epoch()?;
+
+        catalog_delta.created_table = Some((table_obj_id, table_rel_id));
+
+        session.install_local_schema_delta(catalog_delta.clone())?;
+
+        tx.commit()?;
+
+        self.schema.publish_after_ddl_commit(new_epoch, catalog_delta)?;
+
+        Ok(())
+    }
+}
+```
+
+The real implementation should ensure `tx.commit()` publishes cache changes only after the WAL commit record is durable under strict mode.
+
+---
+
+# Lowering `CREATE TABLE`
+
+```rust
+pub struct LoweredCreateTable {
+    pub if_not_exists: bool,
+    pub ns_name: String,
+    pub table_name: String,
+    pub columns: Vec<LoweredColumn>,
+    pub constraints: Vec<LoweredConstraint>,
+    pub backing_indexes: Vec<LoweredIndex>,
+    pub expressions: Vec<LoweredExpr>,
+    pub row_format_id: u32,
+}
+
+pub struct LoweredColumn {
+    pub attnum: u16,
+    pub storage_slot: i16,
+    pub name: String,
+    pub name_key: NameKey,
+    pub declared_type: Option<String>,
+    pub affinity: Affinity,
+    pub collation: CollationId,
+    pub flags: ColumnFlags,
+    pub default_expr_id: Option<ExprId>,
+}
+
+pub struct LoweredConstraint {
+    pub id: ConstraintId,
+    pub name: Option<String>,
+    pub kind: ConstraintKind,
+    pub columns: Vec<u16>,
+    pub expr_id: Option<ExprId>,
+    pub backing_index: Option<RelId>,
+    pub conflict: ConflictAction,
+}
+
+pub struct LoweredIndex {
+    pub name: String,
+    pub name_key: NameKey,
+    pub unique: bool,
+    pub primary: bool,
+    pub constraint_backed: bool,
+    pub keys: Vec<LoweredIndexKey>,
+}
+```
+
+Lowering algorithm:
+
+```rust
+pub fn lower_create_table(
+    schema: &SchemaSnapshot,
+    ast: CreateTable,
+) -> Result<LoweredCreateTable, DbError> {
+    let mut seen_cols = hashbrown::HashSet::new();
+    let mut columns = Vec::with_capacity(ast.columns.len());
+
+    let mut primary_key: Option<TableConstraint> = None;
+    let mut table_constraints = ast.table_constraints.clone();
+
+    for (i, c) in ast.columns.iter().enumerate() {
+        let attnum = checked_attnum(i)?;
+        let key = normalize_ident(&c.name);
+
+        if !seen_cols.insert(key.clone()) {
+            return Err(DbError::DuplicateColumn(c.name.clone()));
+        }
+
+        let mut flags = ColumnFlags::empty();
+        let mut declared_type = c.declared_type.clone();
+        let affinity = Affinity::from_declared_type(declared_type.as_deref());
+        let mut collation = BuiltinCollation::Binary as u32;
+        let mut default_expr = None;
+
+        for cons in c.constraints.iter() {
+            match cons {
+                ColumnConstraint::NotNull { .. } => {
+                    flags.insert(ColumnFlags::NOT_NULL);
+                }
+                ColumnConstraint::Default { expr } => {
+                    default_expr = Some(validate_and_compile_default(expr)?);
+                }
+                ColumnConstraint::Collate { collation: name } => {
+                    collation = resolve_collation(schema, name)?.0;
+                }
+                ColumnConstraint::PrimaryKey { name, conflict, sort_dir, autoincrement } => {
+                    if primary_key.is_some() {
+                        return Err(DbError::InvalidSchema("multiple PRIMARY KEY clauses".into()));
+                    }
+
+                    primary_key = Some(TableConstraint::PrimaryKey {
+                        name: name.clone(),
+                        columns: vec![IndexedColumnAst::column(c.name.clone(), *sort_dir)],
+                        conflict: *conflict,
+                    });
+
+                    if *autoincrement {
+                        // Store for future if you want, but reject in Phase 4 unless implemented.
+                        return Err(DbError::Unsupported("AUTOINCREMENT".into()));
+                    }
+                }
+                ColumnConstraint::Unique { name, conflict } => {
+                    table_constraints.push(TableConstraint::Unique {
+                        name: name.clone(),
+                        columns: vec![IndexedColumnAst::column(c.name.clone(), None)],
+                        conflict: *conflict,
+                    });
+                }
+                ColumnConstraint::Check { name, expr } => {
+                    table_constraints.push(TableConstraint::Check {
+                        name: name.clone(),
+                        expr: expr.clone(),
+                    });
+                }
+            }
+        }
+
+        columns.push(LoweredColumn {
+            attnum,
+            storage_slot: -999, // filled after PK rowid-alias decision
+            name: c.name.clone(),
+            name_key: key,
+            declared_type,
+            affinity,
+            collation: CollationId(collation),
+            flags,
+            default_expr_id: default_expr.map(|e| e.expr_id),
+        });
+    }
+
+    if let Some(pk) = primary_key {
+        table_constraints.insert(0, pk);
+    }
+
+    // Decide INTEGER PRIMARY KEY rowid alias before assigning storage slots.
+    let rowid_alias_attnum = detect_rowid_alias(&columns, &table_constraints)?;
+
+    let mut storage_slot = 0i16;
+    for col in columns.iter_mut() {
+        if Some(col.attnum) == rowid_alias_attnum {
+            col.storage_slot = -1;
+            col.flags.insert(ColumnFlags::ROWID_ALIAS);
+            col.flags.insert(ColumnFlags::NOT_NULL);
+        } else {
+            col.storage_slot = storage_slot;
+            storage_slot += 1;
+        }
+    }
+
+    // Lower constraints into checks and backing indexes.
+    // Details omitted here but should allocate expression IDs and index drafts.
+    todo!()
+}
+```
+
+---
+
+# `INTEGER PRIMARY KEY` detection
+
+```rust
+fn detect_rowid_alias(
+    columns: &[LoweredColumn],
+    constraints: &[TableConstraint],
+) -> Result<Option<u16>, DbError> {
+    let mut pk_cols: Option<Vec<String>> = None;
+
+    for c in constraints {
+        if let TableConstraint::PrimaryKey { columns, .. } = c {
+            if pk_cols.is_some() {
+                return Err(DbError::InvalidSchema("multiple PRIMARY KEY clauses".into()));
+            }
+
+            let names = columns
+                .iter()
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>();
+
+            pk_cols = Some(names);
+        }
+    }
+
+    let Some(pk_cols) = pk_cols else {
+        return Ok(None);
+    };
+
+    if pk_cols.len() != 1 {
+        return Ok(None);
+    }
+
+    let pk_name_key = normalize_ident(&pk_cols[0]);
+
+    let col = columns
+        .iter()
+        .find(|c| c.name_key == pk_name_key)
+        .ok_or_else(|| DbError::InvalidSchema("PRIMARY KEY references missing column".into()))?;
+
+    let declared = col.declared_type.as_deref().unwrap_or("");
+
+    if declared.eq_ignore_ascii_case("INTEGER") {
+        Ok(Some(col.attnum))
+    } else {
+        Ok(None)
+    }
+}
+```
+
+For exact SQLite compatibility, there is a legacy edge case around column-level `PRIMARY KEY DESC`. You can either emulate it or document that RedlineDB does not copy that legacy quirk. I would store enough AST detail to emulate it later, but not let that quirk infect the core design.
+
+---
+
+# Catalog row writing
+
+Use the same row encoder for catalog rows.
+
+Example for `rl_attribute`:
+
+```rust
+fn write_attribute_row(
+    tx: &mut dyn CatalogWriteTxn,
+    table_obj_id: ObjId,
+    col: &LoweredColumn,
+) -> Result<(), DbError> {
+    let values = [
+        ValueRef::Int(table_obj_id.0 as i64),
+        ValueRef::Int(col.attnum as i64),
+        ValueRef::Int(col.storage_slot as i64),
+        ValueRef::Text(&col.name),
+        ValueRef::Text(&col.name_key.0),
+        match col.declared_type.as_deref() {
+            Some(t) => ValueRef::Text(t),
+            None => ValueRef::Null,
+        },
+        ValueRef::Int(col.affinity as i64),
+        ValueRef::Int(col.collation.0 as i64),
+        ValueRef::Int(col.flags.bits as i64),
+        match col.default_expr_id {
+            Some(id) => ValueRef::Int(id.0 as i64),
+            None => ValueRef::Null,
+        },
+        ValueRef::Int(1), // generation
+    ];
+
+    let mut buf = Vec::with_capacity(128);
+    encode_row(&values, &mut buf).map_err(DbError::Row)?;
+
+    tx.heap_insert_auto(sysrel::RL_ATTRIBUTE, &buf)?;
+
+    Ok(())
+}
+```
+
+For production, do not allocate a fresh `Vec` per catalog row; use a transaction scratch buffer.
+
+---
+
+# Loading schema from catalogs
+
+At open or rebuild:
+
+```text
+1. Read rl_meta.schema_epoch.
+2. Scan rl_namespace.
+3. Scan rl_class.
+4. Scan rl_attribute.
+5. Scan rl_expr and compile expression bytecode into Arc<CompiledExpr>.
+6. Scan rl_constraint.
+7. Scan rl_index and rl_index_key.
+8. Stitch objects together.
+9. Validate invariants.
+10. Publish Arc<SchemaSnapshot>.
+```
+
+Validation after catalog load is mandatory. A corrupt catalog should fail loudly.
+
+Invariants:
+
+```text
+Every rl_attribute.table_id references table rl_class.
+Every rl_index.table_id references table rl_class.
+Every rl_index.index_rel_id references index rl_class.
+Every constraint index_id references an index when kind is PK/UNIQUE.
+Every CHECK constraint has expr_id.
+No duplicate attnums.
+No duplicate storage slots except -1.
+At most one rowid alias.
+All index key columns exist.
+All default/check expressions are deterministic where required.
+```
+
+---
+
+# Transaction-local schema overlay
+
+A session needs to see uncommitted DDL in its own transaction.
+
+```rust
+pub struct Session {
+    pinned_schema: Option<Arc<SchemaSnapshot>>,
+    ddl_overlay: Option<SchemaOverlay>,
+}
+
+pub struct SchemaOverlay {
+    created_tables: HashMap<(ObjId, NameKey), Arc<TableDef>>,
+    dropped_objects: hashbrown::HashSet<ObjId>,
+}
+
+impl Session {
+    pub fn resolve_table(&self, name: &QualifiedName) -> Option<Arc<TableDef>> {
+        if let Some(overlay) = &self.ddl_overlay {
+            if let Some(t) = overlay.resolve_created_table(name) {
+                return Some(t);
+            }
+
+            if overlay.is_dropped_name(name) {
+                return None;
+            }
+        }
+
+        self.current_schema().resolve_table(name)
+    }
+}
+```
+
+On rollback:
+
+```text
+discard overlay
+kernel rollback removes catalog writes
+```
+
+On commit:
+
+```text
+publish global schema snapshot
+discard overlay
+```
+
+---
+
+# DDL and crash recovery
+
+Every crash point should produce one of two outcomes:
+
+```text
+DDL transaction committed:
+    catalog rows visible
+    relation roots reachable
+    schema_epoch bumped
+
+DDL transaction not committed:
+    catalog rows invisible
+    relation allocations rolled back or reclaimable
+    schema_epoch unchanged
+```
+
+Important crash injection points:
+
+```text
+after relation ID allocation
+after heap root allocation
+after rl_class insert
+after some rl_attribute rows
+after backing index root creation
+during CREATE INDEX heap scan
+after index pages written before catalog rows
+after catalog rows before commit
+after commit before schema cache publish
+after schema cache publish but before returning to client
+```
+
+The last two are process-local only. After restart, the catalog is source of truth.
+
+---
+
+# Error model
+
+Keep errors structured now so C ABI and SQL frontend can map them later.
+
+```rust
+#[derive(Debug)]
+pub enum DbError {
+    CatalogCorrupt(String),
+    InvalidSchema(String),
+    DuplicateObject(String),
+    DuplicateColumn(String),
+    UndefinedObject(String),
+    Unsupported(String),
+    SchemaChanged,
+    DatatypeMismatch(String),
+    ConstraintViolation {
+        table: Box<str>,
+        constraint: Option<Box<str>>,
+        kind: ConstraintKind,
+        detail: String,
+    },
+    Row(RowError),
+    Kernel(KernelError),
+}
+```
+
+Later mappings:
+
+```text
+ConstraintViolation UNIQUE    -> SQLITE_CONSTRAINT_UNIQUE-like
+ConstraintViolation NOT NULL  -> SQLITE_CONSTRAINT_NOTNULL-like
+ConstraintViolation CHECK     -> SQLITE_CONSTRAINT_CHECK-like
+DatatypeMismatch              -> SQLITE_MISMATCH-like
+SchemaChanged                 -> SQLITE_SCHEMA-like
+```
+
+---
+
+# Threading model
+
+Fast path:
+
+```text
+prepared statement owns Arc<TableDef>
+row write gets shared schema gate
+row locks/index locks are sharded
+unique key locks are sharded
+no catalog locks
+no global schema read lock
+```
+
+DDL path:
+
+```text
+rare
+uses DDL mutex/name locks/table exclusive gates
+writes catalog rows transactionally
+publishes immutable schema snapshot atomically
+```
+
+Recommended lock hierarchy:
+
+```text
+1. DDL mutex or namespace DDL lock
+2. table schema gate
+3. catalog row/name locks
+4. unique key locks, sorted by index_rel_id/key
+5. row locks
+6. page latches
+```
+
+Never hold page latches while waiting on transaction locks, unique key locks, DDL locks, or WAL fsync.
+
+---
+
+# Memory strategy
+
+## Schema memory
+
+Use:
+
+```text
+Arc<TableDef>
+Box<[ColumnDef]>
+Box<[IndexDef]>
+Box<[CheckDef]>
+Box<str>
+interned identifier keys
+```
+
+Do not store `Vec` inside hot schema definitions unless they mutate. Immutable boxed slices are smaller and cache-friendlier.
+
+## Row write memory
+
+Each session should own reusable scratch:
+
+```rust
+pub struct SessionScratch {
+    pub row_build: RowBuildScratch,
+    pub index_key_bufs: Vec<Vec<u8>>,
+    pub expr_stack: Vec<OwnedValue>,
+}
+```
+
+Avoid per-row allocations:
+
+```text
+reuse logical vector
+reuse storage vector
+reuse encoded row Vec
+reuse index key Vecs
+reuse expression stack
+```
+
+## Catalog load memory
+
+Catalog load can allocate freely because it is not hot. But still validate against configurable limits:
+
+```text
+max_tables
+max_columns_per_table
+max_indexes_per_table
+max_constraints_per_table
+max_schema_bytes
+max_expr_bytecode_bytes
+```
+
+---
+
+# Index creation memory
+
+Do not allow `CREATE INDEX` to allocate unbounded memory.
+
+```rust
+pub struct IndexBuildConfig {
+    pub memory_budget_bytes: usize,
+    pub run_target_bytes: usize,
+}
+```
+
+Algorithm:
+
+```text
+if estimated entries fit in memory:
+    sort and bulk build
+
+else:
+    make sorted runs under memory_budget
+    spill runs to temp relation
+    k-way merge
+    bulk build leaves
+```
+
+Even if Phase 4 initially falls back to row-by-row insert, define the API as a bulk builder:
+
+```rust
+pub trait IndexBulkBuilder {
+    fn push(&mut self, key: &[u8], rowid: i64) -> Result<(), DbError>;
+    fn finish(self: Box<Self>, tx: &mut dyn KernelTxn) -> Result<(), DbError>;
+}
+```
+
+---
+
+# Catalog bootstrap
+
+New database creation:
+
+```text
+1. Kernel creates database header/checkpoint metadata.
+2. Allocate reserved catalog relations.
+3. Create catalog heap/index roots.
+4. Insert static rows describing system catalogs.
+5. Insert builtin namespace main.
+6. Insert builtin collations.
+7. Insert rl_meta rows.
+8. Commit bootstrap transaction at CSN 1.
+```
+
+Existing database open:
+
+```text
+1. Run recovery.
+2. Read catalog format version.
+3. Reject unknown major format.
+4. Load schema snapshot.
+5. Verify catalog invariants.
+6. Publish schema.
+```
+
+Catalog migrations should be explicit transactions:
+
+```text
+BEGIN internal migration
+add/modify catalog rows
+bump catalog_format_version
+bump schema_epoch
+COMMIT
+```
+
+---
+
+# Table/index build plans
+
+For DML speed, compile per-table plans.
+
+```rust
+pub struct TableWritePlan {
+    pub table: Arc<TableDef>,
+    pub insert_constraints: InsertConstraintPlan,
+    pub index_maintainers: Box<[IndexMaintainer]>,
+}
+
+pub struct InsertConstraintPlan {
+    pub not_null_slots: Box<[u16]>,
+    pub checks: Box<[Arc<CompiledExpr>]>,
+    pub unique_indexes: Box<[usize]>,
+}
+
+pub struct IndexMaintainer {
+    pub index: Arc<IndexDef>,
+    pub key_columns: Box<[u16]>,
+    pub may_need_expr_eval: bool,
+}
+```
+
+The executor should not rediscover constraints on every row. It should run precompiled plans.
+
+---
+
+# Update optimization
+
+On `UPDATE`, compute changed logical columns:
+
+```rust
+pub struct ChangedCols {
+    bits: Vec<u64>,
+}
+```
+
+Then skip unnecessary work:
+
+```text
+NOT NULL:
+    check changed not-null columns, or all columns in debug/integrity mode
+
+CHECK:
+    if check.referenced_cols intersects changed_cols:
+        evaluate
+    else:
+        skip
+
+Index:
+    if index key refs intersect changed_cols:
+        update index entry
+    else:
+        skip
+```
+
+For correctness under possible corruption, an integrity-check command should evaluate all constraints against all rows.
+
+---
+
+# Drop safety and old readers
+
+Old readers may hold:
+
+```text
+Arc<TableDef>
+old snapshot CSN
+old index relation references
+old page references
+```
+
+Therefore:
+
+```text
+DROP TABLE does not free pages immediately.
+DROP INDEX does not free index pages immediately.
+```
+
+`rl_pending_drop` plus vacuum horizon decides when to reclaim.
+
+Safe reclaim condition:
+
+```text
+drop_csn < oldest_active_snapshot_csn
+and drop_csn < oldest_checkpoint_needed_csn
+and drop_csn < oldest_backup_needed_csn
+and drop_csn < oldest_replication_needed_csn
+```
+
+This ties Phase 4 into Phase 2/8 correctly.
+
+---
+
+# Testing plan
+
+## Unit tests
+
+```text
+affinity_from_declared_type
+apply_text_affinity
+apply_numeric_affinity
+row_encode_decode_roundtrip
+rowid_alias_omitted_from_payload
+default_constant_eval
+check_zero_fails
+check_null_passes
+unique_nulls_distinct
+catalog_row_roundtrip
+schema_snapshot_build_invariants
+```
+
+## Property tests
+
+```text
+random table schemas
+random rows
+encode/decode equality
+random defaults
+random check expressions from supported subset
+catalog load after random DDL sequence
+```
+
+## Crash tests
+
+Inject crash at every DDL step:
+
+```text
+CREATE TABLE crash after relation allocation
+CREATE TABLE crash after class row
+CREATE TABLE crash after partial attribute rows
+CREATE TABLE crash after constraint rows
+CREATE TABLE crash after epoch bump before commit
+CREATE TABLE crash after commit
+
+CREATE INDEX crash during scan
+CREATE INDEX crash after root creation
+CREATE INDEX crash after page writes before catalog rows
+CREATE INDEX crash after catalog rows before commit
+CREATE INDEX crash after commit
+
+DROP TABLE crash before pending_drop
+DROP TABLE crash after pending_drop before commit
+DROP TABLE crash after commit
+```
+
+Expected:
+
+```text
+before commit -> old schema
+after commit  -> new schema
+no dangling visible catalog references
+no missing backing index for visible constraint
+no visible table without attributes
+no visible index without keys
+```
+
+## Concurrency tests
+
+```text
+two sessions CREATE TABLE same name
+CREATE TABLE while SELECT scans catalog
+CREATE INDEX while writers insert
+DROP INDEX while readers use old prepared SELECT
+DROP TABLE while old reader scans table
+stale prepared INSERT after CREATE INDEX
+stale prepared INSERT after DROP INDEX
+```
+
+Expected:
+
+```text
+DML writers are blocked or aborted across table-changing DDL.
+Readers continue.
+Stale write plans fail with SchemaChanged or reprepare.
+No missing index entries.
+No duplicate unique keys.
+```
+
+---
+
+# Minimal Phase 4 acceptance gates
+
+I would consider Phase 4 complete when these pass:
+
+```text
+1. Catalog bootstrap/reopen works.
+2. CREATE TABLE is transactional and crash-safe.
+3. DROP TABLE is transactional and physical cleanup is deferred.
+4. CREATE INDEX and DROP INDEX are transactional.
+5. PRIMARY KEY and UNIQUE create backing indexes.
+6. INTEGER PRIMARY KEY aliases rowid.
+7. NOT NULL/default/CHECK constraints are enforced on insert/update.
+8. Unique constraints are concurrency-safe with key locks.
+9. Schema cache is immutable and not on DML hot path.
+10. Prepared statements invalidate safely on schema generation change.
+11. DDL cannot cause stale writers to miss index maintenance.
+12. Catalog corruption fails loudly.
+```
+
+---
+
+# Recommended build order
+
+1. **Values and row encoding**
+   Implement `OwnedValue`, `ValueRef`, affinity, row encoding, row decoding, rowid alias logical access.
+
+2. **Static system catalog definitions**
+   Define reserved relation IDs and static schemas for catalog tables.
+
+3. **Catalog bootstrap**
+   New DB creates catalog relations and builtin rows transactionally.
+
+4. **Schema loader**
+   Scan catalogs and build immutable `SchemaSnapshot`.
+
+5. **Schema cache**
+   Publish `Arc<SchemaSnapshot>` with atomic swap. Make sessions pin snapshots.
+
+6. **Typed DDL AST**
+   Implement `CreateTable`, `DropTable`, `CreateIndex`, `DropIndex` structs independent of SQL parser.
+
+7. **CREATE TABLE**
+   Lower columns, defaults, constraints, rowid alias, backing indexes. Write catalog rows transactionally.
+
+8. **Constraint enforcement**
+   Implement insert/update pipeline with defaults, affinity, not-null, check, unique locks.
+
+9. **CREATE INDEX**
+   Implement table write gate, heap scan, unique duplicate detection, catalog publish.
+
+10. **DROP TABLE / DROP INDEX**
+    Implement tombstoning and `rl_pending_drop`.
+
+11. **Prepared invalidation**
+    Add `schema_epoch`, per-object generation, plan dependency checks.
+
+12. **Crash and concurrency tests**
+    Wire DDL into the existing crash-injection framework.
+
+---
+
+# The guiding performance principle
+
+Phase 4 should make this true:
+
+```rust
+// Hot-path insert should look conceptually like this:
+let plan: Arc<TableWritePlan> = prepared.plan.table_write.clone();
+
+let built = build_insert_row(
+    &plan.table,
+    input,
+    &mut rowid_alloc,
+    &mut eval_ctx,
+    &mut session.scratch.row_build,
+)?;
+
+insert_with_constraints(
+    tx,
+    &plan.table,
+    built.rowid,
+    built.encoded,
+    &logical_view,
+)?;
+```
+
+No catalog lookup.
+No schema mutex.
+No string-based column lookup.
+No DDL lock except shared schema gate for writers.
+No per-row schema allocation.
+No page latch held during waits.
+
+That is how Phase 4 stays compatible with the end goal: RedlineDB can keep SQLite-like ergonomics while preserving the concurrent-writer architecture that should let it beat SQLite WAL mode on multi-connection write-heavy workloads.
+
+[1]: https://www.sqlite.org/datatype3.html "Datatypes In SQLite"
+[2]: https://www.sqlite.org/lang_createtable.html "CREATE TABLE"
+[3]: https://sqlite.org/lang_createindex.html "CREATE INDEX"
+

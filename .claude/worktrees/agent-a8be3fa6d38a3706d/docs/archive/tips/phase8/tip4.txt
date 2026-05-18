@@ -1,0 +1,2919 @@
+Confirmed: **Phase 8 only**. The fastest, cleanest Phase 8 is not a pile of “backup features.” It is one operational durability subsystem built around a single rule:
+
+**Everything operationally durable flows from WAL + CSN + timeline + retention horizons.**
+
+Backups, WAL archive, point-in-time restore, physical replica creation, and logical replication should all share the same LSN/CSN machinery. Done correctly, Phase 8 adds almost nothing to the commit hot path: a commit publishes durable metadata, and background workers archive, decode, copy, and stream from WAL.
+
+Rust is a good fit here because the core can stay thread-safe, allocation-controlled, and C-free. For low-level filesystem durability, use `File::sync_all` when file content plus metadata must reach disk, and `sync_data` only when metadata is not needed; Rust’s standard docs explicitly distinguish those two cases. For offset-based file reads/writes on Unix, `FileExt::read_at` / `write_at` avoid disturbing the file cursor, which is exactly what backup and restore workers want. Use `OpenOptions::create_new(true)` for atomic creation of slot files, temp archive objects, and lock-free reservation of backup IDs. ([Rust Documentation][1])
+
+For threading, I would keep the embedded engine synchronous and thread-based rather than forcing async into the storage core. A bounded `crossbeam-channel` is useful for archiver/backup/decoder queues because it is multi-producer/multi-consumer and supports bounded channels; `parking_lot` is a good fit for cold metadata locks because its locks are documented as smaller/faster/more flexible than std locks. Hot-path visibility should be done with atomics using Release/Acquire ordering: publish durable LSN/CSN with Release, read them with Acquire. ([Docs.rs][2])
+
+Optional compression and integrity should stay outside the commit path. `crc32fast` is useful for fast corruption detection because it does runtime CPU feature detection and uses optimized implementations where available; BLAKE3 is useful for archive/backup manifests because it is designed as a parallelizable Merkle-tree hash; `lz4_flex` gives streaming LZ4 frame encoder/decoder APIs for backup/archive compression when enabled. ([Docs.rs][3])
+
+---
+
+# 1. Phase 8 target architecture
+
+Build this as a crate/module family:
+
+```text
+redlinedb_ops/
+  src/
+    lib.rs
+    types.rs
+    retention.rs
+    archive/
+      mod.rs
+      local_fs.rs
+      manifest.rs
+    backup/
+      mod.rs
+      manifest.rs
+      writer.rs
+      restore.rs
+    repl/
+      mod.rs
+      slot.rs
+      logical.rs
+      physical.rs
+      protocol.rs
+    wal_range.rs
+    failpoints.rs
+    stats.rs
+```
+
+The important design choice:
+
+```text
+Writer hot path:
+  transaction changes -> WAL writer/group commit -> durable_lsn publish -> commit visible
+
+Phase 8 background path:
+  durable WAL -> archive
+              -> backup WAL catch-up
+              -> logical decode
+              -> physical stream
+              -> retention/reaper decisions
+```
+
+The commit path should not copy backup bytes, hash archives, compress segments, or decode logical rows. It should only publish enough metadata for background workers.
+
+The operational subsystem needs five primitives:
+
+```rust
+pub struct Lsn(pub u64);      // Physical WAL byte position or encoded segment+offset
+pub struct Csn(pub u64);      // Commit sequence number
+pub struct TimelineId(pub u64);
+pub struct TxId(pub u64);
+pub struct DbUuid(pub [u8; 16]);
+```
+
+And five global monotonic states:
+
+```text
+durable_lsn          Highest WAL byte known fsynced/synced.
+published_csn        Highest commit sequence visible to sessions.
+archived_lsn         Highest contiguous WAL byte safely archived.
+checkpoint_redo_lsn  Oldest WAL LSN needed for local crash recovery.
+retention_floor_lsn  Oldest WAL LSN still needed by anyone.
+```
+
+Phase 8 is correct when these invariants hold:
+
+```text
+1. No finalized backup references WAL that can be deleted.
+2. No WAL segment is deleted until local recovery, archiving, backups, and replication slots no longer need it.
+3. Every finalized backup restores to a transactionally consistent state.
+4. Logical replication emits only committed transactions, in CSN order.
+5. Physical replication applies WAL idempotently.
+6. Archive restore fails loudly on missing/corrupt non-tail WAL.
+7. A lagging replica cannot silently cause unbounded WAL growth; it is either retained within config or marked lost.
+```
+
+---
+
+# 2. Data directory and archive layout
+
+Use explicit, boring paths. Boring is fast and recoverable.
+
+```text
+db/
+  control.redline
+  pages/
+    rel_0000000000000001.dat
+    rel_0000000000000002.dat
+  wal/
+    0000000000000001_0000000000000000.redwal
+    0000000000000001_0000000004000000.redwal
+  slots/
+    logical_orders.slot
+    physical_replica_a.slot
+  ops/
+    backup_state/
+    archive_state.redline
+    retention_state.redline
+
+archive/
+  db_<db_uuid>/
+    timeline_0000000000000001/
+      wal/
+        0000000000000000.redwal
+        0000000004000000.redwal
+      wal_index/
+        segments.manifest
+      base/
+        base_2026_04_28_001/
+          manifest.redbackup
+          data/
+            rel_0000000000000001.chunk_000000
+            rel_0000000000000001.chunk_000001
+          wal/
+            0000000000000000.redwal
+```
+
+A WAL segment filename should include:
+
+```text
+timeline_id
+segment_base_lsn
+```
+
+Do **not** name by wall-clock time. Time is for humans. LSN is for recovery.
+
+---
+
+# 3. Core types
+
+```rust
+use std::{
+    cmp::{max, min},
+    fmt,
+    num::NonZeroU64,
+    path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
+pub struct Lsn(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
+pub struct Csn(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
+pub struct TxId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
+pub struct TimelineId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub struct DbUuid(pub [u8; 16]);
+
+impl Lsn {
+    pub const ZERO: Lsn = Lsn(0);
+    pub const MAX: Lsn = Lsn(u64::MAX);
+
+    #[inline]
+    pub fn next(self) -> Lsn {
+        Lsn(self.0 + 1)
+    }
+
+    #[inline]
+    pub fn align_down(self, segment_size: u64) -> Lsn {
+        Lsn(self.0 - (self.0 % segment_size))
+    }
+
+    #[inline]
+    pub fn align_up(self, segment_size: u64) -> Lsn {
+        if self.0 % segment_size == 0 {
+            self
+        } else {
+            Lsn(self.align_down(segment_size).0 + segment_size)
+        }
+    }
+}
+
+impl fmt::Debug for Lsn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Useful in logs and manifests.
+        write!(f, "LSN({:#018x})", self.0)
+    }
+}
+
+impl fmt::Debug for Csn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CSN({})", self.0)
+    }
+}
+```
+
+Global publication:
+
+```rust
+pub struct DurableFrontier {
+    durable_lsn: AtomicU64,
+    published_csn: AtomicU64,
+    archived_lsn: AtomicU64,
+}
+
+impl DurableFrontier {
+    pub fn new() -> Self {
+        Self {
+            durable_lsn: AtomicU64::new(0),
+            published_csn: AtomicU64::new(0),
+            archived_lsn: AtomicU64::new(0),
+        }
+    }
+
+    #[inline]
+    pub fn publish_commit(&self, durable_lsn: Lsn, csn: Csn) {
+        // Commit contents are already durable before this point.
+        self.durable_lsn.store(durable_lsn.0, Ordering::Release);
+        self.published_csn.store(csn.0, Ordering::Release);
+    }
+
+    #[inline]
+    pub fn durable_lsn(&self) -> Lsn {
+        Lsn(self.durable_lsn.load(Ordering::Acquire))
+    }
+
+    #[inline]
+    pub fn published_csn(&self) -> Csn {
+        Csn(self.published_csn.load(Ordering::Acquire))
+    }
+
+    #[inline]
+    pub fn publish_archived_lsn(&self, lsn: Lsn) {
+        let mut current = self.archived_lsn.load(Ordering::Acquire);
+        while lsn.0 > current {
+            match self.archived_lsn.compare_exchange(
+                current,
+                lsn.0,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return,
+                Err(observed) => current = observed,
+            }
+        }
+    }
+
+    #[inline]
+    pub fn archived_lsn(&self) -> Lsn {
+        Lsn(self.archived_lsn.load(Ordering::Acquire))
+    }
+}
+```
+
+---
+
+# 4. Kernel interface Phase 8 needs
+
+Do not let backup or replication poke at random internals. Define a narrow operational API.
+
+```rust
+use std::io;
+use std::ops::RangeInclusive;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+pub trait OpsKernel: Send + Sync + 'static {
+    fn db_uuid(&self) -> DbUuid;
+    fn timeline_id(&self) -> TimelineId;
+    fn page_size(&self) -> usize;
+    fn wal_segment_size(&self) -> u64;
+
+    fn durable_lsn(&self) -> Lsn;
+    fn published_csn(&self) -> Csn;
+
+    /// Oldest WAL needed for local crash recovery.
+    fn checkpoint_redo_lsn(&self) -> Lsn;
+
+    /// Highest committed CSN whose commit record is <= lsn.
+    fn csn_at_lsn(&self, lsn: Lsn) -> io::Result<Csn>;
+
+    /// Stable list of relation files known at this instant.
+    /// Drops must be delayed by storage-manager retention until released.
+    fn snapshot_relation_files(&self) -> io::Result<Vec<RelationFileSnapshot>>;
+
+    /// Copy a stable page image into dst.
+    /// Implementation should take a short shared page latch.
+    fn copy_page_image(&self, file_id: RelationFileId, page_no: u64, dst: &mut [u8])
+        -> io::Result<PageCopyMeta>;
+
+    /// Iterate physical WAL records in [start, end].
+    fn wal_reader(&self, start: Lsn, end: Lsn) -> io::Result<Box<dyn WalRecordReader>>;
+
+    /// Force WAL segment rotation when a backup needs an archive boundary.
+    fn force_wal_rotation(&self) -> io::Result<Lsn>;
+
+    /// Ask checkpoint worker to run soon, but do not block writers.
+    fn request_checkpoint(&self);
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct RelationFileId(pub u64);
+
+#[derive(Clone, Debug)]
+pub struct RelationFileSnapshot {
+    pub id: RelationFileId,
+    pub path: PathBuf,
+    pub size_bytes: u64,
+    pub create_lsn: Lsn,
+    pub drop_lsn: Option<Lsn>,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct PageCopyMeta {
+    pub page_lsn: Lsn,
+    pub checksum: u32,
+}
+
+pub trait WalRecordReader: Send {
+    fn next_record(&mut self) -> io::Result<Option<WalRecord>>;
+}
+
+#[derive(Clone, Debug)]
+pub struct WalRecord {
+    pub lsn: Lsn,
+    pub end_lsn: Lsn,
+    pub kind: WalRecordKind,
+    pub txid: Option<TxId>,
+    pub csn: Option<Csn>,
+    pub payload: Vec<u8>,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum WalRecordKind {
+    PageImage,
+    PageDelta,
+    HeapInsert,
+    HeapUpdate,
+    HeapDelete,
+    IndexInsert,
+    IndexDelete,
+    RelationCreate,
+    RelationDrop,
+    Commit,
+    Abort,
+    Checkpoint,
+    Catalog,
+    LogicalMessage,
+}
+```
+
+For maximum speed, `WalRecord.payload` should eventually become borrowed from a WAL read buffer, but for the first integrated Phase 8, use `Vec<u8>` behind the trait. Then optimize the reader with a scratch arena.
+
+---
+
+# 5. Retention manager
+
+This is the heart of Phase 8.
+
+You need one place that answers:
+
+```text
+Can I delete this WAL segment?
+Can I prune this tuple version?
+Can I physically unlink this dropped relation file?
+Can I recycle this page?
+Can I remove this archived WAL?
+```
+
+Use RAII retention tokens for short-lived operations, plus durable replication slots for long-lived consumers.
+
+```rust
+use parking_lot::Mutex;
+use std::collections::HashMap;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc, Weak,
+};
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct RetentionTokenId(u64);
+
+#[derive(Clone, Debug)]
+pub enum RetentionReason {
+    Backup { backup_id: u64 },
+    Restore,
+    PhysicalReplicationSlot { name: String },
+    LogicalReplicationSlot { name: String },
+    ActiveSnapshot,
+    Checkpoint,
+    Test,
+}
+
+#[derive(Clone, Debug)]
+pub struct RetentionHorizon {
+    pub wal_floor: Option<Lsn>,
+    pub csn_floor: Option<Csn>,
+    pub relation_file_floor: Option<Lsn>,
+    pub reason: RetentionReason,
+}
+
+struct RetentionState {
+    next_id: u64,
+    transient: HashMap<RetentionTokenId, RetentionHorizon>,
+    durable_slots: HashMap<String, RetentionHorizon>,
+    checkpoint_redo_lsn: Lsn,
+    vacuum_base_csn: Csn,
+}
+
+pub struct RetentionManager {
+    state: Mutex<RetentionState>,
+    cached_min_wal_lsn: AtomicU64,
+    cached_min_csn: AtomicU64,
+}
+
+pub struct RetentionGuard {
+    id: RetentionTokenId,
+    mgr: Weak<RetentionManager>,
+}
+
+impl RetentionManager {
+    pub fn new(checkpoint_redo_lsn: Lsn, vacuum_base_csn: Csn) -> Arc<Self> {
+        Arc::new(Self {
+            state: Mutex::new(RetentionState {
+                next_id: 1,
+                transient: HashMap::new(),
+                durable_slots: HashMap::new(),
+                checkpoint_redo_lsn,
+                vacuum_base_csn,
+            }),
+            cached_min_wal_lsn: AtomicU64::new(checkpoint_redo_lsn.0),
+            cached_min_csn: AtomicU64::new(vacuum_base_csn.0),
+        })
+    }
+
+    pub fn pin(self: &Arc<Self>, horizon: RetentionHorizon) -> RetentionGuard {
+        let mut st = self.state.lock();
+        let id = RetentionTokenId(st.next_id);
+        st.next_id += 1;
+        st.transient.insert(id, horizon);
+        drop(st);
+        self.recompute();
+        RetentionGuard {
+            id,
+            mgr: Arc::downgrade(self),
+        }
+    }
+
+    pub fn upsert_durable_slot(&self, name: String, horizon: RetentionHorizon) {
+        let mut st = self.state.lock();
+        st.durable_slots.insert(name, horizon);
+        drop(st);
+        self.recompute();
+    }
+
+    pub fn remove_durable_slot(&self, name: &str) {
+        let mut st = self.state.lock();
+        st.durable_slots.remove(name);
+        drop(st);
+        self.recompute();
+    }
+
+    pub fn update_checkpoint_redo_lsn(&self, redo: Lsn) {
+        let mut st = self.state.lock();
+        st.checkpoint_redo_lsn = redo;
+        drop(st);
+        self.recompute();
+    }
+
+    pub fn min_wal_lsn(&self) -> Lsn {
+        Lsn(self.cached_min_wal_lsn.load(Ordering::Acquire))
+    }
+
+    pub fn min_csn(&self) -> Csn {
+        Csn(self.cached_min_csn.load(Ordering::Acquire))
+    }
+
+    fn release(&self, id: RetentionTokenId) {
+        let mut st = self.state.lock();
+        st.transient.remove(&id);
+        drop(st);
+        self.recompute();
+    }
+
+    fn recompute(&self) {
+        let st = self.state.lock();
+
+        let mut min_wal = st.checkpoint_redo_lsn;
+        let mut min_csn = st.vacuum_base_csn;
+
+        for h in st.transient.values().chain(st.durable_slots.values()) {
+            if let Some(wal) = h.wal_floor {
+                min_wal = min(min_wal, wal);
+            }
+            if let Some(csn) = h.csn_floor {
+                min_csn = min(min_csn, csn);
+            }
+        }
+
+        self.cached_min_wal_lsn.store(min_wal.0, Ordering::Release);
+        self.cached_min_csn.store(min_csn.0, Ordering::Release);
+    }
+}
+
+impl Drop for RetentionGuard {
+    fn drop(&mut self) {
+        if let Some(mgr) = self.mgr.upgrade() {
+            mgr.release(self.id);
+        }
+    }
+}
+```
+
+Retention formula:
+
+```text
+safe_to_delete_wal_segment(segment_end_lsn) iff
+    segment_end_lsn < min(
+        checkpoint_redo_lsn,
+        oldest_backup_base_lsn,
+        oldest_physical_slot_restart_lsn,
+        oldest_logical_slot_restart_lsn,
+        oldest_restore_required_lsn,
+        oldest_unarchived_required_lsn
+    )
+```
+
+Vacuum formula:
+
+```text
+safe_to_prune_version(version_csn) iff
+    version_csn < min(
+        oldest_active_reader_csn,
+        oldest_exported_snapshot_csn,
+        oldest_logical_initial_snapshot_csn,
+        oldest_backup_snapshot_csn_if_logical_backup
+    )
+```
+
+For a **physical fuzzy backup**, you usually pin WAL, not tuple versions. For a **logical initial snapshot**, you must pin a CSN so vacuum does not remove versions needed by the snapshot scan.
+
+---
+
+# 6. WAL segment lifecycle
+
+Every WAL segment should move through this state machine:
+
+```text
+OPEN
+  -> SEALED
+  -> ARCHIVING
+  -> ARCHIVED
+  -> LOCALLY_RELEASABLE
+  -> DELETED
+```
+
+Segment metadata:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct WalSegmentMeta {
+    pub db_uuid: DbUuid,
+    pub timeline_id: TimelineId,
+    pub segment_no: u64,
+    pub start_lsn: Lsn,
+    pub end_lsn: Lsn,
+    pub path: PathBuf,
+    pub len: u64,
+    pub crc32: u32,
+    pub blake3: [u8; 32],
+    pub first_csn: Option<Csn>,
+    pub last_csn: Option<Csn>,
+    pub sealed: bool,
+}
+```
+
+Segment header should include:
+
+```text
+magic:          b"RLWAL\0\1"
+format_version: u16
+page_size:      u32
+timeline_id:    u64
+segment_no:     u64
+start_lsn:      u64
+prev_segment_hash: [u8; 32]
+header_crc32:   u32
+```
+
+Record header should include:
+
+```text
+magic
+record_len
+record_kind
+flags
+record_lsn
+prev_record_lsn
+txid
+csn_or_zero
+payload_crc32
+header_crc32
+```
+
+For physical recovery and physical replication, each page mutation WAL record must include:
+
+```text
+relation_file_id
+page_no
+record_lsn
+before_page_lsn or expected_page_lsn
+after_page_lsn
+payload kind: full page image or delta
+```
+
+Apply rule:
+
+```text
+if page.page_lsn >= record_lsn:
+    skip; record already applied
+else:
+    validate expected_page_lsn if present
+    apply full image or delta
+    set page.page_lsn = record_lsn
+```
+
+That makes restore and physical replication idempotent.
+
+---
+
+# 7. WAL archiving
+
+Archiving must be boring and asynchronous.
+
+Hot path:
+
+```text
+WAL writer seals segment -> sends WalSegmentMeta to bounded queue -> returns
+```
+
+Archiver path:
+
+```text
+read sealed segment
+validate segment checksum/hash
+write archive temp file
+sync archive temp file
+rename to final archive file
+sync parent directory where supported
+write/update archive manifest
+publish archived_lsn
+```
+
+Do not let archive work run on writer threads.
+
+```rust
+use crossbeam_channel::{Receiver, Sender};
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{self, BufReader, BufWriter, Read, Write},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+pub trait ArchiveStore: Send + Sync + 'static {
+    fn put_segment(&self, meta: &WalSegmentMeta) -> io::Result<ArchiveReceipt>;
+    fn segment_exists(&self, timeline: TimelineId, start_lsn: Lsn) -> io::Result<bool>;
+    fn open_segment(&self, timeline: TimelineId, start_lsn: Lsn) -> io::Result<File>;
+}
+
+#[derive(Clone, Debug)]
+pub struct ArchiveReceipt {
+    pub timeline_id: TimelineId,
+    pub start_lsn: Lsn,
+    pub end_lsn: Lsn,
+    pub archive_path: PathBuf,
+    pub len: u64,
+    pub crc32: u32,
+    pub blake3: [u8; 32],
+}
+
+pub struct LocalFsArchive {
+    root: PathBuf,
+    copy_buf_bytes: usize,
+}
+
+impl LocalFsArchive {
+    pub fn new(root: PathBuf, copy_buf_bytes: usize) -> Self {
+        Self { root, copy_buf_bytes }
+    }
+
+    fn final_path(&self, meta: &WalSegmentMeta) -> PathBuf {
+        self.root
+            .join(format!("timeline_{:016x}", meta.timeline_id.0))
+            .join("wal")
+            .join(format!("{:016x}.redwal", meta.start_lsn.0))
+    }
+
+    fn temp_path(&self, meta: &WalSegmentMeta) -> PathBuf {
+        self.root
+            .join(format!("timeline_{:016x}", meta.timeline_id.0))
+            .join("wal")
+            .join(format!("{:016x}.redwal.partial", meta.start_lsn.0))
+    }
+}
+
+impl ArchiveStore for LocalFsArchive {
+    fn put_segment(&self, meta: &WalSegmentMeta) -> io::Result<ArchiveReceipt> {
+        let final_path = self.final_path(meta);
+        let temp_path = self.temp_path(meta);
+
+        if final_path.exists() {
+            // Idempotent restart path: verify existing object before accepting it.
+            let existing = File::open(&final_path)?;
+            let existing_len = existing.metadata()?.len();
+            if existing_len == meta.len {
+                return Ok(ArchiveReceipt {
+                    timeline_id: meta.timeline_id,
+                    start_lsn: meta.start_lsn,
+                    end_lsn: meta.end_lsn,
+                    archive_path: final_path,
+                    len: meta.len,
+                    crc32: meta.crc32,
+                    blake3: meta.blake3,
+                });
+            }
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "archive segment exists with wrong length",
+            ));
+        }
+
+        if let Some(parent) = final_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let src = File::open(&meta.path)?;
+        let mut src = BufReader::with_capacity(self.copy_buf_bytes, src);
+
+        let tmp = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)?;
+
+        let mut dst = BufWriter::with_capacity(self.copy_buf_bytes, tmp);
+
+        let copied = io::copy(&mut src, &mut dst)?;
+        if copied != meta.len {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!("archived {} bytes, expected {}", copied, meta.len),
+            ));
+        }
+
+        dst.flush()?;
+        let tmp_file = dst.into_inner()?;
+        tmp_file.sync_all()?;
+
+        fs::rename(&temp_path, &final_path)?;
+        sync_parent_dir(&final_path)?;
+
+        Ok(ArchiveReceipt {
+            timeline_id: meta.timeline_id,
+            start_lsn: meta.start_lsn,
+            end_lsn: meta.end_lsn,
+            archive_path: final_path,
+            len: meta.len,
+            crc32: meta.crc32,
+            blake3: meta.blake3,
+        })
+    }
+
+    fn segment_exists(&self, timeline: TimelineId, start_lsn: Lsn) -> io::Result<bool> {
+        Ok(self.root
+            .join(format!("timeline_{:016x}", timeline.0))
+            .join("wal")
+            .join(format!("{:016x}.redwal", start_lsn.0))
+            .exists())
+    }
+
+    fn open_segment(&self, timeline: TimelineId, start_lsn: Lsn) -> io::Result<File> {
+        File::open(
+            self.root
+                .join(format!("timeline_{:016x}", timeline.0))
+                .join("wal")
+                .join(format!("{:016x}.redwal", start_lsn.0)),
+        )
+    }
+}
+
+#[cfg(unix)]
+fn sync_parent_dir(path: &Path) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        let dir = File::open(parent)?;
+        dir.sync_all()?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_parent_dir(_path: &Path) -> io::Result<()> {
+    // Keep this explicit. Windows directory fsync semantics differ.
+    // The file itself was synced before rename.
+    Ok(())
+}
+```
+
+Archiver worker:
+
+```rust
+pub struct Archiver {
+    store: Arc<dyn ArchiveStore>,
+    frontier: Arc<DurableFrontier>,
+    rx: Receiver<WalSegmentMeta>,
+}
+
+impl Archiver {
+    pub fn run(self) {
+        while let Ok(meta) = self.rx.recv() {
+            match self.store.put_segment(&meta) {
+                Ok(receipt) => {
+                    self.frontier.publish_archived_lsn(receipt.end_lsn);
+                    // Also persist archive_state.redline after publishing.
+                }
+                Err(e) => {
+                    // Do not delete source WAL.
+                    // Mark archiver unhealthy and expose stats.
+                    eprintln!("redlinedb archiver failed: {e}");
+                }
+            }
+        }
+    }
+}
+```
+
+Important policy:
+
+```text
+commit does not wait for archiving by default
+backup finalization can wait for archive coverage
+PITR archive mode can force WAL rotation to reduce RPO
+replication slots and archive lag prevent WAL deletion
+```
+
+---
+
+# 8. Archive manifest
+
+You need an append-only archive index plus periodic compacted manifest.
+
+Segment manifest record:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct ArchivedSegmentRecord {
+    pub timeline_id: TimelineId,
+    pub start_lsn: Lsn,
+    pub end_lsn: Lsn,
+    pub len: u64,
+    pub crc32: u32,
+    pub blake3: [u8; 32],
+    pub path: String,
+    pub first_csn: Option<Csn>,
+    pub last_csn: Option<Csn>,
+}
+```
+
+Manual binary encoding is better than dragging serde into the hot operational core:
+
+```rust
+pub trait EncodeLe {
+    fn encode_le(&self, out: &mut Vec<u8>);
+}
+
+fn put_u16(out: &mut Vec<u8>, x: u16) {
+    out.extend_from_slice(&x.to_le_bytes());
+}
+
+fn put_u32(out: &mut Vec<u8>, x: u32) {
+    out.extend_from_slice(&x.to_le_bytes());
+}
+
+fn put_u64(out: &mut Vec<u8>, x: u64) {
+    out.extend_from_slice(&x.to_le_bytes());
+}
+
+impl EncodeLe for ArchivedSegmentRecord {
+    fn encode_le(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(b"RLARCHSEG\0");
+        put_u16(out, 1);
+        put_u64(out, self.timeline_id.0);
+        put_u64(out, self.start_lsn.0);
+        put_u64(out, self.end_lsn.0);
+        put_u64(out, self.len);
+        put_u32(out, self.crc32);
+        out.extend_from_slice(&self.blake3);
+
+        match self.first_csn {
+            Some(c) => {
+                out.push(1);
+                put_u64(out, c.0);
+            }
+            None => out.push(0),
+        }
+
+        match self.last_csn {
+            Some(c) => {
+                out.push(1);
+                put_u64(out, c.0);
+            }
+            None => out.push(0),
+        }
+
+        let path_bytes = self.path.as_bytes();
+        put_u32(out, path_bytes.len() as u32);
+        out.extend_from_slice(path_bytes);
+    }
+}
+```
+
+Manifest update rule:
+
+```text
+write record to temp or append log
+sync manifest file
+only then publish archived_lsn
+```
+
+For high throughput, batch manifest updates:
+
+```text
+archive N segments
+write N manifest records in one append
+sync once
+publish archived_lsn to highest contiguous receipt
+```
+
+Never publish an archived LSN for a segment whose manifest is not durable.
+
+---
+
+# 9. Online physical backup
+
+This is the most important Phase 8 feature.
+
+The correct fast design is a **fuzzy physical base backup plus WAL catch-up**.
+
+You do **not** freeze writers. You do:
+
+```text
+1. Read checkpoint_redo_lsn = base_lsn.
+2. Pin WAL retention at base_lsn.
+3. Optionally request a checkpoint to reduce WAL catch-up.
+4. Snapshot relation file list.
+5. Copy page images with short page latches.
+6. After all data pages are copied, sample stop_lsn = durable_lsn.
+7. Compute stop_csn = highest committed CSN <= stop_lsn.
+8. Copy WAL range [base_lsn, stop_lsn].
+9. Write final backup manifest.
+10. Release retention.
+```
+
+Why this works:
+
+```text
+A copied data page may be older than stop_lsn.
+Recovery replays WAL records after that page_lsn.
+
+A copied data page may be newer than base_lsn.
+Recovery skips WAL records already reflected by page_lsn.
+
+A copied data page cannot be newer than stop_lsn,
+because stop_lsn is sampled after all page copies finish.
+
+Therefore restore to stop_lsn is consistent.
+```
+
+This requires per-page LSNs and idempotent WAL replay.
+
+Backup options:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct BackupOptions {
+    pub dest: PathBuf,
+    pub chunk_bytes: usize,
+    pub copy_workers: usize,
+    pub max_bytes_per_sec: Option<u64>,
+    pub compress: BackupCompression,
+    pub wait_for_archive: bool,
+    pub force_wal_rotation_at_end: bool,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum BackupCompression {
+    None,
+    Lz4Frame,
+}
+```
+
+Backup manifest:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct BackupManifest {
+    pub magic: [u8; 8],
+    pub version: u16,
+    pub db_uuid: DbUuid,
+    pub timeline_id: TimelineId,
+    pub page_size: u32,
+    pub wal_segment_size: u64,
+
+    pub backup_id: u64,
+    pub base_lsn: Lsn,
+    pub begin_lsn: Lsn,
+    pub stop_lsn: Lsn,
+    pub stop_csn: Csn,
+
+    pub relation_files: Vec<BackupRelationFile>,
+    pub wal_files: Vec<BackupWalFile>,
+
+    pub compression: BackupCompression,
+    pub final_hash: [u8; 32],
+}
+
+#[derive(Clone, Debug)]
+pub struct BackupRelationFile {
+    pub file_id: RelationFileId,
+    pub original_path: String,
+    pub size_bytes_at_start: u64,
+    pub chunks: Vec<BackupChunk>,
+}
+
+#[derive(Clone, Debug)]
+pub struct BackupChunk {
+    pub chunk_no: u64,
+    pub file_offset: u64,
+    pub uncompressed_len: u32,
+    pub stored_len: u32,
+    pub crc32: u32,
+    pub blake3: [u8; 32],
+    pub path: String,
+    pub min_page_lsn: Lsn,
+    pub max_page_lsn: Lsn,
+}
+
+#[derive(Clone, Debug)]
+pub struct BackupWalFile {
+    pub timeline_id: TimelineId,
+    pub start_lsn: Lsn,
+    pub end_lsn: Lsn,
+    pub path: String,
+    pub crc32: u32,
+    pub blake3: [u8; 32],
+}
+```
+
+Backup engine skeleton:
+
+```rust
+use crossbeam_channel as chan;
+use std::{io, sync::Arc, thread};
+
+pub struct BackupEngine<K: OpsKernel> {
+    kernel: Arc<K>,
+    retention: Arc<RetentionManager>,
+    archive: Option<Arc<dyn ArchiveStore>>,
+}
+
+impl<K: OpsKernel> BackupEngine<K> {
+    pub fn new(
+        kernel: Arc<K>,
+        retention: Arc<RetentionManager>,
+        archive: Option<Arc<dyn ArchiveStore>>,
+    ) -> Self {
+        Self { kernel, retention, archive }
+    }
+
+    pub fn run_backup(&self, backup_id: u64, opts: BackupOptions) -> io::Result<BackupManifest> {
+        std::fs::create_dir_all(&opts.dest)?;
+
+        let base_lsn = self.kernel.checkpoint_redo_lsn();
+        let begin_lsn = self.kernel.durable_lsn();
+
+        let _guard = self.retention.pin(RetentionHorizon {
+            wal_floor: Some(base_lsn),
+            csn_floor: None,
+            relation_file_floor: Some(base_lsn),
+            reason: RetentionReason::Backup { backup_id },
+        });
+
+        self.kernel.request_checkpoint();
+
+        let files = self.kernel.snapshot_relation_files()?;
+
+        let mut relation_manifests = Vec::with_capacity(files.len());
+
+        for file in files {
+            let copied = self.copy_relation_file(backup_id, &opts, &file)?;
+            relation_manifests.push(copied);
+        }
+
+        let mut stop_lsn = self.kernel.durable_lsn();
+
+        if opts.force_wal_rotation_at_end {
+            stop_lsn = self.kernel.force_wal_rotation()?;
+        }
+
+        let stop_csn = self.kernel.csn_at_lsn(stop_lsn)?;
+
+        let wal_files = self.copy_wal_range(backup_id, &opts, base_lsn, stop_lsn)?;
+
+        if opts.wait_for_archive {
+            self.wait_archive_coverage(stop_lsn)?;
+        }
+
+        let manifest = BackupManifest {
+            magic: *b"RLBAK001",
+            version: 1,
+            db_uuid: self.kernel.db_uuid(),
+            timeline_id: self.kernel.timeline_id(),
+            page_size: self.kernel.page_size() as u32,
+            wal_segment_size: self.kernel.wal_segment_size(),
+            backup_id,
+            base_lsn,
+            begin_lsn,
+            stop_lsn,
+            stop_csn,
+            relation_files: relation_manifests,
+            wal_files,
+            compression: opts.compress,
+            final_hash: [0; 32], // fill after encoding all chunks
+        };
+
+        self.write_final_manifest(&opts.dest, &manifest)?;
+        Ok(manifest)
+    }
+
+    fn copy_relation_file(
+        &self,
+        backup_id: u64,
+        opts: &BackupOptions,
+        file: &RelationFileSnapshot,
+    ) -> io::Result<BackupRelationFile> {
+        let page_size = self.kernel.page_size();
+        let pages = (file.size_bytes + page_size as u64 - 1) / page_size as u64;
+
+        let mut chunks = Vec::new();
+        let pages_per_chunk = max(1, opts.chunk_bytes / page_size);
+        let mut page_buf = vec![0u8; page_size];
+        let mut chunk_buf = Vec::with_capacity(opts.chunk_bytes);
+
+        let mut page_no = 0u64;
+        let mut chunk_no = 0u64;
+
+        while page_no < pages {
+            chunk_buf.clear();
+
+            let chunk_start_page = page_no;
+            let mut min_lsn = Lsn::MAX;
+            let mut max_lsn = Lsn::ZERO;
+
+            for _ in 0..pages_per_chunk {
+                if page_no >= pages {
+                    break;
+                }
+
+                let meta = self.kernel.copy_page_image(file.id, page_no, &mut page_buf)?;
+                min_lsn = min(min_lsn, meta.page_lsn);
+                max_lsn = max(max_lsn, meta.page_lsn);
+                chunk_buf.extend_from_slice(&page_buf);
+                page_no += 1;
+            }
+
+            let stored = self.write_backup_chunk(
+                backup_id,
+                opts,
+                file.id,
+                chunk_no,
+                &chunk_buf,
+            )?;
+
+            chunks.push(BackupChunk {
+                chunk_no,
+                file_offset: chunk_start_page * page_size as u64,
+                uncompressed_len: chunk_buf.len() as u32,
+                stored_len: stored.stored_len,
+                crc32: stored.crc32,
+                blake3: stored.blake3,
+                path: stored.relative_path,
+                min_page_lsn: min_lsn,
+                max_page_lsn: max_lsn,
+            });
+
+            chunk_no += 1;
+        }
+
+        Ok(BackupRelationFile {
+            file_id: file.id,
+            original_path: file.path.to_string_lossy().to_string(),
+            size_bytes_at_start: file.size_bytes,
+            chunks,
+        })
+    }
+
+    fn write_backup_chunk(
+        &self,
+        backup_id: u64,
+        opts: &BackupOptions,
+        file_id: RelationFileId,
+        chunk_no: u64,
+        bytes: &[u8],
+    ) -> io::Result<StoredChunkMeta> {
+        let rel_dir = opts.dest.join("data").join(format!("rel_{:016x}", file_id.0));
+        std::fs::create_dir_all(&rel_dir)?;
+
+        let relative = format!("data/rel_{:016x}/chunk_{:016x}.rlchunk", file_id.0, chunk_no);
+        let final_path = opts.dest.join(&relative);
+        let temp_path = opts.dest.join(format!("{}.partial", relative));
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)?;
+
+        let stored_len = match opts.compress {
+            BackupCompression::None => {
+                file.write_all(bytes)?;
+                bytes.len() as u32
+            }
+            BackupCompression::Lz4Frame => {
+                #[cfg(feature = "lz4")]
+                {
+                    let mut enc = lz4_flex::frame::FrameEncoder::new(&mut file);
+                    enc.write_all(bytes)?;
+                    let _file_ref = enc.finish()?;
+                    file.metadata()?.len() as u32
+                }
+
+                #[cfg(not(feature = "lz4"))]
+                {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "lz4 feature not enabled",
+                    ));
+                }
+            }
+        };
+
+        file.sync_all()?;
+        drop(file);
+
+        std::fs::rename(&temp_path, &final_path)?;
+        sync_parent_dir(&final_path)?;
+
+        Ok(StoredChunkMeta {
+            stored_len,
+            crc32: checksum_crc32(bytes),
+            blake3: hash_blake3(bytes),
+            relative_path: relative,
+        })
+    }
+
+    fn copy_wal_range(
+        &self,
+        backup_id: u64,
+        opts: &BackupOptions,
+        base_lsn: Lsn,
+        stop_lsn: Lsn,
+    ) -> io::Result<Vec<BackupWalFile>> {
+        // Simplest first implementation:
+        // materialize WAL records into backup/wal/range.redwal with exact LSN range.
+        // Better later: copy whole segment files plus a range descriptor.
+        let wal_dir = opts.dest.join("wal");
+        std::fs::create_dir_all(&wal_dir)?;
+
+        let rel = format!("wal/range_{:016x}_{:016x}.redwal", base_lsn.0, stop_lsn.0);
+        let final_path = opts.dest.join(&rel);
+        let temp_path = opts.dest.join(format!("{rel}.partial"));
+
+        let mut out = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)?;
+
+        let mut reader = self.kernel.wal_reader(base_lsn, stop_lsn)?;
+
+        let mut crc_hasher = crc32fast::Hasher::new();
+        let mut blake = blake3::Hasher::new();
+        let mut len = 0u64;
+
+        while let Some(record) = reader.next_record()? {
+            let encoded = encode_wal_record_for_backup(&record);
+            out.write_all(&encoded)?;
+            crc_hasher.update(&encoded);
+            blake.update(&encoded);
+            len += encoded.len() as u64;
+        }
+
+        out.sync_all()?;
+        drop(out);
+
+        std::fs::rename(&temp_path, &final_path)?;
+        sync_parent_dir(&final_path)?;
+
+        Ok(vec![BackupWalFile {
+            timeline_id: self.kernel.timeline_id(),
+            start_lsn: base_lsn,
+            end_lsn: stop_lsn,
+            path: rel,
+            crc32: crc_hasher.finalize(),
+            blake3: blake.finalize().into(),
+        }])
+    }
+
+    fn wait_archive_coverage(&self, stop_lsn: Lsn) -> io::Result<()> {
+        // Do not spin forever in production.
+        // Use condvar/event from archiver state.
+        let Some(_archive) = &self.archive else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "wait_for_archive requested but no archive configured",
+            ));
+        };
+
+        // Real implementation checks archive manifest coverage.
+        Ok(())
+    }
+
+    fn write_final_manifest(&self, dest: &std::path::Path, manifest: &BackupManifest) -> io::Result<()> {
+        let bytes = encode_backup_manifest(manifest);
+        let temp = dest.join("manifest.redbackup.partial");
+        let final_path = dest.join("manifest.redbackup");
+
+        let mut f = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        f.write_all(&bytes)?;
+        f.sync_all()?;
+        drop(f);
+
+        std::fs::rename(&temp, &final_path)?;
+        sync_parent_dir(&final_path)?;
+        Ok(())
+    }
+}
+
+struct StoredChunkMeta {
+    stored_len: u32,
+    crc32: u32,
+    blake3: [u8; 32],
+    relative_path: String,
+}
+
+fn checksum_crc32(bytes: &[u8]) -> u32 {
+    let mut h = crc32fast::Hasher::new();
+    h.update(bytes);
+    h.finalize()
+}
+
+fn hash_blake3(bytes: &[u8]) -> [u8; 32] {
+    let mut h = blake3::Hasher::new();
+    h.update(bytes);
+    h.finalize().into()
+}
+
+fn encode_wal_record_for_backup(record: &WalRecord) -> Vec<u8> {
+    let mut out = Vec::with_capacity(64 + record.payload.len());
+    out.extend_from_slice(b"RLWALREC");
+    put_u64(&mut out, record.lsn.0);
+    put_u64(&mut out, record.end_lsn.0);
+    put_u32(&mut out, record.payload.len() as u32);
+    out.extend_from_slice(&record.payload);
+    out
+}
+
+fn encode_backup_manifest(_manifest: &BackupManifest) -> Vec<u8> {
+    // Implement manual LE encoding with final manifest hash.
+    Vec::new()
+}
+```
+
+For the real implementation, `copy_wal_range` should prefer whole WAL segment copies where possible:
+
+```text
+if range covers entire sealed segment:
+    hard-link/copy archived segment or local sealed segment
+else:
+    write bounded range file with record framing
+```
+
+---
+
+# 10. Restore
+
+Restore should share the same recovery code as crash recovery. Do **not** create a second recovery engine.
+
+Restore flow:
+
+```text
+1. Validate backup manifest.
+2. Validate every data chunk hash/checksum.
+3. Create fresh destination directory.
+4. Restore data chunks to relation files.
+5. Write backup control file with base_lsn and target_lsn.
+6. Restore/copy WAL range.
+7. Run normal WAL recovery from base_lsn to stop_lsn.
+8. Sync data files, WAL files, and control metadata.
+9. Open database in recovered state.
+```
+
+Restore code skeleton:
+
+```rust
+pub struct RestoreOptions {
+    pub backup_dir: PathBuf,
+    pub dest_db_dir: PathBuf,
+    pub target_lsn: Option<Lsn>,
+    pub target_csn: Option<Csn>,
+    pub allow_existing_empty_dir: bool,
+}
+
+pub trait RecoveryEngine {
+    fn recover_to_lsn(&self, db_dir: &std::path::Path, target: Lsn) -> io::Result<()>;
+}
+
+pub struct BackupRestorer<R: RecoveryEngine> {
+    recovery: R,
+}
+
+impl<R: RecoveryEngine> BackupRestorer<R> {
+    pub fn restore(&self, opts: RestoreOptions) -> io::Result<()> {
+        let manifest = read_and_validate_manifest(&opts.backup_dir)?;
+
+        let target_lsn = opts.target_lsn.unwrap_or(manifest.stop_lsn);
+        if target_lsn > manifest.stop_lsn {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "target_lsn is beyond backup stop_lsn",
+            ));
+        }
+
+        prepare_destination(&opts.dest_db_dir, opts.allow_existing_empty_dir)?;
+
+        for rel in &manifest.relation_files {
+            restore_relation_file(&opts.backup_dir, &opts.dest_db_dir, rel, manifest.compression)?;
+        }
+
+        restore_wal_files(&opts.backup_dir, &opts.dest_db_dir, &manifest.wal_files)?;
+
+        write_restore_control(&opts.dest_db_dir, &manifest, target_lsn)?;
+
+        self.recovery.recover_to_lsn(&opts.dest_db_dir, target_lsn)?;
+
+        sync_tree_best_effort(&opts.dest_db_dir)?;
+
+        Ok(())
+    }
+}
+```
+
+Point-in-time restore should support:
+
+```text
+restore to exact LSN
+restore to CSN
+restore to timestamp only if commit records include commit timestamp
+restore to named restore point if WAL has restore-point records
+```
+
+The serious internal target should always be LSN or CSN. Timestamp is a convenience mapping.
+
+---
+
+# 11. Physical replication
+
+Physical replication is WAL shipping plus base backup.
+
+Physical replica creation:
+
+```text
+1. Primary creates physical backup with stop_lsn.
+2. Replica restores base backup.
+3. Replica fetches archived WAL from stop_lsn onward.
+4. Replica switches to live WAL stream.
+5. Replica applies WAL idempotently.
+```
+
+Physical slot state:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct PhysicalSlot {
+    pub name: String,
+    pub slot_uuid: [u8; 16],
+    pub db_uuid: DbUuid,
+    pub timeline_id: TimelineId,
+
+    /// Oldest WAL still required by this replica.
+    pub restart_lsn: Lsn,
+
+    /// Highest WAL the replica says it has flushed durably.
+    pub confirmed_flush_lsn: Lsn,
+
+    /// Optional: highest replayed LSN if replica reports apply progress.
+    pub confirmed_replay_lsn: Lsn,
+
+    pub max_retained_bytes: u64,
+    pub state: SlotState,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SlotState {
+    Active,
+    Inactive,
+    Lost,
+}
+```
+
+Physical WAL stream API:
+
+```rust
+pub enum PhysicalStreamMessage {
+    WalBytes {
+        timeline_id: TimelineId,
+        start_lsn: Lsn,
+        end_lsn: Lsn,
+        bytes: Vec<u8>,
+    },
+    Keepalive {
+        durable_lsn: Lsn,
+        server_time_micros: u64,
+    },
+    EndOfTimeline {
+        old_timeline: TimelineId,
+        new_timeline: TimelineId,
+    },
+}
+
+pub trait PhysicalReplicaSink {
+    fn send(&mut self, msg: PhysicalStreamMessage) -> io::Result<()>;
+    fn recv_ack(&mut self) -> io::Result<Option<PhysicalAck>>;
+}
+
+pub struct PhysicalAck {
+    pub flushed_lsn: Lsn,
+    pub replayed_lsn: Lsn,
+}
+```
+
+Physical streamer:
+
+```rust
+pub struct PhysicalStreamer<K: OpsKernel> {
+    kernel: Arc<K>,
+    slots: Arc<SlotStore>,
+}
+
+impl<K: OpsKernel> PhysicalStreamer<K> {
+    pub fn stream<S: PhysicalReplicaSink>(
+        &self,
+        slot_name: &str,
+        mut sink: S,
+        start_lsn: Lsn,
+    ) -> io::Result<()> {
+        let mut cursor = start_lsn;
+
+        loop {
+            let durable = self.kernel.durable_lsn();
+
+            if cursor < durable {
+                let mut reader = self.kernel.wal_reader(cursor, durable)?;
+                while let Some(record) = reader.next_record()? {
+                    let bytes = encode_wal_record_for_backup(&record);
+                    let end = record.end_lsn;
+                    sink.send(PhysicalStreamMessage::WalBytes {
+                        timeline_id: self.kernel.timeline_id(),
+                        start_lsn: record.lsn,
+                        end_lsn: end,
+                        bytes,
+                    })?;
+                    cursor = end;
+                }
+            } else {
+                sink.send(PhysicalStreamMessage::Keepalive {
+                    durable_lsn: durable,
+                    server_time_micros: now_micros(),
+                })?;
+            }
+
+            if let Some(ack) = sink.recv_ack()? {
+                self.slots.update_physical_ack(slot_name, ack.flushed_lsn, ack.replayed_lsn)?;
+            }
+
+            // Real implementation waits on WAL writer condvar/event.
+            std::thread::park_timeout(std::time::Duration::from_millis(10));
+        }
+    }
+}
+
+fn now_micros() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_micros() as u64
+}
+```
+
+Physical replica apply rule:
+
+```rust
+pub trait WalApplier {
+    fn apply_record(&mut self, record: &WalRecord) -> io::Result<()>;
+}
+
+pub struct PhysicalReplica<A: WalApplier> {
+    applier: A,
+    flushed_lsn: Lsn,
+    replayed_lsn: Lsn,
+}
+
+impl<A: WalApplier> PhysicalReplica<A> {
+    pub fn receive(&mut self, msg: PhysicalStreamMessage) -> io::Result<Option<PhysicalAck>> {
+        match msg {
+            PhysicalStreamMessage::WalBytes { bytes, .. } => {
+                let records = decode_wal_records(&bytes)?;
+                for rec in records {
+                    self.applier.apply_record(&rec)?;
+                    self.replayed_lsn = rec.end_lsn;
+                }
+                self.flushed_lsn = self.replayed_lsn;
+                Ok(Some(PhysicalAck {
+                    flushed_lsn: self.flushed_lsn,
+                    replayed_lsn: self.replayed_lsn,
+                }))
+            }
+            PhysicalStreamMessage::Keepalive { .. } => Ok(Some(PhysicalAck {
+                flushed_lsn: self.flushed_lsn,
+                replayed_lsn: self.replayed_lsn,
+            })),
+            PhysicalStreamMessage::EndOfTimeline { .. } => {
+                // Timeline switch handling.
+                Ok(None)
+            }
+        }
+    }
+}
+
+fn decode_wal_records(_bytes: &[u8]) -> io::Result<Vec<WalRecord>> {
+    Ok(Vec::new())
+}
+```
+
+---
+
+# 12. Logical replication
+
+Logical replication must be CSN-ordered and transaction-based.
+
+Do **not** stream row changes as soon as you see them in WAL. Stream only committed transactions.
+
+Pipeline:
+
+```text
+WAL records
+  -> transaction reorder buffer
+  -> commit record with CSN
+  -> committed transaction frame
+  -> CSN ordering heap
+  -> subscriber
+  -> ack
+  -> slot confirmed_csn/confirmed_flush_lsn update
+```
+
+Logical slot:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct LogicalSlot {
+    pub name: String,
+    pub slot_uuid: [u8; 16],
+    pub db_uuid: DbUuid,
+    pub timeline_id: TimelineId,
+
+    /// Where decoder must restart WAL reading.
+    pub restart_lsn: Lsn,
+
+    /// Last transaction fully acknowledged by subscriber.
+    pub confirmed_csn: Csn,
+
+    /// For initial snapshot.
+    pub snapshot_csn: Option<Csn>,
+
+    /// Prevent catalog/schema pruning needed by the decoder.
+    pub catalog_floor_csn: Option<Csn>,
+
+    pub max_retained_bytes: u64,
+    pub state: SlotState,
+}
+```
+
+Logical frame protocol:
+
+```rust
+#[derive(Clone, Debug)]
+pub enum LogicalFrame {
+    Begin {
+        txid: TxId,
+        begin_lsn: Lsn,
+    },
+    Relation {
+        rel_id: u64,
+        schema_version: u64,
+        name: String,
+        columns: Vec<LogicalColumn>,
+    },
+    Insert {
+        rel_id: u64,
+        row_id: u64,
+        values: Vec<LogicalValue>,
+    },
+    Update {
+        rel_id: u64,
+        row_id: u64,
+        old_key: Option<Vec<LogicalValue>>,
+        new_values: Vec<LogicalValue>,
+    },
+    Delete {
+        rel_id: u64,
+        row_id: u64,
+        old_key: Option<Vec<LogicalValue>>,
+    },
+    Commit {
+        txid: TxId,
+        csn: Csn,
+        commit_lsn: Lsn,
+        end_lsn: Lsn,
+    },
+    Keepalive {
+        durable_lsn: Lsn,
+        published_csn: Csn,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct LogicalColumn {
+    pub name: String,
+    pub type_tag: u32,
+    pub nullable: bool,
+    pub primary_key: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum LogicalValue {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(Vec<u8>),
+    Blob(Vec<u8>),
+}
+```
+
+Transaction reorder buffer with bounded memory:
+
+```rust
+use std::collections::{BTreeMap, HashMap};
+
+pub struct LogicalDecodeConfig {
+    pub max_in_memory_tx_bytes: usize,
+    pub spill_dir: PathBuf,
+    pub max_frame_bytes: usize,
+}
+
+pub struct TxDecodeBuffer {
+    txid: TxId,
+    begin_lsn: Lsn,
+    bytes_in_mem: usize,
+    frames: Vec<LogicalFrame>,
+    spill: Option<File>,
+}
+
+impl TxDecodeBuffer {
+    pub fn new(txid: TxId, begin_lsn: Lsn) -> Self {
+        Self {
+            txid,
+            begin_lsn,
+            bytes_in_mem: 0,
+            frames: Vec::new(),
+            spill: None,
+        }
+    }
+
+    pub fn push(
+        &mut self,
+        frame: LogicalFrame,
+        cfg: &LogicalDecodeConfig,
+    ) -> io::Result<()> {
+        let approx = approx_frame_size(&frame);
+
+        if self.spill.is_none() && self.bytes_in_mem + approx <= cfg.max_in_memory_tx_bytes {
+            self.bytes_in_mem += approx;
+            self.frames.push(frame);
+            return Ok(());
+        }
+
+        self.spill_frame(frame, cfg)
+    }
+
+    fn spill_frame(
+        &mut self,
+        frame: LogicalFrame,
+        cfg: &LogicalDecodeConfig,
+    ) -> io::Result<()> {
+        if self.spill.is_none() {
+            std::fs::create_dir_all(&cfg.spill_dir)?;
+            let path = cfg.spill_dir.join(format!("tx_{:016x}.spill", self.txid.0));
+            let mut f = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)?;
+
+            for existing in self.frames.drain(..) {
+                let bytes = encode_logical_frame(&existing);
+                f.write_all(&bytes)?;
+            }
+
+            self.spill = Some(f);
+        }
+
+        let bytes = encode_logical_frame(&frame);
+        self.spill.as_mut().unwrap().write_all(&bytes)?;
+        Ok(())
+    }
+
+    pub fn finalize(mut self, commit: LogicalFrame) -> io::Result<CommittedLogicalTx> {
+        if let Some(mut f) = self.spill.take() {
+            f.write_all(&encode_logical_frame(&commit))?;
+            f.sync_data()?;
+            Ok(CommittedLogicalTx::Spilled {
+                txid: self.txid,
+                begin_lsn: self.begin_lsn,
+                path: PathBuf::new(), // store actual path in real impl
+            })
+        } else {
+            self.frames.push(commit);
+            Ok(CommittedLogicalTx::Memory {
+                txid: self.txid,
+                begin_lsn: self.begin_lsn,
+                frames: self.frames,
+            })
+        }
+    }
+}
+
+pub enum CommittedLogicalTx {
+    Memory {
+        txid: TxId,
+        begin_lsn: Lsn,
+        frames: Vec<LogicalFrame>,
+    },
+    Spilled {
+        txid: TxId,
+        begin_lsn: Lsn,
+        path: PathBuf,
+    },
+}
+
+fn approx_frame_size(frame: &LogicalFrame) -> usize {
+    match frame {
+        LogicalFrame::Insert { values, .. } |
+        LogicalFrame::Update { new_values: values, .. } => {
+            32 + values.iter().map(approx_value_size).sum::<usize>()
+        }
+        LogicalFrame::Delete { old_key, .. } => {
+            32 + old_key.as_ref()
+                .map(|v| v.iter().map(approx_value_size).sum())
+                .unwrap_or(0)
+        }
+        _ => 64,
+    }
+}
+
+fn approx_value_size(v: &LogicalValue) -> usize {
+    match v {
+        LogicalValue::Null => 1,
+        LogicalValue::Integer(_) => 8,
+        LogicalValue::Real(_) => 8,
+        LogicalValue::Text(b) | LogicalValue::Blob(b) => b.len(),
+    }
+}
+
+fn encode_logical_frame(_frame: &LogicalFrame) -> Vec<u8> {
+    Vec::new()
+}
+```
+
+Logical decoder:
+
+```rust
+pub struct LogicalDecoder<K: OpsKernel> {
+    kernel: Arc<K>,
+    cfg: LogicalDecodeConfig,
+}
+
+impl<K: OpsKernel> LogicalDecoder<K> {
+    pub fn decode_from<S: LogicalSink>(
+        &self,
+        slot: &mut LogicalSlot,
+        sink: &mut S,
+    ) -> io::Result<()> {
+        let mut cursor = slot.restart_lsn;
+        let mut open: HashMap<TxId, TxDecodeBuffer> = HashMap::new();
+
+        loop {
+            let durable = self.kernel.durable_lsn();
+
+            if cursor >= durable {
+                sink.send(LogicalFrame::Keepalive {
+                    durable_lsn: durable,
+                    published_csn: self.kernel.published_csn(),
+                })?;
+                std::thread::park_timeout(std::time::Duration::from_millis(10));
+                continue;
+            }
+
+            let mut reader = self.kernel.wal_reader(cursor, durable)?;
+
+            while let Some(record) = reader.next_record()? {
+                cursor = record.end_lsn;
+
+                match record.kind {
+                    WalRecordKind::HeapInsert |
+                    WalRecordKind::HeapUpdate |
+                    WalRecordKind::HeapDelete |
+                    WalRecordKind::Catalog |
+                    WalRecordKind::LogicalMessage => {
+                        let Some(txid) = record.txid else {
+                            continue;
+                        };
+                        let buf = open
+                            .entry(txid)
+                            .or_insert_with(|| TxDecodeBuffer::new(txid, record.lsn));
+
+                        let frame = decode_logical_change(&record)?;
+                        buf.push(frame, &self.cfg)?;
+                    }
+
+                    WalRecordKind::Commit => {
+                        let txid = record.txid.expect("commit must have txid");
+                        let csn = record.csn.expect("commit must have csn");
+
+                        let commit = LogicalFrame::Commit {
+                            txid,
+                            csn,
+                            commit_lsn: record.lsn,
+                            end_lsn: record.end_lsn,
+                        };
+
+                        if let Some(buf) = open.remove(&txid) {
+                            let tx = buf.finalize(commit)?;
+                            emit_committed_tx(tx, sink)?;
+                        } else {
+                            sink.send(commit)?;
+                        }
+
+                        slot.confirmed_csn = csn;
+                        slot.restart_lsn = cursor;
+                    }
+
+                    WalRecordKind::Abort => {
+                        if let Some(txid) = record.txid {
+                            open.remove(&txid);
+                        }
+                    }
+
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+pub trait LogicalSink {
+    fn send(&mut self, frame: LogicalFrame) -> io::Result<()>;
+}
+
+fn decode_logical_change(record: &WalRecord) -> io::Result<LogicalFrame> {
+    match record.kind {
+        WalRecordKind::HeapInsert => Ok(LogicalFrame::Insert {
+            rel_id: 0,
+            row_id: 0,
+            values: Vec::new(),
+        }),
+        WalRecordKind::HeapUpdate => Ok(LogicalFrame::Update {
+            rel_id: 0,
+            row_id: 0,
+            old_key: None,
+            new_values: Vec::new(),
+        }),
+        WalRecordKind::HeapDelete => Ok(LogicalFrame::Delete {
+            rel_id: 0,
+            row_id: 0,
+            old_key: None,
+        }),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "not a logical change record",
+        )),
+    }
+}
+
+fn emit_committed_tx<S: LogicalSink>(
+    tx: CommittedLogicalTx,
+    sink: &mut S,
+) -> io::Result<()> {
+    match tx {
+        CommittedLogicalTx::Memory { frames, .. } => {
+            for f in frames {
+                sink.send(f)?;
+            }
+            Ok(())
+        }
+        CommittedLogicalTx::Spilled { path, .. } => {
+            // Read frames from spill file and send.
+            // Delete spill after ack in real implementation.
+            let _ = path;
+            Ok(())
+        }
+    }
+}
+```
+
+If group commit can assign CSNs out of physical WAL order, add a CSN reorder heap:
+
+```text
+decode committed tx
+push into BTreeMap<Csn, Tx>
+while map contains next_expected_csn:
+    emit
+```
+
+But the better kernel rule is simpler:
+
+```text
+commit record WAL order == CSN order
+```
+
+That makes logical replication fast.
+
+---
+
+# 13. Replication slot store
+
+Slots are durable metadata. Use one file per slot plus atomic replacement.
+
+Slot file layout:
+
+```text
+magic:       b"RLSLOT\0\1"
+kind:        physical/logical
+db_uuid
+timeline_id
+slot_uuid
+restart_lsn
+confirmed_flush_lsn
+confirmed_replay_lsn
+confirmed_csn
+snapshot_csn
+catalog_floor_csn
+state
+crc32
+```
+
+Implementation:
+
+```rust
+use parking_lot::RwLock;
+use std::collections::HashMap;
+
+pub struct SlotStore {
+    dir: PathBuf,
+    slots: RwLock<HashMap<String, ReplicationSlot>>,
+    retention: Arc<RetentionManager>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ReplicationSlot {
+    Physical(PhysicalSlot),
+    Logical(LogicalSlot),
+}
+
+impl SlotStore {
+    pub fn open(dir: PathBuf, retention: Arc<RetentionManager>) -> io::Result<Self> {
+        std::fs::create_dir_all(&dir)?;
+        let slots = load_slots_from_dir(&dir)?;
+        let store = Self {
+            dir,
+            slots: RwLock::new(slots),
+            retention,
+        };
+        store.refresh_retention();
+        Ok(store)
+    }
+
+    pub fn create_physical(&self, slot: PhysicalSlot) -> io::Result<()> {
+        {
+            let mut slots = self.slots.write();
+            if slots.contains_key(&slot.name) {
+                return Err(io::Error::new(io::ErrorKind::AlreadyExists, "slot exists"));
+            }
+            slots.insert(slot.name.clone(), ReplicationSlot::Physical(slot.clone()));
+        }
+
+        self.persist_slot(&slot.name)?;
+        self.refresh_retention();
+        Ok(())
+    }
+
+    pub fn update_physical_ack(
+        &self,
+        name: &str,
+        flushed: Lsn,
+        replayed: Lsn,
+    ) -> io::Result<()> {
+        {
+            let mut slots = self.slots.write();
+            let Some(ReplicationSlot::Physical(slot)) = slots.get_mut(name) else {
+                return Err(io::Error::new(io::ErrorKind::NotFound, "physical slot not found"));
+            };
+
+            slot.confirmed_flush_lsn = max(slot.confirmed_flush_lsn, flushed);
+            slot.confirmed_replay_lsn = max(slot.confirmed_replay_lsn, replayed);
+
+            // Once replica has flushed beyond restart_lsn, it no longer needs earlier WAL.
+            slot.restart_lsn = slot.confirmed_flush_lsn;
+        }
+
+        self.persist_slot(name)?;
+        self.refresh_retention();
+        Ok(())
+    }
+
+    pub fn update_logical_ack(
+        &self,
+        name: &str,
+        confirmed_csn: Csn,
+        restart_lsn: Lsn,
+    ) -> io::Result<()> {
+        {
+            let mut slots = self.slots.write();
+            let Some(ReplicationSlot::Logical(slot)) = slots.get_mut(name) else {
+                return Err(io::Error::new(io::ErrorKind::NotFound, "logical slot not found"));
+            };
+
+            slot.confirmed_csn = max(slot.confirmed_csn, confirmed_csn);
+            slot.restart_lsn = max(slot.restart_lsn, restart_lsn);
+        }
+
+        self.persist_slot(name)?;
+        self.refresh_retention();
+        Ok(())
+    }
+
+    fn persist_slot(&self, name: &str) -> io::Result<()> {
+        let slots = self.slots.read();
+        let slot = slots
+            .get(name)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "slot not found"))?;
+
+        let bytes = encode_slot(slot);
+        let final_path = self.dir.join(format!("{name}.slot"));
+        let temp_path = self.dir.join(format!("{name}.slot.partial"));
+
+        let mut f = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&temp_path)?;
+
+        f.write_all(&bytes)?;
+        f.sync_all()?;
+        drop(f);
+
+        std::fs::rename(&temp_path, &final_path)?;
+        sync_parent_dir(&final_path)?;
+        Ok(())
+    }
+
+    fn refresh_retention(&self) {
+        let slots = self.slots.read();
+
+        for (name, slot) in slots.iter() {
+            match slot {
+                ReplicationSlot::Physical(s) if s.state != SlotState::Lost => {
+                    self.retention.upsert_durable_slot(
+                        name.clone(),
+                        RetentionHorizon {
+                            wal_floor: Some(s.restart_lsn),
+                            csn_floor: None,
+                            relation_file_floor: None,
+                            reason: RetentionReason::PhysicalReplicationSlot {
+                                name: name.clone(),
+                            },
+                        },
+                    );
+                }
+                ReplicationSlot::Logical(s) if s.state != SlotState::Lost => {
+                    self.retention.upsert_durable_slot(
+                        name.clone(),
+                        RetentionHorizon {
+                            wal_floor: Some(s.restart_lsn),
+                            csn_floor: s.snapshot_csn.or(s.catalog_floor_csn),
+                            relation_file_floor: None,
+                            reason: RetentionReason::LogicalReplicationSlot {
+                                name: name.clone(),
+                            },
+                        },
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn encode_slot(_slot: &ReplicationSlot) -> Vec<u8> {
+    Vec::new()
+}
+
+fn load_slots_from_dir(_dir: &std::path::Path) -> io::Result<HashMap<String, ReplicationSlot>> {
+    Ok(HashMap::new())
+}
+```
+
+Slot loss policy:
+
+```text
+if retained_wal_bytes_for_slot > max_retained_bytes:
+    mark slot LOST
+    release retention
+    require new base backup
+```
+
+Do not let one dead laptop replica fill the primary’s disk forever.
+
+---
+
+# 14. WAL deletion / reaper
+
+The reaper is deliberately simple:
+
+```rust
+pub struct WalReaper<K: OpsKernel> {
+    kernel: Arc<K>,
+    retention: Arc<RetentionManager>,
+    wal_dir: PathBuf,
+    segment_size: u64,
+}
+
+impl<K: OpsKernel> WalReaper<K> {
+    pub fn run_once(&self) -> io::Result<()> {
+        let floor = self.retention.min_wal_lsn();
+        let deletable_before = floor.align_down(self.segment_size);
+
+        for seg in list_local_wal_segments(&self.wal_dir)? {
+            if seg.end_lsn < deletable_before {
+                // Additional guard: segment must be archived if archive mode requires it.
+                std::fs::remove_file(&seg.path)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LocalWalSegment {
+    pub path: PathBuf,
+    pub start_lsn: Lsn,
+    pub end_lsn: Lsn,
+}
+
+fn list_local_wal_segments(_dir: &std::path::Path) -> io::Result<Vec<LocalWalSegment>> {
+    Ok(Vec::new())
+}
+```
+
+The reaper must never reason about backups, replicas, or checkpoints directly. It only trusts the retention manager.
+
+---
+
+# 15. Timeline handling
+
+You need timelines as soon as you support restore and replication.
+
+Rules:
+
+```text
+Fresh database:
+  timeline 1
+
+Restore without promotion:
+  same timeline, recovered to target
+
+Restore and open writable:
+  new timeline = old timeline + 1
+  history records parent timeline and fork LSN
+
+Replica promoted writable:
+  new timeline
+  archive timeline history
+```
+
+Timeline history record:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct TimelineHistory {
+    pub db_uuid: DbUuid,
+    pub timeline_id: TimelineId,
+    pub parent_timeline_id: Option<TimelineId>,
+    pub fork_lsn: Option<Lsn>,
+    pub fork_csn: Option<Csn>,
+    pub reason: TimelineForkReason,
+}
+
+#[derive(Clone, Debug)]
+pub enum TimelineForkReason {
+    Init,
+    Restore,
+    ReplicaPromotion,
+}
+```
+
+Archive paths include timeline. Restore must not accidentally combine WAL from sibling timelines.
+
+---
+
+# 16. Threading model
+
+Use a small number of explicit threads.
+
+```text
+Existing:
+  wal_writer/thread group commit
+  checkpoint worker
+  vacuum worker
+
+Phase 8:
+  archiver worker(s): sealed WAL -> archive
+  backup coordinator: one per active backup
+  backup copy workers: bounded, mostly sequential I/O
+  logical decoder: one per active logical slot or shared decoder cache
+  physical streamer: one per physical client/session
+  wal reaper: periodic
+  slot persistence worker: optional batcher
+```
+
+Do **not** create one thread per relation file or per WAL segment. Keep it bounded.
+
+Suggested defaults:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct OpsConfig {
+    pub archive_queue_segments: usize,
+    pub archive_copy_buf_bytes: usize,
+
+    pub backup_chunk_bytes: usize,
+    pub backup_copy_workers: usize,
+    pub backup_max_bytes_per_sec: Option<u64>,
+
+    pub logical_max_in_memory_tx_bytes: usize,
+    pub logical_max_frame_bytes: usize,
+
+    pub max_total_wal_bytes: u64,
+    pub max_slot_retained_wal_bytes: u64,
+
+    pub wal_reaper_interval_ms: u64,
+}
+
+impl Default for OpsConfig {
+    fn default() -> Self {
+        Self {
+            archive_queue_segments: 8,
+            archive_copy_buf_bytes: 1024 * 1024,
+
+            backup_chunk_bytes: 4 * 1024 * 1024,
+            backup_copy_workers: 2,
+            backup_max_bytes_per_sec: None,
+
+            logical_max_in_memory_tx_bytes: 8 * 1024 * 1024,
+            logical_max_frame_bytes: 1024 * 1024,
+
+            max_total_wal_bytes: 1024 * 1024 * 1024,
+            max_slot_retained_wal_bytes: 512 * 1024 * 1024,
+
+            wal_reaper_interval_ms: 1000,
+        }
+    }
+}
+```
+
+Memory discipline:
+
+```text
+archive memory      = archive_workers * archive_copy_buf_bytes
+backup memory       = backup_workers * backup_chunk_bytes + page scratch
+logical memory      = active_slots * logical_max_in_memory_tx_bytes + bounded spill metadata
+physical streaming  = send_buffer_bytes per active stream
+```
+
+The buffer pool should not be stolen by backup. Backup gets its own bounded scratch buffers.
+
+---
+
+# 17. Fast page-copy design
+
+The backup copier should prefer copying from the pager, not from raw files, because the pager can give a stable page image under a short latch.
+
+Pager copy rule:
+
+```text
+1. Locate page frame if resident.
+2. Take shared page latch.
+3. Copy page bytes into backup buffer.
+4. Read page_lsn and checksum.
+5. Release latch.
+
+If not resident:
+1. Read page from disk using offset read.
+2. Validate checksum.
+3. Optionally re-read header/checksum if checkpoint writer might race.
+```
+
+The storage manager should expose:
+
+```rust
+pub trait PageCopy {
+    fn copy_page_stable(
+        &self,
+        file_id: RelationFileId,
+        page_no: u64,
+        dst: &mut [u8],
+    ) -> io::Result<PageCopyMeta>;
+}
+```
+
+Avoid:
+
+```text
+global backup lock
+blocking writers for whole files
+mmap for restore-critical copying
+unbounded Vec growth
+copying through SQL layer
+```
+
+---
+
+# 18. Logical replication payload choices
+
+For a SQLite-class replacement, logical replication should not replicate index mutations. It should replicate table changes:
+
+```text
+INSERT table row
+UPDATE table row
+DELETE table row
+DDL/catalog transaction
+sequence/autoincrement state if supported
+```
+
+Indexes on the replica are maintained by applying table changes locally.
+
+For each row change, WAL should contain enough logical info:
+
+```rust
+pub struct LogicalWalChange {
+    pub rel_id: u64,
+    pub schema_version: u64,
+    pub row_id: u64,
+    pub op: LogicalOp,
+}
+
+pub enum LogicalOp {
+    Insert { new_values: Vec<LogicalValue> },
+    Update {
+        old_key: Option<Vec<LogicalValue>>,
+        new_values: Vec<LogicalValue>,
+    },
+    Delete {
+        old_key: Option<Vec<LogicalValue>>,
+    },
+}
+```
+
+Critical rule:
+
+```text
+The WAL may contain logical changes before commit,
+but the decoder must emit them only after the commit record.
+```
+
+DDL:
+
+```text
+DDL is just another transaction.
+A catalog change with CSN N must be emitted before data changes that depend on schema_version N.
+```
+
+Prepared statements and schema invalidation from Phase 4/5 will already need schema versions; reuse that.
+
+---
+
+# 19. Initial logical snapshot
+
+A logical replica needs a starting point.
+
+Flow:
+
+```text
+1. Create logical slot.
+2. Export snapshot at snapshot_csn.
+3. Pin csn_floor = snapshot_csn.
+4. Scan tables as of snapshot_csn.
+5. Send snapshot rows to subscriber.
+6. Start streaming committed transactions with csn > snapshot_csn.
+7. Once subscriber confirms snapshot complete, release snapshot CSN pin.
+8. Slot continues retaining WAL from restart_lsn.
+```
+
+Snapshot export object:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct ExportedSnapshot {
+    pub snapshot_id: u64,
+    pub snapshot_csn: Csn,
+    pub start_lsn: Lsn,
+    pub schema_version: u64,
+}
+```
+
+This is the only Phase 8 path that truly needs MVCC old-version retention. Physical backup does not need to hold a logical snapshot CSN unless you choose to provide a logical dump.
+
+---
+
+# 20. Restore from archive
+
+Archive restore without an explicit base backup should be impossible unless you have a base. The correct hierarchy is:
+
+```text
+base backup + archived WAL + optional live WAL stream
+```
+
+Archive restore algorithm:
+
+```text
+1. Select base backup with base_lsn <= target_lsn.
+2. Restore base backup.
+3. Read archive manifest for timeline.
+4. Verify contiguous WAL coverage from backup.base_lsn to target_lsn.
+5. Replay WAL.
+6. If target is before latest, fork timeline when opened writable.
+```
+
+Archive gap detection:
+
+```rust
+pub fn verify_wal_coverage(
+    segments: &[ArchivedSegmentRecord],
+    start: Lsn,
+    target: Lsn,
+) -> io::Result<()> {
+    let mut cursor = start;
+
+    for seg in segments {
+        if seg.end_lsn <= cursor {
+            continue;
+        }
+
+        if seg.start_lsn > cursor {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "archive gap: need WAL at {:?}, next segment starts at {:?}",
+                    cursor, seg.start_lsn
+                ),
+            ));
+        }
+
+        cursor = max(cursor, seg.end_lsn);
+
+        if cursor >= target {
+            return Ok(());
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::UnexpectedEof,
+        format!("archive ends at {:?}, target is {:?}", cursor, target),
+    ))
+}
+```
+
+---
+
+# 21. Operational stats
+
+Expose this from the embedded API and CLI:
+
+```rust
+#[derive(Clone, Debug)]
+pub struct OpsStats {
+    pub durable_lsn: Lsn,
+    pub archived_lsn: Lsn,
+    pub checkpoint_redo_lsn: Lsn,
+    pub retention_floor_lsn: Lsn,
+
+    pub local_wal_bytes: u64,
+    pub retained_wal_bytes: u64,
+    pub archived_wal_bytes: u64,
+
+    pub active_backups: usize,
+    pub active_physical_slots: usize,
+    pub active_logical_slots: usize,
+    pub lost_slots: usize,
+
+    pub oldest_slot_lag_bytes: u64,
+    pub archiver_queue_len: usize,
+
+    pub backup_bytes_copied: u64,
+    pub backup_bytes_per_sec: u64,
+
+    pub logical_decode_spill_bytes: u64,
+    pub logical_decode_lag_lsn: u64,
+}
+```
+
+CLI examples:
+
+```text
+.redline ops
+.redline backup /path/to/backup
+.redline restore /path/to/backup /path/to/db
+.redline archive status
+.redline slots
+.redline slot drop replica_a
+.redline slot advance replica_a 0x12345678
+```
+
+---
+
+# 22. Failure handling
+
+Use explicit failpoints.
+
+```rust
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum OpsFailpoint {
+    ArchiveBeforeTempSync,
+    ArchiveAfterTempSyncBeforeRename,
+    ArchiveAfterRenameBeforeManifest,
+    BackupAfterBegin,
+    BackupAfterDataChunk,
+    BackupAfterWalCopy,
+    BackupBeforeFinalManifest,
+    SlotAfterTempWrite,
+    SlotAfterRename,
+    RestoreAfterDataFiles,
+    RestoreBeforeRecovery,
+}
+
+pub trait Failpoints: Send + Sync {
+    fn check(&self, point: OpsFailpoint) -> io::Result<()>;
+}
+
+pub struct NoFailpoints;
+
+impl Failpoints for NoFailpoints {
+    fn check(&self, _point: OpsFailpoint) -> io::Result<()> {
+        Ok(())
+    }
+}
+```
+
+Crash test matrix:
+
+```text
+Archive:
+  crash during partial segment copy
+  crash after temp sync before rename
+  crash after rename before manifest
+  crash after manifest before archived_lsn publish
+
+Backup:
+  crash after retention pin
+  crash after copied data chunk
+  crash after copied WAL
+  crash before final manifest
+  crash after final manifest
+
+Restore:
+  crash after data restore
+  crash during WAL replay
+  crash after recovery before control sync
+
+Logical replication:
+  crash after sending commit before slot ack
+  crash after ack before slot file sync
+  crash while large tx spill file exists
+
+Physical replication:
+  crash after receiving WAL before flush ack
+  crash after flush ack before replay
+```
+
+Expected restart behavior:
+
+```text
+.partial files are ignored or cleaned.
+finalized manifest is authoritative.
+non-final backup directories are not restorable unless explicitly resumed.
+slot files are either old valid state or new valid state.
+duplicate logical frames are idempotently skipped by CSN.
+duplicate physical WAL records are skipped by page_lsn.
+```
+
+---
+
+# 23. Correctness tests
+
+Add these before performance claims.
+
+## Backup equivalence
+
+```text
+for random workload:
+  run writers/readers
+  start backup concurrently
+  continue workload
+  finalize backup at stop_lsn/stop_csn
+  restore backup
+  compare restored database at stop_csn against primary historical checksum
+```
+
+If the primary cannot query historical state at `stop_csn`, record a deterministic logical checksum at `stop_csn` during the backup.
+
+## WAL archive gap tests
+
+```text
+delete one archived segment
+restore must fail loudly
+
+corrupt one non-tail segment
+restore must fail loudly
+
+corrupt tail beyond target_lsn
+restore may ignore bytes beyond target
+```
+
+## Slot retention tests
+
+```text
+create physical slot
+generate WAL
+checkpoint repeatedly
+assert WAL below slot.restart_lsn is retained
+
+ack slot forward
+assert old WAL becomes deletable
+
+exceed max slot lag
+assert slot becomes LOST and WAL can be reaped
+```
+
+## Logical replication tests
+
+```text
+large transaction spills but emits atomically
+abort never emits changes
+commit order == CSN order
+duplicate delivery after crash is skipped
+DDL transaction precedes dependent row changes
+updates/deletes preserve key identity
+```
+
+## Physical replication tests
+
+```text
+base backup + WAL catchup equals primary
+apply same WAL twice yields same database
+page image/delta/root changes restore correctly
+timeline fork prevents replaying sibling WAL
+```
+
+---
+
+# 24. Performance plan
+
+Phase 8 should improve durability and operational usability without hurting OLTP.
+
+Hot path budget:
+
+```text
+commit path extra allocations: 0
+commit path extra fsyncs: 0
+commit path extra locks: ideally 0, at most one nonblocking publish
+commit path archive work: 0
+commit path backup work: 0
+commit path logical decode work: 0
+```
+
+The only hot-path interaction is:
+
+```rust
+frontier.publish_commit(durable_lsn, commit_csn);
+commit_bus.try_publish(CommitNotice { lsn, csn, txid });
+```
+
+Where `try_publish` must drop non-essential notices if the queue is full, because decoders can always fall back to WAL scanning.
+
+```rust
+#[derive(Copy, Clone, Debug)]
+pub struct CommitNotice {
+    pub txid: TxId,
+    pub commit_lsn: Lsn,
+    pub csn: Csn,
+}
+
+pub struct CommitBus {
+    tx: crossbeam_channel::Sender<CommitNotice>,
+}
+
+impl CommitBus {
+    pub fn try_publish(&self, notice: CommitNotice) {
+        let _ = self.tx.try_send(notice);
+    }
+}
+```
+
+Performance guardrails:
+
+```text
+Backup uses sequential large chunks, but short page latches.
+Archive uses sealed WAL segments, so no writer interference.
+Logical decoder is read-only and sequential over WAL.
+Physical streaming reads WAL sequentially.
+Retention/reaper does periodic metadata scans, not commit-time scans.
+```
+
+Metrics to benchmark:
+
+```text
+insert/update latency with no Phase 8 services
+insert/update latency with archiver on
+insert/update latency with backup running
+insert/update latency with logical slot caught up
+insert/update latency with logical slot lagging
+WAL retained bytes under lag
+backup throughput
+restore throughput
+replica catch-up MB/s
+logical decode rows/s
+```
+
+---
+
+# 25. Build order that gets Phase 8 finished cleanly
+
+Implement in this order:
+
+```text
+1. Add LSN/CSN/timeline types and expose OpsKernel.
+2. Add RetentionManager and WAL reaper.
+3. Add slot store with durable physical/logical slots.
+4. Add local filesystem WAL archive.
+5. Add archive manifest and archive restart recovery.
+6. Add physical backup manifest/chunk writer.
+7. Add restore using existing recovery engine.
+8. Add physical replication stream.
+9. Add logical WAL payload format.
+10. Add logical decoder with bounded tx memory and spill.
+11. Add exported logical snapshot.
+12. Add failpoints and crash tests.
+13. Add CLI/API commands and stats.
+14. Add benchmarks under concurrent writer pressure.
+```
+
+The core design remains simple:
+
+```text
+WAL is the source of truth.
+CSN is the logical order.
+Timeline prevents wrong-history replay.
+Retention prevents premature deletion.
+Everything heavy runs outside the writer hot path.
+```
+
+That gives RedlineDB Phase 8 without compromising the later goal: beating SQLite on concurrent write-heavy embedded workloads.
+
+[1]: https://doc.rust-lang.org/std/fs/struct.File.html "File in std::fs - Rust"
+[2]: https://docs.rs/crossbeam-channel "crossbeam_channel - Rust"
+[3]: https://docs.rs/crc32fast?utm_source=chatgpt.com "crc32fast - Rust"
+

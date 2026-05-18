@@ -1,0 +1,2765 @@
+Below is the Phase 1 I would build for RedlineDB: a pure-Rust, high-concurrency, crash-safe storage kernel that can later support SQL, B-trees, catalogs, and benchmarks without rewriting the durability layer.
+
+The core bet: **do not serialize transactions like SQLite does.** SQLite WAL mode is already good at concurrent readers and a writer, but SQLite still allows only one simultaneous write transaction; RedlineDB should instead allow many writer transactions to mutate disjoint pages/rows concurrently, while serializing only the tiny unavoidable pieces: WAL byte ordering, commit durability publication, and conflicting row/page access. SQLite’s own docs state that WAL lets reading and writing proceed concurrently, but its transaction docs also state that it supports multiple simultaneous read transactions and only one simultaneous write transaction. ([SQLite][1])
+
+---
+
+# Phase 1 North Star
+
+Phase 1 is not “add more features.” It is:
+
+> Make every durable mutation replayable, idempotent, checksummed, crash-tested, and impossible to flush ahead of its WAL.
+
+The kernel should exit Phase 1 with these guarantees:
+
+1. **Strict commit rule**
+   A transaction is not acknowledged until its commit record is durable in the WAL.
+
+2. **Visibility rule**
+   A committed transaction is not published to readers until its commit record is durable.
+
+3. **Page flush rule**
+   A dirty data page is never written to the database file unless:
+
+   ```text
+   stable_wal_lsn >= page.page_lsn
+   ```
+
+4. **Redo idempotence rule**
+   Every durable object stores its own last-applied LSN. Recovery may replay the same WAL record any number of times without changing the final result.
+
+5. **Torn-page rule**
+   Main database page writes are protected by a doublewrite buffer, or by full-page images. I would use **doublewrite** for Phase 1 because it keeps full-page images out of the foreground commit path.
+
+6. **Torn-WAL-tail rule**
+   A partial final WAL record is ignored. A corrupted WAL record in the middle of durable WAL is a hard corruption error.
+
+7. **No blocking under page latches**
+   Page latches may be held while copying into an in-memory WAL buffer, but never while waiting for fsync, checkpoint I/O, group commit, row-lock waits, or long transaction waits.
+
+8. **Testing rule**
+   Crash injection is not optional. Every correctness claim should be backed by deterministic crash/reopen tests.
+
+---
+
+# Recommended Phase 1 Architecture
+
+Use a small set of crates/modules:
+
+```text
+redlinedb_core/
+  types.rs              // Lsn, TxnId, Csn, PageId, RelationId
+  checksum.rs           // page/WAL checksums
+  error.rs
+
+redlinedb_io/
+  vfs.rs                // File abstraction
+  std_vfs.rs            // real filesystem
+  fault_vfs.rs          // crash/fault injection
+  dir_lock.rs           // one owner process lock
+
+redlinedb_page/
+  format.rs             // page header, checksum, page types
+  frame.rs              // in-memory frame state
+  latch.rs              // page latch abstraction
+
+redlinedb_wal/
+  format.rs             // WAL segment/frame format
+  writer.rs             // append, reserve, group commit
+  scanner.rs            // recovery scanner
+  segment.rs            // rotation, segment headers
+
+redlinedb_dwb/
+  doublewrite.rs        // flush protection
+
+redlinedb_buf/
+  buffer_pool.rs        // sharded page table, dirty queues
+  flush.rs              // page flush protocol
+
+redlinedb_recovery/
+  recovery.rs           // full open/replay path
+  redo.rs               // record appliers
+
+redlinedb_txn/
+  txn_table.rs          // txn status, commit CSN
+  mvcc.rs               // visibility
+  lock_table.rs         // row locks
+
+redlinedb_tests/
+  crash_matrix.rs
+  mvcc_model.rs
+  loom_tests.rs
+  shuttle_tests.rs
+```
+
+Use feature flags:
+
+```toml
+[features]
+default = ["strict"]
+strict = []
+normal_durability = []
+unsafe_dev_mode = []
+fault_injection = []
+loom = []
+shuttle = []
+```
+
+External Rust crates I would allow in Phase 1:
+
+```toml
+[dependencies]
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+crossbeam-utils = "0.8"
+crc32fast = "1"
+arrayvec = "0.7"
+smallvec = "1"
+bytes = "1"
+
+[dev-dependencies]
+proptest = "1"
+tempfile = "3"
+loom = "0.7"
+shuttle = "0.8"
+```
+
+Production code should avoid async runtimes in the storage hot path. Use dedicated OS threads:
+
+```text
+application writer threads
+  └─ mutate pages, append WAL records to memory, wait for commit durability
+
+WAL I/O thread
+  └─ writes WAL memory buffer to disk, handles group fsync, publishes stable_lsn
+
+page flush/checkpoint thread
+  └─ copies dirty pages, doublewrites, writes data pages, syncs data file
+
+optional test-only fault thread
+  └─ injects deterministic crashes/errors
+```
+
+---
+
+# Core Types
+
+Use explicit newtypes. Do not pass raw `u64` values around.
+
+```rust
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[repr(transparent)]
+pub struct Lsn(pub u64);
+
+impl Lsn {
+    pub const INVALID: Lsn = Lsn(0);
+
+    #[inline]
+    pub fn is_valid(self) -> bool {
+        self.0 != 0
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[repr(transparent)]
+pub struct PageId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[repr(transparent)]
+pub struct TxnId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[repr(transparent)]
+pub struct Csn(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[repr(transparent)]
+pub struct RelationId(pub u64);
+```
+
+Important LSN convention:
+
+```text
+LSN = end offset of the WAL frame, not the start offset.
+```
+
+Why?
+
+Because if a page stores `page_lsn = X`, then the flush rule is simple:
+
+```text
+stable_wal_lsn >= page_lsn
+```
+
+If LSN were the start of the WAL frame, the page could flush after only the first byte of its record was durable. Using the **end LSN** removes that class of bugs.
+
+---
+
+# Page Format
+
+A page must be self-identifying and self-validating.
+
+```rust
+pub const DEFAULT_PAGE_SIZE: usize = 4096;
+pub const PAGE_MAGIC: u32 = 0x524C_5047; // "RLPG"
+
+#[repr(u16)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum PageType {
+    Meta = 1,
+    Heap = 2,
+    TxnStatus = 3,
+    Free = 4,
+    Undo = 5,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PageHeader {
+    pub magic: u32,
+    pub version: u16,
+    pub page_type: u16,
+
+    pub page_id: u64,
+    pub relation_id: u64,
+
+    /// End-LSN of the newest WAL record applied to this page.
+    pub page_lsn: u64,
+
+    /// Used to detect stale/reused/misdirected pages.
+    pub page_epoch: u64,
+
+    pub flags: u32,
+    pub checksum: u32,
+
+    /// Slotted-page layout.
+    pub lower: u16,
+    pub upper: u16,
+    pub special: u16,
+
+    pub reserved: [u8; 24],
+}
+
+const _: () = assert!(std::mem::size_of::<PageHeader>() == 64);
+```
+
+Checksum rule:
+
+```text
+checksum = crc32(page with checksum field zeroed,
+                 db_uuid,
+                 page_id,
+                 page_lsn,
+                 page_epoch)
+```
+
+The checksum must include `page_id`. That catches misdirected writes: page 100 accidentally written into page 101’s file offset.
+
+The checksum is sealed when the page is flushed, not on every in-memory mutation.
+
+```rust
+pub fn seal_page_checksum(page: &mut [u8], db_uuid: [u8; 16]) {
+    debug_assert!(page.len() >= std::mem::size_of::<PageHeader>());
+
+    write_page_checksum(page, 0);
+
+    let page_id = read_page_id(page);
+    let page_lsn = read_page_lsn(page);
+    let page_epoch = read_page_epoch(page);
+
+    let mut h = crc32fast::Hasher::new();
+    h.update(&db_uuid);
+    h.update(&page_id.to_le_bytes());
+    h.update(&page_lsn.to_le_bytes());
+    h.update(&page_epoch.to_le_bytes());
+    h.update(page);
+
+    let checksum = h.finalize();
+    write_page_checksum(page, checksum);
+}
+
+pub fn verify_page_checksum(page: &[u8], db_uuid: [u8; 16]) -> bool {
+    let stored = read_page_checksum(page);
+
+    let mut tmp = page.to_vec();
+    write_page_checksum(&mut tmp, 0);
+
+    let page_id = read_page_id(&tmp);
+    let page_lsn = read_page_lsn(&tmp);
+    let page_epoch = read_page_epoch(&tmp);
+
+    let mut h = crc32fast::Hasher::new();
+    h.update(&db_uuid);
+    h.update(&page_id.to_le_bytes());
+    h.update(&page_lsn.to_le_bytes());
+    h.update(&page_epoch.to_le_bytes());
+    h.update(&tmp);
+
+    h.finalize() == stored
+}
+```
+
+---
+
+# WAL Format
+
+Use physiological WAL:
+
+```text
+physical enough for idempotent page redo,
+logical enough to avoid logging full pages for every small mutation.
+```
+
+Each WAL record should target one or more durable objects, and every target must carry a last-applied LSN.
+
+## WAL Segment Layout
+
+```text
+wal/
+  0000000000000001.wal
+  0000000000000002.wal
+  0000000000000003.wal
+```
+
+Segment size:
+
+```text
+default: 64 MiB
+configurable: 16 MiB to 1 GiB
+```
+
+Segment header:
+
+```rust
+pub const WAL_SEGMENT_MAGIC: u32 = 0x524C_5741; // "RLWA"
+pub const WAL_FRAME_MAGIC: u32 = 0x524C_4652;   // "RLFR"
+pub const WAL_TRAILER_MAGIC: u32 = 0x524C_5452; // "RLTR"
+
+#[repr(C)]
+pub struct WalSegmentHeader {
+    pub magic: u32,
+    pub version: u16,
+    pub header_len: u16,
+
+    pub db_uuid: [u8; 16],
+
+    pub segment_no: u64,
+    pub segment_start_lsn: u64,
+    pub segment_size: u64,
+
+    pub salt1: u64,
+    pub salt2: u64,
+
+    pub header_crc: u32,
+    pub reserved: [u8; 4044],
+}
+
+const _: () = assert!(std::mem::size_of::<WalSegmentHeader>() == 4096);
+```
+
+## WAL Frame Header
+
+```rust
+#[repr(u16)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum WalKind {
+    PagePatch = 1,
+    PageImage = 2,
+
+    HeapInsert = 10,
+    HeapUpdate = 11,
+    HeapDelete = 12,
+
+    TxnBegin = 20,
+    TxnCommit = 21,
+    TxnAbort = 22,
+    TxnStatusSet = 23,
+
+    CheckpointBegin = 30,
+    CheckpointEnd = 31,
+
+    SegmentSeal = 40,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct WalFrameHeader {
+    pub magic: u32,
+    pub version: u16,
+    pub kind: u16,
+
+    pub header_len: u16,
+    pub flags: u16,
+
+    /// Absolute byte offset where this frame starts.
+    pub start_lsn: u64,
+
+    /// Absolute byte offset immediately after this frame.
+    /// This is the record identity LSN.
+    pub end_lsn: u64,
+
+    pub prev_frame_lsn: u64,
+
+    pub txn_id: u64,
+    pub csn: u64,
+
+    pub payload_len: u32,
+
+    pub header_crc: u32,
+    pub payload_crc: u32,
+}
+```
+
+Frame trailer:
+
+```rust
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct WalFrameTrailer {
+    pub end_lsn: u64,
+    pub frame_crc: u32,
+    pub magic: u32,
+}
+```
+
+Frame validation:
+
+```text
+header.magic == WAL_FRAME_MAGIC
+trailer.magic == WAL_TRAILER_MAGIC
+header.end_lsn == trailer.end_lsn
+payload_crc matches payload
+header_crc matches header with header_crc zeroed
+frame_crc matches header + payload + trailer with frame_crc zeroed
+prev_frame_lsn forms monotonic chain
+```
+
+---
+
+# WAL Record Types
+
+Do not make recovery depend on high-level heap replay only. Every current durable mutation should become one of these:
+
+## 1. PagePatch
+
+For compact page-local modifications.
+
+```text
+PagePatch {
+  page_id,
+  expected_page_lsn_optional,
+  patch_count,
+  patches: [
+    { offset, bytes }
+  ]
+}
+```
+
+Redo rule:
+
+```rust
+if page.header.page_lsn >= record.end_lsn {
+    skip;
+} else {
+    verify page_id;
+    apply patches;
+    page.header.page_lsn = record.end_lsn;
+    seal checksum later on flush;
+}
+```
+
+## 2. PageImage
+
+For initialization, repair, or future optional FPI mode.
+
+```text
+PageImage {
+  page_id,
+  full_page_bytes
+}
+```
+
+Redo rule:
+
+```rust
+if existing_page_valid && existing_page_lsn >= record.end_lsn {
+    skip;
+} else {
+    write full page image;
+}
+```
+
+## 3. HeapInsert / HeapUpdate / HeapDelete
+
+These can be encoded as typed page-local records, but they must still target a page and set `page_lsn`.
+
+Example heap insert payload:
+
+```text
+HeapInsert {
+  relation_id,
+  page_id,
+  slot_id,
+  tuple_header,
+  tuple_bytes
+}
+```
+
+Redo is page-local:
+
+```rust
+if page_lsn >= record.end_lsn {
+    skip;
+}
+
+assert page_id matches;
+insert slot if absent, or verify equivalent slot exists;
+set page_lsn = record.end_lsn;
+```
+
+## 4. TxnCommit
+
+Commit record:
+
+```text
+TxnCommit {
+  txn_id,
+  commit_csn,
+  first_txn_lsn,
+  last_txn_lsn,
+  write_set_hash,
+}
+```
+
+A transaction becomes visible only after:
+
+```text
+stable_wal_lsn >= commit_record.end_lsn
+```
+
+## 5. TxnAbort
+
+Rollback does not strictly need to be durable because absence of a commit means loser transaction after crash. Still, append `TxnAbort` for observability, lock cleanup, and future vacuum/undo pruning.
+
+## 6. CheckpointBegin / CheckpointEnd
+
+Checkpoint records are informational. The real checkpoint commit point is the durable control file slot.
+
+---
+
+# Control File
+
+Use double-buffered control slots instead of one mutable file.
+
+```text
+redline.control.a
+redline.control.b
+```
+
+Pick the valid slot with the highest generation.
+
+```rust
+pub const CONTROL_MAGIC: u32 = 0x524C_4354; // "RLCT"
+
+#[repr(C)]
+pub struct ControlFile {
+    pub magic: u32,
+    pub version: u16,
+    pub page_size: u16,
+
+    pub db_uuid: [u8; 16],
+
+    pub generation: u64,
+
+    pub segment_size: u64,
+
+    /// Earliest WAL LSN recovery must scan from.
+    pub redo_start_lsn: u64,
+
+    /// Last checkpoint target that was completed.
+    pub checkpoint_lsn: u64,
+
+    /// Main data file is known durable through this LSN.
+    pub durable_data_lsn: u64,
+
+    pub next_page_id: u64,
+    pub next_txn_id: u64,
+    pub next_csn: u64,
+
+    pub clean_shutdown: u8,
+    pub reserved1: [u8; 7],
+
+    pub crc: u32,
+    pub reserved2: [u8; 3996],
+}
+
+const _: () = assert!(std::mem::size_of::<ControlFile>() == 4096);
+```
+
+Control update protocol:
+
+```text
+1. Read active slot.
+2. Build new slot with generation + 1.
+3. Write inactive slot.
+4. sync_all inactive slot.
+5. Optionally sync database directory if file was created/replaced.
+6. New slot is now authoritative.
+```
+
+Use `sync_data` for file content when metadata is irrelevant and `sync_all` when metadata durability matters; Rust’s standard library documents that `sync_data` may avoid metadata sync, while `sync_all` is the stronger metadata-inclusive operation. ([Rust Documentation][2])
+
+---
+
+# WAL Writer Design
+
+The fastest safe design is:
+
+```text
+many writers
+  └─ reserve bounded WAL memory before page latch
+  └─ latch page
+  └─ encode WAL record
+  └─ copy WAL record into in-memory WAL buffer
+  └─ mutate page
+  └─ release page latch
+  └─ commit waits for durable commit LSN only
+
+single WAL I/O thread
+  └─ writes contiguous WAL bytes to disk
+  └─ group fsyncs
+  └─ publishes stable_wal_lsn
+```
+
+Do **not** do disk writes while holding page latches.
+
+## WAL Append Permit
+
+A writer should reserve memory before acquiring a page latch.
+
+```rust
+pub struct WalPermit {
+    max_bytes: usize,
+}
+
+pub struct WalAppend {
+    pub start_lsn: Lsn,
+    pub end_lsn: Lsn,
+}
+
+pub struct Wal {
+    inner: parking_lot::Mutex<WalInner>,
+
+    /// Highest contiguous LSN copied into the in-memory WAL buffer.
+    published_lsn: std::sync::atomic::AtomicU64,
+
+    /// Highest contiguous LSN known durable on storage.
+    stable_lsn: std::sync::atomic::AtomicU64,
+
+    budget: WalBudget,
+
+    flush_tx: crossbeam_channel::Sender<FlushRequest>,
+    stable_notify: parking_lot::Condvar,
+    stable_wait_lock: parking_lot::Mutex<()>,
+}
+
+struct WalInner {
+    next_lsn: u64,
+    prev_frame_lsn: u64,
+    current_segment_no: u64,
+    current_segment_offset: u64,
+
+    /// Bounded ring/chunk buffer of not-yet-written WAL bytes.
+    mem: WalMemory,
+}
+
+struct FlushRequest {
+    target_lsn: Lsn,
+    strict: bool,
+}
+```
+
+Atomic ordering matters here. Use `Release` when publishing `stable_lsn`; waiters load it with `Acquire`. Rust’s atomic ordering model defines how atomic operations synchronize across threads, and its orderings correspond to C++20 orderings. ([Rust Documentation][3])
+
+```rust
+impl Wal {
+    pub fn reserve(&self, max_bytes: usize) -> crate::Result<WalPermit> {
+        self.budget.acquire(max_bytes)?;
+        Ok(WalPermit { max_bytes })
+    }
+
+    pub fn append(
+        &self,
+        permit: WalPermit,
+        kind: WalKind,
+        txn_id: TxnId,
+        csn: Option<Csn>,
+        payload: &[u8],
+    ) -> crate::Result<WalAppend> {
+        let mut inner = self.inner.lock();
+
+        let frame_len = encoded_frame_len(payload.len());
+        assert!(frame_len <= permit.max_bytes);
+
+        if inner.segment_remaining() < frame_len {
+            self.append_segment_seal_locked(&mut inner)?;
+            self.rotate_segment_locked(&mut inner)?;
+        }
+
+        let start_lsn = inner.next_lsn;
+        let end_lsn = start_lsn + frame_len as u64;
+
+        let frame = encode_wal_frame(EncodeWalFrame {
+            kind,
+            txn_id,
+            csn,
+            start_lsn: Lsn(start_lsn),
+            end_lsn: Lsn(end_lsn),
+            prev_frame_lsn: Lsn(inner.prev_frame_lsn),
+            payload,
+        });
+
+        inner.mem.push(&frame)?;
+        inner.prev_frame_lsn = end_lsn;
+        inner.next_lsn = end_lsn;
+        inner.current_segment_offset += frame_len as u64;
+
+        self.published_lsn
+            .store(end_lsn, std::sync::atomic::Ordering::Release);
+
+        self.budget.release_unused(permit.max_bytes - frame_len);
+
+        Ok(WalAppend {
+            start_lsn: Lsn(start_lsn),
+            end_lsn: Lsn(end_lsn),
+        })
+    }
+
+    pub fn request_flush(&self, target_lsn: Lsn, strict: bool) -> crate::Result<()> {
+        self.flush_tx.send(FlushRequest { target_lsn, strict })?;
+        Ok(())
+    }
+
+    pub fn wait_stable(&self, target_lsn: Lsn) -> crate::Result<()> {
+        if self.stable_lsn.load(std::sync::atomic::Ordering::Acquire) >= target_lsn.0 {
+            return Ok(());
+        }
+
+        let mut guard = self.stable_wait_lock.lock();
+
+        while self.stable_lsn.load(std::sync::atomic::Ordering::Acquire) < target_lsn.0 {
+            self.stable_notify.wait(&mut guard);
+        }
+
+        Ok(())
+    }
+
+    pub fn stable_lsn(&self) -> Lsn {
+        Lsn(self.stable_lsn.load(std::sync::atomic::Ordering::Acquire))
+    }
+}
+```
+
+## WAL I/O Thread
+
+```rust
+pub fn wal_io_thread(mut io: WalIoState) -> crate::Result<()> {
+    let mut pending_flush_lsn = Lsn::INVALID;
+
+    loop {
+        let req = io.flush_rx.recv()?;
+        pending_flush_lsn = pending_flush_lsn.max(req.target_lsn);
+
+        // Small group-commit window. Configurable.
+        while let Ok(extra) = io.flush_rx.try_recv() {
+            pending_flush_lsn = pending_flush_lsn.max(extra.target_lsn);
+        }
+
+        io.write_published_bytes_through(pending_flush_lsn)?;
+
+        if req.strict {
+            io.current_segment_file.sync_data()?;
+        }
+
+        io.wal.stable_lsn.store(
+            pending_flush_lsn.0,
+            std::sync::atomic::Ordering::Release,
+        );
+
+        io.wal.budget.release_written_through(pending_flush_lsn);
+        io.wal.stable_notify.notify_all();
+
+        pending_flush_lsn = Lsn::INVALID;
+    }
+}
+```
+
+Commit path:
+
+```rust
+impl Transaction {
+    pub fn commit(mut self, engine: &Engine) -> crate::Result<Csn> {
+        let csn = engine.txn_table.reserve_csn();
+
+        let payload = encode_commit_payload(CommitPayload {
+            txn_id: self.id,
+            csn,
+            first_lsn: self.first_lsn,
+            last_lsn: self.last_lsn,
+            write_set_hash: self.write_set_hash,
+        });
+
+        let permit = engine.wal.reserve(MAX_COMMIT_RECORD_BYTES)?;
+        let rec = engine
+            .wal
+            .append(permit, WalKind::TxnCommit, self.id, Some(csn), &payload)?;
+
+        engine.wal.request_flush(rec.end_lsn, true)?;
+        engine.wal.wait_stable(rec.end_lsn)?;
+
+        // Publish only after durable commit.
+        engine.txn_table.publish_committed(self.id, csn, rec.end_lsn);
+
+        Ok(csn)
+    }
+}
+```
+
+This is the central correctness/performance design:
+
+```text
+writers do not wait for data-file writes;
+writers wait only for WAL durability at commit;
+many writers can run concurrently;
+only WAL byte order and fsync publication serialize.
+```
+
+---
+
+# Page Mutation Protocol
+
+Every page mutation follows this pattern:
+
+```text
+1. Reserve WAL memory.
+2. Acquire page latch.
+3. Decide exact mutation.
+4. Encode WAL payload.
+5. Append WAL record into memory.
+6. Apply mutation to page.
+7. Set page.page_lsn = record.end_lsn.
+8. Mark frame dirty with dirty_lsn = record.end_lsn.
+9. Release page latch.
+10. Never wait for fsync while holding the latch.
+```
+
+Example heap insert:
+
+```rust
+pub fn heap_insert(
+    engine: &Engine,
+    txn: &mut Transaction,
+    relation_id: RelationId,
+    tuple: &[u8],
+) -> crate::Result<RowId> {
+    let permit = engine.wal.reserve(MAX_HEAP_INSERT_RECORD)?;
+
+    let frame = engine.buffer_pool.find_heap_page_with_space(relation_id, tuple.len())?;
+
+    let mut page = frame.write();
+
+    let slot_id = page.allocate_slot(tuple.len())?;
+
+    let payload = encode_heap_insert_payload(HeapInsertPayload {
+        relation_id,
+        page_id: page.page_id(),
+        slot_id,
+        txn_id: txn.id,
+        tuple,
+    });
+
+    let rec = engine
+        .wal
+        .append(permit, WalKind::HeapInsert, txn.id, None, &payload)?;
+
+    page.heap_insert(slot_id, txn.id, tuple)?;
+    page.set_page_lsn(rec.end_lsn);
+
+    frame.mark_dirty(rec.end_lsn);
+
+    txn.note_lsn(rec.end_lsn);
+    txn.write_set_hash_update(page.page_id(), slot_id);
+
+    Ok(RowId {
+        page_id: page.page_id(),
+        slot_id,
+    })
+}
+```
+
+The important subtlety:
+
+```text
+reserve WAL memory before the page latch;
+append only to memory while holding the page latch;
+never call sync/fsync under the page latch.
+```
+
+---
+
+# Buffer Frame Design
+
+```rust
+pub struct Frame {
+    state: FrameState,
+
+    page_id: std::sync::atomic::AtomicU64,
+    pin_count: std::sync::atomic::AtomicU32,
+
+    dirty_lsn: std::sync::atomic::AtomicU64,
+    rec_lsn: std::sync::atomic::AtomicU64,
+
+    latch: parking_lot::RwLock<PageBytes>,
+}
+
+pub struct PageBytes {
+    bytes: Box<[u8]>,
+}
+
+bitflags::bitflags! {
+    pub struct FrameFlags: u32 {
+        const DIRTY = 1 << 0;
+        const IO_IN_PROGRESS = 1 << 1;
+        const EVICTABLE = 1 << 2;
+    }
+}
+
+pub struct FrameState {
+    flags: std::sync::atomic::AtomicU32,
+}
+```
+
+Frame dirty semantics:
+
+```text
+dirty_lsn = newest page_lsn
+rec_lsn   = first LSN that dirtied this page since last clean flush
+```
+
+`rec_lsn` is useful for checkpoint/recovery horizon decisions.
+
+```rust
+impl Frame {
+    pub fn mark_dirty(&self, lsn: Lsn) {
+        let old_flags = self.state.flags.fetch_or(
+            FrameFlags::DIRTY.bits(),
+            std::sync::atomic::Ordering::AcqRel,
+        );
+
+        if old_flags & FrameFlags::DIRTY.bits() == 0 {
+            self.rec_lsn.store(lsn.0, std::sync::atomic::Ordering::Release);
+        }
+
+        self.dirty_lsn.store(lsn.0, std::sync::atomic::Ordering::Release);
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.state.flags.load(std::sync::atomic::Ordering::Acquire)
+            & FrameFlags::DIRTY.bits()
+            != 0
+    }
+}
+```
+
+---
+
+# WAL-Before-Data Flush Protocol
+
+The page flush worker must enforce this:
+
+```rust
+pub fn flush_frame(
+    engine: &Engine,
+    frame: &std::sync::Arc<Frame>,
+) -> crate::Result<FlushOutcome> {
+    if !frame.is_dirty() {
+        return Ok(FlushOutcome::AlreadyClean);
+    }
+
+    let stable_wal_lsn = engine.wal.stable_lsn();
+
+    let page_copy = {
+        let page = frame.latch.read();
+
+        let page_id = page.read_page_id();
+        let page_lsn = page.read_page_lsn();
+
+        if page_lsn.0 > stable_wal_lsn.0 {
+            return Ok(FlushOutcome::WalNotDurableYet {
+                page_lsn,
+                stable_wal_lsn,
+            });
+        }
+
+        let mut bytes = engine.page_pool.alloc_page_buf();
+        bytes.copy_from_slice(page.as_bytes());
+
+        seal_page_checksum(&mut bytes, engine.config.db_uuid);
+
+        PageFlushCopy {
+            page_id,
+            page_lsn,
+            bytes,
+        }
+    };
+
+    engine.doublewrite.flush_protected_batch(std::slice::from_ref(&page_copy))?;
+
+    engine.data_file.write_page(page_copy.page_id, &page_copy.bytes)?;
+
+    // In production, data sync is batched by checkpoint/flush batch.
+    engine.data_file.sync_data_if_batch_boundary()?;
+
+    let page = frame.latch.read();
+    let current_lsn = page.read_page_lsn();
+
+    if current_lsn == page_copy.page_lsn {
+        frame.state.flags.fetch_and(
+            !FrameFlags::DIRTY.bits(),
+            std::sync::atomic::Ordering::AcqRel,
+        );
+    }
+
+    Ok(FlushOutcome::Flushed)
+}
+```
+
+If a writer modifies the frame after the flush worker copied it, the flush worker may write an older page version to disk. That is okay because:
+
+```text
+older page image has page_lsn <= copied_lsn;
+newer WAL record remains in WAL;
+frame remains dirty because current page_lsn != copied_lsn;
+recovery replays newer WAL if needed.
+```
+
+---
+
+# Doublewrite Buffer
+
+I would use doublewrite protection instead of full-page images for Phase 1 strict mode.
+
+Reason:
+
+```text
+Full-page images increase foreground WAL bytes.
+Doublewrite increases background page-flush bytes.
+```
+
+For a concurrent OLTP engine, commit-path WAL bandwidth and fsync pressure are more important than background checkpoint bandwidth. So protect data-page writes outside the foreground commit path.
+
+## Doublewrite File
+
+```text
+dwb/protect.red
+```
+
+Layout:
+
+```text
+DwbHeader
+DwbSlot[0]
+DwbSlot[1]
+...
+```
+
+Header:
+
+```rust
+#[repr(u32)]
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum DwbState {
+    Clean = 0,
+    Writing = 1,
+    Ready = 2,
+}
+
+#[repr(C)]
+pub struct DwbHeader {
+    pub magic: u32,
+    pub version: u16,
+    pub state: u16,
+
+    pub generation: u64,
+    pub slot_count: u32,
+    pub page_size: u32,
+
+    pub header_crc: u32,
+    pub reserved: [u8; 4072],
+}
+
+const _: () = assert!(std::mem::size_of::<DwbHeader>() == 4096);
+```
+
+Slot header:
+
+```rust
+#[repr(C)]
+pub struct DwbSlotHeader {
+    pub page_id: u64,
+    pub page_lsn: u64,
+    pub page_crc: u32,
+    pub slot_crc: u32,
+    pub reserved: [u8; 40],
+}
+```
+
+## Doublewrite Protocol
+
+For a batch of dirty pages:
+
+```text
+1. Copy and checksum pages under short read latches.
+2. Write DWB slots.
+3. sync_data(DWB).
+4. Write DWB header state = Ready.
+5. sync_data(DWB).
+6. Write pages to main data file.
+7. sync_data(data file) at batch/checkpoint boundary.
+8. Write DWB header state = Clean.
+9. sync_data(DWB header).
+```
+
+Code sketch:
+
+```rust
+pub fn flush_protected_batch(&self, pages: &[PageFlushCopy]) -> crate::Result<()> {
+    if pages.is_empty() {
+        return Ok(());
+    }
+
+    let generation = self.next_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    self.write_header(DwbState::Writing, generation, 0)?;
+    self.write_slots(generation, pages)?;
+    self.file.sync_data()?;
+
+    self.write_header(DwbState::Ready, generation, pages.len() as u32)?;
+    self.file.sync_data()?;
+
+    for page in pages {
+        self.data_file.write_page(page.page_id, &page.bytes)?;
+    }
+
+    self.data_file.sync_data()?;
+
+    self.write_header(DwbState::Clean, generation, 0)?;
+    self.file.sync_data()?;
+
+    Ok(())
+}
+```
+
+Recovery:
+
+```rust
+pub fn recover_doublewrite(&self) -> crate::Result<()> {
+    let header = self.read_header()?;
+
+    if header.state != DwbState::Ready as u16 {
+        return Ok(());
+    }
+
+    let slots = self.read_valid_slots(header.slot_count)?;
+
+    for slot in slots {
+        let main_page = self.data_file.read_page(slot.page_id)?;
+
+        let main_valid = verify_page_checksum(&main_page, self.db_uuid);
+        let main_lsn = if main_valid {
+            read_page_lsn(&main_page)
+        } else {
+            Lsn::INVALID
+        };
+
+        if !main_valid || main_lsn.0 < slot.page_lsn.0 {
+            self.data_file.write_page(slot.page_id, &slot.page_bytes)?;
+        }
+    }
+
+    self.data_file.sync_data()?;
+    self.write_header(DwbState::Clean, header.generation, 0)?;
+    self.file.sync_data()?;
+
+    Ok(())
+}
+```
+
+This handles:
+
+```text
+crash before main page write       -> DWB restores page
+crash during torn main page write  -> DWB restores page
+crash after main write before clean -> DWB reapplies idempotently
+```
+
+---
+
+# Recovery Algorithm
+
+Open/recovery should be deterministic and boring.
+
+```text
+1. Acquire database directory owner lock.
+2. Read control A/B; choose highest valid generation.
+3. Recover doublewrite buffer.
+4. Scan WAL from control.redo_start_lsn.
+5. Stop safely at torn tail.
+6. Fail loudly on non-tail corruption.
+7. Redo all idempotent page/object records.
+8. Rebuild transaction table from commit/abort records.
+9. Mark loser transactions aborted.
+10. Publish recovered stable_lsn and committed CSN frontier.
+11. Optionally run recovery checkpoint.
+```
+
+## WAL Scanner
+
+Scanner states:
+
+```rust
+pub enum WalScanEvent {
+    Record(WalRecord),
+    Tail { at: Lsn },
+    Corruption { at: Lsn, reason: CorruptionReason },
+}
+
+pub enum CorruptionReason {
+    BadMagic,
+    BadHeaderCrc,
+    BadPayloadCrc,
+    BadFrameCrc,
+    BadTrailer,
+    NonMonotonicLsn,
+    BadPrevLsn,
+    UnexpectedNonZeroBytesAfterTail,
+}
+```
+
+Scanner rule:
+
+```text
+A bad/incomplete frame is tail only if it is the final frame candidate
+and the remaining bytes are zero or EOF.
+
+Otherwise it is corruption.
+```
+
+Code sketch:
+
+```rust
+pub fn scan_wal_segments(
+    wal_dir: &dyn WalDir,
+    start_lsn: Lsn,
+) -> crate::Result<WalScanResult> {
+    let mut result = WalScanResult::default();
+    let mut expected_prev = Lsn::INVALID;
+
+    for segment in wal_dir.segments_from(start_lsn)? {
+        let mut offset = segment.offset_for_lsn(start_lsn)?;
+
+        loop {
+            let start = segment.start_lsn + offset;
+
+            let header_bytes = match segment.read_exact_or_short(offset, WAL_FRAME_HEADER_LEN)? {
+                ReadExactOrShort::Exact(bytes) => bytes,
+                ReadExactOrShort::Short(_) => {
+                    result.tail_lsn = Lsn(start);
+                    return Ok(result);
+                }
+            };
+
+            if all_zero(&header_bytes) {
+                result.tail_lsn = Lsn(start);
+                return Ok(result);
+            }
+
+            let header = parse_frame_header(&header_bytes)?;
+
+            if header.magic != WAL_FRAME_MAGIC {
+                if segment.rest_is_zero(offset)? {
+                    result.tail_lsn = Lsn(start);
+                    return Ok(result);
+                }
+                return Err(Error::wal_corruption(start, CorruptionReason::BadMagic));
+            }
+
+            validate_header_crc(&header, &header_bytes)
+                .map_err(|r| Error::wal_corruption(start, r))?;
+
+            if expected_prev.is_valid() && header.prev_frame_lsn != expected_prev.0 {
+                return Err(Error::wal_corruption(start, CorruptionReason::BadPrevLsn));
+            }
+
+            let frame_len = total_frame_len(header.payload_len as usize);
+
+            let frame_bytes = match segment.read_exact_or_short(offset, frame_len)? {
+                ReadExactOrShort::Exact(bytes) => bytes,
+                ReadExactOrShort::Short(_) => {
+                    result.tail_lsn = Lsn(start);
+                    return Ok(result);
+                }
+            };
+
+            validate_full_frame(&frame_bytes)
+                .map_err(|r| Error::wal_corruption(start, r))?;
+
+            let record = decode_wal_record(&frame_bytes)?;
+            expected_prev = record.end_lsn;
+
+            result.records += 1;
+            result.end_lsn = record.end_lsn;
+
+            result.apply_or_collect(record)?;
+
+            offset += frame_len as u64;
+        }
+    }
+
+    Ok(result)
+}
+```
+
+## Redo Applier
+
+Page-local redo:
+
+```rust
+pub fn redo_page_patch(
+    engine: &Engine,
+    record_lsn: Lsn,
+    patch: PagePatchRecord,
+) -> crate::Result<()> {
+    let mut page = engine.data_file.read_page_or_zero(patch.page_id)?;
+
+    let page_valid = verify_page_checksum(&page, engine.config.db_uuid);
+
+    if page_valid {
+        let page_lsn = read_page_lsn(&page);
+
+        if page_lsn.0 >= record_lsn.0 {
+            return Ok(());
+        }
+    } else if !patch.has_full_image_fallback {
+        return Err(Error::PageCorruptNeedsFullImage {
+            page_id: patch.page_id,
+            record_lsn,
+        });
+    }
+
+    for p in patch.patches {
+        let start = p.offset as usize;
+        let end = start + p.bytes.len();
+        page[start..end].copy_from_slice(&p.bytes);
+    }
+
+    write_page_lsn(&mut page, record_lsn);
+    seal_page_checksum(&mut page, engine.config.db_uuid);
+
+    engine.data_file.write_page(patch.page_id, &page)?;
+
+    Ok(())
+}
+```
+
+Transaction recovery:
+
+```rust
+pub fn rebuild_txn_table_from_wal(scan: &WalScanResult) -> TxnRecoveryTable {
+    let mut table = TxnRecoveryTable::default();
+
+    for rec in scan.records_iter() {
+        match rec.kind {
+            WalKind::TxnCommit => {
+                let commit = decode_commit_payload(&rec.payload);
+                table.mark_committed(commit.txn_id, commit.csn, rec.end_lsn);
+            }
+            WalKind::TxnAbort => {
+                let abort = decode_abort_payload(&rec.payload);
+                table.mark_aborted(abort.txn_id, rec.end_lsn);
+            }
+            _ => {}
+        }
+    }
+
+    table.mark_missing_commits_as_aborted();
+    table
+}
+```
+
+For MVCC heap, this is sufficient:
+
+```text
+Uncommitted inserted tuples may exist physically after redo.
+They are invisible because their xmin transaction is not committed.
+
+Uncommitted deletes may exist physically after redo.
+They do not hide old versions because their xmax transaction is not committed.
+```
+
+That avoids ARIES-style physical undo in Phase 1.
+
+---
+
+# MVCC Commit and Visibility
+
+Use CSN, not wall-clock time.
+
+```rust
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum TxnState {
+    InProgress,
+    Committed { csn: Csn, commit_lsn: Lsn },
+    Aborted,
+}
+
+pub struct TxnTable {
+    buckets: Vec<parking_lot::RwLock<TxnBucket>>,
+    next_txn_id: std::sync::atomic::AtomicU64,
+    next_csn: std::sync::atomic::AtomicU64,
+
+    /// Highest committed CSN safe for new snapshots.
+    published_csn: std::sync::atomic::AtomicU64,
+}
+
+impl TxnTable {
+    pub fn begin(&self) -> Transaction {
+        let txn_id = TxnId(
+            self.next_txn_id
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        );
+
+        self.insert_state(txn_id, TxnState::InProgress);
+
+        let snapshot_csn = Csn(
+            self.published_csn
+                .load(std::sync::atomic::Ordering::Acquire),
+        );
+
+        Transaction {
+            id: txn_id,
+            snapshot_csn,
+            first_lsn: Lsn::INVALID,
+            last_lsn: Lsn::INVALID,
+            write_set_hash: 0,
+        }
+    }
+
+    pub fn reserve_csn(&self) -> Csn {
+        Csn(
+            self.next_csn
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        )
+    }
+
+    pub fn publish_committed(&self, txn_id: TxnId, csn: Csn, commit_lsn: Lsn) {
+        self.set_state(txn_id, TxnState::Committed { csn, commit_lsn });
+
+        self.published_csn
+            .fetch_max(csn.0, std::sync::atomic::Ordering::Release);
+    }
+}
+```
+
+Tuple visibility:
+
+```rust
+pub fn tuple_visible(
+    txn_table: &TxnTable,
+    snapshot_csn: Csn,
+    tuple: &TupleHeader,
+) -> bool {
+    let xmin_state = txn_table.get_state(tuple.xmin);
+
+    let xmin_visible = match xmin_state {
+        TxnState::Committed { csn, .. } => csn.0 <= snapshot_csn.0,
+        TxnState::InProgress => false,
+        TxnState::Aborted => false,
+    };
+
+    if !xmin_visible {
+        return false;
+    }
+
+    if tuple.xmax == TxnId(0) {
+        return true;
+    }
+
+    let xmax_state = txn_table.get_state(tuple.xmax);
+
+    match xmax_state {
+        TxnState::Committed { csn, .. } => csn.0 > snapshot_csn.0,
+        TxnState::InProgress => true,
+        TxnState::Aborted => true,
+    }
+}
+```
+
+This gives clean snapshot isolation semantics for Phase 1.
+
+---
+
+# Checkpoint Protocol
+
+Checkpoint should not block writers. It only establishes a new recovery starting point.
+
+```text
+1. target_lsn = wal.stable_lsn()
+2. append CheckpointBegin(target_lsn)
+3. collect dirty frames with page_lsn <= target_lsn
+4. flush them through doublewrite
+5. sync data file
+6. write new control slot:
+     checkpoint_lsn = target_lsn
+     redo_start_lsn = target_lsn or lower if retention requires
+     durable_data_lsn = target_lsn
+7. sync control slot
+8. append CheckpointEnd
+9. prune old WAL segments after control is durable
+```
+
+Checkpoint must tolerate concurrent writers:
+
+```text
+If a page changes while checkpoint is copying it:
+  checkpoint may write the old image;
+  page remains dirty because current page_lsn changed;
+  newer WAL remains available.
+```
+
+Code sketch:
+
+```rust
+pub fn checkpoint(engine: &Engine) -> crate::Result<CheckpointResult> {
+    let target_lsn = engine.wal.stable_lsn();
+
+    let begin_payload = encode_checkpoint_begin(target_lsn);
+    let permit = engine.wal.reserve(MAX_CHECKPOINT_RECORD)?;
+    engine
+        .wal
+        .append(permit, WalKind::CheckpointBegin, TxnId(0), None, &begin_payload)?;
+
+    let dirty = engine.buffer_pool.collect_dirty_pages_lte(target_lsn);
+
+    for batch in dirty.chunks(engine.config.checkpoint_flush_batch_pages) {
+        engine.buffer_pool.flush_batch_protected(batch, target_lsn)?;
+    }
+
+    engine.data_file.sync_data()?;
+
+    engine.control.write_next_slot(ControlUpdate {
+        checkpoint_lsn: target_lsn,
+        durable_data_lsn: target_lsn,
+        redo_start_lsn: engine.retention.redo_start_lsn(target_lsn),
+    })?;
+
+    let end_payload = encode_checkpoint_end(target_lsn);
+    let permit = engine.wal.reserve(MAX_CHECKPOINT_RECORD)?;
+    engine
+        .wal
+        .append(permit, WalKind::CheckpointEnd, TxnId(0), None, &end_payload)?;
+
+    engine.wal_pruner.prune_segments_before(engine.control.redo_start_lsn())?;
+
+    Ok(CheckpointResult { target_lsn })
+}
+```
+
+---
+
+# Crash Injection System
+
+This is the most important Phase 1 test infrastructure.
+
+Build a pure-Rust VFS trait:
+
+```rust
+pub trait DbFile: Send + Sync {
+    fn read_at(&self, offset: u64, buf: &mut [u8]) -> crate::Result<usize>;
+    fn write_at(&self, offset: u64, buf: &[u8]) -> crate::Result<usize>;
+    fn sync_data(&self) -> crate::Result<()>;
+    fn sync_all(&self) -> crate::Result<()>;
+    fn set_len(&self, len: u64) -> crate::Result<()>;
+}
+
+pub trait Vfs: Send + Sync {
+    fn open(&self, path: &std::path::Path, opts: OpenOptions) -> crate::Result<Box<dyn DbFile>>;
+    fn create_dir_all(&self, path: &std::path::Path) -> crate::Result<()>;
+    fn remove_file(&self, path: &std::path::Path) -> crate::Result<()>;
+    fn sync_dir(&self, path: &std::path::Path) -> crate::Result<()>;
+}
+```
+
+Then implement:
+
+```text
+StdVfs       -> real filesystem
+FaultVfs     -> deterministic crash/fault model
+MemVfs       -> in-memory durable/volatile byte model
+```
+
+## Fault Points
+
+```rust
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum FaultPoint {
+    WalBeforeAppend,
+    WalAfterHeaderWrite,
+    WalAfterPayloadWrite,
+    WalBeforeSync,
+    WalAfterSync,
+
+    PageBeforeFlush,
+    PageAfterDwbSlots,
+    PageAfterDwbReady,
+    PageAfterDataPartialWrite,
+    PageAfterDataWriteBeforeSync,
+    PageAfterDataSyncBeforeDwbClean,
+
+    CheckpointBeforeControlWrite,
+    CheckpointAfterControlWriteBeforeSync,
+    CheckpointAfterControlSyncBeforeWalPrune,
+
+    SegmentBeforeRotate,
+    SegmentAfterCreateBeforeHeaderSync,
+    SegmentAfterHeaderSyncBeforePublish,
+
+    RecoveryAfterDwb,
+    RecoveryAfterWalScan,
+    RecoveryMidRedo,
+}
+```
+
+Crash runner:
+
+```rust
+pub struct CrashScript {
+    crash_at_nth_fault: Option<u64>,
+    seen: std::sync::atomic::AtomicU64,
+}
+
+impl CrashScript {
+    pub fn hit(&self, point: FaultPoint) -> crate::Result<()> {
+        let n = self.seen.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+
+        if self.crash_at_nth_fault == Some(n) {
+            return Err(Error::InjectedCrash { point, n });
+        }
+
+        Ok(())
+    }
+}
+```
+
+Test every crash point:
+
+```rust
+#[test]
+fn crash_matrix_committed_rows_survive() {
+    for crash_n in 1..10_000 {
+        let vfs = FaultVfs::new(CrashScript {
+            crash_at_nth_fault: Some(crash_n),
+            seen: Default::default(),
+        });
+
+        let model = run_workload_until_crash(vfs.clone());
+
+        let reopened = Engine::open_with_vfs(TEST_DB, vfs.reboot()).unwrap();
+
+        assert_committed_model_visible(&reopened, &model.acked_commits);
+        assert_no_uncommitted_rows_visible(&reopened);
+        assert_page_checksums_valid(&reopened);
+    }
+}
+```
+
+The test oracle must distinguish:
+
+```text
+acked commits:
+  commit returned Ok before crash
+  must be visible after recovery
+
+unacked commits:
+  commit was in progress during crash
+  may be visible if commit record reached durable WAL
+  may be absent
+  must not corrupt database
+
+uncommitted txns:
+  must not be visible
+```
+
+---
+
+# Fault VFS Model
+
+You want to model the ugly reality:
+
+```text
+write without sync may or may not persist
+sync creates a durability barrier
+crash may leave a torn final write
+data pages may tear
+WAL tails may tear
+```
+
+Simplified in-memory model:
+
+```rust
+#[derive(Clone)]
+pub struct FaultFileState {
+    durable: Vec<u8>,
+    volatile: Vec<PendingWrite>,
+}
+
+#[derive(Clone)]
+pub struct PendingWrite {
+    offset: u64,
+    bytes: Vec<u8>,
+    may_tear: bool,
+}
+
+impl FaultFileState {
+    pub fn write_at(&mut self, offset: u64, bytes: &[u8], may_tear: bool) {
+        self.volatile.push(PendingWrite {
+            offset,
+            bytes: bytes.to_vec(),
+            may_tear,
+        });
+    }
+
+    pub fn sync_data(&mut self) {
+        for w in self.volatile.drain(..) {
+            apply_write(&mut self.durable, w.offset, &w.bytes);
+        }
+    }
+
+    pub fn crash(mut self, policy: CrashPersistencePolicy) -> Self {
+        match policy {
+            CrashPersistencePolicy::LoseAllVolatile => {
+                self.volatile.clear();
+            }
+            CrashPersistencePolicy::PersistSomeVolatile => {
+                let writes = choose_subset_or_prefix(&self.volatile);
+                for w in writes {
+                    let bytes = if w.may_tear {
+                        tear_bytes(&w.bytes)
+                    } else {
+                        w.bytes.clone()
+                    };
+                    apply_write(&mut self.durable, w.offset, &bytes);
+                }
+                self.volatile.clear();
+            }
+        }
+
+        self
+    }
+}
+```
+
+Run the same workload under several crash policies:
+
+```text
+lose all unsynced writes
+persist all unsynced writes
+persist random prefix
+persist random subset
+persist torn final write
+persist torn page write
+```
+
+---
+
+# Required Phase 1 Tests
+
+## 1. WAL Tail Tests
+
+```text
+append N valid records
+truncate final record at every byte boundary
+recover
+expect records 1..N-1 applied
+expect no corruption error
+```
+
+```rust
+#[test]
+fn torn_wal_tail_is_ignored_at_every_byte() {
+    for cut in 0..MAX_RECORD_SIZE {
+        let vfs = make_db_with_wal_cut_at_last_record(cut);
+        let db = Engine::open_with_vfs(TEST_DB, vfs).unwrap();
+
+        assert_visible_rows(&db, expected_without_torn_record());
+    }
+}
+```
+
+## 2. Non-Tail Corruption Tests
+
+```text
+append records A, B, C
+flip one byte in B
+recover
+expect hard corruption error
+```
+
+```rust
+#[test]
+fn corrupt_middle_wal_record_fails_loudly() {
+    let vfs = make_db_with_three_commits();
+    vfs.flip_wal_byte(record_b_payload_offset());
+
+    let err = Engine::open_with_vfs(TEST_DB, vfs).unwrap_err();
+
+    assert!(matches!(err, Error::WalCorruption { .. }));
+}
+```
+
+## 3. Dirty Page Flush Guard
+
+```rust
+#[test]
+fn dirty_page_never_flushes_ahead_of_wal() {
+    let engine = Engine::open_test();
+
+    let txn = engine.begin();
+    let row = engine.heap_insert_for_test(txn, b"abc").unwrap();
+
+    let frame = engine.buffer_pool.frame_for(row.page_id).unwrap();
+    let page_lsn = frame.read_page_lsn();
+
+    engine.test_set_stable_wal_lsn(Lsn(page_lsn.0 - 1));
+
+    let out = engine.buffer_pool.flush_frame(&frame).unwrap();
+
+    assert!(matches!(out, FlushOutcome::WalNotDurableYet { .. }));
+    assert!(!engine.vfs.data_file_write_attempted(row.page_id));
+}
+```
+
+## 4. Doublewrite Recovery Tests
+
+Cases:
+
+```text
+crash after DWB ready before data write
+crash halfway through data page write
+crash after data write before DWB clean
+DWB header torn
+DWB slot torn
+```
+
+Expected:
+
+```text
+valid DWB restores main page
+invalid unused DWB is ignored
+valid main page plus stale DWB is harmless
+```
+
+## 5. MVCC Model Tests
+
+Use `proptest`.
+
+Operations:
+
+```rust
+#[derive(Clone, Debug)]
+pub enum ModelOp {
+    Begin { session: u8 },
+    Insert { session: u8, key: u16, value: u16 },
+    Update { session: u8, key: u16, value: u16 },
+    Delete { session: u8, key: u16 },
+    Read { session: u8, key: u16 },
+    Commit { session: u8 },
+    Rollback { session: u8 },
+    Checkpoint,
+    Vacuum,
+    CrashReopen,
+}
+```
+
+Reference model:
+
+```rust
+#[derive(Clone, Debug)]
+struct RefVersion {
+    value: Option<u16>,
+    xmin: TxnId,
+    xmin_csn: Option<Csn>,
+    xmax: Option<TxnId>,
+    xmax_csn: Option<Csn>,
+    aborted: bool,
+}
+
+#[derive(Default)]
+struct RefModel {
+    next_txn: u64,
+    next_csn: u64,
+    active: BTreeMap<u8, RefTxn>,
+    rows: BTreeMap<u16, Vec<RefVersion>>,
+    acked_commits: Vec<Csn>,
+}
+```
+
+Property:
+
+```text
+For any generated operation sequence:
+  RedlineDB visible rows == reference visible rows
+after every commit, rollback, checkpoint, vacuum, and crash/reopen.
+```
+
+Test:
+
+```rust
+proptest! {
+    #[test]
+    fn mvcc_matches_reference_model(ops in proptest::collection::vec(any_model_op(), 1..200)) {
+        let mut harness = MvccHarness::new();
+        let mut model = RefModel::default();
+
+        for op in ops {
+            harness.apply(&op);
+            model.apply(&op);
+
+            if op.is_observation_point() {
+                assert_eq!(
+                    harness.visible_snapshot(),
+                    model.visible_snapshot()
+                );
+            }
+        }
+    }
+}
+```
+
+## 6. Long Snapshot Tests
+
+```text
+T1 begins at CSN 10
+T2 deletes row and commits at CSN 11
+vacuum runs
+T1 still sees old row
+T1 ends
+vacuum runs again
+old version may be reclaimed
+```
+
+## 7. Recovery Idempotence Tests
+
+```text
+run recovery once
+copy files
+run recovery again
+files and visible state remain equivalent
+```
+
+```rust
+#[test]
+fn recovery_is_idempotent() {
+    let vfs = make_crashed_db();
+
+    let db1 = Engine::open_with_vfs(TEST_DB, vfs.clone()).unwrap();
+    let state1 = db1.debug_dump_state();
+
+    drop(db1);
+
+    let db2 = Engine::open_with_vfs(TEST_DB, vfs.clone()).unwrap();
+    let state2 = db2.debug_dump_state();
+
+    assert_eq!(state1.visible_rows, state2.visible_rows);
+    assert_eq!(state1.page_lsn_map, state2.page_lsn_map);
+}
+```
+
+---
+
+# Concurrency Testing
+
+Use two layers.
+
+## Loom for Small Critical Structures
+
+Loom systematically explores possible concurrent executions under the C11 memory model and uses state reduction to avoid some combinatorial explosion. ([Docs.rs][4])
+
+Use loom for:
+
+```text
+stable_lsn wait/notify
+WAL budget acquire/release
+frame dirty/clean race
+row-lock acquisition order
+commit publication ordering
+```
+
+Example:
+
+```rust
+#[cfg(feature = "loom")]
+#[test]
+fn stable_lsn_waiter_cannot_miss_notification() {
+    loom::model(|| {
+        use loom::sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc, Condvar, Mutex,
+        };
+        use loom::thread;
+
+        let stable = Arc::new(AtomicU64::new(0));
+        let pair = Arc::new((Mutex::new(()), Condvar::new()));
+
+        let waiter_stable = stable.clone();
+        let waiter_pair = pair.clone();
+
+        let waiter = thread::spawn(move || {
+            let (lock, cv) = &*waiter_pair;
+            let mut guard = lock.lock().unwrap();
+
+            while waiter_stable.load(Ordering::Acquire) < 10 {
+                guard = cv.wait(guard).unwrap();
+            }
+
+            assert!(waiter_stable.load(Ordering::Acquire) >= 10);
+        });
+
+        let flusher_stable = stable.clone();
+        let flusher_pair = pair.clone();
+
+        let flusher = thread::spawn(move || {
+            flusher_stable.store(10, Ordering::Release);
+            let (_, cv) = &*flusher_pair;
+            cv.notify_all();
+        });
+
+        waiter.join().unwrap();
+        flusher.join().unwrap();
+    });
+}
+```
+
+## Shuttle for Larger Concurrent Scenarios
+
+Shuttle controls thread scheduling and can reproduce failing randomized schedules deterministically, which is useful for bigger tests that are too large for exhaustive loom checking. ([Docs.rs][5])
+
+Use shuttle for:
+
+```text
+8 sessions inserting disjoint keys
+8 sessions updating same key with row locks
+checkpoint racing with commits
+flush worker racing with page mutations
+commit waiters racing with WAL fsync thread
+```
+
+Example:
+
+```rust
+#[cfg(feature = "shuttle")]
+#[test]
+fn concurrent_disjoint_writers_no_lost_commits() {
+    shuttle::check_random(|| {
+        let engine = shuttle_engine();
+
+        let mut handles = Vec::new();
+
+        for i in 0..4u64 {
+            let e = engine.clone();
+
+            handles.push(shuttle::thread::spawn(move || {
+                let mut txn = e.begin();
+                e.insert(&mut txn, i, i * 10).unwrap();
+                txn.commit(&e).unwrap();
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        let snapshot = engine.read_all();
+        assert_eq!(snapshot.len(), 4);
+    }, 10_000);
+}
+```
+
+---
+
+# Locking and Latch Order
+
+Define a global order and enforce it in debug builds.
+
+Recommended order:
+
+```text
+1. transaction table bucket
+2. row-lock bucket
+3. buffer-pool shard
+4. frame/page latch
+5. WAL insertion mutex
+```
+
+But WAL insertion mutex is special:
+
+```text
+it must never acquire page latches;
+it must never fsync;
+it must never block on checkpoint;
+it must only copy memory and advance cursors.
+```
+
+That makes this safe:
+
+```text
+page latch -> WAL insertion mutex
+```
+
+because the WAL insertion mutex does not call back into the buffer pool.
+
+Never do this:
+
+```text
+page latch -> wait for stable_lsn
+page latch -> row lock wait
+page latch -> checkpoint wait
+page latch -> data file sync
+page latch -> WAL fsync
+```
+
+Debug guard:
+
+```rust
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum LockRank {
+    TxnTable = 10,
+    RowLock = 20,
+    BufferShard = 30,
+    PageLatch = 40,
+    WalInsert = 50,
+}
+
+thread_local! {
+    static HELD_LOCK_RANK: std::cell::Cell<Option<LockRank>> =
+        std::cell::Cell::new(None);
+}
+
+pub fn assert_lock_order(next: LockRank) {
+    HELD_LOCK_RANK.with(|rank| {
+        if let Some(current) = rank.get() {
+            debug_assert!(
+                next >= current,
+                "lock order violation: holding {:?}, acquiring {:?}",
+                current,
+                next
+            );
+        }
+        rank.set(Some(next));
+    });
+}
+```
+
+---
+
+# Memory Discipline
+
+Phase 1 should already behave like a production embedded database.
+
+## Fixed Memory Budgets
+
+```rust
+pub struct MemoryConfig {
+    pub buffer_pool_bytes: usize,
+    pub wal_buffer_bytes: usize,
+    pub doublewrite_batch_pages: usize,
+    pub checkpoint_batch_pages: usize,
+    pub max_txn_private_bytes: usize,
+    pub row_lock_buckets: usize,
+}
+```
+
+Defaults:
+
+```text
+buffer_pool_bytes:       64 MiB
+wal_buffer_bytes:        16 MiB
+doublewrite_batch_pages: 128
+checkpoint_batch_pages:  256
+max_txn_private_bytes:   1 MiB before spill
+row_lock_buckets:        next_power_of_two(4 * CPUs)
+```
+
+## Avoid Hot-Path Allocations
+
+Use:
+
+```text
+SmallVec for small WAL payloads
+ArrayVec for fixed headers
+page-copy pool for flush/checkpoint buffers
+per-thread scratch buffers
+bounded WAL memory ring
+bounded dirty queues
+```
+
+Writer hot path should usually be:
+
+```text
+row lock
+page lookup
+page latch
+WAL memcpy
+page memcpy
+unlock
+commit wait
+```
+
+No heap allocation for common small tuple inserts.
+
+---
+
+# Threading Model for Speed
+
+## Application Threads
+
+Do:
+
+```text
+MVCC begin
+row locks
+buffer-pool page lookup
+page mutation
+WAL append into memory
+commit wait
+```
+
+Do not:
+
+```text
+fsync
+checkpoint
+data file writes
+long vacuum work
+```
+
+## WAL Thread
+
+Single writer to WAL file. This is intentional.
+
+Even if transactions run concurrently, WAL byte order must be total. The trick is to make the serialized section tiny:
+
+```text
+serialized: assign LSN + memcpy frame into WAL buffer
+not serialized: transaction execution, row locks, page latches, reads, most writes
+```
+
+## Flush/Checkpoint Thread
+
+Batches page flushing.
+
+```text
+collect dirty pages
+skip pages whose page_lsn > stable_lsn
+copy pages under short latch
+doublewrite batch
+write data pages sorted by page_id
+sync data file at batch boundary
+mark frames clean if unchanged
+```
+
+## Background Work Limits
+
+No unbounded background work.
+
+```rust
+pub struct BackgroundLimits {
+    pub max_pages_per_checkpoint_tick: usize,
+    pub max_dwb_pages_per_batch: usize,
+    pub max_wal_bytes_per_sync: usize,
+    pub max_checkpoint_millis_per_tick: u64,
+}
+```
+
+---
+
+# Durability Modes
+
+Phase 1 correctness gates should target strict mode.
+
+```rust
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum DurabilityMode {
+    /// Commit returns only after WAL commit record is synced.
+    Strict,
+
+    /// Commit returns after WAL bytes are written to OS cache.
+    Normal,
+
+    /// Commit returns after in-memory append. Dev/test only.
+    Unsafe,
+}
+```
+
+Strict:
+
+```text
+commit append
+request WAL sync
+wait stable_lsn >= commit_lsn
+publish commit
+return
+```
+
+Normal:
+
+```text
+commit append
+wait written_lsn >= commit_lsn
+publish commit
+return
+```
+
+Unsafe:
+
+```text
+commit append to memory
+publish commit
+return
+```
+
+For Phase 1 release gates, only Strict must satisfy:
+
+```text
+no acknowledged commit disappears
+dirty pages never flush ahead of durable WAL
+```
+
+---
+
+# Idempotence Strategy for Every Durable Mutation
+
+Create a trait:
+
+```rust
+pub trait RedoRecord {
+    fn end_lsn(&self) -> Lsn;
+    fn targets(&self) -> &[RedoTarget];
+    fn apply(&self, ctx: &mut RedoContext) -> crate::Result<()>;
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum RedoTarget {
+    Page(PageId),
+    TxnStatus(TxnId),
+    Control,
+    Doublewrite,
+}
+```
+
+Idempotence rules by target:
+
+| Target          |                             Stored LSN | Redo check                       |
+| --------------- | -------------------------------------: | -------------------------------- |
+| Data page       |                 `page_header.page_lsn` | skip if `page_lsn >= record_lsn` |
+| Txn status page | status page LSN or commit record table | skip if status LSN >= record LSN |
+| Control file    |                       generation + CRC | choose highest valid generation  |
+| DWB             |                       generation + CRC | reapply valid ready batch        |
+| WAL segment     |                      frame chain + CRC | validate sequentially            |
+
+Every new durable structure added later must answer:
+
+```text
+Where is your last-applied LSN stored?
+How does redo skip an already-applied record?
+How do you detect torn/corrupt bytes?
+```
+
+If it cannot answer those, it should not be added.
+
+---
+
+# Concrete Recovery Redo Example: Heap Insert
+
+Payload:
+
+```rust
+pub struct HeapInsertPayload<'a> {
+    pub relation_id: RelationId,
+    pub page_id: PageId,
+    pub slot_id: u16,
+    pub txn_id: TxnId,
+    pub tuple: &'a [u8],
+}
+```
+
+Redo:
+
+```rust
+pub fn redo_heap_insert(
+    ctx: &mut RedoContext,
+    record_lsn: Lsn,
+    payload: HeapInsertPayload<'_>,
+) -> crate::Result<()> {
+    let mut page = ctx.read_or_init_heap_page(payload.page_id, payload.relation_id)?;
+
+    if page.page_lsn().0 >= record_lsn.0 {
+        return Ok(());
+    }
+
+    if page.slot_exists(payload.slot_id) {
+        let existing = page.slot_bytes(payload.slot_id)?;
+
+        if existing == payload.tuple {
+            page.set_page_lsn(record_lsn);
+            ctx.write_page(page)?;
+            return Ok(());
+        }
+
+        return Err(Error::RedoConflict {
+            page_id: payload.page_id,
+            lsn: record_lsn,
+        });
+    }
+
+    page.insert_at_slot(payload.slot_id, payload.txn_id, payload.tuple)?;
+    page.set_page_lsn(record_lsn);
+    page.seal_checksum(ctx.db_uuid());
+
+    ctx.write_page(page)?;
+
+    Ok(())
+}
+```
+
+---
+
+# Release Gates for Phase 1
+
+Do not move to Phase 2 until these pass.
+
+## Unit Gates
+
+```text
+page checksum detects bit flips
+page checksum detects wrong page_id
+WAL frame checksum detects payload corruption
+WAL frame checksum detects header corruption
+control A/B picks newest valid generation
+DWB replays ready batch
+DWB ignores clean batch
+```
+
+## Crash Gates
+
+```text
+crash at every WAL append point
+crash at every WAL sync point
+crash at every data flush point
+crash at every DWB point
+crash at every checkpoint point
+crash at every segment rotation point
+crash during recovery redo
+```
+
+## Invariant Gates
+
+```text
+no acked commit disappears in strict mode
+uncommitted rows are invisible after recovery
+torn WAL tail ignored
+non-tail WAL corruption fails
+dirty page flush ahead of WAL is impossible
+recovery is idempotent
+checkpoint never prunes needed WAL
+```
+
+## Concurrency Gates
+
+```text
+loom stable_lsn waiter
+loom WAL budget
+loom frame dirty/clean race
+loom commit publication
+shuttle concurrent disjoint writers
+shuttle same-row writer conflict
+shuttle checkpoint racing with writers
+shuttle flush racing with page mutation
+```
+
+## Performance Sanity Gates
+
+Even in Phase 1, measure:
+
+```text
+WAL append ns/op
+commit strict p50/p95/p99
+group commit batch size
+bytes WAL/op
+page flush MB/s
+checkpoint stall time
+buffer-pool hit rate
+dirty pages waiting for WAL
+stable_lsn lag
+```
+
+Expose these counters:
+
+```rust
+pub struct KernelStats {
+    pub wal_appended_bytes: AtomicU64,
+    pub wal_synced_bytes: AtomicU64,
+    pub wal_sync_count: AtomicU64,
+    pub wal_group_commit_count: AtomicU64,
+    pub wal_waiter_count: AtomicU64,
+
+    pub buffer_hits: AtomicU64,
+    pub buffer_misses: AtomicU64,
+    pub dirty_pages: AtomicU64,
+    pub flush_blocked_by_wal: AtomicU64,
+
+    pub checkpoint_count: AtomicU64,
+    pub checkpoint_pages_written: AtomicU64,
+    pub checkpoint_millis: AtomicU64,
+
+    pub recovery_count: AtomicU64,
+    pub recovery_redone_records: AtomicU64,
+    pub recovery_skipped_records: AtomicU64,
+}
+```
+
+---
+
+# The Simplest Correct Phase 1 Implementation Order
+
+I would land it in this exact order:
+
+## Step 1: Introduce VFS and checksummed pages
+
+Do this before changing WAL.
+
+Deliverables:
+
+```text
+Vfs trait
+StdVfs
+FaultVfs skeleton
+PageHeader
+page checksum
+page read/write verification
+```
+
+Tests:
+
+```text
+wrong page_id fails checksum
+bit flip fails checksum
+zero page initializes correctly
+```
+
+## Step 2: Replace WAL format with framed end-LSN records
+
+Deliverables:
+
+```text
+WalSegmentHeader
+WalFrameHeader
+WalFrameTrailer
+record CRCs
+end-LSN convention
+scanner that distinguishes tail vs corruption
+```
+
+Tests:
+
+```text
+append/scan
+tail truncation at every byte
+middle corruption fails
+segment rotation
+```
+
+## Step 3: Add WAL memory buffer and group commit
+
+Deliverables:
+
+```text
+Wal::reserve
+Wal::append
+WAL I/O thread
+stable_lsn publication
+commit wait
+strict/normal/unsafe modes
+```
+
+Tests:
+
+```text
+commit publishes only after stable_lsn
+waiter cannot miss notification
+group commit wakes all waiters
+```
+
+## Step 4: Enforce WAL-before-data in buffer pool
+
+Deliverables:
+
+```text
+page.page_lsn set from WAL record end_lsn
+frame dirty_lsn
+flush guard
+flush requeue if stable_lsn too low
+```
+
+Tests:
+
+```text
+flush ahead forbidden
+flush after WAL stable allowed
+page modified during flush remains dirty
+```
+
+## Step 5: Add doublewrite
+
+Deliverables:
+
+```text
+DWB file
+Ready/Clean protocol
+DWB recovery before WAL redo
+protected flush batches
+```
+
+Tests:
+
+```text
+crash before data write
+crash during data write
+crash before DWB clean
+```
+
+## Step 6: Make all current durable mutations redo-idempotent
+
+Deliverables:
+
+```text
+heap insert/update/delete redo
+txn status redo
+checkpoint metadata redo/control
+undo/vacuum V1 records if currently durable
+```
+
+Tests:
+
+```text
+recovery twice is equivalent
+committed heap state survives
+loser txns invisible
+```
+
+## Step 7: Full crash matrix
+
+Deliverables:
+
+```text
+FaultPoint registry
+run workload with crash_at_nth_fault = N
+reopen and assert model
+```
+
+Tests:
+
+```text
+small exhaustive workloads
+larger randomized workloads
+```
+
+## Step 8: Loom/Shuttle concurrency suite
+
+Deliverables:
+
+```text
+cfg(loom) sync abstraction
+loom tests for small races
+shuttle tests for engine-level schedules
+```
+
+---
+
+# The Final Phase 1 Shape
+
+When Phase 1 is done, the core write path should look like this:
+
+```text
+BEGIN
+  txn_id = atomic fetch_add
+  snapshot_csn = published_csn acquire-load
+
+INSERT
+  row lock
+  WAL reserve
+  page latch
+  WAL append into memory -> record end_lsn
+  mutate page
+  page.page_lsn = end_lsn
+  frame dirty_lsn = end_lsn
+  unlatch
+
+COMMIT
+  csn = atomic fetch_add
+  WAL append TxnCommit -> commit_lsn
+  request group flush(commit_lsn)
+  wait stable_lsn >= commit_lsn
+  publish txn committed
+  published_csn release-store/fetch_max
+  return OK
+```
+
+Data pages flush independently:
+
+```text
+flush worker
+  find dirty frame
+  read page_lsn
+  if stable_lsn < page_lsn: requeue
+  copy page
+  seal checksum
+  DWB protect batch
+  write data page
+  data sync at batch/checkpoint boundary
+  mark clean only if page_lsn unchanged
+```
+
+Recovery:
+
+```text
+open
+  lock directory
+  read control
+  recover DWB
+  scan WAL
+  redo page/object records idempotently
+  rebuild txn table
+  abort losers
+  publish stable_lsn and csn frontier
+  return database
+```
+
+That is the Phase 1 foundation I would want before building indexes or SQL. It gives RedlineDB the important thing SQLite cannot give you: **many concurrent writer transactions doing useful work at the same time**, with serialization narrowed to WAL ordering and durability publication rather than a database-wide write transaction.
+
+[1]: https://www.sqlite.org/wal.html "Write-Ahead Logging"
+[2]: https://doc.rust-lang.org/std/fs/struct.File.html "File in std::fs - Rust"
+[3]: https://doc.rust-lang.org/std/sync/atomic/enum.Ordering.html "Ordering in std::sync::atomic - Rust"
+[4]: https://docs.rs/loom/latest/loom/ "loom - Rust"
+[5]: https://docs.rs/shuttle/latest/shuttle/ "shuttle - Rust"
+

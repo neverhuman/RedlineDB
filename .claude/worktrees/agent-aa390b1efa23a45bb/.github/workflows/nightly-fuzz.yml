@@ -1,0 +1,44 @@
+name: nightly-fuzz
+
+# Thin dispatcher (HLT-042 ci-local-parity). All lane logic lives in
+# `ops/ci/nightly-fuzz.sh` so the same command runs in CI and locally
+# via `bash ops/ci/nightly-fuzz.sh`. The PR-time short fuzz lane runs
+# inline as part of `just fuzz-parity` (see `agent/proof-lanes.toml`).
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz-parity-nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: nightly fuzz parity (ops/ci/nightly-fuzz.sh)
+        run: bash ops/ci/nightly-fuzz.sh
+      - name: Upload new fuzz regressions (if any)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: fuzz-parity-regressions
+          if-no-files-found: ignore
+          path: |
+            crates/sql/tests/regressions/fuzz-*.sql
+            target/proof/sqlite-full-parity/symbol-diff-baseline.txt
+            target/proof/sqlite-full-parity/fuzz-divergence.txt

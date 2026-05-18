@@ -1,0 +1,13 @@
+metric,value
+total_runs,1728
+measured_runs,1280
+warmup_runs,448
+measured_runs_in_jsonl,1440
+failures,0
+lost_acked_commits_total,0
+recovery_pass,36
+recovery_total,36
+failpoint_pass,24
+failpoint_total,24
+compat_pass,40
+compat_total,40

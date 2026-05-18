@@ -1,0 +1,2594 @@
+Below is the Phase 7 build plan I would implement for RedlineDB: **a pure-Rust embedded API, SQLite-like C ABI, CLI, and optional server layer that preserve RedlineDB’s concurrency advantage instead of accidentally reintroducing SQLite-style bottlenecks.**
+
+SQLite’s public surface is worth copying conceptually because the core ergonomic loop is simple: open a database connection, prepare SQL, bind parameters, step rows, read columns, finalize, close. SQLite’s docs describe this small core API and prepared-statement lifecycle directly. ([SQLite][1]) But RedlineDB should **not** copy SQLite’s concurrency model. SQLite WAL allows readers and writers to proceed concurrently, but its own WAL docs state that there can only be one writer at a time because there is one WAL file. ([SQLite][2]) Phase 7 should expose an API that lets many RedlineDB sessions write concurrently when the kernel supports it.
+
+---
+
+# Phase 7 North Star
+
+Phase 7 should produce these deliverables:
+
+```text
+crates/
+  redlinedb_api/       safe Rust embedded API
+  redlinedb_ffi/       extern "C" ABI, SQLite-like but RedlineDB-native
+  redlinedb_cli/       interactive shell and utility binary
+  redlinedb_server/    optional local/TCP server mode, feature gated
+  redlinedb_headers/   generated C header package
+  redlinedb_bench_api/ API-level microbenchmarks
+```
+
+The most important design rule:
+
+```text
+The public API must not serialize the engine.
+```
+
+The C ABI and CLI must be thin wrappers over the same Rust session model. They must not introduce a global database mutex, a single writer queue, or per-call heap churn.
+
+---
+
+# Phase 7 Architecture
+
+## Handle hierarchy
+
+Use this model:
+
+```text
+Database
+  Arc<Engine>
+  global database-directory owner
+  Send + Sync
+  cheap clone
+
+Connection
+  session state
+  transaction state
+  prepared statement cache
+  scratch arenas
+  cancellation flag
+  busy handler
+  Send, not Sync
+
+Statement
+  compiled/bound executable SQL statement
+  owns bindings
+  owns row scratch
+  references connection/session
+  not Sync
+  usually not Send unless executor guarantees it
+
+Row
+  borrow of current statement row
+  valid until next step/reset/finalize
+
+ColumnRef / ValueRef
+  zero-copy borrowed view
+  valid until next step/reset/finalize
+```
+
+The **Database** is the shared engine owner. The **Connection** is a cheap session. In the C ABI, `rldb_open()` can return a connection-like handle for SQLite ergonomics, but internally it should attach to a process-local engine registry keyed by canonical database directory. This preserves the roadmap assumption: one owner process per database directory, many sessions/threads inside that process.
+
+---
+
+# Public Rust API
+
+## Design goals
+
+The Rust API should be the canonical API. The C ABI should wrap it. The CLI should use it. The optional server should use it.
+
+Priorities:
+
+1. **Zero-copy result access** where possible.
+2. **Prepared statement reuse** with schema-version invalidation.
+3. **No async requirement** in the embedded path.
+4. **No global API lock** around query execution.
+5. **Per-connection memory budgets** and scratch reuse.
+6. **Simple transaction ergonomics** without hiding isolation semantics.
+7. **Explicit durability/config knobs** matching benchmark modes.
+8. **Stable error codes** reusable by C ABI.
+
+---
+
+# Suggested Rust API Surface
+
+```rust
+use std::path::Path;
+
+fn main() -> redlinedb::Result<()> {
+    let db = redlinedb::Database::open(
+        "app.rldb",
+        redlinedb::Config::default()
+            .create(true)
+            .durability(redlinedb::Durability::Strict)
+            .cache_bytes(512 * 1024 * 1024)
+            .statement_cache_capacity(256),
+    )?;
+
+    let mut conn = db.connect()?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL)",
+        (),
+    )?;
+
+    {
+        let tx = conn.transaction(redlinedb::Isolation::Snapshot)?;
+        tx.execute("INSERT INTO users(id, name) VALUES (?, ?)", (1_i64, "Ada"))?;
+        tx.commit()?;
+    }
+
+    let mut stmt = conn.prepare("SELECT id, name FROM users WHERE id = ?")?;
+    stmt.bind((1_i64,))?;
+
+    while let Some(row) = stmt.next()? {
+        let id: i64 = row.get(0)?;
+        let name: &str = row.get(1)?;
+        println!("{id}: {name}");
+    }
+
+    Ok(())
+}
+```
+
+This is the ergonomic layer. Under it, expose a lower-level `step()` API for maximum control:
+
+```rust
+let mut stmt = conn.prepare("SELECT id, name FROM users WHERE id = ?")?;
+stmt.bind_index(1, 1_i64)?;
+
+loop {
+    match stmt.step()? {
+        redlinedb::Step::Row => {
+            let id = stmt.column_i64(0)?;
+            let name = stmt.column_str(1)?;
+            println!("{id}: {name}");
+        }
+        redlinedb::Step::Done => break,
+    }
+}
+```
+
+---
+
+# Crate Layout
+
+```text
+redlinedb_api
+  src/
+    lib.rs
+    config.rs
+    database.rs
+    connection.rs
+    statement.rs
+    row.rs
+    value.rs
+    error.rs
+    transaction.rs
+    stats.rs
+    backup.rs
+    pool.rs
+    internal/
+      engine_registry.rs
+      stmt_cache.rs
+      scratch.rs
+      adapters.rs
+
+redlinedb_ffi
+  src/
+    lib.rs
+    error.rs
+    handles.rs
+    open.rs
+    prepare.rs
+    bind.rs
+    step.rs
+    column.rs
+    exec.rs
+    config.rs
+    stats.rs
+    backup.rs
+    panic.rs
+  include/
+    redlinedb.h
+
+redlinedb_cli
+  src/
+    main.rs
+    repl.rs
+    dot.rs
+    output.rs
+    import.rs
+    export.rs
+    completion.rs
+    bench.rs
+
+redlinedb_server
+  src/
+    lib.rs
+    protocol.rs
+    server.rs
+    session.rs
+    codec.rs
+```
+
+---
+
+# Core Trait Boundary Between API and SQL Engine
+
+Phase 7 should not leak storage internals. Define a narrow SQL execution contract. The actual `redlinedb_sql` crate can implement this.
+
+```rust
+pub trait SqlEngine: Send + Sync + 'static {
+    type Session: SqlSession;
+
+    fn connect(&self, opts: SessionOptions) -> Result<Self::Session>;
+    fn stats(&self) -> EngineStats;
+    fn checkpoint(&self, mode: CheckpointMode) -> Result<CheckpointStats>;
+    fn backup(&self, opts: BackupOptions) -> Result<BackupStats>;
+    fn shutdown(&self) -> Result<()>;
+}
+
+pub trait SqlSession: Send + 'static {
+    type Prepared: SqlPrepared;
+
+    fn prepare(&mut self, sql: &str, opts: PrepareOptions) -> Result<Self::Prepared>;
+    fn execute_batch(&mut self, sql: &str) -> Result<ExecuteSummary>;
+
+    fn begin(&mut self, opts: BeginOptions) -> Result<()>;
+    fn commit(&mut self) -> Result<CommitStats>;
+    fn rollback(&mut self) -> Result<()>;
+
+    fn schema_epoch(&self) -> u64;
+    fn interrupt_handle(&self) -> InterruptHandle;
+}
+
+pub trait SqlPrepared {
+    fn parameter_count(&self) -> usize;
+    fn parameter_name(&self, index1: usize) -> Option<&str>;
+    fn bind(&mut self, index1: usize, value: ValueRef<'_>) -> Result<()>;
+    fn clear_bindings(&mut self);
+    fn reset(&mut self) -> Result<()>;
+    fn step(&mut self) -> Result<Step>;
+    fn column_count(&self) -> usize;
+    fn column_name(&self, index0: usize) -> Option<&str>;
+    fn column_value(&self, index0: usize) -> Result<ValueRef<'_>>;
+}
+```
+
+This isolates Phase 7 from planner/executor internals. The API does not care whether execution is row-oriented, vectorized, indexed, or future JIT-like.
+
+---
+
+# Error Model
+
+Use one canonical Rust error enum and map it to C-compatible integer codes.
+
+```rust
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ErrorCode {
+    Ok = 0,
+    Error = 1,
+    Internal = 2,
+    Permission = 3,
+    Busy = 5,
+    Locked = 6,
+    NoMem = 7,
+    ReadOnly = 8,
+    Interrupt = 9,
+    IoErr = 10,
+    Corrupt = 11,
+    NotFound = 12,
+    Full = 13,
+    CannotOpen = 14,
+    Protocol = 15,
+    Empty = 16,
+    Schema = 17,
+    TooBig = 18,
+    Constraint = 19,
+    Mismatch = 20,
+    Misuse = 21,
+    NoLargeFile = 22,
+    Auth = 23,
+    Range = 25,
+    NotADatabase = 26,
+}
+
+#[derive(Debug)]
+pub struct Error {
+    code: ErrorCode,
+    message: Box<str>,
+    source: Option<Box<dyn std::error::Error + Send + Sync>>,
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+```
+
+Rules:
+
+```text
+ErrorCode is ABI-stable.
+Error messages are not ABI-stable.
+Error source chains are Rust-only.
+C ABI exposes code + message.
+C ABI never exposes Rust enum layout.
+```
+
+---
+
+# Config Model
+
+The API must make performance and memory explicit.
+
+```rust
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub create: bool,
+    pub read_only: bool,
+    pub durability: Durability,
+    pub cache_bytes: usize,
+    pub dirty_bytes_limit: usize,
+    pub wal_bytes_limit: usize,
+    pub worker_threads: WorkerThreads,
+    pub background_tasks: BackgroundTasks,
+    pub statement_cache_capacity: usize,
+    pub busy_timeout: Option<std::time::Duration>,
+    pub mmap: MmapConfig,
+    pub temp_store: TempStore,
+    pub max_connections: usize,
+    pub max_prepared_per_connection: usize,
+    pub page_size: Option<usize>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Durability {
+    Strict,
+    Normal,
+    UnsafeDev,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum WorkerThreads {
+    Inline,
+    Fixed(usize),
+    Auto,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BackgroundTasks {
+    pub checkpoint: bool,
+    pub vacuum: bool,
+    pub stats_refresh: bool,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MmapConfig {
+    pub enabled: bool,
+    pub max_bytes: usize,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum TempStore {
+    Memory,
+    File,
+}
+```
+
+Builder style:
+
+```rust
+impl Config {
+    pub fn create(mut self, yes: bool) -> Self {
+        self.create = yes;
+        self
+    }
+
+    pub fn durability(mut self, durability: Durability) -> Self {
+        self.durability = durability;
+        self
+    }
+
+    pub fn cache_bytes(mut self, bytes: usize) -> Self {
+        self.cache_bytes = bytes;
+        self
+    }
+
+    pub fn statement_cache_capacity(mut self, n: usize) -> Self {
+        self.statement_cache_capacity = n;
+        self
+    }
+}
+```
+
+Benchmark modes should map cleanly:
+
+```text
+SQLite FULL      -> RedlineDB Durability::Strict
+SQLite NORMAL    -> RedlineDB Durability::Normal
+SQLite unsafe    -> RedlineDB Durability::UnsafeDev
+```
+
+---
+
+# Memory Strategy
+
+Phase 7 must not squander the memory discipline from earlier phases.
+
+## Per-connection memory
+
+Each connection owns:
+
+```text
+Statement cache
+Binding vectors
+Row scratch arena
+Temporary string/blob conversion buffers
+Small execution metadata
+Cancellation flag
+Error buffer for C ABI
+```
+
+Recommended connection memory layout:
+
+```rust
+pub struct Connection {
+    db: Database,
+    session: Box<dyn ErasedSession>,
+    stmt_cache: StatementCache,
+    scratch: Scratch,
+    interrupt: InterruptHandle,
+    config: ConnectionConfig,
+}
+```
+
+## Scratch arena
+
+Do not allocate for every row. Use a reusable scratch buffer.
+
+```rust
+pub struct Scratch {
+    bytes: Vec<u8>,
+    strings: Vec<std::ffi::CString>,
+}
+
+impl Scratch {
+    pub fn with_capacity(bytes: usize) -> Self {
+        Self {
+            bytes: Vec::with_capacity(bytes),
+            strings: Vec::new(),
+        }
+    }
+
+    pub fn clear_for_next_row(&mut self) {
+        self.bytes.clear();
+        self.strings.clear();
+    }
+
+    pub fn copy_bytes(&mut self, src: &[u8]) -> &[u8] {
+        let start = self.bytes.len();
+        self.bytes.extend_from_slice(src);
+        &self.bytes[start..]
+    }
+
+    pub fn nul_terminate(&mut self, src: &[u8]) -> *const std::os::raw::c_char {
+        let mut v = Vec::with_capacity(src.len() + 1);
+        v.extend_from_slice(src);
+        v.push(0);
+        let c = unsafe { std::ffi::CString::from_vec_with_nul_unchecked(v) };
+        let ptr = c.as_ptr();
+        self.strings.push(c);
+        ptr
+    }
+}
+```
+
+Important rule:
+
+```text
+Rust Row APIs can borrow raw executor buffers.
+C column_text APIs should return NUL-terminated scratch pointers valid until next step/reset/finalize.
+```
+
+That gives C users SQLite-like ergonomics without forcing allocation on Rust users.
+
+---
+
+# Value Representation
+
+Use borrowed values on hot paths.
+
+```rust
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(i32)]
+pub enum ValueType {
+    Null = 0,
+    Integer = 1,
+    Real = 2,
+    Text = 3,
+    Blob = 4,
+}
+
+#[derive(Debug, Clone)]
+pub enum Value {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(Box<str>),
+    Blob(Box<[u8]>),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ValueRef<'a> {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(&'a str),
+    Blob(&'a [u8]),
+}
+
+impl<'a> ValueRef<'a> {
+    pub fn value_type(self) -> ValueType {
+        match self {
+            ValueRef::Null => ValueType::Null,
+            ValueRef::Integer(_) => ValueType::Integer,
+            ValueRef::Real(_) => ValueType::Real,
+            ValueRef::Text(_) => ValueType::Text,
+            ValueRef::Blob(_) => ValueType::Blob,
+        }
+    }
+}
+```
+
+Binding should copy only when needed. In Rust, `bind(ValueRef)` can copy into the statement’s binding storage because the application’s borrowed value may not live until execution. Later, add `bind_static()` or `bind_borrowed()` only if profiling proves it matters.
+
+---
+
+# Statement Cache
+
+Prepared statements are the hot API path. SQLite recommends the `prepare_v2` family for new programs, and its docs describe the first-statement/tail behavior and schema-change implications. ([SQLite][3]) RedlineDB should use the same user-facing behavior: prepare one statement, return the uncompiled tail optionally, keep original SQL for diagnostics/reprepare, and invalidate cached plans when schema epoch changes.
+
+## Cache design
+
+Per connection, not global:
+
+```text
+key: normalized SQL bytes + prepare flags + current schema epoch
+value: cached compiled plan
+capacity: configurable
+eviction: approximate LRU or clock
+```
+
+Do **not** global-cache executable statement objects. They contain bindings, cursors, row buffers, and transaction-local state.
+
+Cache immutable plans:
+
+```rust
+pub struct CachedPlan {
+    sql: Arc<str>,
+    schema_epoch: u64,
+    parameter_count: usize,
+    column_meta: Arc<[ColumnMeta]>,
+    engine_plan: Arc<dyn ErasedPlan>,
+}
+```
+
+A `Statement` gets a cheap plan clone plus fresh bindings/cursor state.
+
+---
+
+# Transaction API
+
+```rust
+impl Connection {
+    pub fn begin(&mut self, isolation: Isolation) -> Result<()>;
+
+    pub fn commit(&mut self) -> Result<CommitStats>;
+
+    pub fn rollback(&mut self) -> Result<()>;
+
+    pub fn transaction(&mut self, isolation: Isolation) -> Result<Transaction<'_>> {
+        self.begin(isolation)?;
+        Ok(Transaction {
+            conn: self,
+            done: false,
+        })
+    }
+}
+
+pub struct Transaction<'c> {
+    conn: &'c mut Connection,
+    done: bool,
+}
+
+impl Transaction<'_> {
+    pub fn execute<P>(&mut self, sql: &str, params: P) -> Result<ExecuteSummary>
+    where
+        P: IntoParams,
+    {
+        self.conn.execute(sql, params)
+    }
+
+    pub fn prepare(&mut self, sql: &str) -> Result<Statement<'_>> {
+        self.conn.prepare(sql)
+    }
+
+    pub fn commit(mut self) -> Result<CommitStats> {
+        let stats = self.conn.commit()?;
+        self.done = true;
+        Ok(stats)
+    }
+
+    pub fn rollback(mut self) -> Result<()> {
+        self.conn.rollback()?;
+        self.done = true;
+        Ok(())
+    }
+}
+
+impl Drop for Transaction<'_> {
+    fn drop(&mut self) {
+        if !self.done {
+            let _ = self.conn.rollback();
+        }
+    }
+}
+```
+
+This RAII rollback behavior is Rust-only. The C ABI should require explicit `BEGIN`, `COMMIT`, and `ROLLBACK` through SQL or dedicated functions.
+
+---
+
+# Connection Threading Rules
+
+Recommended trait behavior:
+
+```rust
+unsafe impl Send for Database {}
+unsafe impl Sync for Database {}
+
+impl !Sync for Connection {}
+impl !Sync for Statement<'_> {}
+```
+
+Use `Connection: Send` only if its underlying session can move between threads. Otherwise make it `!Send` too. For maximum embedded performance, I would make the initial API:
+
+```text
+Database: Send + Sync + Clone
+Connection: Send, not Sync
+Statement: not Send, not Sync
+Row: not Send, not Sync
+```
+
+That encourages:
+
+```text
+one connection per thread
+many connections per Database
+no mutex per API call
+```
+
+Do not add `Arc<Mutex<Connection>>` internally. If a user wants that, they can wrap it themselves.
+
+---
+
+# Rust API Skeleton
+
+```rust
+pub mod config;
+pub mod error;
+pub mod value;
+pub mod stats;
+
+use std::path::Path;
+use std::sync::Arc;
+
+pub use config::*;
+pub use error::*;
+pub use value::*;
+
+#[derive(Clone)]
+pub struct Database {
+    inner: Arc<DatabaseInner>,
+}
+
+struct DatabaseInner {
+    engine: Arc<dyn ErasedEngine>,
+    config: Config,
+}
+
+pub struct Connection {
+    db: Database,
+    session: Box<dyn ErasedSession>,
+    stmt_cache: StatementCache,
+    scratch: Scratch,
+    interrupt: InterruptHandle,
+}
+
+pub struct Statement<'c> {
+    conn: &'c mut Connection,
+    prepared: Box<dyn ErasedPrepared + 'c>,
+    done: bool,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Step {
+    Row,
+    Done,
+}
+
+impl Database {
+    pub fn open(path: impl AsRef<Path>, config: Config) -> Result<Self> {
+        let canonical = canonicalize_database_path(path.as_ref())?;
+        let engine = internal::engine_registry::open_or_get(&canonical, &config)?;
+        Ok(Self {
+            inner: Arc::new(DatabaseInner {
+                engine,
+                config,
+            }),
+        })
+    }
+
+    pub fn connect(&self) -> Result<Connection> {
+        let session = self.inner.engine.connect(SessionOptions::default())?;
+        Ok(Connection {
+            db: self.clone(),
+            session,
+            stmt_cache: StatementCache::new(self.inner.config.statement_cache_capacity),
+            scratch: Scratch::with_capacity(4096),
+            interrupt: InterruptHandle::new(),
+        })
+    }
+
+    pub fn stats(&self) -> EngineStats {
+        self.inner.engine.stats()
+    }
+}
+
+impl Connection {
+    pub fn prepare(&mut self, sql: &str) -> Result<Statement<'_>> {
+        let schema_epoch = self.session.schema_epoch();
+
+        if let Some(plan) = self.stmt_cache.get(sql, schema_epoch) {
+            let prepared = self.session.instantiate_cached(plan)?;
+            return Ok(Statement {
+                conn: self,
+                prepared,
+                done: false,
+            });
+        }
+
+        let prepared = self.session.prepare(sql, PrepareOptions::default())?;
+
+        if let Some(cacheable) = prepared.cacheable_plan() {
+            self.stmt_cache.insert(sql, schema_epoch, cacheable);
+        }
+
+        Ok(Statement {
+            conn: self,
+            prepared,
+            done: false,
+        })
+    }
+
+    pub fn execute<P>(&mut self, sql: &str, params: P) -> Result<ExecuteSummary>
+    where
+        P: IntoParams,
+    {
+        let mut stmt = self.prepare(sql)?;
+        params.bind_into(&mut stmt)?;
+        let mut rows = 0_u64;
+
+        loop {
+            match stmt.step()? {
+                Step::Row => rows += 1,
+                Step::Done => break,
+            }
+        }
+
+        Ok(ExecuteSummary {
+            rows_returned: rows,
+            rows_changed: stmt.rows_changed(),
+        })
+    }
+
+    pub fn interrupt(&self) {
+        self.interrupt.interrupt();
+    }
+}
+
+impl Statement<'_> {
+    pub fn bind_index<V>(&mut self, index1: usize, value: V) -> Result<()>
+    where
+        V: IntoValue,
+    {
+        let owned = value.into_value();
+        self.prepared.bind_owned(index1, owned)
+    }
+
+    pub fn bind<P>(&mut self, params: P) -> Result<()>
+    where
+        P: IntoParams,
+    {
+        params.bind_into(self)
+    }
+
+    pub fn step(&mut self) -> Result<Step> {
+        self.conn.scratch.clear_for_next_row();
+        self.prepared.step()
+    }
+
+    pub fn next(&mut self) -> Result<Option<Row<'_>>> {
+        match self.step()? {
+            Step::Row => Ok(Some(Row { stmt: self })),
+            Step::Done => Ok(None),
+        }
+    }
+
+    pub fn reset(&mut self) -> Result<()> {
+        self.done = false;
+        self.prepared.reset()
+    }
+
+    pub fn clear_bindings(&mut self) {
+        self.prepared.clear_bindings();
+    }
+
+    pub fn column_count(&self) -> usize {
+        self.prepared.column_count()
+    }
+
+    pub fn column_name(&self, index0: usize) -> Option<&str> {
+        self.prepared.column_name(index0)
+    }
+
+    pub fn column_value(&self, index0: usize) -> Result<ValueRef<'_>> {
+        self.prepared.column_value(index0)
+    }
+
+    pub fn column_i64(&self, index0: usize) -> Result<i64> {
+        match self.column_value(index0)? {
+            ValueRef::Integer(v) => Ok(v),
+            other => Err(Error::type_mismatch("INTEGER", other.value_type())),
+        }
+    }
+
+    pub fn column_str(&self, index0: usize) -> Result<&str> {
+        match self.column_value(index0)? {
+            ValueRef::Text(v) => Ok(v),
+            other => Err(Error::type_mismatch("TEXT", other.value_type())),
+        }
+    }
+}
+```
+
+---
+
+# Parameter Binding Ergonomics
+
+Support tuples up to a reasonable arity using macros.
+
+```rust
+pub trait IntoParams {
+    fn bind_into(self, stmt: &mut Statement<'_>) -> Result<()>;
+}
+
+impl IntoParams for () {
+    fn bind_into(self, _stmt: &mut Statement<'_>) -> Result<()> {
+        Ok(())
+    }
+}
+
+macro_rules! impl_tuple_params {
+    ($($name:ident : $idx:tt),+) => {
+        impl<$($name),+> IntoParams for ($($name,)+)
+        where
+            $($name: IntoValue),+
+        {
+            fn bind_into(self, stmt: &mut Statement<'_>) -> Result<()> {
+                #[allow(non_snake_case)]
+                let ($($name,)+) = self;
+                $(
+                    stmt.bind_index($idx, $name)?;
+                )+
+                Ok(())
+            }
+        }
+    };
+}
+
+impl_tuple_params!(A:1);
+impl_tuple_params!(A:1, B:2);
+impl_tuple_params!(A:1, B:2, C:3);
+impl_tuple_params!(A:1, B:2, C:3, D:4);
+impl_tuple_params!(A:1, B:2, C:3, D:4, E:5);
+```
+
+---
+
+# C ABI Design
+
+Rust FFI requires stable C-compatible layouts and calling conventions. The Rust Reference describes `extern "C"` as matching the target platform’s C ABI, and `repr(C)` is the representation intended for C interoperability. ([Rust Documentation][4]) Rust panics must not escape the C ABI; use `catch_unwind` around every exported function that can touch Rust logic. ([Rust Documentation][5])
+
+## Build output
+
+```toml
+[lib]
+name = "redlinedb"
+crate-type = ["cdylib", "staticlib"]
+```
+
+## C object model
+
+Use opaque C types:
+
+```c
+typedef struct rldb rldb;
+typedef struct rldb_stmt rldb_stmt;
+typedef struct rldb_backup rldb_backup;
+```
+
+Internally:
+
+```rust
+#[repr(C)]
+pub struct rldb {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+pub struct rldb_stmt {
+    _private: [u8; 0],
+}
+
+struct ConnHandle {
+    magic: u64,
+    conn: UnsafeCell<redlinedb_api::Connection>,
+    active_statements: AtomicUsize,
+    last_error_code: AtomicI32,
+    last_error_msg: parking_lot::Mutex<Option<CString>>,
+    interrupt: InterruptHandle,
+}
+
+struct StmtHandle {
+    magic: u64,
+    owner: NonNull<ConnHandle>,
+    stmt: UnsafeCell<Option<OwnedCStatement>>,
+}
+```
+
+For pure Rust dependencies, `parking_lot` is optional. `std::sync::Mutex` is fine if you want fewer dependencies.
+
+## C ABI constants
+
+```c
+#define RLDB_OK          0
+#define RLDB_ERROR       1
+#define RLDB_INTERNAL    2
+#define RLDB_PERM        3
+#define RLDB_BUSY        5
+#define RLDB_LOCKED      6
+#define RLDB_NOMEM       7
+#define RLDB_READONLY    8
+#define RLDB_INTERRUPT   9
+#define RLDB_IOERR       10
+#define RLDB_CORRUPT     11
+#define RLDB_NOTFOUND    12
+#define RLDB_FULL        13
+#define RLDB_CANTOPEN    14
+#define RLDB_PROTOCOL    15
+#define RLDB_EMPTY       16
+#define RLDB_SCHEMA      17
+#define RLDB_TOOBIG      18
+#define RLDB_CONSTRAINT  19
+#define RLDB_MISMATCH    20
+#define RLDB_MISUSE      21
+#define RLDB_RANGE       25
+#define RLDB_NOTADB      26
+
+#define RLDB_ROW         100
+#define RLDB_DONE        101
+
+#define RLDB_NULL        0
+#define RLDB_INTEGER     1
+#define RLDB_REAL        2
+#define RLDB_TEXT        3
+#define RLDB_BLOB        4
+```
+
+Do not expose Rust enum layout directly. The C constants are stable forever.
+
+---
+
+# C ABI Function Set
+
+Start with this exact minimum:
+
+```c
+const char *rldb_libversion(void);
+int rldb_libversion_number(void);
+
+int rldb_open(const char *path, rldb **out_db);
+int rldb_open_v2(const char *path, rldb **out_db, uint32_t flags, const rldb_config *config);
+int rldb_close(rldb *db);
+int rldb_close_v2(rldb *db);
+
+int rldb_errcode(rldb *db);
+const char *rldb_errmsg(rldb *db);
+
+int rldb_prepare_v2(
+    rldb *db,
+    const char *sql,
+    int sql_bytes,
+    rldb_stmt **out_stmt,
+    const char **out_tail
+);
+
+int rldb_finalize(rldb_stmt *stmt);
+int rldb_reset(rldb_stmt *stmt);
+int rldb_clear_bindings(rldb_stmt *stmt);
+
+int rldb_step(rldb_stmt *stmt);
+
+int rldb_bind_null(rldb_stmt *stmt, int index);
+int rldb_bind_int64(rldb_stmt *stmt, int index, int64_t value);
+int rldb_bind_double(rldb_stmt *stmt, int index, double value);
+int rldb_bind_text(rldb_stmt *stmt, int index, const char *value, int bytes);
+int rldb_bind_blob(rldb_stmt *stmt, int index, const void *value, int bytes);
+
+int rldb_bind_parameter_count(rldb_stmt *stmt);
+const char *rldb_bind_parameter_name(rldb_stmt *stmt, int index);
+int rldb_bind_parameter_index(rldb_stmt *stmt, const char *name);
+
+int rldb_column_count(rldb_stmt *stmt);
+const char *rldb_column_name(rldb_stmt *stmt, int col);
+int rldb_column_type(rldb_stmt *stmt, int col);
+
+int64_t rldb_column_int64(rldb_stmt *stmt, int col);
+double rldb_column_double(rldb_stmt *stmt, int col);
+const unsigned char *rldb_column_text(rldb_stmt *stmt, int col);
+const void *rldb_column_blob(rldb_stmt *stmt, int col);
+int rldb_column_bytes(rldb_stmt *stmt, int col);
+
+int rldb_exec(
+    rldb *db,
+    const char *sql,
+    int (*callback)(void *, int, char **, char **),
+    void *ctx,
+    char **errmsg
+);
+
+void rldb_free(void *ptr);
+
+void rldb_interrupt(rldb *db);
+int rldb_busy_timeout(rldb *db, int milliseconds);
+
+int rldb_checkpoint(rldb *db);
+int rldb_backup(rldb *db, const char *target_path);
+int rldb_stats_json(rldb *db, char **out_json);
+```
+
+Later, add:
+
+```c
+int rldb_prepare_v3(..., uint32_t prep_flags);
+int rldb_bind_text64(...);
+int rldb_bind_blob64(...);
+int rldb_column_database_name(...);
+int rldb_column_table_name(...);
+int rldb_expanded_sql(...);
+int rldb_normalized_sql(...);
+```
+
+---
+
+# C ABI Handle Safety
+
+Every exported function should do:
+
+```text
+1. catch_unwind
+2. null pointer validation
+3. magic validation
+4. handle state validation
+5. call Rust API
+6. store last error on connection
+7. return integer code
+```
+
+## Panic guard
+
+```rust
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::os::raw::{c_char, c_int};
+
+macro_rules! ffi_guard {
+    ($fallback:expr, $body:block) => {{
+        match catch_unwind(AssertUnwindSafe(|| $body)) {
+            Ok(v) => v,
+            Err(_) => $fallback,
+        }
+    }};
+}
+```
+
+For functions with a `db` handle:
+
+```rust
+macro_rules! ffi_db_guard {
+    ($db:expr, $body:block) => {{
+        ffi_guard!(RLDB_INTERNAL, {
+            let db = unsafe { ConnHandle::from_raw($db) }?;
+            match (|| $body)() {
+                Ok(code) => code,
+                Err(err) => {
+                    db.set_error(&err);
+                    err.code() as c_int
+                }
+            }
+        })
+    }};
+}
+```
+
+## Opaque handle conversion
+
+```rust
+const CONN_MAGIC: u64 = 0x524C_4442_434F_4E4E; // RLDBCONN
+const STMT_MAGIC: u64 = 0x524C_4442_5354_4D54; // RLDBSTMT
+
+impl ConnHandle {
+    unsafe fn from_raw<'a>(ptr: *mut rldb) -> redlinedb_api::Result<&'a ConnHandle> {
+        if ptr.is_null() {
+            return Err(Error::misuse("null database handle"));
+        }
+
+        let handle = &*(ptr as *mut ConnHandle);
+
+        if handle.magic != CONN_MAGIC {
+            return Err(Error::misuse("invalid database handle"));
+        }
+
+        Ok(handle)
+    }
+}
+```
+
+---
+
+# C ABI Open
+
+```rust
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_open(
+    path: *const c_char,
+    out_db: *mut *mut rldb,
+) -> c_int {
+    ffi_guard!(RLDB_INTERNAL, {
+        if out_db.is_null() {
+            return RLDB_MISUSE;
+        }
+
+        *out_db = std::ptr::null_mut();
+
+        if path.is_null() {
+            return RLDB_MISUSE;
+        }
+
+        let path = match std::ffi::CStr::from_ptr(path).to_str() {
+            Ok(v) => v,
+            Err(_) => return RLDB_MISUSE,
+        };
+
+        let db = match redlinedb_api::Database::open(path, Config::default().create(true)) {
+            Ok(db) => db,
+            Err(err) => return err.code() as c_int,
+        };
+
+        let conn = match db.connect() {
+            Ok(conn) => conn,
+            Err(err) => return err.code() as c_int,
+        };
+
+        let handle = Box::new(ConnHandle::new(conn));
+        *out_db = Box::into_raw(handle) as *mut rldb;
+
+        RLDB_OK
+    })
+}
+```
+
+---
+
+# C ABI Close
+
+SQLite-style `close` should fail if active statements exist. `close_v2` can mark closed and defer actual cleanup.
+
+```rust
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_close(db: *mut rldb) -> c_int {
+    ffi_guard!(RLDB_INTERNAL, {
+        if db.is_null() {
+            return RLDB_OK;
+        }
+
+        let handle = &*(db as *mut ConnHandle);
+
+        if handle.magic != CONN_MAGIC {
+            return RLDB_MISUSE;
+        }
+
+        if handle.active_statements.load(Ordering::Acquire) != 0 {
+            handle.set_simple_error(ErrorCode::Busy, "database has active statements");
+            return RLDB_BUSY;
+        }
+
+        let mut boxed = Box::from_raw(db as *mut ConnHandle);
+        boxed.magic = 0;
+        drop(boxed);
+
+        RLDB_OK
+    })
+}
+```
+
+---
+
+# C ABI Prepare
+
+The tail behavior should match SQLite ergonomics: compile the first statement and optionally return a pointer to remaining SQL. SQLite’s prepare docs describe this first-statement behavior. ([SQLite][3])
+
+```rust
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_prepare_v2(
+    db: *mut rldb,
+    sql: *const c_char,
+    sql_bytes: c_int,
+    out_stmt: *mut *mut rldb_stmt,
+    out_tail: *mut *const c_char,
+) -> c_int {
+    ffi_guard!(RLDB_INTERNAL, {
+        if out_stmt.is_null() {
+            return RLDB_MISUSE;
+        }
+
+        *out_stmt = std::ptr::null_mut();
+
+        let conn = match ConnHandle::from_raw(db) {
+            Ok(v) => v,
+            Err(err) => return err.code() as c_int,
+        };
+
+        if sql.is_null() {
+            conn.set_simple_error(ErrorCode::Misuse, "null SQL pointer");
+            return RLDB_MISUSE;
+        }
+
+        let bytes: &[u8] = if sql_bytes < 0 {
+            std::ffi::CStr::from_ptr(sql).to_bytes()
+        } else {
+            std::slice::from_raw_parts(sql as *const u8, sql_bytes as usize)
+        };
+
+        let sql_str = match std::str::from_utf8(bytes) {
+            Ok(v) => v,
+            Err(_) => {
+                conn.set_simple_error(ErrorCode::Misuse, "SQL is not valid UTF-8");
+                return RLDB_MISUSE;
+            }
+        };
+
+        let mut conn_ref = conn.conn_mut();
+
+        let prepared = match conn_ref.prepare_owned_for_c(sql_str) {
+            Ok(v) => v,
+            Err(err) => {
+                conn.set_error(&err);
+                return err.code() as c_int;
+            }
+        };
+
+        if !out_tail.is_null() {
+            // If parser reports consumed byte count, set true tail.
+            // Otherwise set to SQL end for initial implementation.
+            *out_tail = sql.add(bytes.len());
+        }
+
+        conn.active_statements.fetch_add(1, Ordering::AcqRel);
+
+        let stmt = Box::new(StmtHandle {
+            magic: STMT_MAGIC,
+            owner: NonNull::new(db as *mut ConnHandle).unwrap(),
+            stmt: UnsafeCell::new(Some(prepared)),
+        });
+
+        *out_stmt = Box::into_raw(stmt) as *mut rldb_stmt;
+
+        RLDB_OK
+    })
+}
+```
+
+The Rust API needs an owned C statement adapter because a normal Rust `Statement<'conn>` borrows `&mut Connection`. For C, use an internal owned session cursor model, or store prepared state in the connection and reference it by ID. Avoid self-referential structs.
+
+Best approach:
+
+```text
+Rust ergonomic API: Statement<'conn> borrows Connection.
+C ABI internal API: ConnHandle owns a Slab<CStatementState>; rldb_stmt stores statement ID.
+```
+
+That avoids unsafe self-referential lifetime tricks.
+
+---
+
+# Better C Statement Ownership Model
+
+Use IDs instead of embedding a borrowed Rust statement:
+
+```rust
+struct ConnHandle {
+    magic: u64,
+    inner: Mutex<ConnHandleInner>,
+    active_statements: AtomicUsize,
+    last_error: Mutex<LastError>,
+}
+
+struct ConnHandleInner {
+    conn: redlinedb_api::Connection,
+    statements: Vec<Option<CStatementState>>,
+    free_statement_ids: Vec<usize>,
+}
+
+struct CStatementState {
+    prepared: redlinedb_api::OwnedStatement,
+    last_column_cache: Vec<CColumnCache>,
+}
+```
+
+Then:
+
+```rust
+struct StmtHandle {
+    magic: u64,
+    owner: NonNull<ConnHandle>,
+    id: usize,
+}
+```
+
+This is slightly more locking than raw borrowed references, but only on C ABI calls. The Rust API remains zero-lock. The mutex is per connection, not global, so concurrent C connections still scale.
+
+If you want the C ABI to be faster, require that a single `rldb*` connection is used by one thread at a time and replace the mutex with `UnsafeCell`. That matches many embedded database APIs. I would implement:
+
+```text
+Default C connection mode: serialized per connection for safety.
+Fast C connection mode: no internal connection mutex, documented as single-thread-use.
+Many concurrent C connections: supported and fast.
+```
+
+---
+
+# C ABI Step
+
+```rust
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
+    ffi_guard!(RLDB_INTERNAL, {
+        let stmt_handle = match StmtHandle::from_raw(stmt) {
+            Ok(v) => v,
+            Err(err) => return err.code() as c_int,
+        };
+
+        let conn = stmt_handle.owner.as_ref();
+
+        let result = conn.with_statement_mut(stmt_handle.id, |s| {
+            s.step()
+        });
+
+        match result {
+            Ok(redlinedb_api::Step::Row) => RLDB_ROW,
+            Ok(redlinedb_api::Step::Done) => RLDB_DONE,
+            Err(err) => {
+                conn.set_error(&err);
+                err.code() as c_int
+            }
+        }
+    })
+}
+```
+
+---
+
+# C ABI Bind
+
+SQLite supports numbered and named parameters like `?`, `?NNN`, `:name`, `@name`, `$name`; its binding docs state parameter indexes are 1-based. ([SQLite][6]) RedlineDB should do the same.
+
+```rust
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_bind_int64(
+    stmt: *mut rldb_stmt,
+    index: c_int,
+    value: i64,
+) -> c_int {
+    ffi_guard!(RLDB_INTERNAL, {
+        if index <= 0 {
+            return RLDB_RANGE;
+        }
+
+        let stmt_handle = match StmtHandle::from_raw(stmt) {
+            Ok(v) => v,
+            Err(err) => return err.code() as c_int,
+        };
+
+        let conn = stmt_handle.owner.as_ref();
+
+        match conn.with_statement_mut(stmt_handle.id, |s| {
+            s.bind_index(index as usize, value)
+        }) {
+            Ok(()) => RLDB_OK,
+            Err(err) => {
+                conn.set_error(&err);
+                err.code() as c_int
+            }
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_bind_text(
+    stmt: *mut rldb_stmt,
+    index: c_int,
+    value: *const c_char,
+    bytes: c_int,
+) -> c_int {
+    ffi_guard!(RLDB_INTERNAL, {
+        if index <= 0 {
+            return RLDB_RANGE;
+        }
+
+        if value.is_null() {
+            return rldb_bind_null(stmt, index);
+        }
+
+        let raw = if bytes < 0 {
+            std::ffi::CStr::from_ptr(value).to_bytes()
+        } else {
+            std::slice::from_raw_parts(value as *const u8, bytes as usize)
+        };
+
+        let text = match std::str::from_utf8(raw) {
+            Ok(v) => v,
+            Err(_) => return RLDB_MISMATCH,
+        };
+
+        let stmt_handle = match StmtHandle::from_raw(stmt) {
+            Ok(v) => v,
+            Err(err) => return err.code() as c_int,
+        };
+
+        let conn = stmt_handle.owner.as_ref();
+
+        match conn.with_statement_mut(stmt_handle.id, |s| {
+            s.bind_index(index as usize, text)
+        }) {
+            Ok(()) => RLDB_OK,
+            Err(err) => {
+                conn.set_error(&err);
+                err.code() as c_int
+            }
+        }
+    })
+}
+```
+
+Initial `rldb_bind_text` should copy. Add borrowed/destructor variants only after correctness tests.
+
+---
+
+# C ABI Column Access
+
+Column pointers should be valid until:
+
+```text
+next rldb_step()
+rldb_reset()
+rldb_finalize()
+same statement produces another row
+```
+
+```rust
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_column_type(
+    stmt: *mut rldb_stmt,
+    col: c_int,
+) -> c_int {
+    ffi_guard!(RLDB_NULL, {
+        let stmt_handle = match StmtHandle::from_raw(stmt) {
+            Ok(v) => v,
+            Err(_) => return RLDB_NULL,
+        };
+
+        let conn = stmt_handle.owner.as_ref();
+
+        match conn.with_statement_mut(stmt_handle.id, |s| {
+            s.column_value(col as usize).map(|v| v.value_type())
+        }) {
+            Ok(t) => t as c_int,
+            Err(_) => RLDB_NULL,
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_column_int64(
+    stmt: *mut rldb_stmt,
+    col: c_int,
+) -> i64 {
+    ffi_guard!(0_i64, {
+        let stmt_handle = match StmtHandle::from_raw(stmt) {
+            Ok(v) => v,
+            Err(_) => return 0,
+        };
+
+        let conn = stmt_handle.owner.as_ref();
+
+        conn.with_statement_mut(stmt_handle.id, |s| {
+            match s.column_value(col as usize)? {
+                ValueRef::Integer(v) => Ok(v),
+                ValueRef::Real(v) => Ok(v as i64),
+                ValueRef::Text(v) => Ok(v.parse::<i64>().unwrap_or(0)),
+                _ => Ok(0),
+            }
+        }).unwrap_or(0)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_column_text(
+    stmt: *mut rldb_stmt,
+    col: c_int,
+) -> *const u8 {
+    ffi_guard!(std::ptr::null(), {
+        let stmt_handle = match StmtHandle::from_raw(stmt) {
+            Ok(v) => v,
+            Err(_) => return std::ptr::null(),
+        };
+
+        let conn = stmt_handle.owner.as_ref();
+
+        match conn.with_statement_mut(stmt_handle.id, |s| {
+            s.column_text_ptr_for_c(col as usize)
+        }) {
+            Ok(ptr) => ptr,
+            Err(_) => std::ptr::null(),
+        }
+    })
+}
+```
+
+For C compatibility, text should be UTF-8 and NUL-terminated in scratch memory. Blob should not be NUL-terminated.
+
+---
+
+# C ABI Exec Convenience
+
+`rldb_exec` is not the fast path. It is a convenience API.
+
+```rust
+type ExecCallback = Option<
+    unsafe extern "C" fn(
+        ctx: *mut std::ffi::c_void,
+        column_count: c_int,
+        values: *mut *mut c_char,
+        names: *mut *mut c_char,
+    ) -> c_int
+>;
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_exec(
+    db: *mut rldb,
+    sql: *const c_char,
+    callback: ExecCallback,
+    ctx: *mut std::ffi::c_void,
+    errmsg: *mut *mut c_char,
+) -> c_int {
+    ffi_guard!(RLDB_INTERNAL, {
+        if !errmsg.is_null() {
+            *errmsg = std::ptr::null_mut();
+        }
+
+        let conn = match ConnHandle::from_raw(db) {
+            Ok(v) => v,
+            Err(err) => return err.code() as c_int,
+        };
+
+        if sql.is_null() {
+            return RLDB_MISUSE;
+        }
+
+        let sql = match std::ffi::CStr::from_ptr(sql).to_str() {
+            Ok(v) => v,
+            Err(_) => return RLDB_MISUSE,
+        };
+
+        let result = conn.exec_for_c(sql, callback, ctx);
+
+        match result {
+            Ok(()) => RLDB_OK,
+            Err(err) => {
+                conn.set_error(&err);
+
+                if !errmsg.is_null() {
+                    let cmsg = CString::new(err.message()).unwrap_or_else(|_| {
+                        CString::new("redlinedb error").unwrap()
+                    });
+                    *errmsg = cmsg.into_raw();
+                }
+
+                err.code() as c_int
+            }
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rldb_free(ptr: *mut std::ffi::c_void) {
+    if !ptr.is_null() {
+        let _ = CString::from_raw(ptr as *mut c_char);
+    }
+}
+```
+
+---
+
+# C ABI Header Sketch
+
+```c
+#ifndef REDLINEDB_H
+#define REDLINEDB_H
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct rldb rldb;
+typedef struct rldb_stmt rldb_stmt;
+
+#define RLDB_OK          0
+#define RLDB_ERROR       1
+#define RLDB_INTERNAL    2
+#define RLDB_BUSY        5
+#define RLDB_NOMEM       7
+#define RLDB_INTERRUPT   9
+#define RLDB_IOERR       10
+#define RLDB_CORRUPT     11
+#define RLDB_SCHEMA      17
+#define RLDB_CONSTRAINT  19
+#define RLDB_MISUSE      21
+#define RLDB_RANGE       25
+
+#define RLDB_ROW         100
+#define RLDB_DONE        101
+
+#define RLDB_NULL        0
+#define RLDB_INTEGER     1
+#define RLDB_REAL        2
+#define RLDB_TEXT        3
+#define RLDB_BLOB        4
+
+typedef struct rldb_config {
+    uint64_t struct_size;
+    uint64_t cache_bytes;
+    uint64_t dirty_bytes_limit;
+    uint64_t wal_bytes_limit;
+    uint32_t flags;
+    uint32_t durability;
+    uint32_t worker_threads;
+    uint32_t statement_cache_capacity;
+    uint32_t busy_timeout_ms;
+    uint32_t reserved0;
+    uint64_t reserved1;
+    uint64_t reserved2;
+} rldb_config;
+
+const char *rldb_libversion(void);
+int rldb_libversion_number(void);
+
+int rldb_open(const char *path, rldb **out_db);
+int rldb_open_v2(const char *path, rldb **out_db, uint32_t flags, const rldb_config *config);
+int rldb_close(rldb *db);
+int rldb_close_v2(rldb *db);
+
+int rldb_errcode(rldb *db);
+const char *rldb_errmsg(rldb *db);
+
+int rldb_prepare_v2(rldb *db, const char *sql, int sql_bytes, rldb_stmt **out_stmt, const char **out_tail);
+int rldb_finalize(rldb_stmt *stmt);
+int rldb_reset(rldb_stmt *stmt);
+int rldb_clear_bindings(rldb_stmt *stmt);
+
+int rldb_step(rldb_stmt *stmt);
+
+int rldb_bind_null(rldb_stmt *stmt, int index);
+int rldb_bind_int64(rldb_stmt *stmt, int index, int64_t value);
+int rldb_bind_double(rldb_stmt *stmt, int index, double value);
+int rldb_bind_text(rldb_stmt *stmt, int index, const char *value, int bytes);
+int rldb_bind_blob(rldb_stmt *stmt, int index, const void *value, int bytes);
+
+int rldb_column_count(rldb_stmt *stmt);
+const char *rldb_column_name(rldb_stmt *stmt, int col);
+int rldb_column_type(rldb_stmt *stmt, int col);
+int64_t rldb_column_int64(rldb_stmt *stmt, int col);
+double rldb_column_double(rldb_stmt *stmt, int col);
+const unsigned char *rldb_column_text(rldb_stmt *stmt, int col);
+const void *rldb_column_blob(rldb_stmt *stmt, int col);
+int rldb_column_bytes(rldb_stmt *stmt, int col);
+
+int rldb_exec(
+    rldb *db,
+    const char *sql,
+    int (*callback)(void *, int, char **, char **),
+    void *ctx,
+    char **errmsg
+);
+
+void rldb_free(void *ptr);
+void rldb_interrupt(rldb *db);
+int rldb_busy_timeout(rldb *db, int milliseconds);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+```
+
+The `struct_size` field in `rldb_config` is critical. It lets you extend the C config struct without breaking old callers.
+
+---
+
+# Engine Registry
+
+For C `rldb_open()` ergonomics, multiple opens against the same path should attach to the same in-process engine.
+
+```rust
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Weak, OnceLock, Mutex};
+
+static REGISTRY: OnceLock<Mutex<EngineRegistry>> = OnceLock::new();
+
+struct EngineRegistry {
+    engines: HashMap<PathBuf, Weak<dyn ErasedEngine>>,
+}
+
+pub fn open_or_get(path: &Path, config: &Config) -> Result<Arc<dyn ErasedEngine>> {
+    let registry = REGISTRY.get_or_init(|| {
+        Mutex::new(EngineRegistry {
+            engines: HashMap::new(),
+        })
+    });
+
+    let mut guard = registry.lock().unwrap();
+
+    if let Some(existing) = guard.engines.get(path).and_then(Weak::upgrade) {
+        return Ok(existing);
+    }
+
+    let engine = redlinedb_sql::open_engine(path, config)?;
+    guard.engines.insert(path.to_path_buf(), Arc::downgrade(&engine));
+
+    Ok(engine)
+}
+```
+
+Registry lock is only on open. It must never guard query execution.
+
+---
+
+# CLI Design
+
+SQLite’s CLI docs explicitly separate the CLI application from the SQLite library, and dot commands are interpreted by the CLI, not the database library. ([SQLite][7]) RedlineDB should copy that separation.
+
+## Binary
+
+```text
+rldb [OPTIONS] [DATABASE] [SQL]
+```
+
+Options:
+
+```text
+--readonly
+--create
+--strict
+--normal
+--unsafe-dev
+--cache-bytes N
+--workers N
+--json
+--csv
+--no-header
+--timer
+--stats
+--cmd SQL_OR_DOT_COMMAND
+```
+
+Interactive commands:
+
+```text
+.open FILE
+.close
+.databases
+.tables
+.schema [PATTERN]
+.indexes [TABLE]
+.mode list|csv|json|box|column|quote
+.headers on|off
+.timer on|off
+.stats on|off
+.import FILE TABLE
+.export FILE SQL
+.read FILE
+.output FILE
+.once FILE
+.backup FILE
+.checkpoint
+.explain SQL
+.bench smoke
+.quit
+.help
+```
+
+## CLI execution loop
+
+```rust
+fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
+    let mut shell = Shell::new(args)?;
+
+    if let Some(sql) = shell.initial_sql.take() {
+        shell.exec_input(&sql)?;
+        return Ok(());
+    }
+
+    shell.repl()
+}
+```
+
+```rust
+impl Shell {
+    fn exec_input(&mut self, input: &str) -> anyhow::Result<()> {
+        if input.trim_start().starts_with('.') {
+            let cmd = DotCommand::parse(input)?;
+            self.exec_dot(cmd)
+        } else {
+            self.exec_sql(input)
+        }
+    }
+
+    fn exec_sql(&mut self, sql: &str) -> anyhow::Result<()> {
+        let mut stmt = self.conn.prepare(sql)?;
+
+        let mut out = Output::new(&self.output_mode, &mut self.writer);
+
+        while let Some(row) = stmt.next()? {
+            out.write_row(row)?;
+        }
+
+        out.finish()?;
+        Ok(())
+    }
+}
+```
+
+## Output performance
+
+Do not build giant in-memory result tables.
+
+```text
+.mode csv      streaming
+.mode json     streaming array or NDJSON option
+.mode list     streaming
+.mode quote    streaming
+.mode column   bounded buffering for width detection
+.mode box      bounded buffering or width-from-first-N rows
+```
+
+For `.mode box`, either buffer the result up to a configured cap or compute widths from the first N rows and truncate later output. Do not accidentally materialize a 10 million row result.
+
+---
+
+# CLI Import/Export
+
+## CSV import
+
+Fast path:
+
+```text
+.parse CSV row
+prepare INSERT once
+bind per row
+step/reset per row
+commit every N rows
+reuse buffers
+```
+
+Pseudo-code:
+
+```rust
+fn import_csv(conn: &mut Connection, file: &Path, table: &str) -> Result<()> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(file)?;
+
+    let headers = reader.headers()?.clone();
+    let sql = build_insert_sql(table, headers.iter());
+
+    conn.begin(Isolation::ReadCommitted)?;
+
+    let mut stmt = conn.prepare(&sql)?;
+    let mut count = 0_u64;
+
+    for record in reader.records() {
+        let record = record?;
+
+        stmt.reset()?;
+        stmt.clear_bindings();
+
+        for (i, field) in record.iter().enumerate() {
+            stmt.bind_index(i + 1, field)?;
+        }
+
+        match stmt.step()? {
+            Step::Done => {}
+            Step::Row => return Err(Error::internal("INSERT unexpectedly returned row")),
+        }
+
+        count += 1;
+
+        if count % 10_000 == 0 {
+            conn.commit()?;
+            conn.begin(Isolation::ReadCommitted)?;
+        }
+    }
+
+    conn.commit()?;
+    Ok(())
+}
+```
+
+`csv` is pure Rust and acceptable outside the kernel hot path.
+
+---
+
+# Optional Server Mode
+
+Server mode should be additive and feature-gated.
+
+```text
+redlinedb_server
+  --listen 127.0.0.1:7432
+  --database FILE
+  --max-clients N
+  --cache-bytes N
+```
+
+Do not force an async runtime into `redlinedb_api`.
+
+Recommended:
+
+```text
+Embedded API: synchronous, no runtime
+CLI: synchronous
+Server: optional tokio feature or blocking thread-per-client mode
+```
+
+Protocol stages:
+
+```text
+HELLO
+AUTH optional
+PREPARE sql -> statement_id
+BIND statement_id values
+STEP statement_id -> row/done
+RESET statement_id
+FINALIZE statement_id
+EXEC sql
+BEGIN/COMMIT/ROLLBACK
+CLOSE
+```
+
+Each client gets one RedlineDB `Connection`. Many clients share one `Database`.
+
+```rust
+pub struct Server {
+    db: redlinedb_api::Database,
+    config: ServerConfig,
+}
+
+pub struct ClientSession {
+    conn: redlinedb_api::Connection,
+    statements: HashMap<u64, redlinedb_api::OwnedStatement>,
+}
+```
+
+Keep Postgres wire compatibility separate:
+
+```text
+redlinedb_pgwire optional crate
+```
+
+Do not pollute the embedded API with wire-protocol concerns.
+
+---
+
+# Connection Pool
+
+For Rust users, provide a simple pool, but do not require it.
+
+```rust
+pub struct Pool {
+    db: Database,
+    idle: crossbeam_queue::ArrayQueue<Connection>,
+    max: usize,
+    total: AtomicUsize,
+}
+
+impl Pool {
+    pub fn get(&self) -> Result<PooledConnection<'_>> {
+        if let Some(conn) = self.idle.pop() {
+            return Ok(PooledConnection {
+                pool: self,
+                conn: Some(conn),
+            });
+        }
+
+        let total = self.total.load(Ordering::Acquire);
+        if total < self.max {
+            if self
+                .total
+                .compare_exchange(total, total + 1, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return Ok(PooledConnection {
+                    pool: self,
+                    conn: Some(self.db.connect()?),
+                });
+            }
+        }
+
+        self.wait_for_idle()
+    }
+}
+```
+
+The pool is an ergonomic utility. It must not be the only route to concurrency.
+
+---
+
+# Backup API
+
+Phase 7 requires backup in the public API.
+
+The API should be:
+
+```rust
+impl Database {
+    pub fn backup_to_path(&self, path: impl AsRef<Path>, opts: BackupOptions) -> Result<BackupStats>;
+}
+
+#[derive(Debug, Clone)]
+pub struct BackupOptions {
+    pub consistent_at: BackupConsistency,
+    pub page_batch_size: usize,
+    pub throttle: Option<Throttle>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum BackupConsistency {
+    LatestCommitted,
+    Snapshot(Csn),
+}
+```
+
+Rules:
+
+```text
+Backup starts a stable snapshot.
+Backup does not block writers except for short metadata latches.
+Backup pins retention horizon until done.
+Backup streams pages in bounded batches.
+Backup reports bytes/pages copied.
+```
+
+C ABI:
+
+```c
+int rldb_backup(rldb *db, const char *target_path);
+int rldb_backup_v2(rldb *db, const char *target_path, const rldb_backup_options *opts);
+```
+
+---
+
+# Stats API
+
+Make observability part of Phase 7, not an afterthought.
+
+```rust
+#[derive(Debug, Clone)]
+pub struct EngineStats {
+    pub cache: CacheStats,
+    pub wal: WalStats,
+    pub checkpoint: CheckpointStats,
+    pub vacuum: VacuumStats,
+    pub transactions: TransactionStats,
+    pub memory: MemoryStats,
+    pub scheduler: SchedulerStats,
+}
+
+#[derive(Debug, Clone)]
+pub struct MemoryStats {
+    pub configured_cache_bytes: u64,
+    pub used_cache_bytes: u64,
+    pub dirty_bytes: u64,
+    pub connection_bytes: u64,
+    pub statement_cache_bytes: u64,
+    pub scratch_bytes: u64,
+}
+```
+
+Rust:
+
+```rust
+let stats = db.stats();
+println!("{stats:#?}");
+```
+
+C:
+
+```c
+char *json = NULL;
+rldb_stats_json(db, &json);
+puts(json);
+rldb_free(json);
+```
+
+CLI:
+
+```text
+.stats
+.checkpoint
+```
+
+---
+
+# API-Level Performance Rules
+
+## Avoid these
+
+```text
+Arc<Mutex<Engine>> around every call
+global statement cache lock
+global allocator churn per row
+CString allocation per column access
+String allocation for every error-free call
+async runtime in embedded API
+copying text/blob result values by default
+converting all values to strings in CLI before output
+```
+
+## Prefer these
+
+```text
+Arc<Engine> only
+per-connection state
+per-connection statement cache
+per-statement binding vector
+borrowed ValueRef results
+row scratch reset, not reallocate
+streamed CLI output
+single prepare for repeated import inserts
+batch commits for CLI import
+explicit connection-per-thread concurrency
+```
+
+---
+
+# Statement Lifetime and Column Validity
+
+Document this clearly:
+
+```text
+A Row borrows its Statement.
+Column references are valid until the next Statement::step, Statement::reset, or Statement drop.
+C column pointers are valid until next rldb_step, rldb_reset, or rldb_finalize on the same statement.
+Bindings survive rldb_reset.
+Bindings are cleared by rldb_clear_bindings.
+```
+
+SQLite has similar prepared-statement lifecycle expectations: prepare, bind, step, reset, repeat, finalize. ([SQLite][8])
+
+---
+
+# Prepared Statement Invalidations
+
+Each prepared plan records:
+
+```text
+schema_epoch_at_prepare
+catalog object dependencies
+parameter shape
+result column shape
+```
+
+On `step()`:
+
+```rust
+if stmt.schema_epoch != conn.current_schema_epoch() {
+    if stmt.can_reprepare() {
+        stmt.reprepare()?;
+    } else {
+        return Err(Error::schema("statement schema is stale"));
+    }
+}
+```
+
+For performance:
+
+```text
+Check schema epoch once at first step after reset.
+Do not check it on every produced row.
+```
+
+---
+
+# Busy Handler and Interrupt
+
+## Busy timeout
+
+```rust
+pub trait BusyHandler: Send {
+    fn on_busy(&mut self, event: BusyEvent) -> BusyDecision;
+}
+
+pub enum BusyDecision {
+    Retry,
+    Sleep(std::time::Duration),
+    Abort,
+}
+```
+
+C minimal:
+
+```c
+int rldb_busy_timeout(rldb *db, int milliseconds);
+```
+
+## Interrupt
+
+```rust
+#[derive(Clone)]
+pub struct InterruptHandle {
+    flag: Arc<AtomicBool>,
+}
+
+impl InterruptHandle {
+    pub fn interrupt(&self) {
+        self.flag.store(true, Ordering::Release);
+    }
+
+    pub fn check(&self) -> Result<()> {
+        if self.flag.load(Ordering::Acquire) {
+            Err(Error::interrupt())
+        } else {
+            Ok(())
+        }
+    }
+}
+```
+
+Executor should check this between operators, batches, and long scans. Do not check on every tuple in the fastest paths unless the loop is long-running.
+
+---
+
+# Feature Flags
+
+```toml
+[features]
+default = ["std"]
+std = []
+ffi = []
+cli = ["std", "dep:clap", "dep:csv"]
+server = ["std"]
+serde = ["dep:serde", "dep:serde_json"]
+bench = []
+```
+
+For the core API, keep dependencies lean.
+
+---
+
+# Testing Plan
+
+## Rust API tests
+
+```text
+open/create
+open readonly
+connect many sessions
+prepare/step/finalize
+tuple parameter binding
+named parameter binding
+statement reset keeps bindings
+clear bindings works
+schema invalidates prepared statement
+transaction commit
+transaction rollback on drop
+interrupt cancels long query
+busy timeout respected
+stats available
+backup consistent
+```
+
+## C ABI tests
+
+Write C integration tests, not just Rust tests.
+
+```c
+void test_basic_insert_select(void) {
+    rldb *db = NULL;
+    assert(rldb_open("test.rldb", &db) == RLDB_OK);
+
+    assert(rldb_exec(db, "CREATE TABLE t(x INTEGER)", NULL, NULL, NULL) == RLDB_OK);
+
+    rldb_stmt *stmt = NULL;
+    assert(rldb_prepare_v2(db, "INSERT INTO t VALUES (?)", -1, &stmt, NULL) == RLDB_OK);
+    assert(rldb_bind_int64(stmt, 1, 42) == RLDB_OK);
+    assert(rldb_step(stmt) == RLDB_DONE);
+    assert(rldb_finalize(stmt) == RLDB_OK);
+
+    assert(rldb_close(db) == RLDB_OK);
+}
+```
+
+Test misuse:
+
+```text
+null db
+null stmt
+double finalize
+close with active statement
+bind after step without reset
+invalid UTF-8 SQL
+invalid column index
+wrong parameter index
+panic containment
+```
+
+## CLI golden tests
+
+```text
+rldb test.rldb "select 1"
+.tables
+.schema
+.mode csv
+.mode json
+.import
+.export
+.read
+.timer
+.stats
+```
+
+## ABI stability tests
+
+```text
+header compiles as C89/C99
+header compiles as C++
+staticlib link
+cdylib link
+Python ctypes smoke test
+Swift/C++ smoke test later
+```
+
+---
+
+# API Benchmarks
+
+Phase 7 should include API overhead benchmarks independent of kernel benchmarks.
+
+```text
+prepare_cached
+prepare_uncached
+bind_int
+bind_text_small
+bind_blob_1kb
+step_empty_select
+step_point_lookup
+column_i64
+column_text
+reset_rebind_step
+exec_convenience
+concurrent_connections_read
+concurrent_connections_write
+cli_import_csv
+ffi_prepare_bind_step
+ffi_column_read
+```
+
+Benchmark goals:
+
+```text
+Rust API overhead should be negligible versus executor work.
+C ABI overhead should be a thin function-call/pointer-validation layer.
+CLI should stream results without memory blowups.
+Concurrent C/Rust connections should not contend on API-global locks.
+```
+
+---
+
+# “Finish Phase 7” Implementation Sequence
+
+I would implement it in this order:
+
+```text
+1. redlinedb_api core types:
+   Database, Connection, Statement, Row, Value, Error, Config.
+
+2. redlinedb_sql adapter:
+   Implement ErasedEngine, ErasedSession, ErasedPrepared.
+
+3. Rust API tests:
+   Open, prepare, bind, step, transaction, reset, errors.
+
+4. Statement cache:
+   Per-connection cache with schema epoch invalidation.
+
+5. Stats and backup API:
+   Wire existing engine stats/checkpoint/backup.
+
+6. C ABI:
+   Opaque handles, open, close, prepare, step, bind, column, finalize.
+
+7. C header:
+   Stable constants, config struct with struct_size, C/C++ compatibility.
+
+8. C integration tests:
+   Compile real C programs against cdylib/staticlib.
+
+9. CLI:
+   REPL, dot commands, output modes, import/export, stats, backup.
+
+10. API benchmarks:
+    Rust API, C ABI, CLI import/export.
+
+11. Optional server:
+    Feature-gated local/TCP server after embedded API stabilizes.
+```
+
+The key is to avoid building the CLI or server before the Rust API and C ABI semantics are nailed down.
+
+---
+
+# Minimal End-State Example: C
+
+```c
+#include "redlinedb.h"
+#include <stdio.h>
+
+int main(void) {
+    rldb *db = NULL;
+    rldb_stmt *stmt = NULL;
+
+    if (rldb_open("app.rldb", &db) != RLDB_OK) {
+        fprintf(stderr, "open failed\n");
+        return 1;
+    }
+
+    rldb_exec(db,
+        "CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT)",
+        NULL,
+        NULL,
+        NULL
+    );
+
+    rldb_prepare_v2(db, "INSERT INTO users(id, name) VALUES (?, ?)", -1, &stmt, NULL);
+    rldb_bind_int64(stmt, 1, 1);
+    rldb_bind_text(stmt, 2, "Ada", -1);
+    rldb_step(stmt);
+    rldb_finalize(stmt);
+
+    rldb_prepare_v2(db, "SELECT id, name FROM users", -1, &stmt, NULL);
+
+    while (rldb_step(stmt) == RLDB_ROW) {
+        long long id = rldb_column_int64(stmt, 0);
+        const unsigned char *name = rldb_column_text(stmt, 1);
+        printf("%lld %s\n", id, name);
+    }
+
+    rldb_finalize(stmt);
+    rldb_close(db);
+
+    return 0;
+}
+```
+
+---
+
+# Minimal End-State Example: Rust
+
+```rust
+use redlinedb::{Config, Database, Durability, Isolation, Step};
+
+fn main() -> redlinedb::Result<()> {
+    let db = Database::open(
+        "app.rldb",
+        Config::default()
+            .create(true)
+            .durability(Durability::Strict)
+            .cache_bytes(256 * 1024 * 1024),
+    )?;
+
+    let mut conn = db.connect()?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL)",
+        (),
+    )?;
+
+    let tx = conn.transaction(Isolation::Snapshot)?;
+    tx.execute("INSERT INTO users(id, name) VALUES (?, ?)", (1_i64, "Ada"))?;
+    tx.commit()?;
+
+    let mut stmt = conn.prepare("SELECT id, name FROM users WHERE id = ?")?;
+    stmt.bind((1_i64,))?;
+
+    loop {
+        match stmt.step()? {
+            Step::Row => {
+                println!("{} {}", stmt.column_i64(0)?, stmt.column_str(1)?);
+            }
+            Step::Done => break,
+        }
+    }
+
+    Ok(())
+}
+```
+
+---
+
+# The Most Important Phase 7 Decisions
+
+If I had to reduce Phase 7 to the decisions that matter most:
+
+```text
+Use Database as Arc<Engine>; Connection as cheap per-thread session.
+Do not put a global mutex around execution.
+Make Rust API primary; C ABI wraps it.
+Make C handles opaque and panic-safe.
+Use per-connection statement caches.
+Return borrowed column values in Rust.
+Return scratch-backed C pointers valid until next step/reset/finalize.
+Keep embedded API synchronous.
+Make server optional and feature-gated.
+Make CLI dot commands a shell concern, never SQL engine syntax.
+Expose memory/stats/backup/config from day one.
+Benchmark API overhead separately from engine speed.
+```
+
+That gives RedlineDB a Phase 7 surface that feels familiar to SQLite users while still letting the kernel exploit its biggest planned advantage: **many concurrent sessions without a SQLite-style single-writer API bottleneck.**
+
+[1]: https://sqlite.org/cintro.html "An Introduction To The SQLite C/C++ Interface"
+[2]: https://sqlite.org/wal.html "Write-Ahead Logging"
+[3]: https://sqlite.org/c3ref/prepare.html "Compiling An SQL Statement"
+[4]: https://doc.rust-lang.org/reference/items/external-blocks.html "External blocks - The Rust Reference"
+[5]: https://doc.rust-lang.org/nomicon/ffi.html "FFI - The Rustonomicon"
+[6]: https://sqlite.org/c3ref/bind_blob.html "Binding Values To Prepared Statements"
+[7]: https://sqlite.org/cli.html "Command Line Shell For SQLite"
+[8]: https://sqlite.org/c3ref/stmt.html "Prepared Statement Object"
+

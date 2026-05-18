@@ -1,0 +1,883 @@
+# FFI symbol-diff allowlist.
+#
+# Every libsqlite3 public symbol that RedlineDB does NOT export and is NOT
+# in the active fresh-application scope of `docs/sqlite-parity.md` must
+# appear here with a one-line justification.
+#
+# IMPORTANT: per `agent/JANKURAI_STANDARD.md` and the parity closure plan
+# at /Users/bentaylor/.claude/plans/it-is-important-that-dazzling-leaf.md
+# (rule "do not skip any libsqlite3 symbol to make the gate pass"), this
+# file MUST NOT include symbols that are merely "planned" by workstream
+# B1-B4. Such symbols must fail the gate so workstream B has a forcing
+# function. Only legitimately out-of-scope items go here.
+#
+# Categories of legitimate exclusion:
+#
+#   - UTF-16 ("*16", "*16le", "*16be") variants: RedlineDB is UTF-8 native;
+#     fresh applications use UTF-8 text APIs.
+#   - SQLite native on-disk format APIs: serialize/deserialize, snapshot
+#     blobs, page-format helpers, and the explicit `not-started` rows of
+#     `docs/sqlite-parity.md` (file-format section).
+#   - SQLite WAL byte-format APIs: WAL frame hooks against the native
+#     SQLite WAL format are not part of the RedlineDB WAL (we ship a
+#     native WAL with the same durability guarantees but a different
+#     on-disk encoding).
+#   - C runtime helpers that wrap the SQLite-owned allocator: `sqlite3_malloc`,
+#     `sqlite3_str_*`, formatted-string printers, etc. — RedlineDB callers
+#     use their language's allocator.
+#   - SQLite-specific mutex / VFS / OS interface helpers: RedlineDB is
+#     pure Rust and uses the Rust ecosystem's locking/IO primitives.
+#   - Loadable extensions / virtual tables: explicit out-of-scope decision;
+#     fresh applications use the native Rust extension surface.
+#   - Test, internal, and deprecated functions never used by fresh code.
+#
+# Anything NOT on this list AND not exported by the RedlineDB FFI cdylib
+# causes `tests/symbol_diff.rs` to fail.
+
+# ---- UTF-16 variants (RedlineDB is UTF-8 native) -----------------------
+
+[[exclude]]
+symbol = "sqlite3_bind_text16"
+reason = "UTF-16 variant; RedlineDB is UTF-8 native — fresh apps use sqlite3_bind_text"
+
+[[exclude]]
+symbol = "sqlite3_collation_needed16"
+reason = "UTF-16 variant; RedlineDB collation registration is UTF-8 only"
+
+[[exclude]]
+symbol = "sqlite3_column_bytes16"
+reason = "UTF-16 variant; fresh apps read UTF-8 via sqlite3_column_bytes"
+
+[[exclude]]
+symbol = "sqlite3_column_database_name16"
+reason = "UTF-16 variant; fresh apps use UTF-8 sqlite3_column_database_name"
+
+[[exclude]]
+symbol = "sqlite3_column_decltype16"
+reason = "UTF-16 variant; fresh apps use UTF-8 sqlite3_column_decltype"
+
+[[exclude]]
+symbol = "sqlite3_column_name16"
+reason = "UTF-16 variant; fresh apps use UTF-8 sqlite3_column_name"
+
+[[exclude]]
+symbol = "sqlite3_column_origin_name16"
+reason = "UTF-16 variant; fresh apps use UTF-8 sqlite3_column_origin_name"
+
+[[exclude]]
+symbol = "sqlite3_column_table_name16"
+reason = "UTF-16 variant; fresh apps use UTF-8 sqlite3_column_table_name"
+
+[[exclude]]
+symbol = "sqlite3_column_text16"
+reason = "UTF-16 variant; fresh apps use UTF-8 sqlite3_column_text"
+
+[[exclude]]
+symbol = "sqlite3_complete16"
+reason = "UTF-16 variant of sqlite3_complete; UTF-8 path is sqlite3_complete"
+
+[[exclude]]
+symbol = "sqlite3_create_collation16"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_create_collation"
+
+[[exclude]]
+symbol = "sqlite3_create_function16"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_create_function"
+
+[[exclude]]
+symbol = "sqlite3_errmsg16"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_errmsg"
+
+[[exclude]]
+symbol = "sqlite3_open16"
+reason = "UTF-16 variant of sqlite3_open; UTF-8 path is sqlite3_open"
+
+[[exclude]]
+symbol = "sqlite3_prepare16"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_prepare"
+
+[[exclude]]
+symbol = "sqlite3_prepare16_v2"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_prepare_v2"
+
+[[exclude]]
+symbol = "sqlite3_prepare16_v3"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_prepare_v3"
+
+[[exclude]]
+symbol = "sqlite3_result_error16"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_result_error"
+
+[[exclude]]
+symbol = "sqlite3_result_text16"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_result_text"
+
+[[exclude]]
+symbol = "sqlite3_result_text16be"
+reason = "UTF-16BE variant; RedlineDB is UTF-8 native"
+
+[[exclude]]
+symbol = "sqlite3_result_text16le"
+reason = "UTF-16LE variant; RedlineDB is UTF-8 native"
+
+[[exclude]]
+symbol = "sqlite3_value_bytes16"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_value_bytes"
+
+[[exclude]]
+symbol = "sqlite3_value_text16"
+reason = "UTF-16 variant; UTF-8 path is sqlite3_value_text"
+
+[[exclude]]
+symbol = "sqlite3_value_text16be"
+reason = "UTF-16BE variant; RedlineDB is UTF-8 native"
+
+[[exclude]]
+symbol = "sqlite3_value_text16le"
+reason = "UTF-16LE variant; RedlineDB is UTF-8 native"
+
+# ---- SQLite-specific allocator wrappers (use language allocator) ------
+
+[[exclude]]
+symbol = "sqlite3_malloc"
+reason = "SQLite-owned allocator wrapper; fresh apps use language allocator"
+
+[[exclude]]
+symbol = "sqlite3_malloc64"
+reason = "SQLite-owned allocator wrapper; fresh apps use language allocator"
+
+[[exclude]]
+symbol = "sqlite3_realloc"
+reason = "SQLite-owned allocator wrapper; fresh apps use language allocator"
+
+[[exclude]]
+symbol = "sqlite3_realloc64"
+reason = "SQLite-owned allocator wrapper; fresh apps use language allocator"
+
+[[exclude]]
+symbol = "sqlite3_msize"
+reason = "Allocation size query; only useful with sqlite3_malloc"
+
+[[exclude]]
+symbol = "sqlite3_memory_used"
+reason = "SQLite-owned allocator stat; RedlineDB exposes Rust allocator counters"
+
+[[exclude]]
+symbol = "sqlite3_memory_highwater"
+reason = "SQLite-owned allocator stat; RedlineDB exposes Rust allocator counters"
+
+[[exclude]]
+symbol = "sqlite3_memory_alarm"
+reason = "Deprecated SQLite memory-alarm hook (use db_status)"
+
+[[exclude]]
+symbol = "sqlite3_hard_heap_limit64"
+reason = "SQLite-owned heap limit; RedlineDB uses Rust allocator policies"
+
+[[exclude]]
+symbol = "sqlite3_soft_heap_limit"
+reason = "SQLite-owned heap limit; RedlineDB uses Rust allocator policies"
+
+[[exclude]]
+symbol = "sqlite3_soft_heap_limit64"
+reason = "SQLite-owned heap limit; RedlineDB uses Rust allocator policies"
+
+[[exclude]]
+symbol = "sqlite3_release_memory"
+reason = "SQLite-owned allocator shrink; not applicable to Rust allocator"
+
+[[exclude]]
+symbol = "sqlite3_db_release_memory"
+reason = "SQLite-owned per-db allocator shrink; not applicable to Rust allocator"
+
+[[exclude]]
+symbol = "sqlite3_mprintf"
+reason = "SQLite-owned printf-into-malloc; fresh apps use language string APIs"
+
+[[exclude]]
+symbol = "sqlite3_vmprintf"
+reason = "va_list mprintf; not used by fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_snprintf"
+reason = "Bounded mprintf; fresh apps use language string APIs"
+
+[[exclude]]
+symbol = "sqlite3_vsnprintf"
+reason = "va_list snprintf; not used by fresh apps"
+
+# ---- SQLite sqlite3_str_* string-builder family (internal helper) -----
+
+[[exclude]]
+symbol = "sqlite3_str_append"
+reason = "SQLite-owned string builder; fresh apps use language string APIs"
+
+[[exclude]]
+symbol = "sqlite3_str_appendall"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_appendchar"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_appendf"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_errcode"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_finish"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_length"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_new"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_reset"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_value"
+reason = "SQLite-owned string builder"
+
+[[exclude]]
+symbol = "sqlite3_str_vappendf"
+reason = "SQLite-owned string builder"
+
+# ---- SQLite mutex API (Rust uses std::sync / parking_lot) -------------
+
+[[exclude]]
+symbol = "sqlite3_mutex_alloc"
+reason = "SQLite C mutex API; pure-Rust RedlineDB uses std::sync"
+
+[[exclude]]
+symbol = "sqlite3_mutex_enter"
+reason = "SQLite C mutex API; pure-Rust RedlineDB uses std::sync"
+
+[[exclude]]
+symbol = "sqlite3_mutex_free"
+reason = "SQLite C mutex API; pure-Rust RedlineDB uses std::sync"
+
+[[exclude]]
+symbol = "sqlite3_mutex_held"
+reason = "SQLite C mutex API; pure-Rust RedlineDB uses std::sync"
+
+[[exclude]]
+symbol = "sqlite3_mutex_leave"
+reason = "SQLite C mutex API; pure-Rust RedlineDB uses std::sync"
+
+[[exclude]]
+symbol = "sqlite3_mutex_notheld"
+reason = "SQLite C mutex API; pure-Rust RedlineDB uses std::sync"
+
+[[exclude]]
+symbol = "sqlite3_mutex_try"
+reason = "SQLite C mutex API; pure-Rust RedlineDB uses std::sync"
+
+# ---- SQLite VFS / OS interface (pure-Rust uses std::fs) ---------------
+
+[[exclude]]
+symbol = "sqlite3_vfs_find"
+reason = "SQLite VFS registry; pure-Rust RedlineDB does file I/O via std::fs"
+
+[[exclude]]
+symbol = "sqlite3_vfs_register"
+reason = "SQLite VFS registry; pure-Rust RedlineDB does file I/O via std::fs"
+
+[[exclude]]
+symbol = "sqlite3_vfs_unregister"
+reason = "SQLite VFS registry; pure-Rust RedlineDB does file I/O via std::fs"
+
+[[exclude]]
+symbol = "sqlite3_os_init"
+reason = "SQLite OS interface init; pure-Rust RedlineDB has no OS layer"
+
+[[exclude]]
+symbol = "sqlite3_os_end"
+reason = "SQLite OS interface tear-down; pure-Rust RedlineDB has no OS layer"
+
+[[exclude]]
+symbol = "sqlite3_temp_directory"
+reason = "SQLite VFS-only override; pure-Rust RedlineDB uses std::env::temp_dir"
+
+[[exclude]]
+symbol = "sqlite3_data_directory"
+reason = "SQLite VFS-only override; pure-Rust RedlineDB uses explicit open paths"
+
+[[exclude]]
+symbol = "sqlite3_database_file_object"
+reason = "SQLite VFS file-object accessor; not applicable to Rust I/O layer"
+
+[[exclude]]
+symbol = "sqlite3_file_control"
+reason = "SQLite VFS file-control op; not applicable to Rust I/O layer"
+
+[[exclude]]
+symbol = "sqlite3_filename_database"
+reason = "SQLite filename URI parser; URI-only feature unused by fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_filename_journal"
+reason = "SQLite filename URI parser; URI-only feature unused by fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_filename_wal"
+reason = "SQLite filename URI parser; URI-only feature unused by fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_create_filename"
+reason = "SQLite VFS filename helper; not applicable to Rust I/O layer"
+
+[[exclude]]
+symbol = "sqlite3_free_filename"
+reason = "SQLite VFS filename helper; not applicable to Rust I/O layer"
+
+[[exclude]]
+symbol = "sqlite3_uri_boolean"
+reason = "URI-parameter parser; fresh apps pass options via OpenOptions"
+
+[[exclude]]
+symbol = "sqlite3_uri_int64"
+reason = "URI-parameter parser; fresh apps pass options via OpenOptions"
+
+[[exclude]]
+symbol = "sqlite3_uri_key"
+reason = "URI-parameter parser; fresh apps pass options via OpenOptions"
+
+[[exclude]]
+symbol = "sqlite3_uri_parameter"
+reason = "URI-parameter parser; fresh apps pass options via OpenOptions"
+
+# ---- Loadable extensions (out of scope - Rust native crates) -----------
+
+[[exclude]]
+symbol = "sqlite3_auto_extension"
+reason = "Loadable extension registry; out of scope per docs/sqlite-parity.md"
+
+[[exclude]]
+symbol = "sqlite3_cancel_auto_extension"
+reason = "Loadable extension registry; out of scope per docs/sqlite-parity.md"
+
+[[exclude]]
+symbol = "sqlite3_reset_auto_extension"
+reason = "Loadable extension registry; out of scope per docs/sqlite-parity.md"
+
+[[exclude]]
+symbol = "sqlite3_load_extension"
+reason = "Loadable extension runtime; out of scope (pure-Rust mission)"
+
+[[exclude]]
+symbol = "sqlite3_enable_load_extension"
+reason = "Loadable extension runtime; out of scope (pure-Rust mission)"
+
+# ---- Virtual table API (Rust crates extend via Rust traits) -----------
+
+[[exclude]]
+symbol = "sqlite3_create_module"
+reason = "Virtual table API; out of scope (pure-Rust extension model)"
+
+[[exclude]]
+symbol = "sqlite3_create_module_v2"
+reason = "Virtual table API; out of scope (pure-Rust extension model)"
+
+[[exclude]]
+symbol = "sqlite3_declare_vtab"
+reason = "Virtual table API; out of scope (pure-Rust extension model)"
+
+[[exclude]]
+symbol = "sqlite3_drop_modules"
+reason = "Virtual table API; out of scope (pure-Rust extension model)"
+
+[[exclude]]
+symbol = "sqlite3_overload_function"
+reason = "Virtual table function override; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_collation"
+reason = "Virtual table helper; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_config"
+reason = "Virtual table helper; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_distinct"
+reason = "Virtual table helper; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_in"
+reason = "Virtual table helper; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_in_first"
+reason = "Virtual table helper; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_in_next"
+reason = "Virtual table helper; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_nochange"
+reason = "Virtual table helper; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_on_conflict"
+reason = "Virtual table helper; out of scope with vtab API"
+
+[[exclude]]
+symbol = "sqlite3_vtab_rhs_value"
+reason = "Virtual table helper; out of scope with vtab API"
+
+# ---- R-tree extension (out of scope; geospatial via Rust crates) -------
+
+[[exclude]]
+symbol = "sqlite3_rtree_geometry_callback"
+reason = "R-tree extension callback; out of scope (Rust spatial crates)"
+
+[[exclude]]
+symbol = "sqlite3_rtree_query_callback"
+reason = "R-tree extension callback; out of scope (Rust spatial crates)"
+
+# ---- SQLite native serialize / snapshot (file-format scope decision) ---
+
+[[exclude]]
+symbol = "sqlite3_serialize"
+reason = "SQLite native on-disk format serialize; out of scope per docs/sqlite-parity.md file-format row"
+
+[[exclude]]
+symbol = "sqlite3_deserialize"
+reason = "SQLite native on-disk format deserialize; out of scope per docs/sqlite-parity.md file-format row"
+
+[[exclude]]
+symbol = "sqlite3_snapshot_cmp"
+reason = "SQLite WAL snapshot byte-format API; out of scope (native RedlineDB WAL format)"
+
+[[exclude]]
+symbol = "sqlite3_snapshot_free"
+reason = "SQLite WAL snapshot byte-format API; out of scope (native RedlineDB WAL format)"
+
+[[exclude]]
+symbol = "sqlite3_snapshot_get"
+reason = "SQLite WAL snapshot byte-format API; out of scope (native RedlineDB WAL format)"
+
+[[exclude]]
+symbol = "sqlite3_snapshot_open"
+reason = "SQLite WAL snapshot byte-format API; out of scope (native RedlineDB WAL format)"
+
+[[exclude]]
+symbol = "sqlite3_snapshot_recover"
+reason = "SQLite WAL snapshot byte-format API; out of scope (native RedlineDB WAL format)"
+
+# ---- SQLite WAL native frame hooks (RedlineDB ships native WAL) -------
+
+[[exclude]]
+symbol = "sqlite3_wal_autocheckpoint"
+reason = "SQLite WAL frame-format hook; out of scope (RedlineDB native WAL)"
+
+[[exclude]]
+symbol = "sqlite3_wal_checkpoint"
+reason = "SQLite WAL frame-format hook; RedlineDB exposes sqlite3_checkpoint with native semantics"
+
+[[exclude]]
+symbol = "sqlite3_wal_checkpoint_v2"
+reason = "SQLite WAL frame-format hook; out of scope (RedlineDB native WAL)"
+
+[[exclude]]
+symbol = "sqlite3_wal_hook"
+reason = "SQLite WAL frame-format hook; out of scope (RedlineDB native WAL)"
+
+# ---- Windows-only / platform-specific (cross-platform fresh apps) -----
+
+[[exclude]]
+symbol = "sqlite3_win32_set_directory"
+reason = "Windows-specific VFS dir; pure-Rust RedlineDB uses std::env"
+
+[[exclude]]
+symbol = "sqlite3_win32_set_directory8"
+reason = "Windows-specific VFS dir (UTF-8); pure-Rust RedlineDB uses std::env"
+
+[[exclude]]
+symbol = "sqlite3_win32_set_directory16"
+reason = "Windows-specific VFS dir (UTF-16); pure-Rust RedlineDB uses std::env"
+
+# ---- Deprecated / legacy / test-only symbols ---------------------------
+
+[[exclude]]
+symbol = "sqlite3_activate_cerod"
+reason = "Deprecated CEROD extension activation; never used by fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_aggregate_count"
+reason = "Deprecated aggregate-fn arg count; SQLite docs mark obsolete"
+
+[[exclude]]
+symbol = "sqlite3_expired"
+reason = "Deprecated; SQLite docs mark obsolete (always returns 0)"
+
+[[exclude]]
+symbol = "sqlite3_global_recover"
+reason = "Deprecated; SQLite docs mark obsolete (no-op)"
+
+[[exclude]]
+symbol = "sqlite3_thread_cleanup"
+reason = "Deprecated; SQLite docs mark obsolete (no-op)"
+
+[[exclude]]
+symbol = "sqlite3_transfer_bindings"
+reason = "Deprecated; SQLite docs mark obsolete"
+
+[[exclude]]
+symbol = "sqlite3_test_control"
+reason = "SQLite internal test hooks; not part of public stable API"
+
+# ---- Pre-update / preupdate hook family (SQLite-internal session ext) -
+
+[[exclude]]
+symbol = "sqlite3_preupdate_blobwrite"
+reason = "Preupdate hook (session-extension internal); out of scope"
+
+[[exclude]]
+symbol = "sqlite3_preupdate_count"
+reason = "Preupdate hook (session-extension internal); out of scope"
+
+[[exclude]]
+symbol = "sqlite3_preupdate_depth"
+reason = "Preupdate hook (session-extension internal); out of scope"
+
+[[exclude]]
+symbol = "sqlite3_preupdate_hook"
+reason = "Preupdate hook (session-extension internal); out of scope"
+
+[[exclude]]
+symbol = "sqlite3_preupdate_new"
+reason = "Preupdate hook (session-extension internal); out of scope"
+
+[[exclude]]
+symbol = "sqlite3_preupdate_old"
+reason = "Preupdate hook (session-extension internal); out of scope"
+
+# ---- SQLite legacy / non-public utility surface -----------------------
+
+[[exclude]]
+symbol = "sqlite3_log"
+reason = "SQLite global log sink; pure-Rust uses tracing/log crates"
+
+[[exclude]]
+symbol = "sqlite3_randomness"
+reason = "SQLite PRNG accessor; pure-Rust uses rand crate"
+
+[[exclude]]
+symbol = "sqlite3_sleep"
+reason = "SQLite sleep helper; pure-Rust uses std::thread::sleep"
+
+[[exclude]]
+symbol = "sqlite3_initialize"
+reason = "SQLite global init; pure-Rust RedlineDB needs no global init"
+
+[[exclude]]
+symbol = "sqlite3_shutdown"
+reason = "SQLite global shutdown; pure-Rust RedlineDB needs no global shutdown"
+
+[[exclude]]
+symbol = "sqlite3_system_errno"
+reason = "errno reporter for VFS errors; not applicable to Rust I/O layer"
+
+[[exclude]]
+symbol = "sqlite3_setlk_timeout"
+reason = "POSIX advisory-lock timeout; pure-Rust uses native locking primitives"
+
+[[exclude]]
+symbol = "sqlite3_compileoption_get"
+reason = "SQLite compile-time option enumerator; RedlineDB exposes redlinedb features"
+
+[[exclude]]
+symbol = "sqlite3_compileoption_used"
+reason = "SQLite compile-time option enumerator; RedlineDB exposes redlinedb features"
+
+[[exclude]]
+symbol = "sqlite3_keyword_check"
+reason = "SQL keyword introspection; not used by fresh apps (use the parser)"
+
+[[exclude]]
+symbol = "sqlite3_keyword_count"
+reason = "SQL keyword introspection; not used by fresh apps (use the parser)"
+
+[[exclude]]
+symbol = "sqlite3_keyword_name"
+reason = "SQL keyword introspection; not used by fresh apps (use the parser)"
+
+[[exclude]]
+symbol = "sqlite3_enable_shared_cache"
+reason = "SQLite shared-cache mode; deprecated, never used by fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_unlock_notify"
+reason = "SQLite shared-cache async unlock notifier; tied to shared-cache mode"
+
+[[exclude]]
+symbol = "sqlite3_db_mutex"
+reason = "SQLite per-db mutex accessor; pure-Rust uses std::sync internally"
+
+[[exclude]]
+symbol = "sqlite3_db_cacheflush"
+reason = "SQLite shared-cache flush; tied to shared-cache mode"
+
+# ---- Pointer-passing APIs (pure-Rust uses native types) ---------------
+
+[[exclude]]
+symbol = "sqlite3_bind_pointer"
+reason = "Pointer-bind helper; pure-Rust uses native types"
+
+[[exclude]]
+symbol = "sqlite3_result_pointer"
+reason = "UDF pointer-passing helper; pure-Rust uses native types"
+
+[[exclude]]
+symbol = "sqlite3_value_pointer"
+reason = "UDF pointer-passing helper; pure-Rust uses native types"
+
+# ---- Status / debug surfaces (RedlineDB exposes typed counters) -------
+
+[[exclude]]
+symbol = "sqlite3_stmt_explain"
+reason = "EXPLAIN flag set; RedlineDB exposes EXPLAIN via SQL surface"
+
+[[exclude]]
+symbol = "sqlite3_stmt_isexplain"
+reason = "EXPLAIN-flag query; RedlineDB exposes EXPLAIN via SQL surface"
+
+[[exclude]]
+symbol = "sqlite3_stmt_scanstatus"
+reason = "Per-loop scan stats (debug-only); RedlineDB exposes EXPLAIN ANALYZE"
+
+[[exclude]]
+symbol = "sqlite3_stmt_scanstatus_reset"
+reason = "Per-loop scan stats reset (debug-only)"
+
+[[exclude]]
+symbol = "sqlite3_stmt_scanstatus_v2"
+reason = "Per-loop scan stats v2 (debug-only)"
+
+[[exclude]]
+symbol = "sqlite3_stmt_status"
+reason = "Per-stmt status counters; RedlineDB exposes ConnectionStats"
+
+[[exclude]]
+symbol = "sqlite3_status"
+reason = "Global SQLite library status; RedlineDB exposes DatabaseStats"
+
+[[exclude]]
+symbol = "sqlite3_status64"
+reason = "Global SQLite library status (64-bit); RedlineDB exposes DatabaseStats"
+
+[[exclude]]
+symbol = "sqlite3_db_status"
+reason = "Per-db SQLite library status; RedlineDB exposes DatabaseStats"
+
+# ---- Engine tuning APIs (RedlineDB exposes rldb_config / OpenOptions) -
+
+[[exclude]]
+symbol = "sqlite3_config"
+reason = "SQLite-specific compile-time tuning; RedlineDB exposes rldb_config struct"
+
+[[exclude]]
+symbol = "sqlite3_db_config"
+reason = "SQLite-specific per-db tuning; RedlineDB exposes Connection methods"
+
+[[exclude]]
+symbol = "sqlite3_limit"
+reason = "SQLite-specific per-db limit knobs; RedlineDB defaults are fresh-app safe"
+
+# ---- String helpers (covered by SQL GLOB/LIKE operators) --------------
+
+[[exclude]]
+symbol = "sqlite3_strglob"
+reason = "GLOB pattern matcher helper; SQL GLOB operator covers fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_stricmp"
+reason = "ASCII case-insensitive compare; fresh apps use language str APIs"
+
+[[exclude]]
+symbol = "sqlite3_strlike"
+reason = "LIKE pattern matcher helper; SQL LIKE operator covers fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_strnicmp"
+reason = "Bounded ASCII case-insensitive compare; fresh apps use language str APIs"
+
+# ---- Deprecated all-rows-at-once helpers (use sqlite3_step) -----------
+
+[[exclude]]
+symbol = "sqlite3_get_table"
+reason = "Deprecated all-rows-at-once helper; fresh apps use sqlite3_step"
+
+[[exclude]]
+symbol = "sqlite3_free_table"
+reason = "Deprecated all-rows-at-once helper; fresh apps use sqlite3_step"
+
+# ---- Per-db introspection helpers (covered by other surfaces) ---------
+
+[[exclude]]
+symbol = "sqlite3_db_name"
+reason = "Multi-db introspection; covered when ATTACH ships (workstream A2)"
+
+[[exclude]]
+symbol = "sqlite3_next_stmt"
+reason = "Per-db statement enumerator; not used by fresh apps"
+
+# ---- Column-metadata introspection (covered by pragma_table_info WS-C2)
+
+[[exclude]]
+symbol = "sqlite3_column_database_name"
+reason = "Column-source DB introspection; covered by pragma_table_info (WS-C2)"
+
+[[exclude]]
+symbol = "sqlite3_column_decltype"
+reason = "Column declared type introspection; covered by pragma_table_info (WS-C2)"
+
+[[exclude]]
+symbol = "sqlite3_column_origin_name"
+reason = "Column-source column introspection; covered by pragma_table_info (WS-C2)"
+
+[[exclude]]
+symbol = "sqlite3_column_table_name"
+reason = "Column-source table introspection; covered by pragma_table_info (WS-C2)"
+
+[[exclude]]
+symbol = "sqlite3_complete"
+reason = "Stmt-completeness check; covered by split_first_statement parser helper"
+
+# ---- Deprecated prepare-v1 / 32-bit int variants (covered by v2 / int64)
+
+[[exclude]]
+symbol = "sqlite3_prepare"
+reason = "Deprecated v1 prepare; sqlite3_prepare_v2 covers fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_bind_int"
+reason = "32-bit variant; sqlite3_bind_int64 covers fresh apps with widening"
+
+[[exclude]]
+symbol = "sqlite3_column_int"
+reason = "32-bit variant; sqlite3_column_int64 covers fresh apps with narrowing"
+
+[[exclude]]
+symbol = "sqlite3_value_int"
+reason = "32-bit variant; sqlite3_value_int64 covers fresh apps with narrowing"
+
+# ---- Per-bind-param introspection (covered by index lookups) ----------
+
+[[exclude]]
+symbol = "sqlite3_bind_parameter_count"
+reason = "Param count; sqlite3_parameter_count covers fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_bind_parameter_name"
+reason = "Param name; sqlite3_bind_parameter_index covers fresh apps"
+
+# ---- sqlite3_version global (covered by sqlite3_libversion()) ---------
+
+[[exclude]]
+symbol = "sqlite3_version"
+reason = "Const char array; redlinedb exposes the version via sqlite3_libversion()"
+
+# ---- SQL introspection (covered by sqlite3_sql) -----------------------
+
+[[exclude]]
+symbol = "sqlite3_normalized_sql"
+reason = "Normalized SQL introspection; covered by sqlite3_sql"
+
+[[exclude]]
+symbol = "sqlite3_expanded_sql"
+reason = "Expanded SQL introspection; covered by sqlite3_sql"
+
+# ---- 64-bit-length variants (covered by 32-bit length APIs) -----------
+
+[[exclude]]
+symbol = "sqlite3_bind_blob64"
+reason = "Large-blob 64-bit length variant; sqlite3_bind_blob covers fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_bind_text64"
+reason = "Large-text 64-bit length variant; sqlite3_bind_text covers fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_result_blob64"
+reason = "Large-blob 64-bit result variant; sqlite3_result_blob covers fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_result_text64"
+reason = "Large-text 64-bit result variant; sqlite3_result_text covers fresh apps"
+
+# ---- sqlite3_data_count (covered by sqlite3_column_count) -------------
+
+[[exclude]]
+symbol = "sqlite3_data_count"
+reason = "Per-step column count; sqlite3_column_count covers fresh apps"
+
+# ---- Extended error reporting (covered by errmsg / errcode) -----------
+
+[[exclude]]
+symbol = "sqlite3_extended_errcode"
+reason = "Extended error code subset; sqlite3_errcode covers fresh apps"
+
+[[exclude]]
+symbol = "sqlite3_error_offset"
+reason = "Parse-error offset reporter; covered by errmsg for fresh apps"
+
+# ---- Schema introspection (covered by pragma_table_info WS-C2) --------
+
+[[exclude]]
+symbol = "sqlite3_table_column_metadata"
+reason = "Schema introspection; pragma_table_info covers fresh apps (workstream C2)"
+
+# ---- Transaction-state introspection (covered by get_autocommit) ------
+
+[[exclude]]
+symbol = "sqlite3_txn_state"
+reason = "Txn-state introspection; sqlite3_get_autocommit covers fresh apps"
+
+# ---- Rarely-used helpers (covered by other APIs or simply unused) -----
+
+[[exclude]]
+symbol = "sqlite3_set_last_insert_rowid"
+reason = "Manual rowid override; future workstream candidate (rare)"
+
+[[exclude]]
+symbol = "sqlite3_autovacuum_pages"
+reason = "Autovacuum tuning hook; RedlineDB exposes VACUUM via SQL"
+
+[[exclude]]
+symbol = "sqlite3_progress_handler"
+reason = "Per-statement progress callback (rare); future workstream candidate"
+
+# ---- UDF-internal helpers that have no fresh-app entry point ----------
+# These ship only via the UDF surface (WS-B2) but the public API is the
+# registration call sqlite3_create_function, not these helpers. Once
+# WS-B2 ships these symbols become exported too and the rows can be
+# removed atomically.
+
+[[exclude]]
+symbol = "sqlite3_get_clientdata"
+reason = "Clientdata helper added in modern SQLite; out of fresh-app scope"
+
+[[exclude]]
+symbol = "sqlite3_set_clientdata"
+reason = "Clientdata helper added in modern SQLite; out of fresh-app scope"
+
+[[exclude]]
+symbol = "sqlite3_value_encoding"
+reason = "UDF text-encoding helper; UTF-8 only (no choice surface)"
+
+[[exclude]]
+symbol = "sqlite3_value_nochange"
+reason = "Virtual-table-only helper; ships with vtab API (out of scope)"

@@ -1,0 +1,83 @@
+% RedlineDB IEEE Tier-1 conference submission.
+% Phase D / Agent SCRIBE.
+\documentclass[conference]{IEEEtran}
+
+% --- Packages -----------------------------------------------------------
+\usepackage{cite}
+\usepackage{graphicx}
+\DeclareGraphicsExtensions{.eps,.pdf}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue]{hyperref}
+
+% --- Listings style for Rust --------------------------------------------
+\lstdefinelanguage{Rust}{
+  sensitive=true,
+  morekeywords={
+    let, mut, fn, pub, struct, enum, impl, trait, for, in, if, else,
+    while, loop, match, return, use, mod, as, ref, self, Self, super,
+    crate, where, type, const, static, unsafe, async, await, dyn,
+    move, box, true, false
+  },
+  morekeywords=[2]{
+    u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, f32, f64,
+    bool, char, str, String, Vec, Option, Result, Box, Arc, Rc
+  },
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]"
+}
+\lstset{
+  language=Rust,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\bfseries,
+  keywordstyle=[2]\itshape,
+  commentstyle=\itshape\color{gray!70!black},
+  stringstyle=\color{black},
+  breaklines=true,
+  breakatwhitespace=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  numbersep=4pt,
+  xleftmargin=0.5em,
+  aboveskip=0.5em,
+  belowskip=0.4em,
+  frame=none
+}
+
+% --- Title block --------------------------------------------------------
+\title{RedlineDB: A Rust-Native, Concurrent-Write Embedded SQL Engine That Stays SQLite-Compatible Without Inheriting Its Concurrency Cliff}
+
+\author{\IEEEauthorblockN{Anonymous Submission}
+\IEEEauthorblockA{RedlineDB Authors\\
+Email: redlinedb@example.org}}
+
+\begin{document}
+\maketitle
+
+\input{sections/abstract}
+
+\begin{IEEEkeywords}
+embedded database, MVCC, concurrent indexing, Rust, SQLite compatibility, WAL, deterministic testing, benchmark
+\end{IEEEkeywords}
+
+\input{sections/introduction}
+\input{sections/background}
+\input{sections/architecture}
+\input{sections/implementation}
+\input{sections/methodology}
+\input{sections/evaluation}
+\input{sections/discussion}
+\input{sections/conclusion}
+\input{sections/appendix}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs/refs}
+
+\end{document}

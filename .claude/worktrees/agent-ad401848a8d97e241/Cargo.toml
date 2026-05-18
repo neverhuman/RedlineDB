@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "crates/kernel",
+    "crates/sql",
+    "crates/bench",
+    "crates/redlinedb",
+    "crates/ffi",
+    "crates/cli",
+    "crates/server",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.95"

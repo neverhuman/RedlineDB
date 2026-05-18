@@ -1,0 +1,1415 @@
+Absolutely. The strongest transactional storage-kernel design here is **not** “SQLite but in Rust.” It is a **Rust-native, page-oriented, MVCC, WAL-backed kernel** with a Postgres-like concurrency contract, but with a more modern row-version layout to reduce index churn, vacuum pain, and memory overhead.
+
+The core bet:
+
+> **Many writer transactions execute concurrently. Readers never block writers. Writers only block other writers on the same logical rows, unique keys, or DDL conflicts. The only global serialization point is the commit/WAL orderer, and that orderer is a high-throughput batching pipe, not a giant database mutex.**
+
+SQLite WAL mode is fast and elegant, but it still has a hard write-concurrency ceiling: SQLite’s own docs say WAL readers and writers can run at the same time, but “there can only be one writer at a time,” and long readers can stop checkpoint progress. That is exactly the bottleneck this kernel should destroy. ([SQLite][1]) PostgreSQL’s MVCC model is the better concurrency target: its docs describe snapshots where reads do not conflict with writes, and writes do not conflict with reads, even at strong isolation levels. ([PostgreSQL][2])
+
+# 1. Best overall storage-kernel shape
+
+Build the kernel around these pieces:
+
+| Area              | Design                                                                                             |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| Storage model     | Fixed-size page store, default **16 KiB pages**, with slotted pages and checksums.                 |
+| Transaction model | MVCC using **64-bit transaction IDs** and **64-bit commit sequence numbers**.                      |
+| Row identity      | Stable logical `RowId`, separate from physical version location.                                   |
+| Versioning        | Append/prepend immutable row versions into version pages; row directory points to newest version.  |
+| Concurrency       | Lock-free snapshots; row-level write locks; short page latches only for physical mutation.         |
+| WAL               | ARIES-inspired physiological redo WAL, page LSNs, full-page images after checkpoint, group commit. |
+| Commit            | Globally ordered commit records; one `fdatasync` can commit a whole batch.                         |
+| Recovery          | Redo-only for row data; uncommitted versions become invisible garbage after crash.                 |
+| GC                | Cooperative pruning plus background vacuum based on `oldest_snapshot_csn`.                         |
+| Memory            | Bounded sharded page cache, no per-row heap allocations, no mandatory mmap.                        |
+| Rust stance       | Small, audited `unsafe` surface only inside page-cache/page-parsing internals.                     |
+
+The kernel is **Postgres-inspired**, but not a Postgres clone. PostgreSQL stores fixed-size pages with page headers, item identifiers, page LSNs, checksums, and slotted item layout; that is the right family of design for a robust transactional engine. ([PostgreSQL][3]) But we should improve on Postgres’s heap/index churn by using a **stable row directory** and **logical RowId indirection**, so secondary indexes do not constantly chase changing physical tuple IDs.
+
+# 2. Hard product decision: one file owner, many concurrent sessions
+
+For maximum speed and correctness, the first-class mode should be:
+
+> **Single owner process, many threads, many connections, many concurrent transactions.**
+
+That owner can be embedded in-process or exposed through the future Postgres wire layer. Do **not** start by allowing many independent OS processes to directly mutate the same database files. SQLite does that brilliantly, but it forces a file-locking/shared-memory design that fights the “Postgres-level concurrency” goal.
+
+For multi-process use, run the engine as a local server. That is the right tradeoff if the goal is world-class concurrent writes.
+
+# 3. Top-level architecture
+
+```text
+SQL / executor layer
+        |
+        v
++-----------------------------+
+| Transaction API             |
+| begin / read / write / scan |
++-----------------------------+
+        |
+        +--> SnapshotMgr: CSN snapshots, active readers
+        +--> TxStatus: txid -> in-progress / committed(csn) / aborted
+        +--> LockMgr: row locks, unique-key locks, DDL locks
+        +--> HeapStore: row directory + version pages
+        +--> Index AM boundary: B+tree later, but WAL-ready now
+        +--> PageCache: sharded, bounded, checksummed pages
+        +--> WAL: mini-transactions, commit records, group fsync
+        +--> Checkpointer: fuzzy checkpoints
+        +--> GC/Vacuum: prune dead versions and dead index entries
+        +--> Recovery: redo WAL from checkpoint
+```
+
+This is a storage kernel. Keep parser, optimizer, SQL expression evaluation, and wire protocol out of it.
+
+# 4. Non-negotiable invariants
+
+These are the rules that keep the thing alive under crashes, concurrency, power loss, and angry benchmarks:
+
+1. **WAL-before-data:** a dirty page with `page_lsn = X` may not be written to disk until WAL is durable through `X`. PostgreSQL’s WAL docs state the core principle clearly: data-file changes are written only after WAL records describing them have been flushed to permanent storage. ([PostgreSQL][4])
+
+2. **Commit visibility follows durable commit:** in strict mode, a transaction is not visible to other transactions until its commit record is durable.
+
+3. **Readers never wait on uncommitted writers:** they follow version chains and use the snapshot visibility rules.
+
+4. **Writers only wait on logical conflicts:** same row, same unique key, incompatible DDL/schema lock, or serializable dependency.
+
+5. **Page latches are never transaction locks:** page latches are held for microseconds; row/table/key locks are held to transaction end.
+
+6. **Redo records are idempotent:** replaying the same WAL record twice must produce the same page state.
+
+7. **No page reuse while old snapshots can see old versions:** free pages, row slots, and blob chunks cannot be reused until `free_csn < oldest_snapshot_csn`.
+
+8. **Uncommitted data on disk is allowed but invisible:** if a crash leaves uncommitted row versions or index entries on disk, recovery marks loser transactions aborted; GC removes the garbage later.
+
+9. **Every page carries identity:** page header includes `page_id`, `relation_id`, `kind`, `page_lsn`, checksum, and format version.
+
+10. **Checksums are mandatory:** silent corruption should be detected aggressively.
+
+# 5. File and directory layout
+
+Fast mode should use a directory, not a single monolithic file:
+
+```text
+db/
+  CONTROL                 # two or three checksummed control slots
+  MANIFEST                # relation/object metadata root, timeline, format
+  data/
+    rel_00000001.seg
+    rel_00000002.seg
+  wal/
+    0000000000000001.wal
+    0000000000000002.wal
+  txstatus/
+    00000000.xst          # persisted transaction status pages
+  tmp/
+  snapshots/
+```
+
+Single-file mode can come later as a packaging layer. The fastest, cleanest kernel wants separate data, WAL, txstatus, and temp paths.
+
+Recommended defaults:
+
+```text
+page_size                 = 16 KiB
+wal_segment_size          = 256 MiB
+wal_block_size            = 64 KiB
+checkpoint_target_wal     = 1 GiB to 8 GiB
+group_commit_max_delay    = 100-500 µs
+default_page_cache        = configurable; start 64 MiB embedded, larger in server mode
+checksum                  = CRC32C, hardware accelerated when available
+durability                = strict by default
+```
+
+# 6. Page format
+
+Use a slotted page layout, but make the header more explicit than PostgreSQL’s. PostgreSQL uses fixed-size pages, page headers, item identifiers, free space, item storage, and optional special space; that general layout is proven and very extensible. ([PostgreSQL][3])
+
+Proposed page header:
+
+```rust
+// On-disk format is little-endian. Do not transmute directly.
+// Parse with checked byte readers or zerocopy-style validated structs.
+
+struct PageHeader {
+    magic: u32,             // engine magic
+    format_version: u16,
+    page_size_log2: u8,
+    page_kind: u8,          // heap_version, rowdir, btree_leaf, btree_internal, fsm, vm, blob
+    relation_id: u32,
+    fork_id: u8,            // main, fsm, vm, blob, catalog, etc.
+    flags: u8,
+    level: u16,             // btree level or page subtype
+    page_no: u64,
+
+    page_lsn: u64,          // last WAL LSN applied to this page
+    checksum: u32,          // CRC32C over page with checksum zeroed + salt/page_id
+    generation: u32,        // detects stale physical pointers
+
+    lower: u16,             // start of free space
+    upper: u16,             // end of free space
+    special: u16,           // start of special area
+    free_frag: u16,
+
+    prune_csn_floor: u64,   // hint: oldest maybe-dead version on page
+    right_sibling: u64,     // for btree pages; zero otherwise
+    reserved: [u8; 16],
+}
+```
+
+Slot entry:
+
+```rust
+struct SlotEntry {
+    offset: u16,
+    len: u16,
+    flags: u16,        // live, dead, redirect, overflow
+    generation: u16,   // stale pointer detection
+}
+```
+
+Design rules:
+
+```text
+- Page header is 64 bytes and cache-line friendly.
+- Slot table grows upward.
+- Item bytes grow downward.
+- Items may move during page compaction.
+- Slot IDs remain stable until slot generation changes.
+- Page mutation always updates page_lsn.
+- Page write computes checksum into a scratch copy, not directly inside the live frame.
+```
+
+# 7. Core row layout: stable RowId + version chains
+
+This is the big design move.
+
+Instead of making indexes point directly at physical tuple versions, every table gets a **row directory**:
+
+```text
+RowId -> newest VersionPtr
+```
+
+A `RowId` is stable across updates. Physical row versions can move, chain, compress, and be pruned without breaking secondary indexes.
+
+```rust
+type RowId = u64;
+type TxnId = u64;
+type Csn   = u64;
+type Lsn   = u64;
+
+struct VersionPtr {
+    page_no: u64,
+    slot_id: u16,
+    generation: u16,
+}
+```
+
+Row directory slot:
+
+```rust
+struct RowDirSlot {
+    head: VersionPtr,       // newest known version
+    flags: u16,             // live, deleted, redirected
+    generation: u16,
+    key_hash: u64,          // optional fast check for PK/unique constraints
+}
+```
+
+Version header:
+
+```rust
+struct VersionHeader {
+    row_id: RowId,
+
+    prev: VersionPtr,       // older version, null if none
+
+    begin: Stamp,           // creator txid or committed CSN
+    end: Stamp,             // INF, deleting/updating txid, or committed end CSN
+
+    schema_version: u32,
+    create_cmd: u32,        // for self-visibility / savepoints / statement semantics
+    delete_cmd: u32,
+
+    flags: u16,             // deleted, has_nulls, compressed, delta, overflow
+    ncols: u16,
+    payload_len: u32,
+
+    // followed by null bitmap, fixed data, varlen offset table, payload
+}
+```
+
+`Stamp` is a packed 64-bit value:
+
+```rust
+enum Stamp {
+    Infinity,
+    TxnId(TxnId),       // pending or unresolved
+    Csn(Csn),           // committed visibility timestamp
+    AbortedHint(TxnId), // optional hint
+}
+```
+
+Visibility:
+
+```rust
+fn visible(version: &VersionHeader, snapshot: Snapshot, tx: Option<TxnId>) -> bool {
+    // 1. Creator must be visible.
+    // 2. Deleter/updater must not be visible.
+    // 3. Own writes are visible according to command/savepoint rules.
+    // 4. Aborted creator is invisible.
+    // 5. Aborted deleter means the old version remains visible.
+}
+```
+
+Why this is powerful:
+
+```text
+- Non-key updates do not require secondary index rewrites.
+- Old snapshots can still find old versions through the chain.
+- New snapshots quickly find the newest version.
+- Vacuum can prune intermediate versions without touching indexes.
+- Index entries can point to RowId, not physical tuple addresses.
+```
+
+PostgreSQL has a related optimization called HOT, where updates that do not modify indexed columns can avoid new index entries and prune intermediate versions during normal operation; the proposed row-directory design makes that idea more general by making the logical row pointer stable from the beginning. ([PostgreSQL][5])
+
+# 8. Transaction and snapshot model
+
+Use three clocks/IDs:
+
+```text
+TxnId: unique write transaction ID.
+Csn:   commit sequence number, assigned in durable commit order.
+Lsn:   WAL byte position / logical log sequence number.
+```
+
+Snapshots:
+
+```rust
+struct Snapshot {
+    read_csn: Csn,
+    isolation: Isolation,
+    active_txns_epoch: u64,
+}
+```
+
+Isolation levels:
+
+```rust
+enum Isolation {
+    ReadCommitted,    // snapshot per statement
+    RepeatableRead,   // one snapshot per transaction
+    Serializable,     // SSI dependency tracking
+}
+```
+
+Read Committed:
+
+```text
+- Each statement grabs current visible_csn.
+- Reads only versions committed at or before that CSN, plus own writes.
+```
+
+Repeatable Read / Snapshot Isolation:
+
+```text
+- First statement grabs read_csn.
+- All later reads use same read_csn.
+- Write/write conflicts are detected at update/commit.
+```
+
+Serializable:
+
+```text
+- Use SSI: record read dependencies, range reads, and write conflicts.
+- Abort one transaction if dependency graph becomes non-serializable.
+```
+
+PostgreSQL’s transaction-isolation docs describe Serializable as behavior equivalent to some serial order, with retry required on serialization failure; they also describe how Serializable monitors conditions that would make concurrent execution inconsistent with serial execution. ([PostgreSQL][6])
+
+# 9. Write path
+
+## Insert
+
+```text
+1. Assign TxnId if transaction is not already a writer.
+2. Allocate RowId from relation-local atomic counter.
+3. Choose version page from free-space map.
+4. Build VersionHeader with begin = TxnId, end = INF.
+5. Build mini-transaction WAL record:
+   - heap_insert_version
+   - rowdir_set_head
+   - optional index_insert entries
+6. Copy WAL record into WAL buffer and assign LSN.
+7. Apply page mutations under page latches.
+8. Mark pages dirty with page_lsn = LSN.
+9. Return RowId.
+```
+
+## Update
+
+```text
+1. Acquire row write lock on RowId.
+2. Read rowdir head.
+3. Walk version chain until visible version found.
+4. Validate write conflict:
+   - ReadCommitted: executor may recheck predicate on newest committed version.
+   - RepeatableRead/Serializable: abort if row changed after snapshot.
+5. Allocate new version.
+6. Set new.begin = TxnId.
+7. Set old.end = TxnId.
+8. new.prev = old VersionPtr.
+9. rowdir.head = new VersionPtr.
+10. WAL mini-transaction covers all physical changes.
+```
+
+## Delete
+
+```text
+1. Acquire row write lock.
+2. Find visible version.
+3. Set visible_version.end = TxnId.
+4. WAL-log the end-stamp change.
+5. Keep rowdir head unchanged unless delete creates a tombstone version.
+```
+
+## Abort
+
+```text
+1. Mark TxnId aborted in TxStatus.
+2. Release locks.
+3. Do not physically undo row versions on the hot path.
+4. GC removes aborted versions later.
+```
+
+## Commit
+
+```text
+1. Validate deferred constraints and SSI dependencies.
+2. Enter commit sequencer.
+3. Assign next commit CSN.
+4. Append WAL Commit record { txid, csn, aborted_subtxns, commit_flags }.
+5. Group flush WAL through commit_lsn.
+6. Publish TxStatus[txid] = committed(csn).
+7. Advance global visible_csn if commits are contiguous.
+8. Release locks.
+```
+
+This is where the speed comes from: transactions do row work concurrently, while commit durability is batched. PostgreSQL’s WAL docs explicitly note that when many small concurrent transactions are processed, one WAL `fsync` can be enough to commit many transactions. ([PostgreSQL][4])
+
+# 10. WAL design
+
+Use **ARIES-inspired physiological redo**, but simplify row rollback through MVCC. ARIES is the classic recovery family for WAL, fine-granularity locking, and partial rollbacks. 
+
+WAL segment header:
+
+```rust
+struct WalSegmentHeader {
+    magic: u32,
+    format_version: u16,
+    timeline_id: u32,
+    system_id: u128,
+    segment_no: u64,
+    start_lsn: u64,
+    prev_segment_crc: u32,
+    header_crc: u32,
+}
+```
+
+WAL record header:
+
+```rust
+struct WalRecordHeader {
+    magic: u16,
+    version: u8,
+    record_type: u8,
+
+    flags: u16,
+    header_len: u16,
+    total_len: u32,
+
+    crc32c: u32,
+
+    lsn: u64,
+    prev_tx_lsn: u64,      // per-transaction chain, useful for rollback/debug
+    txid: u64,             // zero for system records
+
+    mtx_id: u64,           // mini-transaction ID
+}
+```
+
+Record types:
+
+```rust
+enum WalRecordType {
+    FullPageImage,
+    MiniTxn,              // one atomic physical mutation unit
+    HeapInsertVersion,
+    HeapSetEndStamp,
+    RowDirSetHead,
+    BtreeInsert,
+    BtreeDelete,
+    BtreeSplit,
+    AllocPage,
+    FreePage,
+    TxCommit,
+    TxAbort,
+    CheckpointBegin,
+    CheckpointEnd,
+    TxStatusPage,
+    ControlUpdate,
+}
+```
+
+## Mini-transactions
+
+A mini-transaction is a small atomic physical mutation unit:
+
+```text
+- One row update touching rowdir + heap page.
+- One btree page split touching child + parent + sibling.
+- One page allocation + initialization.
+```
+
+Rule:
+
+```text
+Do not apply a multi-page structural change until its MiniTxn WAL record has been copied into the WAL buffer and assigned an LSN.
+```
+
+Every page touched by the mini-transaction receives the same `page_lsn`. During recovery, if `page.page_lsn >= record.lsn`, skip; otherwise redo.
+
+## Full-page images
+
+After a checkpoint, the first modification to a page should log a compressed or raw full-page image. This protects against torn pages. PostgreSQL’s WAL configuration docs discuss checkpoints, dirty page flushing, redo records, and the effect of full-page writes after checkpoints. ([PostgreSQL][7])
+
+# 11. Page cache
+
+Use a sharded bounded page cache.
+
+```rust
+struct PageFrame {
+    page_id: PageId,
+    state: AtomicU64,       // pins, dirty, io_in_flight, evicting
+    page_lsn: AtomicU64,
+    rec_lsn: AtomicU64,     // first LSN that dirtied this page
+    latch: PageLatch,
+    bytes: UnsafeCell<[u8; PAGE_SIZE]>,
+}
+```
+
+Design:
+
+```text
+- Shard page table by hash(PageId).
+- Use CLOCK or CLOCK-Pro eviction.
+- Dirty page queues are per shard.
+- Page pins are atomic.
+- Reads use optimistic seqlock-style validation where possible.
+- Writers take exclusive page latch only while changing page bytes.
+- Flush copies the page into an aligned scratch buffer, computes checksum, releases latch, then writes.
+```
+
+Flush protocol:
+
+```rust
+fn flush_page(frame: &PageFrame) {
+    let copy_lsn = frame.page_lsn.load(Acquire);
+
+    wal.flush_until(copy_lsn); // WAL-before-data
+
+    let scratch = frame.copy_with_checksum_under_latch();
+
+    io.write_page(frame.page_id, &scratch);
+
+    if frame.page_lsn.load(Acquire) == copy_lsn {
+        frame.clear_dirty();
+    }
+}
+```
+
+This prevents long I/O from holding page latches.
+
+# 12. Locking model
+
+Separate **locks** from **latches**.
+
+```text
+Locks:
+  - Logical.
+  - Held to transaction end.
+  - Row locks, unique-key locks, table/DDL locks, advisory locks later.
+
+Latches:
+  - Physical.
+  - Held for microseconds.
+  - Protect page bytes and btree structural changes.
+```
+
+Row locks:
+
+```rust
+enum RowLockMode {
+    KeyShare,
+    NoKeyUpdate,
+    Update,
+    Delete,
+}
+```
+
+Use a sharded lock table:
+
+```rust
+struct LockShard {
+    map: HashMap<LockKey, LockState>,
+}
+
+struct LockState {
+    owners: SmallVec<[TxnId; 2]>,
+    mode: LockMode,
+    waiters: VecDeque<Waiter>,
+}
+```
+
+Deadlock strategy:
+
+```text
+- Use wound-wait for row locks:
+  - Older transaction wounds/aborts younger holder.
+  - Younger transaction waits for older holder.
+- Use wait-for graph detection for heavyweight DDL/table locks.
+```
+
+This avoids global deadlock hell on hot rows.
+
+PostgreSQL separates MVCC from explicit locking and provides table/row/advisory locks for cases where MVCC is not enough; the same conceptual separation is right here. ([PostgreSQL][8])
+
+# 13. Unique constraints need kernel support
+
+Even though “indexes and constraints” are a separate milestone, the storage kernel must expose the primitives.
+
+Unique insert/update protocol:
+
+```text
+1. Normalize key bytes.
+2. Acquire unique-key lock on hash(index_id, key).
+3. Probe unique index.
+4. For each candidate RowId:
+   - Walk version chain.
+   - Check visibility under latest committed state, not just reader snapshot.
+   - If conflicting uncommitted creator exists, wait or wound.
+5. Insert index entry.
+6. Hold unique-key lock until commit/abort.
+```
+
+Index entry should be:
+
+```rust
+struct SecondaryIndexEntry {
+    key_bytes: KeyBytes,
+    row_id: RowId,
+    maybe_version_ptr: VersionPtr, // optional accelerator
+    key_hash: u64,
+}
+```
+
+For snapshots before/after key updates, index scans must always recheck that the visible row version still matches the searched key. This is the price of stable `RowId`, and it is worth it.
+
+# 14. Checkpointing
+
+Use fuzzy checkpoints.
+
+Checkpoint record:
+
+```rust
+struct Checkpoint {
+    checkpoint_lsn: Lsn,
+    redo_lsn: Lsn,
+    oldest_active_txid: TxnId,
+    oldest_snapshot_csn: Csn,
+    dirty_page_table_digest: u64,
+    txstatus_root: PageId,
+    manifest_root: PageId,
+}
+```
+
+Protocol:
+
+```text
+1. Mark checkpoint begin LSN.
+2. Snapshot dirty page table.
+3. Flush dirty pages gradually.
+4. Flush txstatus pages.
+5. Flush data files.
+6. Write CheckpointEnd record.
+7. fsync WAL.
+8. Update CONTROL alternate slot with checkpoint_lsn and redo_lsn.
+9. fsync CONTROL.
+10. Recycle WAL segments older than redo_lsn and not needed by replication.
+```
+
+PostgreSQL’s checkpoint model gives the right basic pattern: checkpoint records define where REDO can start, dirty pages are flushed, and older WAL can be recycled after the checkpoint boundary, with a tradeoff between recovery time and checkpoint I/O pressure. ([PostgreSQL][7])
+
+Important difference from SQLite WAL:
+
+```text
+SQLite readers can hold an end mark that prevents checkpoint progress past that point.
+This engine’s old readers hold MVCC snapshots, not WAL end marks.
+Long readers can delay GC, but should not block checkpoint page flushing.
+```
+
+# 15. Crash recovery
+
+Recovery algorithm:
+
+```text
+1. Read all CONTROL slots.
+2. Pick highest-generation valid checksum slot.
+3. Open WAL at checkpoint.redo_lsn.
+4. Scan records sequentially.
+5. Stop at first invalid CRC, malformed length, or torn tail.
+6. For each record:
+   - If page record: redo if page_lsn < record.lsn.
+   - If TxCommit: TxStatus[txid] = committed(csn).
+   - If TxAbort: TxStatus[txid] = aborted.
+   - If CheckpointEnd: maybe update recovery metadata.
+7. Any transaction with WAL changes but no durable commit is loser/aborted.
+8. Rebuild/free-space hints if needed.
+9. Start background GC to remove loser garbage.
+```
+
+The critical insight:
+
+```text
+Committed effects survive because commit records are durable.
+Uncommitted effects may physically exist but remain invisible.
+Structural page changes are safe because they are WAL-redone as valid mini-transactions.
+```
+
+That gives you ARIES-grade durability without making every abort physically undo row data on the hot path.
+
+# 16. Garbage collection / vacuum
+
+Track:
+
+```rust
+global_oldest_snapshot_csn = min(active_readers.read_csn)
+global_oldest_needed_txid  = min(active_writers.txid, unresolved_txstatus_refs)
+```
+
+A version is reclaimable when:
+
+```text
+- Creator transaction aborted; or
+- Version.end is committed and end_csn < oldest_snapshot_csn; or
+- Version is an intermediate update version no active snapshot can see.
+```
+
+GC modes:
+
+```text
+1. Opportunistic pruning:
+   - During read/update, if page has prune hint and latch is available, prune locally.
+
+2. Background relation vacuum:
+   - Walk pages with prune_csn_floor < oldest_snapshot_csn.
+   - Remove dead versions.
+   - Compact pages.
+   - Update free-space map.
+
+3. Index vacuum:
+   - Remove index entries whose RowId/version cannot be visible to any active snapshot.
+
+4. Freeze/promote:
+   - Replace old TxnId stamps with CSN stamps.
+   - Allows txstatus truncation.
+```
+
+Avoid a single giant autovacuum cliff. Make cleanup incremental and cooperative.
+
+# 17. Large values and row payloads
+
+Do not store huge values inline.
+
+Payload format:
+
+```text
+- Null bitmap.
+- Fixed-width section.
+- Varlen offset table.
+- Inline varlen bytes up to threshold.
+- Out-of-line blob refs for large values.
+```
+
+Blob chunks:
+
+```rust
+struct BlobRef {
+    blob_id: u64,
+    chunk_count: u32,
+    total_len: u64,
+    compression: CompressionKind,
+    content_hash: u128,
+}
+```
+
+Rules:
+
+```text
+- Blob chunks are immutable.
+- Updates reuse unchanged blob refs.
+- Blob refs are GC’d when no visible row version can reference them.
+- Use pure-Rust compression optionally: lz4-style for hot, zstd-style only if pure Rust and acceptable.
+```
+
+For very wide rows, support two payload types later:
+
+```rust
+enum VersionPayloadKind {
+    FullRow,
+    DeltaAgainstPrev,
+}
+```
+
+Start with full rows. Add deltas only after the recovery and GC machinery is rock solid.
+
+# 18. Rust workspace layout
+
+```text
+crates/
+  kernel/
+    src/
+      lib.rs
+
+      id.rs                 # PageId, RowId, TxnId, Csn, Lsn
+      config.rs
+      error.rs
+
+      io/
+        mod.rs              # Io trait
+        posix.rs            # pwrite/pread/fdatasync/fallocate
+        uring.rs            # optional Linux io_uring backend
+        sim.rs              # deterministic crash/fault simulator
+
+      page/
+        mod.rs
+        format.rs           # checked page parsing
+        cache.rs            # sharded page cache
+        latch.rs
+        checksum.rs
+        fsm.rs              # free-space map
+        vm.rs               # visibility map
+
+      wal/
+        mod.rs
+        record.rs
+        segment.rs
+        writer.rs           # WAL insert + group commit
+        checkpoint.rs
+        recovery.rs
+
+      txn/
+        mod.rs
+        snapshot.rs
+        status.rs           # txid -> status/csn
+        commit.rs           # commit sequencer
+        lock.rs             # row/key/table locks
+        ssi.rs              # serializable dependency tracking
+        savepoint.rs
+
+      heap/
+        mod.rs
+        rowdir.rs
+        version.rs
+        payload.rs
+        scan.rs
+        prune.rs
+
+      catalog/
+        mod.rs              # transactional object metadata
+
+      bg/
+        checkpointer.rs
+        gc.rs
+        wal_recycler.rs
+
+      metrics.rs
+      tracing.rs
+
+  testutil/
+    src/
+      model.rs              # reference model
+      crash.rs              # crash scheduler
+      workload.rs
+
+  cli/
+    src/
+      main.rs               # debug shell: create/open/check/recover/dump
+```
+
+Keep all direct disk-layout code inside `page`, `wal`, and `txstatus`. The executor should never poke raw pages.
+
+# 19. Minimal kernel API
+
+```rust
+pub trait StorageKernel {
+    fn begin(&self, opts: TxnOptions) -> Result<Txn>;
+    fn open_relation(&self, rel: RelationId) -> Result<RelationHandle>;
+    fn checkpoint(&self) -> Result<CheckpointStats>;
+    fn recover(path: &Path, cfg: Config) -> Result<Self>
+    where
+        Self: Sized;
+}
+
+pub struct TxnOptions {
+    pub isolation: Isolation,
+    pub read_only: bool,
+    pub durability: Durability,
+}
+
+pub enum Durability {
+    Strict,       // visible only after WAL fsync
+    AsyncCommit, // visible after WAL write, may lose last commits on crash
+    Ephemeral,   // tests/temp only
+}
+
+pub trait Relation {
+    fn insert(&self, tx: &mut Txn, row: RowBytes) -> Result<RowId>;
+
+    fn get(&self, tx: &Txn, row_id: RowId) -> Result<Option<RowRef>>;
+
+    fn update(
+        &self,
+        tx: &mut Txn,
+        row_id: RowId,
+        new_row: RowBytes,
+        update_mask: ColumnMask,
+    ) -> Result<()>;
+
+    fn delete(&self, tx: &mut Txn, row_id: RowId) -> Result<()>;
+
+    fn scan(&self, tx: &Txn, bounds: ScanBounds) -> Result<ScanCursor>;
+}
+```
+
+# 20. Commit pseudocode
+
+```rust
+pub fn commit(tx: &mut Txn, kernel: &Kernel) -> Result<()> {
+    if tx.read_only {
+        tx.state = TxnState::CommittedReadOnly;
+        return Ok(());
+    }
+
+    tx.state = TxnState::Preparing;
+
+    kernel.constraints.validate_deferred(tx)?;
+    kernel.ssi.validate(tx)?;
+
+    // Commit sequencer assigns CSN in the same order commit records enter WAL.
+    let (commit_lsn, commit_csn) = kernel.commit_seq.append_commit_record(
+        tx.id,
+        tx.aborted_subtxns(),
+        tx.commit_digest(),
+    )?;
+
+    match tx.durability {
+        Durability::Strict => {
+            kernel.wal.flush_until(commit_lsn)?;
+            kernel.tx_status.publish_committed(tx.id, commit_csn);
+            kernel.snapshot_mgr.advance_visible_csn(commit_csn);
+        }
+        Durability::AsyncCommit => {
+            kernel.tx_status.publish_committed(tx.id, commit_csn);
+            kernel.snapshot_mgr.advance_visible_csn(commit_csn);
+            kernel.wal.request_async_flush(commit_lsn);
+        }
+        Durability::Ephemeral => {
+            kernel.tx_status.publish_committed(tx.id, commit_csn);
+            kernel.snapshot_mgr.advance_visible_csn(commit_csn);
+        }
+    }
+
+    kernel.lock_mgr.release_all(tx.id);
+    tx.state = TxnState::Committed;
+
+    Ok(())
+}
+```
+
+# 21. Update pseudocode
+
+```rust
+pub fn update(
+    rel: &RelationHandle,
+    tx: &mut Txn,
+    row_id: RowId,
+    new_payload: RowBytes,
+    update_mask: ColumnMask,
+) -> Result<()> {
+    tx.ensure_writer_id()?;
+
+    rel.lock_row(tx.id, row_id, RowLockMode::Update)?;
+
+    let snapshot = tx.snapshot();
+    let head = rel.rowdir.load_head(row_id)?;
+
+    let old = rel.heap.find_visible_version(head, snapshot, Some(tx.id))?
+        .ok_or(Error::RowNotVisible)?;
+
+    rel.validate_write_conflict(tx, &old)?;
+
+    let new_version = VersionBuilder {
+        row_id,
+        prev: old.ptr,
+        begin: Stamp::TxnId(tx.id),
+        end: Stamp::Infinity,
+        payload: new_payload,
+        schema_version: rel.schema_version(),
+    };
+
+    let mut mtx = MiniTxn::new(tx.id);
+
+    let new_ptr = rel.heap.reserve_version_slot(&new_version)?;
+    mtx.heap_insert_version(new_ptr, new_version);
+    mtx.heap_set_end_stamp(old.ptr, Stamp::TxnId(tx.id));
+    mtx.rowdir_set_head(row_id, new_ptr);
+
+    if update_mask.touches_indexed_columns() {
+        for index in rel.indexes() {
+            mtx.index_insert(index.id(), index.encode_key(&new_payload), row_id);
+        }
+    }
+
+    let lsn = rel.kernel.wal.insert_minitxn(mtx)?;
+    rel.kernel.apply_minitxn(lsn)?;
+
+    tx.write_set.push(WriteRef::Update { row_id, old: old.ptr, new: new_ptr });
+
+    Ok(())
+}
+```
+
+# 22. Implementation order for an agent with minimal context
+
+Build it in this order. Do not jump to SQL first.
+
+## Phase 1: bytes, pages, checksums
+
+Definition of done:
+
+```text
+- Can create a database directory.
+- Can allocate pages.
+- Can write/read pages.
+- Page checksum catches corruption.
+- Page parser rejects malformed pages without panic.
+- Slotted page insert/delete/compact works under property tests.
+```
+
+Deliverables:
+
+```text
+page::format
+page::checksum
+io::posix
+io::sim
+```
+
+## Phase 2: WAL without transactions
+
+Definition of done:
+
+```text
+- Append WAL records.
+- Rotate WAL segments.
+- Validate CRC.
+- Stop cleanly at torn tail.
+- Redo page updates idempotently.
+- Fuzz WAL parser with arbitrary bytes.
+```
+
+Deliverables:
+
+```text
+wal::record
+wal::segment
+wal::writer
+wal::recovery
+```
+
+## Phase 3: page cache
+
+Definition of done:
+
+```text
+- Pin/unpin pages.
+- Bounded eviction.
+- Dirty page tracking.
+- WAL-before-data enforced.
+- Concurrent readers/writers pass loom tests.
+```
+
+Deliverables:
+
+```text
+page::cache
+page::latch
+bg::checkpointer skeleton
+```
+
+## Phase 4: TxStatus and commit sequencer
+
+Definition of done:
+
+```text
+- TxnId allocation.
+- CSN allocation in commit order.
+- Group commit.
+- TxStatus survives checkpoint/recovery.
+- visible_csn only advances after durable commits in strict mode.
+```
+
+Deliverables:
+
+```text
+txn::status
+txn::commit
+wal::TxCommit
+```
+
+## Phase 5: row directory and MVCC heap
+
+Definition of done:
+
+```text
+- insert/get/update/delete by RowId.
+- Read Committed and Repeatable Read.
+- Readers do not block writers.
+- Writers conflict only on same RowId.
+- Aborted versions invisible.
+- Crash after any WAL/page write recovers to valid committed state.
+```
+
+Deliverables:
+
+```text
+heap::rowdir
+heap::version
+heap::payload
+txn::snapshot
+txn::lock
+```
+
+## Phase 6: GC/pruning
+
+Definition of done:
+
+```text
+- Dead versions pruned after oldest_snapshot_csn advances.
+- Aborted versions cleaned.
+- Free space map updated.
+- No page/slot reuse while old snapshots can reference it.
+```
+
+Deliverables:
+
+```text
+heap::prune
+bg::gc
+page::fsm
+```
+
+## Phase 7: checkpoint/recovery torture
+
+Definition of done:
+
+```text
+- Random crash after every write/sync boundary.
+- Recovery never panics.
+- All durable commits are present.
+- No non-durable commit becomes visible.
+- Page checksums and WAL CRCs catch torn/corrupt data.
+```
+
+## Phase 8: index access method boundary
+
+Even before building the optimizer, define the storage-side index contract:
+
+```text
+- insert index entry transactionally
+- delete/mark-dead index entry transactionally
+- scan key/range under snapshot
+- unique-key lock protocol
+- SSI range-read hooks
+```
+
+# 23. Testing strategy
+
+This kernel will live or die by testing quality.
+
+Use five test layers:
+
+## 1. Pure model tests
+
+Make a tiny reference MVCC model:
+
+```rust
+BTreeMap<RowId, Vec<ModelVersion>>
+```
+
+Randomly generate:
+
+```text
+begin
+read
+insert
+update
+delete
+commit
+abort
+checkpoint
+crash
+recover
+```
+
+Compare kernel-visible rows to the model after every operation.
+
+## 2. Crash simulator
+
+The `io::sim` backend should support:
+
+```text
+- lose writes not fsynced
+- tear WAL tail
+- tear data page
+- reorder unsynced writes
+- fail allocation with ENOSPC
+- fail write halfway
+```
+
+Run thousands of generated histories.
+
+## 3. Concurrency model checking
+
+Use loom-style tests for:
+
+```text
+- page pin/unpin
+- lock table acquire/wait/release
+- visible_csn advancement
+- WAL group commit notification
+- dirty page flush race
+```
+
+## 4. Fuzzing
+
+Fuzz:
+
+```text
+- page parser
+- WAL parser
+- recovery from random bytes
+- row payload decoder
+- varlen/blob references
+```
+
+Rule: malformed disk bytes must return an error, never undefined behavior.
+
+## 5. Benchmarks
+
+Compare against SQLite WAL and PostgreSQL later:
+
+```text
+- 1 writer, 1 reader
+- 16 writers, 16 readers
+- 64 writers, 64 readers
+- hot-row contention
+- uniform random updates
+- long read transaction + write storm
+- small transactions, fsync strict
+- group commit batch workload
+- bulk insert
+- update non-indexed columns
+- update indexed columns
+```
+
+Track:
+
+```text
+throughput
+p50/p95/p99 latency
+RSS
+page-cache hit ratio
+WAL bytes per transaction
+data bytes written per transaction
+fsync count
+checkpoint stalls
+GC debt
+recovery time
+```
+
+# 24. Performance-critical implementation choices
+
+## Do not mmap as the default
+
+Memory mapping is tempting, but for a high-concurrency transactional kernel it makes it harder to control eviction, writeback, torn-page handling, and memory pressure. Use explicit page cache by default. Add mmap only for read-only snapshots or special modes.
+
+## Use direct I/O optionally for data pages
+
+Good mode split:
+
+```text
+WAL: buffered sequential writes + fdatasync
+Data pages: buffered by default, optional O_DIRECT in server mode
+```
+
+## Use group commit aggressively
+
+The commit sequencer should batch by either:
+
+```text
+- max delay: 100-500 µs
+- max WAL bytes: e.g. 4 MiB
+- explicit sync pressure
+```
+
+## Avoid allocation on hot paths
+
+Rules:
+
+```text
+- No heap allocation for point read.
+- No heap allocation for visibility check.
+- Transaction write set uses SmallVec initially.
+- Row payload bytes live in page frames or transaction arena.
+- Lock table allocates only when there is an actual lock.
+```
+
+## Keep unsafe tiny
+
+Acceptable `unsafe` zones:
+
+```text
+- Page frame byte storage via UnsafeCell.
+- Cache-aligned allocation.
+- Maybe atomic page state packing.
+```
+
+Not acceptable:
+
+```text
+- transmuting arbitrary disk bytes into Rust structs
+- unchecked varlen offsets
+- references into pages that outlive page guards
+- sharing mutable page bytes without latch proof
+```
+
+# 25. Recommended crates / tooling
+
+Use current stable Rust and keep dependencies boring.
+
+```text
+Concurrency:
+  parking_lot
+  crossbeam
+  arc-swap or equivalent for config/snapshot handles
+
+Bytes/parsing:
+  bytes
+  smallvec
+  arrayvec
+  zerocopy-style checked parsing, or manual endian readers
+
+Checksums/hashing:
+  crc32c implementation with hardware acceleration
+  fast non-crypto hash for lock/index hash hints
+
+Testing:
+  proptest
+  arbitrary
+  cargo-fuzz
+  loom
+  criterion
+  tempfile
+
+Tracing/metrics:
+  tracing
+  metrics-compatible facade
+
+OS I/O:
+  rustix or direct libc bindings wrapped safely
+  optional io_uring backend behind feature flag
+```
+
+Avoid pulling in a C storage engine, C compression dependency, or RocksDB. The point is to own the kernel.
+
+# 26. Default configuration
+
+```rust
+pub struct Config {
+    pub page_size: usize,                  // 16 KiB default
+    pub page_cache_bytes: usize,           // bounded
+    pub wal_segment_bytes: usize,          // 256 MiB default
+    pub wal_buffer_bytes: usize,           // 16-64 MiB
+    pub group_commit_max_delay_us: u64,    // 200 us default
+    pub checkpoint_target_wal_bytes: u64,  // 1-8 GiB
+    pub checkpoint_completion_target: f64, // spread writes
+    pub max_old_snapshot_age_ms: Option<u64>,
+    pub durability: Durability,
+    pub checksum_pages: bool,
+    pub full_page_images: bool,
+    pub direct_io_data: bool,
+    pub async_commit_allowed: bool,
+}
+```
+
+# 27. The big “why this wins”
+
+This design beats SQLite-style concurrency because:
+
+```text
+- There is no single writer transaction mutex.
+- Checkpointing does not depend on reader WAL end marks.
+- Readers use MVCC snapshots, not WAL lookup.
+- Writers on different rows proceed concurrently.
+- Commit fsync is batched.
+- Long readers delay GC, not the whole write/checkpoint pipeline.
+```
+
+It improves on classic Postgres heap behavior because:
+
+```text
+- Stable RowId reduces secondary index churn.
+- Non-key updates naturally avoid index rewrites.
+- 64-bit CSN avoids practical transaction ID wraparound pressure.
+- Row directory makes pruning and version-chain traversal cleaner.
+- Rust implementation can avoid per-backend process memory overhead.
+```
+
+It stays robust because:
+
+```text
+- WAL-before-data is strict.
+- Full-page images handle torn writes.
+- Page checksums detect corruption.
+- Recovery is deterministic and idempotent.
+- Uncommitted disk garbage is invisible by construction.
+- GC is based on explicit oldest-snapshot rules.
+```
+
+The storage kernel I would build is:
+
+> **A Rust-native MVCC row-version store with stable logical RowIds, physiological redo WAL, group commit, fuzzy checkpoints, sharded page cache, row-level conflict locking, and incremental vacuum.**
+
+That is the right foundation for a serious SQLite replacement with Postgres-class concurrency.
+
+[1]: https://www.sqlite.org/wal.html "Write-Ahead Logging"
+[2]: https://www.postgresql.org/docs/current/mvcc-intro.html "PostgreSQL: Documentation: 18: 13.1. Introduction"
+[3]: https://www.postgresql.org/docs/current/storage-page-layout.html "PostgreSQL: Documentation: 18: 66.6. Database Page Layout"
+[4]: https://www.postgresql.org/docs/current/wal-intro.html "PostgreSQL: Documentation: 18: 28.3. Write-Ahead Logging (WAL)"
+[5]: https://www.postgresql.org/docs/current/storage-hot.html "PostgreSQL: Documentation: 18: 66.7. Heap-Only Tuples (HOT)"
+[6]: https://www.postgresql.org/docs/current/transaction-iso.html "PostgreSQL: Documentation: 18: 13.2. Transaction Isolation"
+[7]: https://www.postgresql.org/docs/current/wal-configuration.html "PostgreSQL: Documentation: 18: 28.5. WAL Configuration"
+[8]: https://www.postgresql.org/docs/current/explicit-locking.html "PostgreSQL: Documentation: 18: 13.3. Explicit Locking"
+

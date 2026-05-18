@@ -1,0 +1,4 @@
+# Keep unsafe blocks rare and auditable.
+# Each entry should record file, line, owner, invariant, and proof lane.
+entries = []
+

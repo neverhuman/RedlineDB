@@ -1,0 +1,16 @@
+out_dir = "target/bench/phase10-v3-smoke"
+engines = ["redline"]
+workloads = [
+  "json-path-extract",
+  "json-path-update",
+  "vector-flat-search",
+  "vector-ann-search",
+  "vector-ann-search-disk",
+  "commit-storm-batched",
+  "large-sort-spill",
+]
+durabilities = ["strict"]
+threads = [1]
+rows = 64
+seconds = 1
+cache_mib = 16

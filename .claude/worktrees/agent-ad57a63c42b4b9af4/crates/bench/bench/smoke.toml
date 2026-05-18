@@ -1,0 +1,7 @@
+out_dir = "target/bench/smoke"
+workloads = ["single-row-insert", "point-read-pk", "secondary-index-read", "writers-disjoint"]
+durabilities = ["strict"]
+threads = [1, 8]
+rows = 256
+seconds = 1
+cache_mib = 8

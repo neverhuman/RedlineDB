@@ -1,0 +1,12 @@
+/target/
+**/target/
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tmp
+*.log
+*.sqlite
+*.db
+*.redline

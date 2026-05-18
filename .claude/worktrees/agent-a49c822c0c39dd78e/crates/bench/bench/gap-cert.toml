@@ -1,0 +1,14 @@
+out_dir = "target/bench/xbabe1/gap-cert"
+workloads = [
+  "secondary-index-range",
+  "secondary-index-read",
+  "hot-row-update",
+  "single-row-insert",
+  "batched-insert100",
+  "point-read-pk",
+]
+durabilities = ["strict", "normal"]
+threads = [1, 4, 32, 64, 128]
+rows = 4096
+seconds = 2
+cache_mib = 32

@@ -1,0 +1,451 @@
+I reviewed the current GitHub `main` rather than a local clone; the sandbox DNS blocked `git clone`, but I inspected the live repository files and current history. The latest visible commit I saw is `6ef9f4e`, “feat: phase 8 durability scaffolding,” dated April 28, 2026. ([GitHub][1])
+
+## Executive verdict
+
+RedlineDB has a strong **architecture scaffold**: separate kernel, SQL, public API, FFI, CLI, server, WAL/checkpoint work, catalog work, MVCC concepts, statement caching, planner scaffolding, and benchmark scaffolding. The README correctly frames the current public surface as “SQLite-like” and explicitly says it is **not claiming SQLite file-format compatibility**. ([GitHub][2])
+
+But for your stated goal — **100% Rust SQLite drop-in replacement, faster, smarter memory, high concurrency, robust, richer datatypes** — the current code is still much closer to an ambitious prototype than a drop-in engine. The biggest issues are not cosmetic; they are correctness, durability, physical indexing, compatibility, and concurrency bottlenecks.
+
+The highest-value move right now is: **do not run headline QPS benchmarks until the P0 correctness/concurrency gaps are fixed**. Run internal measurements, yes, but not external claims.
+
+---
+
+## P0 gaps: fix before serious benchmarking
+
+### 1. “SQLite drop-in” is not yet defined tightly enough
+
+You need to decide which of these you mean:
+
+1. **SQLite file-format compatible**: can open existing `.db` files.
+2. **SQLite C ABI compatible**: existing code using `sqlite3_open_v2`, `sqlite3_prepare_v2/v3`, `sqlite3_step`, `sqlite3_bind_*`, `sqlite3_column_*`, etc. can link against RedlineDB.
+3. **SQLite SQL dialect compatible**: PRAGMA, transactions, constraints, collations, triggers, views, virtual tables, FTS, JSON functions, `ALTER TABLE`, `WITHOUT ROWID`, `ON CONFLICT`, savepoints, attach, temp schema, etc.
+4. **SQLite behavior compatible**: locking, busy handlers, type affinity, null ordering, rowid behavior, constraint timing, error codes, schema invalidation, `last_insert_rowid`, `changes`, and all the weird edge cases.
+
+Right now, RedlineDB has an `rldb_*` FFI surface, not a `sqlite3_*` ABI surface. For example, the code exposes `rldb_open`, `rldb_open_v2`, `rldb_prepare_v2`, `rldb_step`, and similar functions, while official SQLite applications expect the `sqlite3_*` C API family. ([GitHub][3])
+
+Also, SQLite file compatibility is a separate mountain: a valid SQLite database file starts with the “SQLite format 3” header, and RedlineDB’s own README says it is not claiming SQLite file-format compatibility. ([SQLite][4])
+
+**Recommendation:** split the roadmap into two modes:
+
+* **Compatibility mode:** SQLite storage classes, SQLite-ish quirks, `sqlite3_*` shim, sqllogictest parity.
+* **Redline mode:** richer datatypes, stronger typing, higher concurrency, non-SQLite storage layout, advanced features.
+
+Trying to make one mode do both will slow everything down and create impossible edge-case conflicts.
+
+---
+
+### 2. Critical row-lock tracking bug across relations
+
+The lock manager itself is relation-aware: it locks by `(RelId, RowId)`. But the transaction tracks only `RowId`, and release uses `self.rel_id` rather than the relation that was actually locked. That means locks acquired on non-default relations can be released against the wrong relation or effectively leak. The engine code calls `lock_row_in_rel(rel_id, row_id, tx)` but pushes only `row_id`; `release_locks` later unlocks with `self.rel_id`. The `Txn` struct also stores `row_locks: Vec<RowId>` and checks `has_row_lock(row_id)` without relation awareness. ([GitHub][5])
+
+This is a P0 correctness issue for multi-table workloads and concurrency tests.
+
+**Fix:** change transaction lock tracking to `Vec<RowKey>` or `HashSet<(RelId, RowId)>`. Make `has_row_lock` relation-aware. Add tests where two tables contain the same row id and concurrent updates occur on both.
+
+---
+
+### 3. Planner claims index scans, executor appears to fall back to row-id/full-table paths
+
+There is real B-tree index code in the kernel, including `BtreeIndex`, page kinds, unique-key lock table, and insert/delete-mark paths. The planner also has `AccessPath::IndexPointLookup`, `IndexRangeScan`, `CoveringIndexScan`, `MultiIndexOr`, and `MultiIndexAnd`, and emits `PhysicalKind::IndexScan`/`MultiIndexScan`. ([GitHub][6])
+
+But the SQL executor path I inspected does not show `IndexScan` execution. The `execute_select` path checks a rowid equality optimization, otherwise collects table row ids or full rows; searching `exec.rs` found no `IndexScan`, no `BtreeIndex`, and no `index` usage. ([GitHub][7])
+
+That means current “index benchmark” results could be misleading: `EXPLAIN` may talk about index paths while execution still scans. This is a huge gap for QPS, memory, and concurrency.
+
+**Fix:** wire physical indexes end-to-end:
+
+* Create-index should build the physical B-tree from existing table rows.
+* Insert/update/delete must maintain all relevant indexes transactionally.
+* SELECT must use index cursors for point/range scans.
+* Covering index scans must avoid heap fetches.
+* Index maintenance must be WAL-logged and recoverable.
+* Add correctness tests that compare scan counts and results with/without indexes.
+
+---
+
+### 4. DML uses a suspicious `Lsn(1)` sentinel while heap writes full page images
+
+Engine insert/update/delete paths pass `Lsn(1)` into heap operations, and the heap layer records a full `WalPayload::PageImage` when WAL is present and the LSN is non-zero. ([GitHub][5])
+
+Full-page WAL images are simple and recoverable, but they are expensive. For high write QPS, this will likely dominate:
+
+* WAL bytes per row update.
+* Memory copies.
+* Flush pressure.
+* Checkpoint cost.
+* Cache pollution.
+
+**Fix:** remove `Lsn(1)` as an implicit “please log” sentinel. Use an explicit enum such as `WalLogging::Disabled | WalLogging::PageImage | WalLogging::Delta | WalLogging::Logical`. Then implement page deltas or logical records for the hot paths. Keep page-image WAL as a fallback for page splits, format changes, or debug mode.
+
+---
+
+### 5. Catalog/DDL durability looks risky
+
+Commit appends a commit record, flushes WAL, publishes commit state, and then if a pending schema exists it saves the catalog snapshot and publishes it. ([GitHub][5])
+
+That ordering creates a scary question: what happens if the process crashes after the transaction commit is durable but before the catalog side file is fully saved and fsynced? The recovery code has WAL replay scaffolding and commit scanning, but catalog snapshot durability needs to be part of the same atomic story. ([GitHub][5])
+
+**Fix:** make catalog changes WAL-backed or use an atomic manifest protocol:
+
+* WAL record for DDL intent and catalog root/version.
+* Write new catalog snapshot to temp file.
+* Fsync file.
+* Atomic rename.
+* Fsync directory.
+* Commit record ordering must make recovery deterministic.
+
+---
+
+### 6. Current richer datatype support is not there yet at SQL value level
+
+The SQL value comparator/truthiness path I inspected handles `Null`, `Integer`, `Real`, `Text`, and `Blob`. That is basically SQLite’s storage-class set, not “many different datatypes more than SQLite.” ([GitHub][8])
+
+**Fix:** design the type system now, before storage format ossifies. I would add:
+
+* `BOOLEAN`
+* signed/unsigned integer widths
+* `DECIMAL128` or arbitrary precision decimal
+* `DATE`, `TIME`, `TIMESTAMP`, `TIMESTAMPTZ`, interval
+* `UUID`/`ULID`
+* `JSONB`
+* arrays/lists
+* structs/records
+* enums
+* fixed-size vectors for embeddings
+* optional `INET`/`CIDR`
+
+But keep SQLite-compatible affinity mode separate from Redline strict mode.
+
+---
+
+## P1 gaps: major performance/concurrency bottlenecks
+
+### 7. File I/O serializes through a single mutex and seek-based file handle
+
+`PageFile` stores a single `Mutex<Fs::File>`, and page reads/writes lock that file and perform seek/read or seek/write operations. ([GitHub][9])
+
+That will bottleneck under high concurrency, especially with mixed readers/writers and cache misses.
+
+**Fix:** use positioned I/O:
+
+* Unix: `FileExt::read_at` / `write_at`.
+* Windows: equivalent positioned APIs.
+* Avoid shared seek state.
+* Consider multiple file descriptors for read-heavy workloads.
+* Keep the current trait abstraction for tests and crash injection.
+
+---
+
+### 8. Buffer pool has a global eviction lock
+
+The buffer pool is sharded for resident frames, which is good, but eviction uses a global `eviction: Mutex<()>` and clock-hand scanning. Under memory pressure, many threads will pile up there. ([GitHub][10])
+
+**Fix:** shard eviction by page-id range or use segmented CLOCK/LRU with per-shard hands. Track contention metrics: eviction wait time, scan length, dirty flushes, failed evictions, and pinned-frame pressure.
+
+---
+
+### 9. Heap row directories are memory-heavy and can hotspot
+
+`PageBackedHeap` keeps in-memory row directories: global row directory, relation row directory, append lanes, reusable page lists, and other structures. Reads clone payloads into `Vec<u8>`, and `relation_rowids(rel_id)` returns a `Vec<RowId>`. ([GitHub][11])
+
+This is fine for a prototype, but for “smart memory” and high concurrency it creates problems:
+
+* Row directory memory grows with row count.
+* Full table scans materialize row-id vectors.
+* Reads clone row payloads.
+* Relation-level row directory sharding can become hot for large tables.
+* Vacuum scans row-dir structures heavily. ([GitHub][11])
+
+**Fix:** move toward cursor-based scans, compact row directory pages, and zero-copy row views where possible. Avoid returning large `Vec<RowId>` for scans; use iterators/cursors with MVCC visibility checks.
+
+---
+
+### 10. Per-connection session mutex serializes too much
+
+A `Connection` owns `session: Mutex<SessionState>`, and many operations go through `with_session`, which locks the session mutex. That is acceptable if each connection is used by one thread, but it is a footgun for shared-connection high-concurrency workloads. ([GitHub][12])
+
+**Fix:** document that `Connection` is cheap and should be one-per-thread, or redesign statement/session state so immutable prepared statements and independent cursors do not serialize unnecessarily.
+
+---
+
+### 11. Serializable isolation is explicitly unsupported
+
+`Engine::begin` rejects `Isolation::Serializable`, and the SQL connection maps Deferred/Immediate/Exclusive begin modes to snapshot isolation. ([GitHub][5])
+
+Snapshot isolation can be fast, but it allows write skew. For a serious SQLite replacement, at least be explicit:
+
+* SQLite compatibility mode: emulate SQLite transaction semantics closely.
+* Redline mode: offer Snapshot, Repeatable Read, Serializable Snapshot Isolation, and maybe Read Committed.
+
+**Fix:** implement SSI or clearly state that serializable is not available yet. Do not let benchmarks imply stronger semantics than the engine actually provides.
+
+---
+
+### 12. Index structure lock serializes B-tree mutation
+
+The B-tree index has a `structure_lock: Mutex<()>`, and insert/delete paths acquire it. ([GitHub][6])
+
+That simplifies correctness but will cap write concurrency on indexed tables.
+
+**Fix:** evolve to page-level latch coupling or optimistic B-tree concurrency:
+
+* Read latches for descent.
+* Write latch only target leaf.
+* Split protocol with parent propagation.
+* Right-link/B-link tree style high-key handling.
+* Keep a debug mode with the global structure lock for validation.
+
+---
+
+## SQLite compatibility gaps I would prioritize
+
+The parser already rejects several SQL features: `DELETE ... USING`, `DELETE ORDER BY`, `DELETE LIMIT`, `CREATE TABLE AS SELECT`, many create-table modifiers, many create-index modifiers, and most complex drop forms. ([GitHub][13])
+
+For a true drop-in story, build a compatibility matrix. I would group it like this:
+
+**Core must-have:**
+
+* `sqlite3_*` ABI shim.
+* `PRAGMA` basics: `journal_mode`, `synchronous`, `cache_size`, `foreign_keys`, `busy_timeout`, `user_version`, `schema_version`, `table_info`, `index_list`, `index_info`.
+* Savepoints.
+* `ON CONFLICT` / UPSERT.
+* Foreign keys.
+* Triggers.
+* Views.
+* Temp tables.
+* `ALTER TABLE` subset.
+* Collations.
+* `LIKE`, `GLOB`, `REGEXP` hooks.
+* `RETURNING`.
+* `ATTACH`/`DETACH`, even if initially limited.
+* `sqlite_master` / `sqlite_schema` compatibility.
+
+**FFI gaps visible now:**
+
+* `rldb_busy_timeout` currently returns OK but does not set behavior. ([GitHub][3])
+* Backup step appears to recursively copy the database directory, skipping `owner.lock`; that is not enough for a robust online backup if writes are active. ([GitHub][3])
+* FFI names are `rldb_*`, not `sqlite3_*`, so existing SQLite clients will not link without an adapter. ([GitHub][3])
+
+---
+
+## Benchmark readiness
+
+The repo has a benchmark harness with smoke, optimizer-regression, matrix/full, and concurrency commands. It includes concurrency smoke cases up to 64 readers and a mixed workload with concurrency 8. ([GitHub][14])
+
+That is useful for early development, but it is not yet enough for serious query/sec claims. The harness records fields like `memory_bytes` and `spill_bytes`, but some current concurrency result construction sets those to zero. ([GitHub][14])
+
+### What to benchmark after P0 fixes
+
+Use this matrix:
+
+**Correctness first**
+
+* sqllogictest subset against SQLite.
+* Differential testing: RedlineDB vs SQLite for supported SQL.
+* Crash injection after every WAL append, flush, page write, catalog save, rename, and checkpoint.
+* Multi-thread stress with random readers/writers.
+* Fuzz parser + planner + executor.
+* Property tests for page encoding, WAL encoding, tuple encoding, index ordering, MVCC visibility.
+
+SQLite’s own testing culture is the right bar to study: its official testing docs discuss crash/power-loss testing, fuzzing, multiple concurrency stress tools, and sqllogictest-style correctness validation. ([SQLite][15])
+
+**Performance second**
+
+Run RedlineDB vs SQLite WAL mode with identical durability settings:
+
+* Single-row insert autocommit.
+* Batched insert transaction.
+* Point lookup by primary key.
+* Point lookup by secondary index.
+* Range scan by secondary index.
+* Update hot row.
+* Update random row.
+* Delete random row.
+* Join with indexed foreign key.
+* Aggregation with and without grouping.
+* ORDER BY with and without index.
+* Checkpoint under write load.
+* Vacuum/compaction.
+
+**Concurrency matrix**
+
+Run connections/thread counts:
+
+`1, 2, 4, 8, 16, 32, 64, 128`
+
+Mixes:
+
+* 100% reads
+* 95/5 read/write
+* 80/20 read/write
+* 50/50 read/write
+* 100% writes
+* one writer + many readers
+* many writers on disjoint keys
+* many writers on hot key
+* many writers on same indexed secondary key prefix
+
+Track:
+
+* QPS
+* p50/p95/p99/p999 latency
+* aborts/retries
+* lock waits/timeouts
+* WAL bytes/query
+* fsyncs/sec
+* page-cache hit rate
+* resident memory
+* allocations/query
+* checkpoint stalls
+* rows scanned/query
+* index probes/query
+* CPU profile
+* flamegraph top locks
+
+---
+
+## “Most epic” upgrades I would build into the roadmap
+
+### A. True SQLite compatibility shim
+
+Build a `libredlinesqlite` crate that exports `sqlite3_*` symbols:
+
+* `sqlite3_open`, `sqlite3_open_v2`, `sqlite3_close`, `sqlite3_close_v2`
+* `sqlite3_prepare_v2`, `sqlite3_prepare_v3`
+* `sqlite3_step`, `sqlite3_reset`, `sqlite3_finalize`
+* `sqlite3_bind_*`
+* `sqlite3_column_*`
+* `sqlite3_errcode`, `sqlite3_errmsg`
+* `sqlite3_exec`
+* `sqlite3_changes`, `sqlite3_total_changes`
+* `sqlite3_last_insert_rowid`
+* busy handler and busy timeout
+* authorizer
+* trace/profile hooks
+* custom collation registration
+* scalar/aggregate/window UDF registration
+
+This is how you get `rusqlite`, `sqlx`, Python SQLite bindings, Node SQLite bindings, and application code closer to “drop-in.”
+
+### B. Two storage engines, one SQL layer
+
+SQLite replacement mode and Redline advanced mode may want different physical layouts.
+
+* **SQLite-like row store:** simple row-oriented, rowid-compatible, B-tree indexes.
+* **Redline high-performance store:** MVCC append heap + B-tree/ART indexes + optional columnar projections.
+
+This lets you beat SQLite on concurrency without trapping yourself into every SQLite quirk.
+
+### C. Better write path
+
+Move toward:
+
+* logical WAL for inserts/updates/deletes
+* page-delta WAL for page mutations
+* group commit with adaptive batching
+* background checkpoint
+* write-combining for adjacent pages
+* no global file mutex
+* bounded memory for pending WAL records
+* commit latency budget knobs
+
+The WAL coordinator already has group-commit-related config fields and a writer loop, so this direction fits the existing architecture. ([GitHub][16])
+
+### D. Query engine jump
+
+The current SQL execution path has some batching/materialization concepts, but to become “epic”:
+
+* vectorized expression evaluation
+* late materialization for covering indexes
+* adaptive hash joins
+* streaming aggregates
+* top-N without full sort
+* projection pushdown
+* predicate pushdown
+* parallel scans
+* prepared plan cache with safe invalidation
+* `EXPLAIN ANALYZE` with actual rows/time/memory
+* cost model tied to real stats
+
+The planner already has ambitious physical kinds: table scan, rowid get, index scan, multi-index scan, nested-loop join, index nested-loop join, hash join, streaming aggregate, hash aggregate, sort, top-N, limit, explain, constant. ([GitHub][17])
+
+### E. Rich type system
+
+For extended datatypes, define:
+
+* logical type
+* physical encoding
+* ordering semantics
+* null semantics
+* cast rules
+* index encoding
+* JSON serialization
+* FFI representation
+* SQLite compatibility behavior
+
+Best first additions:
+
+1. `BOOLEAN`
+2. `DECIMAL`
+3. `DATE/TIME/TIMESTAMP/TIMESTAMPTZ`
+4. `UUID`
+5. `JSONB`
+6. fixed-size `VECTOR<F32, N>`
+
+The vector type could be a killer differentiator if you later add ANN indexes.
+
+### F. Observability as a first-class feature
+
+Add:
+
+* `PRAGMA redline_stats`
+* `EXPLAIN ANALYZE`
+* lock wait histogram
+* WAL queue depth
+* group commit batch sizes
+* buffer hit/miss stats
+* page eviction stats
+* checkpoint duration
+* per-query memory usage
+* per-query rows scanned vs returned
+* index usage counters
+* slow query log
+* trace spans
+
+This will make benchmark work dramatically easier and will help users trust the engine.
+
+---
+
+## Suggested immediate engineering order
+
+1. **Fix row-lock relation bug.**
+2. **Define drop-in target:** file format, SQL dialect, C ABI, or all three.
+3. **Make index execution real:** build, maintain, scan, recover.
+4. **Remove `Lsn(1)` sentinel and reduce page-image WAL amplification.**
+5. **Make catalog/DDL crash-atomic.**
+6. **Replace global file mutex with positioned I/O.**
+7. **Add crash-injection tests and sqllogictest subset.**
+8. **Add real benchmark metrics: p99 latency, memory, WAL bytes, lock waits, scan counts.**
+9. **Implement busy timeout for real.**
+10. **Build SQLite compatibility shim separately from Redline extended mode.**
+
+My bottom line: the project has a genuinely interesting skeleton, especially the modular workspace, WAL/checkpoint direction, MVCC direction, planner ambition, and Rust kernel split. But the current code is not yet ready to claim SQLite drop-in status or high-concurrency superiority. Fix the relation-lock bug, make physical indexes real end-to-end, harden crash recovery/catalog atomicity, and improve I/O/WAL write amplification first. Then your benchmarks will mean something.
+
+[1]: https://github.com/jeppsontaylor/RedlineDB/commits/main/ "Commits · jeppsontaylor/RedlineDB · GitHub"
+[2]: https://github.com/jeppsontaylor/RedlineDB "GitHub - jeppsontaylor/RedlineDB: Fastest SQL database period · GitHub"
+[3]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/ffi/src/lib.rs "RedlineDB/crates/ffi/src/lib.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[4]: https://sqlite.org/fileformat.html?utm_source=chatgpt.com "Database File Format"
+[5]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/kernel/src/engine/mod.rs "RedlineDB/crates/kernel/src/engine/mod.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[6]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/kernel/src/index/mod.rs "RedlineDB/crates/kernel/src/index/mod.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[7]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/sql/src/exec.rs "RedlineDB/crates/sql/src/exec.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[8]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/sql/src/value.rs "RedlineDB/crates/sql/src/value.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[9]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/kernel/src/storage/page_file.rs "RedlineDB/crates/kernel/src/storage/page_file.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[10]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/kernel/src/storage/buffer.rs "RedlineDB/crates/kernel/src/storage/buffer.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[11]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/kernel/src/engine/page_heap.rs "RedlineDB/crates/kernel/src/engine/page_heap.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[12]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/sql/src/connection.rs "RedlineDB/crates/sql/src/connection.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[13]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/sql/src/parser.rs "RedlineDB/crates/sql/src/parser.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[14]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/bench/src/main.rs "RedlineDB/crates/bench/src/main.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[15]: https://sqlite.org/testing.html?utm_source=chatgpt.com "How SQLite Is Tested"
+[16]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/kernel/src/wal/manager.rs "RedlineDB/crates/kernel/src/wal/manager.rs at main · jeppsontaylor/RedlineDB · GitHub"
+[17]: https://github.com/jeppsontaylor/RedlineDB/blob/main/crates/sql/src/planner.rs "RedlineDB/crates/sql/src/planner.rs at main · jeppsontaylor/RedlineDB · GitHub"
+

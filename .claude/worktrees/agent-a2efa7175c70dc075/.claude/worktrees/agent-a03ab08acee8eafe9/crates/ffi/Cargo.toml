@@ -1,0 +1,23 @@
+[package]
+name = "redlinedb-ffi"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "redlinedb"
+# Section E (jankurai-repair): `rlib` joins `cdylib`/`staticlib` so the
+# `crates/ffi/tests/*.rs` integration tests (input-boundary negative
+# proofs for HLT-023) can link the public `rldb_*` / `sqlite3_*` symbols
+# as a normal Rust dependency. The cdylib/staticlib symbol set is
+# unchanged — `rlib` is purely an additional output format used by
+# `cargo test --test`.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+redlinedb-kernel = { path = "../kernel" }
+redlinedb-sql = { path = "../sql" }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,22 @@
+durabilities = ["strict", "normal"]
+
+[[cases]]
+name = "wal"
+scenario = "wal"
+rows = 4096
+kill_windows_ms = [150, 350, 700]
+checkpoint_every_rows = 64
+
+[[cases]]
+name = "catalog"
+scenario = "catalog"
+rows = 1024
+kill_windows_ms = [150, 350, 700]
+checkpoint_every_rows = 32
+
+[[cases]]
+name = "checkpoint"
+scenario = "checkpoint"
+rows = 4096
+kill_windows_ms = [150, 350, 700]
+checkpoint_every_rows = 16

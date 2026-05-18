@@ -1,0 +1,1572 @@
+## What I found after unpacking
+
+I unpacked the archive and studied `EXTERNAL_REVIEW_MASTER_PROMPT.md`, the benchmark harness, planner/executor code, index cursor code, WAL/lock code, and the workplan/README benchmark claims.
+
+There is an important evidence gap: the archive contains the benchmark prose and SHA-256 references, but **not the raw benchmark artifacts** needed to recompute the ratios. Missing from this package:
+
+`target/bench/xbabe1/phase10-cert/{runs.jsonl,summary.csv,ratio.csv,report.json,manifest.json}`
+`target/bench/phase10-v3-smoke/{runs.jsonl,summary.csv,...}`
+`crates/bench/bench/*.toml`
+`crates/bench/compat/**`
+`paper/data/*.csv`
+`paper/sections/**`
+`agent/owner-map.json`, `agent/test-map.json`, `agent/proof-lanes.toml`, `agent/generated-zones.toml`, `agent/unsafe-ledger.toml`
+
+The archive also has no `.git`, so the prompt’s requested `git status --short` cannot be run from this package.
+
+The benchmark numbers I could verify are the reported tables in `README.md:38-54` and `docs/WORKPLAN_slam.md:570-621`. The important low cells are:
+
+| Benchmark               | Threads | RedlineDB qps | SQLite qps |      Ratio |
+| ----------------------- | ------: | ------------: | ---------: | ---------: |
+| `secondary-index-range` |      64 |         5,598 |    117,088 | **0.048×** |
+| `secondary-index-read`  |      64 |        16,245 |    121,030 |  **0.13×** |
+| `hot-row-update`        |      64 |            35 |         79 |  **0.44×** |
+| `point-read-pk`         |      64 |       121,268 |    122,221 |  **0.99×** |
+
+I would focus on four performance changes plus one evidence/plumbing change. The biggest immediate win is **not** in WAL; it is in the secondary-index executor.
+
+---
+
+# 1. Fix `secondary-index-read`: exploit the implicit rowid suffix of secondary indexes
+
+## Benchmark targeted
+
+`secondary-index-read` at 64 threads: **0.13×**.
+
+The workload is:
+
+```rust
+SELECT k, v FROM kv WHERE tenant = ?1 ORDER BY k LIMIT 1
+```
+
+from `crates/bench/src/workload.rs:320-324`.
+
+The benchmark schema creates only this index:
+
+```sql
+CREATE INDEX kv_tenant_idx ON kv(tenant)
+```
+
+in `crates/bench/src/engine/redline.rs:52-58` and the equivalent SQLite setup in `crates/bench/src/engine/sqlite.rs:90-99`.
+
+## Root issue
+
+This query should be cheap even with only `kv_tenant_idx ON kv(tenant)`.
+
+In RedlineDB’s B-tree, a secondary-index physical key is:
+
+```rust
+logical_key || row_id || tuple page/slot/generation
+```
+
+That is visible in `crates/kernel/src/index/mod.rs:696-700`:
+
+```rust
+pub fn encode_physical_key(logical_key: &[u8], row: IndexRowRef) -> KeyBuf {
+    let mut key = KeyBuf::new();
+    key.extend_logical(logical_key);
+    key.append_row_ref_suffix(row);
+    key
+}
+```
+
+and the rowid suffix is big-endian sortable at `crates/kernel/src/index/mod.rs:90-97`.
+
+Because `k INTEGER PRIMARY KEY` is the rowid alias, the physical order inside one `tenant = ?` prefix is already:
+
+```text
+tenant, rowid/k
+```
+
+So:
+
+```sql
+WHERE tenant = ? ORDER BY k LIMIT 1
+```
+
+can be satisfied by reading the **first visible entry in the tenant prefix**, then loading one heap row for `v`.
+
+Current code does not recognize this. The current `covering_order_satisfies()` only checks whether `ORDER BY` matches the **first logical index key**:
+
+```rust
+// crates/sql/src/exec/select_top.rs:719-748
+fn covering_order_satisfies(index, table, order_by) -> bool {
+    ...
+    let Some(first_key) = index.keys.first() else { return false; };
+    ...
+}
+```
+
+And `try_ordered_index_limit_path()` only recognizes a rowid suffix case for a **point lookup**, not for the common prefix-range case:
+
+```rust
+// crates/sql/src/exec/select_top.rs:801-823
+if matched.index.keys.len() == 1
+    && order_by_rowid_alias(table, &plan.order_by)
+    && matches!(matched.probe, index_access::IndexProbe::Point { .. })
+{
+    ...
+}
+
+if !matches!(matched.probe, index_access::IndexProbe::Range { .. }) {
+    return Ok(None);
+}
+if !covering_order_satisfies(&matched.index, table, &plan.order_by) {
+    return Ok(None);
+}
+```
+
+For `tenant = ?`, `try_match_index_access()` returns a prefix `Range`, not a `Point`, so the executor falls through. It then does this expensive path:
+
+1. Use the tenant index to collect **all rowids for the tenant**.
+2. Load every matching heap row.
+3. Top-K sort by `k`.
+4. Return one row.
+
+That path is in `table_rows_for_select()` and `order_and_project_rows()` in `crates/sql/src/exec/select_top.rs:402-476`.
+
+SQLite is almost certainly winning this benchmark because it knows the rowid suffix order of secondary indexes and can stop at the first row.
+
+## Key change
+
+Teach the planner/executor that an equality-bound index prefix is ordered by:
+
+```text
+remaining logical index keys, then implicit rowid suffix
+```
+
+For the current benchmark:
+
+```text
+index:       (tenant) + implicit rowid
+predicate:  tenant = ?
+ORDER BY:   k / rowid alias
+LIMIT:      1
+```
+
+This should become an ordered index range scan with hard early stop at `LIMIT + OFFSET`.
+
+## Files touched
+
+Existing files:
+
+```text
+crates/sql/src/exec/index_access.rs
+crates/sql/src/exec/select_top.rs
+crates/sql/src/planner/helpers.rs
+crates/sql/src/planner.rs
+crates/sql/tests/phase11_w1_cde.rs
+```
+
+Optional if exposing counters in test assertions:
+
+```text
+crates/redlinedb/src/lib.rs
+crates/redlinedb/src/options.rs
+```
+
+Created tests:
+
+```text
+crates/sql/tests/phase11_secondary_index_read_fastpath.rs
+```
+
+## Detailed implementation sketch
+
+Add equality-prefix metadata to `IndexAccessMatch`.
+
+```rust
+// crates/sql/src/exec/index_access.rs
+
+#[derive(Debug, Clone)]
+pub(crate) struct IndexAccessMatch {
+    pub(crate) index: Arc<IndexDef>,
+    pub(crate) kind: IndexProbeKind,
+    pub(crate) probe: IndexProbe,
+    pub(crate) predicates: Vec<String>,
+    pub(crate) ordered_limit: Option<usize>,
+
+    /// Number of leading logical index columns constrained by equality.
+    ///
+    /// Example:
+    ///   index (tenant)       + WHERE tenant = ? => 1
+    ///   index (tenant, k, v) + WHERE tenant = ? => 1
+    ///   index (tenant, k)    + WHERE tenant = ? AND k = ? => 2
+    pub(crate) equality_prefix_len: usize,
+}
+```
+
+Refactor matching so prefix equality is not hard-coded to only the first key.
+
+```rust
+// crates/sql/src/exec/index_access.rs
+
+fn equality_prefix_values(
+    conjuncts: &[&Expr],
+    table: &TableDef,
+    index: &IndexDef,
+    bindings: &[Option<SqlValue>],
+) -> Vec<SqlValue> {
+    let mut values = Vec::new();
+
+    for key in &index.keys {
+        let IndexKeySource::Column { attnum } = key.source;
+        let column = attnum as usize;
+
+        match first_constant_eq_for_column(conjuncts, table, column, bindings) {
+            Some(value) if !matches!(value, SqlValue::Null) => values.push(value),
+            _ => break,
+        }
+    }
+
+    values
+}
+```
+
+Then use it in `try_match_index_access()`.
+
+```rust
+let eq_values = equality_prefix_values(&conjuncts, table, index, bindings);
+
+if !eq_values.is_empty() {
+    if eq_values.len() == index.keys.len() {
+        let key = encode_full_key(index, &eq_values);
+
+        return Some(IndexAccessMatch {
+            index: Arc::new(index.clone()),
+            kind: IndexProbeKind::PointLookup,
+            probe: IndexProbe::Point { key },
+            predicates: explain_eq_prefix(table, index, &eq_values),
+            ordered_limit: None,
+            equality_prefix_len: eq_values.len(),
+        });
+    }
+
+    let prefix = encode_prefix_key(index, &eq_values);
+    let (start, end) = prefix_bounds(&prefix);
+
+    return Some(IndexAccessMatch {
+        index: Arc::new(index.clone()),
+        kind: IndexProbeKind::RangeScan,
+        probe: IndexProbe::Range { start, end },
+        predicates: explain_eq_prefix(table, index, &eq_values),
+        ordered_limit: None,
+        equality_prefix_len: eq_values.len(),
+    });
+}
+```
+
+Now add ordering recognition that skips equality-bound prefix columns and accepts the implicit rowid suffix.
+
+```rust
+// crates/sql/src/exec/select_top.rs
+
+fn ordered_index_scan_satisfies(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    matched: &index_access::IndexAccessMatch,
+    order_by: &[OrderByExpr],
+) -> bool {
+    use redlinedb_kernel::catalog::{IndexKeySource, SortDir};
+
+    if order_by.is_empty() {
+        return true;
+    }
+
+    let mut key_pos = matched.equality_prefix_len;
+
+    for order in order_by {
+        let ascending = order.options.asc.unwrap_or(true);
+        if !ascending {
+            // No reverse cursor yet.
+            return false;
+        }
+
+        if key_pos < matched.index.keys.len() {
+            let key = &matched.index.keys[key_pos];
+
+            let IndexKeySource::Column { attnum } = key.source;
+            let Some(order_ord) = order_expr_column_ordinal_for_table(&order.expr, table) else {
+                return false;
+            };
+
+            if order_ord != attnum as usize {
+                return false;
+            }
+
+            if key.sort_dir != SortDir::Asc {
+                return false;
+            }
+
+            key_pos += 1;
+            continue;
+        }
+
+        // After all logical index keys, leaf physical order is rowid.
+        // This is the missing case for:
+        //   index (tenant), WHERE tenant = ?, ORDER BY k LIMIT 1
+        // when k is INTEGER PRIMARY KEY / rowid alias.
+        if order_by_rowid_alias_expr(table, &order.expr) {
+            key_pos += 1;
+            continue;
+        }
+
+        return false;
+    }
+
+    true
+}
+```
+
+Helper for rowid alias expression:
+
+```rust
+fn order_by_rowid_alias_expr(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    expr: &Expr,
+) -> bool {
+    let name = match expr {
+        Expr::Identifier(ident) => ident.value.as_str(),
+        Expr::CompoundIdentifier(parts) => {
+            let Some(last) = parts.last() else { return false; };
+            last.value.as_str()
+        }
+        _ => return false,
+    };
+
+    name.eq_ignore_ascii_case("rowid")
+        || name.eq_ignore_ascii_case("_rowid_")
+        || name.eq_ignore_ascii_case("oid")
+        || table
+            .rowid_alias_column
+            .and_then(|alias| table.columns.get(alias as usize))
+            .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
+}
+```
+
+Then change `try_ordered_index_limit_path()`:
+
+```rust
+// crates/sql/src/exec/select_top.rs
+
+fn try_ordered_index_limit_path(
+    conn: &Connection,
+    tx: &mut Txn,
+    plan: &SelectPlan,
+    bindings: &[Option<SqlValue>],
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    limit: usize,
+    offset: usize,
+) -> Result<Option<Vec<RowId>>> {
+    if plan.order_by.is_empty() || limit == usize::MAX {
+        return Ok(None);
+    }
+
+    let Some(matched) =
+        index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+    else {
+        return Ok(None);
+    };
+
+    if index_access::open_handle(conn.engine(), &matched.index).is_none() {
+        return Ok(None);
+    }
+
+    if !ordered_index_scan_satisfies(table, &matched, &plan.order_by) {
+        return Ok(None);
+    }
+
+    let take = limit.saturating_add(offset);
+
+    let rowids = index_access::execute_index_probe_with_limit(
+        conn.engine(),
+        tx,
+        table,
+        &matched.index,
+        &matched.probe,
+        Some(take),
+    )?;
+
+    Ok(Some(rowids))
+}
+```
+
+## Test that must be added
+
+The current tests check correctness but not that the fast path fires. Add a counter assertion around `ordered_limit_path_hits`.
+
+```rust
+#[test]
+fn secondary_index_read_uses_tenant_index_rowid_suffix() {
+    let (_dir, conn) = open_database();
+
+    conn.execute("CREATE TABLE kv(k INTEGER PRIMARY KEY, tenant INTEGER, v INTEGER)")
+        .expect("create");
+    conn.execute("CREATE INDEX kv_tenant ON kv(tenant)")
+        .expect("index");
+
+    for &(k, tenant, v) in &[(42, 7, 10), (4, 7, 11), (19, 7, 12), (61, 3, 13)] {
+        let mut stmt = conn
+            .prepare("INSERT INTO kv(k, tenant, v) VALUES (?1, ?2, ?3)")
+            .expect("insert");
+        stmt.bind_i64(1, k).unwrap();
+        stmt.bind_i64(2, tenant).unwrap();
+        stmt.bind_i64(3, v).unwrap();
+        assert_eq!(stmt.step().unwrap(), Step::Done);
+    }
+
+    let before = conn.engine_for_tests()
+        .phase11_counters_snapshot()
+        .ordered_limit_path_hits;
+
+    let mut stmt = conn
+        .prepare("SELECT k, v FROM kv WHERE tenant = ?1 ORDER BY k LIMIT 1")
+        .expect("select");
+    stmt.bind_i64(1, 7).unwrap();
+
+    assert_eq!(stmt.step().unwrap(), Step::Row);
+    assert_eq!(stmt.column_i64(0).unwrap(), 4);
+    assert_eq!(stmt.column_i64(1).unwrap(), 11);
+    assert_eq!(stmt.step().unwrap(), Step::Done);
+
+    let after = conn.engine_for_tests()
+        .phase11_counters_snapshot()
+        .ordered_limit_path_hits;
+
+    assert!(
+        after > before,
+        "expected tenant index + implicit rowid suffix ordered LIMIT path"
+    );
+}
+```
+
+## Expected impact
+
+This should be the largest, cleanest improvement. It changes `secondary-index-read` from:
+
+```text
+scan all rows in tenant bucket + heap load all + top-k sort
+```
+
+to:
+
+```text
+seek tenant prefix + read first visible index entry + heap load one row
+```
+
+That directly targets the 0.13× ratio without changing benchmark schema.
+
+---
+
+# 2. Fix `secondary-index-range`: rerun Phase 11 count fast path, then add raw-cursor prefetch and narrow-index selection
+
+## Benchmark targeted
+
+`secondary-index-range` at 64 threads: **0.048×**.
+
+The workload is:
+
+```rust
+SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ?1 AND ?2
+```
+
+from `crates/bench/src/workload.rs:329-340`.
+
+## Important discovery
+
+The current archive already contains a Phase 11 fast path that appears designed to fix this benchmark:
+
+```rust
+// crates/sql/src/exec/select_top.rs:33-66
+if is_count_star_only_projection(&plan.projection)
+    && let Some(matched) = index_access::try_match_index_access(...)
+    && let index_access::IndexProbe::Range { start, end } = &matched.probe
+{
+    let count = index_access::execute_index_count_range(...)?;
+    fast_path_rows = Some(vec![vec![SqlValue::Integer(count)]]);
+}
+```
+
+That calls:
+
+```rust
+// crates/sql/src/exec/index_batch.rs:190-210
+execute_index_count_range(...)
+```
+
+which uses:
+
+```rust
+// crates/kernel/src/index/cursor.rs:708-783
+RawIndexCursor::count_remaining()
+```
+
+This is a major code change relative to the reported Phase 10 number. Since the raw Phase 11 benchmark results are not in the archive, the first action is to rerun the exact comparison before optimizing further. The published 0.048× number may already be stale for this code.
+
+## Remaining issues after rerun
+
+Even with the count fast path, the raw cursor still has two problems.
+
+### Issue A: `RawIndexCursor` does not prefetch
+
+The normal `IndexCursor` has prefetch plumbing, but the raw count/covering cursor does not have equivalent next-leaf prefetch. The `RawIndexCursor` count path pins one leaf at a time:
+
+```rust
+// crates/kernel/src/index/cursor.rs:723
+let guard = self.index.inner.buffer.pin(leaf_id)?;
+```
+
+It then reads `header.right`, processes the page, and only then advances.
+
+### Issue B: current `BufferPool::prefetch()` is synchronous on cold pages
+
+`BufferPool::prefetch()` claims to be advisory, but on a cold page it calls `pin()` directly:
+
+```rust
+// crates/kernel/src/storage/buffer.rs:212-221
+counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
+if let Ok(_guard) = self.pin(page_id) {
+    // Drop the guard immediately
+}
+```
+
+That can block the cursor on the exact I/O it is supposed to hide. For cold range scans, this is not real read-ahead; it is a synchronous extra pin.
+
+### Issue C: if a covering composite index is later added, count must still prefer the narrow `(tenant)` index
+
+The existing index matcher returns the first usable index:
+
+```rust
+// crates/sql/src/exec/index_access.rs:117-121
+// Take the first index that fits
+for index in &table.indexes {
+    ...
+}
+```
+
+For `COUNT(*) WHERE tenant BETWEEN ? AND ?`, the best index is the narrowest index on `tenant`, not a wider covering index. If we later add a `(tenant, k, v)` benchmark index for a read-specific lane, the count fast path must not accidentally choose the wider index.
+
+## Key change
+
+Add query-shape-aware index selection and real raw-cursor read-ahead.
+
+## Files touched
+
+Existing files:
+
+```text
+crates/sql/src/exec/index_access.rs
+crates/sql/src/exec/select_top.rs
+crates/sql/src/planner.rs
+crates/sql/src/planner/helpers.rs
+crates/sql/tests/phase11_w1_cde.rs
+crates/kernel/src/index/cursor.rs
+crates/kernel/src/storage/buffer.rs
+crates/kernel/src/telemetry/mod.rs
+crates/kernel/tests/index_cursor_prefetch.rs
+```
+
+Created tests:
+
+```text
+crates/sql/tests/phase11_secondary_index_count_fastpath.rs
+crates/kernel/tests/raw_index_cursor_prefetch.rs
+```
+
+Created or restored benchmark configs in a complete repo:
+
+```text
+crates/bench/bench/phase11-index-gap.toml
+```
+
+## Detailed implementation sketch: query-shape index scoring
+
+Add a hinted matcher instead of always taking the first index.
+
+```rust
+// crates/sql/src/exec/index_access.rs
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum IndexAccessPurpose {
+    General,
+    CountStar,
+    OrderedLimit,
+    CoveringProjection,
+}
+
+pub(crate) struct IndexAccessHints<'a> {
+    pub purpose: IndexAccessPurpose,
+    pub order_by: &'a [OrderByExpr],
+    pub projection: &'a [SelectItem],
+}
+
+pub(crate) fn try_match_index_access_with_hints(
+    engine: &Engine,
+    table: &Arc<TableDef>,
+    selection: &Option<Expr>,
+    bindings: &[Option<SqlValue>],
+    hints: IndexAccessHints<'_>,
+) -> Option<IndexAccessMatch> {
+    let expr = selection.as_ref()?;
+    let conjuncts = flatten_top_level_and(expr);
+
+    let mut best: Option<(i64, IndexAccessMatch)> = None;
+
+    for index in &table.indexes {
+        if index.meta_page_id.is_none() || engine.index_handle(index.index_id).is_none() {
+            continue;
+        }
+
+        let Some(candidate) = match_one_index(index, table, &conjuncts, bindings) else {
+            continue;
+        };
+
+        let score = score_index_candidate(table, &candidate, hints);
+
+        if best.as_ref().is_none_or(|(best_score, _)| score > *best_score) {
+            best = Some((score, candidate));
+        }
+    }
+
+    best.map(|(_, candidate)| candidate)
+}
+```
+
+Scoring rule:
+
+```rust
+fn score_index_candidate(
+    table: &TableDef,
+    candidate: &IndexAccessMatch,
+    hints: IndexAccessHints<'_>,
+) -> i64 {
+    let mut score = 0_i64;
+
+    match candidate.kind {
+        IndexProbeKind::PointLookup => score += 10_000,
+        IndexProbeKind::RangeScan => score += 5_000,
+    }
+
+    // More equality-bound prefix is usually better.
+    score += (candidate.equality_prefix_len as i64) * 500;
+
+    match hints.purpose {
+        IndexAccessPurpose::CountStar => {
+            // For COUNT(*), prefer leaf density. Wider keys reduce fanout.
+            score -= estimated_index_key_width(&candidate.index) as i64;
+            score -= (candidate.index.keys.len() as i64) * 100;
+        }
+        IndexAccessPurpose::OrderedLimit => {
+            if ordered_index_scan_satisfies(table, candidate, hints.order_by) {
+                score += 20_000;
+            }
+        }
+        IndexAccessPurpose::CoveringProjection => {
+            if projection_is_covered_by_index(table, &candidate.index, hints.projection) {
+                score += 15_000;
+            }
+        }
+        IndexAccessPurpose::General => {}
+    }
+
+    score
+}
+```
+
+Then the count fast path should call with `CountStar`:
+
+```rust
+let matched = index_access::try_match_index_access_with_hints(
+    conn.engine(),
+    table,
+    &plan.selection,
+    bindings,
+    index_access::IndexAccessHints {
+        purpose: index_access::IndexAccessPurpose::CountStar,
+        order_by: &plan.order_by,
+        projection: &plan.projection,
+    },
+);
+```
+
+## Detailed implementation sketch: nonblocking raw-cursor prefetch
+
+First, do not make `BufferPool::prefetch()` synchronously call `pin()` on cold pages. Add a true nonblocking method.
+
+```rust
+// crates/kernel/src/storage/buffer.rs
+
+pub fn prefetch_nonblocking(&self, page_id: PageId, counters: &Phase11Counters) {
+    let shard_idx = self.shard_idx(page_id);
+
+    let resident = match self.shards[shard_idx].try_lock() {
+        Ok(shard) => shard.contains_key(&page_id),
+        Err(_) => {
+            counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+    };
+
+    if resident {
+        counters.prefetch_hits.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+
+    counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
+
+    // Do not call pin() here.
+    // Queue the load onto a bounded prefetch worker, or drop the hint.
+    //
+    // The first implementation can be conservative:
+    //   - bounded queue
+    //   - de-duplicate in-flight page IDs
+    //   - one or two worker threads per buffer pool
+    //   - never evict dirty pages just for prefetch
+    let _ = self.prefetch_queue.try_enqueue(page_id);
+}
+```
+
+Then wire it into `RawIndexCursor`.
+
+```rust
+// crates/kernel/src/index/cursor.rs
+
+impl<'idx> RawIndexCursor<'idx> {
+    fn prefetch_leaf(&self, page_id: Option<PageId>) {
+        let Some(page_id) = page_id else { return; };
+        let Some(counters) = self.counters else { return; };
+
+        self.index
+            .inner
+            .buffer
+            .prefetch_nonblocking(page_id, counters);
+    }
+}
+```
+
+Inside `count_remaining()`, after reading the header:
+
+```rust
+let batch_result = guard.with_page(|page| {
+    let header = BtreeIndex::read_page_header(page)?;
+    next_leaf = header.right;
+
+    // Schedule the next leaf before processing the current leaf,
+    // so I/O can overlap with CPU visibility checks.
+    self.prefetch_leaf(next_leaf);
+
+    ...
+    Ok(())
+});
+```
+
+For better read-ahead, prefetch the next-next leaf too by peeking at the next leaf header when resident, but do not block if not resident.
+
+## Expected impact
+
+`secondary-index-range` should move substantially once the COUNT fast path is measured. After that, real nonblocking prefetch matters most for cold-cache and wider range windows. The current Phase 10 0.048× number should not be treated as current until the Phase 11 code is rerun.
+
+---
+
+# 3. Fix `hot-row-update`: skip unnecessary index work, then add a safe hot-row combiner
+
+## Benchmark targeted
+
+`hot-row-update` at 64 threads: **0.44×**.
+
+The workload is:
+
+```rust
+UPDATE kv SET v = ?1, version = version + 1 WHERE k = ?2
+```
+
+with `k = 0`, from `crates/bench/src/workload.rs:404-412`.
+
+## Root issue
+
+The row lock manager is not the obvious bottleneck anymore. It already has targeted FIFO handoff:
+
+```rust
+// crates/kernel/src/engine/lock.rs:16-19
+// Each waiter owns its own Condvar so the holder can wake exactly the next-in-line waiter
+```
+
+and the unlock path uses `notify_one()`:
+
+```rust
+// crates/kernel/src/engine/lock.rs:160-163
+if let Some(next) = state.waiters.front().cloned() {
+    next.notify_one();
+}
+```
+
+The expensive path is the SQL/autocommit update pipeline. Every operation does:
+
+1. Begin read-committed transaction.
+2. Resolve target rowid.
+3. Lock hot row.
+4. Reload fresh row.
+5. Evaluate assignments.
+6. Apply affinity and constraints.
+7. Check unique constraints.
+8. Encode row payload.
+9. Heap update.
+10. Call index update maintenance.
+11. Commit and wait for durability.
+
+That is in `crates/sql/src/exec/tail.rs:357-450` and `crates/sql/src/exec/mod.rs:274-342`.
+
+The WAL combiner is not actually wired to mutations. `WalConfig::semantic_combiner` exists, but `grep` only finds combiner use in `combiner.rs`; the manager does not consume `CombinableDelta`. The workplan also calls semantic combiner deferred.
+
+## Low-risk change first: skip index maintenance when no indexed column changed
+
+`hot-row-update` changes only `v` and `version`. The only benchmark index is `tenant`. The rowid `k` is unchanged. Current code still calls:
+
+```rust
+maintain_indexes_on_update(...)
+```
+
+which loops indexes and builds old/new index keys before discovering they are equal:
+
+```rust
+// crates/sql/src/exec/index_dml.rs:177-188
+let old_key = build_index_key(index, old_values);
+let new_key = build_index_key(index, new_values);
+if old_key.bytes == new_key.bytes && old_rowid == new_rowid {
+    continue;
+}
+```
+
+Avoid this call entirely when assigned columns cannot affect any index key and the rowid is unchanged.
+
+## Files touched
+
+Existing files:
+
+```text
+crates/sql/src/exec/tail.rs
+crates/sql/src/exec/index_dml.rs
+crates/sql/tests/phase10_sqld_indexes.rs
+```
+
+## Code example
+
+```rust
+// crates/sql/src/exec/tail.rs
+
+fn update_touches_any_index_key(
+    table: &TableDef,
+    assigned_ordinals: &std::collections::BTreeSet<usize>,
+    old_rowid: RowId,
+    new_rowid: RowId,
+) -> bool {
+    if old_rowid != new_rowid {
+        return true;
+    }
+
+    for index in &table.indexes {
+        for key in &index.keys {
+            let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = key.source;
+            if assigned_ordinals.contains(&(attnum as usize)) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+```
+
+Then in `execute_update()`:
+
+```rust
+let assigned_ordinals: std::collections::BTreeSet<usize> =
+    plan.assignments.iter().map(|(ordinal, _)| *ordinal).collect();
+
+...
+
+if update_touches_any_index_key(&plan.table, &assigned_ordinals, fresh.rowid, new_rowid) {
+    crate::exec::index_dml::maintain_indexes_on_update(
+        conn.engine(),
+        tx,
+        &plan.table,
+        &old_values,
+        &values,
+        fresh.rowid,
+        new_rowid,
+    )?;
+}
+```
+
+This is safe and should help both `hot-row-update` and `writers-disjoint`.
+
+## High-impact change: safe SQL-level hot-row combiner
+
+WAL-level semantic combining alone is not enough, because the heap MVCC row still gets updated once per SQL transaction. The effective change is a **SQL-level combiner** for very narrow, provably safe update shapes.
+
+Start with two exact shapes:
+
+```sql
+UPDATE hot_counter SET counter = counter + 1 WHERE pk = ?
+```
+
+and then:
+
+```sql
+UPDATE kv SET v = ?, version = version + 1 WHERE k = ?
+```
+
+The second shape is safe only under these restrictions:
+
+```text
+single rowid equality predicate
+no RETURNING
+no triggers
+no foreign-key side effects
+no rowid change
+no indexed column assignment
+version assignment is exactly version = version + positive constant
+v assignment is constant or bound parameter, not row-dependent
+all queued statements are concurrent; callers are acknowledged only after the combined commit
+```
+
+For a batch of N concurrent `hot-row-update` operations on the same row:
+
+```text
+version := old_version + N
+v       := last queued v
+```
+
+Then every queued caller gets `rows_affected = 1` after the single combined commit. This is equivalent to a serial order in which the queued writes run back-to-back with no externally visible reads between them.
+
+## Files touched
+
+Existing files:
+
+```text
+crates/sql/src/exec/tail.rs
+crates/sql/src/exec/mod.rs
+crates/sql/src/connection.rs
+crates/kernel/src/engine/mod.rs
+crates/redlinedb/src/options.rs
+crates/redlinedb/src/lib.rs
+crates/bench/src/workload.rs
+crates/bench/src/config.rs
+```
+
+Created files:
+
+```text
+crates/sql/src/exec/hot_update.rs
+crates/sql/tests/hot_update_combiner.rs
+crates/bench/bench/phase11-hot-row-combiner.toml
+```
+
+Because `crates/bench/src/workload.rs` is already around 1,888 lines, do not add a large new benchmark body there. Split new Phase 11 workload helpers into a module before growing that file past the 2,000-line cap.
+
+## Code example: shape detection
+
+```rust
+// crates/sql/src/exec/hot_update.rs
+
+pub(crate) struct HotRowCandidate {
+    pub table: Arc<TableDef>,
+    pub rowid: RowId,
+    pub version_col: usize,
+    pub payload_col: Option<usize>,
+    pub payload_value: Option<SqlValue>,
+    pub version_delta: i64,
+}
+
+pub(crate) fn detect_hot_row_candidate(
+    plan: &UpdatePlan,
+    bindings: &[Option<SqlValue>],
+) -> Result<Option<HotRowCandidate>> {
+    if plan.returning.is_some() {
+        return Ok(None);
+    }
+
+    let Some(rowid) = selection_rowid_eq(&plan.table, &plan.selection, bindings)? else {
+        return Ok(None);
+    };
+
+    let assigned: std::collections::BTreeSet<usize> =
+        plan.assignments.iter().map(|(ord, _)| *ord).collect();
+
+    if assignment_touches_index_key_or_rowid(&plan.table, &assigned) {
+        return Ok(None);
+    }
+
+    let mut version_col = None;
+    let mut version_delta = None;
+    let mut payload_col = None;
+    let mut payload_value = None;
+
+    for (ordinal, expr) in &plan.assignments {
+        let col_name = plan.table.columns[*ordinal].folded.as_ref();
+
+        if col_name.eq_ignore_ascii_case("version") {
+            if let Some(delta) = parse_col_plus_const(expr, &plan.table, *ordinal, bindings)? {
+                version_col = Some(*ordinal);
+                version_delta = Some(delta);
+            } else {
+                return Ok(None);
+            }
+            continue;
+        }
+
+        if col_name.eq_ignore_ascii_case("v") {
+            // Accept only constant/bind RHS so the queued job can capture it
+            // without reading the current row.
+            let value = eval_constant_update_rhs(expr, bindings)?;
+            payload_col = Some(*ordinal);
+            payload_value = Some(value);
+            continue;
+        }
+
+        return Ok(None);
+    }
+
+    let Some(version_col) = version_col else { return Ok(None); };
+    let Some(version_delta) = version_delta else { return Ok(None); };
+
+    if version_delta <= 0 {
+        return Ok(None);
+    }
+
+    Ok(Some(HotRowCandidate {
+        table: Arc::clone(&plan.table),
+        rowid,
+        version_col,
+        payload_col,
+        payload_value,
+        version_delta,
+    }))
+}
+```
+
+## Code example: coordinator
+
+```rust
+// crates/sql/src/exec/hot_update.rs
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct HotRowKey {
+    rel_id: u64,
+    rowid: u64,
+    version_col: usize,
+    payload_col: Option<usize>,
+}
+
+struct HotRowJob {
+    candidate: HotRowCandidate,
+    reply: std::sync::mpsc::Sender<Result<ExecutionResult>>,
+}
+
+pub(crate) struct HotUpdateCoordinator {
+    queues: dashmap::DashMap<HotRowKey, Arc<HotRowQueue>>,
+    max_batch: usize,
+    max_delay: Duration,
+}
+
+impl HotUpdateCoordinator {
+    pub(crate) fn submit(
+        &self,
+        conn: &Connection,
+        candidate: HotRowCandidate,
+    ) -> Result<ExecutionResult> {
+        let key = HotRowKey {
+            rel_id: candidate.table.relation_id.0,
+            rowid: candidate.rowid.0,
+            version_col: candidate.version_col,
+            payload_col: candidate.payload_col,
+        };
+
+        let queue = self
+            .queues
+            .entry(key.clone())
+            .or_insert_with(|| Arc::new(HotRowQueue::new()))
+            .clone();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        let became_owner = queue.push(HotRowJob {
+            candidate,
+            reply: tx,
+        });
+
+        if became_owner {
+            self.drain_as_owner(conn, key, queue);
+        }
+
+        rx.recv()
+            .map_err(|_| Error::TransactionState("hot update coordinator dropped reply"))?
+    }
+
+    fn drain_as_owner(
+        &self,
+        conn: &Connection,
+        key: HotRowKey,
+        queue: Arc<HotRowQueue>,
+    ) {
+        loop {
+            let jobs = queue.drain_up_to(self.max_batch, self.max_delay);
+
+            if jobs.is_empty() {
+                queue.release_owner();
+                if queue.is_empty() {
+                    self.queues.remove(&key);
+                    return;
+                }
+                if !queue.try_become_owner() {
+                    return;
+                }
+                continue;
+            }
+
+            let result = apply_hot_row_batch(conn, &jobs);
+
+            for job in jobs {
+                let _ = job.reply.send(result.clone());
+            }
+        }
+    }
+}
+```
+
+## Code example: apply one physical update for N logical updates
+
+```rust
+fn apply_hot_row_batch(
+    conn: &Connection,
+    jobs: &[HotRowJob],
+) -> Result<ExecutionResult> {
+    let first = &jobs[0].candidate;
+    let batch_len = jobs.len() as i64;
+    let total_delta = jobs
+        .iter()
+        .map(|job| job.candidate.version_delta)
+        .try_fold(0_i64, |acc, delta| acc.checked_add(delta).ok_or_else(|| {
+            Error::TransactionState("hot row version delta overflow")
+        }))?;
+
+    with_write_tx(conn, |_session, tx| {
+        conn.engine()
+            .lock_row_for_relation(tx, first.table.relation_id, first.rowid)?;
+
+        let Some(fresh) =
+            load_table_row_by_rowid(conn.engine(), tx, &first.table, first.rowid)?
+        else {
+            return Ok(ExecutionResult {
+                affected_rows: 0,
+                returned_rows: Vec::new(),
+                runtime: RuntimeState::Done,
+            });
+        };
+
+        let mut values = fresh.values.clone();
+
+        let old_version = match values.get(first.version_col) {
+            Some(SqlValue::Integer(v)) => *v,
+            _ => return Err(Error::Type("hot row version column must be INTEGER".into())),
+        };
+
+        values[first.version_col] = SqlValue::Integer(
+            old_version
+                .checked_add(total_delta)
+                .ok_or_else(|| Error::TransactionState("hot row version overflow"))?,
+        );
+
+        if let Some(payload_col) = first.payload_col {
+            // Last queued update wins, matching serial order by queue order.
+            let last_payload = jobs
+                .last()
+                .and_then(|job| job.candidate.payload_value.clone())
+                .ok_or_else(|| Error::TransactionState("missing hot row payload"))?;
+            values[payload_col] = last_payload;
+        }
+
+        let payload = encode_sql_row(first.table.table_id.0, &values)?;
+
+        conn.engine().update_for_relation(
+            tx,
+            first.table.relation_id,
+            first.rowid,
+            payload,
+        )?;
+
+        Ok(ExecutionResult {
+            affected_rows: batch_len as usize,
+            returned_rows: Vec::new(),
+            runtime: RuntimeState::Done,
+        })
+    })
+}
+```
+
+For the public SQL result, each caller should receive `affected_rows = 1`, not the batch length. The coordinator can apply the batch length internally and reply with a per-job result.
+
+## Tests required
+
+1. `64` concurrent updates to `hot_counter` produce final counter `64`.
+2. `64` concurrent `hot-row-update` operations produce final `version = old + 64`.
+3. Every caller receives `rows_affected = 1`.
+4. No fast path with `RETURNING`.
+5. No fast path if an indexed column is assigned.
+6. No fast path if rowid changes.
+7. Crash/failpoint test: if callers are acknowledged, recovered final version includes their count.
+8. Concurrent reader test: readers either see old state before the batch or final state after the batch, never an impossible partial payload/version combination.
+
+## Expected impact
+
+The low-risk skip-index-maintenance change reduces per-update CPU overhead. The combiner is the real throughput change: it converts a convoy of N independent hot-row updates into one physical heap update and one durable commit group. This is the change most likely to move `hot-row-update` above SQLite, but it needs correctness proof and should start behind an opt-in flag.
+
+---
+
+# 4. Improve `point-read-pk` and read-heavy mixed workloads with a direct rowid SELECT fast path
+
+## Benchmark targeted
+
+`point-read-pk` at 64 threads is **0.99×**, which is not disastrous, but it matters because it is the read side of the mixed OLTP workloads and the README explicitly calls out single-thread per-transaction overhead.
+
+The workload is:
+
+```rust
+SELECT version, v FROM kv WHERE k = ?1
+```
+
+from `crates/bench/src/workload.rs:311-317`.
+
+## Root issue
+
+The rowid fast path exists, but it still builds a runtime source and lets the row be loaded/projected later:
+
+```rust
+// crates/sql/src/exec/select_top.rs:141-180
+let rowids = if let Some(rowid) = selection_rowid_eq(...) {
+    vec![rowid]
+} ...
+SelectRuntimeSource::Table {
+    table: Arc::clone(table),
+    rowids,
+    cursor: 0,
+}
+```
+
+For the common point-read shape, the executor can load and project the row immediately into `StaticRows`, similar to the existing count fast path.
+
+This reduces:
+
+```text
+runtime source setup
+rowid Vec allocation
+late table-row runtime dispatch
+some projection overhead
+```
+
+The SQL prepare cache already exists in `crates/sql/src/connection.rs:784-817`, and `prepare()` routes through `prepare_v2()` into `prepare_cached()` at `crates/sql/src/connection.rs:364-379`. So I would not spend effort claiming the statement cache is missing. The better target is the rowid select runtime path.
+
+## Files touched
+
+Existing files:
+
+```text
+crates/sql/src/exec/select_top.rs
+crates/sql/tests/smoke_select.rs
+crates/sql/tests/phase11_w1_cde.rs
+crates/bench/src/engine/redline.rs
+crates/bench/src/engine/sqlite.rs
+```
+
+Created tests:
+
+```text
+crates/sql/tests/phase11_rowid_direct_select.rs
+```
+
+## Code example
+
+Add a fast path near the existing `COUNT(*)` fast path in `execute_select()`.
+
+```rust
+// crates/sql/src/exec/select_top.rs
+
+fn can_direct_project_rowid_get(plan: &SelectPlan) -> bool {
+    plan.group_by.is_empty()
+        && !plan.distinct
+        && plan.order_by.is_empty()
+        && plan.having.is_none()
+        && !select_requires_aggregation(plan)
+}
+
+fn direct_rowid_get_rows(
+    conn: &Connection,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    rowid: RowId,
+    projection: &[SelectItem],
+    bindings: &[Option<SqlValue>],
+) -> Result<Vec<Vec<SqlValue>>> {
+    let Some(row) = load_table_row_by_rowid(conn.engine(), tx, table, rowid)? else {
+        return Ok(Vec::new());
+    };
+
+    let sql_row = SqlRow::Table(row);
+    let projected = project_row(projection, &sql_row, bindings)?;
+    Ok(vec![projected])
+}
+```
+
+Then in `execute_select()`:
+
+```rust
+if fast_path_rows.is_none()
+    && let SelectSource::Table(table) = &plan.source
+    && can_direct_project_rowid_get(plan)
+    && let Some(rowid) = selection_rowid_eq(table, &plan.selection, bindings)?
+{
+    let tx_ref = tx.as_mut().expect("tx present");
+    let rows = direct_rowid_get_rows(
+        conn,
+        tx_ref,
+        table,
+        rowid,
+        &plan.projection,
+        bindings,
+    )?;
+
+    fast_path_rows = Some(rows);
+}
+```
+
+The existing bottom block already wraps `fast_path_rows` as `StaticRows`, with `limit` and `offset` applied uniformly.
+
+## Benchmark harness improvement
+
+The Redline and SQLite bench engines currently prepare every operation:
+
+```rust
+// Redline
+let mut stmt = self.conn.prepare(sql)?;
+
+// SQLite
+let mut stmt = self.conn.prepare(sql)?;
+```
+
+That is in `crates/bench/src/engine/redline.rs:144-146` and `crates/bench/src/engine/sqlite.rs:171-175`.
+
+For fair measurement, either leave both as-is or add symmetric per-worker prepared statement reuse to both. Do not optimize only Redline’s harness.
+
+A fair trait-level change would be:
+
+```rust
+trait BenchConn {
+    fn execute(&mut self, sql: &str, params: &[CellValue]) -> Result<u64>;
+    fn query_row(&mut self, sql: &str, params: &[CellValue]) -> Result<Vec<CellValue>>;
+
+    // New optional hook.
+    fn prepare_cache_capacity(&self) -> usize { 16 }
+}
+```
+
+Then implement a small LRU inside both `RedlineConn` and `SqliteConn`.
+
+Expected impact is smaller than the secondary-index fix, but this should improve point reads, read-heavy mixed workloads, and single-thread constant overhead.
+
+---
+
+# 5. Repair benchmark evidence and reporting plumbing before publishing new ratios
+
+This is not a performance change, but it is necessary for trusting any claimed improvement.
+
+## Issues found
+
+`EXTERNAL_REVIEW_MASTER_PROMPT.md` correctly says it is a briefing, not ground truth. In this archive, the ground-truth artifacts are missing.
+
+There is also path drift:
+
+`docs/WORKPLAN_slam.md:587-603` references:
+
+```text
+target/bench/xbabe1/phase10-cert/...
+```
+
+but `paper/scripts/build_figs.py:35-38` reads:
+
+```python
+CERT = BENCH / "xbabe1" / "certification"
+RUNS_JSONL = CERT / "runs.jsonl"
+SUMMARY_CSV = CERT / "summary.csv"
+```
+
+Also, the paper script’s `HERO_ROWS` includes `secondary-index-range` but not `secondary-index-read`, even though the README table includes `secondary-index-read`.
+
+## Files touched
+
+Existing files:
+
+```text
+paper/scripts/build_figs.py
+docs/WORKPLAN_slam.md
+README.md
+crates/bench/src/report.rs
+crates/bench/src/certify.rs
+crates/bench/src/config.rs
+```
+
+Created/restored files in a complete repo:
+
+```text
+crates/bench/bench/certification.toml
+crates/bench/bench/phase11-index-gap.toml
+crates/bench/bench/phase11-hot-row-combiner.toml
+paper/data/headline_table.csv          # generated, do not hand-edit
+paper/data/perf_aggregates.csv         # generated, do not hand-edit
+paper/data/phase11_gap_table.csv       # generated, do not hand-edit
+```
+
+## Required changes
+
+Update `paper/scripts/build_figs.py` to accept an explicit artifact root:
+
+```python
+CERT = Path(os.environ.get(
+    "REDLINEDB_CERT_DIR",
+    BENCH / "xbabe1" / "phase10-cert",
+))
+```
+
+Add `secondary-index-read` to `HERO_ROWS`:
+
+```python
+HERO_ROWS = [
+    ("point-read-pk", 1),
+    ("point-read-pk", 64),
+    ("point-read-pk", 128),
+    ("mixed95-read5-write", 32),
+    ("mixed95-read5-write", 64),
+    ("mixed95-read5-write", 128),
+    ("mixed50-read50-write", 64),
+    ("writers-disjoint", 64),
+    ("hot-row-update", 64),
+    ("secondary-index-range", 64),
+    ("secondary-index-read", 64),
+]
+```
+
+Add a Phase 11 gap table that specifically tracks:
+
+```text
+secondary-index-read
+secondary-index-range
+secondary-index-count
+secondary-index-ordered-limit
+covered-range-cold
+covered-range-warm
+hot-row-update
+hot-counter-update
+point-read-pk
+```
+
+For each run, require:
+
+```text
+qps median/mean/std
+p50/p95/p99 latency
+failures
+checksum
+Redline phase11 counters:
+  ordered_limit_path_hits
+  heap_rechecks
+  leaf_visits
+  cursor_batches_emitted
+  prefetch_hits
+  prefetch_misses
+  wal_batch_size_buckets
+  lock_wait_us_buckets
+WAL group commit:
+  group_commits_issued
+  group_commit_batch_p50/p95/p99/max
+```
+
+## Why this matters
+
+Before claiming the `secondary-index-range` fix worked, the Phase 11 code must be measured against SQLite with raw artifacts present. The code in the archive is newer than the reported Phase 10 results, especially for count-only index range scans.
+
+---
+
+# Consolidated touched and created files
+
+## Existing files to touch
+
+```text
+crates/sql/src/exec/index_access.rs
+crates/sql/src/exec/index_batch.rs
+crates/sql/src/exec/select_top.rs
+crates/sql/src/exec/tail.rs
+crates/sql/src/exec/index_dml.rs
+crates/sql/src/exec/mod.rs
+crates/sql/src/connection.rs
+crates/sql/src/planner.rs
+crates/sql/src/planner/helpers.rs
+
+crates/kernel/src/index/cursor.rs
+crates/kernel/src/storage/buffer.rs
+crates/kernel/src/telemetry/mod.rs
+crates/kernel/src/engine/mod.rs
+crates/kernel/src/wal/manager.rs
+crates/kernel/src/wal/combiner.rs
+
+crates/redlinedb/src/lib.rs
+crates/redlinedb/src/options.rs
+
+crates/bench/src/config.rs
+crates/bench/src/workload.rs
+crates/bench/src/engine/redline.rs
+crates/bench/src/engine/sqlite.rs
+crates/bench/src/report.rs
+crates/bench/src/certify.rs
+
+paper/scripts/build_figs.py
+README.md
+docs/WORKPLAN_slam.md
+```
+
+## New files to create
+
+```text
+crates/sql/src/exec/hot_update.rs
+
+crates/sql/tests/phase11_secondary_index_read_fastpath.rs
+crates/sql/tests/phase11_secondary_index_count_fastpath.rs
+crates/sql/tests/phase11_rowid_direct_select.rs
+crates/sql/tests/hot_update_combiner.rs
+
+crates/kernel/tests/raw_index_cursor_prefetch.rs
+
+crates/bench/bench/phase11-index-gap.toml
+crates/bench/bench/phase11-hot-row-combiner.toml
+
+paper/data/phase11_gap_table.csv       # generated
+```
+
+---
+
+# Priority order
+
+1. **Implement implicit rowid-suffix ordered LIMIT for `secondary-index-read`.**
+   This is the cleanest high-impact fix. It directly targets the 0.13× benchmark and should not require schema changes.
+
+2. **Rerun `secondary-index-range` with the current Phase 11 count fast path.**
+   The archive already contains code that likely invalidates the old 0.048× number. Measure first, then optimize raw-cursor prefetch.
+
+3. **Add index-selection scoring.**
+   This prevents future composite/covering indexes from hurting count scans and ensures ordered-limit queries choose the right index.
+
+4. **Apply hot-row low-risk CPU cuts, then build an opt-in combiner.**
+   Skip unchanged-index maintenance immediately. Then implement the hot-row/hot-counter combiner behind a flag with crash/recovery proof.
+
+5. **Add direct rowid SELECT fast path.**
+   This improves point-read constant overhead and protects mixed read-heavy workloads.
+
+The top two changes should move the worst read-side gaps. The hot-row combiner is the hardest and riskiest, but it is the likely path to move `hot-row-update` from “trails SQLite” to “competitive or better.”
+

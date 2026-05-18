@@ -1,0 +1,342 @@
+{
+  "phase10": {
+    "lane-gc": {
+      "tests": "rtk cargo test -p redlinedb-kernel --test group_commit_tests --quiet --locked"
+    },
+    "lane-int": {
+      "bench": "rtk cargo test -p redlinedb-bench checksum:: --quiet --locked",
+      "kernel": "rtk cargo test -p redlinedb-kernel --test integrity_tests --quiet --locked",
+      "sql": "rtk cargo test -p redlinedb-sql --test sql_smoke pragma_redline --quiet --locked"
+    },
+    "lane-j1": {
+      "compat": "rtk cargo test -p redlinedb-sql --test phase10_j1_compat --quiet --locked"
+    },
+    "lane-j2": {
+      "fuzz": "rtk cargo test -p redlinedb-kernel --test jsonb_fuzz --quiet --locked",
+      "tests": "rtk cargo test -p redlinedb-kernel --test jsonb_tests --quiet --locked"
+    },
+    "lane-sqla": {
+      "integration": "rtk cargo test -p redlinedb-sql --test phase10_sqla_correctness --quiet --locked"
+    },
+    "lane-sqlb": {
+      "ffi": "rtk cargo test -p redlinedb-ffi --quiet --locked",
+      "integration": "rtk cargo test -p redlinedb-sql --test phase10_sqlb --quiet --locked"
+    },
+    "lane-sqlc": {
+      "integration": "rtk cargo test -p redlinedb-sql --test phase10_sqlc_conflict_matrix --quiet --locked"
+    },
+    "lane-sqld": {
+      "advanced": "rtk cargo test -p redlinedb-sql --test phase10_sqld_advanced --quiet --locked",
+      "alter": "rtk cargo test -p redlinedb-sql --test phase10_sqld_alter --quiet --locked",
+      "collation": "rtk cargo test -p redlinedb-sql --test phase10_sqld_collation --quiet --locked",
+      "datetime": "rtk cargo test -p redlinedb-sql --test phase10_sqld_datetime --quiet --locked",
+      "fk": "rtk cargo test -p redlinedb-sql --test phase10_sqld_fk --quiet --locked",
+      "indexes": "rtk cargo test -p redlinedb-sql --test phase10_sqld_indexes --quiet --locked",
+      "regexp": "rtk cargo test -p redlinedb-sql --test phase10_sqld_regexp --quiet --locked"
+    },
+    "lane-v1": {
+      "kernel": "rtk cargo test -p redlinedb-kernel --test vector_simd --quiet --locked",
+      "sql": "rtk cargo test -p redlinedb-sql --test vector_basic --quiet --locked"
+    },
+    "lane-v2": {
+      "correctness": "rtk cargo test -p redlinedb-kernel --test hnsw_correctness --quiet --locked",
+      "failpoints": "rtk cargo test -p redlinedb-kernel --test hnsw_failpoints --features failpoints --quiet --locked",
+      "recall": "rtk cargo test -p redlinedb-kernel --test hnsw_recall --quiet --locked -- --ignored"
+    },
+    "lane-v3": {
+      "correctness": "rtk cargo test -p redlinedb-kernel --test diskann_correctness --quiet --locked",
+      "recall": "rtk cargo test -p redlinedb-kernel --test diskann_recall --quiet --locked --ignored"
+    },
+    "lane-ve": {
+      "integration": "rtk cargo test -p redlinedb-sql --test phase10_ve --quiet --locked",
+      "unit": "rtk cargo test -p redlinedb-sql --lib --quiet --locked exec::vec"
+    },
+    "xbabe1-cert": [
+      "./scripts/bench/xbabe1_sync.sh",
+      "./scripts/bench/xbabe1_run.sh cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/phase10-cert --seed 7 --repetitions 5 --warmup 1",
+      "./scripts/bench/xbabe1_fetch.sh phase10-cert"
+    ]
+  },
+  "phase10/lane-int": [
+    "rtk cargo test -p redlinedb-kernel --test integrity_tests --quiet --locked",
+    "rtk cargo test -p redlinedb-sql --test sql_smoke pragma_redline --quiet --locked",
+    "rtk cargo test -p redlinedb-bench checksum:: --quiet --locked"
+  ],
+  "phase11-ephemeral-db": [
+    "rtk cargo test -p redlinedb --test phase11_ephemeral --quiet --locked"
+  ],
+  "phase11-oltp-gap": [
+    "rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/phase11-oltp-gap.toml --out-dir target/bench/phase11-oltp-gap --seed 7 --repetitions 3 --warmup 1"
+  ],
+  "phase11-sql-contracts": [
+    "rtk cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked",
+    "rtk cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked",
+    "rtk cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked"
+  ],
+  "phase8-smoke": [
+    "rtk cargo test --workspace --quiet --locked",
+    "rtk cargo run -p redlinedb-cli -- --help",
+    "rtk cargo run -p redlinedb-server -- --help"
+  ],
+  "phase9-certification": [
+    "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/certify-certification --seed 7 --repetitions 5 --warmup 1"
+  ],
+  "phase9-compat-full": [
+    "rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/compat-full.json"
+  ],
+  "phase9-docker-smoke": [
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo test -p redlinedb-bench --quiet --locked"
+  ],
+  "phase9-failpoint-matrix": [
+    "rtk cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint-matrix.json --seed 7"
+  ],
+  "phase9-recovery-matrix": [
+    "rtk cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/recovery-matrix.json --seed 7"
+  ],
+  "phase9-smoke": [
+    "rtk cargo test -p redlinedb-bench --quiet --locked",
+    "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/certify-smoke --seed 7 --repetitions 1 --warmup 0",
+    "rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7"
+  ],
+  "phase9-xbabe1-certification": [
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/certification --seed 7 --repetitions 5 --warmup 1",
+    "./scripts/bench/xbabe1_fetch.sh certification"
+  ],
+  "phase9-xbabe1-certify-with-strace": [
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/xbabe1/certify-strace --seed 7 --repetitions 5 --warmup 1 --with-strace",
+    "./scripts/bench/xbabe1_fetch.sh certify-strace"
+  ],
+  "phase9-xbabe1-gap": [
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert --seed 7 --repetitions 3 --warmup 1",
+    "./scripts/bench/xbabe1_fetch.sh gap-cert"
+  ],
+  "phase9-xbabe1-gap-strace": [
+    "./scripts/bench/xbabe1_sync.sh",
+    "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert-strace --seed 7 --repetitions 3 --warmup 1 --with-strace",
+    "./scripts/bench/xbabe1_fetch.sh gap-cert-strace"
+  ],
+  "security-local": [
+    "rtk cargo audit",
+    "rtk cargo deny check",
+    "rtk gitleaks detect --source ."
+  ],
+  "tests": {
+    "AGENTS.md": {
+      "command": "just score",
+      "purpose": "verify root routing remains visible to the audit"
+    },
+    "README-jankurai-scaffold.md": {
+      "command": "jankurai doctor --fail-on critical",
+      "purpose": "verify scaffold marker does not hide missing control-plane files"
+    },
+    "agent/": {
+      "command": "just score",
+      "purpose": "verify manifests remain parseable and authoritative"
+    },
+    "agent/coverage-sources.toml": {
+      "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+      "purpose": "verify coverage evidence source routing and score import"
+    },
+    ".agents/": {
+      "command": "just score",
+      "purpose": "verify agent workspace markers remain routed"
+    },
+    ".cursor/": {
+      "command": "just score",
+      "purpose": "verify editor workspace markers remain routed"
+    },
+    ".editorconfig": {
+      "command": "just score",
+      "purpose": "verify top-level editor policy remains routed"
+    },
+    ".github/CODEOWNERS": {
+      "command": "just score",
+      "purpose": "verify code-ownership routing stays in sync with owner-map"
+    },
+    ".github/PULL_REQUEST_TEMPLATE.md": {
+      "command": "just score",
+      "purpose": "verify PR template stays routed and visible to the audit"
+    },
+    ".github/copilot-instructions.md": {
+      "command": "just score",
+      "purpose": "verify Copilot IDE adapter stays routed to the agent standard"
+    },
+    ".github/instructions/": {
+      "command": "just score",
+      "purpose": "verify thin IDE/agent adapters stay aligned with agent/JANKURAI_STANDARD.md"
+    },
+    ".github/workflows/": {
+      "command": "just security",
+      "purpose": "verify CI workflows lint clean and the security lane runs"
+    },
+    ".gitignore": {
+      "command": "just score",
+      "purpose": "keep the exclude list aligned with the owner-map"
+    },
+    "assets/": {
+      "command": "just score",
+      "purpose": "ensure paper/figure assets stay routed and indexed"
+    },
+    "CHANGELOG.md": {
+      "command": "just score",
+      "purpose": "verify release log discipline (docs/release.md)"
+    },
+    "CLAUDE.md": {
+      "command": "just score",
+      "purpose": "verify root agent instructions stay short and routed"
+    },
+    "CONTRIBUTING.md": {
+      "command": "just score",
+      "purpose": "verify contributor docs route through the agent standard"
+    },
+    "Cargo.lock": {
+      "command": "just security",
+      "purpose": "verify dependency lock evidence for cargo audit / deny"
+    },
+    "Cargo.toml": {
+      "command": "just fast",
+      "purpose": "verify workspace manifest builds and tests workspace-wide"
+    },
+    "EXTERNAL_REVIEW_MASTER_PROMPT.md": {
+      "command": "just score",
+      "purpose": "verify external-review prompt stays visible to the audit"
+    },
+    "EXTERNAL_REVIEW_SUPERPROMPT.md": {
+      "command": "just score",
+      "purpose": "verify external-review superprompt stays visible to the audit"
+    },
+    "FEATURE_GAPS.md": {
+      "command": "just score",
+      "purpose": "verify gap tracker stays visible to the audit"
+    },
+    "GEMINI.md": {
+      "command": "just score",
+      "purpose": "verify Gemini IDE adapter stays routed to the agent standard"
+    },
+    "LICENSE": {
+      "command": "just score",
+      "purpose": "verify license file stays routed and unchanged accidentally"
+    },
+    "README.md": {
+      "command": "just score",
+      "purpose": "verify root README stays routed and reflects the standard"
+    },
+    "SECURITY.md": {
+      "command": "just security",
+      "purpose": "verify security disclosure policy is observed"
+    },
+    "deny.toml": {
+      "command": "just security",
+      "purpose": "verify cargo-deny policy is honored"
+    },
+    "justfile": {
+      "command": "just fast",
+      "purpose": "verify proof-lane recipes execute"
+    },
+    "paper/": {
+      "command": "just score",
+      "purpose": "verify paper artifacts stay routed and reproducible"
+    },
+    "rust-toolchain.toml": {
+      "command": "just fast",
+      "purpose": "verify pinned toolchain still builds the workspace"
+    },
+    "rustfmt.toml": {
+      "command": "just fast",
+      "purpose": "verify formatting policy is honored"
+    },
+    "scripts/": {
+      "command": "just fast",
+      "purpose": "verify scripts referenced by proof lanes stay executable"
+    },
+    "agent/zyal/": {
+      "command": "just score",
+      "purpose": "verify canonical ZYAL runbooks stay under agent/zyal and only use the .zyal extension"
+    },
+    "apps/": {
+      "command": "just fast",
+      "purpose": "verify app surfaces remain routed through the audit"
+    },
+    "contracts/": {
+      "command": "jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+      "purpose": "advisory contract drift scan until project-specific contract checks exist"
+    },
+    "crates/": {
+      "command": "just fast",
+      "purpose": "verify Rust behavior and audit checks"
+    },
+    "crates/jankurai/src/audit/coverage.rs": {
+      "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+      "purpose": "verify coverage parsers and evidence normalization"
+    },
+    "crates/jankurai/src/commands/coverage.rs": {
+      "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+      "purpose": "verify coverage audit command behavior"
+    },
+    "crates/jankurai/tests/fixtures/coverage/": {
+      "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
+      "purpose": "verify coverage parser fixture contracts"
+    },
+    "db/": {
+      "command": "jankurai doctor --fail-on critical",
+      "purpose": "advisory database boundary health check"
+    },
+    "db/constraints/": {
+      "command": "jankurai doctor --fail-on critical",
+      "purpose": "advisory constraint-lane health check until DB proof exists"
+    },
+    "db/migrations/": {
+      "command": "jankurai doctor --fail-on critical",
+      "purpose": "advisory control-plane health check until migration tests exist"
+    },
+    "docs/": {
+      "command": "just score",
+      "purpose": "verify agent-readable documentation remains routed"
+    },
+    "docs/COVERAGE_*.md": {
+      "command": "just score",
+      "purpose": "verify coverage evidence docs remain routed"
+    },
+    "docs/architecture/": {
+      "command": "jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+      "purpose": "verify architecture docs remain visible to the audit"
+    },
+    "docs/decisions/": {
+      "command": "jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+      "purpose": "verify decision records remain visible to the audit"
+    },
+    "examples/perfect-web-api-db/backend/src/background_job.rs": {
+      "command": "just fast",
+      "purpose": "run proofs for background‑job cell"
+    },
+    "ops/": {
+      "command": "just fast",
+      "purpose": "verify ops surfaces remain visible to the audit"
+    },
+    "schemas/coverage-*.schema.json": {
+      "command": "just score",
+      "purpose": "verify coverage evidence schemas and fixtures"
+    },
+    "tools/": {
+      "command": "just fast",
+      "purpose": "verify Rust behavior and audit checks"
+    },
+    "crates/bench/tests/tenant_isolation.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test tenant_isolation --quiet --locked",
+      "purpose": "prove cross-tenant data isolation under the kv_tenant_idx fixture"
+    },
+    "crates/ffi/tests/exec_input_boundary.rs": {
+      "command": "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked",
+      "purpose": "prove FFI rldb_exec rejects malformed and injection-shaped input deterministically"
+    },
+    "crates/ffi/tests/safety_invariants.rs": {
+      "command": "rtk cargo test -p redlinedb-ffi --test safety_invariants --quiet --locked",
+      "purpose": "prove documented ownership invariants for the FFI surface"
+    }
+  },
+  "workspace": "jankurai"
+}

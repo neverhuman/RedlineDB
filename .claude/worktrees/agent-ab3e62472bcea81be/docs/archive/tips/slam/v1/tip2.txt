@@ -1,0 +1,491 @@
+I studied the current public RedlineDB repo via GitHub source. One limitation: the sandbox could not resolve `github.com` for a direct `git clone`, so I could not run `cargo test` locally. This is a static code review grounded in the current repository files.
+
+## Executive read
+
+RedlineDB already has a strong skeleton: separate kernel, SQL, FFI, CLI, server, and benchmark crates; a page/WAL/buffer-pool storage kernel; MVCC-style transactions; a SQL layer built on `sqlparser`; a C ABI surface; and a small bench harness. The README explicitly frames the project as SQLite-like but **not SQLite file-format compatible**, with current support for embedded Rust API, C ABI, CLI shell, framed local server, and typed CRUD/query execution. ([GitHub][1])
+
+The big picture: **the kernel direction is promising, but the SQL execution layer is not yet benchmark-ready as a serious SQLite replacement.** The most important gap is that the planner has ambitious support for index scans, multi-index plans, joins, aggregates, and sorting, but the executor still mostly does heap scans, materializes rows into `Vec`s, sorts in memory, and performs join cross-products. ([GitHub][2])
+
+If you benchmark now, you will mostly benchmark “early prototype executor + heap scan behavior,” not the database architecture you actually want to win with.
+
+---
+
+## Highest-priority gaps to fix before serious benchmarking
+
+### 1. Critical concurrency bug: row locks can leak across relations
+
+The row lock manager keys locks by both `rel_id` and `row_id`, but the transaction object only tracks `Vec<RowId>`. The engine’s relation-specific lock path locks `(rel_id, row_id)` but records only `row_id`, and release uses the engine’s default relation id instead of the original relation id. That means updates/deletes on real table relations can leave row locks behind and cause later writers to time out. ([GitHub][3])
+
+**Fix immediately:**
+
+```rust
+struct HeldRowLock {
+    rel_id: RelId,
+    row_id: RowId,
+}
+```
+
+Then release the exact `(rel_id, row_id)` pair. Add a regression test:
+
+1. Connection A updates row in table T.
+2. Connection A commits.
+3. Connection B updates same row.
+4. It must not timeout.
+
+This is the first thing I would fix before any concurrency benchmark.
+
+---
+
+### 2. Planner/executor mismatch: indexes are planned but not really executed
+
+The planner is already ambitious: it has access paths for table scans, rowid lookups, index point/range scans, covering indexes, multi-index `OR`/`AND`, dynamic-programming joins, greedy fallback, aggregate strategies, sort, and top-N planning. ([GitHub][2])
+
+But the executor path still does this for many real queries:
+
+* rowid equality gets a special fast path;
+* otherwise table rows are collected by scanning relation row IDs;
+* joins are built by cross-product materialization and then filtered;
+* order-by materializes and sorts all rows in memory;
+* unique constraint checks scan existing rows. ([GitHub][4])
+
+This is the biggest performance gap.
+
+**Upgrade path:**
+
+Build a real physical executor that consumes the planner’s physical plan:
+
+* `SeqScan`
+* `RowIdLookup`
+* `IndexScan`
+* `IndexRangeScan`
+* `CoveringIndexScan`
+* `BitmapAnd`
+* `BitmapOr`
+* `HashJoin`
+* `IndexNestedLoopJoin`
+* `MergeJoin`
+* `HashAggregate`
+* `StreamingAggregate`
+* `ExternalSort`
+* `TopNHeap`
+
+Until this exists, any “queries/second” number will understate the architecture’s potential and may mislead you on where bottlenecks really are.
+
+---
+
+### 3. Unique indexes and secondary indexes need to become first-class storage structures
+
+The current SQL executor enforces uniqueness by scanning existing rows, which is fatal for write-heavy benchmarks and high-concurrency workloads. ([GitHub][5])
+
+For a SQLite replacement, this must be kernel-level and durable:
+
+* unique B+tree / Bw-tree / ART index;
+* non-unique secondary indexes;
+* covering indexes;
+* partial indexes;
+* expression indexes;
+* index WAL records;
+* index recovery;
+* index vacuum/compaction;
+* online index build;
+* index consistency checker.
+
+**Minimum viable win:** implement durable unique and non-unique B+tree indexes and route `WHERE col = ?`, `WHERE col BETWEEN ? AND ?`, `ORDER BY indexed_col`, and uniqueness enforcement through them.
+
+---
+
+### 4. DDL/catalog durability looks non-atomic
+
+The engine commit path appears to flush/publish the WAL commit and then save a pending catalog snapshot afterward. If the catalog save fails after the commit is durable/published, you can end up with a transaction that has committed but whose schema/catalog update did not persist cleanly. ([GitHub][6])
+
+For a robust database, schema changes need to be WAL-redoable and transactionally atomic with the rest of the commit.
+
+**Fix options:**
+
+* store catalog in normal kernel pages and WAL-log catalog page changes;
+* or make catalog updates part of logical WAL replay;
+* or use copy-on-write catalog roots with atomic root pointer install;
+* add crash tests for `CREATE TABLE`, `CREATE INDEX`, `DROP`, `ALTER`, checkpoint, reopen.
+
+Do not benchmark DDL or mixed DDL/DML until this is hardened.
+
+---
+
+### 5. The page file has a global file mutex
+
+`PageFile` wraps reads, writes, and syncs behind one `Mutex<File>`. That is simple and safe, but it becomes a serious bottleneck under high read/write concurrency. ([GitHub][7])
+
+**Upgrade path:**
+
+* use positioned I/O: `pread`/`pwrite` style access;
+* separate metadata, heap, index, and WAL files where useful;
+* add async/background page flushers;
+* support Linux `io_uring` later;
+* batch adjacent page writes;
+* expose counters: read ops, write ops, fsyncs, bytes, queue depth, stall time.
+
+This is essential if the database is supposed to beat SQLite under concurrent workloads.
+
+---
+
+### 6. Buffer pool eviction has a global choke point
+
+The buffer pool is sharded for page maps, which is good, but eviction is coordinated through a global eviction mutex and scans frame state. ([GitHub][8])
+
+For high concurrency, move toward:
+
+* per-shard eviction clocks;
+* background cleaner threads;
+* dirty-page queues;
+* page temperature / hot-cold separation;
+* sequential scan resistance;
+* configurable buffer pool policies;
+* prefetch/read-ahead;
+* separate cache accounting for heap/index/catalog pages.
+
+A SQLite competitor should make buffer management a signature strength, not an afterthought.
+
+---
+
+### 7. Current row directory is memory-heavy
+
+`PageBackedHeap` maintains in-memory row directories and relation row directories using `HashMap` structures. That is convenient, but it can become very expensive at tens/hundreds of millions of rows. ([GitHub][9])
+
+Better approaches:
+
+* compact row-id-to-page mapping table;
+* per-relation row-id allocator for locality;
+* compressed sparse page directory;
+* slab/arena-backed metadata instead of many hash map entries;
+* optional page-level zone maps;
+* rowset bitmaps for scans;
+* relation-local row IDs instead of one global monotonically increasing row ID.
+
+This matters because your stated goal includes being “really smart on memory.”
+
+---
+
+### 8. Query memory/spill is mostly accounting, not true external execution
+
+The SQL layer has `QueryMemory`, `RowBatch`, and spill-file concepts, but rows are still mostly materialized in memory. The spill path creates/truncates spill files but does not yet implement true external sort/hash join/hash aggregate spilling. ([GitHub][10])
+
+For real benchmark credibility, implement:
+
+* external merge sort;
+* top-N heap without full sort;
+* hybrid hash aggregate;
+* hybrid hash join;
+* spill partition files;
+* memory reservation per operator;
+* hard OOM prevention;
+* actual spill byte counters.
+
+Benchmarks should report memory peak, spill bytes, and spill runs.
+
+---
+
+## SQL compatibility gaps
+
+The parser currently uses SQLite dialect support from `sqlparser`, but RedlineDB intentionally accepts only a subset. The parser rejects or does not yet support many SQLite-like features: compound selects, richer `INSERT`, `UPDATE FROM`, `RETURNING`, `DELETE ORDER BY/LIMIT`, CTAS, richer indexes, and many table/index modifiers. ([GitHub][11])
+
+For a true drop-in surface, you need a compatibility matrix.
+
+### Minimum SQLite-like compatibility checklist
+
+Prioritize:
+
+1. `SELECT` with subqueries.
+2. `JOIN` variants.
+3. `GROUP BY`, `HAVING`, aggregates.
+4. `ORDER BY`, `LIMIT`, `OFFSET`.
+5. `INSERT ... SELECT`.
+6. `UPSERT`.
+7. `RETURNING`.
+8. `CREATE INDEX`, unique indexes, partial indexes.
+9. `ALTER TABLE`.
+10. transactions and savepoints.
+11. views.
+12. triggers.
+13. foreign keys.
+14. pragmas or pragma-compatible shims.
+15. SQLite C API compatibility layer if “drop-in” means existing apps can link against it.
+
+The current README says the project is not SQLite file-format compatible, so define “drop-in” precisely: SQL dialect compatibility, C API compatibility, behavioral compatibility, or file compatibility. ([GitHub][1])
+
+---
+
+## Datatype gap: current values are still SQLite-like
+
+Right now `SqlValue` maps to kernel `OwnedValue`, and comparisons cover the classic SQLite-like set: `NULL`, integer, real, text, and blob. ([GitHub][12])
+
+To exceed SQLite, add real typed columns and richer physical encodings:
+
+### High-impact datatypes
+
+* `BOOLEAN`
+* `INT8`, `INT16`, `INT32`, `INT64`, `UINT64`
+* `FLOAT32`, `FLOAT64`
+* `DECIMAL128` / `DECIMAL256`
+* `DATE`
+* `TIME`
+* `TIMESTAMP`
+* `TIMESTAMPTZ`
+* `INTERVAL`
+* `UUID`
+* `JSON`
+* `JSONB`
+* `ARRAY<T>`
+* `STRUCT`
+* `MAP`
+* `ENUM`
+* `IPADDR` / `CIDR`
+* `VECTOR<F32, N>` for embeddings
+* compressed blob/text types
+* optional geospatial types later
+
+The killer feature would be: **SQLite-compatible dynamic typing mode plus strict typed table mode.** That gives compatibility and modern analytical/app-database power.
+
+---
+
+## Benchmark readiness
+
+The repo has a bench crate with commands like smoke, optimizer regression, matrix/full, and concurrency. That is a good start, but the current benchmark sizes are small and mostly smoke/regression oriented, not buyer-grade performance validation. ([GitHub][13])
+
+Before publishing numbers, build a serious benchmark harness.
+
+### Benchmark matrix I would build
+
+| Area           |                                          Workload | Why it matters                  |
+| -------------- | ------------------------------------------------: | ------------------------------- |
+| Point reads    |               rowid, primary key, secondary index | shows lookup path quality       |
+| Range reads    |                    indexed and non-indexed ranges | tests index + scan performance  |
+| Writes         | single-row insert, batched insert, update, delete | shows WAL and lock behavior     |
+| Contention     |                hot-row updates, hot-index inserts | exposes lock manager flaws      |
+| Mixed workload |                     95/5, 80/20, 50/50 read/write | real embedded app behavior      |
+| Joins          |                      FK joins, many-to-many joins | tests optimizer/executor        |
+| Aggregates     |                     low/high-cardinality group-by | tests hash/streaming aggregate  |
+| Sorts          |                               full sort and top-N | tests memory/spill              |
+| Large DB       |                                1M, 10M, 100M rows | exposes memory directory design |
+| Recovery       |   crash during WAL append/checkpoint/index update | proves durability               |
+
+### Metrics to capture
+
+* QPS / TPS.
+* p50, p95, p99, p99.9 latency.
+* lock wait time.
+* abort/retry count.
+* WAL bytes.
+* data bytes written.
+* fsync count.
+* dirty page count.
+* buffer hit ratio.
+* page read/write ops.
+* RSS peak.
+* allocator stats.
+* spill bytes.
+* recovery time.
+* checkpoint time.
+* file size after vacuum.
+
+### Compare against
+
+* SQLite rollback journal.
+* SQLite WAL mode.
+* SQLite WAL + tuned pragmas.
+* RedlineDB safe defaults.
+* RedlineDB performance profile.
+
+Benchmarking only against default SQLite is not enough; tuned SQLite is the real bar.
+
+---
+
+## Existing testing surface is good but incomplete
+
+The kernel has a decent-looking test spread: catalog, engine, heap, index, page heap, recovery, storage, transaction, WAL, tuple, and stats tests. The SQL test directory currently appears much thinner, with only a smoke test shown in the repo tree. ([GitHub][14])
+
+The agent/test map includes good proof lanes such as formatting, locked workspace checks/tests, clippy, audit, deny, and gitleaks. ([GitHub][15])
+
+Add these next:
+
+* crash-injection tests for every WAL/checkpoint/write path;
+* `proptest` SQL operation histories;
+* `loom` tests for row locks, tx status, and buffer pool concurrency;
+* SQL logic tests;
+* SQLite differential tests;
+* random query generator;
+* long-running soak tests;
+* failpoint-based filesystem fault tests;
+* recovery idempotence tests;
+* index/heap consistency checker.
+
+---
+
+## “Epic” upgrades worth designing in now
+
+### 1. Dual-mode execution: row engine + vectorized engine
+
+Use row execution for OLTP point operations and vectorized batches for scans, filters, joins, aggregates, and sorts.
+
+This could be a major advantage over SQLite for analytical-ish embedded workloads.
+
+### 2. Adaptive indexing
+
+Add automatic indexes for repeated expensive predicates:
+
+* observe query patterns;
+* recommend indexes;
+* optionally auto-create transient indexes;
+* expire unused indexes;
+* collect index utility stats.
+
+SQLite has automatic indexes in limited cases; you can make this far smarter.
+
+### 3. JSONB and vector search as first-class citizens
+
+If RedlineDB supports modern app workloads natively, it becomes more than a SQLite clone:
+
+* JSONB path indexes;
+* generated columns over JSON paths;
+* vector embeddings;
+* hybrid scalar + vector filters;
+* approximate nearest-neighbor index later.
+
+### 4. Time-travel and snapshots
+
+The WAL payload enum already has hooks for backup, timeline fork, and logical transaction payloads. ([GitHub][16])
+
+Lean into that:
+
+* consistent online backup;
+* point-in-time restore;
+* named snapshots;
+* branch/fork database state;
+* local replication stream;
+* CDC feed.
+
+This is a place where a new Rust database can feel magical.
+
+### 5. Smart memory modes
+
+Expose clear memory profiles:
+
+* tiny embedded mode;
+* balanced mode;
+* high-throughput mode;
+* read-heavy mode;
+* write-heavy mode;
+* analytics mode.
+
+Each profile tunes buffer pool pages, WAL batch delay, checkpoint cadence, worker counts, spill limits, and index cache sizes.
+
+### 6. SQLite compatibility layer as a separate crate
+
+Keep the native Rust API clean, but add a `redlinedb-sqlite3` compatibility layer later:
+
+* `sqlite3_open`
+* `sqlite3_prepare_v2`
+* `sqlite3_step`
+* `sqlite3_finalize`
+* `sqlite3_bind_*`
+* `sqlite3_column_*`
+* common pragmas
+* extension loading story
+
+This is probably required if “drop-in replacement” means existing apps can swap libraries.
+
+---
+
+## Recommended build order
+
+### Phase 0: correctness gate
+
+Fix before any public benchmark:
+
+1. relation row-lock release bug;
+2. DDL/catalog atomicity;
+3. crash tests around commit/checkpoint/recovery;
+4. SQL differential smoke tests against SQLite;
+5. recovery idempotence for heap + index + catalog.
+
+### Phase 1: make indexes real
+
+1. durable primary/secondary index storage;
+2. unique index enforcement;
+3. executor `IndexScan`;
+4. executor `IndexRangeScan`;
+5. covering index reads;
+6. index WAL/recovery;
+7. index consistency checker.
+
+### Phase 2: make the executor match the planner
+
+1. physical operator trait;
+2. streaming row/batch pipeline;
+3. hash join;
+4. index nested-loop join;
+5. hash aggregate;
+6. streaming aggregate;
+7. top-N;
+8. external sort.
+
+### Phase 3: concurrency and I/O
+
+1. remove global page-file mutex;
+2. shard eviction;
+3. background page writers;
+4. configurable lock timeout;
+5. deadlock prevention/detection;
+6. row-key lock tracking;
+7. improved group commit telemetry;
+8. read/write stress harness.
+
+### Phase 4: memory excellence
+
+1. compact row directory;
+2. real spill;
+3. allocator profiling;
+4. low-copy row representation;
+5. page-local tuple references;
+6. string/blob interning or arena mode for query execution.
+
+### Phase 5: datatype expansion
+
+1. strict typed tables;
+2. decimal;
+3. temporal types;
+4. UUID;
+5. JSONB;
+6. arrays/structs;
+7. vector type.
+
+---
+
+## My blunt assessment
+
+RedlineDB is not yet “the most epic SQLite replacement,” but it has the right early bones: separate kernel/SQL layers, WAL coordinator, buffer pool, MVCC transaction state, catalog, FFI, server, CLI, and a benchmark crate. The biggest immediate risk is benchmarking too early and getting numbers dominated by avoidable prototype behavior: full scans, materialized joins, O(N) uniqueness checks, global file mutexing, and memory-heavy row maps.
+
+My top three fixes before serious QPS/concurrency runs:
+
+1. **Fix the row-lock relation leak.**
+2. **Implement real index-backed execution and unique indexes.**
+3. **Replace materialized cross-product joins/sorts with physical streaming operators.**
+
+Once those are in, RedlineDB can start producing benchmark results that reflect the architecture you actually want to prove.
+
+[1]: https://github.com/jeppsontaylor/RedlineDB/blob/main/README.md "RedlineDB/README.md at main · jeppsontaylor/RedlineDB · GitHub"
+[2]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/sql/src/planner.rs "raw.githubusercontent.com"
+[3]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/kernel/src/engine/lock.rs "raw.githubusercontent.com"
+[4]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/sql/src/exec.rs "raw.githubusercontent.com"
+[5]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/sql/src/exec/tail.rs "raw.githubusercontent.com"
+[6]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/kernel/src/engine/mod.rs "raw.githubusercontent.com"
+[7]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/kernel/src/storage/page_file.rs "raw.githubusercontent.com"
+[8]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/kernel/src/storage/buffer.rs "raw.githubusercontent.com"
+[9]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/kernel/src/engine/page_heap.rs "raw.githubusercontent.com"
+[10]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/sql/src/batch.rs "raw.githubusercontent.com"
+[11]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/sql/src/parser.rs "raw.githubusercontent.com"
+[12]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/sql/src/value.rs "raw.githubusercontent.com"
+[13]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/bench/src/main.rs "raw.githubusercontent.com"
+[14]: https://github.com/jeppsontaylor/RedlineDB/tree/main/crates/kernel/tests "RedlineDB/crates/kernel/tests at main · jeppsontaylor/RedlineDB · GitHub"
+[15]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/agent/test-map.json "raw.githubusercontent.com"
+[16]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/kernel/src/wal/payload.rs "raw.githubusercontent.com"
+

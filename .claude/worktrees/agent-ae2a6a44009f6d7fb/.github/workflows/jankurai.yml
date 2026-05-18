@@ -1,0 +1,106 @@
+name: jankurai
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: jankurai-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+      - name: Install jankurai
+        run: cargo install jankurai --locked
+      - run: jankurai --version
+      - name: jankurai audit
+        run: jankurai audit . --mode advisory --baseline agent/repo-score.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl
+      - name: Proofbind verify
+        run: jankurai proofbind verify . --changed-from origin/main
+      - name: Proofmark rust
+        run: jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+      - name: Rust witness build
+        run: jankurai rust witness build .
+      - name: UX QA smoke
+        run: jankurai ux audit --config agent/ux-qa.toml --out target/jankurai/ux-qa.json
+      - uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
+        if: always()
+        with:
+          sarif_file: target/jankurai/jankurai.sarif
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: jankurai-adoption-evidence
+          if-no-files-found: ignore
+          path: |
+            target/jankurai/repo-score.json
+            target/jankurai/repo-score.md
+            target/jankurai/jankurai.sarif
+            target/jankurai/repair-queue.jsonl
+            target/jankurai/proofbind/obligations.json
+            target/jankurai/proofbind/surface-witness.json
+            target/jankurai/proofmark/proofmark-receipt.json
+            target/jankurai/proofmark/proof-receipt.json
+            target/jankurai/rust/witness-graph.json
+            target/jankurai/ux-qa.json
+            target/jankurai/security/evidence.json
+            target/jankurai/migration-report.json
+
+  security:
+    # Supply-chain, secret, and advisory gate. Required check; every
+    # step here is blocking. Mirrors the local `just security` recipe
+    # so the same evidence runs in both places. Audit reference:
+    # HLT-016 supply-chain-drift.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: cargo audit
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: cargo deny check
+        uses: EmbarkStudios/cargo-deny-action@d6d27f1b02f0c07f9db6ffc34e7871bba5ab5816
+        with:
+          command: check
+      - name: Install gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+      - name: gitleaks detect
+        run: gitleaks detect --source . --redact --no-banner
+
+  dependency-review:
+    # SBOM-like dependency review on PRs. Compares base vs head
+    # manifests for newly-introduced vulnerable or non-allowlisted
+    # licenses. PR-only; non-PR runs short-circuit cleanly.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

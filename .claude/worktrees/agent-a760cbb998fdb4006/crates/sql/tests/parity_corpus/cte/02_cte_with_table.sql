@@ -1,0 +1,4 @@
+CREATE TABLE t(id INTEGER, v INTEGER);
+INSERT INTO t VALUES (1, 10), (2, 20), (3, 30);
+WITH doubled AS (SELECT id, v*2 AS v2 FROM t)
+SELECT id, v2 FROM doubled ORDER BY id

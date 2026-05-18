@@ -1,0 +1,169 @@
+Study this: # RedlineDB End-to-End Roadmap to a 100% Rust SQLite-Class Replacement
+
+  ## Summary
+
+  Current state: RedlineDB has a green Rust kernel baseline with page format/checksums, sharded buffer pool, WAL writer/group commit, committed-record recovery, MVCC heap, row locks, CSN frontier, checkpoint metadata, and vacuum V1. The next
+  goal is to turn this kernel into a complete embedded SQL database that can be benchmarked directly against SQLite WAL mode.
+
+  Default target: a 100% Rust, SQLite-like embedded SQL engine with optional Rust-written C ABI compatibility later. Do not chase SQLite file-format compatibility or import SQLite C internals.
+
+  ## Phase 1: Production Storage-Kernel Correctness
+
+  Requirements:
+
+  - Harden WAL-before-data guarantees with full-page images or doublewrite protection after checkpoints.
+  - Make recovery idempotent for every durable mutation, not only logical heap replay.
+  - Add crash-injection testing around WAL append, page mutation, checkpoint, segment rotation, fsync, and reopen.
+  - Add model/property tests for MVCC histories, rollback, long snapshots, deletes, vacuum, and recovery.
+  - Add concurrency tests using Rust-native tools such as loom or shuttle for lock/latch ordering.
+
+  Expectation:
+
+  - No acknowledged commit can disappear in strict durability mode.
+  - Torn WAL tails are ignored safely; corrupt non-tail WAL fails loudly.
+  - Dirty pages never flush ahead of durable WAL.
+  - Kernel correctness gates must pass before indexes or SQL depend on it.
+
+  ## Phase 2: Space Management, Vacuum, and Page Lifecycle
+
+  Requirements:
+
+  - Add a durable page allocator, free-space map, relation/page metadata, and reusable page lists.
+  - Extend vacuum beyond logical undo pruning into safe physical reclamation of dead tuples, undo records, and empty pages.
+  - Track oldest required CSN/LSN across active snapshots, checkpoints, replication slots, and recovery needs.
+  - Add background checkpoint and vacuum workers with bounded memory and bounded work batches.
+  - Expose memory, dirty-page, WAL, checkpoint, and vacuum stats.
+
+  Expectation:
+
+  - Long readers preserve old versions; once horizons advance, dead space is reclaimed.
+  - WAL growth is bounded under normal checkpoint/vacuum operation.
+  - Memory usage is explicitly configurable and observable.
+  - Vacuum must not block normal readers and should only briefly latch pages.
+
+  ## Phase 3: Concurrent Ordered Storage and Indexes
+
+  Requirements:
+
+  - Implement a Rust-native B-link/B+tree access method for ordered key/value data.
+  - Support point lookup, insert, delete marker, range scan, split, merge/consolidation, and recovery.
+  - Add MVCC-visible index entries with heap recheck or row-id indirection.
+  - Add unique indexes with key-level locking and conflict detection.
+  - Use short page latches only; never hold page latches during WAL fsync or blocking transaction waits.
+
+  Expectation:
+
+  - Primary-key and secondary-index reads avoid full scans.
+  - Disjoint writer transactions scale until WAL/device limits, not a global SQLite-style writer lock.
+  - Index crash recovery is covered for insert, delete mark, split, root change, and checkpoint.
+  - Index entries may be stale physically but never return incorrect visible SQL rows.
+
+  ## Phase 4: Catalog, Schema, Types, and Constraints
+
+  Requirements:
+
+  - Add persistent system catalogs for schemas, tables, columns, indexes, constraints, and statistics.
+  - Define compact row encoding for SQLite-style dynamic typing plus stricter internal typed values.
+  - Support table creation/drop, index creation/drop, primary keys, unique constraints, NOT NULL, defaults, and basic CHECK constraints.
+  - Make all DDL transactional through the same WAL/MVCC machinery.
+  - Add schema-version tracking so prepared statements can invalidate safely.
+
+  Expectation:
+
+  - Catalog changes recover correctly after crash.
+  - Constraints are enforced transactionally under concurrent writers.
+  - SQL tables and indexes map to the same storage primitives, avoiding special-case engines.
+  - DDL has clear locking rules and does not corrupt concurrent sessions.
+
+  ## Phase 5: SQL Frontend and Execution Engine
+
+  Requirements:
+
+  - Add redlinedb_sql with parser, binder, planner, executor, prepared statements, and session state.
+  - Start with the SQLite-critical subset: CREATE TABLE, CREATE INDEX, INSERT, UPDATE, DELETE, SELECT, WHERE, ORDER BY, LIMIT, transactions, parameters, and basic expressions.
+  - Implement row-oriented execution first, with clean operator boundaries for later vectorization.
+  - Add transaction integration for autocommit, explicit BEGIN/COMMIT/ROLLBACK, snapshot isolation, and read committed.
+  - Support common SQLite scalar functions and type coercions required by benchmark workloads.
+
+  Expectation:
+
+  - A real user can run common embedded SQL workloads without touching kernel APIs.
+  - SQL execution preserves MVCC semantics under concurrent readers/writers.
+  - Prepared statements reuse parsed/bound plans where schema version allows.
+  - Correctness tests compare results against SQLite for supported SQL.
+
+  ## Phase 6: Optimizer, Statistics, and Query Performance
+
+  Requirements:
+
+  - Add table/index statistics: row counts, distinct estimates, histograms or sketches, null fractions, and page estimates.
+  - Build a cost-based optimizer for index selection, join order, predicate pushdown, projection pruning, and sort avoidance.
+  - Add efficient operators for nested-loop joins, indexed joins, hash joins, aggregates, grouping, sorting, and range scans.
+  - Add covering-index reads where payload allows.
+  - Add plan inspection and deterministic test hooks.
+
+  Expectation:
+
+  - Indexed point/range workloads compete with or beat SQLite.
+  - Full scans and joins have predictable memory limits.
+  - Optimizer choices are explainable and regression-tested.
+  - Performance work is driven by benchmarks, not intuition.
+
+  ## Phase 7: Public APIs, C ABI, CLI, and Optional Wire Server
+
+  Requirements:
+
+  - Provide a stable Rust embedded API for database open, connection/session, prepare, bind, step, columns, transactions, backup, and configuration.
+  - Add a Rust-written C ABI crate with SQLite-like ergonomics where practical: open, close, prepare, step, reset, finalize, bind, column access, error codes.
+  - Add a CLI for interactive SQL, import/export, .schema, .tables, and benchmark smoke checks.
+  - Add optional server mode after embedded APIs stabilize; Postgres wire can follow if useful for client ecosystem access.
+  - Keep all implementation 100% Rust; C ABI means extern "C" surface, not C storage code.
+
+  Expectation:
+
+  - Applications can embed RedlineDB without linking SQLite.
+  - C/C++/Swift/etc. can call RedlineDB through a stable ABI.
+  - API-level benchmarks can run the same logical workload against RedlineDB and SQLite.
+  - Server mode is additive and must not compromise embedded performance.
+
+  ## Phase 8: Replication, Backup, and Operational Durability
+
+  Requirements:
+
+  - Add online consistent backup without blocking writers.
+  - Add WAL archiving and restore.
+  - Add logical replication stream based on committed transactions and CSN order.
+  - Add physical/base snapshot plus WAL catch-up for fast replica creation.
+  - Track retention horizons so checkpoints/vacuum do not remove data needed by backup or replication.
+
+  Expectation:
+
+  - Backups restore to a transactionally consistent database.
+  - Replicas can follow committed changes in order.
+  - Operational features are optional for embedded use but share the same correctness invariants.
+  - Recovery time and retained WAL size are bounded by configuration.
+
+  ## Phase 9: Benchmark Certification and SQLite Head-to-Head
+
+  Requirements:
+
+  - Build redlinedb_bench with repeatable workloads: single-row insert, batched insert, point read, range scan, update, delete, indexed lookup, joins, concurrent readers, concurrent writers, mixed OLTP, checkpoint pressure, crash recovery, and
+    memory ceiling tests.
+  - Compare against SQLite WAL mode with matched durability settings: FULL/strict, NORMAL/normal, and unsafe/dev modes separately.
+  - Measure throughput, p50/p95/p99 latency, WAL bytes/op, data bytes/op, peak RSS, resident pages, checkpoint stalls, recovery time, and database size.
+  - Add compatibility tests that run supported SQL against both RedlineDB and SQLite and compare results.
+  - Define release gates: correctness first, then single-thread parity, then concurrent-writer advantage, then memory discipline.
+
+  Expectation:
+
+  - RedlineDB must clearly beat SQLite on concurrent connection/write-heavy workloads because it avoids SQLite’s single-writer ceiling.
+  - RedlineDB should match or beat SQLite on key single-thread OLTP paths before claiming replacement status.
+  - Memory usage must stay within configured bounds and be lower or comparable for equivalent workloads.
+  - Final release is benchmarked, reproducible, documented, and honest about unsupported SQLite features.
+
+  ## Assumptions
+
+  - “SQLite replacement” means embedded SQL engine and API ergonomics, not SQLite file-format compatibility.
+  - The storage engine remains one owner process per database directory; many sessions/threads share that engine. Independent processes should use the future C ABI plus local server/wire mode, not all mutate the same files directly.
+  - Third-party Rust crates are acceptable if they are 100% Rust and not on hot paths where custom code is clearly required.
+  - SQLite C API compatibility is useful but later; the kernel, SQL engine, and benchmark correctness come first.

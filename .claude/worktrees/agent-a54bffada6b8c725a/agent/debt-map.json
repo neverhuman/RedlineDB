@@ -1,0 +1,38 @@
+{
+  "clippy": [
+    {
+      "file": "crates/kernel/src/catalog/affinity.rs",
+      "status": "fixed",
+      "note": "manual case-insensitive ASCII comparison"
+    },
+    {
+      "file": "crates/kernel/src/catalog/ops.rs",
+      "status": "fixed",
+      "note": "too many arguments in table constraint index builder"
+    },
+    {
+      "file": "crates/kernel/src/engine/page_heap.rs",
+      "status": "fixed",
+      "note": "too many arguments in relation update path"
+    }
+  ],
+  "security": [
+    {
+      "file": "crates/ffi/src/lib.rs",
+      "status": "open",
+      "note": "unsafe FFI pointer handling remains ledgered separately"
+    }
+  ],
+  "file_size": [
+    {
+      "file": "crates/sql/src/exec.rs",
+      "status": "watch",
+      "note": "close to the active-source ceiling"
+    },
+    {
+      "file": "crates/sql/src/exec/expr.rs",
+      "status": "watch",
+      "note": "close to the preferred target ceiling"
+    }
+  ]
+}

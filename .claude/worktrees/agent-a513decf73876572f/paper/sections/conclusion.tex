@@ -1,0 +1,16 @@
+\section{Conclusion}\label{sec:conclusion}
+
+We rebuilt SQLite's API contract in safe Rust, kept the embedded
+single-process deployment story intact, and measured what the swap
+buys. The kernel and SQL layer together fit in roughly 35 KLOC of
+safe Rust active source, against the SQLite amalgamation's roughly
+250 KLOC of C. On a 128-vCPU host the engine reaches 7.9--8.3$\times$
+SQLite's throughput on mixed and writers-disjoint OLTP at 64 threads,
+holds parity at the 64-thread point-read peak, and trails on the two
+contention-bound workloads we discussed openly. The deterministic
+crash certification observed 0 lost-acked-commits across 24
+fail-point scenarios; the recovery matrix passed 36/36 and the SQL
+compatibility matrix passed 40/40. The artifact, including the
+manifest-stamped certification harness, the per-run JSONL telemetry,
+and the figure regeneration scripts, is available at the public
+RedlineDB repository~\cite{redlinedb}.

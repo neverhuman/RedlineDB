@@ -1,0 +1,4060 @@
+Phase 4 should be built as a **catalog + schema + type + constraint subsystem** that sits above your MVCC heap/index primitives and below the future SQL executor. The big performance rule: **catalog lookups must never become the new SQLite-style global bottleneck**. DML should use immutable `Arc<TableDef>` snapshots with no catalog locks, while DDL is serialized or narrowly gated because DDL is rare and correctness-sensitive.
+
+SQLite-like behavior to target: dynamic storage classes with column affinities, not rigid physical column types; SQLite assigns columns one of `TEXT`, `NUMERIC`, `INTEGER`, `REAL`, or `BLOB` affinities, and non-`INTEGER PRIMARY KEY` columns may store values of any storage class. SQLite derives affinity from declared type text using string rules such as `INT`, `CHAR`/`TEXT`/`CLOB`, `BLOB`, `REAL`/`FLOA`/`DOUB`, otherwise `NUMERIC`. ([SQLite][1]) Constraints should follow SQLite-like semantics where `UNIQUE` and non-rowid `PRIMARY KEY` treat `NULL` values as distinct, `CHECK` fails only when it evaluates to numeric zero, `NULL` check results pass, and `NOT NULL` is checked on writes. ([SQLite][2]) For compatibility ergonomics, expose a `sqlite_schema`-like view with `type`, `name`, `tbl_name`, `rootpage`, and `sql`, but do **not** make that text table the source of truth; SQLite uses such a schema table, but RedlineDB should store normalized catalog rows and synthesize the compatibility view. ([SQLite][3])
+
+## Phase 4 target
+
+By the end of Phase 4, RedlineDB should have:
+
+1. **Durable system catalogs** stored as ordinary MVCC relations.
+2. **Transactional DDL** through the same WAL/MVCC machinery as user tables.
+3. **Immutable schema snapshots** for lock-free reads and prepared statement safety.
+4. **SQLite-style dynamic row values** with fast compact storage encoding.
+5. **Internal typed values** for expression evaluation, defaults, constraints, and future planning.
+6. **Primary key, unique, not-null, default, and check constraints** enforced at write time.
+7. **DDL recovery** that is idempotent and rejects catalog corruption loudly.
+8. **Schema-version invalidation** for prepared statements and cached plans.
+9. **No catalog locks on the row hot path.**
+
+The core design is:
+
+```text
+SQL DDL / schema builder
+        |
+        v
+redlinedb_catalog
+  - object IDs
+  - system catalog tables
+  - schema snapshots
+  - DDL transaction layer
+  - constraint compiler
+  - default expression compiler
+  - row/value encoders
+        |
+        v
+storage primitives
+  - MVCC heap
+  - row locks
+  - B+tree/index AM
+  - WAL
+  - recovery
+  - page allocator
+```
+
+## Non-negotiable design choices
+
+### 1. Catalog rows are real database rows
+
+Do **not** store schema as a Rust struct blob, JSON blob, TOML blob, or special meta-page-only structure. Store system catalogs as normal MVCC tables. That gives you:
+
+```text
+DDL atomicity = normal transaction atomicity
+DDL recovery = normal WAL/MVCC recovery
+DDL visibility = normal CSN visibility
+DROP safety = normal old-version retention
+catalog corruption checks = normal table/index consistency checks
+```
+
+The schema cache is a derived acceleration structure, not the durable source of truth.
+
+### 2. DML reads immutable schema snapshots
+
+DML should not do this:
+
+```rust
+engine.catalog.lock().lookup_table(...)
+```
+
+It should do this:
+
+```rust
+let schema = engine.catalog.current();     // Arc clone, lock-free
+let table = schema.lookup_table(schema_id, "users")?;
+```
+
+Prepared statements should hold `Arc<TableDef>`, `Arc<[ColumnDef]>`, precompiled default/check programs, row encoders, and index descriptors. The hot path should not touch catalog heap pages.
+
+### 3. DDL is serialized, DML is not
+
+Use one global `ddl_commit_lock` at first. It is simple and correct. It only serializes schema mutations, not ordinary inserts/updates/deletes/selects.
+
+For `CREATE INDEX` and `DROP TABLE`, add per-table DML gates so you can briefly or selectively block **writers** without blocking normal readers.
+
+### 4. Object IDs never reuse
+
+Names can be dropped and recreated. IDs should never be reused inside a database. This avoids horrible bugs in old prepared plans, stale snapshots, delayed vacuum, replication, and backup.
+
+Use monotonic `ObjectId`, `TableId`, `IndexId`, `ConstraintId`, `ColumnId`, and `RelationId`.
+
+### 5. DDL commit publishes schema after durable commit
+
+The order must be:
+
+```text
+1. Validate DDL against current schema snapshot.
+2. Start write transaction.
+3. Allocate object/relation IDs transactionally.
+4. Create storage roots.
+5. Insert/update/delete catalog rows.
+6. Increment schema_version in catalog/meta row.
+7. Commit WAL transaction.
+8. Build new immutable SchemaSnapshot.
+9. Publish with ArcSwap/store.
+10. Notify sessions/plans.
+```
+
+Never publish a schema before the commit is durable.
+
+---
+
+# Crate/module layout
+
+A clean Phase 4 layout:
+
+```text
+crates/
+  redlinedb_kernel/
+    ... existing heap/WAL/MVCC/index code ...
+
+  redlinedb_catalog/
+    src/
+      lib.rs
+      ids.rs
+      names.rs
+      value.rs
+      affinity.rs
+      record.rs
+      key.rs
+      expr.rs
+      constraint.rs
+      system.rs
+      schema.rs
+      loader.rs
+      ddl.rs
+      bootstrap.rs
+      error.rs
+      tests/
+
+  redlinedb_sql/
+    ... Phase 5, later ...
+```
+
+`redlinedb_catalog` should not depend on a full SQL parser yet. It should expose a typed builder API:
+
+```rust
+CreateTableSpec
+CreateIndexSpec
+DropTableSpec
+DropIndexSpec
+ColumnSpec
+ConstraintSpec
+ExprAst
+```
+
+Phase 5’s parser/binder will translate SQL AST into these specs.
+
+---
+
+# System catalog design
+
+Use fixed system relation IDs for bootstrap.
+
+```rust
+pub const SYS_META: RelationId = RelationId(1);
+pub const SYS_SCHEMAS: RelationId = RelationId(2);
+pub const SYS_TABLES: RelationId = RelationId(3);
+pub const SYS_COLUMNS: RelationId = RelationId(4);
+pub const SYS_INDEXES: RelationId = RelationId(5);
+pub const SYS_INDEX_COLUMNS: RelationId = RelationId(6);
+pub const SYS_CONSTRAINTS: RelationId = RelationId(7);
+pub const SYS_CONSTRAINT_COLUMNS: RelationId = RelationId(8);
+pub const SYS_STATS: RelationId = RelationId(9);
+pub const SYS_SEQUENCES: RelationId = RelationId(10);
+```
+
+## `redline_meta`
+
+Small key/value table.
+
+| column        |             type | purpose     |
+| ------------- | ---------------: | ----------- |
+| `key`         | text primary key | meta key    |
+| `value`       |          dynamic | meta value  |
+| `updated_csn` |          integer | last update |
+
+Required rows:
+
+```text
+catalog_format_version = 1
+schema_version         = monotonically increasing u64
+next_object_id         = monotonically increasing u64
+next_relation_id       = monotonically increasing u64
+database_uuid          = blob/text
+```
+
+`schema_version` increments once per committed DDL transaction.
+
+## `redline_schemas`
+
+For now, you probably only need `main`, but model this for future `temp` and attach-like behavior.
+
+| column        | type                |
+| ------------- | ------------------- |
+| `schema_id`   | integer primary key |
+| `name`        | text unique         |
+| `state`       | integer             |
+| `created_csn` | integer             |
+| `dropped_csn` | integer/null        |
+
+## `redline_tables`
+
+| column          |                type | notes                                       |
+| --------------- | ------------------: | ------------------------------------------- |
+| `table_id`      | integer primary key | stable object ID                            |
+| `schema_id`     |             integer | normally `main`                             |
+| `name`          |                text | preserved case                              |
+| `name_folded`   |                text | lookup key                                  |
+| `relation_id`   |             integer | heap/root relation                          |
+| `row_format_id` |             integer | row decoder version                         |
+| `flags`         |             integer | rowid, strict, system, without-rowid future |
+| `state`         |             integer | ready/dropped                               |
+| `sql`           |           text/null | normalized CREATE TABLE                     |
+| `created_csn`   |             integer |                                             |
+| `dropped_csn`   |        integer/null |                                             |
+
+Unique live index:
+
+```text
+(schema_id, name_folded) WHERE state = READY
+```
+
+If partial indexes are not available internally yet, enforce this with catalog DDL validation plus a normal catalog-name index that includes `state`.
+
+## `redline_columns`
+
+| column          |         type | notes                               |
+| --------------- | -----------: | ----------------------------------- |
+| `table_id`      |      integer |                                     |
+| `column_id`     |      integer | stable within table                 |
+| `ordinal`       |      integer | physical/logical order              |
+| `name`          |         text |                                     |
+| `name_folded`   |         text |                                     |
+| `declared_type` |    text/null |                                     |
+| `affinity`      |      integer | blob/text/numeric/integer/real      |
+| `storage`       |      integer | normal/rowid-alias/generated future |
+| `not_null`      | integer/bool |                                     |
+| `default_expr`  |    blob/null | encoded expression IR               |
+| `default_sql`   |    text/null |                                     |
+| `collation`     |         text | default `BINARY`                    |
+| `flags`         |      integer |                                     |
+
+Primary key:
+
+```text
+(table_id, ordinal)
+```
+
+Unique:
+
+```text
+(table_id, name_folded)
+```
+
+## `redline_indexes`
+
+| column        |                type | notes                                |
+| ------------- | ------------------: | ------------------------------------ |
+| `index_id`    | integer primary key |                                      |
+| `schema_id`   |             integer |                                      |
+| `table_id`    |             integer |                                      |
+| `name`        |                text |                                      |
+| `name_folded` |                text |                                      |
+| `relation_id` |             integer | B+tree relation                      |
+| `is_unique`   |                bool |                                      |
+| `is_primary`  |                bool |                                      |
+| `origin`      |             integer | user, primary-key, unique-constraint |
+| `state`       |             integer | ready/building/dropped               |
+| `sql`         |           text/null | null for auto indexes if desired     |
+| `created_csn` |             integer |                                      |
+| `dropped_csn` |        integer/null |                                      |
+
+Indexes created for constraints should have `origin = PrimaryKey` or `UniqueConstraint`.
+
+## `redline_index_columns`
+
+| column      |    type | notes                    |
+| ----------- | ------: | ------------------------ |
+| `index_id`  | integer |                          |
+| `seqno`     | integer |                          |
+| `column_id` | integer |                          |
+| `sort_dir`  | integer | asc/desc                 |
+| `collation` |    text |                          |
+| `key_kind`  | integer | column/expression future |
+
+Primary key:
+
+```text
+(index_id, seqno)
+```
+
+## `redline_constraints`
+
+| column            |                type | notes                                     |
+| ----------------- | ------------------: | ----------------------------------------- |
+| `constraint_id`   | integer primary key |                                           |
+| `table_id`        |             integer |                                           |
+| `name`            |           text/null |                                           |
+| `kind`            |             integer | pk/unique/not-null/check/default metadata |
+| `column_id`       |        integer/null | for column constraints                    |
+| `index_id`        |        integer/null | backing index                             |
+| `expr`            |           blob/null | encoded CHECK expression IR               |
+| `expr_sql`        |           text/null |                                           |
+| `conflict_action` |             integer | abort/ignore/replace/etc.                 |
+| `flags`           |             integer |                                           |
+
+## `redline_constraint_columns`
+
+| column          |    type |
+| --------------- | ------: |
+| `constraint_id` | integer |
+| `ordinal`       | integer |
+| `column_id`     | integer |
+
+## `redline_stats`
+
+Stub this now so Phase 6 has a place to land.
+
+| column         |    type |
+| -------------- | ------: |
+| `object_id`    | integer |
+| `stat_kind`    | integer |
+| `payload`      |    blob |
+| `analyzed_csn` | integer |
+
+Initial Phase 4 can leave it empty except approximate row counts if already cheap.
+
+---
+
+# Rust core types
+
+## IDs
+
+Use `repr(transparent)` newtypes. Avoid raw `u64` crossing APIs.
+
+```rust
+// redlinedb_catalog/src/ids.rs
+
+use core::fmt;
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[repr(transparent)]
+pub struct ObjectId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[repr(transparent)]
+pub struct SchemaId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[repr(transparent)]
+pub struct TableId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[repr(transparent)]
+pub struct ColumnId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[repr(transparent)]
+pub struct IndexId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[repr(transparent)]
+pub struct ConstraintId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[repr(transparent)]
+pub struct RelationId(pub u64);
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[repr(transparent)]
+pub struct RowId(pub i64);
+
+macro_rules! impl_debug_id {
+    ($t:ty, $name:literal) => {
+        impl fmt::Debug for $t {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}({})", $name, self.0)
+            }
+        }
+    };
+}
+
+impl_debug_id!(ObjectId, "ObjectId");
+impl_debug_id!(SchemaId, "SchemaId");
+impl_debug_id!(TableId, "TableId");
+impl_debug_id!(ColumnId, "ColumnId");
+impl_debug_id!(IndexId, "IndexId");
+impl_debug_id!(ConstraintId, "ConstraintId");
+impl_debug_id!(RelationId, "RelationId");
+impl_debug_id!(RowId, "RowId");
+```
+
+## Names
+
+Use folded names for lookup, original names for display.
+
+```rust
+// redlinedb_catalog/src/names.rs
+
+use std::sync::Arc;
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct DbName {
+    original: Arc<str>,
+    folded: Arc<str>,
+}
+
+impl DbName {
+    pub fn new(input: &str) -> Self {
+        // SQLite-style identifier comparison is mostly ASCII-case-insensitive.
+        // Keep this deterministic and allocation-light. Full Unicode casefolding
+        // can be a compatibility extension later.
+        let folded = input
+            .bytes()
+            .map(|b| {
+                if b'A' <= b && b <= b'Z' {
+                    (b + 32) as char
+                } else {
+                    b as char
+                }
+            })
+            .collect::<String>();
+
+        Self {
+            original: Arc::from(input),
+            folded: Arc::from(folded),
+        }
+    }
+
+    #[inline]
+    pub fn original(&self) -> &str {
+        &self.original
+    }
+
+    #[inline]
+    pub fn folded(&self) -> &str {
+        &self.folded
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct QualifiedName {
+    pub schema: DbName,
+    pub name: DbName,
+}
+```
+
+---
+
+# Value model
+
+You want two value layers:
+
+```text
+ValueRef<'a>     zero-copy borrowed row/API value
+OwnedValue       stable heap-owned value for expressions/plans/defaults
+```
+
+Do not allocate during row decode. Decode returns borrowed text/blob slices.
+
+```rust
+// redlinedb_catalog/src/value.rs
+
+use std::sync::Arc;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum StorageClass {
+    Null,
+    Integer,
+    Real,
+    Text,
+    Blob,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OwnedValue {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(Arc<str>),
+    Blob(Arc<[u8]>),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ValueRef<'a> {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(&'a str),
+    Blob(&'a [u8]),
+}
+
+impl OwnedValue {
+    #[inline]
+    pub fn storage_class(&self) -> StorageClass {
+        match self {
+            OwnedValue::Null => StorageClass::Null,
+            OwnedValue::Integer(_) => StorageClass::Integer,
+            OwnedValue::Real(_) => StorageClass::Real,
+            OwnedValue::Text(_) => StorageClass::Text,
+            OwnedValue::Blob(_) => StorageClass::Blob,
+        }
+    }
+
+    #[inline]
+    pub fn as_ref(&self) -> ValueRef<'_> {
+        match self {
+            OwnedValue::Null => ValueRef::Null,
+            OwnedValue::Integer(v) => ValueRef::Integer(*v),
+            OwnedValue::Real(v) => ValueRef::Real(*v),
+            OwnedValue::Text(v) => ValueRef::Text(v),
+            OwnedValue::Blob(v) => ValueRef::Blob(v),
+        }
+    }
+}
+
+impl<'a> ValueRef<'a> {
+    #[inline]
+    pub fn storage_class(self) -> StorageClass {
+        match self {
+            ValueRef::Null => StorageClass::Null,
+            ValueRef::Integer(_) => StorageClass::Integer,
+            ValueRef::Real(_) => StorageClass::Real,
+            ValueRef::Text(_) => StorageClass::Text,
+            ValueRef::Blob(_) => StorageClass::Blob,
+        }
+    }
+
+    pub fn to_owned_value(self) -> OwnedValue {
+        match self {
+            ValueRef::Null => OwnedValue::Null,
+            ValueRef::Integer(v) => OwnedValue::Integer(v),
+            ValueRef::Real(v) => OwnedValue::Real(v),
+            ValueRef::Text(v) => OwnedValue::Text(Arc::from(v)),
+            ValueRef::Blob(v) => OwnedValue::Blob(Arc::from(v)),
+        }
+    }
+}
+```
+
+---
+
+# Type affinity
+
+SQLite-like type affinity should be computed once at DDL bind time. Do **not** recompute affinity on every insert.
+
+```rust
+// redlinedb_catalog/src/affinity.rs
+
+use crate::value::OwnedValue;
+use std::sync::Arc;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum Affinity {
+    Blob = 0,
+    Text = 1,
+    Numeric = 2,
+    Integer = 3,
+    Real = 4,
+}
+
+impl Affinity {
+    pub fn from_declared_type(declared: Option<&str>) -> Self {
+        let Some(t) = declared else {
+            return Affinity::Blob;
+        };
+
+        let t = t.trim();
+
+        if t.is_empty() {
+            return Affinity::Blob;
+        }
+
+        if contains_ascii_case_insensitive(t, "INT") {
+            return Affinity::Integer;
+        }
+
+        if contains_ascii_case_insensitive(t, "CHAR")
+            || contains_ascii_case_insensitive(t, "CLOB")
+            || contains_ascii_case_insensitive(t, "TEXT")
+        {
+            return Affinity::Text;
+        }
+
+        if contains_ascii_case_insensitive(t, "BLOB") {
+            return Affinity::Blob;
+        }
+
+        if contains_ascii_case_insensitive(t, "REAL")
+            || contains_ascii_case_insensitive(t, "FLOA")
+            || contains_ascii_case_insensitive(t, "DOUB")
+        {
+            return Affinity::Real;
+        }
+
+        Affinity::Numeric
+    }
+}
+
+fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+
+    if n.is_empty() {
+        return true;
+    }
+    if n.len() > h.len() {
+        return false;
+    }
+
+    h.windows(n.len()).any(|w| {
+        w.iter()
+            .zip(n.iter())
+            .all(|(a, b)| a.to_ascii_uppercase() == b.to_ascii_uppercase())
+    })
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CoerceError {
+    #[error("datatype mismatch")]
+    DatatypeMismatch,
+}
+
+pub fn apply_affinity(value: OwnedValue, affinity: Affinity) -> Result<OwnedValue, CoerceError> {
+    use OwnedValue::*;
+
+    match affinity {
+        Affinity::Blob => Ok(value),
+
+        Affinity::Text => match value {
+            Null | Text(_) | Blob(_) => Ok(value),
+            Integer(v) => Ok(Text(Arc::from(v.to_string()))),
+            Real(v) => Ok(Text(Arc::from(format_float(v)))),
+        },
+
+        Affinity::Numeric | Affinity::Integer => match value {
+            Text(s) => Ok(parse_numeric_text(&s).unwrap_or(OwnedValue::Text(s))),
+            Real(v) if real_is_exact_i64(v) => Ok(Integer(v as i64)),
+            _ => Ok(value),
+        },
+
+        Affinity::Real => match value {
+            Integer(v) => Ok(Real(v as f64)),
+            Text(s) => {
+                if let Some(v) = parse_numeric_text(&s) {
+                    match v {
+                        Integer(i) => Ok(Real(i as f64)),
+                        Real(r) => Ok(Real(r)),
+                        other => Ok(other),
+                    }
+                } else {
+                    Ok(Text(s))
+                }
+            }
+            _ => Ok(value),
+        },
+    }
+}
+
+fn parse_numeric_text(s: &str) -> Option<OwnedValue> {
+    let trimmed = s.trim();
+
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(i) = trimmed.parse::<i64>() {
+        return Some(OwnedValue::Integer(i));
+    }
+
+    if let Ok(f) = trimmed.parse::<f64>() {
+        if f.is_finite() && real_is_exact_i64(f) {
+            return Some(OwnedValue::Integer(f as i64));
+        }
+        return Some(OwnedValue::Real(f));
+    }
+
+    None
+}
+
+fn real_is_exact_i64(v: f64) -> bool {
+    if !v.is_finite() {
+        return false;
+    }
+    if v < i64::MIN as f64 || v > i64::MAX as f64 {
+        return false;
+    }
+    let i = v as i64;
+    i as f64 == v
+}
+
+fn format_float(v: f64) -> String {
+    // Good enough for Phase 4. Later, replace with a shortest-roundtrip formatter
+    // such as ryu or a local equivalent.
+    if v.fract() == 0.0 && v.is_finite() {
+        format!("{:.1}", v)
+    } else {
+        v.to_string()
+    }
+}
+```
+
+For `INTEGER PRIMARY KEY` rowid alias columns, do not apply generic affinity. Enforce lossless integer conversion or return datatype mismatch.
+
+---
+
+# Row format
+
+You want compact, zero-copy, versioned, append-friendly row encoding.
+
+A good Phase 4 record format:
+
+```text
+record_v1:
+  u8      format = 0x01
+  varint  column_count
+  varint  serial_type[0]
+  varint  serial_type[1]
+  ...
+  bytes   payloads concatenated
+```
+
+Serial types:
+
+```text
+0        NULL
+1        i8
+2        i16
+3        i32
+4        i64
+5        f64
+16+      variable length:
+           even => BLOB, len = (serial - 16) / 2
+           odd  => TEXT, len = (serial - 17) / 2
+```
+
+This gives:
+
+```text
+NULL      1 byte header, 0 payload
+small int 1 byte header, 1/2/4 payload
+i64       1 byte header, 8 payload
+f64       1 byte header, 8 payload
+text/blob varint header, exact payload
+```
+
+No per-column length table. Decode scans serials once into scratch arrays.
+
+```rust
+// redlinedb_catalog/src/record.rs
+
+use crate::value::ValueRef;
+
+const RECORD_V1: u8 = 0x01;
+
+const ST_NULL: u64 = 0;
+const ST_I8: u64 = 1;
+const ST_I16: u64 = 2;
+const ST_I32: u64 = 3;
+const ST_I64: u64 = 4;
+const ST_F64: u64 = 5;
+const ST_VAR_BASE: u64 = 16;
+
+#[derive(Debug, thiserror::Error)]
+pub enum RecordError {
+    #[error("record is empty")]
+    Empty,
+    #[error("unknown record format {0}")]
+    UnknownFormat(u8),
+    #[error("truncated record")]
+    Truncated,
+    #[error("invalid utf8 text")]
+    InvalidUtf8,
+    #[error("invalid serial type {0}")]
+    InvalidSerial(u64),
+    #[error("column out of bounds")]
+    ColumnOutOfBounds,
+    #[error("too many columns")]
+    TooManyColumns,
+    #[error("varint overflow")]
+    VarintOverflow,
+}
+
+#[derive(Debug, Default)]
+pub struct RecordScratch {
+    serials: Vec<u64>,
+    offsets: Vec<usize>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct RecordRef<'a> {
+    bytes: &'a [u8],
+}
+
+impl<'a> RecordRef<'a> {
+    pub fn new(bytes: &'a [u8]) -> Result<Self, RecordError> {
+        if bytes.is_empty() {
+            return Err(RecordError::Empty);
+        }
+        if bytes[0] != RECORD_V1 {
+            return Err(RecordError::UnknownFormat(bytes[0]));
+        }
+        Ok(Self { bytes })
+    }
+
+    pub fn decode_into(&self, scratch: &mut RecordScratch) -> Result<(), RecordError> {
+        scratch.serials.clear();
+        scratch.offsets.clear();
+
+        let mut pos = 1;
+        let ncols = get_varint(self.bytes, &mut pos)? as usize;
+
+        if ncols > 32_768 {
+            return Err(RecordError::TooManyColumns);
+        }
+
+        scratch.serials.reserve(ncols);
+        scratch.offsets.reserve(ncols);
+
+        for _ in 0..ncols {
+            let st = get_varint(self.bytes, &mut pos)?;
+            scratch.serials.push(st);
+        }
+
+        let mut payload = pos;
+
+        for &st in &scratch.serials {
+            scratch.offsets.push(payload);
+            payload = payload
+                .checked_add(serial_payload_len(st)?)
+                .ok_or(RecordError::Truncated)?;
+            if payload > self.bytes.len() {
+                return Err(RecordError::Truncated);
+            }
+        }
+
+        if payload != self.bytes.len() {
+            // You may choose to allow trailing bytes for future extension, but
+            // failing loudly is better until format evolution is explicit.
+            return Err(RecordError::Truncated);
+        }
+
+        Ok(())
+    }
+
+    pub fn value_at(
+        &self,
+        scratch: &RecordScratch,
+        ordinal: usize,
+    ) -> Result<ValueRef<'a>, RecordError> {
+        let st = *scratch
+            .serials
+            .get(ordinal)
+            .ok_or(RecordError::ColumnOutOfBounds)?;
+        let off = *scratch
+            .offsets
+            .get(ordinal)
+            .ok_or(RecordError::ColumnOutOfBounds)?;
+
+        match st {
+            ST_NULL => Ok(ValueRef::Null),
+            ST_I8 => {
+                let b = read_exact(self.bytes, off, 1)?[0];
+                Ok(ValueRef::Integer((b as i8) as i64))
+            }
+            ST_I16 => {
+                let mut buf = [0u8; 2];
+                buf.copy_from_slice(read_exact(self.bytes, off, 2)?);
+                Ok(ValueRef::Integer(i16::from_le_bytes(buf) as i64))
+            }
+            ST_I32 => {
+                let mut buf = [0u8; 4];
+                buf.copy_from_slice(read_exact(self.bytes, off, 4)?);
+                Ok(ValueRef::Integer(i32::from_le_bytes(buf) as i64))
+            }
+            ST_I64 => {
+                let mut buf = [0u8; 8];
+                buf.copy_from_slice(read_exact(self.bytes, off, 8)?);
+                Ok(ValueRef::Integer(i64::from_le_bytes(buf)))
+            }
+            ST_F64 => {
+                let mut buf = [0u8; 8];
+                buf.copy_from_slice(read_exact(self.bytes, off, 8)?);
+                Ok(ValueRef::Real(f64::from_le_bytes(buf)))
+            }
+            s if s >= ST_VAR_BASE => {
+                let len = var_payload_len(s)?;
+                let payload = read_exact(self.bytes, off, len)?;
+
+                if is_text_serial(s) {
+                    let text = std::str::from_utf8(payload).map_err(|_| RecordError::InvalidUtf8)?;
+                    Ok(ValueRef::Text(text))
+                } else {
+                    Ok(ValueRef::Blob(payload))
+                }
+            }
+            other => Err(RecordError::InvalidSerial(other)),
+        }
+    }
+
+    pub fn column_count(&self) -> Result<usize, RecordError> {
+        let mut pos = 1;
+        Ok(get_varint(self.bytes, &mut pos)? as usize)
+    }
+}
+
+pub fn encode_record(values: &[ValueRef<'_>], out: &mut Vec<u8>) -> Result<(), RecordError> {
+    out.clear();
+    out.push(RECORD_V1);
+    put_varint(values.len() as u64, out);
+
+    for &v in values {
+        put_varint(serial_type(v), out);
+    }
+
+    for &v in values {
+        match v {
+            ValueRef::Null => {}
+            ValueRef::Integer(i) => encode_int_payload(i, out),
+            ValueRef::Real(f) => out.extend_from_slice(&canonical_f64(f).to_le_bytes()),
+            ValueRef::Text(s) => out.extend_from_slice(s.as_bytes()),
+            ValueRef::Blob(b) => out.extend_from_slice(b),
+        }
+    }
+
+    Ok(())
+}
+
+fn serial_type(v: ValueRef<'_>) -> u64 {
+    match v {
+        ValueRef::Null => ST_NULL,
+        ValueRef::Integer(i) if i8::try_from(i).is_ok() => ST_I8,
+        ValueRef::Integer(i) if i16::try_from(i).is_ok() => ST_I16,
+        ValueRef::Integer(i) if i32::try_from(i).is_ok() => ST_I32,
+        ValueRef::Integer(_) => ST_I64,
+        ValueRef::Real(_) => ST_F64,
+        ValueRef::Blob(b) => ST_VAR_BASE + (b.len() as u64) * 2,
+        ValueRef::Text(s) => ST_VAR_BASE + (s.len() as u64) * 2 + 1,
+    }
+}
+
+fn encode_int_payload(i: i64, out: &mut Vec<u8>) {
+    if let Ok(v) = i8::try_from(i) {
+        out.push(v as u8);
+    } else if let Ok(v) = i16::try_from(i) {
+        out.extend_from_slice(&v.to_le_bytes());
+    } else if let Ok(v) = i32::try_from(i) {
+        out.extend_from_slice(&v.to_le_bytes());
+    } else {
+        out.extend_from_slice(&i.to_le_bytes());
+    }
+}
+
+fn canonical_f64(f: f64) -> f64 {
+    if f == 0.0 {
+        0.0
+    } else if f.is_nan() {
+        f64::NAN
+    } else {
+        f
+    }
+}
+
+fn serial_payload_len(st: u64) -> Result<usize, RecordError> {
+    match st {
+        ST_NULL => Ok(0),
+        ST_I8 => Ok(1),
+        ST_I16 => Ok(2),
+        ST_I32 => Ok(4),
+        ST_I64 | ST_F64 => Ok(8),
+        s if s >= ST_VAR_BASE => var_payload_len(s),
+        other => Err(RecordError::InvalidSerial(other)),
+    }
+}
+
+fn var_payload_len(st: u64) -> Result<usize, RecordError> {
+    if st < ST_VAR_BASE {
+        return Err(RecordError::InvalidSerial(st));
+    }
+
+    let len = if is_text_serial(st) {
+        (st - ST_VAR_BASE - 1) / 2
+    } else {
+        (st - ST_VAR_BASE) / 2
+    };
+
+    usize::try_from(len).map_err(|_| RecordError::InvalidSerial(st))
+}
+
+#[inline]
+fn is_text_serial(st: u64) -> bool {
+    st >= ST_VAR_BASE && ((st - ST_VAR_BASE) & 1) == 1
+}
+
+fn read_exact(bytes: &[u8], off: usize, len: usize) -> Result<&[u8], RecordError> {
+    let end = off.checked_add(len).ok_or(RecordError::Truncated)?;
+    bytes.get(off..end).ok_or(RecordError::Truncated)
+}
+
+fn put_varint(mut v: u64, out: &mut Vec<u8>) {
+    while v >= 0x80 {
+        out.push((v as u8) | 0x80);
+        v >>= 7;
+    }
+    out.push(v as u8);
+}
+
+fn get_varint(bytes: &[u8], pos: &mut usize) -> Result<u64, RecordError> {
+    let mut shift = 0;
+    let mut out = 0u64;
+
+    loop {
+        let b = *bytes.get(*pos).ok_or(RecordError::Truncated)?;
+        *pos += 1;
+
+        out |= ((b & 0x7f) as u64) << shift;
+
+        if (b & 0x80) == 0 {
+            return Ok(out);
+        }
+
+        shift += 7;
+        if shift >= 64 {
+            return Err(RecordError::VarintOverflow);
+        }
+    }
+}
+```
+
+For hot scans, the executor should allocate one `RecordScratch` per cursor and reuse it for every row.
+
+---
+
+# Index key encoding
+
+Record encoding is for row payloads. Index keys need lexicographic byte order to match SQL ordering. Use a separate `key.rs`.
+
+Basic ascending key part encoding:
+
+```text
+NULL    => 0x00
+INTEGER => 0x10 + sign-flipped big-endian i64
+REAL    => 0x20 + sortable f64 bits
+TEXT    => 0x30 + escaped collation bytes + terminator
+BLOB    => 0x40 + escaped bytes + terminator
+```
+
+Append `RowId` to non-unique indexes so duplicate keys are unique in the B+tree.
+
+For unique indexes, do not enforce uniqueness if any key column is `NULL` in SQLite-compat mode. Instead:
+
+```text
+UNIQUE(a, b)
+  if a or b is NULL:
+      index key = key(a,b) + rowid suffix
+      no conflict probe
+  else:
+      index key = key(a,b)
+      conflict probe required
+```
+
+Sketch:
+
+```rust
+// redlinedb_catalog/src/key.rs
+
+use crate::ids::RowId;
+use crate::value::ValueRef;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SortDir {
+    Asc,
+    Desc,
+}
+
+pub fn encode_index_key(
+    parts: &[ValueRef<'_>],
+    dirs: &[SortDir],
+    rowid_suffix: Option<RowId>,
+    out: &mut Vec<u8>,
+) {
+    debug_assert_eq!(parts.len(), dirs.len());
+
+    out.clear();
+
+    for (&value, &dir) in parts.iter().zip(dirs.iter()) {
+        let start = out.len();
+        encode_key_part_asc(value, out);
+
+        if dir == SortDir::Desc {
+            for b in &mut out[start..] {
+                *b = !*b;
+            }
+        }
+
+        // Part boundary. This keeps composite keys unambiguous.
+        out.push(0xff);
+    }
+
+    if let Some(rowid) = rowid_suffix {
+        out.push(0xfe);
+        encode_i64_sortable(rowid.0, out);
+    }
+}
+
+pub fn has_null_part(parts: &[ValueRef<'_>]) -> bool {
+    parts.iter().any(|v| matches!(v, ValueRef::Null))
+}
+
+fn encode_key_part_asc(v: ValueRef<'_>, out: &mut Vec<u8>) {
+    match v {
+        ValueRef::Null => out.push(0x00),
+        ValueRef::Integer(i) => {
+            out.push(0x10);
+            encode_i64_sortable(i, out);
+        }
+        ValueRef::Real(f) => {
+            out.push(0x20);
+            encode_f64_sortable(f, out);
+        }
+        ValueRef::Text(s) => {
+            out.push(0x30);
+            encode_escaped_bytes(s.as_bytes(), out);
+        }
+        ValueRef::Blob(b) => {
+            out.push(0x40);
+            encode_escaped_bytes(b, out);
+        }
+    }
+}
+
+fn encode_i64_sortable(i: i64, out: &mut Vec<u8>) {
+    let sortable = (i as u64) ^ 0x8000_0000_0000_0000;
+    out.extend_from_slice(&sortable.to_be_bytes());
+}
+
+fn encode_f64_sortable(f: f64, out: &mut Vec<u8>) {
+    let f = if f == 0.0 { 0.0 } else { f };
+    let bits = f.to_bits();
+
+    let sortable = if (bits & 0x8000_0000_0000_0000) != 0 {
+        !bits
+    } else {
+        bits ^ 0x8000_0000_0000_0000
+    };
+
+    out.extend_from_slice(&sortable.to_be_bytes());
+}
+
+fn encode_escaped_bytes(bytes: &[u8], out: &mut Vec<u8>) {
+    for &b in bytes {
+        match b {
+            0x00 => {
+                out.push(0x00);
+                out.push(0xff);
+            }
+            _ => out.push(b),
+        }
+    }
+
+    // Terminator lower than escaped 0x00, so prefixes sort correctly.
+    out.push(0x00);
+    out.push(0x00);
+}
+```
+
+Later, collations can transform `TEXT` before `encode_escaped_bytes`.
+
+---
+
+# Schema snapshot
+
+The runtime schema should be immutable and cheap to clone.
+
+```rust
+// redlinedb_catalog/src/schema.rs
+
+use crate::affinity::Affinity;
+use crate::ids::*;
+use crate::key::SortDir;
+use crate::names::DbName;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum TableState {
+    Ready = 1,
+    Dropped = 2,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum IndexState {
+    Ready = 1,
+    Building = 2,
+    Dropped = 3,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum ColumnStorage {
+    Normal = 0,
+    RowIdAlias = 1,
+}
+
+#[derive(Debug)]
+pub struct SchemaSnapshot {
+    pub version: u64,
+    pub main_schema_id: SchemaId,
+
+    pub schemas_by_name: HashMap<Arc<str>, SchemaId>,
+    pub tables_by_id: HashMap<TableId, Arc<TableDef>>,
+    pub tables_by_name: HashMap<(SchemaId, Arc<str>), Arc<TableDef>>,
+    pub indexes_by_id: HashMap<IndexId, Arc<IndexDef>>,
+}
+
+impl SchemaSnapshot {
+    #[inline]
+    pub fn lookup_table(&self, schema_id: SchemaId, folded_name: &str) -> Option<Arc<TableDef>> {
+        self.tables_by_name
+            .get(&(schema_id, Arc::<str>::from(folded_name)))
+            .cloned()
+    }
+
+    #[inline]
+    pub fn table_by_id(&self, id: TableId) -> Option<Arc<TableDef>> {
+        self.tables_by_id.get(&id).cloned()
+    }
+}
+
+#[derive(Debug)]
+pub struct TableDef {
+    pub table_id: TableId,
+    pub schema_id: SchemaId,
+    pub name: DbName,
+    pub relation_id: RelationId,
+    pub row_format_id: u32,
+    pub flags: TableFlags,
+    pub state: TableState,
+    pub columns: Arc<[ColumnDef]>,
+    pub indexes: Arc<[Arc<IndexDef>]>,
+    pub constraints: Arc<[CompiledConstraint]>,
+    pub sql: Option<Arc<str>>,
+    pub runtime: Arc<TableRuntime>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct TableFlags {
+    pub has_rowid: bool,
+    pub strict: bool,
+    pub system: bool,
+}
+
+#[derive(Debug)]
+pub struct ColumnDef {
+    pub column_id: ColumnId,
+    pub ordinal: u16,
+    pub name: DbName,
+    pub declared_type: Option<Arc<str>>,
+    pub affinity: Affinity,
+    pub storage: ColumnStorage,
+    pub not_null: bool,
+    pub default: Option<CompiledDefault>,
+    pub collation: Arc<str>,
+}
+
+#[derive(Debug)]
+pub struct IndexDef {
+    pub index_id: IndexId,
+    pub table_id: TableId,
+    pub name: DbName,
+    pub relation_id: RelationId,
+    pub is_unique: bool,
+    pub is_primary: bool,
+    pub state: IndexState,
+    pub columns: Arc<[IndexColumnDef]>,
+    pub origin: IndexOrigin,
+}
+
+#[derive(Debug)]
+pub struct IndexColumnDef {
+    pub column_id: ColumnId,
+    pub ordinal: u16,
+    pub sort_dir: SortDir,
+    pub collation: Arc<str>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum IndexOrigin {
+    User = 0,
+    PrimaryKey = 1,
+    UniqueConstraint = 2,
+}
+
+#[derive(Debug)]
+pub struct TableRuntime {
+    pub table_id: TableId,
+
+    // Rowid allocation is statement-level hot but not per row if batches reserve ranges.
+    pub next_rowid_hint: AtomicI64,
+
+    // DDL gate for create-index/drop-table correctness.
+    pub write_blocked: AtomicBool,
+    pub active_writers: AtomicU64,
+}
+
+impl TableRuntime {
+    pub fn new(table_id: TableId, next_rowid_hint: i64) -> Self {
+        Self {
+            table_id,
+            next_rowid_hint: AtomicI64::new(next_rowid_hint),
+            write_blocked: AtomicBool::new(false),
+            active_writers: AtomicU64::new(0),
+        }
+    }
+
+    pub fn enter_writer(&self) -> Result<WritePermit<'_>, SchemaAccessError> {
+        if self.write_blocked.load(Ordering::Acquire) {
+            return Err(SchemaAccessError::TableWriteBlocked);
+        }
+
+        self.active_writers.fetch_add(1, Ordering::AcqRel);
+
+        if self.write_blocked.load(Ordering::Acquire) {
+            self.active_writers.fetch_sub(1, Ordering::AcqRel);
+            return Err(SchemaAccessError::TableWriteBlocked);
+        }
+
+        Ok(WritePermit { runtime: self })
+    }
+
+    pub fn block_new_writers_and_wait(&self) {
+        self.write_blocked.store(true, Ordering::Release);
+
+        while self.active_writers.load(Ordering::Acquire) != 0 {
+            std::thread::yield_now();
+        }
+    }
+
+    pub fn unblock_writers(&self) {
+        self.write_blocked.store(false, Ordering::Release);
+    }
+
+    pub fn allocate_rowid(&self) -> RowId {
+        let v = self.next_rowid_hint.fetch_add(1, Ordering::AcqRel);
+        RowId(v)
+    }
+
+    pub fn observe_explicit_rowid(&self, rowid: RowId) {
+        let mut cur = self.next_rowid_hint.load(Ordering::Acquire);
+        let wanted = rowid.0.saturating_add(1);
+
+        while wanted > cur {
+            match self.next_rowid_hint.compare_exchange_weak(
+                cur,
+                wanted,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(next) => cur = next,
+            }
+        }
+    }
+}
+
+pub struct WritePermit<'a> {
+    runtime: &'a TableRuntime,
+}
+
+impl Drop for WritePermit<'_> {
+    fn drop(&mut self) {
+        self.runtime.active_writers.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SchemaAccessError {
+    #[error("table is blocked for schema change")]
+    TableWriteBlocked,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledDefault {
+    pub program: Arc<[crate::expr::Op]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledConstraint {
+    pub id: ConstraintId,
+    pub kind: ConstraintKind,
+    pub name: Option<Arc<str>>,
+    pub program: Option<Arc<[crate::expr::Op]>>,
+    pub column_id: Option<ColumnId>,
+    pub conflict: ConflictAction,
+    pub depends_on_columns: ColumnSet,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum ConstraintKind {
+    PrimaryKey = 1,
+    Unique = 2,
+    NotNull = 3,
+    Check = 4,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum ConflictAction {
+    Abort = 0,
+    Rollback = 1,
+    Fail = 2,
+    Ignore = 3,
+    Replace = 4,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ColumnSet {
+    bits: Arc<[u64]>,
+}
+
+impl ColumnSet {
+    pub fn empty() -> Self {
+        Self { bits: Arc::from([]) }
+    }
+
+    pub fn contains_ordinal(&self, ordinal: usize) -> bool {
+        let word = ordinal / 64;
+        let bit = ordinal % 64;
+        self.bits
+            .get(word)
+            .is_some_and(|w| (w & (1u64 << bit)) != 0)
+    }
+}
+```
+
+`HashMap<(SchemaId, Arc<str>), ...>` can be optimized later with custom borrowed lookup to avoid allocating an `Arc<str>` in `lookup_table`. For Phase 4, prepared statements should do lookup once, so it is not the primary bottleneck.
+
+---
+
+# Catalog manager
+
+Use `arc-swap` or an equivalent local implementation for lock-free snapshot reads.
+
+```rust
+// redlinedb_catalog/src/catalog.rs
+
+use crate::schema::SchemaSnapshot;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+pub struct CatalogManager {
+    current: arc_swap::ArcSwap<SchemaSnapshot>,
+    schema_version: AtomicU64,
+    ddl_lock: parking_lot::Mutex<()>,
+}
+
+impl CatalogManager {
+    pub fn new(initial: Arc<SchemaSnapshot>) -> Self {
+        let version = initial.version;
+
+        Self {
+            current: arc_swap::ArcSwap::from(initial),
+            schema_version: AtomicU64::new(version),
+            ddl_lock: parking_lot::Mutex::new(()),
+        }
+    }
+
+    #[inline]
+    pub fn current(&self) -> Arc<SchemaSnapshot> {
+        self.current.load_full()
+    }
+
+    #[inline]
+    pub fn version(&self) -> u64 {
+        self.schema_version.load(Ordering::Acquire)
+    }
+
+    pub fn publish(&self, next: Arc<SchemaSnapshot>) {
+        let version = next.version;
+        self.current.store(next);
+        self.schema_version.store(version, Ordering::Release);
+    }
+
+    pub fn lock_ddl(&self) -> parking_lot::MutexGuard<'_, ()> {
+        self.ddl_lock.lock()
+    }
+}
+```
+
+Hot path prepared statement check:
+
+```rust
+pub struct PreparedPlan {
+    schema_version: u64,
+    // plan tree holds Arc<TableDef>, Arc<IndexDef>, compiled row encoder, etc.
+}
+
+impl PreparedPlan {
+    #[inline]
+    pub fn validate_schema(&self, catalog: &CatalogManager) -> Result<(), PlanError> {
+        if catalog.version() != self.schema_version {
+            return Err(PlanError::SchemaChanged);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PlanError {
+    #[error("schema changed")]
+    SchemaChanged,
+}
+```
+
+Simple global invalidation is enough for Phase 4. Later, you can keep per-object epochs and only invalidate plans whose dependency set changed.
+
+---
+
+# DDL specs
+
+Do not couple Phase 4 to the Phase 5 parser. Use typed specs.
+
+```rust
+// redlinedb_catalog/src/ddl_spec.rs
+
+use crate::affinity::Affinity;
+use crate::names::DbName;
+use crate::schema::{ConflictAction, SortDir};
+use crate::value::OwnedValue;
+
+#[derive(Debug, Clone)]
+pub struct CreateTableSpec {
+    pub schema: Option<DbName>,
+    pub name: DbName,
+    pub if_not_exists: bool,
+    pub columns: Vec<ColumnSpec>,
+    pub constraints: Vec<TableConstraintSpec>,
+    pub strict: bool,
+    pub without_rowid: bool,
+    pub normalized_sql: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ColumnSpec {
+    pub name: DbName,
+    pub declared_type: Option<String>,
+    pub constraints: Vec<ColumnConstraintSpec>,
+    pub collation: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ColumnConstraintSpec {
+    PrimaryKey {
+        sort_dir: SortDir,
+        conflict: ConflictAction,
+    },
+    Unique {
+        conflict: ConflictAction,
+    },
+    NotNull {
+        conflict: ConflictAction,
+    },
+    Default {
+        expr: ExprAst,
+        normalized_sql: String,
+    },
+    Check {
+        expr: ExprAst,
+        normalized_sql: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum TableConstraintSpec {
+    PrimaryKey {
+        name: Option<DbName>,
+        columns: Vec<IndexedColumnSpec>,
+        conflict: ConflictAction,
+    },
+    Unique {
+        name: Option<DbName>,
+        columns: Vec<IndexedColumnSpec>,
+        conflict: ConflictAction,
+    },
+    Check {
+        name: Option<DbName>,
+        expr: ExprAst,
+        normalized_sql: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexedColumnSpec {
+    pub name: DbName,
+    pub sort_dir: SortDir,
+    pub collation: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ExprAst {
+    Literal(OwnedValue),
+    ColumnRef(DbName),
+    Unary {
+        op: UnaryOp,
+        expr: Box<ExprAst>,
+    },
+    Binary {
+        op: BinaryOp,
+        left: Box<ExprAst>,
+        right: Box<ExprAst>,
+    },
+    IsNull(Box<ExprAst>),
+    IsNotNull(Box<ExprAst>),
+    Function {
+        name: DbName,
+        args: Vec<ExprAst>,
+    },
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum UnaryOp {
+    Not,
+    Neg,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum BinaryOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    And,
+    Or,
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+```
+
+---
+
+# Expression VM for defaults and CHECK
+
+Do not evaluate CHECK constraints by walking boxed AST on every row. Compile once into compact bytecode inside `TableDef`.
+
+```rust
+// redlinedb_catalog/src/expr.rs
+
+use crate::value::{OwnedValue, ValueRef};
+
+#[derive(Debug, Clone)]
+pub enum Op {
+    Const(OwnedValue),
+    Column(u16),
+
+    IsNull,
+    IsNotNull,
+
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+
+    And,
+    Or,
+    Not,
+
+    Add,
+    Sub,
+    Mul,
+    Div,
+
+    CastNumeric,
+
+    CurrentTimestamp,
+}
+
+#[derive(Debug, Clone)]
+pub enum EvalValue<'a> {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(&'a str),
+    Blob(&'a [u8]),
+    Owned(OwnedValue),
+}
+
+pub trait RowValueSource {
+    fn value_at(&self, ordinal: u16) -> ValueRef<'_>;
+}
+
+#[derive(Debug, Default)]
+pub struct EvalScratch {
+    stack: Vec<OwnedValue>,
+}
+
+impl EvalScratch {
+    pub fn clear(&mut self) {
+        self.stack.clear();
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ExprError {
+    #[error("stack underflow")]
+    StackUnderflow,
+    #[error("invalid column reference")]
+    InvalidColumn,
+    #[error("unsupported expression")]
+    Unsupported,
+}
+
+pub fn eval_expr(
+    program: &[Op],
+    row: &dyn RowValueSource,
+    scratch: &mut EvalScratch,
+) -> Result<OwnedValue, ExprError> {
+    scratch.clear();
+
+    for op in program {
+        match op {
+            Op::Const(v) => scratch.stack.push(v.clone()),
+
+            Op::Column(ord) => scratch
+                .stack
+                .push(row.value_at(*ord).to_owned_value()),
+
+            Op::IsNull => {
+                let v = pop(&mut scratch.stack)?;
+                scratch.stack.push(OwnedValue::Integer(matches!(v, OwnedValue::Null) as i64));
+            }
+
+            Op::IsNotNull => {
+                let v = pop(&mut scratch.stack)?;
+                scratch.stack.push(OwnedValue::Integer(!matches!(v, OwnedValue::Null) as i64));
+            }
+
+            Op::Not => {
+                let v = pop(&mut scratch.stack)?;
+                scratch.stack.push(sql_not(v));
+            }
+
+            Op::And => {
+                let r = pop(&mut scratch.stack)?;
+                let l = pop(&mut scratch.stack)?;
+                scratch.stack.push(sql_and(l, r));
+            }
+
+            Op::Or => {
+                let r = pop(&mut scratch.stack)?;
+                let l = pop(&mut scratch.stack)?;
+                scratch.stack.push(sql_or(l, r));
+            }
+
+            Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
+                let r = pop(&mut scratch.stack)?;
+                let l = pop(&mut scratch.stack)?;
+                scratch.stack.push(compare_values(l, r, op)?);
+            }
+
+            Op::Add | Op::Sub | Op::Mul | Op::Div => {
+                let r = pop(&mut scratch.stack)?;
+                let l = pop(&mut scratch.stack)?;
+                scratch.stack.push(arithmetic(l, r, op)?);
+            }
+
+            Op::CastNumeric => {
+                let v = pop(&mut scratch.stack)?;
+                scratch.stack.push(cast_numeric(v));
+            }
+
+            Op::CurrentTimestamp => {
+                // Phase 4 placeholder. Wire to engine clock abstraction for deterministic tests.
+                scratch.stack.push(OwnedValue::Text(std::sync::Arc::from(
+                    "1970-01-01 00:00:00",
+                )));
+            }
+        }
+    }
+
+    if scratch.stack.len() != 1 {
+        return Err(ExprError::Unsupported);
+    }
+
+    Ok(scratch.stack.pop().unwrap())
+}
+
+fn pop(stack: &mut Vec<OwnedValue>) -> Result<OwnedValue, ExprError> {
+    stack.pop().ok_or(ExprError::StackUnderflow)
+}
+
+fn truthy(v: &OwnedValue) -> Option<bool> {
+    match v {
+        OwnedValue::Null => None,
+        OwnedValue::Integer(i) => Some(*i != 0),
+        OwnedValue::Real(f) => Some(*f != 0.0),
+        OwnedValue::Text(s) => {
+            if let Ok(i) = s.trim().parse::<i64>() {
+                Some(i != 0)
+            } else if let Ok(f) = s.trim().parse::<f64>() {
+                Some(f != 0.0)
+            } else {
+                Some(false)
+            }
+        }
+        OwnedValue::Blob(_) => Some(false),
+    }
+}
+
+fn sql_not(v: OwnedValue) -> OwnedValue {
+    match truthy(&v) {
+        None => OwnedValue::Null,
+        Some(b) => OwnedValue::Integer((!b) as i64),
+    }
+}
+
+fn sql_and(l: OwnedValue, r: OwnedValue) -> OwnedValue {
+    match (truthy(&l), truthy(&r)) {
+        (Some(false), _) | (_, Some(false)) => OwnedValue::Integer(0),
+        (Some(true), Some(true)) => OwnedValue::Integer(1),
+        _ => OwnedValue::Null,
+    }
+}
+
+fn sql_or(l: OwnedValue, r: OwnedValue) -> OwnedValue {
+    match (truthy(&l), truthy(&r)) {
+        (Some(true), _) | (_, Some(true)) => OwnedValue::Integer(1),
+        (Some(false), Some(false)) => OwnedValue::Integer(0),
+        _ => OwnedValue::Null,
+    }
+}
+
+fn compare_values(l: OwnedValue, r: OwnedValue, op: &Op) -> Result<OwnedValue, ExprError> {
+    if matches!(l, OwnedValue::Null) || matches!(r, OwnedValue::Null) {
+        return Ok(OwnedValue::Null);
+    }
+
+    let ord = compare_non_null(&l, &r);
+
+    let result = match op {
+        Op::Eq => ord == std::cmp::Ordering::Equal,
+        Op::Ne => ord != std::cmp::Ordering::Equal,
+        Op::Lt => ord == std::cmp::Ordering::Less,
+        Op::Le => ord != std::cmp::Ordering::Greater,
+        Op::Gt => ord == std::cmp::Ordering::Greater,
+        Op::Ge => ord != std::cmp::Ordering::Less,
+        _ => return Err(ExprError::Unsupported),
+    };
+
+    Ok(OwnedValue::Integer(result as i64))
+}
+
+fn compare_non_null(l: &OwnedValue, r: &OwnedValue) -> std::cmp::Ordering {
+    use OwnedValue::*;
+
+    match (l, r) {
+        (Integer(a), Integer(b)) => a.cmp(b),
+        (Real(a), Real(b)) => a.total_cmp(b),
+        (Integer(a), Real(b)) => (*a as f64).total_cmp(b),
+        (Real(a), Integer(b)) => a.total_cmp(&(*b as f64)),
+        (Text(a), Text(b)) => a.as_ref().cmp(b.as_ref()),
+        (Blob(a), Blob(b)) => a.as_ref().cmp(b.as_ref()),
+
+        // Storage-class ordering for mixed types. Tune later for exact SQLite behavior.
+        _ => storage_rank(l).cmp(&storage_rank(r)),
+    }
+}
+
+fn storage_rank(v: &OwnedValue) -> u8 {
+    match v {
+        OwnedValue::Null => 0,
+        OwnedValue::Integer(_) => 1,
+        OwnedValue::Real(_) => 1,
+        OwnedValue::Text(_) => 2,
+        OwnedValue::Blob(_) => 3,
+    }
+}
+
+fn arithmetic(l: OwnedValue, r: OwnedValue, op: &Op) -> Result<OwnedValue, ExprError> {
+    let Some(a) = numeric_as_f64(&l) else {
+        return Ok(OwnedValue::Null);
+    };
+    let Some(b) = numeric_as_f64(&r) else {
+        return Ok(OwnedValue::Null);
+    };
+
+    let out = match op {
+        Op::Add => a + b,
+        Op::Sub => a - b,
+        Op::Mul => a * b,
+        Op::Div => {
+            if b == 0.0 {
+                return Ok(OwnedValue::Null);
+            }
+            a / b
+        }
+        _ => return Err(ExprError::Unsupported),
+    };
+
+    if out.fract() == 0.0 && out >= i64::MIN as f64 && out <= i64::MAX as f64 {
+        Ok(OwnedValue::Integer(out as i64))
+    } else {
+        Ok(OwnedValue::Real(out))
+    }
+}
+
+fn numeric_as_f64(v: &OwnedValue) -> Option<f64> {
+    match v {
+        OwnedValue::Integer(i) => Some(*i as f64),
+        OwnedValue::Real(f) => Some(*f),
+        OwnedValue::Text(s) => s.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn cast_numeric(v: OwnedValue) -> OwnedValue {
+    match v {
+        OwnedValue::Text(s) => {
+            if let Ok(i) = s.trim().parse::<i64>() {
+                OwnedValue::Integer(i)
+            } else if let Ok(f) = s.trim().parse::<f64>() {
+                OwnedValue::Real(f)
+            } else {
+                OwnedValue::Integer(0)
+            }
+        }
+        other => other,
+    }
+}
+```
+
+For `CHECK`, after evaluation:
+
+```rust
+pub fn check_constraint_passes(v: &OwnedValue) -> bool {
+    match v {
+        // SQLite-like: CHECK passes if NULL or non-zero.
+        OwnedValue::Null => true,
+        OwnedValue::Integer(i) => *i != 0,
+        OwnedValue::Real(f) => *f != 0.0,
+        OwnedValue::Text(s) => {
+            if let Ok(i) = s.trim().parse::<i64>() {
+                i != 0
+            } else if let Ok(f) = s.trim().parse::<f64>() {
+                f != 0.0
+            } else {
+                false
+            }
+        }
+        OwnedValue::Blob(_) => false,
+    }
+}
+```
+
+---
+
+# Constraint enforcement pipeline
+
+On `INSERT`:
+
+```text
+1. Resolve table snapshot.
+2. Take table write permit.
+3. Build logical row:
+   - explicit values
+   - defaults
+   - generated rowid if needed
+4. Apply column affinity.
+5. Enforce rowid/integer-primary-key rules.
+6. Enforce NOT NULL.
+7. Evaluate CHECK constraints.
+8. For each unique/PK backing index:
+   - build key
+   - if NULL-distinct mode and any key part NULL: skip conflict check
+   - otherwise acquire unique key lock
+   - probe visible conflicting row
+9. Encode heap record.
+10. Heap insert.
+11. Insert index entries.
+12. Commit transaction.
+```
+
+On `UPDATE`:
+
+```text
+1. Read old visible row.
+2. Build new row.
+3. Apply affinity only to changed/new values.
+4. Check only constraints whose dependency set intersects changed columns.
+5. For unique indexes affected by changed columns:
+   - delete-mark old index entry
+   - conflict-check new entry
+   - insert new entry
+6. Heap update.
+```
+
+Constraint code sketch:
+
+```rust
+// redlinedb_catalog/src/constraint.rs
+
+use crate::expr::{eval_expr, EvalScratch, RowValueSource};
+use crate::key::{encode_index_key, has_null_part};
+use crate::schema::{CompiledConstraint, ConstraintKind, IndexDef, TableDef};
+use crate::value::{OwnedValue, ValueRef};
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConstraintError {
+    #[error("NOT NULL constraint failed: {0}")]
+    NotNull(String),
+
+    #[error("CHECK constraint failed: {0}")]
+    Check(String),
+
+    #[error("UNIQUE constraint failed: {0}")]
+    Unique(String),
+
+    #[error("PRIMARY KEY constraint failed: {0}")]
+    PrimaryKey(String),
+
+    #[error(transparent)]
+    Expr(#[from] crate::expr::ExprError),
+}
+
+pub trait UniqueIndexProbe {
+    fn visible_conflict_exists(&mut self, index: &IndexDef, encoded_key: &[u8]) -> Result<bool, ConstraintError>;
+    fn lock_unique_key(&mut self, index: &IndexDef, encoded_key: &[u8]) -> Result<(), ConstraintError>;
+}
+
+pub fn enforce_row_constraints(
+    table: &TableDef,
+    row: &dyn RowValueSource,
+    scratch: &mut EvalScratch,
+) -> Result<(), ConstraintError> {
+    for c in table.constraints.iter() {
+        match c.kind {
+            ConstraintKind::NotNull => {
+                let col_id = c.column_id.expect("not-null constraint must have column");
+                let col = table
+                    .columns
+                    .iter()
+                    .find(|col| col.column_id == col_id)
+                    .expect("validated catalog");
+
+                if matches!(row.value_at(col.ordinal), ValueRef::Null) {
+                    let name = format!("{}.{}", table.name.original(), col.name.original());
+                    return Err(ConstraintError::NotNull(name));
+                }
+            }
+
+            ConstraintKind::Check => {
+                let program = c.program.as_ref().expect("check has program");
+                let v = eval_expr(program, row, scratch)?;
+
+                if !check_passes(&v) {
+                    let name = c
+                        .name
+                        .as_deref()
+                        .unwrap_or("<unnamed_check>")
+                        .to_string();
+                    return Err(ConstraintError::Check(name));
+                }
+            }
+
+            ConstraintKind::PrimaryKey | ConstraintKind::Unique => {
+                // Backing index checks are handled separately so they can acquire
+                // key locks and probe storage.
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn enforce_unique_indexes(
+    table: &TableDef,
+    row: &dyn RowValueSource,
+    rowid: crate::ids::RowId,
+    probe: &mut dyn UniqueIndexProbe,
+    key_buf: &mut Vec<u8>,
+) -> Result<(), ConstraintError> {
+    for index in table.indexes.iter() {
+        if !index.is_unique {
+            continue;
+        }
+
+        let mut parts = smallvec::SmallVec::<[ValueRef<'_>; 8]>::new();
+        let mut dirs = smallvec::SmallVec::<[crate::key::SortDir; 8]>::new();
+
+        for idx_col in index.columns.iter() {
+            parts.push(row.value_at(idx_col.ordinal));
+            dirs.push(idx_col.sort_dir);
+        }
+
+        let null_distinct = has_null_part(&parts);
+
+        if null_distinct {
+            // SQLite-compatible UNIQUE semantics: NULL values are distinct.
+            encode_index_key(&parts, &dirs, Some(rowid), key_buf);
+            continue;
+        }
+
+        encode_index_key(&parts, &dirs, None, key_buf);
+
+        probe.lock_unique_key(index, key_buf)?;
+
+        if probe.visible_conflict_exists(index, key_buf)? {
+            let label = format!("{}.{}", table.name.original(), index.name.original());
+            if index.is_primary {
+                return Err(ConstraintError::PrimaryKey(label));
+            }
+            return Err(ConstraintError::Unique(label));
+        }
+    }
+
+    Ok(())
+}
+
+fn check_passes(v: &OwnedValue) -> bool {
+    match v {
+        OwnedValue::Null => true,
+        OwnedValue::Integer(i) => *i != 0,
+        OwnedValue::Real(f) => *f != 0.0,
+        OwnedValue::Text(s) => {
+            if let Ok(i) = s.trim().parse::<i64>() {
+                i != 0
+            } else if let Ok(f) = s.trim().parse::<f64>() {
+                f != 0.0
+            } else {
+                false
+            }
+        }
+        OwnedValue::Blob(_) => false,
+    }
+}
+```
+
+---
+
+# Row builder
+
+A write path should reuse buffers.
+
+```rust
+pub struct RowBuilder {
+    values: Vec<OwnedValue>,
+    present: Vec<bool>,
+}
+
+impl RowBuilder {
+    pub fn new() -> Self {
+        Self {
+            values: Vec::new(),
+            present: Vec::new(),
+        }
+    }
+
+    pub fn reset_for_table(&mut self, table: &TableDef) {
+        let n = table.columns.len();
+
+        self.values.clear();
+        self.values.resize(n, OwnedValue::Null);
+
+        self.present.clear();
+        self.present.resize(n, false);
+    }
+
+    pub fn set(&mut self, ordinal: usize, value: OwnedValue) {
+        self.values[ordinal] = value;
+        self.present[ordinal] = true;
+    }
+
+    pub fn finish_insert(
+        &mut self,
+        table: &TableDef,
+        ctx: &mut DefaultEvalCtx<'_>,
+    ) -> Result<RowId, InsertBuildError> {
+        let mut rowid = None;
+
+        for col in table.columns.iter() {
+            let ord = col.ordinal as usize;
+
+            if !self.present[ord] {
+                if col.storage == ColumnStorage::RowIdAlias {
+                    let allocated = table.runtime.allocate_rowid();
+                    self.values[ord] = OwnedValue::Integer(allocated.0);
+                    self.present[ord] = true;
+                    rowid = Some(allocated);
+                } else if let Some(default) = &col.default {
+                    self.values[ord] = ctx.eval_default(default)?;
+                    self.present[ord] = true;
+                } else {
+                    self.values[ord] = OwnedValue::Null;
+                    self.present[ord] = true;
+                }
+            }
+
+            if col.storage == ColumnStorage::RowIdAlias {
+                let rid = coerce_rowid(&self.values[ord])?;
+                table.runtime.observe_explicit_rowid(rid);
+                self.values[ord] = OwnedValue::Integer(rid.0);
+                rowid = Some(rid);
+            } else {
+                let value = std::mem::replace(&mut self.values[ord], OwnedValue::Null);
+                self.values[ord] = crate::affinity::apply_affinity(value, col.affinity)
+                    .map_err(|_| InsertBuildError::DatatypeMismatch)?;
+            }
+        }
+
+        Ok(rowid.unwrap_or_else(|| table.runtime.allocate_rowid()))
+    }
+
+    pub fn value_refs<'a>(&'a self, out: &mut Vec<ValueRef<'a>>) -> &'a [OwnedValue] {
+        out.clear();
+        out.reserve(self.values.len());
+        for v in &self.values {
+            out.push(v.as_ref());
+        }
+        &self.values
+    }
+}
+
+impl crate::expr::RowValueSource for RowBuilder {
+    fn value_at(&self, ordinal: u16) -> ValueRef<'_> {
+        self.values[ordinal as usize].as_ref()
+    }
+}
+
+pub struct DefaultEvalCtx<'a> {
+    pub expr_scratch: &'a mut crate::expr::EvalScratch,
+}
+
+impl DefaultEvalCtx<'_> {
+    pub fn eval_default(
+        &mut self,
+        default: &CompiledDefault,
+    ) -> Result<OwnedValue, InsertBuildError> {
+        struct EmptyRow;
+
+        impl crate::expr::RowValueSource for EmptyRow {
+            fn value_at(&self, _ordinal: u16) -> ValueRef<'_> {
+                ValueRef::Null
+            }
+        }
+
+        crate::expr::eval_expr(&default.program, &EmptyRow, self.expr_scratch)
+            .map_err(InsertBuildError::Expr)
+    }
+}
+
+fn coerce_rowid(v: &OwnedValue) -> Result<RowId, InsertBuildError> {
+    match v {
+        OwnedValue::Integer(i) => Ok(RowId(*i)),
+        OwnedValue::Real(f) if *f >= i64::MIN as f64 && *f <= i64::MAX as f64 => {
+            let i = *f as i64;
+            if i as f64 == *f {
+                Ok(RowId(i))
+            } else {
+                Err(InsertBuildError::DatatypeMismatch)
+            }
+        }
+        OwnedValue::Text(s) => {
+            let i = s
+                .trim()
+                .parse::<i64>()
+                .map_err(|_| InsertBuildError::DatatypeMismatch)?;
+            Ok(RowId(i))
+        }
+        OwnedValue::Null => Err(InsertBuildError::NullRowId),
+        OwnedValue::Blob(_) => Err(InsertBuildError::DatatypeMismatch),
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum InsertBuildError {
+    #[error("datatype mismatch")]
+    DatatypeMismatch,
+    #[error("rowid cannot be null here")]
+    NullRowId,
+    #[error(transparent)]
+    Expr(#[from] crate::expr::ExprError),
+}
+```
+
+For a table with an `INTEGER PRIMARY KEY`, the column should be `ColumnStorage::RowIdAlias`. SQLite rowid tables have a 64-bit signed rowid, and an exact `INTEGER PRIMARY KEY` column aliases that rowid except for documented edge cases such as `PRIMARY KEY DESC`. ([SQLite][2])
+
+---
+
+# DDL implementation
+
+## Kernel interface Phase 4 needs
+
+Define a small trait boundary so catalog code is testable.
+
+```rust
+pub trait CatalogKernel {
+    type Txn: CatalogKernelTxn;
+
+    fn begin_write(&self) -> Result<Self::Txn, KernelError>;
+    fn latest_committed_csn(&self) -> u64;
+}
+
+pub trait CatalogKernelTxn {
+    fn alloc_object_id(&mut self) -> Result<ObjectId, KernelError>;
+    fn alloc_relation_id(&mut self) -> Result<RelationId, KernelError>;
+
+    fn create_relation(
+        &mut self,
+        relation_id: RelationId,
+        kind: RelationKind,
+    ) -> Result<(), KernelError>;
+
+    fn insert_catalog_row(
+        &mut self,
+        relation: RelationId,
+        values: &[ValueRef<'_>],
+    ) -> Result<RowId, KernelError>;
+
+    fn update_meta_u64(&mut self, key: &str, value: u64) -> Result<(), KernelError>;
+
+    fn commit(self) -> Result<CommitInfo, KernelError>;
+    fn rollback(self) -> Result<(), KernelError>;
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum RelationKind {
+    Heap,
+    BTreeIndex,
+}
+
+#[derive(Debug)]
+pub struct CommitInfo {
+    pub commit_csn: u64,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum KernelError {
+    #[error("kernel error")]
+    Other,
+}
+```
+
+## `CREATE TABLE` algorithm
+
+```text
+create_table(spec):
+  ddl_lock
+  old_schema = current snapshot
+  validate name not used
+  bind columns
+  derive affinities
+  detect integer primary key
+  prepare backing indexes for PK/UNIQUE
+  compile defaults/checks
+  txn = begin_write
+  allocate table_id, relation_id
+  create heap relation
+  allocate index_ids/relation_ids
+  create index relations
+  insert table catalog row
+  insert column rows
+  insert index/index_column rows
+  insert constraint rows
+  bump schema_version
+  commit
+  build new schema snapshot from old + delta
+  publish
+```
+
+Code skeleton:
+
+```rust
+// redlinedb_catalog/src/ddl.rs
+
+use crate::affinity::Affinity;
+use crate::ddl_spec::*;
+use crate::ids::*;
+use crate::schema::*;
+use crate::value::ValueRef;
+use std::sync::Arc;
+
+pub struct DdlExecutor<K> {
+    kernel: Arc<K>,
+    catalog: Arc<crate::catalog::CatalogManager>,
+}
+
+impl<K: CatalogKernel> DdlExecutor<K> {
+    pub fn create_table(&self, spec: CreateTableSpec) -> Result<TableId, DdlError> {
+        let _ddl_guard = self.catalog.lock_ddl();
+
+        let old = self.catalog.current();
+        let schema_id = old.main_schema_id;
+
+        let folded = Arc::<str>::from(spec.name.folded());
+
+        if let Some(existing) = old.tables_by_name.get(&(schema_id, folded.clone())) {
+            if existing.state == TableState::Ready {
+                if spec.if_not_exists {
+                    return Ok(existing.table_id);
+                }
+                return Err(DdlError::ObjectAlreadyExists(spec.name.original().to_string()));
+            }
+        }
+
+        let bound = bind_create_table(&old, schema_id, spec)?;
+
+        let mut txn = self.kernel.begin_write().map_err(DdlError::Kernel)?;
+
+        let table_obj = txn.alloc_object_id().map_err(DdlError::Kernel)?;
+        let table_id = TableId(table_obj.0);
+
+        let relation_id = txn.alloc_relation_id().map_err(DdlError::Kernel)?;
+        txn.create_relation(relation_id, RelationKind::Heap)
+            .map_err(DdlError::Kernel)?;
+
+        let mut index_defs = Vec::new();
+
+        for pending_idx in &bound.indexes {
+            let idx_obj = txn.alloc_object_id().map_err(DdlError::Kernel)?;
+            let index_id = IndexId(idx_obj.0);
+            let idx_rel = txn.alloc_relation_id().map_err(DdlError::Kernel)?;
+
+            txn.create_relation(idx_rel, RelationKind::BTreeIndex)
+                .map_err(DdlError::Kernel)?;
+
+            index_defs.push((pending_idx.clone(), index_id, idx_rel));
+        }
+
+        insert_table_catalog_row(&mut txn, table_id, relation_id, &bound)?;
+        insert_column_catalog_rows(&mut txn, table_id, &bound)?;
+        insert_index_catalog_rows(&mut txn, table_id, &index_defs)?;
+        insert_constraint_catalog_rows(&mut txn, table_id, &bound, &index_defs)?;
+
+        let new_version = old.version.checked_add(1).ok_or(DdlError::VersionOverflow)?;
+        txn.update_meta_u64("schema_version", new_version)
+            .map_err(DdlError::Kernel)?;
+
+        let commit = txn.commit().map_err(DdlError::Kernel)?;
+
+        let next = build_schema_after_create_table(
+            &old,
+            new_version,
+            commit.commit_csn,
+            table_id,
+            relation_id,
+            bound,
+            index_defs,
+        )?;
+
+        self.catalog.publish(Arc::new(next));
+
+        Ok(table_id)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DdlError {
+    #[error("object already exists: {0}")]
+    ObjectAlreadyExists(String),
+
+    #[error("unknown column: {0}")]
+    UnknownColumn(String),
+
+    #[error("duplicate column: {0}")]
+    DuplicateColumn(String),
+
+    #[error("multiple primary keys")]
+    MultiplePrimaryKeys,
+
+    #[error("unsupported DDL: {0}")]
+    Unsupported(String),
+
+    #[error("schema version overflow")]
+    VersionOverflow,
+
+    #[error("catalog validation error: {0}")]
+    CatalogValidation(String),
+
+    #[error(transparent)]
+    Kernel(#[from] KernelError),
+}
+```
+
+Binding structure:
+
+```rust
+#[derive(Debug)]
+struct BoundCreateTable {
+    schema_id: SchemaId,
+    name: crate::names::DbName,
+    columns: Vec<BoundColumn>,
+    constraints: Vec<BoundConstraint>,
+    indexes: Vec<PendingIndex>,
+    flags: TableFlags,
+    normalized_sql: Option<Arc<str>>,
+}
+
+#[derive(Debug)]
+struct BoundColumn {
+    column_id: ColumnId,
+    ordinal: u16,
+    name: crate::names::DbName,
+    declared_type: Option<Arc<str>>,
+    affinity: Affinity,
+    storage: ColumnStorage,
+    not_null: bool,
+    default: Option<CompiledDefault>,
+    default_sql: Option<Arc<str>>,
+    collation: Arc<str>,
+}
+
+#[derive(Debug, Clone)]
+struct PendingIndex {
+    name: crate::names::DbName,
+    columns: Vec<PendingIndexColumn>,
+    is_unique: bool,
+    is_primary: bool,
+    origin: IndexOrigin,
+}
+
+#[derive(Debug, Clone)]
+struct PendingIndexColumn {
+    column_id: ColumnId,
+    ordinal: u16,
+    sort_dir: SortDir,
+    collation: Arc<str>,
+}
+
+#[derive(Debug)]
+struct BoundConstraint {
+    id_placeholder: usize,
+    kind: ConstraintKind,
+    name: Option<Arc<str>>,
+    column_id: Option<ColumnId>,
+    index_ordinal: Option<usize>,
+    program: Option<Arc<[crate::expr::Op]>>,
+    conflict: ConflictAction,
+}
+```
+
+Bind function sketch:
+
+```rust
+fn bind_create_table(
+    schema: &SchemaSnapshot,
+    schema_id: SchemaId,
+    spec: CreateTableSpec,
+) -> Result<BoundCreateTable, DdlError> {
+    if spec.without_rowid {
+        return Err(DdlError::Unsupported(
+            "WITHOUT ROWID can be wired later after primary-key table storage".into(),
+        ));
+    }
+
+    let mut seen = std::collections::HashSet::<String>::new();
+    let mut columns = Vec::with_capacity(spec.columns.len());
+
+    for (i, c) in spec.columns.iter().enumerate() {
+        if i > u16::MAX as usize {
+            return Err(DdlError::Unsupported("too many columns".into()));
+        }
+
+        let folded = c.name.folded().to_string();
+
+        if !seen.insert(folded) {
+            return Err(DdlError::DuplicateColumn(c.name.original().to_string()));
+        }
+
+        let declared = c.declared_type.as_deref();
+        let affinity = Affinity::from_declared_type(declared);
+
+        columns.push(BoundColumn {
+            column_id: ColumnId((i + 1) as u64),
+            ordinal: i as u16,
+            name: c.name.clone(),
+            declared_type: c.declared_type.as_deref().map(Arc::from),
+            affinity,
+            storage: ColumnStorage::Normal,
+            not_null: false,
+            default: None,
+            default_sql: None,
+            collation: Arc::from(c.collation.as_deref().unwrap_or("BINARY")),
+        });
+    }
+
+    let mut constraints = Vec::new();
+    let mut indexes = Vec::new();
+    let mut primary_key_seen = false;
+
+    // Column constraints.
+    for (ord, c) in spec.columns.iter().enumerate() {
+        for cc in &c.constraints {
+            match cc {
+                ColumnConstraintSpec::NotNull { conflict } => {
+                    columns[ord].not_null = true;
+                    constraints.push(BoundConstraint {
+                        id_placeholder: constraints.len(),
+                        kind: ConstraintKind::NotNull,
+                        name: None,
+                        column_id: Some(columns[ord].column_id),
+                        index_ordinal: None,
+                        program: None,
+                        conflict: *conflict,
+                    });
+                }
+
+                ColumnConstraintSpec::Default { expr, normalized_sql } => {
+                    columns[ord].default = Some(CompiledDefault {
+                        program: Arc::from(compile_default_expr(expr)?.into_boxed_slice()),
+                    });
+                    columns[ord].default_sql = Some(Arc::from(normalized_sql.as_str()));
+                }
+
+                ColumnConstraintSpec::Check { expr, .. } => {
+                    constraints.push(BoundConstraint {
+                        id_placeholder: constraints.len(),
+                        kind: ConstraintKind::Check,
+                        name: None,
+                        column_id: Some(columns[ord].column_id),
+                        index_ordinal: None,
+                        program: Some(Arc::from(compile_check_expr(expr, &columns)?.into_boxed_slice())),
+                        conflict: ConflictAction::Abort,
+                    });
+                }
+
+                ColumnConstraintSpec::Unique { conflict } => {
+                    let idx_ord = indexes.len();
+                    indexes.push(PendingIndex {
+                        name: auto_index_name(&spec.name, idx_ord + 1),
+                        columns: vec![PendingIndexColumn {
+                            column_id: columns[ord].column_id,
+                            ordinal: columns[ord].ordinal,
+                            sort_dir: SortDir::Asc,
+                            collation: columns[ord].collation.clone(),
+                        }],
+                        is_unique: true,
+                        is_primary: false,
+                        origin: IndexOrigin::UniqueConstraint,
+                    });
+
+                    constraints.push(BoundConstraint {
+                        id_placeholder: constraints.len(),
+                        kind: ConstraintKind::Unique,
+                        name: None,
+                        column_id: Some(columns[ord].column_id),
+                        index_ordinal: Some(idx_ord),
+                        program: None,
+                        conflict: *conflict,
+                    });
+                }
+
+                ColumnConstraintSpec::PrimaryKey { sort_dir, conflict } => {
+                    if primary_key_seen {
+                        return Err(DdlError::MultiplePrimaryKeys);
+                    }
+                    primary_key_seen = true;
+
+                    let exact_integer = columns[ord]
+                        .declared_type
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case("INTEGER"));
+
+                    if exact_integer && *sort_dir != SortDir::Desc {
+                        columns[ord].storage = ColumnStorage::RowIdAlias;
+                        columns[ord].not_null = true;
+
+                        constraints.push(BoundConstraint {
+                            id_placeholder: constraints.len(),
+                            kind: ConstraintKind::PrimaryKey,
+                            name: None,
+                            column_id: Some(columns[ord].column_id),
+                            index_ordinal: None,
+                            program: None,
+                            conflict: *conflict,
+                        });
+                    } else {
+                        let idx_ord = indexes.len();
+                        indexes.push(PendingIndex {
+                            name: auto_index_name(&spec.name, idx_ord + 1),
+                            columns: vec![PendingIndexColumn {
+                                column_id: columns[ord].column_id,
+                                ordinal: columns[ord].ordinal,
+                                sort_dir: *sort_dir,
+                                collation: columns[ord].collation.clone(),
+                            }],
+                            is_unique: true,
+                            is_primary: true,
+                            origin: IndexOrigin::PrimaryKey,
+                        });
+
+                        constraints.push(BoundConstraint {
+                            id_placeholder: constraints.len(),
+                            kind: ConstraintKind::PrimaryKey,
+                            name: None,
+                            column_id: Some(columns[ord].column_id),
+                            index_ordinal: Some(idx_ord),
+                            program: None,
+                            conflict: *conflict,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Table constraints.
+    for tc in &spec.constraints {
+        match tc {
+            TableConstraintSpec::PrimaryKey {
+                name,
+                columns: pk_cols,
+                conflict,
+            } => {
+                if primary_key_seen {
+                    return Err(DdlError::MultiplePrimaryKeys);
+                }
+                primary_key_seen = true;
+
+                let idx_cols = bind_index_columns(pk_cols, &columns)?;
+                let idx_ord = indexes.len();
+
+                indexes.push(PendingIndex {
+                    name: name.clone().unwrap_or_else(|| auto_index_name(&spec.name, idx_ord + 1)),
+                    columns: idx_cols,
+                    is_unique: true,
+                    is_primary: true,
+                    origin: IndexOrigin::PrimaryKey,
+                });
+
+                constraints.push(BoundConstraint {
+                    id_placeholder: constraints.len(),
+                    kind: ConstraintKind::PrimaryKey,
+                    name: name.as_ref().map(|n| Arc::from(n.original())),
+                    column_id: None,
+                    index_ordinal: Some(idx_ord),
+                    program: None,
+                    conflict: *conflict,
+                });
+            }
+
+            TableConstraintSpec::Unique {
+                name,
+                columns: unique_cols,
+                conflict,
+            } => {
+                let idx_cols = bind_index_columns(unique_cols, &columns)?;
+                let idx_ord = indexes.len();
+
+                indexes.push(PendingIndex {
+                    name: name.clone().unwrap_or_else(|| auto_index_name(&spec.name, idx_ord + 1)),
+                    columns: idx_cols,
+                    is_unique: true,
+                    is_primary: false,
+                    origin: IndexOrigin::UniqueConstraint,
+                });
+
+                constraints.push(BoundConstraint {
+                    id_placeholder: constraints.len(),
+                    kind: ConstraintKind::Unique,
+                    name: name.as_ref().map(|n| Arc::from(n.original())),
+                    column_id: None,
+                    index_ordinal: Some(idx_ord),
+                    program: None,
+                    conflict: *conflict,
+                });
+            }
+
+            TableConstraintSpec::Check {
+                name,
+                expr,
+                normalized_sql: _,
+            } => {
+                constraints.push(BoundConstraint {
+                    id_placeholder: constraints.len(),
+                    kind: ConstraintKind::Check,
+                    name: name.as_ref().map(|n| Arc::from(n.original())),
+                    column_id: None,
+                    index_ordinal: None,
+                    program: Some(Arc::from(compile_check_expr(expr, &columns)?.into_boxed_slice())),
+                    conflict: ConflictAction::Abort,
+                });
+            }
+        }
+    }
+
+    Ok(BoundCreateTable {
+        schema_id,
+        name: spec.name,
+        columns,
+        constraints,
+        indexes,
+        flags: TableFlags {
+            has_rowid: true,
+            strict: spec.strict,
+            system: false,
+        },
+        normalized_sql: spec.normalized_sql.as_deref().map(Arc::from),
+    })
+}
+
+fn bind_index_columns(
+    specs: &[IndexedColumnSpec],
+    columns: &[BoundColumn],
+) -> Result<Vec<PendingIndexColumn>, DdlError> {
+    let mut out = Vec::with_capacity(specs.len());
+
+    for s in specs {
+        let folded = s.name.folded();
+
+        let col = columns
+            .iter()
+            .find(|c| c.name.folded() == folded)
+            .ok_or_else(|| DdlError::UnknownColumn(s.name.original().to_string()))?;
+
+        out.push(PendingIndexColumn {
+            column_id: col.column_id,
+            ordinal: col.ordinal,
+            sort_dir: s.sort_dir,
+            collation: Arc::from(s.collation.as_deref().unwrap_or(col.collation.as_ref())),
+        });
+    }
+
+    Ok(out)
+}
+
+fn auto_index_name(table: &crate::names::DbName, n: usize) -> crate::names::DbName {
+    crate::names::DbName::new(&format!("sqlite_autoindex_{}_{}", table.original(), n))
+}
+```
+
+Catalog row insertion functions should encode values using the same record format and insert into system relations. Example:
+
+```rust
+fn insert_table_catalog_row<T: CatalogKernelTxn>(
+    txn: &mut T,
+    table_id: TableId,
+    relation_id: RelationId,
+    bound: &BoundCreateTable,
+) -> Result<(), DdlError> {
+    let flags = encode_table_flags(bound.flags);
+
+    let values = [
+        ValueRef::Integer(table_id.0 as i64),
+        ValueRef::Integer(bound.schema_id.0 as i64),
+        ValueRef::Text(bound.name.original()),
+        ValueRef::Text(bound.name.folded()),
+        ValueRef::Integer(relation_id.0 as i64),
+        ValueRef::Integer(1), // row_format_id
+        ValueRef::Integer(flags as i64),
+        ValueRef::Integer(TableState::Ready as i64),
+        match bound.normalized_sql.as_deref() {
+            Some(sql) => ValueRef::Text(sql),
+            None => ValueRef::Null,
+        },
+        ValueRef::Null, // created_csn filled by storage? or explicit txn provisional
+        ValueRef::Null, // dropped_csn
+    ];
+
+    txn.insert_catalog_row(SYS_TABLES, &values)
+        .map_err(DdlError::Kernel)?;
+
+    Ok(())
+}
+
+fn encode_table_flags(flags: TableFlags) -> u64 {
+    let mut out = 0u64;
+
+    if flags.has_rowid {
+        out |= 1 << 0;
+    }
+    if flags.strict {
+        out |= 1 << 1;
+    }
+    if flags.system {
+        out |= 1 << 2;
+    }
+
+    out
+}
+```
+
+---
+
+# `CREATE INDEX`
+
+For Phase 4, use the correctness-first algorithm:
+
+```text
+CREATE INDEX existing_table:
+  ddl_lock
+  resolve table
+  block new writers to table
+  wait active writers = 0
+  begin DDL txn
+  create pending index relation
+  scan table at stable snapshot
+  build index in bounded batches
+  validate unique conflicts if unique
+  insert catalog rows
+  bump schema_version
+  commit
+  publish schema
+  unblock writers
+```
+
+Readers continue. Writers to that one table are blocked. DDL is rare, so this is acceptable and much simpler than online index catch-up.
+
+Important: do not hold page latches while waiting for the table writer gate or unique key locks.
+
+Pseudo-code:
+
+```rust
+pub fn create_index(&self, spec: CreateIndexSpec) -> Result<IndexId, DdlError> {
+    let _ddl_guard = self.catalog.lock_ddl();
+
+    let old = self.catalog.current();
+    let table = resolve_table(&old, &spec.table)?;
+
+    table.runtime.block_new_writers_and_wait();
+
+    let result = self.create_index_inner(&old, table.clone(), spec);
+
+    table.runtime.unblock_writers();
+
+    result
+}
+
+fn create_index_inner(
+    &self,
+    old: &SchemaSnapshot,
+    table: Arc<TableDef>,
+    spec: CreateIndexSpec,
+) -> Result<IndexId, DdlError> {
+    let bound = bind_create_index(old, &table, spec)?;
+
+    let mut txn = self.kernel.begin_write().map_err(DdlError::Kernel)?;
+
+    let idx_obj = txn.alloc_object_id().map_err(DdlError::Kernel)?;
+    let index_id = IndexId(idx_obj.0);
+
+    let rel_id = txn.alloc_relation_id().map_err(DdlError::Kernel)?;
+    txn.create_relation(rel_id, RelationKind::BTreeIndex)
+        .map_err(DdlError::Kernel)?;
+
+    build_index_from_heap(&mut txn, &table, &bound, rel_id)?;
+
+    insert_one_index_catalog_row(&mut txn, index_id, rel_id, &table, &bound)?;
+    insert_one_index_column_rows(&mut txn, index_id, &bound)?;
+
+    let new_version = old.version + 1;
+    txn.update_meta_u64("schema_version", new_version)
+        .map_err(DdlError::Kernel)?;
+
+    let commit = txn.commit().map_err(DdlError::Kernel)?;
+
+    let next = build_schema_after_create_index(
+        old,
+        new_version,
+        commit.commit_csn,
+        table,
+        bound,
+        index_id,
+        rel_id,
+    )?;
+
+    self.catalog.publish(Arc::new(next));
+
+    Ok(index_id)
+}
+```
+
+For very large tables later, replace this with a hidden `BUILDING` index state and catch-up log. But do not start there unless you need online DDL immediately.
+
+---
+
+# `DROP TABLE`
+
+Do not immediately free pages. Mark catalog rows dropped and let vacuum reclaim after the oldest snapshot/backup/replication horizon passes.
+
+```text
+DROP TABLE:
+  ddl_lock
+  resolve table
+  block writers
+  begin txn
+  mark table state dropped, dropped_csn pending
+  mark indexes dropped
+  bump schema_version
+  commit
+  publish schema without table name
+  unblock writers
+  vacuum later frees heap/index relations after horizon
+```
+
+Running readers with old `Arc<TableDef>` can finish. New statements see schema version changed and fail/reprepare.
+
+```rust
+pub fn drop_table(&self, name: QualifiedName, if_exists: bool) -> Result<(), DdlError> {
+    let _ddl_guard = self.catalog.lock_ddl();
+
+    let old = self.catalog.current();
+    let Some(table) = resolve_optional_table(&old, &name)? else {
+        if if_exists {
+            return Ok(());
+        }
+        return Err(DdlError::Unsupported("table does not exist".into()));
+    };
+
+    table.runtime.block_new_writers_and_wait();
+
+    let result = (|| {
+        let mut txn = self.kernel.begin_write().map_err(DdlError::Kernel)?;
+
+        mark_table_dropped(&mut txn, &table)?;
+        for idx in table.indexes.iter() {
+            mark_index_dropped(&mut txn, idx)?;
+        }
+
+        let new_version = old.version + 1;
+        txn.update_meta_u64("schema_version", new_version)
+            .map_err(DdlError::Kernel)?;
+
+        let commit = txn.commit().map_err(DdlError::Kernel)?;
+
+        let next = build_schema_after_drop_table(&old, new_version, commit.commit_csn, table.table_id)?;
+        self.catalog.publish(Arc::new(next));
+
+        Ok(())
+    })();
+
+    table.runtime.unblock_writers();
+
+    result
+}
+```
+
+---
+
+# Loader and recovery
+
+On open/recovery:
+
+```text
+1. Kernel recovers WAL.
+2. Kernel opens system relations.
+3. Load redline_meta.
+4. Check catalog_format_version.
+5. Read committed rows from catalog tables at latest committed CSN.
+6. Ignore rows not visible at latest CSN.
+7. Reconstruct schema objects.
+8. Validate all references.
+9. Validate live-name uniqueness.
+10. Validate relation roots exist.
+11. Build immutable SchemaSnapshot.
+12. Publish.
+```
+
+Validation should be aggressive. If system catalogs are corrupt, fail open loudly.
+
+Catalog validation checklist:
+
+```text
+meta:
+  - exactly one supported catalog_format_version
+  - schema_version present
+  - next IDs >= max observed IDs
+
+schemas:
+  - main exists
+  - live names unique
+
+tables:
+  - table_id unique
+  - live (schema_id, name_folded) unique
+  - relation_id exists
+  - system table IDs match bootstrap descriptors
+
+columns:
+  - table exists
+  - column_id unique within table
+  - ordinal contiguous from 0
+  - no duplicate name_folded
+  - rowid alias at most one
+
+indexes:
+  - table exists
+  - relation_id exists
+  - live names unique
+  - ready indexes have at least one key column
+
+constraints:
+  - table exists
+  - referenced column/index exists
+  - check/default expression format version supported
+  - PK at most one per table
+
+drop states:
+  - dropped object remains reachable by ID until vacuum horizon
+  - dropped name not in lookup map
+```
+
+Use a temporary mutable builder:
+
+```rust
+pub struct SchemaBuilder {
+    version: u64,
+    schemas_by_name: HashMap<Arc<str>, SchemaId>,
+    tables_raw: HashMap<TableId, RawTable>,
+    columns_raw: Vec<RawColumn>,
+    indexes_raw: Vec<RawIndex>,
+    index_cols_raw: Vec<RawIndexColumn>,
+    constraints_raw: Vec<RawConstraint>,
+}
+
+impl SchemaBuilder {
+    pub fn finish(self) -> Result<SchemaSnapshot, CatalogLoadError> {
+        // group columns by table
+        // group indexes by table
+        // compile constraints/defaults
+        // allocate TableRuntime
+        // validate
+        // return immutable snapshot
+        todo!()
+    }
+}
+```
+
+Important: `TableRuntime` should preserve rowid hints across schema reloads. On normal DDL publish, reuse existing runtime for unchanged tables. On database open, initialize rowid hint from relation metadata/high-water mark, not by scanning the table if avoidable.
+
+---
+
+# Bootstrap
+
+Bootstrap is the only special catalog code.
+
+New DB bootstrap flow:
+
+```text
+1. Kernel sees empty database directory.
+2. Create system relations with fixed IDs.
+3. Insert catalog rows describing the system catalogs themselves.
+4. Insert redline_meta rows.
+5. Commit bootstrap transaction.
+6. Load schema snapshot from committed catalogs.
+```
+
+Hardcode system catalog descriptors in Rust, then insert their rows into themselves.
+
+```rust
+pub fn bootstrap_new_database<K: CatalogKernel>(kernel: &K) -> Result<(), BootstrapError> {
+    let mut txn = kernel.begin_write().map_err(BootstrapError::Kernel)?;
+
+    for rel in SYSTEM_RELATIONS {
+        txn.create_relation(rel.id, rel.kind)
+            .map_err(BootstrapError::Kernel)?;
+    }
+
+    insert_meta_rows(&mut txn)?;
+    insert_system_schema_rows(&mut txn)?;
+    insert_system_table_rows(&mut txn)?;
+    insert_system_column_rows(&mut txn)?;
+    insert_system_index_rows(&mut txn)?;
+
+    txn.commit().map_err(BootstrapError::Kernel)?;
+    Ok(())
+}
+
+struct SystemRelationDesc {
+    id: RelationId,
+    kind: RelationKind,
+}
+
+const SYSTEM_RELATIONS: &[SystemRelationDesc] = &[
+    SystemRelationDesc { id: SYS_META, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_SCHEMAS, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_TABLES, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_COLUMNS, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_INDEXES, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_INDEX_COLUMNS, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_CONSTRAINTS, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_CONSTRAINT_COLUMNS, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_STATS, kind: RelationKind::Heap },
+    SystemRelationDesc { id: SYS_SEQUENCES, kind: RelationKind::Heap },
+];
+```
+
+Do not allow user DDL to modify system catalogs directly.
+
+---
+
+# Prepared statement invalidation
+
+Phase 4 should expose this to Phase 5:
+
+```rust
+pub struct Session {
+    observed_schema_version: u64,
+}
+
+pub struct PreparedStatement {
+    schema_version: u64,
+    plan: Plan,
+}
+
+impl PreparedStatement {
+    pub fn step(&mut self, engine: &Engine, session: &mut Session) -> Result<StepResult, DbError> {
+        let current = engine.catalog.version();
+
+        if current != self.schema_version {
+            return Err(DbError::SchemaChanged {
+                old: self.schema_version,
+                new: current,
+            });
+        }
+
+        self.plan.execute(engine, session)
+    }
+}
+```
+
+Later, add automatic reprepare:
+
+```text
+if schema_version changed:
+  if original SQL text exists:
+    reparse/rebind/replan
+  else:
+    return SchemaChanged
+```
+
+For Phase 4, just returning `SchemaChanged` is enough.
+
+---
+
+# Table creation details
+
+## Primary keys
+
+Support these cases:
+
+### `INTEGER PRIMARY KEY`
+
+```sql
+CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT);
+```
+
+Implementation:
+
+```text
+table has hidden/internal rowid
+id column is ColumnStorage::RowIdAlias
+id is not stored in row payload separately
+id value is heap RowId
+no backing unique index needed
+```
+
+### Non-integer single-column primary key
+
+```sql
+CREATE TABLE t(id TEXT PRIMARY KEY, name TEXT);
+```
+
+Implementation:
+
+```text
+normal stored column
+backing unique index on id
+SQLite-compat mode: NULL allowed unless NOT NULL/STRICT/etc.
+```
+
+SQLite has a legacy behavior where primary key does not always imply `NOT NULL` except for integer primary key, without-rowid tables, strict tables, or explicit `NOT NULL`. RedlineDB should make this a config choice:
+
+```rust
+pub enum PrimaryKeyNullMode {
+    SqliteCompat,
+    StandardNotNull,
+}
+```
+
+Default for replacement compatibility: `SqliteCompat`.
+
+### Composite primary key
+
+```sql
+CREATE TABLE t(a INT, b INT, PRIMARY KEY(a, b));
+```
+
+Implementation:
+
+```text
+backing unique index on (a, b)
+constraint metadata references backing index
+NULL behavior follows compatibility mode
+```
+
+## Unique constraints
+
+```sql
+CREATE TABLE users(email TEXT UNIQUE);
+```
+
+Implementation:
+
+```text
+backing unique index
+NULL-distinct conflict behavior
+key-level lock during insert/update
+```
+
+## Not null
+
+```sql
+name TEXT NOT NULL
+```
+
+Implementation:
+
+```text
+ColumnDef.not_null = true
+CompiledConstraint kind = NotNull
+checked after defaults and affinity
+```
+
+## Defaults
+
+```sql
+created_at TEXT DEFAULT CURRENT_TIMESTAMP
+status TEXT DEFAULT 'new'
+count INT DEFAULT 0
+```
+
+Implementation:
+
+```text
+ColumnDef.default = CompiledDefault
+ColumnDef.default_sql = normalized original
+evaluated when column omitted
+not evaluated when explicit NULL supplied
+```
+
+Use an engine clock trait for deterministic tests:
+
+```rust
+pub trait DbClock: Send + Sync + 'static {
+    fn current_timestamp_utc(&self) -> String;
+}
+```
+
+## Check constraints
+
+```sql
+CHECK(total_cents >= 0)
+```
+
+Implementation:
+
+```text
+CompiledConstraint kind = Check
+program = bytecode
+depends_on_columns = bitset
+checked on insert and on updates touching dependent columns
+```
+
+Reject subqueries in CHECK. Store both expression IR and normalized SQL.
+
+---
+
+# Memory strategy
+
+## Catalog memory
+
+Use:
+
+```text
+Arc<SchemaSnapshot>
+Arc<TableDef>
+Arc<[ColumnDef]>
+Arc<[Arc<IndexDef>]>
+Arc<[CompiledConstraint]>
+Arc<[Op]>
+Arc<str>
+```
+
+Avoid:
+
+```text
+String clones on lookup
+Vec clones in prepared statements
+Mutex/RwLock on schema reads
+boxed AST evaluation per row
+catalog table scans during DML
+```
+
+## Per-session scratch
+
+Each session/connection should own reusable scratch:
+
+```rust
+pub struct SessionScratch {
+    pub row_builder: RowBuilder,
+    pub record_buf: Vec<u8>,
+    pub value_refs: Vec<ValueRef<'static>>, // practically use scoped API instead
+    pub key_bufs: Vec<Vec<u8>>,
+    pub expr_scratch: EvalScratch,
+    pub record_scratch: RecordScratch,
+}
+```
+
+Because of lifetimes, `value_refs` is usually function-local. The buffers should be reused.
+
+## Insert batching
+
+Expose an internal batch insert API:
+
+```rust
+pub struct InsertExecutor {
+    table: Arc<TableDef>,
+    write_permit: WritePermit<'static>, // actual lifetime tied to executor
+    row_builder: RowBuilder,
+    record_buf: Vec<u8>,
+    key_buf: Vec<u8>,
+}
+```
+
+Take the table write permit once per statement, not once per row.
+
+## Rowid range reservation
+
+For high-throughput inserts, reserve rowid ranges:
+
+```rust
+pub struct RowIdRange {
+    next: i64,
+    end: i64,
+}
+
+impl TableRuntime {
+    pub fn reserve_rowids(&self, n: i64) -> RowIdRange {
+        let start = self.next_rowid_hint.fetch_add(n, Ordering::AcqRel);
+        RowIdRange {
+            next: start,
+            end: start + n,
+        }
+    }
+}
+```
+
+Batched inserts can reserve 1,024 rowids at a time.
+
+---
+
+# Threading strategy
+
+## Read path
+
+```text
+Prepared statement:
+  Arc<TableDef>
+  Arc<IndexDef>
+  no catalog locks
+  no DDL locks
+  no name lookup after prepare
+```
+
+## Write path
+
+```text
+Statement start:
+  check schema_version
+  enter table write gate: two atomics
+  execute many row changes
+  leave gate at statement end
+```
+
+## DDL path
+
+```text
+DDL:
+  acquire global DDL mutex
+  optionally block table writers
+  perform catalog transaction
+  publish schema
+```
+
+This is intentionally biased toward DML performance. DDL gets the heavier synchronization.
+
+## Lock ordering
+
+Use a strict order:
+
+```text
+1. ddl_lock
+2. table write gate / namespace gate
+3. kernel transaction
+4. row/key locks
+5. page latches
+```
+
+Never wait for a transaction, fsync, or key lock while holding a page latch.
+
+---
+
+# Catalog-to-storage mapping
+
+Every SQL table maps to:
+
+```text
+TableDef.relation_id => MVCC heap relation
+IndexDef.relation_id => B+tree relation
+```
+
+System catalogs are not special after bootstrap. They are normal tables with system flags.
+
+Compatibility view:
+
+```sql
+sqlite_schema(type, name, tbl_name, rootpage, sql)
+```
+
+Synthesize from normalized catalog rows:
+
+```text
+tables:
+  type     = 'table'
+  name     = table.name
+  tbl_name = table.name
+  rootpage = relation_id/root page mapping
+  sql      = table.sql
+
+indexes:
+  type     = 'index'
+  name     = index.name
+  tbl_name = table.name
+  rootpage = index relation root
+  sql      = index.sql or NULL for autoindex
+```
+
+SQLite’s schema table includes one row per table/index/view/trigger except the schema table itself, with fields like `type`, `name`, `tbl_name`, `rootpage`, and `sql`; RedlineDB can match that API shape without adopting SQLite’s file format. ([SQLite][3])
+
+---
+
+# Insert path example
+
+An internal Phase 4 insert API might look like this:
+
+```rust
+pub fn insert_row<K: DataKernel>(
+    kernel_txn: &mut K::Txn,
+    table: &TableDef,
+    input: &[(u16, OwnedValue)],
+    scratch: &mut InsertScratch,
+) -> Result<RowId, InsertError> {
+    let _permit = table
+        .runtime
+        .enter_writer()
+        .map_err(|_| InsertError::TableBlocked)?;
+
+    scratch.row.reset_for_table(table);
+
+    for &(ordinal, ref value) in input {
+        scratch.row.set(ordinal as usize, value.clone());
+    }
+
+    let mut default_ctx = DefaultEvalCtx {
+        expr_scratch: &mut scratch.expr,
+    };
+
+    let rowid = scratch
+        .row
+        .finish_insert(table, &mut default_ctx)
+        .map_err(InsertError::Build)?;
+
+    enforce_row_constraints(table, &scratch.row, &mut scratch.expr)
+        .map_err(InsertError::Constraint)?;
+
+    enforce_unique_indexes(
+        table,
+        &scratch.row,
+        rowid,
+        &mut KernelUniqueProbe { txn: kernel_txn },
+        &mut scratch.key_buf,
+    )
+    .map_err(InsertError::Constraint)?;
+
+    scratch.value_refs.clear();
+    for v in &scratch.row.values {
+        scratch.value_refs.push(v.as_ref());
+    }
+
+    encode_record(&scratch.value_refs, &mut scratch.record_buf)
+        .map_err(InsertError::Record)?;
+
+    kernel_txn
+        .heap_insert(table.relation_id, rowid, &scratch.record_buf)
+        .map_err(InsertError::Kernel)?;
+
+    insert_index_entries(kernel_txn, table, rowid, &scratch.row, &mut scratch.key_buf)?;
+
+    Ok(rowid)
+}
+
+pub struct InsertScratch {
+    pub row: RowBuilder,
+    pub expr: EvalScratch,
+    pub key_buf: Vec<u8>,
+    pub record_buf: Vec<u8>,
+    pub value_refs: Vec<ValueRef<'static>>, // actual implementation should avoid 'static
+}
+```
+
+The actual lifetime-safe version builds `Vec<ValueRef<'_>>` inside the function rather than storing `'static`.
+
+---
+
+# Catalog corruption handling
+
+Errors should be specific:
+
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum CatalogLoadError {
+    #[error("unsupported catalog format version {0}")]
+    UnsupportedFormat(u64),
+
+    #[error("missing required meta key {0}")]
+    MissingMeta(&'static str),
+
+    #[error("duplicate live table name {schema_id:?}.{name}")]
+    DuplicateTableName {
+        schema_id: SchemaId,
+        name: String,
+    },
+
+    #[error("table {0:?} has non-contiguous columns")]
+    NonContiguousColumns(TableId),
+
+    #[error("index {0:?} references missing table {1:?}")]
+    MissingIndexTable(IndexId, TableId),
+
+    #[error("constraint {0:?} references missing column {1:?}")]
+    MissingConstraintColumn(ConstraintId, ColumnId),
+
+    #[error("relation {0:?} missing for object {1:?}")]
+    MissingRelation(RelationId, ObjectId),
+
+    #[error("system catalog is corrupt: {0}")]
+    SystemCorruption(String),
+}
+```
+
+If a user table is corrupt, fail loudly. Do not silently drop catalog entries.
+
+---
+
+# Recovery invariants for Phase 4
+
+Add explicit tests for:
+
+```text
+CREATE TABLE crash points:
+  - after relation allocation
+  - after table catalog row insert
+  - after some column rows
+  - after index root allocation
+  - after schema_version update
+  - after commit before publish
+
+DROP TABLE crash points:
+  - after table tombstone
+  - after index tombstone
+  - after schema_version update
+  - after commit before publish
+
+CREATE INDEX crash points:
+  - after index relation allocation
+  - halfway through index build
+  - after catalog index row
+  - after schema_version update
+  - after commit before publish
+
+Recovery expectations:
+  - committed DDL visible
+  - aborted/uncommitted DDL invisible
+  - no live catalog row points at missing relation
+  - orphan pending relation either rolled back or reclaimed
+  - schema_version equals durable committed state
+  - prepared statement invalidation works after reopen
+```
+
+If Phase 1 already has crash injection, add catalog crash hooks:
+
+```rust
+pub enum CatalogCrashPoint {
+    AfterCreateRelation,
+    AfterInsertTableRow,
+    AfterInsertColumnRows,
+    AfterInsertIndexRows,
+    AfterUpdateSchemaVersion,
+    AfterCommitBeforePublish,
+}
+```
+
+---
+
+# Property tests
+
+## Affinity tests
+
+Generate:
+
+```text
+declared_type strings
+input values
+expected affinity
+coercion result
+```
+
+Important cases:
+
+```text
+INT                  => INTEGER
+VARCHAR(255)         => TEXT
+CLOB                 => TEXT
+BLOB                 => BLOB
+empty/no type        => BLOB
+DOUBLE PRECISION     => REAL
+BOOLEAN              => NUMERIC
+DECIMAL(10,5)        => NUMERIC
+CHARINT              => INTEGER because INT rule wins
+```
+
+## Record format tests
+
+```text
+roundtrip arbitrary rows
+reject truncated payloads
+reject bad UTF-8 text
+compact int encodings
+decode without allocation except scratch growth
+```
+
+## Key ordering tests
+
+Generate values and compare:
+
+```text
+encoded_key(a) < encoded_key(b) iff SQL_order(a,b) < 0
+```
+
+Separate tests for:
+
+```text
+integers across negative/positive
+f64 negative/positive/zero
+text prefix cases: "a" < "aa"
+blob prefix cases
+composite keys
+desc ordering
+rowid suffix
+```
+
+## Catalog model tests
+
+Model catalog as pure Rust map:
+
+```text
+commands:
+  create_table
+  drop_table
+  create_index
+  drop_index
+```
+
+Assert Redline catalog snapshot equals model after each committed command.
+
+## Concurrency tests
+
+Use `loom` or `shuttle` around:
+
+```text
+prepare while CREATE TABLE commits
+insert while CREATE INDEX starts
+drop table while reader holds old schema Arc
+two concurrent CREATE TABLE same name
+schema publish racing with schema lookup
+prepared statement detects schema_version change
+```
+
+---
+
+# Compatibility tests against SQLite
+
+For supported Phase 4 DDL and constraints, run a compatibility test matrix:
+
+```sql
+CREATE TABLE t(a INT, b TEXT DEFAULT 'x', CHECK(a > 0));
+INSERT INTO t(a) VALUES(1);
+INSERT INTO t(a) VALUES(0); -- fails
+INSERT INTO t(a) VALUES(NULL); -- CHECK passes unless NOT NULL
+```
+
+Compare:
+
+```text
+accepted/rejected
+error class
+stored value storage class
+rowid behavior
+unique NULL behavior
+default behavior
+```
+
+Use SQLite as an external test oracle, not as a linked implementation dependency.
+
+---
+
+# Performance gates for Phase 4
+
+Phase 4 should not wait until Phase 9 to benchmark. Add microbenches now:
+
+```text
+schema lookup by name
+prepared statement schema validation
+row encode/decode
+affinity coercion
+CHECK bytecode eval
+NOT NULL check
+unique key encoding
+catalog load with 1k/10k/100k tables
+CREATE TABLE latency
+DROP TABLE latency
+```
+
+Targets:
+
+```text
+prepared schema_version check: one atomic load + branch
+table metadata access: Arc pointer deref
+row encode: no heap allocation after buffer reserve
+CHECK eval: no AST allocation
+catalog read path: no locks
+DML write gate: statement-level atomics only
+```
+
+---
+
+# Implementation order
+
+## PR 1: values, affinity, record encoding
+
+Deliver:
+
+```text
+value.rs
+affinity.rs
+record.rs
+key.rs
+tests for roundtrip/order/coercion
+```
+
+No kernel changes required.
+
+## PR 2: system catalog descriptors and bootstrap
+
+Deliver:
+
+```text
+system.rs
+bootstrap.rs
+fixed relation IDs
+redline_meta
+redline_schemas
+redline_tables
+redline_columns
+```
+
+Open a new DB and recover catalog after restart.
+
+## PR 3: schema loader and immutable snapshots
+
+Deliver:
+
+```text
+loader.rs
+schema.rs
+CatalogManager
+ArcSwap publish
+catalog validation
+```
+
+No DDL yet; load bootstrap catalogs.
+
+## PR 4: CREATE TABLE / DROP TABLE
+
+Deliver:
+
+```text
+CreateTableSpec
+DropTableSpec
+DDL transaction path
+schema_version bump
+prepared invalidation primitive
+```
+
+Test crash points.
+
+## PR 5: primary key and unique backing indexes
+
+Deliver:
+
+```text
+redline_indexes
+redline_index_columns
+autoindex creation
+unique metadata
+rowid alias support
+```
+
+No full SQL needed.
+
+## PR 6: defaults, NOT NULL, CHECK
+
+Deliver:
+
+```text
+ExprAst
+bytecode compiler
+constraint executor
+default executor
+constraint catalog rows
+```
+
+## PR 7: CREATE INDEX / DROP INDEX
+
+Deliver:
+
+```text
+CreateIndexSpec
+writer gate
+bounded scan/build
+index catalog rows
+schema publish
+```
+
+## PR 8: compatibility view
+
+Deliver:
+
+```text
+sqlite_schema virtual/system view
+.schema support foundation
+```
+
+---
+
+# “Done” definition for Phase 4
+
+Phase 4 is complete when this works through the internal API:
+
+```rust
+let db = Redline::open("db.redline")?;
+
+let users = db.create_table(CreateTableSpec {
+    schema: None,
+    name: DbName::new("users"),
+    if_not_exists: false,
+    strict: false,
+    without_rowid: false,
+    columns: vec![
+        ColumnSpec {
+            name: DbName::new("id"),
+            declared_type: Some("INTEGER".into()),
+            collation: None,
+            constraints: vec![
+                ColumnConstraintSpec::PrimaryKey {
+                    sort_dir: SortDir::Asc,
+                    conflict: ConflictAction::Abort,
+                },
+            ],
+        },
+        ColumnSpec {
+            name: DbName::new("email"),
+            declared_type: Some("TEXT".into()),
+            collation: None,
+            constraints: vec![
+                ColumnConstraintSpec::NotNull {
+                    conflict: ConflictAction::Abort,
+                },
+                ColumnConstraintSpec::Unique {
+                    conflict: ConflictAction::Abort,
+                },
+            ],
+        },
+        ColumnSpec {
+            name: DbName::new("age"),
+            declared_type: Some("INT".into()),
+            collation: None,
+            constraints: vec![
+                ColumnConstraintSpec::Default {
+                    expr: ExprAst::Literal(OwnedValue::Integer(0)),
+                    normalized_sql: "0".into(),
+                },
+                ColumnConstraintSpec::Check {
+                    expr: ExprAst::Binary {
+                        op: BinaryOp::Ge,
+                        left: Box::new(ExprAst::ColumnRef(DbName::new("age"))),
+                        right: Box::new(ExprAst::Literal(OwnedValue::Integer(0))),
+                    },
+                    normalized_sql: "age >= 0".into(),
+                },
+            ],
+        },
+    ],
+    constraints: vec![],
+    normalized_sql: Some(
+        "CREATE TABLE users(id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, age INT DEFAULT 0 CHECK(age >= 0))".into(),
+    ),
+})?;
+```
+
+And these are true:
+
+```text
+- Crash after any DDL sub-step recovers to old schema or new schema, never half schema.
+- Committed CREATE TABLE survives reopen.
+- Aborted CREATE TABLE leaves no live table.
+- DROP TABLE invalidates new statements but old readers finish safely.
+- INTEGER PRIMARY KEY aliases rowid.
+- UNIQUE allows multiple NULLs in SQLite-compat mode.
+- NOT NULL, DEFAULT, and CHECK are enforced on writes.
+- Catalog lookup is lock-free for DML.
+- Prepared statements fail with SchemaChanged after committed DDL.
+- sqlite_schema-compatible output can be synthesized.
+```
+
+The “brilliant simplicity” version is: **normal MVCC catalog tables, immutable schema snapshots, global DDL serialization, per-table writer gates only for index/drop correctness, compact row/value encoding, bytecode constraints, and delayed physical reclamation**. That gives you correctness now and keeps the hot path clean enough to preserve the long-term goal: beating SQLite where SQLite’s single-writer architecture hurts most.
+
+[1]: https://www.sqlite.org/datatype3.html "Datatypes In SQLite"
+[2]: https://www.sqlite.org/lang_createtable.html "CREATE TABLE"
+[3]: https://www.sqlite.org/schematab.html "The Schema Table"
+

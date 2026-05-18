@@ -1,0 +1,29 @@
+schema_version = "1.0.0"
+
+[[tools]]
+id = "audit-ci"
+mode = "auto"
+
+[[tools]]
+id = "proof-routing"
+mode = "auto"
+
+[[tools]]
+id = "security"
+mode = "auto"
+
+[[tools]]
+id = "ux-qa"
+mode = "auto"
+
+[[tools]]
+id = "db-migration-analyze"
+mode = "auto"
+
+[[tools]]
+id = "contract-drift"
+mode = "auto"
+
+[[tools]]
+id = "rust-witness"
+mode = "auto"

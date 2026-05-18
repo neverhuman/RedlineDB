@@ -1,0 +1,1738 @@
+I unpacked `/mnt/data/RedlineDB.tar(16).gz` and studied `EXTERNAL_REVIEW_MASTER_PROMPT.md`, the benchmark runner code, SQL execution paths, index cursor code, WAL/lock code, and vector index code.
+
+The important caveat: the uploaded tarball does **not** contain the raw certified benchmark artifacts named by the prompt. I found no `.git`, no `target/bench/**`, no `paper/data/**`, no `crates/bench/bench/**` configs, and none of the agent maps referenced in the prompt such as `agent/owner-map.json`, `agent/test-map.json`, or `agent/proof-lanes.toml`. I also could not run the workspace tests in this container because the repo requires Rust/Cargo `1.95.0` with edition `2024`, while the container has Rust/Cargo `1.81.0`.
+
+So the benchmark numbers below come from the checked-in documentation and prompt, not from raw benchmark CSV/JSON artifacts.
+
+---
+
+## 1. Benchmark data found
+
+The benchmark table in `README.md:40-52` gives the main Phase 10 numbers:
+
+| Benchmark               | Threads | RedlineDB qps | SQLite qps |  Ratio |                 Gap |
+| ----------------------- | ------: | ------------: | ---------: | -----: | ------------------: |
+| `writers-disjoint`      |      64 |         1,256 |         79 | 15.89x |      RedlineDB wins |
+| `mixed-95/5`            |      64 |        24,763 |      1,680 | 14.74x |      RedlineDB wins |
+| `mixed-80/20`           |      64 |         6,154 |        405 | 15.21x |      RedlineDB wins |
+| `mixed-50/50`           |      64 |         2,483 |        160 | 15.55x |      RedlineDB wins |
+| `point-read-pk`         |      64 |       121,268 |    122,221 |  0.99x |              parity |
+| `point-read-pk`         |      32 |        32,611 |     23,371 |  1.40x |      RedlineDB wins |
+| `hot-row-update`        |      64 |            35 |         79 |  0.44x | SQLite 2.26x faster |
+| `secondary-index-range` |      64 |         5,598 |    117,088 | 0.048x | SQLite 20.9x faster |
+| `secondary-index-read`  |      64 |        16,245 |    121,030 |  0.13x | SQLite 7.45x faster |
+
+`EXTERNAL_REVIEW_MASTER_PROMPT.md:83-96` repeats the same headline gaps. `docs/WORKPLAN_slam.md:609-616` repeats the Phase 10 ratios and artifact hashes, but the artifact files themselves are not present in the tarball.
+
+There is also a stale prose mismatch: `README.md:310-312` says the secondary-index range gap is “~80x” and hot-row is “~5x” slower. That matches older Phase 9-ish ratios, not the Phase 10 table. Using the Phase 10 table, secondary-index range is about **20.9x** behind SQLite and hot-row is about **2.26x** behind SQLite.
+
+---
+
+# Priority benchmarks to improve
+
+I would focus on these 5 targets:
+
+1. **`secondary-index-range`**
+   Worst confirmed headline gap: `0.048x`, RedlineDB `5,598 qps` vs SQLite `117,088 qps`.
+
+2. **`secondary-index-read`**
+   Second-worst confirmed headline gap: `0.13x`, RedlineDB `16,245 qps` vs SQLite `121,030 qps`.
+
+3. **`hot-row-update` / `hot-counter-update` split**
+   Confirmed hot-row gap: `0.44x`. There is also a dedicated `hot-counter-update` workload in code, which is the right place for commutative-delta optimization.
+
+4. **`covered-range-cold` / `covered-range-warm` / `secondary-index-count`**
+   These workloads exist in `crates/bench/src/workload.rs`, but the uploaded tarball lacks raw results. They are the direct path to proving the secondary-index fixes.
+
+5. **`vector-ann-search` / `vector-ann-search-disk`**
+   The prompt calls out HNSW lower-`M` recall and DiskANN mmap as gaps. The code confirms the DiskANN benchmark is currently memory-loaded, not truly mmap/disk-resident.
+
+---
+
+# Key finding before performance work: one fast-path correctness risk
+
+The most important technical finding is not just performance-related.
+
+The current SQL fast paths can use an index range without proving that **all predicates are consumed by the index**.
+
+The risky paths are in:
+
+* `crates/sql/src/exec/select_top.rs`
+* `crates/sql/src/exec/index_access.rs`
+* `crates/sql/src/exec/index_batch.rs`
+
+The current `COUNT(*)` fast path recognizes a query like:
+
+```sql
+SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ?1 AND ?2
+```
+
+and routes it to an index-only count through `execute_index_count_range`.
+
+That is exactly what we want for `secondary-index-range`.
+
+But the current matcher appears to return only the usable leading index range. It does **not** carry a residual predicate contract. That means a query like this is dangerous:
+
+```sql
+SELECT COUNT(*)
+FROM kv
+WHERE tenant BETWEEN 1 AND 4
+  AND version = 999;
+```
+
+The index on `tenant` can satisfy the `tenant BETWEEN` part, but not `version = 999`. If the fast path counts the index range without rechecking `version`, it can return the wrong answer.
+
+The same category applies to covering index range scans and ordered-limit scans. This must be fixed before relying on the fast paths for benchmark wins.
+
+---
+
+# Change 1: Make index fast paths residual-predicate-safe, then harden index-only `COUNT(*)`
+
+## Benchmarks improved
+
+Primary:
+
+* `secondary-index-range`
+* `secondary-index-count`
+
+Secondary:
+
+* `covered-range-warm`
+* `covered-range-cold`
+* `queue-mixed` count path
+
+## Current code path
+
+The benchmark workload is in `crates/bench/src/workload.rs`.
+
+For `secondary-index-range`, the query is:
+
+```rust
+SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ?1 AND ?2
+```
+
+That appears around `workload.rs:329-340`.
+
+The RedlineDB benchmark schema creates:
+
+```sql
+CREATE TABLE kv(k INTEGER PRIMARY KEY, tenant INTEGER, v BLOB, version INTEGER)
+CREATE INDEX kv_tenant_idx ON kv(tenant)
+```
+
+That is in `crates/bench/src/engine/redline.rs:52-59`.
+
+The SQL fast path is in `crates/sql/src/exec/select_top.rs`. The `COUNT(*)` path checks for simple table source, no grouping/distinct/order/having, and a single `COUNT(*)` projection, then uses `try_match_index_access` and `execute_index_count_range`.
+
+The low-level count implementation is already promising:
+
+* `crates/sql/src/exec/index_batch.rs`
+* `crates/kernel/src/index/cursor.rs`
+
+`RawIndexCursor::count_remaining` walks index leaves without heap rechecks. That is exactly what should narrow the `secondary-index-range` gap.
+
+## Main issue
+
+The current index access match needs to expose:
+
+1. Which predicates were consumed by the index.
+2. Whether any residual predicate remains.
+3. Whether the fast path is allowed to avoid heap recheck.
+
+Without this, the count path is fast but potentially unsound.
+
+## Required change
+
+Add a residual-aware index match contract.
+
+### Files touched
+
+Existing files:
+
+* `crates/sql/src/exec/index_access.rs`
+* `crates/sql/src/exec/select_top.rs`
+* `crates/sql/src/exec/index_batch.rs`
+* `crates/kernel/src/index/cursor.rs`
+* `crates/kernel/src/telemetry/mod.rs`
+* `crates/bench/src/workload.rs`
+* `crates/bench/src/config.rs`
+* `README.md`
+* `docs/WORKPLAN_slam.md`
+
+Tests to create/update:
+
+* `crates/sql/tests/index_fast_path_residuals.rs`
+* `crates/sql/tests/index_count_fast_path.rs`
+* `crates/bench/tests/secondary_index_count_config.rs`
+
+Benchmark configs to create, because they are absent from the tarball:
+
+* `crates/bench/bench/phase11-oltp-gap.toml`
+* `crates/bench/bench/secondary-index-gap.toml`
+
+Generated artifacts after rerun:
+
+* `target/bench/phase11-oltp-gap/**`
+* `paper/data/headline_table.csv`
+* `paper/data/perf_aggregates.csv`
+
+## Concrete implementation guidance
+
+### Step 1: extend `IndexAccessMatch`
+
+Current logic returns a match but does not sufficiently prove residual safety. Add explicit consumed-predicate metadata.
+
+A concrete shape:
+
+```rust
+// crates/sql/src/exec/index_access.rs
+
+#[derive(Debug, Clone)]
+pub(crate) struct IndexAccessMatch {
+    pub index_id: IndexId,
+    pub index_name: String,
+    pub key_parts: Vec<SqlValue>,
+    pub access: IndexAccessKind,
+
+    // New:
+    pub conjunct_count: usize,
+    pub consumed_conjuncts: Vec<usize>,
+    pub equality_prefix_len: usize,
+}
+
+impl IndexAccessMatch {
+    pub(crate) fn consumes_all_conjuncts(&self) -> bool {
+        self.consumed_conjuncts.len() == self.conjunct_count
+    }
+
+    pub(crate) fn has_residual_predicate(&self) -> bool {
+        !self.consumes_all_conjuncts()
+    }
+
+    pub(crate) fn consumed_set_contains(&self, idx: usize) -> bool {
+        self.consumed_conjuncts.iter().any(|seen| *seen == idx)
+    }
+}
+```
+
+Then change predicate flattening to preserve conjunct positions.
+
+Instead of only flattening into expressions:
+
+```rust
+let conjuncts = flatten_and(selection);
+```
+
+use something like:
+
+```rust
+#[derive(Clone)]
+struct IndexedConjunct<'a> {
+    ordinal: usize,
+    expr: &'a Expr,
+}
+
+fn flatten_and_indexed<'a>(expr: &'a Expr, out: &mut Vec<IndexedConjunct<'a>>) {
+    match expr {
+        Expr::Binary { op: BinaryOp::And, left, right } => {
+            flatten_and_indexed(left, out);
+            flatten_and_indexed(right, out);
+        }
+        other => {
+            let ordinal = out.len();
+            out.push(IndexedConjunct { ordinal, expr: other });
+        }
+    }
+}
+```
+
+When the matcher consumes `tenant BETWEEN ?1 AND ?2`, mark that conjunct consumed. When it consumes `tenant = ?1`, mark that conjunct consumed. If the selection includes `version = 999`, leave it unconsumed.
+
+### Step 2: make index-only count require no residual
+
+In `select_top.rs`, the index-only count path should only fire when the index match consumes the entire selection.
+
+Shape:
+
+```rust
+// crates/sql/src/exec/select_top.rs
+
+fn try_count_star_index_range(
+    conn: &Connection,
+    tx: &Tx,
+    plan: &SelectPlan,
+    source: &TableSource,
+    snapshot: SnapshotView,
+) -> Result<Option<Vec<Vec<SqlValue>>>> {
+    if !is_simple_count_star(plan) {
+        return Ok(None);
+    }
+
+    let Some(selection) = plan.selection.as_ref() else {
+        return Ok(None);
+    };
+
+    let Some(matched) = try_match_index_access(conn, source, selection)? else {
+        return Ok(None);
+    };
+
+    // Critical correctness guard.
+    if matched.has_residual_predicate() {
+        return Ok(None);
+    }
+
+    let count = execute_index_count_range(
+        conn.engine(),
+        tx,
+        source.relation_id,
+        &matched,
+        snapshot,
+    )?;
+
+    conn.engine()
+        .benchmark_stats()
+        .index_count_path_hits
+        .fetch_add(1, Ordering::Relaxed);
+
+    Ok(Some(vec![vec![SqlValue::Integer(count as i64)]]))
+}
+```
+
+This should be the only heap-free `COUNT(*)` path.
+
+If a query has residual predicates, either:
+
+1. Fall back to heap recheck, or
+2. Add a residual-aware count path that scans the index but checks qualifying rows.
+
+Do **not** use the pure index-only count if residual predicates remain.
+
+### Step 3: add correctness tests that would fail today if the path is unsound
+
+Add tests like:
+
+```rust
+#[test]
+fn count_index_range_does_not_ignore_residual_predicate() {
+    let db = open_test_db();
+    db.execute_batch(
+        "
+        CREATE TABLE kv(
+            k INTEGER PRIMARY KEY,
+            tenant INTEGER,
+            v BLOB,
+            version INTEGER
+        );
+        CREATE INDEX kv_tenant_idx ON kv(tenant);
+
+        INSERT INTO kv(k, tenant, v, version) VALUES
+          (1, 1, X'01', 1),
+          (2, 1, X'02', 2),
+          (3, 2, X'03', 1),
+          (4, 2, X'04', 2);
+        ",
+    ).unwrap();
+
+    let got: i64 = db
+        .query_one(
+            "SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ?1 AND ?2 AND version = ?3",
+            params![1, 2, 999],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    assert_eq!(got, 0);
+}
+```
+
+Also add a positive fast-path test:
+
+```rust
+#[test]
+fn count_index_range_uses_index_only_when_all_predicates_consumed() {
+    let db = open_test_db_with_stats();
+    seed_kv(&db, 10_000);
+
+    let before = db.stats().index_count_path_hits();
+
+    let got: i64 = db
+        .query_one(
+            "SELECT COUNT(*) FROM kv WHERE tenant BETWEEN ?1 AND ?2",
+            params![3, 7],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    let after = db.stats().index_count_path_hits();
+
+    assert_eq!(got, expected_count(3, 7));
+    assert_eq!(after - before, 1);
+    assert_eq!(db.stats().heap_rechecks_delta_since(before), 0);
+}
+```
+
+## Expected benchmark impact
+
+This is the most direct fix for `secondary-index-range`.
+
+SQLite’s advantage on `secondary-index-range` is likely because it is doing an efficient index-only count/range walk. RedlineDB already has much of the machinery, but it needs to be guarded, tested, and measured.
+
+Target outcome:
+
+* Move `secondary-index-range` from `0.048x` toward at least `0.3x-0.7x` initially.
+* If the count path is already active in current source but not in Phase 10 artifacts, rerunning Phase 11 may show a larger jump immediately.
+* If the path is inactive or bypassed because of planning details, this change makes the intent explicit and testable.
+
+---
+
+# Change 2: Fix secondary-index ordered `LIMIT` and add a fair covering-index read path
+
+## Benchmarks improved
+
+Primary:
+
+* `secondary-index-read`
+
+Secondary:
+
+* `secondary-index-ordered-limit`
+* `queue-mixed`
+* `covered-range-warm`
+* `covered-range-cold`
+
+## Current benchmark query
+
+`secondary-index-read` in `crates/bench/src/workload.rs:320-327` runs:
+
+```sql
+SELECT k, v FROM kv WHERE tenant = ?1 ORDER BY k LIMIT 1
+```
+
+The schema has only:
+
+```sql
+CREATE INDEX kv_tenant_idx ON kv(tenant)
+```
+
+This means the current index is **not covering** for `v`.
+
+Because `k INTEGER PRIMARY KEY` is effectively the rowid, the index can use tenant equality and rowid order to find the first `k`, but it still needs a heap fetch to get `v`.
+
+That puts RedlineDB in a weaker position than SQLite’s mature btree executor.
+
+## Current fast path
+
+`crates/sql/src/exec/select_top.rs` contains an ordered-limit fast path.
+
+For a one-key index and `ORDER BY` rowid alias, it can use:
+
+```rust
+execute_index_probe_with_limit(...)
+```
+
+That is good for:
+
+```sql
+WHERE tenant = ?
+ORDER BY k
+LIMIT 1
+```
+
+because duplicate `tenant` index entries are ordered by rowid / primary key.
+
+## Main issues
+
+There are three important issues.
+
+### Issue A: the fast path must be proven active
+
+If RedlineDB misses the ordered-limit path, the fallback can do something much worse:
+
+1. Fetch all rowids for the tenant.
+2. Heap-load them.
+3. Sort/order.
+4. Take one row.
+
+That would explain a large gap.
+
+So add counters and tests proving this query hits the ordered-limit path.
+
+### Issue B: current index is not covering
+
+The query returns `v`, but `v` is not in `kv_tenant_idx`.
+
+A fair covering benchmark should use the same covering index on both engines:
+
+```sql
+CREATE INDEX kv_tenant_k_v_idx ON kv(tenant, k, v);
+```
+
+Then this query can be answered entirely from the index:
+
+```sql
+SELECT k, v
+FROM kv
+WHERE tenant = ?1
+ORDER BY k
+LIMIT 1;
+```
+
+### Issue C: covering-order logic needs equality-prefix awareness
+
+For an index like:
+
+```sql
+CREATE INDEX kv_tenant_k_v_idx ON kv(tenant, k, v);
+```
+
+and query:
+
+```sql
+WHERE tenant = ?
+ORDER BY k
+LIMIT 1
+```
+
+the order is not the first index column. It is the first column **after the equality prefix**.
+
+The planner should understand:
+
+* `tenant = ?` consumes index key position `0`.
+* Remaining index order is by `k`, then `v`, then rowid.
+* Therefore `ORDER BY k LIMIT 1` is satisfied by the index range.
+
+The current `covering_order_satisfies` logic appears too narrow. It mostly checks the first index key or rowid alias. It needs equality-prefix-aware suffix ordering.
+
+## Files touched
+
+Existing files:
+
+* `crates/sql/src/exec/index_access.rs`
+* `crates/sql/src/exec/select_top.rs`
+* `crates/sql/src/exec/index_batch.rs`
+* `crates/bench/src/workload.rs`
+* `crates/bench/src/config.rs`
+* `crates/bench/src/engine/redline.rs`
+* `crates/bench/src/engine/sqlite.rs`
+* `crates/kernel/src/telemetry/mod.rs`
+* `README.md`
+* `docs/WORKPLAN_slam.md`
+
+Tests to create/update:
+
+* `crates/sql/tests/index_order_limit.rs`
+* `crates/sql/tests/index_covering_order_limit.rs`
+* `crates/sql/tests/index_fast_path_residuals.rs`
+
+Benchmark configs to create:
+
+* `crates/bench/bench/secondary-index-gap.toml`
+* `crates/bench/bench/secondary-index-read-covered.toml`
+
+## Concrete implementation guidance
+
+### Step 1: add a counter for the ordered-limit path
+
+In the stats structure, expose counters such as:
+
+```rust
+ordered_limit_path_hits
+ordered_limit_rows_examined
+ordered_limit_heap_rechecks
+covering_order_limit_path_hits
+```
+
+Then in the ordered-limit fast path:
+
+```rust
+stats.ordered_limit_path_hits.fetch_add(1, Ordering::Relaxed);
+```
+
+The benchmark report should print these so agents can verify that `secondary-index-read` is not accidentally falling back.
+
+### Step 2: make order satisfaction equality-prefix-aware
+
+Example implementation shape:
+
+```rust
+// crates/sql/src/exec/select_top.rs
+
+fn index_order_satisfies_after_equality_prefix(
+    table: &TableMeta,
+    index: &IndexMeta,
+    matched: &IndexAccessMatch,
+    order_by: &[OrderExpr],
+) -> bool {
+    if order_by.is_empty() {
+        return true;
+    }
+
+    let mut key_pos = matched.equality_prefix_len;
+
+    for order in order_by {
+        if order.desc {
+            return false;
+        }
+
+        let Some(order_col) = order_expr_column_name(&order.expr) else {
+            return false;
+        };
+
+        // Case 1: ORDER BY rowid / INTEGER PRIMARY KEY alias.
+        if table.is_rowid_alias(&order_col) {
+            // Rowid order is available after all explicit index keys.
+            // For single-key duplicate ranges like idx(tenant), rowid is the tiebreaker.
+            return key_pos >= index.keys.len()
+                || index.keys[key_pos..].is_empty();
+        }
+
+        // Case 2: ORDER BY next index key after equality prefix.
+        let Some(index_key) = index.keys.get(key_pos) else {
+            return false;
+        };
+
+        if !same_column(table, index_key.column_id, &order_col) {
+            return false;
+        }
+
+        key_pos += 1;
+    }
+
+    true
+}
+```
+
+The important rule:
+
+```text
+WHERE a = ?
+ORDER BY b
+```
+
+is satisfied by:
+
+```text
+INDEX(a, b, ...)
+```
+
+because `a` is fixed.
+
+### Step 3: add a covering benchmark instead of silently changing the existing one
+
+Do not quietly change the headline `secondary-index-read` schema and pretend the number is comparable. Add a new benchmark:
+
+```rust
+BenchmarkKind::SecondaryIndexReadCovered
+```
+
+Setup for both RedlineDB and SQLite:
+
+```sql
+CREATE TABLE kv(
+    k INTEGER PRIMARY KEY,
+    tenant INTEGER,
+    v BLOB,
+    version INTEGER
+);
+
+CREATE INDEX kv_tenant_k_v_idx ON kv(tenant, k, v);
+```
+
+Query:
+
+```sql
+SELECT k, v
+FROM kv
+WHERE tenant = ?1
+ORDER BY k
+LIMIT 1;
+```
+
+This is fair because both engines get the same covering index.
+
+### Step 4: keep the original `secondary-index-read` and improve its early-stop path
+
+For the original non-covering index:
+
+```sql
+CREATE INDEX kv_tenant_idx ON kv(tenant);
+```
+
+the best RedlineDB can do is:
+
+1. Seek to `tenant = ?`.
+2. Read the first visible rowid in rowid order.
+3. Heap-load that one row.
+4. Project `k, v`.
+5. Stop.
+
+It must not scan all rows in the tenant bucket.
+
+A test should enforce:
+
+```rust
+#[test]
+fn tenant_order_by_pk_limit_one_uses_ordered_limit_path() {
+    let db = open_test_db_with_stats();
+    seed_many_rows_per_tenant(&db);
+
+    let before = db.stats();
+
+    let row = db.query_one(
+        "SELECT k, v FROM kv WHERE tenant = ?1 ORDER BY k LIMIT 1",
+        params![7],
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?)),
+    ).unwrap();
+
+    assert_eq!(row.0, expected_min_k_for_tenant(7));
+
+    let after = db.stats();
+
+    assert_eq!(
+        after.ordered_limit_path_hits - before.ordered_limit_path_hits,
+        1
+    );
+
+    assert!(
+        after.heap_rechecks - before.heap_rechecks <= 1,
+        "LIMIT 1 path should not heap-load the whole tenant bucket"
+    );
+}
+```
+
+## Expected benchmark impact
+
+For the existing non-covering `secondary-index-read`, the realistic goal is to reduce wasted scans and sort work. If the current Phase 10 number reflects a fallback path, this could produce a large improvement.
+
+For a new `secondary-index-read-covered` benchmark, RedlineDB should be much closer to SQLite because it can avoid heap fetches completely.
+
+Target outcomes:
+
+* Existing `secondary-index-read`: move from `0.13x` toward `0.4x-0.8x` if fallback is currently happening.
+* New covered benchmark: target parity or better, depending on cursor overhead and cache behavior.
+
+---
+
+# Change 3: Make index range scanning truly streaming and make prefetch non-blocking
+
+## Benchmarks improved
+
+Primary:
+
+* `secondary-index-range`
+* `covered-range-cold`
+* `covered-range-warm`
+* `secondary-index-count`
+
+Secondary:
+
+* `secondary-index-read`
+* `secondary-index-ordered-limit`
+* queue-style workloads using state indexes
+
+## Current code path
+
+Index scans use cursor code in:
+
+* `crates/kernel/src/index/cursor.rs`
+* `crates/sql/src/exec/index_batch.rs`
+
+There are two cursor styles:
+
+1. `IndexCursor`, which decodes a whole leaf into owned `Vec<LeafEntry>`.
+2. `RawIndexCursor`, which avoids some allocation and can decode by reference.
+
+The `COUNT(*)` and covering paths already use `RawIndexCursor`, which is good.
+
+However, `BufferPool::prefetch` in `crates/kernel/src/storage/buffer.rs` appears to do a synchronous cold `pin` if the page is not resident. That means the cursor’s “prefetch” can actually block the scanning thread.
+
+For a range benchmark, blocking prefetch is not really prefetch. It can serialize I/O or pollute timing.
+
+## Key issues
+
+1. `RawIndexCursor::count_remaining` is the right primitive for index-only count.
+2. `BufferPool::prefetch` should not synchronously block the scanning thread on a cold page.
+3. Heap recheck batching currently allocates a `HashMap` per batch and calls visibility checks row by row.
+4. Batch sizes are fixed and conservative. The index count/range workloads should be able to use larger batches or full-leaf loops.
+
+## Files touched
+
+Existing files:
+
+* `crates/kernel/src/index/cursor.rs`
+* `crates/kernel/src/storage/buffer.rs`
+* `crates/sql/src/exec/index_batch.rs`
+* `crates/kernel/src/telemetry/mod.rs`
+* `crates/bench/src/workload.rs`
+* `crates/bench/src/config.rs`
+
+Tests to create/update:
+
+* `crates/kernel/tests/index_cursor_prefetch.rs`
+* `crates/sql/tests/index_range_streaming.rs`
+
+Benchmark configs to create:
+
+* `crates/bench/bench/secondary-index-gap.toml`
+* `crates/bench/bench/covered-range-gap.toml`
+
+## Concrete implementation guidance
+
+### Step 1: split blocking pin from non-blocking prefetch
+
+Current behavior is approximately:
+
+```rust
+pub fn prefetch(&self, page_id: PageId) {
+    if self.try_resident(page_id) {
+        return;
+    }
+
+    // Bad for scanner: this can block.
+    let _guard = self.pin(page_id);
+}
+```
+
+Replace with a non-blocking enqueue API.
+
+Shape:
+
+```rust
+// crates/kernel/src/storage/buffer.rs
+
+pub enum PrefetchResult {
+    AlreadyResident,
+    Enqueued,
+    QueueFull,
+    Disabled,
+}
+
+impl BufferPool {
+    pub fn try_prefetch(&self, page_id: PageId) -> PrefetchResult {
+        if self.is_resident(page_id) {
+            self.stats.prefetch_hits.fetch_add(1, Ordering::Relaxed);
+            return PrefetchResult::AlreadyResident;
+        }
+
+        match self.prefetch_queue.try_push(page_id) {
+            Ok(()) => {
+                self.stats.prefetch_enqueued.fetch_add(1, Ordering::Relaxed);
+                PrefetchResult::Enqueued
+            }
+            Err(_) => {
+                self.stats.prefetch_dropped.fetch_add(1, Ordering::Relaxed);
+                PrefetchResult::QueueFull
+            }
+        }
+    }
+}
+```
+
+Then a background worker or existing heap lane should perform the blocking pin:
+
+```rust
+fn prefetch_worker(pool: Arc<BufferPool>, rx: Receiver<PageId>) {
+    while let Ok(page_id) = rx.recv() {
+        if !pool.is_resident(page_id) {
+            let _ = pool.pin(page_id);
+        }
+    }
+}
+```
+
+The key requirement: the scanner thread should not block just because it tried to prefetch the next leaf.
+
+### Step 2: in `RawIndexCursor`, prefetch one or two leaves ahead but never block
+
+In `crates/kernel/src/index/cursor.rs`:
+
+```rust
+fn emit_prefetch_hint(&mut self, page_id: PageId) {
+    if let Some(pool) = self.buffer_pool.as_ref() {
+        match pool.try_prefetch(page_id) {
+            PrefetchResult::AlreadyResident => self.stats.prefetch_hits += 1,
+            PrefetchResult::Enqueued => self.stats.prefetch_enqueued += 1,
+            PrefetchResult::QueueFull => self.stats.prefetch_dropped += 1,
+            PrefetchResult::Disabled => {}
+        }
+    }
+}
+```
+
+When a leaf is loaded and has `right_link`, enqueue that right link. If the page has a known next-next link after decoding the current leaf header, enqueue that too.
+
+### Step 3: avoid per-batch heap grouping allocations
+
+In `crates/sql/src/exec/index_batch.rs`, `process_recheck_batch` groups tuples by page using a fresh `HashMap`.
+
+For batch sizes like 256, a sorted vector is often cheaper and more predictable:
+
+```rust
+fn process_recheck_batch(
+    engine: &Engine,
+    tx: &Tx,
+    relation: RelationId,
+    batch: &mut [IndexTuple],
+    snapshot: SnapshotView,
+) -> Result<Vec<RowId>> {
+    batch.sort_unstable_by_key(|tuple| (tuple.page_id, tuple.slot_id));
+
+    let mut out = Vec::with_capacity(batch.len());
+    let mut i = 0;
+
+    while i < batch.len() {
+        let page_id = batch[i].page_id;
+        let mut j = i + 1;
+
+        while j < batch.len() && batch[j].page_id == page_id {
+            j += 1;
+        }
+
+        // Ideal next step:
+        // pin heap page once, visibility-check all slots on that page.
+        for tuple in &batch[i..j] {
+            if engine.visible_in_relation(tx, relation, tuple.row_id, snapshot)? {
+                out.push(tuple.row_id);
+            }
+        }
+
+        i = j;
+    }
+
+    Ok(out)
+}
+```
+
+The next improvement is a page-local visibility helper that pins the heap page once and checks all slots in that page.
+
+### Step 4: telemetry gate
+
+Add these counters:
+
+```text
+index_count_path_hits
+index_covering_path_hits
+index_ordered_limit_path_hits
+index_leaf_visits
+index_cursor_batches
+index_prefetch_enqueued
+index_prefetch_hits
+index_prefetch_dropped
+heap_rechecks
+```
+
+For `secondary-index-range`, the acceptance condition should be:
+
+```text
+index_count_path_hits > 0
+heap_rechecks == 0
+```
+
+For non-covering `secondary-index-read LIMIT 1`, the acceptance condition should be approximately:
+
+```text
+ordered_limit_path_hits > 0
+heap_rechecks <= operations
+```
+
+For covered read:
+
+```text
+covering_order_limit_path_hits > 0
+heap_rechecks == 0
+```
+
+## Expected benchmark impact
+
+This should compound with Change 1.
+
+The count fast path removes heap work. Non-blocking prefetch and raw cursor improvements reduce leaf-walk overhead. Together they should directly attack the `secondary-index-range` gap.
+
+---
+
+# Change 4: Split hot-row from hot-counter, then implement a real commutative integer-delta path
+
+## Benchmarks improved
+
+Primary:
+
+* `hot-counter-update`
+
+Secondary:
+
+* `hot-row-update`, indirectly through telemetry and lock optimizations
+* `commit-storm-batched`
+* mixed write-heavy workloads
+
+## Current benchmark
+
+`hot-row-update` in `crates/bench/src/workload.rs:404-414` runs:
+
+```sql
+UPDATE kv
+SET v = ?1, version = version + 1
+WHERE k = ?2
+```
+
+with `k = 0`.
+
+This is not safely commutative because `v = ?1` is an arbitrary last-writer-wins blob assignment. You cannot combine 64 concurrent updates into one delta without changing the final `v` semantics.
+
+There is also a separate `hot-counter-update` workload in `crates/bench/src/workload.rs:1223-1269`:
+
+```sql
+UPDATE hot_counter
+SET counter = counter + 1
+WHERE pk = ?1
+```
+
+That is the right benchmark for commutative combining.
+
+## Current write path
+
+The SQL update executor is in `crates/sql/src/exec/tail.rs`.
+
+The core update path:
+
+1. Finds target rows.
+2. Locks the row.
+3. Reloads the fresh row after lock.
+4. Rechecks predicate.
+5. Evaluates assignments.
+6. Applies constraints/index changes.
+7. Updates heap.
+8. Commits.
+
+The row lock implementation is in `crates/kernel/src/engine/lock.rs`. It is FIFO and wakes one waiter.
+
+The commit path in `crates/kernel/src/engine/mod.rs` has a useful detail: in the common strict path without schema/index handle changes, it publishes the commit and releases locks before flushing the WAL. So the confirmed hot-row gap is not simply “row lock held across fsync.” It is more likely row-lock convoying plus per-statement update/WAL overhead.
+
+There is a `crates/kernel/src/wal/combiner.rs`, but it is currently design-level. It is opt-in, disabled by default, and not integrated into the SQL update path as a real semantic delta execution mode.
+
+## Key issues
+
+1. Do not apply commutative combining to the existing `hot-row-update` benchmark. It is not semantically safe.
+2. Add/promote `hot-counter-update` as the benchmark for semantic combining.
+3. Implement a SQL-level detector for `counter = counter + constant`.
+4. Implement a kernel-level delta apply path with checked integer overflow.
+5. Make WAL/recovery preserve every committed transaction’s durability semantics.
+
+## Files touched
+
+Existing files:
+
+* `crates/sql/src/exec/tail.rs`
+* `crates/sql/src/statement.rs`
+* `crates/sql/src/planner.rs` if update planning is split there
+* `crates/kernel/src/engine/mod.rs`
+* `crates/kernel/src/engine/lock.rs`
+* `crates/kernel/src/wal/combiner.rs`
+* `crates/kernel/src/wal/manager.rs`
+* `crates/kernel/src/wal/payload.rs`
+* `crates/kernel/src/wal/record.rs`
+* `crates/kernel/src/telemetry/mod.rs`
+* `crates/bench/src/workload.rs`
+* `crates/bench/src/config.rs`
+
+Tests to create/update:
+
+* `crates/sql/tests/hot_counter_update.rs`
+* `crates/kernel/tests/wal_semantic_combiner.rs`
+* `crates/kernel/tests/hot_counter_recovery.rs`
+* `crates/kernel/tests/hot_counter_overflow.rs`
+* `crates/kernel/tests/hot_counter_isolation.rs`
+
+Benchmark configs to create:
+
+* `crates/bench/bench/hot-counter-64.toml`
+* `crates/bench/bench/phase11-oltp-gap.toml`
+
+## Concrete implementation guidance
+
+### Step 1: add a semantic update detector
+
+In the SQL update executor, detect this exact safe pattern:
+
+```sql
+UPDATE t
+SET counter = counter + ?
+WHERE pk = ?
+```
+
+Required safety constraints:
+
+* Single target table.
+* Single target row by primary key / rowid equality.
+* Updated column is an integer column.
+* Assignment is `col = col + constant` or `col = col - constant`.
+* No updated indexed column, unless index maintenance supports the delta path.
+* No `RETURNING` requiring intermediate values.
+* No triggers.
+* No residual predicate that could become false after combining unless it is rechecked correctly.
+* Overflow is checked.
+* Transaction isolation remains correct.
+
+Example shape:
+
+```rust
+// crates/sql/src/exec/tail.rs
+
+#[derive(Debug, Clone)]
+struct IntegerDeltaUpdate {
+    relation_id: RelationId,
+    row_id: RowId,
+    column_id: ColumnId,
+    delta: i64,
+}
+
+fn detect_integer_delta_update(
+    plan: &UpdatePlan,
+    bindings: &[SqlValue],
+    table: &TableMeta,
+) -> Option<IntegerDeltaUpdate> {
+    // 1. Exactly one assignment.
+    let assignment = plan.assignments.single()?;
+
+    // 2. Assignment shape: col = col + literal_or_param.
+    let (lhs_col, rhs_col, delta) = parse_additive_assignment(assignment, bindings)?;
+
+    if lhs_col != rhs_col {
+        return None;
+    }
+
+    // 3. WHERE shape: pk = param/literal.
+    let row_id = extract_exact_rowid_equality(&plan.selection, table, bindings)?;
+
+    // 4. The target column must not require secondary index maintenance.
+    if table.column_is_indexed(lhs_col) {
+        return None;
+    }
+
+    // 5. Column type / affinity guard.
+    if !table.column_is_integer_affinity(lhs_col) {
+        return None;
+    }
+
+    Some(IntegerDeltaUpdate {
+        relation_id: table.relation_id,
+        row_id,
+        column_id: lhs_col,
+        delta,
+    })
+}
+```
+
+Then at the top of `execute_update`:
+
+```rust
+if let Some(delta) = detect_integer_delta_update(plan, bindings, table) {
+    if conn.engine().wal_config().semantic_combiner {
+        return execute_integer_delta_update(conn, tx, delta);
+    }
+}
+```
+
+### Step 2: implement the engine delta apply API
+
+Add something like:
+
+```rust
+// crates/kernel/src/engine/mod.rs
+
+pub fn apply_integer_delta_for_relation(
+    &self,
+    tx: &mut Tx,
+    relation_id: RelationId,
+    row_id: RowId,
+    column_id: ColumnId,
+    delta: i64,
+) -> Result<()> {
+    self.lock_row_for_relation(tx, relation_id, row_id)?;
+
+    let current = self.read_column_for_update(tx, relation_id, row_id, column_id)?;
+    let current_i64 = current.as_i64_checked()?;
+
+    let next = current_i64
+        .checked_add(delta)
+        .ok_or(Error::IntegerOverflow)?;
+
+    self.write_column_for_update(
+        tx,
+        relation_id,
+        row_id,
+        column_id,
+        SqlValue::Integer(next),
+    )?;
+
+    tx.record_semantic_delta(CombinableDelta {
+        rel_id: relation_id,
+        row_id,
+        column: column_id,
+        delta,
+    });
+
+    Ok(())
+}
+```
+
+This does not yet reduce row-lock contention by itself. It first creates a semantically clean path.
+
+### Step 3: batch deltas before the row lock
+
+To actually improve `hot-counter-update`, the combiner needs to combine waiting deltas before every transaction individually grabs the row lock.
+
+One implementation direction:
+
+```rust
+pub struct PendingDeltaGroup {
+    key: DeltaKey,
+    waiters: Vec<DeltaWaiter>,
+    sum: i64,
+}
+
+pub struct DeltaWaiter {
+    tx_id: TxId,
+    delta: i64,
+    durable_ack: oneshot::Sender<Result<CommitReceipt>>,
+}
+```
+
+For identical `(relation_id, row_id, column_id)`:
+
+1. Threads submit deltas.
+2. Combiner sums compatible deltas with checked arithmetic.
+3. One worker takes the row lock.
+4. It applies the total delta once.
+5. WAL records either:
+
+   * one combined physical update plus a list of transaction commit records, or
+   * individual semantic delta records that recovery replays deterministically.
+
+Do not acknowledge durability to a transaction until its commit record is durable under the selected sync mode.
+
+### Step 4: preserve correctness in WAL/recovery
+
+A safe WAL shape:
+
+```rust
+enum WalPayload {
+    Commit {
+        tx_id: TxId,
+        commit_csn: Csn,
+        records: Vec<WalRecord>,
+    },
+
+    SemanticDelta {
+        relation_id: RelationId,
+        row_id: RowId,
+        column_id: ColumnId,
+        delta: i64,
+    },
+
+    CombinedSemanticDelta {
+        relation_id: RelationId,
+        row_id: RowId,
+        column_id: ColumnId,
+        total_delta: i64,
+        member_tx_ids: Vec<TxId>,
+    },
+}
+```
+
+Recovery must satisfy:
+
+```text
+Applying tx1(+1), tx2(+1), tx3(+1)
+is equivalent to applying combined(+3)
+and marking tx1, tx2, tx3 committed.
+```
+
+### Step 5: keep `hot-row-update` honest
+
+For `hot-row-update`, optimize only general overhead:
+
+* Better lock wait telemetry.
+* Less statement/update allocation.
+* Possibly row-local update fast path for primary-key exact update.
+* Group commit tuning.
+
+But do not fold the blob assignment.
+
+## Expected benchmark impact
+
+For `hot-row-update`, expect modest improvement unless the benchmark semantics are changed.
+
+For `hot-counter-update`, a real combiner can produce a major improvement because all threads are incrementing the same integer. That is the benchmark where RedlineDB can plausibly beat SQLite.
+
+Target outcomes:
+
+* `hot-row-update`: move from `0.44x` to maybe `0.6x-1.0x` with general overhead reduction.
+* `hot-counter-update`: target multi-x improvement over the uncombined path.
+
+---
+
+# Change 5: Separate vector benchmark fixes: HNSW lower-`M` recall and real mmap DiskANN
+
+## Benchmarks improved
+
+Primary:
+
+* `vector-ann-search`
+* `vector-ann-search-disk`
+
+Secondary:
+
+* vector recall gates
+* vector build-time gates
+* memory footprint gates
+
+## HNSW current code
+
+The HNSW benchmark in `crates/bench/src/workload.rs:509-543` uses:
+
+```rust
+let mut params = HnswParams::standard(dim);
+params.m = 16;
+params.m_max0 = 32;
+params.ef_construction = 128;
+params.ef_search = 96;
+```
+
+The default HNSW params in `crates/kernel/src/vector/hnsw/levels.rs` use `ef_construction = 200`.
+
+So the benchmark explicitly lowers construction quality to `128`, while the prompt says lower-`M` recall is still a gap.
+
+The HNSW builder and searcher are in:
+
+* `crates/kernel/src/vector/hnsw/builder.rs`
+* `crates/kernel/src/vector/hnsw/searcher.rs`
+* `crates/kernel/src/vector/hnsw/mod.rs`
+
+The builder already has neighbor diversity logic and reciprocal pruning, so this is not a missing-basic-HNSW issue. It is more about tuning, adaptive candidate expansion, and recall gates.
+
+## DiskANN current code
+
+The “disk” benchmark in `crates/bench/src/workload.rs:546-585` does this:
+
+1. Builds a `DiskAnnIndex`.
+2. Serializes sectors.
+3. Writes sectors to a temp file.
+4. Reads the entire file back into memory.
+5. Calls `DiskAnnIndex::from_sectors(&loaded, ...)`.
+6. Searches the in-memory decoded structure.
+
+So this is not currently a real mmap/disk-resident benchmark.
+
+`crates/kernel/src/vector/diskann/mod.rs` also has a TODO around disk-resident mmap. The internal index stores vectors/neighbors/row IDs in memory.
+
+## Files touched
+
+Existing files:
+
+* `crates/kernel/src/vector/hnsw/levels.rs`
+* `crates/kernel/src/vector/hnsw/builder.rs`
+* `crates/kernel/src/vector/hnsw/searcher.rs`
+* `crates/kernel/src/vector/hnsw/mod.rs`
+* `crates/kernel/src/vector/diskann/mod.rs`
+* `crates/kernel/src/vector/diskann/builder.rs`
+* `crates/kernel/src/vector/diskann/searcher.rs`
+* `crates/kernel/src/vector/diskann/sectors.rs`
+* `crates/bench/src/workload.rs`
+* `crates/bench/src/config.rs`
+
+Tests to create/update:
+
+* `crates/kernel/tests/hnsw_recall_m16.rs`
+* `crates/kernel/tests/hnsw_tombstone_overfetch.rs`
+* `crates/kernel/tests/diskann_mmap.rs`
+* `crates/bench/tests/vector_ann_configs.rs`
+
+Benchmark configs to create:
+
+* `crates/bench/bench/vector-ann-gap.toml`
+
+## Concrete HNSW implementation guidance
+
+### Step 1: tune construction quality for `M = 16`
+
+The benchmark currently uses:
+
+```rust
+params.ef_construction = 128;
+```
+
+I would test these first:
+
+```rust
+M = 16
+Mmax0 = 32
+ef_construction = 200
+ef_search = 96
+
+M = 16
+Mmax0 = 32
+ef_construction = 256
+ef_search = 96
+
+M = 16
+Mmax0 = 32
+ef_construction = 256
+ef_search = 128
+```
+
+Do not only raise `ef_search`; that improves query recall but can hide a poor graph. First improve graph quality at build time.
+
+### Step 2: make benchmark params explicit in config
+
+Avoid hard-coded vector benchmark params in `workload.rs`.
+
+Add config fields:
+
+```rust
+pub struct VectorAnnConfig {
+    pub dim: usize,
+    pub rows: usize,
+    pub queries: usize,
+    pub k: usize,
+    pub hnsw_m: usize,
+    pub hnsw_m_max0: usize,
+    pub hnsw_ef_construction: usize,
+    pub hnsw_ef_search: usize,
+    pub recall_floor_at_10: f64,
+}
+```
+
+Then the benchmark config can sweep construction/search parameters reproducibly.
+
+### Step 3: add adaptive overfetch for deleted/dead nodes
+
+Current search filters dead nodes after search. If the graph has tombstones, the final result can contain fewer live neighbors than requested.
+
+In `crates/kernel/src/vector/hnsw/mod.rs`, search should overfetch when dead nodes exist:
+
+```rust
+pub fn search(&self, query: &[f32], k: usize, ef: usize) -> Result<Vec<SearchHit>> {
+    let live_ratio = self.live_ratio_estimate();
+    let tombstone_penalty = if live_ratio < 0.95 {
+        ((k as f64 / live_ratio.max(0.1)).ceil() as usize).saturating_sub(k)
+    } else {
+        0
+    };
+
+    let internal_k = k + tombstone_penalty;
+    let internal_ef = ef.max(internal_k * 4);
+
+    let candidates = self.search_layer(query, self.entry_point, internal_ef, 0)?;
+
+    Ok(candidates
+        .into_iter()
+        .filter(|hit| self.is_live(hit.node_id))
+        .take(k)
+        .collect())
+}
+```
+
+Even if the current benchmark has no deletes, this should be added before using HNSW as a production benchmark target.
+
+## Concrete DiskANN mmap implementation guidance
+
+The current `from_sectors(&loaded, ...)` API forces the benchmark to load the whole file into memory.
+
+Introduce a sector reader abstraction.
+
+```rust
+// crates/kernel/src/vector/diskann/sectors.rs
+
+pub trait SectorReader: Send + Sync + 'static {
+    fn sector_count(&self) -> usize;
+    fn read_sector(&self, sector_id: u64) -> Result<&[u8]>;
+}
+```
+
+Memory implementation:
+
+```rust
+pub struct MemorySectorReader {
+    bytes: Arc<[u8]>,
+    sector_size: usize,
+}
+
+impl SectorReader for MemorySectorReader {
+    fn sector_count(&self) -> usize {
+        self.bytes.len() / self.sector_size
+    }
+
+    fn read_sector(&self, sector_id: u64) -> Result<&[u8]> {
+        let start = sector_id as usize * self.sector_size;
+        let end = start + self.sector_size;
+        Ok(&self.bytes[start..end])
+    }
+}
+```
+
+Mmap implementation:
+
+```rust
+pub struct MmapSectorReader {
+    mmap: memmap2::Mmap,
+    sector_size: usize,
+}
+
+impl MmapSectorReader {
+    pub fn open(path: &Path, sector_size: usize) -> Result<Self> {
+        let file = std::fs::File::open(path)?;
+        let mmap = unsafe { memmap2::MmapOptions::new().map(&file)? };
+        Ok(Self { mmap, sector_size })
+    }
+}
+
+impl SectorReader for MmapSectorReader {
+    fn sector_count(&self) -> usize {
+        self.mmap.len() / self.sector_size
+    }
+
+    fn read_sector(&self, sector_id: u64) -> Result<&[u8]> {
+        let start = sector_id as usize * self.sector_size;
+        let end = start + self.sector_size;
+        Ok(&self.mmap[start..end])
+    }
+}
+```
+
+Then make `DiskAnnIndex` generic over the reader:
+
+```rust
+pub struct DiskAnnIndex<R: SectorReader> {
+    reader: R,
+    layout: DiskAnnLayout,
+    metric: VectorMetric,
+    // cache, beam width, entry point, etc.
+}
+```
+
+The disk benchmark should become:
+
+```rust
+let reader = MmapSectorReader::open(&path, sector_size)?;
+let index = DiskAnnIndex::from_reader(reader, dim, metric)?;
+
+for query in queries {
+    let hits = index.search(query, k, beam_width)?;
+    // record latency, recall, sectors touched
+}
+```
+
+Add telemetry:
+
+```text
+diskann_sector_reads
+diskann_unique_sectors
+diskann_cache_hits
+diskann_cache_misses
+diskann_beam_width
+diskann_recall_at_10
+```
+
+## Expected benchmark impact
+
+For HNSW lower-`M`, expect recall improvement first, not necessarily qps improvement. The target is to hit recall gates with the smallest `M` and acceptable `ef_search`.
+
+For DiskANN, the main goal is benchmark honesty. The current benchmark name suggests disk behavior, but the code loads the full file into memory. A real mmap benchmark may initially be slower, but it will be the correct target for future optimization.
+
+---
+
+# Exact touched/created file list
+
+## Existing files to touch
+
+### SQL planner/executor
+
+* `crates/sql/src/exec/index_access.rs`
+* `crates/sql/src/exec/select_top.rs`
+* `crates/sql/src/exec/index_batch.rs`
+* `crates/sql/src/exec/tail.rs`
+* `crates/sql/src/statement.rs`
+* `crates/sql/src/planner.rs` if update planning is centralized there
+* `crates/sql/src/connection.rs` only if statement/fast-path telemetry is exposed through connection stats
+
+### Kernel index/storage
+
+* `crates/kernel/src/index/cursor.rs`
+* `crates/kernel/src/storage/buffer.rs`
+* `crates/kernel/src/telemetry/mod.rs`
+
+### Kernel write/WAL/lock
+
+* `crates/kernel/src/engine/mod.rs`
+* `crates/kernel/src/engine/lock.rs`
+* `crates/kernel/src/wal/combiner.rs`
+* `crates/kernel/src/wal/manager.rs`
+* `crates/kernel/src/wal/payload.rs`
+* `crates/kernel/src/wal/record.rs`
+
+### Vector
+
+* `crates/kernel/src/vector/hnsw/levels.rs`
+* `crates/kernel/src/vector/hnsw/builder.rs`
+* `crates/kernel/src/vector/hnsw/searcher.rs`
+* `crates/kernel/src/vector/hnsw/mod.rs`
+* `crates/kernel/src/vector/diskann/mod.rs`
+* `crates/kernel/src/vector/diskann/builder.rs`
+* `crates/kernel/src/vector/diskann/searcher.rs`
+* `crates/kernel/src/vector/diskann/sectors.rs`
+
+### Bench
+
+* `crates/bench/src/workload.rs`
+* `crates/bench/src/config.rs`
+* `crates/bench/src/engine/redline.rs`
+* `crates/bench/src/engine/sqlite.rs`
+* `crates/bench/src/gates.rs`
+* `crates/bench/src/report.rs` or equivalent reporting module
+
+### Docs
+
+* `README.md`
+* `docs/WORKPLAN_slam.md`
+* `paper/PLAN.md`
+
+## New test files to create
+
+* `crates/sql/tests/index_fast_path_residuals.rs`
+* `crates/sql/tests/index_count_fast_path.rs`
+* `crates/sql/tests/index_order_limit.rs`
+* `crates/sql/tests/index_covering_order_limit.rs`
+* `crates/kernel/tests/index_cursor_prefetch.rs`
+* `crates/sql/tests/hot_counter_update.rs`
+* `crates/kernel/tests/wal_semantic_combiner.rs`
+* `crates/kernel/tests/hot_counter_recovery.rs`
+* `crates/kernel/tests/hot_counter_overflow.rs`
+* `crates/kernel/tests/hnsw_recall_m16.rs`
+* `crates/kernel/tests/diskann_mmap.rs`
+
+## New benchmark configs to create
+
+The prompt references benchmark configs, but they are missing in the uploaded tarball. Create these:
+
+* `crates/bench/bench/phase11-oltp-gap.toml`
+* `crates/bench/bench/secondary-index-gap.toml`
+* `crates/bench/bench/secondary-index-read-covered.toml`
+* `crates/bench/bench/covered-range-gap.toml`
+* `crates/bench/bench/hot-counter-64.toml`
+* `crates/bench/bench/vector-ann-gap.toml`
+
+## Generated benchmark artifacts
+
+These should be generated by the benchmark/export flow, not hand-written:
+
+* `target/bench/phase11-oltp-gap/summary.csv`
+* `target/bench/phase11-oltp-gap/summary.json`
+* `target/bench/phase11-oltp-gap/gates.json`
+* `paper/data/headline_table.csv`
+* `paper/data/perf_aggregates.csv`
+
+---
+
+# Recommended execution order
+
+## P0: correctness and secondary-index range
+
+Do first:
+
+1. Add residual-predicate tracking to `IndexAccessMatch`.
+2. Require residual-free proof for index-only `COUNT(*)`.
+3. Add tests proving residual predicates are not ignored.
+4. Add counters proving `secondary-index-range` uses the index-only count path.
+5. Rerun `secondary-index-range` and `secondary-index-count`.
+
+This is the highest-value and highest-risk area.
+
+## P1: secondary-index read
+
+Then:
+
+1. Add ordered-limit path counters.
+2. Add tests proving `tenant = ? ORDER BY k LIMIT 1` heap-loads at most one row.
+3. Add equality-prefix-aware covering order detection.
+4. Add a fair `secondary-index-read-covered` benchmark with `INDEX(tenant, k, v)` on both engines.
+
+## P2: range cursor and prefetch
+
+Then:
+
+1. Make prefetch non-blocking.
+2. Use `RawIndexCursor` wherever possible.
+3. Avoid per-batch `HashMap` allocation in heap recheck.
+4. Add leaf visit / prefetch / heap recheck counters to benchmark reports.
+
+## P3: hot-counter combiner
+
+Then:
+
+1. Keep `hot-row-update` as non-combinable.
+2. Promote `hot-counter-update` to the primary semantic-combiner benchmark.
+3. Implement SQL additive-update detection.
+4. Integrate `wal/combiner.rs` into the execution/WAL path.
+5. Add recovery/isolation/overflow tests.
+
+## P4: vector benchmarks
+
+Then:
+
+1. Move HNSW params into benchmark config.
+2. Sweep `M=16`, `ef_construction=200/256`, `ef_search=96/128`.
+3. Add recall gates.
+4. Replace the memory-loaded DiskANN “disk” benchmark with an mmap sector reader.
+5. Report sector reads/cache hits/recall.
+
+---
+
+# Proof gates I would require before accepting the changes
+
+Use Rust `1.95.0`, because this repo declares edition `2024` and `rust-version = 1.95`.
+
+Commands should look like:
+
+```bash
+cargo +1.95.0 test --workspace --locked
+```
+
+Then run focused benchmarks:
+
+```bash
+cargo +1.95.0 run -p redlinedb-bench --release -- \
+  certify \
+  --config crates/bench/bench/secondary-index-gap.toml \
+  --out-dir target/bench/secondary-index-gap
+```
+
+```bash
+cargo +1.95.0 run -p redlinedb-bench --release -- \
+  certify \
+  --config crates/bench/bench/hot-counter-64.toml \
+  --out-dir target/bench/hot-counter-64
+```
+
+```bash
+cargo +1.95.0 run -p redlinedb-bench --release -- \
+  certify \
+  --config crates/bench/bench/vector-ann-gap.toml \
+  --out-dir target/bench/vector-ann-gap
+```
+
+For acceptance, I would require these telemetry assertions:
+
+| Benchmark                      | Required telemetry                                            |
+| ------------------------------ | ------------------------------------------------------------- |
+| `secondary-index-range`        | `index_count_path_hits > 0`, `heap_rechecks == 0`             |
+| `secondary-index-count`        | `index_count_path_hits > 0`, `heap_rechecks == 0`             |
+| `secondary-index-read`         | `ordered_limit_path_hits > 0`, heap rechecks roughly `<= ops` |
+| `secondary-index-read-covered` | `covering_order_limit_path_hits > 0`, `heap_rechecks == 0`    |
+| `covered-range-warm`           | `index_covering_path_hits > 0`, `heap_rechecks == 0`          |
+| `hot-counter-update`           | `semantic_delta_combined_tx > 0`, correct final counter       |
+| `hot-row-update`               | no semantic combining of blob assignment                      |
+| `vector-ann-search`            | recall gate met, params recorded                              |
+| `vector-ann-search-disk`       | mmap reader used, sector telemetry emitted                    |
+
+The single most important change is the residual-safe index fast-path contract. Without that, the fastest-looking secondary-index fixes risk being incorrect. Once that is fixed, the index-only count and covering ordered-limit paths are the clearest route to closing the largest benchmark gaps.
+
