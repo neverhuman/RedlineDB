@@ -784,9 +784,7 @@ fn encode_expr_op(out: &mut BytesWriter, op: &ExprOp) -> Result<()> {
 
 fn decode_expr_op(reader: &mut BytesReader<'_>) -> Result<ExprOp> {
     Ok(match reader.u8()? {
-        0 => ExprOp::Const(
-            read_opt_value(reader)?.ok_or(Error::CatalogCorrupt("missing expr const"))?,
-        ),
+        0 => ExprOp::Const(read_value(reader)?),
         1 => ExprOp::Column(reader.u16()?),
         2 => ExprOp::Not,
         3 => ExprOp::And,
