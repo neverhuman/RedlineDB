@@ -384,25 +384,46 @@ impl From<std::time::SystemTime> for Value {
     }
 }
 
+fn system_time_from_micros(micros: i64) -> Result<std::time::SystemTime> {
+    if micros >= 0 {
+        match std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_micros(micros as u64)) {
+            Some(t) => Ok(t),
+            None => Err(Error::new(ErrorCode::Mismatch, "timestamp overflow")),
+        }
+    } else {
+        match std::time::UNIX_EPOCH
+            .checked_sub(std::time::Duration::from_micros(micros.unsigned_abs()))
+        {
+            Some(t) => Ok(t),
+            None => Err(Error::new(ErrorCode::Mismatch, "timestamp underflow")),
+        }
+    }
+}
+
 impl TryFrom<&Value> for std::time::SystemTime {
     type Error = Error;
 
     fn try_from(value: &Value) -> Result<Self> {
-        let micros = value.as_integer()?;
-        if micros >= 0 {
-            match std::time::UNIX_EPOCH
-                .checked_add(std::time::Duration::from_micros(micros as u64))
-            {
-                Some(t) => Ok(t),
-                None => Err(Error::new(ErrorCode::Mismatch, "timestamp overflow")),
+        match value {
+            Value::Integer(micros) => system_time_from_micros(*micros),
+            Value::Text(text) => {
+                #[cfg(feature = "chrono")]
+                {
+                    let dt = chrono::DateTime::parse_from_rfc3339(text).map_err(|err| {
+                        Error::new(
+                            ErrorCode::Mismatch,
+                            format!("invalid RFC3339 timestamp: {err}"),
+                        )
+                    })?;
+                    system_time_from_micros(dt.with_timezone(&chrono::Utc).timestamp_micros())
+                }
+
+                #[cfg(not(feature = "chrono"))]
+                {
+                    Err(Error::new(ErrorCode::Mismatch, "value is not integer"))
+                }
             }
-        } else {
-            match std::time::UNIX_EPOCH
-                .checked_sub(std::time::Duration::from_micros(micros.unsigned_abs()))
-            {
-                Some(t) => Ok(t),
-                None => Err(Error::new(ErrorCode::Mismatch, "timestamp underflow")),
-            }
+            _ => Err(Error::new(ErrorCode::Mismatch, "value is not integer")),
         }
     }
 }
@@ -422,7 +443,10 @@ impl TryFrom<&Value> for chrono::DateTime<chrono::Utc> {
         let micros = value.as_integer()?;
         match chrono::DateTime::<chrono::Utc>::from_timestamp_micros(micros) {
             Some(dt) => Ok(dt),
-            None => Err(Error::new(ErrorCode::Mismatch, "chrono timestamp out of range")),
+            None => Err(Error::new(
+                ErrorCode::Mismatch,
+                "chrono timestamp out of range",
+            )),
         }
     }
 }
@@ -629,7 +653,10 @@ mod tests {
         let v: Value = now.into();
         let back = std::time::SystemTime::try_from(&v).unwrap();
         // Round-trip precision is microseconds (Value::Integer epoch micros).
-        let diff = match (now.duration_since(std::time::UNIX_EPOCH), back.duration_since(std::time::UNIX_EPOCH)) {
+        let diff = match (
+            now.duration_since(std::time::UNIX_EPOCH),
+            back.duration_since(std::time::UNIX_EPOCH),
+        ) {
             (Ok(a), Ok(b)) => a.as_micros().abs_diff(b.as_micros()),
             _ => u128::MAX,
         };
@@ -639,10 +666,22 @@ mod tests {
     #[cfg(feature = "chrono")]
     #[test]
     fn chrono_datetime_round_trips_through_value() {
-        let dt = chrono::DateTime::<chrono::Utc>::from_timestamp_micros(1_700_000_000_000_000).unwrap();
+        let dt =
+            chrono::DateTime::<chrono::Utc>::from_timestamp_micros(1_700_000_000_000_000).unwrap();
         let v: Value = dt.into();
         let back: chrono::DateTime<chrono::Utc> = (&v).try_into().unwrap();
         assert_eq!(dt, back);
+    }
+
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn system_time_parses_rfc3339_text() {
+        let v = Value::from("2024-01-02T03:04:05.123456Z");
+        let back = std::time::SystemTime::try_from(&v).unwrap();
+        let expected = std::time::UNIX_EPOCH
+            .checked_add(std::time::Duration::from_micros(1_704_164_645_123_456))
+            .unwrap();
+        assert_eq!(back, expected);
     }
 
     #[cfg(feature = "uuid")]
