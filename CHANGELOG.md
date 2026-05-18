@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## [1.0.2] - 2026-05-17
+
+New crate **`redlinedb-tokio`** — a tokio async adapter that wraps the sync
+`Database`/`Connection` core in a sqlx::Pool-shaped surface. Lets async
+tokio crates (e.g. jeryu) consume RedlineDB without writing
+`spawn_blocking` by hand.
+
+### Added
+
+- `crates/redlinedb-tokio/` — new workspace member.
+  - `Pool` — clone-cheap async pool; bounded by a tokio semaphore.
+    - `Pool::open(path)` / `Pool::open_in_memory()` constructors.
+    - `Pool::execute / fetch_one / fetch_optional / fetch_all` async methods
+      mirroring `sqlx::Pool` ergonomics.
+    - `Pool::with_connection(closure)` for multi-step ops on one connection.
+    - `Pool::transaction(closure)` — auto BEGIN/COMMIT/ROLLBACK.
+  - `AsyncRow` — owned, `Send + Sync + Clone` row materialized from the
+    borrowed `redlinedb::Row` so it survives `.await` boundaries.
+  - `PoolBuilder` — fluent config (max_connections, busy_timeout).
+- 9 integration test files covering smoke, concurrent writes (16 producers /
+  100 inserts each / no lost rows), transaction commit + rollback, params
+  binding for every `Value` variant, error propagation across `.await`,
+  builder settings, persistent file-backed pools, clone semantics, and
+  multi-step closures.
+- One example: `cargo run --example async_round_trip -p redlinedb-tokio`.
+
+### Changed
+
+- All workspace crate versions bumped 1.0.0 → 1.0.2 in sync (no source
+  changes outside of `redlinedb-tokio` and the workspace `Cargo.toml`).
+- Workspace member list now includes `crates/redlinedb-tokio`.
+
+### Notes for downstream consumers
+
+- The new crate is additive; existing `redlinedb` callers are unaffected.
+- `redlinedb-tokio` re-exports the common types (`Database`, `Connection`,
+  `Error`, `Value`, `params!`, etc.) so migrating callers can `use
+  redlinedb_tokio::*` without pulling `redlinedb` directly.
+
 ## [1.0.1] - 2026-05-16
 Jankurai score repair cycle, CI hardening, and install-story improvements.
 No FFI ABI break; downstream consumers unaffected.
