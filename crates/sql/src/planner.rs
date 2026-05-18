@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use redlinedb_kernel::catalog::{IndexDef, TableDef, TableStats};
 use redlinedb_kernel::format::RowId;
-use sqlparser::ast::{BinaryOperator, Expr, OrderByExpr, SelectItem};
+use sqlparser::ast::{
+    BinaryOperator, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, OrderByExpr, SelectItem,
+};
 
 use crate::connection::{Connection, OptimizerConfig};
 use crate::error::{Error, Result};

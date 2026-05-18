@@ -447,6 +447,11 @@ async fn execute_query(
     args: Vec<redlinedb::Value>,
 ) -> Result<QueryOutcome, Error> {
     tokio::task::spawn_blocking(move || {
+        let (sql, args) = if should_inline_parameters_for_prepare_time_sql(&sql, &args) {
+            (inline_qmark_parameters(&sql, &args)?, Vec::new())
+        } else {
+            (sql, args)
+        };
         let mut guard = state
             .lock()
             .map_err(|_| Error::Protocol("redline connection mutex poisoned".into()))?;
@@ -488,6 +493,73 @@ async fn execute_query(
     })
     .await
     .map_err(join_error)?
+}
+
+fn should_inline_parameters_for_prepare_time_sql(sql: &str, args: &[redlinedb::Value]) -> bool {
+    !args.is_empty() && sql.trim_start().to_ascii_lowercase().starts_with("with")
+}
+
+fn inline_qmark_parameters(sql: &str, args: &[redlinedb::Value]) -> Result<String, Error> {
+    let mut out = String::with_capacity(sql.len() + args.len() * 8);
+    let mut arg_index = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut chars = sql.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\'' if !in_double_quote => {
+                out.push(ch);
+                if in_single_quote && chars.peek() == Some(&'\'') {
+                    out.push(chars.next().expect("peeked escaped quote"));
+                } else {
+                    in_single_quote = !in_single_quote;
+                }
+            }
+            '"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+                out.push(ch);
+            }
+            '?' if !in_single_quote && !in_double_quote => {
+                let value = args.get(arg_index).ok_or_else(|| {
+                    Error::Protocol("not enough bind values for parameterized WITH query".into())
+                })?;
+                out.push_str(&redline_value_literal(value));
+                arg_index += 1;
+            }
+            _ => out.push(ch),
+        }
+    }
+
+    if arg_index != args.len() {
+        return Err(Error::Protocol(
+            "too many bind values for parameterized WITH query".into(),
+        ));
+    }
+    Ok(out)
+}
+
+fn redline_value_literal(value: &redlinedb::Value) -> String {
+    match value {
+        redlinedb::Value::Null => "NULL".to_owned(),
+        redlinedb::Value::Integer(value) => value.to_string(),
+        redlinedb::Value::Real(value) if value.is_finite() => value.to_string(),
+        redlinedb::Value::Real(_) => "NULL".to_owned(),
+        redlinedb::Value::Text(value) => {
+            let escaped = value.replace('\'', "''");
+            format!("'{escaped}'")
+        }
+        redlinedb::Value::Blob(value) => {
+            let mut out = String::with_capacity(value.len() * 2 + 3);
+            out.push_str("x'");
+            for byte in value.iter() {
+                use std::fmt::Write as _;
+                let _ = write!(&mut out, "{byte:02x}");
+            }
+            out.push('\'');
+            out
+        }
+    }
 }
 
 struct StatementDescription {

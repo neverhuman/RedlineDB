@@ -94,7 +94,7 @@ fn lookup_qualified_column_local(
             }
         }
         RowContext::SqliteSchema(row) => match qualifier.to_ascii_lowercase().as_str() {
-            "sqlite_schema" | "sqlite_master" => lookup_schema_column(row, name),
+            "sqlite_schema" | "sqlite_master" | "redline_master" => lookup_schema_column(row, name),
             _ => Err(Error::UnknownColumn(format!("{qualifier}.{name}"))),
         },
         RowContext::Cte(row) => {
@@ -152,10 +152,8 @@ fn is_rowid_alias_name(name: &str) -> bool {
 }
 
 fn matches_table_qualifier(alias: Option<&Arc<str>>, table: &TableDef, qualifier: &str) -> bool {
-    if let Some(alias) = alias
-        && alias.as_ref().eq_ignore_ascii_case(qualifier)
-    {
-        return true;
+    if let Some(alias) = alias {
+        return alias.as_ref().eq_ignore_ascii_case(qualifier);
     }
     table.name.to_string().eq_ignore_ascii_case(qualifier)
 }

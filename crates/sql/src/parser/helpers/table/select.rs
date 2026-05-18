@@ -373,7 +373,9 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
     match name.0.as_slice() {
         [part] => object_name_part_to_string(part)
             .map(|s| {
-                s.eq_ignore_ascii_case("sqlite_schema") || s.eq_ignore_ascii_case("sqlite_master")
+                s.eq_ignore_ascii_case("sqlite_schema")
+                    || s.eq_ignore_ascii_case("sqlite_master")
+                    || s.eq_ignore_ascii_case("redline_master")
             })
             .unwrap_or(false),
         [schema, table] => {
@@ -381,7 +383,9 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
             let table = object_name_part_to_string(table).ok();
             matches!(
                 (schema.as_deref(), table.as_deref()),
-                (Some("main"), Some("sqlite_schema")) | (Some("main"), Some("sqlite_master"))
+                (Some("main"), Some("sqlite_schema"))
+                    | (Some("main"), Some("sqlite_master"))
+                    | (Some("main"), Some("redline_master"))
             )
         }
         _ => false,
