@@ -4,4 +4,4 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
-rtk cargo check --workspace --locked
+CI_FAST_STAGE=preflight bash ops/ci/fast.sh

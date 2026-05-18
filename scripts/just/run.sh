@@ -9,10 +9,7 @@ lane="${1:?lane name required}"
 case "$lane" in
   fast)
     ./scripts/just/cache-warm.sh
-    rtk cargo fmt --check
-    ./scripts/check_file_sizes.sh
-    ./scripts/just/fast-check.sh
-    ./scripts/just/fast-test.sh
+    bash ops/ci/fast.sh
     ;;
   fast-check)
     ./scripts/just/fast-check.sh
