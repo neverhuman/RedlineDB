@@ -19,7 +19,7 @@ redlinedb-kernel = { path = "../kernel" }
 tempfile = "3.23"
 fail = { version = "0.5", features = ["failpoints"] }
 proptest = "1.5"
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.37.0", features = ["bundled", "functions"] }
 
 [features]
 default = []

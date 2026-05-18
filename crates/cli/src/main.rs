@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::exit;
 
@@ -195,13 +195,7 @@ fn main() {
         if state.echo {
             println!("{}", sql);
         }
-        if let Err(e) = run_query_sqlite(
-            &state.db,
-            &sql,
-            &state.mode,
-            &state.separator,
-            state.show_header,
-        ) {
+        if let Err(e) = run_query_with_state(&mut state, &sql) {
             eprintln!("Error: {}", e);
             exit(1);
         }
@@ -245,13 +239,7 @@ fn main() {
                 if state.echo {
                     println!("{}", buffer.trim_end());
                 }
-                if let Err(e) = run_query_sqlite(
-                    &state.db,
-                    &buffer,
-                    &state.mode,
-                    &state.separator,
-                    state.show_header,
-                ) {
+                if let Err(e) = run_query_with_state(&mut state, &buffer) {
                     eprintln!("Error: {}", e);
                     if state.bail {
                         exit(1);
@@ -261,13 +249,7 @@ fn main() {
             }
         }
         if !buffer.trim().is_empty() {
-            if let Err(e) = run_query_sqlite(
-                &state.db,
-                &buffer,
-                &state.mode,
-                &state.separator,
-                state.show_header,
-            ) {
+            if let Err(e) = run_query_with_state(&mut state, &buffer) {
                 eprintln!("Error: {}", e);
                 if state.bail {
                     exit(1);
@@ -316,13 +298,7 @@ fn main() {
                     buffer.push('\n');
 
                     if line.ends_with(';') {
-                        if let Err(e) = run_query_sqlite(
-                            &state.db,
-                            &buffer,
-                            &state.mode,
-                            &state.separator,
-                            state.show_header,
-                        ) {
+                        if let Err(e) = run_query_with_state(&mut state, &buffer) {
                             eprintln!("Error: {}", e);
                         }
                         buffer.clear();
@@ -358,24 +334,12 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
         buffer.push_str(raw_line);
         buffer.push('\n');
         if raw_line.trim_end().ends_with(';') {
-            run_query_sqlite(
-                &state.db,
-                &buffer,
-                &state.mode,
-                &state.separator,
-                state.show_header,
-            )?;
+            run_query_with_state(state, &buffer)?;
             buffer.clear();
         }
     }
     if !buffer.trim().is_empty() {
-        run_query_sqlite(
-            &state.db,
-            &buffer,
-            &state.mode,
-            &state.separator,
-            state.show_header,
-        )?;
+        run_query_with_state(state, &buffer)?;
     }
     Ok(())
 }
@@ -404,17 +368,51 @@ fn print_sqlite_help() {
     println!("   -version             show SQLite version");
 }
 
-fn run_query_sqlite(
+/// CliState-aware query runner that honours `.once FILE` (one-shot
+/// redirect, consumed after a single call) and binds any values stored by
+/// `.parameter set` to the prepared statement.
+fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
+    let params: Vec<(String, String)> = state
+        .params
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if let Some(path) = state.once.take() {
+        let file = std::fs::File::create(&path)
+            .map_err(|err| format!("Error: cannot open {}: {err}", path.display()))?;
+        let mut writer = io::BufWriter::new(file);
+        let result = run_query_writer(
+            &state.db,
+            sql,
+            &state.mode,
+            &state.separator,
+            &mut writer,
+            &params,
+        );
+        writer.flush().map_err(|err| err.to_string())?;
+        result
+    } else {
+        run_query_writer(
+            &state.db,
+            sql,
+            &state.mode,
+            &state.separator,
+            &mut io::stdout(),
+            &params,
+        )
+    }
+}
+
+fn run_query_writer<W: Write>(
     db: &Database,
     sql: &str,
     mode: &OutputMode,
     separator: &str,
-    _show_header: bool,
+    out: &mut W,
+    params: &[(String, String)],
 ) -> Result<(), String> {
     let mut conn = db.connect().map_err(|err| err.to_string())?;
 
-    // Split the input into individual statements separated by ';'
-    // This matches sqlite3 behavior where multiple statements can be piped on one line.
     let statements: Vec<&str> = sql
         .split(';')
         .map(|s| s.trim())
@@ -424,6 +422,14 @@ fn run_query_sqlite(
     for statement in statements {
         let full_stmt = format!("{};", statement);
         let mut stmt = conn.prepare(&full_stmt).map_err(|err| err.to_string())?;
+        // SQLite ignores params that don't appear in the SQL, so we treat
+        // any `bind_named` error as a soft signal and continue.
+        for (name, value) in params {
+            let _ = stmt.bind_named(
+                name,
+                redlinedb::Value::Text(std::sync::Arc::from(value.as_str())),
+            );
+        }
         let column_count = stmt.column_count();
 
         let mut json_results = Vec::new();
@@ -446,40 +452,50 @@ fn run_query_sqlite(
                 let mut first = true;
                 for index in 0..column_count {
                     if !first {
-                        print!("{}", separator);
+                        write!(out, "{separator}").map_err(|err| err.to_string())?;
                     }
                     first = false;
                     match row.get_ref(index).map_err(|err| err.to_string())? {
-                        ValueRef::Null => print!(""),
-                        ValueRef::Integer(value) => print!("{value}"),
-                        ValueRef::Real(value) => print!("{value}"),
+                        ValueRef::Null => {}
+                        ValueRef::Integer(value) => {
+                            write!(out, "{value}").map_err(|err| err.to_string())?;
+                        }
+                        ValueRef::Real(value) => {
+                            write!(out, "{value}").map_err(|err| err.to_string())?;
+                        }
                         ValueRef::Text(value) => {
                             if *mode == OutputMode::Csv {
-                                let escaped = value.replace("\"", "\"\"");
-                                if escaped.contains(",")
-                                    || escaped.contains("\"")
-                                    || escaped.contains("\n")
+                                let escaped = value.replace('"', "\"\"");
+                                if escaped.contains(',')
+                                    || escaped.contains('"')
+                                    || escaped.contains('\n')
                                 {
-                                    print!("\"{}\"", escaped);
+                                    write!(out, "\"{escaped}\"")
+                                        .map_err(|err| err.to_string())?;
                                 } else {
-                                    print!("{}", escaped);
+                                    write!(out, "{escaped}").map_err(|err| err.to_string())?;
                                 }
                             } else {
-                                print!("{value}");
+                                write!(out, "{value}").map_err(|err| err.to_string())?;
                             }
                         }
-                        ValueRef::Blob(value) => print!("<blob:{}>", value.len()),
+                        ValueRef::Blob(value) => {
+                            write!(out, "<blob:{}>", value.len())
+                                .map_err(|err| err.to_string())?;
+                        }
                     }
                 }
-                println!();
+                writeln!(out).map_err(|err| err.to_string())?;
             }
         }
 
         if *mode == OutputMode::Json && !json_results.is_empty() {
-            println!(
+            writeln!(
+                out,
                 "{}",
                 serde_json::to_string_pretty(&json_results).unwrap_or_default()
-            );
+            )
+            .map_err(|err| err.to_string())?;
         }
     }
 

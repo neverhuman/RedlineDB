@@ -2,6 +2,60 @@
 
 ## Unreleased
 
+SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
+
+### Added
+
+- **PRAGMA truth pass**: real implementations for `PRAGMA journal_mode`
+  (`memory`/`off`/`delete`), `synchronous`, `temp_store`, `cache_size`,
+  `query_only` round-trip on the session; `query_only` additionally blocks
+  every write-side statement (Insert/Update/Delete/CreateTable/AlterTable
+  /Drop*/CreateIndex/CreateView/CreateTrigger) with
+  `attempt to write while PRAGMA query_only is set`.
+- **JSON1 oracle parity** (`crates/sql/tests/parity_json1.rs`): 32
+  rusqlite-oracle tests covering `json()`, `json_array[_length]`,
+  `json_object`, `json_extract`, `json_type`, `json_valid`, `json_quote`,
+  `json_set`/`json_insert`/`json_replace`/`json_remove`, `json_patch`,
+  and the `->` / `->>` arrow operators. JSON1 row in
+  `docs/sqlite-parity.md` flips from `fail` to `pass`.
+- **Operator parity lock-in** (`crates/sql/tests/parity_operators.rs`):
+  oracle-compared `||`, `REGEXP` operator/UDF, `LIKE`, and
+  `INSERT/UPDATE/DELETE ... RETURNING`. `ILIKE` is RedlineDB-only
+  (positive tests on our side); `ILIKE ANY` stays a negative test.
+- **CLI dot commands**:
+  - `.fullschema [PATTERN]` — `.schema` plus `SELECT * FROM sqlite_master`.
+  - `.once FILE` — one-shot redirect for the next statement.
+  - `.parameter set|unset|init|clear|list` — named-parameter binding
+    applied to the next prepared statement via `bind_named`.
+- **Fast staged-files pre-commit hook**
+  (`tools/jankurai-hooks/pre-commit`): runs `jankurai audit-file`
+  per staged file in save-gate mode with the HEAD revision (or empty file
+  for new paths) as the baseline. Blocks on any new hard finding.
+  Typical commits now run <2 s instead of 10–60 s.
+  `JANKURAI_SKIP_HOOKS=1` and `JANKURAI_PRE_COMMIT_CHAIN` still work.
+- **CI staged-gate** (`.github/workflows/jankurai.yml`,
+  `ops/ci/jankurai-staged-gate.sh`): PR runs the same per-file save-gate
+  against `origin/main`'s merge base so PRs can't sneak past local
+  bypasses.
+- **Hook integration test**
+  (`tools/jankurai-hooks/tests/pre_commit_blocks.sh`).
+
+### Changed (potentially BREAKING for callers that probe unknown PRAGMAs)
+
+- `PRAGMA auto_vacuum` and `PRAGMA wal_checkpoint(MODE)` previously
+  returned fabricated rows; they now return `UnsupportedSql`. Callers
+  that branched on the row shape need to handle the error instead.
+- Any PRAGMA RedlineDB does not implement now returns
+  `UnsupportedSql("PRAGMA <name> is not supported by RedlineDB")` rather
+  than silently falling through.
+- `redlinedb-cli`'s query runner now writes through an `io::Write` sink
+  so `.once` can redirect a single statement; default sink stays
+  `io::stdout()` so behaviour is unchanged for non-`.once` callers.
+
+### Notes
+
+- Jankurai 1.4.3 is the supported version.
+
 ## [1.0.2] - 2026-05-17
 
 New crate **`redlinedb-tokio`** — a tokio async adapter that wraps the sync

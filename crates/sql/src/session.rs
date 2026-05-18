@@ -74,6 +74,24 @@ pub struct SessionState {
     /// recurse up to the depth cap. When OFF, the executor skips firing
     /// any trigger from within an existing trigger body.
     pub recursive_triggers: bool,
+    /// Mirrors SQLite's `PRAGMA journal_mode`. Stored as a typed value;
+    /// only the subset we can honour (`memory`, `off`, `delete`) is
+    /// accepted at parse time.
+    pub journal_mode: crate::statement::JournalMode,
+    /// Mirrors SQLite's `PRAGMA synchronous`. The engine's fsync policy is
+    /// workspace-wide so this field is recall-only — set to satisfy
+    /// callers (ORMs) that probe the value at connection open.
+    pub synchronous: crate::statement::SynchronousLevel,
+    /// Mirrors SQLite's `PRAGMA temp_store`. The executor's spill helpers
+    /// consult this when picking between in-memory and on-disk spill.
+    pub temp_store: crate::statement::TempStoreMode,
+    /// Mirrors SQLite's `PRAGMA cache_size`. Negative values mean "KiB",
+    /// positive values mean "pages"; stored as written and exposed back to
+    /// the caller. The underlying page cache budget is engine-managed.
+    pub cache_size: i64,
+    /// Mirrors SQLite's `PRAGMA query_only`. When set, the executor
+    /// rejects any non-read statement before dispatching it.
+    pub query_only: bool,
     pub last_insert_rowid: Option<i64>,
     pub unique_guards: Vec<UniqueKeyGuard>,
     /// Kernel-level unique-key reservations held until end-of-transaction.
@@ -104,6 +122,11 @@ impl Default for SessionState {
             total_changes: 0,
             foreign_keys: false,
             recursive_triggers: true,
+            journal_mode: crate::statement::JournalMode::Memory,
+            synchronous: crate::statement::SynchronousLevel::Normal,
+            temp_store: crate::statement::TempStoreMode::Default,
+            cache_size: -2000,
+            query_only: false,
             last_insert_rowid: None,
             unique_guards: Vec::new(),
             kernel_unique_guards: Vec::new(),
@@ -124,6 +147,11 @@ impl SessionState {
         self.total_changes = 0;
         self.foreign_keys = false;
         self.recursive_triggers = true;
+        self.journal_mode = crate::statement::JournalMode::Memory;
+        self.synchronous = crate::statement::SynchronousLevel::Normal;
+        self.temp_store = crate::statement::TempStoreMode::Default;
+        self.cache_size = -2000;
+        self.query_only = false;
         self.last_insert_rowid = None;
         self.unique_guards.clear();
         self.kernel_unique_guards.clear();
