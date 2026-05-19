@@ -5,43 +5,71 @@ the Wave 11.B integration.
 
 ## Current Status
 
-One high-priority integration gap is open from a user request in the dougx
-Jeryu cleanup flow. The resolved items below are integration-contract or
-upstream dependency notes, not active engine defects.
+One high-priority RedlineDB parity gap is open from a user request in the
+dougx Jeryu cleanup flow: large encrypted BLOB inserts can hang instead of
+behaving as a SQLite drop-in. The earlier Jeryu autonomy URL bootstrap gap is
+resolved by the consuming RedlineDB/Jeryu PR cleanup recorded below.
 
 ## Open
+
+### R-4: Large encrypted BLOB inserts can hang through the SQLx/RedlineDB path
+
+**Date:** 2026-05-18
+**Status:** open -- high priority
+**Priority:** High
+**Owner:** SQL execution / SQLx adapter / storage BLOB path
+**Requested by:** user, during the dougx RedlineDB/Jeryu cleanup. The user
+explicitly requested RedlineDB as a 100% parity drop-in and asked that any
+current RedlineDB parity gap be added to the tracker.
+
+The dougx pre-merge lane exposed a RedlineDB parity gap while using the updated
+RedlineDB/Jeryu pins: `veox-bootstrap::rust_api_orchestrator_contracts`
+stalls during `EnclaveRepository::submit_tasks_bulk` on the first insert into
+`tasks.encrypted_payload`. The payload observed at the stall was an encrypted
+BLOB of about 178 KB (`177808` bytes). SQLite treats this as a normal BLOB
+insert; RedlineDB must do the same for the drop-in contract.
+
+The consuming dougx workspace now works around the gap by spilling oversized
+encrypted payloads to sidecars before inserting a small marker row, but that is
+not the RedlineDB parity fix. RedlineDB should accept and round-trip this class
+of BLOB through the SQLx/redline store path without hanging.
+
+**Required fix:** add a focused RedlineDB regression for inserting and reading a
+large `BYTEA`/BLOB through the same SQLx adapter path used by Jeryu/Veox, root
+cause the hang, and make the insert complete with SQLite-compatible behavior.
+
+**Proof target:** a RedlineDB SQLx integration test that creates a table with a
+BLOB/BYTEA column, inserts a deterministic 178 KB payload, reads it back
+byte-for-byte, and fails if the operation hangs or exceeds a tight timeout.
+
+## Resolved
 
 ### R-3: Jeryu autonomy ledger cannot use `redline://` / `redlineDB://` as a SQLx drop-in yet
 
 **Date:** 2026-05-18
-**Status:** open -- high priority
+**Status:** resolved -- consuming PRs cleaned up and validated
 **Priority:** High
 **Owner:** redlinedb-sqlx / external integration
 **Requested by:** user, during dougx Jeryu cleanup after rejecting
 `target/jeryu/autonomy.sqlite` as the autonomy ledger name.
 
 The user request is that Jeryu autonomy state should be backed by a RedlineDB
-ledger as a 100% parity drop-in, not by an `autonomy.sqlite` file. The current
-blocking gap is that the pinned Jeryu `autonomy` binary rejects
+ledger as a 100% parity drop-in, not by an `autonomy.sqlite` file. The original
+blocking gap was that the pinned Jeryu `autonomy` binary rejected
 `JERYU_DATABASE_URL=redline://...` / `redlineDB://...` before profile validation;
-its accepted URL schemes are currently `postgres://`, `postgresql://`, and
+its accepted URL schemes at the time were `postgres://`, `postgresql://`, and
 `sqlite:`. RedlineDB provides the `redlinedb-sqlx` integration layer and
-`redline://` tests, but consuming binaries still must link that crate and call
+`redline://` tests, and consuming binaries must link that crate and call
 `redlinedb_sqlx::install_default_drivers()` before the first `sqlx::AnyPool` or
 `sqlx::AnyConnection`.
 
-**Required fix:** make the Jeryu/autonomy SQLx bootstrap path install the
-RedlineDB driver before opening the launch ledger, document the canonical
-RedlineDB ledger URL/path, and add an integration proof that
-`JERYU_DATABASE_URL=redline://.../target/jeryu/autonomy.redlineDB` (or the final
-canonical URL form) passes `autonomy kill-bell status` and
-`autonomy profile validate --profile sovereign_plus`.
-
-**Proof target:** a consuming-project smoke that fails without RedlineDB driver
-registration and passes with it, plus the existing `redlinedb-sqlx`
-`jeryu_schema` and driver-registration tests.
-
-## Resolved
+**Resolution:** per the user-provided 2026-05-18 cleanup handoff, RedlineDB PR
+#18 was rebased onto `origin/main` with the intended single commit
+`3e73556fe57c32800046082cba826f17b6751284`, and Jeryu PR #10 now pins that
+commit. The consuming Jeryu validation passed
+`cargo check -p jeryu --locked`, and dougx validation passed
+`autonomy profile validate --profile sovereign_plus` with
+`JERYU_DATABASE_URL=redline:///.../target/jeryu/autonomy.redlineDB`.
 
 ### R-1: RedlineDB is not a sqlx-API drop-in
 

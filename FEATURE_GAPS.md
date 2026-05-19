@@ -36,3 +36,14 @@ Historical gaps that were closed in the phase11 follow-up:
 - Kept partial indexes parser-only and left the documented replacement in
   place.
 - Confirmed the workspace MSRV stays at Rust `1.95`.
+
+## 2026-05-18
+
+- High priority -- user-requested RedlineDB parity gap: dougx pre-merge exposed
+  a hang when inserting an encrypted BLOB of about 178 KB (`177808` bytes)
+  through the SQLx/RedlineDB path into `tasks.encrypted_payload`. Request
+  source: user; the user explicitly asked that RedlineDB be treated as a 100%
+  parity drop-in and that any current RedlineDB parity gap be tracked. The
+  consuming dougx tree has a sidecar spill workaround for oversized encrypted
+  payloads, but RedlineDB still needs a native large-BLOB insert/read regression
+  and engine fix so this works without a workaround.
