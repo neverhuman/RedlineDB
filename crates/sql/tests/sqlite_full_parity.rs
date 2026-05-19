@@ -7,10 +7,86 @@
 
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
 use rusqlite::types::Value as RuValue;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::tempdir;
+
+const ROW_COMPARED_REFERENCE_PRAGMAS: &[&str] = &[
+    "cache_size",
+    "database_list",
+    "foreign_keys",
+    "index_info",
+    "index_list",
+    "integrity_check",
+    "journal_mode",
+    "query_only",
+    "quick_check",
+    "recursive_triggers",
+    "schema_version",
+    "synchronous",
+    "table_info",
+    "table_xinfo",
+    "temp_store",
+    "user_version",
+];
+
+const KNOWN_GAP_REFERENCE_PRAGMAS: &[&str] = &[
+    "collation_list",
+    "compile_options",
+    "foreign_key_list",
+    "function_list",
+    "index_xinfo",
+    "module_list",
+    "pragma_list",
+    "table_list",
+];
+
+const EXPLICIT_REJECT_REFERENCE_PRAGMAS: &[&str] = &[
+    "analysis_limit",
+    "application_id",
+    "auto_vacuum",
+    "automatic_index",
+    "busy_timeout",
+    "cache_spill",
+    "case_sensitive_like",
+    "cell_size_check",
+    "checkpoint_fullfsync",
+    "count_changes",
+    "data_version",
+    "default_cache_size",
+    "defer_foreign_keys",
+    "empty_result_callbacks",
+    "encoding",
+    "foreign_key_check",
+    "freelist_count",
+    "full_column_names",
+    "fullfsync",
+    "hard_heap_limit",
+    "ignore_check_constraints",
+    "incremental_vacuum",
+    "journal_size_limit",
+    "legacy_alter_table",
+    "locking_mode",
+    "max_page_count",
+    "mmap_size",
+    "optimize",
+    "page_count",
+    "page_size",
+    "read_uncommitted",
+    "reverse_unordered_selects",
+    "secure_delete",
+    "short_column_names",
+    "shrink_memory",
+    "soft_heap_limit",
+    "temp_store_directory",
+    "threads",
+    "trusted_schema",
+    "wal_autocheckpoint",
+    "wal_checkpoint",
+    "writable_schema",
+];
 
 fn proof_dir() -> PathBuf {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
@@ -78,6 +154,15 @@ fn sqlite_reference_metadata() -> (String, Vec<String>, Vec<String>) {
     };
     let pragmas = sqlite_pragma_list(&conn);
     (version, compile_options, pragmas)
+}
+
+fn classified_reference_pragmas() -> BTreeSet<String> {
+    ROW_COMPARED_REFERENCE_PRAGMAS
+        .iter()
+        .chain(KNOWN_GAP_REFERENCE_PRAGMAS)
+        .chain(EXPLICIT_REJECT_REFERENCE_PRAGMAS)
+        .map(|name| (*name).to_owned())
+        .collect()
 }
 
 struct Harness {
@@ -248,6 +333,25 @@ fn reference_build_metadata_is_available() {
 }
 
 #[test]
+fn reference_build_pragmas_are_fully_classified() {
+    let (_, _, pragmas) = sqlite_reference_metadata();
+    let reference: BTreeSet<String> = pragmas.into_iter().collect();
+    let classified = classified_reference_pragmas();
+
+    let missing: Vec<_> = reference.difference(&classified).cloned().collect();
+    let retired: Vec<_> = classified.difference(&reference).cloned().collect();
+
+    assert!(
+        missing.is_empty(),
+        "bundled SQLite exposes unclassified PRAGMA(s): {missing:?}"
+    );
+    assert!(
+        retired.is_empty(),
+        "PRAGMA classification contains names not emitted by bundled SQLite: {retired:?}"
+    );
+}
+
+#[test]
 fn reference_build_pragma_rows_match_for_supported_surfaces() {
     let harness = Harness::new();
     harness.execute_both("PRAGMA foreign_keys = ON");
@@ -297,6 +401,14 @@ fn reference_build_pragma_rows_match_for_supported_surfaces() {
     harness.assert_query_matches(
         "SELECT seqno, cid, name FROM pragma_index_info('t_name_idx') ORDER BY seqno",
     );
+
+    let sqlite_pragmas = sqlite_pragma_list(&harness.sqlite);
+    for pragma in ROW_COMPARED_REFERENCE_PRAGMAS {
+        assert!(
+            sqlite_pragmas.iter().any(|name| name == pragma),
+            "row-compared PRAGMA {pragma} is not present in bundled SQLite pragma_list"
+        );
+    }
 }
 
 #[test]
@@ -321,6 +433,13 @@ fn known_full_sqlite_parity_gaps_are_explicit_failures() {
         ],
         "SELECT id, seq, \"table\", \"from\", \"to\", on_update, on_delete, \"match\" \
          FROM pragma_foreign_key_list('child') ORDER BY id, seq",
+    );
+    harness.assert_sqlite_result_diff_or_redline_rejects(
+        &[
+            "CREATE TABLE names(name TEXT COLLATE NOCASE)",
+            "INSERT INTO names(name) VALUES ('a'), ('B')",
+        ],
+        "SELECT name FROM names ORDER BY name",
     );
 }
 
@@ -352,5 +471,31 @@ fn sqlite_native_file_format_is_not_compatibility_surface() {
     assert!(
         sqlite.is_err(),
         "SQLite should not open a RedlineDB-native directory as a valid SQLite database"
+    );
+}
+
+#[test]
+fn sqlite_native_file_is_not_redline_database_root() {
+    let dir = tempdir().expect("temp dir");
+    let path = dir.path().join("sqlite-native.db");
+    {
+        let sqlite = rusqlite::Connection::open(&path).expect("create sqlite file");
+        sqlite
+            .execute_batch(
+                "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT);
+                 INSERT INTO t(id, name) VALUES (1, 'Ada');",
+            )
+            .expect("seed sqlite file");
+    }
+
+    assert!(
+        path.is_file(),
+        "SQLite should create a native database file at {}",
+        path.display()
+    );
+    let redline = Database::open(&path, DbOptions::default());
+    assert!(
+        redline.is_err(),
+        "RedlineDB should not open a SQLite-native database file as a RedlineDB root"
     );
 }

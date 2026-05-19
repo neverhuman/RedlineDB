@@ -11,6 +11,8 @@ use crate::engine::{self, BenchEngine, CellValue};
 pub struct CrossEngineReport {
     pub files: usize,
     pub cases: usize,
+    pub query_cases: usize,
+    pub statement_cases: usize,
     pub failures: Vec<String>,
 }
 
@@ -27,10 +29,18 @@ pub fn run_suite(args: &CrossEngineArgs) -> Result<CrossEngineReport> {
     let mut report = CrossEngineReport {
         files: files.len(),
         cases: 0,
+        query_cases: 0,
+        statement_cases: 0,
         failures: Vec::new(),
     };
     for (path, cases) in files {
         report.cases += cases.len();
+        for case in &cases {
+            match case {
+                Case::Statement(_) => report.statement_cases += 1,
+                Case::Query { .. } => report.query_cases += 1,
+            }
+        }
         let actual = run_file(args.engine.expand(), &cases, args.seed)
             .with_context(|| format!("run cross-engine file {}", path.display()));
         if let Err(err) = actual {
@@ -167,6 +177,8 @@ mod tests {
         let input = "statement ok\nCREATE TABLE t(id INTEGER)\n\nquery\nSELECT 1\n----\n1\n";
         let cases = parse_cases(input).expect("cases");
         assert_eq!(cases.len(), 2);
+        assert!(matches!(cases[0], Case::Statement(_)));
+        assert!(matches!(cases[1], Case::Query { .. }));
     }
 
     #[test]
@@ -183,5 +195,20 @@ mod tests {
         let files = collect_cases(staging.path()).expect("files");
         assert_eq!(files.len(), 1);
         assert!(files[0].0.ends_with("migration.sqlt"));
+    }
+
+    #[test]
+    fn bundled_compat_corpus_keeps_query_floor() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("compat");
+        let files = collect_cases(&dir).expect("compat cases");
+        let query_cases = files
+            .iter()
+            .flat_map(|(_, cases)| cases)
+            .filter(|case| matches!(case, Case::Query { .. }))
+            .count();
+        assert!(
+            query_cases >= 500,
+            "bench compat corpus has only {query_cases} query cases; floor is 500"
+        );
     }
 }

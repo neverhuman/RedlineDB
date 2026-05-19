@@ -28,6 +28,38 @@ struct Pair {
     sqlite: rusqlite::Connection,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum ErrorClass {
+    JsonPath,
+    MalformedJson,
+}
+
+#[derive(Debug, PartialEq)]
+enum QueryOutcome {
+    Rows(Vec<Vec<SqlValue>>),
+    Error {
+        class: ErrorClass,
+        stable_fragment: &'static str,
+    },
+}
+
+fn classify_error(message: &str) -> QueryOutcome {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("malformed json") {
+        return QueryOutcome::Error {
+            class: ErrorClass::MalformedJson,
+            stable_fragment: "malformed JSON",
+        };
+    }
+    if lower.contains("json path") {
+        return QueryOutcome::Error {
+            class: ErrorClass::JsonPath,
+            stable_fragment: "JSON path",
+        };
+    }
+    panic!("unexpected JSON table-valued function error: {message}");
+}
+
 impl Pair {
     fn new() -> Self {
         let dir = tempdir().expect("tempdir");
@@ -80,6 +112,66 @@ impl Pair {
         let rl = self.redline_rows(sql);
         let sl = self.sqlite_rows(sql);
         assert_eq!(rl, sl, "rows differ for: {sql}");
+    }
+
+    fn redline_outcome(&self, sql: &str) -> QueryOutcome {
+        let mut stmt = match self.redline.prepare(sql) {
+            Ok(stmt) => stmt,
+            Err(err) => return classify_error(&format!("{err:?}")),
+        };
+        let ncols = stmt.column_count();
+        let mut rows = Vec::new();
+        loop {
+            match stmt.step() {
+                Ok(Step::Row) => rows.push(
+                    (0..ncols)
+                        .map(|i| stmt.column_value(i).expect("redline col").clone())
+                        .collect(),
+                ),
+                Ok(Step::Done) => return QueryOutcome::Rows(rows),
+                Err(err) => return classify_error(&format!("{err:?}")),
+            }
+        }
+    }
+
+    fn sqlite_outcome(&self, sql: &str) -> QueryOutcome {
+        let mut stmt = match self.sqlite.prepare(sql) {
+            Ok(stmt) => stmt,
+            Err(err) => return classify_error(&err.to_string()),
+        };
+        let ncols = stmt.column_count();
+        let mut query = match stmt.query([]) {
+            Ok(query) => query,
+            Err(err) => return classify_error(&err.to_string()),
+        };
+        let mut rows = Vec::new();
+        loop {
+            match query.next() {
+                Ok(Some(row)) => rows.push(
+                    (0..ncols)
+                        .map(|i| to_sql_value(row.get::<usize, RuValue>(i).expect("sqlite get")))
+                        .collect(),
+                ),
+                Ok(None) => return QueryOutcome::Rows(rows),
+                Err(err) => return classify_error(&err.to_string()),
+            }
+        }
+    }
+
+    fn assert_rejects_with_same_error_class(
+        &self,
+        sql: &str,
+        class: ErrorClass,
+        stable_fragment: &'static str,
+    ) {
+        let redline = self.redline_outcome(sql);
+        let sqlite = self.sqlite_outcome(sql);
+        let expected = QueryOutcome::Error {
+            class,
+            stable_fragment,
+        };
+        assert_eq!(redline, expected, "redline outcome for {sql}");
+        assert_eq!(sqlite, expected, "sqlite outcome for {sql}");
     }
 }
 
@@ -159,28 +251,31 @@ fn json_each_with_missing_path_returns_zero_rows() {
 #[test]
 fn json_each_invalid_json_raises_error() {
     let pair = Pair::new();
-    let err_rl = pair
-        .redline
-        .prepare("SELECT key FROM json_each('not json')")
-        .err();
-    // rusqlite returns the error at step time; SQLite raises it on prepare
-    // in some builds. Either way, both engines must reject the input.
-    let mut sl_failed = false;
-    if let Ok(mut stmt) = pair.sqlite.prepare("SELECT key FROM json_each('not json')")
-        && stmt.query_map([], |_| Ok(())).is_err()
-    {
-        sl_failed = true;
-    }
-    if let Err(_) = pair.sqlite.prepare("SELECT key FROM json_each('not json')") {
-        sl_failed = true;
-    }
-    assert!(
-        err_rl.is_some() || sl_failed,
-        "expected invalid-JSON error from at least one engine"
+    pair.assert_rejects_with_same_error_class(
+        "SELECT key FROM json_each('not json')",
+        ErrorClass::MalformedJson,
+        "malformed JSON",
     );
-    // Always assert RedlineDB rejects it (this is the actionable invariant
-    // for the parity story; rusqlite's exact prepare/step boundary varies).
-    assert!(err_rl.is_some(), "redlinedb must reject malformed JSON");
+    pair.assert_rejects_with_same_error_class(
+        "SELECT key FROM json_tree('{broken')",
+        ErrorClass::MalformedJson,
+        "malformed JSON",
+    );
+}
+
+#[test]
+fn json_table_invalid_path_raises_matching_error_class() {
+    let pair = Pair::new();
+    pair.assert_rejects_with_same_error_class(
+        "SELECT key FROM json_each('{\"a\":1}', 'a')",
+        ErrorClass::JsonPath,
+        "JSON path",
+    );
+    pair.assert_rejects_with_same_error_class(
+        "SELECT key FROM json_tree('{\"a\":1}', 'a')",
+        ErrorClass::JsonPath,
+        "JSON path",
+    );
 }
 
 #[test]

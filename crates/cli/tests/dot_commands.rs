@@ -2,9 +2,8 @@
 //!
 //! Each test spawns the `redlinedb` CLI binary, drives it with a script on
 //! stdin (`-batch` mode), and asserts on stdout/stderr. The legacy SQLite3
-//! binary is only required for a single round-trip test that pipes the
-//! `.dump` output through `sqlite3 :memory:`; that test is silently skipped
-//! when `sqlite3` is not on `PATH`.
+//! binary is required for the `.dump` round-trip test that pipes output
+//! through `sqlite3 :memory:`.
 //!
 //! The `redlinedb` binary is located via `assert_cmd::cargo::cargo_bin`.
 
@@ -36,6 +35,19 @@ fn run_script(db: Option<&std::path::Path>, script: &str) -> (String, String, i3
     let stderr = String::from_utf8(output.stderr).expect("utf8 stderr");
     let code = output.status.code().unwrap_or(-1);
     (stdout, stderr, code)
+}
+
+fn sqlite3_version() -> String {
+    let output = Command::new("sqlite3")
+        .arg("--version")
+        .output()
+        .expect("sqlite3 binary is required for CLI parity tests");
+    assert!(
+        output.status.success(),
+        "sqlite3 --version failed: stderr={:?}",
+        output.stderr
+    );
+    String::from_utf8(output.stdout).expect("sqlite3 version utf8")
 }
 
 #[test]
@@ -143,11 +155,7 @@ fn dot_show_dumps_current_settings() {
 
 #[test]
 fn dot_dump_round_trips_through_sqlite3() {
-    // Only run this test if a `sqlite3` binary is available on the path.
-    if Command::new("sqlite3").arg("--version").output().is_err() {
-        eprintln!("skipping dump round-trip: sqlite3 binary not found");
-        return;
-    }
+    eprintln!("sqlite3_version={}", sqlite3_version().trim());
     let dir = tempdir().expect("tempdir");
     let dump_path = dir.path().join("dump.sql");
 

@@ -35,8 +35,8 @@ readable repair receipts.
 | `ffi-test`                           | Targeted `redlinedb-ffi` test proof.                                                                   |
 | `cli-check`                          | Targeted `redlinedb-cli` compile proof.                                                               |
 | `cli-test`                           | Targeted `redlinedb-cli` test proof.                                                                   |
-| `phase9-smoke`                       | Bench harness unit tests plus a one-rep certify and a compat sweep.                                   |
-| `phase9-compat-full`                 | Full `compat --engine both` matrix against `crates/bench/compat/`.                                    |
+| `phase9-smoke`                       | Bench harness unit tests plus a one-rep certify and a cross-engine sweep.                                   |
+| `phase9-compat-full`                 | Full `cross-engine --engine both` matrix against `crates/bench/compat/`.                                    |
 | `phase9-certification`               | 5-rep + 1-warmup certify against `crates/bench/bench/certification.toml`.                             |
 | `phase9-xbabe1-gap`                  | Gap certify on the xbabe1 docker host (sync, run, fetch).                                             |
 | `phase9-xbabe1-gap-strace`           | Same as above with `strace -c` aggregation.                                                           |

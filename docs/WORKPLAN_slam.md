@@ -97,7 +97,7 @@ Post-fusion proof:
 - `cargo clippy --workspace --all-targets --locked -- -D warnings` — green
 - `cargo test --workspace --quiet --locked` — `187 passed (29 suites, 4.06s)`
 - `cargo test -p redlinedb-sql --quiet --locked` — 32 passed (was 26)
-- `cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/wave3-compat.json` — `{"files":3,"cases":40,"failures":[]}`
+- `cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/wave3-compat.json` — `{"files":3,"cases":40,"failures":[]}`
 
 Wave 3 artifact SHA-256:
 - `target/bench/wave3-compat.json` — `ee812460f3f08b55b323b6bc63c461f99551177b4db64b7dd106289179f0f91e`
@@ -131,7 +131,7 @@ Post-fusion proof:
 - `cargo clippy --workspace --all-targets --locked -- -D warnings` — green
 - `cargo test --workspace --quiet --locked` — `195 passed (29 suites, 4.24s)` (187 → 195, +8 tests)
 - `cargo test -p redlinedb-sql --quiet --locked` — 40 passed (was 32)
-- `cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/wave4-compat.json` — `{"files":3,"cases":40,"failures":[]}`
+- `cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/wave4-compat.json` — `{"files":3,"cases":40,"failures":[]}`
 
 Wave 4 artifact SHA-256:
 - `target/bench/wave4-compat.json` — `ee812460f3f08b55b323b6bc63c461f99551177b4db64b7dd106289179f0f91e`
@@ -163,7 +163,7 @@ Local proof matrix at `phase9-fusion-green` tag:
 - `cargo test --workspace --quiet --locked` — `203 passed, 1 ignored (30 suites, 4.42s)`
 - per-package: `kernel 130 / sql 40 / bench 16 / redlinedb 8 / ffi 5`
 - `cargo test -p redlinedb-kernel --features failpoints --quiet --locked` — `133 passed, 1 ignored`
-- `cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/fusion-compat.json` — `{"files":3,"cases":40,"failures":[]}`
+- `cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/fusion-compat.json` — `{"files":3,"cases":40,"failures":[]}`
 - `cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/fusion-recovery.json --seed 7` — exit 0 (24/36 passed; 12 pre-existing crash gaps unchanged)
 - `cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/wave5-failpoint-matrix.json --seed 7` — exit 0, 24/24 cases `lost_acked_commits: 0`
 - `cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/fusion-certify-smoke --seed 7 --repetitions 1 --warmup 0` — exit 0
@@ -233,7 +233,7 @@ Key changes:
 - `cargo check --workspace --locked` — green
 - `cargo clippy --workspace --all-targets --locked -- -D warnings` — green
 - `cargo test --workspace --quiet --locked` — `222 passed, 1 ignored (31 suites, 4.82s)` (203 → 222, +19 new tests across the three lanes)
-- `cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/wave6-compat.json` — `{"files":3,"cases":40,"failures":[]}`
+- `cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/wave6-compat.json` — `{"files":3,"cases":40,"failures":[]}`
 - `cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/wave6-recovery.json --seed 7` — exit 0, 24/36 passed (12 pre-existing crash gaps unchanged, **not** regressed by Wave 6)
 - `cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/wave6-failpoint.json --seed 7` — exit 0, 24/24 cases `lost_acked_commits: 0`
 - `cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/wave6-certify-smoke --seed 7 --repetitions 1 --warmup 0` — exit 0 at **restored** rows=256 (the kernel split fix unblocked the original seed)
@@ -303,7 +303,7 @@ After both fixes, recover-matrix reports **36/36 PASS** (was 24/36 in Wave 6).
 - `cargo clippy --workspace --all-targets --locked -- -D warnings` — green
 - `cargo test --workspace --quiet --locked` — `241 passed, 1 ignored (32 suites, 18.63s)` (222 → 241, +19 new tests across the three lanes)
 - `cargo test --workspace --features failpoints --quiet --locked` — 242 passed, 1 ignored
-- `cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/wave7-compat.json` — `{"files":3,"cases":40,"failures":[]}`
+- `cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/wave7-compat.json` — `{"files":3,"cases":40,"failures":[]}`
 - `cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/wave7-recovery.json --seed 7` — exit 0, **36/36 PASS** (vs 24/36 in Wave 6)
 - `cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/wave7-failpoint.json --seed 7` — exit 0, **24/24 cases passed for the right reasons** (verbatim actions, expect-exit gate, no false-passing)
 - `cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/wave7-certify-smoke --seed 7 --repetitions 1 --warmup 1` — exit 0; manifest now contains `git_sha`, `git_dirty`, `warmup_runs_per_combo`, `measured_runs_per_combo`, recursive `data_bytes`, populated `fdatasync_count`/`pwrite_count`, p50/p95/max in summary.csv
@@ -466,7 +466,7 @@ Wave-1-partial proof matrix:
 - `cargo clippy --workspace --all-targets --locked -- -D warnings` — green
 - `cargo test --workspace --quiet --locked` — `390 passed, 1 ignored` (37 suites)
   (vs 241 wave-7-fused → +149 phase-10 tests)
-- `cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7` — `40/40 cases, 0 failures`
+- `cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7` — `40/40 cases, 0 failures`
 - `cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/phase10-w1p-smoke --seed 7 --repetitions 1 --warmup 0` — exit 0; manifest carries `DatasetChecksum`
 
 Wave-1-partial artifact SHA-256:
@@ -562,7 +562,7 @@ Wave-2-fused proof matrix:
 - `cargo clippy --workspace --all-targets --locked -- -D warnings` — green
 - `cargo test --workspace --quiet --locked` — `691 passed, 3 ignored`
   (55 suites; vs 241 wave-7-fused → +450 phase-10 tests, vs 261 baseline → +430)
-- `cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7` — `40/40 cases, 0 failures`
+- `cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7` — `40/40 cases, 0 failures`
 
 Phase 10 closing tags so far: `phase10-baseline`, `phase10-wave1-partial`,
 `phase10-wave2-fused`.
@@ -656,7 +656,7 @@ that landed in 10E and 10F:
 - `cargo clippy --workspace --all-targets --locked -- -D warnings` — green
 - `cargo test --workspace --quiet --locked` — `691 passed, 3 ignored`
   (56 suites)
-- `cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7` — `40/40 cases, 0 failures`
+- `cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7` — `40/40 cases, 0 failures`
 - `cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/phase10-recovery.json --seed 7` — exit 0, 36/36 PASS
 - `cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/phase10-failpoint.json --seed 7` — exit 0, 24/24 cases `lost_acked_commits: 0`
 - `cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/phase10-fusion-green-smoke --seed 7 --repetitions 1 --warmup 0` — exit 0; manifest carries DatasetChecksum
@@ -759,7 +759,7 @@ These commands passed in the current workspace:
 9. `rtk cargo test -p redlinedb-sql --quiet --locked`  
    Result: `26 passed (3 suites, 1.46s)`
 10. `rtk cargo run -p redlinedb-bench -- compare --config crates/bench/bench/smoke.toml --out target/bench/smoke.jsonl --report target/bench/smoke.md --seed 7`
-11. `rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7`  
+11. `rtk cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7`
     Result: `{"files": 3, "cases": 40, "failures": []}`
 12. `rtk cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/recovery-matrix.json --seed 7`
 13. `rtk cargo check --workspace --locked`
