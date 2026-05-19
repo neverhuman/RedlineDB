@@ -7,10 +7,11 @@ release-readiness, HLT-016 supply-chain drift.
 
 ## Version source
 
-The workspace is published as five crates pinned at the same version.
-Each crate carries its own `version = "X.Y.Z"` in
-`crates/<crate>/Cargo.toml` (the workspace itself does not yet pin a
-`[workspace.package].version`). To bump:
+The release crates are published as a five-crate chain pinned at the
+same version. The rest of the workspace stays version-aligned, but it
+is not part of the crates.io release gate. Each crate carries its own
+`version = "X.Y.Z"` in `crates/<crate>/Cargo.toml` (the workspace
+itself does not yet pin a `[workspace.package].version`). To bump:
 
 ```
 cargo install cargo-edit
@@ -39,23 +40,40 @@ Ordered steps. Each step is gated by the previous one passing.
    rust-witness + rust-diagnose). All must exit zero.
 2. **Bump**: `cargo set-version --workspace X.Y.Z` + edit
    `CHANGELOG.md` (`Unreleased` → `## [X.Y.Z] - YYYY-MM-DD`).
-3. **Commit + signed tag**:
+3. **Commit + push the bump**:
    ```
    git commit -am "chore(release): vX.Y.Z"
-   git tag -s vX.Y.Z -m "redlinedb vX.Y.Z"
-   git push origin main --follow-tags
+   git push origin main
    ```
-4. **Dry-run publish** (dependency order, every crate):
+4. **Publish the crates.io chain**:
    ```
-   cargo publish --dry-run -p redlinedb-domain
+   ./scripts/release/publish-chain.sh X.Y.Z
+   ```
+   The helper publishes `redlinedb-domain` first, waits for the new
+   version to appear in the crates.io index, then continues through
+   `redlinedb-kernel`, `redlinedb-sql`, `redlinedb-ffi`, and
+   `redlinedb`. That wait is required: the next crate can 404 until the
+   previous publish is indexed. The helper also records a
+   machine-readable release witness at
+   `target/release/release-witness.jsonl` and requires the release
+   integrity artifacts to exist before the chain starts:
+   `target/release/SHA256SUMS`, `target/release/sbom.cdx.json`,
+   `target/release/provenance.intoto.jsonl`,
+   `target/release/tag.sig`, and
+   `target/release/attestation.intoto.jsonl`.
+
+   Optional sanity check once `redlinedb-domain` is indexed:
+   ```
    cargo publish --dry-run -p redlinedb-kernel
    cargo publish --dry-run -p redlinedb-sql
    cargo publish --dry-run -p redlinedb-ffi
    cargo publish --dry-run -p redlinedb
    ```
-5. **Publish to crates.io** (same order, no `--dry-run`). Wait for
-   each upload to index on crates.io before the next, otherwise the
-   dependent's `cargo publish` will 404 on the just-pushed version.
+5. **Signed tag, after the publish chain is confirmed**:
+   ```
+   git tag -s vX.Y.Z -m "redlinedb vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
 6. **Cut the GitHub release**:
    ```
    gh release create vX.Y.Z --title "redlinedb vX.Y.Z" \
