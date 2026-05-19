@@ -2,10 +2,11 @@
 # Integration test for the staged-files pre-commit hook.
 #
 # Verifies:
-#   1. Clean staged file => commit succeeds (exit 0).
+#   1. Clean staged file on a branch that contains origin/main => commit succeeds (exit 0).
 #   2. Staged file with a hard finding => commit blocks (exit non-zero).
 #   3. Same as (2) with JANKURAI_SKIP_HOOKS=1 => commit succeeds.
 #   4. Empty staged set (--allow-empty) => commit succeeds.
+#   5. Branch that is behind origin/main => commit blocks before audit.
 #
 # Usage:
 #   bash tools/jankurai-hooks/tests/pre_commit_blocks.sh
@@ -19,6 +20,12 @@ if [ ! -x "$HOOK_SRC" ]; then
   exit 2
 fi
 
+REQUIRE_MAIN_SRC="${REQUIRE_MAIN_SRC:-$(cd "$(dirname "$0")/../../.." && pwd)/ops/ci/require-main-up-to-date.sh}"
+if [ ! -f "$REQUIRE_MAIN_SRC" ]; then
+  echo "FAIL: freshness gate script not found at $REQUIRE_MAIN_SRC" >&2
+  exit 2
+fi
+
 JANKURAI_CMD="${JANKURAI_BIN:-$(command -v jankurai || true)}"
 if [ -z "$JANKURAI_CMD" ] || [ ! -x "$JANKURAI_CMD" ]; then
   echo "FAIL: jankurai binary not found on PATH or via JANKURAI_BIN" >&2
@@ -28,15 +35,22 @@ fi
 work="$(mktemp -d "${TMPDIR:-/tmp}/jankurai-hook-test.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 
+origin="$work/origin.git"
+git init --bare -q "$origin"
+
 cd "$work"
-git init -q
+git init -b main -q repo
+cd repo
 git config user.email test@example.com
 git config user.name test
 git config commit.gpgsign false
+git remote add origin "$origin"
 
 mkdir -p .git/hooks
 cp "$HOOK_SRC" .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
+mkdir -p ops/ci
+cp "$REQUIRE_MAIN_SRC" ops/ci/require-main-up-to-date.sh
 
 # Seed initial commit so HEAD exists.
 echo "init" > README.md
@@ -45,6 +59,8 @@ git commit -q -m "init" || {
   echo "FAIL: initial commit failed" >&2
   exit 1
 }
+git push -q -u origin main
+git checkout -q -b feature/clean-branch
 
 pass_count=0
 fail_count=0
@@ -98,6 +114,37 @@ if git commit -q --allow-empty -m "empty"; then
   ok "empty commit passed"
 else
   bad "empty commit blocked"
+fi
+
+# --- Test 5: stale main blocks even for a clean file ---
+note "stale branch is blocked before audit"
+updater="$work/updater"
+git clone -q "$origin" "$updater"
+( cd "$updater" && \
+  git config user.email test@example.com && \
+  git config user.name test && \
+  git checkout -q main && \
+  echo "remote update" >> README.md && \
+  git add README.md && \
+  git commit -q -m "advance main" && \
+  git push -q origin main
+)
+
+git checkout -q feature/clean-branch
+cat > stale.md <<'EOF'
+# Freshness
+This file is clean; only the branch freshness gate should block it.
+EOF
+git add stale.md
+if git commit -q -m "stale branch commit" 2> "$work/stale.err"; then
+  bad "stale branch commit was allowed"
+else
+  if grep -q "does not contain the latest origin/main" "$work/stale.err"; then
+    ok "stale branch blocked by freshness gate"
+  else
+    bad "stale branch failed for the wrong reason"
+    cat "$work/stale.err" >&2
+  fi
 fi
 
 printf '\nSummary: %d passed, %d failed\n' "$pass_count" "$fail_count"
