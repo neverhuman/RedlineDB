@@ -4,7 +4,6 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 
@@ -53,7 +52,7 @@ impl Database {
     /// the final [`Arc<Database>`] owner drops. Connections opened from the
     /// returned database share the same transient state.
     pub fn create_in_memory(opts: DbOptions) -> Result<Arc<Self>> {
-        let id = EPHEMERAL_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+        let id = next_ephemeral_id();
         let root = EphemeralRoot::new_private(id, &opts)?;
         let path = root.path().to_path_buf();
         Self::create_with_ephemeral_root(&path, opts, Some(Arc::new(root)))
@@ -326,9 +325,18 @@ impl EphemeralRoot {
     }
 }
 
-#[derive(Default)]
 struct EphemeralRegistry {
+    next_id: u64,
     sessions: HashMap<String, EphemeralSession>,
+}
+
+impl Default for EphemeralRegistry {
+    fn default() -> Self {
+        Self {
+            next_id: 1,
+            sessions: HashMap::new(),
+        }
+    }
 }
 
 struct EphemeralSession {
@@ -351,10 +359,18 @@ impl EphemeralSession {
 }
 
 static EPHEMERAL_REGISTRY: OnceLock<Mutex<EphemeralRegistry>> = OnceLock::new();
-static EPHEMERAL_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 fn ephemeral_registry() -> &'static Mutex<EphemeralRegistry> {
     EPHEMERAL_REGISTRY.get_or_init(|| Mutex::new(EphemeralRegistry::default()))
+}
+
+fn next_ephemeral_id() -> u64 {
+    let mut registry = ephemeral_registry()
+        .lock()
+        .expect("ephemeral registry poisoned");
+    let id = registry.next_id;
+    registry.next_id += 1;
+    id
 }
 
 pub(super) fn hash_optimizer(optimizer: &OptimizerConfig, query_memory: &QueryMemoryConfig) -> u64 {
