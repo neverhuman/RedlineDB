@@ -31,6 +31,7 @@ pub fn install_default_drivers() {
 #[cfg(test)]
 mod tests {
     use super::bridge::{RedlineConnectOptions, RedlineLocation};
+    use crate::install_default_drivers;
     use sqlx::connection::ConnectOptions;
     use sqlx::{any::AnyPoolOptions, row::Row};
     use std::fs;
@@ -38,6 +39,8 @@ mod tests {
     use std::process::{Child, Command, Stdio};
     use std::time::{Duration, Instant};
     use url::Url;
+
+    const HELPER_TEST_NAME: &str = "tests::owner_process_holds_database_open";
 
     #[test]
     fn attach_mode_ro_is_read_only_and_ownerless() {
@@ -72,12 +75,7 @@ mod tests {
         let hold_path = tempdir.path().join("owner.hold");
         fs::write(&hold_path, b"hold").expect("create hold file");
 
-        let mut child = spawn_helper(
-            "owner_process_holds_database_open",
-            &db_path,
-            &ready_path,
-            &hold_path,
-        );
+        let mut child = spawn_helper(HELPER_TEST_NAME, &db_path, &ready_path, &hold_path);
 
         wait_for_marker(
             &mut child,
