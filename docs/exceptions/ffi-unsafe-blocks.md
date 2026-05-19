@@ -52,7 +52,7 @@ Every `unsafe { ... }` block in the listed files carries:
 1. An exhaustive `// SAFETY:` comment immediately above the block,
    naming the caller obligation (typically the SQLite ABI's documented
    pointer-validity contract).
-2. A matching `[[entries]]` row in `agent/unsafe-ledger.toml` recording
+2. A matching `[[entries]]` row in `.jankurai/unsafe-ledger.toml` recording
    owner = `c-abi`, the invariant being relied on, and the proof lane
    that exercises the block.
 
@@ -67,14 +67,14 @@ the undocumented-block branch does not gate on the proof-window field).
 This is the same root cause that already required path-level exclusions
 for the rest of `crates/ffi/src/{error,lifecycle,snapshot,stmt,util}.rs`
 under the same exception umbrella. The path-level exclusion mechanism in
-`agent/audit-policy.toml::[scan].extra_excluded_paths` is the only
+`.jankurai/audit-policy.toml::[scan].extra_excluded_paths` is the only
 documented way to suppress the false positive in the current
 `jankurai/audit-policy` schema (no per-detector waiver section is
 supported).
 
 ## Owner
 
-`c-abi` (see `agent/owner-map.json`).
+`c-abi` (see `.jankurai/owner-map.json`).
 
 ## Expiry
 

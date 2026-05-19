@@ -36,7 +36,7 @@ shell command (already executed):
 The remote command runs **plain `cargo`** — the `rtk` wrapper is host-
 only and not in the docker image, so `rtk cargo …` fails inside the
 container with `bash: line 1: rtk: command not found`. This is
-already corrected in `agent/proof-lanes.toml` under
+already corrected in `.jankurai/proof-lanes.toml` under
 `[phase10-xbabe1-certification]`.
 
 ### How to check progress
@@ -160,12 +160,12 @@ TeX Live install.
 ### Already landed
 
 - `CHANGELOG.md` — full phase-10 release notes.
-- `agent/owner-map.json` — registers all new modules
+- `.jankurai/owner-map.json` — registers all new modules
   (integrity / json / vector / hnsw / diskann / wal lanes / vec exec /
   collations / datetime / regexp / savepoint / bench checksum).
-- `agent/test-map.json` — every phase-10 lane test registered under
+- `.jankurai/test-map.json` — every phase-10 lane test registered under
   `phase10/lane-*`.
-- `agent/proof-lanes.toml` — `[phase10-xbabe1-certification]` lane
+- `.jankurai/proof-lanes.toml` — `[phase10-xbabe1-certification]` lane
   added (no rtk wrapper, runs `cargo` directly inside docker).
 - `README.md` — tests badge bumped 243 → 691.
 - `crates/sql/tests/phase10_smoke_extras.rs` — new file holding the 4
@@ -341,9 +341,9 @@ crates/bench/src/checksum.rs
 - `docs/WORKPLAN_slam.md` (in-flight, two-section update)
 - `CHANGELOG.md` (entire phase-10 release notes)
 - `README.md` (tests badge)
-- `agent/owner-map.json`
-- `agent/test-map.json`
-- `agent/proof-lanes.toml`
+- `.jankurai/owner-map.json`
+- `.jankurai/test-map.json`
+- `.jankurai/proof-lanes.toml`
 
 ## Validation evidence
 

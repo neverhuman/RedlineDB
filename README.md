@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="agent/repo-score.md"><img src="https://img.shields.io/badge/jankurai-85%2F100%20pass-brightgreen" alt="jankurai score"></a>
+  <a href=".jankurai/repo-score.md"><img src="https://img.shields.io/badge/jankurai-85%2F100%20pass-brightgreen" alt="jankurai score"></a>
   <a href="#status"><img src="https://img.shields.io/badge/tests-928%20passing-brightgreen" alt="tests"></a>
   <a href="#bench-headlines"><img src="https://img.shields.io/badge/xbabe1%20cert-1728%2F1728%20%E2%9C%93-brightgreen" alt="cert"></a>
   <a href="#crash-and-failpoint-certification"><img src="https://img.shields.io/badge/recovery-36%2F36%20%E2%9C%93-brightgreen" alt="recovery"></a>
@@ -417,7 +417,7 @@ RedlineDB/
 │   ├── cli/                 one-shot shell
 │   ├── server/              framed local server
 │   └── bench/               workload harness + certify lane + matrices
-├── agent/                   repository-level agent routing + proof metadata
+├── .jankurai/                   repository-level agent routing + proof metadata
 ├── docs/
 │   ├── WORKPLAN_slam.md     proof ledger (commands + artifact hashes)
 │   ├── WORKPLAN_CLAUDE.md   detailed phase plan
@@ -457,10 +457,11 @@ We try to publish RedlineDB's wins and its trailing edges with equal weight. As 
 Bug reports and patches are welcome. The proof discipline in this repo is unusually strict for a hobby database:
 
 - Every change runs `cargo fmt --check`, `./scripts/check_file_sizes.sh`, `cargo check --workspace --locked`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`.
-- Active source files stay under 2,000 LOC (`agent/file-size-policy.toml`).
-- New `unsafe` blocks outside `crates/ffi` go into `agent/unsafe-ledger.toml` with reviewer sign-off.
+- Active source files stay under 2,000 LOC (`.jankurai/file-size-policy.toml`).
+- New `unsafe` blocks outside `crates/ffi` go into `.jankurai/unsafe-ledger.toml` with reviewer sign-off.
 - Bench claims must come with a manifest (`target/bench/.../manifest.json`) carrying the git SHA, image digest, host fingerprint, and per-artifact SHA-256.
 - The proof ledger in `docs/WORKPLAN_slam.md` is the source of truth for any performance number quoted.
+- Enable the repo-managed Git hooks with `git config core.hooksPath tools/jankurai-hooks` so the tracked pre-commit hook can block stale branches before commit.
 
 See `AGENTS.md` for the agent routing protocol used during multi-stream development.
 

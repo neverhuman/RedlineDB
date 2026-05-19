@@ -172,11 +172,11 @@ No FFI ABI break; downstream consumers unaffected.
 - Fixed `CI_JANKURAI_GIT` URL typo in `ops/ci/lib.sh`
   (`jepsontaylor` → `jeppsontaylor`)
 - Added `proofbind`, `proofmark-rust`, `copy-code` to
-  `agent/tool-adoption.toml` (13 → 16 tools configured)
-- Committed `agent/baselines/main.repo-score.json`; CI baseline step now
+  `.jankurai/tool-adoption.toml` (13 → 16 tools configured)
+- Committed `.jankurai/baselines/main.repo-score.json`; CI baseline step now
   falls back to local copy on first-commit of the file
-- Exempted `agent/baselines/*` from `scripts/check_file_sizes.sh` 2000-line
-  hard limit (generated score artifacts, same class as `agent/repo-score.json`)
+- Exempted `.jankurai/baselines/*` from `scripts/check_file_sizes.sh` 2000-line
+  hard limit (generated score artifacts, same class as `.jankurai/repo-score.json`)
 - README install section expanded: exact version-pin examples for Cargo,
   `VERSION=v1.0.x` for CLI script, `cargo install --version --locked`,
   and `--git --tag --locked`
@@ -196,7 +196,7 @@ No FFI ABI break; downstream consumers unaffected.
 - `vibe-placeholders-in-product-code` + `future-hostile-dead-language-in-product-code`
   (C1–C4): renamed dead-marker terms across bench, kernel, sql, ffi.
 - `release-readiness-gap` (H): authored `docs/release.md`,
-  `agent/cost-budget.toml`; wired security CI gates.
+  `.jankurai/cost-budget.toml`; wired security CI gates.
 - `non-optimal-product-language-found` (J4): relocated
   `crates/ffi/include/redlinedb.h` → `contracts/c-abi/redlinedb.h`.
 - `fallback-soup-in-product-code` (J1a–d + followups): collapsed ~237
@@ -259,10 +259,10 @@ No FFI ABI break; downstream consumers unaffected.
 
 ### Manifests + CI
 
-- Added `agent/cost-budget.toml` workload budgets + kill-switch.
-- Extended `agent/audit-policy.toml` `extra_excluded_paths` for
+- Added `.jankurai/cost-budget.toml` workload budgets + kill-switch.
+- Extended `.jankurai/audit-policy.toml` `extra_excluded_paths` for
   bench-harness infrastructure modules.
-- Added 76 per-site entries to `agent/unsafe-ledger.toml` documenting
+- Added 76 per-site entries to `.jankurai/unsafe-ledger.toml` documenting
   every FFI/kernel/registry/statement/process_metrics unsafe block.
 - Wired `jankurai security run` + `actions/dependency-review-action` +
   SHA-pinned `cargo-audit` / `cargo-deny` / `gitleaks` into

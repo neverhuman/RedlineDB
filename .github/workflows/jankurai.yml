@@ -13,14 +13,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  branch-freshness:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - name: Ensure PR branch contains latest origin/main
+        run: |
+          git fetch origin main --quiet
+          if ! git merge-base --is-ancestor origin/main HEAD; then
+            echo "PR branch is behind origin/main. Rebase or merge main before committing."
+            exit 1
+          fi
+
   audit:
     # Inline jankurai tool-adoption CI evidence steps. Each `run: jankurai
     # ...` step is the canonical CI evidence entry for its tool-adoption
-    # manifest row (see agent/tool-adoption.toml). Install is soft-gated:
+    # manifest row (see .jankurai/tool-adoption.toml). Install is soft-gated:
     # if jankurai cannot be installed, downstream jankurai steps are
     # skipped via the `installed` output check; the job still exits 0
     # without `continue-on-error: true` (HLT-034). Soft-gate reasoning is
-    # recorded in agent/ci-soft-gate-ledger.toml#jankurai-install.
+    # recorded in .jankurai/ci-soft-gate-ledger.toml#jankurai-install.
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -41,19 +59,19 @@ jobs:
           mkdir -p target/jankurai
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin main --depth=1
-            if git show origin/main:agent/baselines/main.repo-score.json > target/jankurai/accepted-baseline.json 2>/dev/null; then
+            if git show origin/main:.jankurai/baselines/main.repo-score.json > target/jankurai/accepted-baseline.json 2>/dev/null; then
               echo "baseline sourced from origin/main"
-            elif [ -f agent/baselines/main.repo-score.json ]; then
-              cp agent/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
+            elif [ -f .jankurai/baselines/main.repo-score.json ]; then
+              cp .jankurai/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
               echo "baseline sourced from local (first-time commit)"
             else
-              echo "missing accepted baseline agent/baselines/main.repo-score.json" >&2
+              echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2
               exit 1
             fi
-          elif [ -f agent/baselines/main.repo-score.json ]; then
-            cp agent/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
+          elif [ -f .jankurai/baselines/main.repo-score.json ]; then
+            cp .jankurai/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
           else
-            echo "missing accepted baseline agent/baselines/main.repo-score.json" >&2
+            echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2
             exit 1
           fi
       - name: Install jankurai
@@ -66,7 +84,7 @@ jobs:
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "installed=false" >> "$GITHUB_OUTPUT"
-            printf 'soft-gate=jankurai-install status=soft-failed ledger=agent/ci-soft-gate-ledger.toml\n' \
+            printf 'soft-gate=jankurai-install status=soft-failed ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
               | tee -a target/jankurai/jankurai-install.log
             echo "::warning::jankurai install failed; tool-adoption CI evidence steps will be skipped"
           fi
@@ -95,7 +113,7 @@ jobs:
             ( cd target/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
               > >(tee target/jankurai/language-bad-behavior.log) 2>&1
           else
-            printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=agent/ci-soft-gate-ledger.toml\n' \
+            printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
               | tee target/jankurai/language-bad-behavior.log
           fi
       - name: jankurai staged-gate (PR changed files)
@@ -121,10 +139,10 @@ jobs:
           name: jankurai-adoption-evidence
           if-no-files-found: ignore
           path: |
-            agent/repo-score.json
-            agent/repo-score.md
-            agent/cost-budget.toml
-            agent/baselines/main.repo-score.json
+            .jankurai/repo-score.json
+            .jankurai/repo-score.md
+            .jankurai/cost-budget.toml
+            .jankurai/baselines/main.repo-score.json
             target/jankurai/repo-score.json
             target/jankurai/repo-score.md
             target/jankurai/jankurai.sarif
@@ -178,7 +196,7 @@ jobs:
       # Thin dispatcher: all supply-chain logic lives in ops/ci/security.sh
       # so CI and local (`scripts/ci-local.sh security`, `just security`)
       # run identical commands. Cargo-deny is soft-gated INSIDE the script
-      # (see agent/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
+      # (see .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
       # and gitleaks remain hard gates. actionlint and syft are soft-gated
       # (see ledger entries actionlint-workflow-lint, syft-sbom).
       - name: security lane (ops/ci/security.sh)
@@ -194,7 +212,7 @@ jobs:
     # exit is intercepted by ops/ci/dependency-review.sh which decides
     # whether to fail the lane. The workflow step always runs the
     # script, and the soft-gate semantics live there (see
-    # agent/ci-soft-gate-ledger.toml#dependency-review-action).
+    # .jankurai/ci-soft-gate-ledger.toml#dependency-review-action).
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10

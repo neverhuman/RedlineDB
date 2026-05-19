@@ -208,7 +208,7 @@ pub unsafe extern "C" fn sqlite3_blob_close(blob: *mut RldbBlob) -> c_int {
     // ownership invariant: blob is owned by the caller until close; double-
     // close is prevented by the null-check above (caller MUST NULL the
     // pointer after sqlite3_blob_close); ledgered at
-    // agent/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/blob.rs,
+    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/blob.rs,
     // line=98, detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/blob_io.rs::open_read_write_close_round_trip.
     let _ = unsafe { Box::from_raw(blob) };

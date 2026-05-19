@@ -2,7 +2,7 @@ name: jankurai-tools
 
 # Thin dispatcher (HLT-042 ci-local-parity). Per-tool jankurai CI
 # evidence for the 9 tools listed as `configured` but missing CI command
-# evidence in `agent/repo-score.md` (project memory
+# evidence in `.jankurai/repo-score.md` (project memory
 # `project_jankurai_score_gaps`). All lane logic lives in
 # `ops/ci/jankurai-tools.sh` so the same command runs in CI and locally
 # via `bash ops/ci/jankurai-tools.sh <tool>`.
@@ -179,7 +179,7 @@ jobs:
           path: |
             target/jankurai/agent-tool-supply/receipt.json.txt
             target/jankurai/agent-tool-supply/install.log
-            agent/tool-adoption.toml
+            .jankurai/tool-adoption.toml
 
   release-readiness:
     runs-on: ubuntu-latest
@@ -221,4 +221,4 @@ jobs:
           path: |
             target/jankurai/cost-budget/receipt.json.txt
             target/jankurai/cost-budget/install.log
-            agent/cost-budget.toml
+            .jankurai/cost-budget.toml

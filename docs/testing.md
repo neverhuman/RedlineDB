@@ -2,7 +2,7 @@
 
 Every change in this repo is validated through a named *proof lane* —
 a deterministic recipe an agent can rerun without re-discovering it.
-Lanes are declared in `agent/proof-lanes.toml`; this doc indexes them,
+Lanes are declared in `.jankurai/proof-lanes.toml`; this doc indexes them,
 records the budgets/kill-switches that bound the long-running ones,
 and points at the structured error surface that produces machine-
 readable repair receipts.
@@ -54,7 +54,7 @@ readable repair receipts.
 | `security-local`                     | Same as `security`; pinned for local-only invocation.                                                 |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
 
-Lane definitions: `agent/proof-lanes.toml`. To rerun a lane:
+Lane definitions: `.jankurai/proof-lanes.toml`. To rerun a lane:
 
 ```
 rtk just <lane-name>
@@ -78,7 +78,7 @@ can interrupt them without leaving the cluster wedged. The contract:
 | `phase10-xbabe1-certification`      | 90 min         | 64 GiB   | 4e9                    |
 | `phase11-oltp-gap`                  | 20 min         | 4 GiB    | 1e8                    |
 
-These budgets are authored in `agent/cost-budget.toml` (added in
+These budgets are authored in `.jankurai/cost-budget.toml` (added in
 Section H of the repair plan); this doc is the human-readable index.
 
 ### `REDLINEDB_BENCH_KILL=1`
@@ -133,13 +133,13 @@ Authoring a new escalation:
    `docs/audit-rubric.md`.
 
 A `proof-receipt.md` template lives at
-`agent/proof-receipt-template.md`; use it to record the lane name,
+`.jankurai/proof-receipt-template.md`; use it to record the lane name,
 seed, raw-log path, and exit code for any non-trivial repair.
 
 ## Cost budgets and kill-switches
 
 Every bench / certification workload is enumerated in
-[`agent/cost-budget.toml`](../agent/cost-budget.toml) with three
+[`.jankurai/cost-budget.toml`](../.jankurai/cost-budget.toml) with three
 hard limits — `max_wall_clock_minutes`, `max_disk_gb`,
 `max_syscalls` — and a single `owner` field. The TOML is the
 machine-readable source of truth; the table earlier in this file is
@@ -150,14 +150,14 @@ launching (or `export` mid-run) and the bench harness exits at the
 next workload boundary, flushes its in-flight metrics, and writes a
 `kill_receipt.json` next to the run's output directory. The env var
 name is fixed under `[global].kill_switch_env` in
-`agent/cost-budget.toml` so downstream tools can read the contract
+`.jankurai/cost-budget.toml` so downstream tools can read the contract
 without hardcoding the string. Each kill switch and spend cap ceiling
-is defined per-workload in `agent/cost-budget.toml` so the bench
+is defined per-workload in `.jankurai/cost-budget.toml` so the bench
 harness and CI both enforce the same limits.
 
 Adding a new long-running workload:
 
-1. Append a `[[workload]]` block to `agent/cost-budget.toml` with
+1. Append a `[[workload]]` block to `.jankurai/cost-budget.toml` with
    the three budgets and an owner.
 2. Update the "Budgets and kill-switches" table above with the
    summary row.
@@ -183,7 +183,7 @@ tagged release must satisfy:
   audit upload step in `jankurai.yml` is the canonical artifact.
 - **Rollback** — `gh release delete` + `cargo yank` runbook in
   `docs/release.md`; `release-bad-behavior` lane in
-  `agent/proof-lanes.toml`.
+  `.jankurai/proof-lanes.toml`.
 - **Abuse controls** — FFI input boundary tests
   (`cargo test -p redlinedb-ffi shell`) plus the authz matrix lane
   cover misuse of the C ABI from untrusted callers.
@@ -194,7 +194,7 @@ in `docs/release.md`; this section is the testing-side index.
 
 ## Budgets, quotas, stop conditions, and kill-switches for paid operations
 
-Canonical source: [`agent/cost-budget.toml`](../agent/cost-budget.toml).
+Canonical source: [`.jankurai/cost-budget.toml`](../.jankurai/cost-budget.toml).
 The TOML is machine-readable truth; this section is the agent-facing
 operations index for the gates in that file. Audit reference:
 HLT-026 cost-budget-gap.
@@ -225,7 +225,7 @@ explicit budget, a quota, a stop condition, and a kill-switch.
   pre-exported to force exit at the first iteration boundary; the
   resulting `kill_receipt.json` confirms the wiring without paying
   the full budget. Always inspect the matching `[[workload]]` block
-  in `agent/cost-budget.toml` before launching a longer run.
+  in `.jankurai/cost-budget.toml` before launching a longer run.
 - **Quotas (dependency + license).** `[dependencies]` in the budget
   file pins `max_advisory_count = 0` and a license allowlist; any
   PR that introduces a new vulnerable or non-allowlisted dependency
@@ -235,4 +235,4 @@ explicit budget, a quota, a stop condition, and a kill-switch.
   a `max_wall_clock_seconds` in their `[[workload]]` block and a
   kill-switch env var. There are no unbounded paid operations in
   this repo; if one is added it must register a budget + stop
-  condition here and in `agent/cost-budget.toml` before merging.
+  condition here and in `.jankurai/cost-budget.toml` before merging.

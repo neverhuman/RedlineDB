@@ -303,7 +303,7 @@ Benchmarking only against default SQLite is not enough; tuned SQLite is the real
 
 The kernel has a decent-looking test spread: catalog, engine, heap, index, page heap, recovery, storage, transaction, WAL, tuple, and stats tests. The SQL test directory currently appears much thinner, with only a smoke test shown in the repo tree. ([GitHub][14])
 
-The agent/test map includes good proof lanes such as formatting, locked workspace checks/tests, clippy, audit, deny, and gitleaks. ([GitHub][15])
+The .jankurai/test map includes good proof lanes such as formatting, locked workspace checks/tests, clippy, audit, deny, and gitleaks. ([GitHub][15])
 
 Add these next:
 
@@ -486,6 +486,6 @@ Once those are in, RedlineDB can start producing benchmark results that reflect 
 [12]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/sql/src/value.rs "raw.githubusercontent.com"
 [13]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/bench/src/main.rs "raw.githubusercontent.com"
 [14]: https://github.com/jeppsontaylor/RedlineDB/tree/main/crates/kernel/tests "RedlineDB/crates/kernel/tests at main · jeppsontaylor/RedlineDB · GitHub"
-[15]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/agent/test-map.json "raw.githubusercontent.com"
+[15]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/.jankurai/test-map.json "raw.githubusercontent.com"
 [16]: https://raw.githubusercontent.com/jeppsontaylor/RedlineDB/main/crates/kernel/src/wal/payload.rs "raw.githubusercontent.com"
 

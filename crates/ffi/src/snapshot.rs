@@ -88,7 +88,7 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     // redlinedb.h:141; exclusive access upheld because backup handles are not
     // shared across threads in the documented contract; double-close guarded by
     // the null check above (caller must NULL after close); ledgered at
-    // agent/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=94,
+    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=94,
     // detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
     unsafe {

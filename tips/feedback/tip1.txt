@@ -10,7 +10,7 @@ There is an important evidence gap: the archive contains the benchmark prose and
 `crates/bench/compat/**`
 `paper/data/*.csv`
 `paper/sections/**`
-`agent/owner-map.json`, `agent/test-map.json`, `agent/proof-lanes.toml`, `agent/generated-zones.toml`, `agent/unsafe-ledger.toml`
+`.jankurai/owner-map.json`, `.jankurai/test-map.json`, `.jankurai/proof-lanes.toml`, `.jankurai/generated-zones.toml`, `.jankurai/unsafe-ledger.toml`
 
 The archive also has no `.git`, so the prompt’s requested `git status --short` cannot be run from this package.
 

@@ -54,7 +54,7 @@ ci_assert_artifacts() {
 # `continue-on-error: true` in the workflow YAML: the soft-gate semantics
 # live here, the workflow YAML is hard-gated end-to-end.
 #
-# Every call MUST cite an entry in agent/ci-soft-gate-ledger.toml so the
+# Every call MUST cite an entry in .jankurai/ci-soft-gate-ledger.toml so the
 # soft gate is auditable. The ledger entry name is passed as the first
 # argument and stamped into the log marker.
 #
@@ -73,7 +73,7 @@ ci_soft_gate() {
     if [ "$rc" -eq 0 ]; then
         printf 'soft-gate=%s status=passed exit=0\n' "$entry" | tee -a "$log_path"
     else
-        printf 'soft-gate=%s status=soft-failed exit=%d ledger=agent/ci-soft-gate-ledger.toml\n' \
+        printf 'soft-gate=%s status=soft-failed exit=%d ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
             "$entry" "$rc" | tee -a "$log_path" >&2
     fi
     # Always return 0: soft-gate semantics. The ledger row + log marker

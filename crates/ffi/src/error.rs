@@ -35,7 +35,7 @@ pub extern "C" fn rldb_free(ptr: *mut c_void) {
         // library has exclusive access as the sole producer of such pointers per
         // redlinedb.h:128; double-free guarded by the caller's obligation to
         // NULL the handle after rldb_free (redlinedb.h:128); ledgered at
-        // agent/unsafe-ledger.toml (file=crates/ffi/src/error.rs, line=42,
+        // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/error.rs, line=42,
         // detector=rust.unsafe.raw-parts); proof:
         // crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and
         // ::exec_callback_failure_round_trips_errmsg_ownership.

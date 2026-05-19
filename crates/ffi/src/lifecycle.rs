@@ -75,7 +75,7 @@ pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
         // (caller never frees directly per redlinedb.h:87); exclusive access
         // upheld by the active_statements==0 check above; double-close guarded
         // by the null check above (caller must NULL the handle after close);
-        // ledgered at agent/unsafe-ledger.toml (file=crates/ffi/src/lifecycle.rs,
+        // ledgered at .jankurai/unsafe-ledger.toml (file=crates/ffi/src/lifecycle.rs,
         // line=81, detector=rust.unsafe.raw-parts); proof:
         // crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe.
         unsafe {

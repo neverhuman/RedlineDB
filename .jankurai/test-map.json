@@ -70,7 +70,7 @@
       "command": "jankurai doctor --fail-on critical",
       "purpose": "verify scaffold marker does not hide missing control-plane files"
     },
-    "agent/": {
+    ".jankurai/": {
       "command": "just score",
       "purpose": "verify manifests remain parseable and authoritative"
     },
@@ -78,8 +78,8 @@
       "command": "just benchmark-export-existing",
       "purpose": "verify benchmark-results artifacts export cleanly and stay reproducible"
     },
-    "agent/coverage-sources.toml": {
-      "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+    ".jankurai/coverage-sources.toml": {
+      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage evidence source routing and score import"
     },
     ".agents/": {
@@ -112,7 +112,7 @@
     },
     ".github/instructions/": {
       "command": "just score",
-      "purpose": "verify thin IDE/agent adapters stay aligned with agent/JANKURAI_STANDARD.md"
+      "purpose": "verify thin IDE/agent adapters stay aligned with .jankurai/JANKURAI_STANDARD.md"
     },
     ".github/workflows/": {
       "command": "just security",
@@ -214,9 +214,9 @@
       "command": "just fast",
       "purpose": "verify scripts referenced by proof lanes stay executable"
     },
-    "agent/zyal/": {
+    ".jankurai/zyal/": {
       "command": "just score",
-      "purpose": "verify canonical ZYAL runbooks stay under agent/zyal and only use the .zyal extension"
+      "purpose": "verify canonical ZYAL runbooks stay under .jankurai/zyal and only use the .zyal extension"
     },
     "apps/": {
       "command": "just fast",
@@ -231,15 +231,15 @@
       "purpose": "verify Rust behavior and audit checks"
     },
     "crates/jankurai/src/audit/coverage.rs": {
-      "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage parsers and evidence normalization"
     },
     "crates/jankurai/src/commands/coverage.rs": {
-      "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage audit command behavior"
     },
     "crates/jankurai/tests/fixtures/coverage/": {
-      "command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
+      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
       "purpose": "verify coverage parser fixture contracts"
     },
     "db/": {

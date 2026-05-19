@@ -60,28 +60,28 @@ crates/bench/src/gates.rs
 Also, `AGENTS.md` tells reviewers to read:
 
 ```text
-agent/owner-map.json
-agent/test-map.json
-agent/proof-lanes.toml
-agent/generated-zones.toml
-agent/unsafe-ledger.toml
+.jankurai/owner-map.json
+.jankurai/test-map.json
+.jankurai/proof-lanes.toml
+.jankurai/generated-zones.toml
+.jankurai/unsafe-ledger.toml
 ```
 
 but the uploaded archive only has:
 
 ```text
-agent/ari-v0.md
-agent/proof-receipt-template.md
+.jankurai/ari-v0.md
+.jankurai/proof-receipt-template.md
 ```
 
 ## Files to create or restore
 
 ```text
-agent/owner-map.json
-agent/test-map.json
-agent/proof-lanes.toml
-agent/generated-zones.toml
-agent/unsafe-ledger.toml
+.jankurai/owner-map.json
+.jankurai/test-map.json
+.jankurai/proof-lanes.toml
+.jankurai/generated-zones.toml
+.jankurai/unsafe-ledger.toml
 
 crates/bench/bench/certification.toml
 crates/bench/bench/phase11-oltp-gap.toml
@@ -1888,11 +1888,11 @@ crates/kernel/tests/diskann_mmap.rs
 Create or restore:
 
 ```text
-agent/owner-map.json
-agent/test-map.json
-agent/proof-lanes.toml
-agent/generated-zones.toml
-agent/unsafe-ledger.toml
+.jankurai/owner-map.json
+.jankurai/test-map.json
+.jankurai/proof-lanes.toml
+.jankurai/generated-zones.toml
+.jankurai/unsafe-ledger.toml
 
 crates/bench/bench/certification.toml
 crates/bench/bench/phase11-oltp-gap.toml

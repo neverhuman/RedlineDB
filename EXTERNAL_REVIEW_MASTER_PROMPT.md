@@ -5,7 +5,7 @@ This is a briefing, not ground truth. Verify every claim against source code, te
 ## Read This First
 
 1. Read `AGENTS.md`.
-2. Read `agent/owner-map.json`, `agent/test-map.json`, `agent/proof-lanes.toml`, `agent/generated-zones.toml`, and `agent/unsafe-ledger.toml`.
+2. Read `.jankurai/owner-map.json`, `.jankurai/test-map.json`, `.jankurai/proof-lanes.toml`, `.jankurai/generated-zones.toml`, and `.jankurai/unsafe-ledger.toml`.
 3. Read `docs/WORKPLAN_slam.md` and treat `docs/PHASE10_HANDOFF.md` as historical handoff state, not current proof state.
 4. Run `git status --short` before attributing any file, artifact, or benchmark result to a committed tag. The current worktree is dirty and includes phase11 bench additions.
 5. Inspect code and artifacts directly. Do not trust README prose, paper prose, or this prompt without checking the underlying evidence.
@@ -32,7 +32,7 @@ This is a briefing, not ground truth. Verify every claim against source code, te
 - SQL DML, index access, vectorized executor, JSON, collation, datetime, and regexp: `crates/sql/src/exec/*`, `crates/sql/src/json/*`, `crates/sql/src/collation.rs`, `crates/sql/src/datetime.rs`, `crates/sql/src/regexp.rs`, `crates/sql/tests/*`.
 - Public facade stats and benchmark telemetry: `crates/redlinedb/src/*`, `crates/bench/src/certify.rs`, `crates/bench/src/config.rs`, `crates/bench/src/workload.rs`, `crates/bench/src/chaos.rs`.
 - FFI ABI and compatibility surface: `crates/ffi/src/lib.rs`, `crates/ffi/include/sqlite3.h`.
-- Proof-lane metadata: `agent/proof-lanes.toml`, `agent/test-map.json`, `agent/owner-map.json`, `agent/generated-zones.toml`, `agent/unsafe-ledger.toml`.
+- Proof-lane metadata: `.jankurai/proof-lanes.toml`, `.jankurai/test-map.json`, `.jankurai/owner-map.json`, `.jankurai/generated-zones.toml`, `.jankurai/unsafe-ledger.toml`.
 
 ## Current Evidence To Verify
 
@@ -167,7 +167,7 @@ rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench
 
 The recovery matrix currently runs via the direct `rtk cargo run -p redlinedb-bench -- recover-matrix ...` command above; the tree does not expose a standalone `just phase9-recovery-matrix` recipe today.
 
-For remote xbabe1 review, inspect the lane definitions in `agent/proof-lanes.toml` and the runner scripts in `scripts/bench/`. The published phase10 cert lane is `phase10-xbabe1-certification`; the strace-capable lanes are `phase9-xbabe1-certify-with-strace` and `phase9-xbabe1-gap-strace`.
+For remote xbabe1 review, inspect the lane definitions in `.jankurai/proof-lanes.toml` and the runner scripts in `scripts/bench/`. The published phase10 cert lane is `phase10-xbabe1-certification`; the strace-capable lanes are `phase9-xbabe1-certify-with-strace` and `phase9-xbabe1-gap-strace`.
 
 ## How To Challenge The Claims
 

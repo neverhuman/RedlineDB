@@ -2,7 +2,7 @@ schema_version = "1.0.0"
 
 # Bench / certification budgets and kill-switches.
 # Audit reference: HLT-026 cost-budget-gap.
-# Companion policy file: agent/audit-policy.toml (audit gating + scan excludes).
+# Companion policy file: .jankurai/audit-policy.toml (audit gating + scan excludes).
 # Kill-switch env var: REDLINEDB_BENCH_KILL=1 halts any in-flight bench loop
 # at the next iteration boundary; respected by the bench harness in
 # crates/bench/src/lib.rs.

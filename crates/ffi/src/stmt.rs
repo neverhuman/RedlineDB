@@ -171,7 +171,7 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
         // per redlinedb.h:99; exclusive access because rldb_stmt is documented
         // as single-thread-owned in redlinedb.h:99; double-finalize guarded by
         // the null check above (caller must NULL stmt after rldb_finalize per
-        // redlinedb.h:99); ledgered at agent/unsafe-ledger.toml
+        // redlinedb.h:99); ledgered at .jankurai/unsafe-ledger.toml
         // (file=crates/ffi/src/stmt.rs, line=169, detector=rust.unsafe.raw-parts);
         // proof: crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully
         // and ::parameter_index_out_of_range_returns_range.

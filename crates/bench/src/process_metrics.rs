@@ -112,7 +112,7 @@ pub fn collect_self() -> ProcessMetrics {
     // bytes); ownership invariant: `usage` is a fresh stack local with
     // exclusive access; we immediately overwrite every public field on rc == 0
     // via the kernel-provided libc::getrusage call and otherwise discard the
-    // value; ledgered at agent/unsafe-ledger.toml
+    // value; ledgered at .jankurai/unsafe-ledger.toml
     // (file=crates/bench/src/process_metrics.rs, line=110,
     // detector=rust.unsafe.zeroed); proof:
     // crates/bench/src/process_metrics.rs::tests::rusage_populates_after_init.
@@ -122,7 +122,7 @@ pub fn collect_self() -> ProcessMetrics {
     // `&mut usage` is a valid, aligned, writable pointer with exclusive access
     // (fresh stack local), and on success the kernel writes every public field
     // of `libc::rusage` per `man 2 getrusage`; ledgered at
-    // agent/unsafe-ledger.toml (file=crates/bench/src/process_metrics.rs,
+    // .jankurai/unsafe-ledger.toml (file=crates/bench/src/process_metrics.rs,
     // line=112).
     let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage as *mut libc::rusage) };
     if rc == 0 {

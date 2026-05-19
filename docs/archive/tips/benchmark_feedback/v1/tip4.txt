@@ -527,10 +527,10 @@ Docs also report recovery matrix only **24/36 passed** with **12 crash gaps unch
 
 * **Files/lines:**
 
-  * `agent/unsafe-ledger.toml:1-3`
+  * `.jankurai/unsafe-ledger.toml:1-3`
   * `crates/ffi/src/lib.rs`, many unsafe pointer/lifetime sites
 
-`agent/unsafe-ledger.toml` says unsafe blocks should be rare and auditable, but `entries = []`. Many unsafe blocks are in FFI. This is not automatically wrong, but it needs an audit ledger.
+`.jankurai/unsafe-ledger.toml` says unsafe blocks should be rare and auditable, but `entries = []`. Many unsafe blocks are in FFI. This is not automatically wrong, but it needs an audit ledger.
 
 **Fix:** Add an entry for every nontrivial unsafe block with invariant, caller contract, and test coverage.
 

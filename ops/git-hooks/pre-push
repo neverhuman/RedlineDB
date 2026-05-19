@@ -7,10 +7,10 @@
 set -euo pipefail
 
 echo "Running Jankurai audit..."
-jankurai audit . --json agent/repo-score.json --md agent/repo-score.md
+jankurai audit . --policy .jankurai/audit-policy.toml --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 
-FINDINGS=$(grep -c 'Rule: `HLT-' agent/repo-score.md || true)
-IGNORED=$(grep -E -c 'Rule: \`(HLT-001-DEAD-MARKER|HLT-018-PERF-CONCURRENCY-DRIFT)\`' agent/repo-score.md || true)
+FINDINGS=$(grep -c 'Rule: `HLT-' .jankurai/repo-score.md || true)
+IGNORED=$(grep -E -c 'Rule: \`(HLT-001-DEAD-MARKER|HLT-018-PERF-CONCURRENCY-DRIFT)\`' .jankurai/repo-score.md || true)
 REAL_FINDINGS=$((FINDINGS - IGNORED))
 
 if [ "$REAL_FINDINGS" -gt 0 ]; then
@@ -18,7 +18,7 @@ if [ "$REAL_FINDINGS" -gt 0 ]; then
     exit 1
 fi
 
-CAPS=$(grep -o '"hard_findings":\s*[0-9]*' agent/repo-score.json | awk -F: '{print $2}' | tr -d ' ')
+CAPS=$(grep -o '"hard_findings":\s*[0-9]*' .jankurai/repo-score.json | awk -F: '{print $2}' | tr -d ' ')
 if [ "$CAPS" -gt 0 ]; then
     echo "ERROR: Jankurai check failed with $CAPS caps. Must be 0."
     exit 1

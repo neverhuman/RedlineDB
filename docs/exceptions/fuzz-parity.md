@@ -41,7 +41,7 @@ the gate across two compilation units for no benefit.
 
 ## Owner / Expiry
 
-- Owner: `sqlite-parity-fuzz-d7` (see `agent/owner-map.json`).
+- Owner: `sqlite-parity-fuzz-d7` (see `.jankurai/owner-map.json`).
 - Expiry: never — fuzzers structurally cannot avoid string emission.
 - Migration path: none required. If a future audit rule for
   fuzzer-specific patterns lands, swap this path-level exception for

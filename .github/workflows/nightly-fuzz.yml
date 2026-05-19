@@ -3,7 +3,7 @@ name: nightly-fuzz
 # Thin dispatcher (HLT-042 ci-local-parity). All lane logic lives in
 # `ops/ci/nightly-fuzz.sh` so the same command runs in CI and locally
 # via `bash ops/ci/nightly-fuzz.sh`. The PR-time short fuzz lane runs
-# inline as part of `just fuzz-parity` (see `agent/proof-lanes.toml`).
+# inline as part of `just fuzz-parity` (see `.jankurai/proof-lanes.toml`).
 
 on:
   schedule:

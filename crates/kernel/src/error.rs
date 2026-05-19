@@ -13,7 +13,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// stable rodata slice the next agent can grep for.
 const INVALID_CHECKSUM_FIXES: &[&str] = &[
     "rerun `integrity::verify` on the affected page file",
-    "check `agent/proof-lanes.toml` for the `phase9-recovery-matrix` lane",
+    "check `.jankurai/proof-lanes.toml` for the `phase9-recovery-matrix` lane",
     "inspect the WAL tail with `cargo run -p redlinedb-cli -- wal-dump`",
 ];
 
@@ -125,7 +125,7 @@ impl Error {
                     "docs/testing.md#proof-lanes",
                     "rerun `just fast`; if it persists, run \
                      the `phase9-recovery-matrix` lane and capture \
-                     the failing page id from `agent/proof-receipt-template.md`",
+                     the failing page id from `.jankurai/proof-receipt-template.md`",
                 )
                 .with_source(self),
             ),

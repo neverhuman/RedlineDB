@@ -169,7 +169,7 @@ case "$lane" in
     "$0" fuzz-parity
     ;;
   score)
-    jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md --score-history agent/score-history.jsonl --score-history-csv agent/score-history.csv
+    jankurai audit . --policy .jankurai/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --score-history .jankurai/score-history.jsonl --score-history-csv .jankurai/score-history.csv
     ;;
   doctor)
     jankurai doctor --fail-on high

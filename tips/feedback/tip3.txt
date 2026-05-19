@@ -1,6 +1,6 @@
 I unpacked `/mnt/data/RedlineDB.tar(16).gz` and studied `EXTERNAL_REVIEW_MASTER_PROMPT.md`, the benchmark runner code, SQL execution paths, index cursor code, WAL/lock code, and vector index code.
 
-The important caveat: the uploaded tarball does **not** contain the raw certified benchmark artifacts named by the prompt. I found no `.git`, no `target/bench/**`, no `paper/data/**`, no `crates/bench/bench/**` configs, and none of the agent maps referenced in the prompt such as `agent/owner-map.json`, `agent/test-map.json`, or `agent/proof-lanes.toml`. I also could not run the workspace tests in this container because the repo requires Rust/Cargo `1.95.0` with edition `2024`, while the container has Rust/Cargo `1.81.0`.
+The important caveat: the uploaded tarball does **not** contain the raw certified benchmark artifacts named by the prompt. I found no `.git`, no `target/bench/**`, no `paper/data/**`, no `crates/bench/bench/**` configs, and none of the agent maps referenced in the prompt such as `.jankurai/owner-map.json`, `.jankurai/test-map.json`, or `.jankurai/proof-lanes.toml`. I also could not run the workspace tests in this container because the repo requires Rust/Cargo `1.95.0` with edition `2024`, while the container has Rust/Cargo `1.81.0`.
 
 So the benchmark numbers below come from the checked-in documentation and prompt, not from raw benchmark CSV/JSON artifacts.
 

@@ -26,10 +26,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # cargo audit + cargo deny check + gitleaks detect (hard-gated end-to-end
 # except for cargo deny, which is soft-gated inside ops/ci/security.sh
-# per agent/ci-soft-gate-ledger.toml#cargo-deny-check).
+# per .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check).
 bash "$ROOT/ops/ci/security.sh"
 
 # dependency-review-action mirror (soft-gated inside the script per
-# agent/ci-soft-gate-ledger.toml#dependency-review-action until
+# .jankurai/ci-soft-gate-ledger.toml#dependency-review-action until
 # GitHub Advanced Security Dependency graph is enabled at the repo level).
 bash "$ROOT/ops/ci/dependency-review.sh"

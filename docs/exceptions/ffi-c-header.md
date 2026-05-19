@@ -58,7 +58,7 @@ contract for downstream consumers.
 
 ## Owner
 
-`c-abi` (see `agent/owner-map.json`).
+`c-abi` (see `.jankurai/owner-map.json`).
 
 ## Proof lane
 

@@ -1,0 +1,835 @@
+# jankurai Repo Score
+
+- Standard: `jankurai`
+- Auditor: `1.5.1`
+- Schema: `1.9.0`
+- Paper edition: `2026.05-ed8`
+- Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
+- Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
+- Repo: `.`
+- Run ID: `1779226414`
+- Started at: `1779226414`
+- Elapsed: `12024` ms
+- Scope: `full`
+- Raw score: `72`
+- Final score: `64`
+- Decision: `advisory`
+- Minimum score: `85`
+- Caps applied: `python-direct-product-truth-or-db-ownership, non-optimal-product-language-found, fallback-soup-in-product-code, future-hostile-dead-language-in-product-code, severe-duplication-in-product-code, missing-web-e2e-lane, missing-rendered-ux-qa-lane, input-boundary-gap, agent-tool-supply-chain-gap, rust-bad-behavior`
+
+## Hard Rule Caps
+
+| Rule | Max Score | Applied |
+| --- | ---: | --- |
+| `no-root-agent-instructions` | 75 | no |
+| `no-one-command-setup-or-validation` | 70 | no |
+| `no-deterministic-fast-lane` | 65 | no |
+| `no-security-lane-on-high-risk-repo` | 60 | no |
+| `generated-contracts-or-public-api-drift-untested` | 80 | no |
+| `python-direct-product-truth-or-db-ownership` | 72 | yes |
+| `no-secret-or-dependency-scanning-in-ci` | 78 | no |
+| `no-jankurai-audit-lane-in-ci` | 82 | no |
+| `jankurai-required-tool-ci-evidence-gap` | 88 | no |
+| `non-optimal-product-language-found` | 74 | yes |
+| `too-much-python-in-product-surface` | 72 | no |
+| `boundary-reclassification-evidence-gap` | 72 | no |
+| `vibe-placeholders-in-product-code` | 68 | no |
+| `fallback-soup-in-product-code` | 70 | yes |
+| `future-hostile-dead-language-in-product-code` | 64 | yes |
+| `severe-duplication-in-product-code` | 70 | yes |
+| `generated-zone-mutation-risk` | 76 | no |
+| `direct-db-access-from-wrong-layer` | 66 | no |
+| `missing-web-e2e-lane` | 82 | yes |
+| `missing-rendered-ux-qa-lane` | 84 | yes |
+| `prompt-injection-risk` | 78 | no |
+| `overbroad-agent-agency` | 65 | no |
+| `secret-like-content-detected` | 60 | no |
+| `false-green-test-risk` | 76 | no |
+| `destructive-migration-risk` | 70 | no |
+| `authz-or-data-isolation-gap` | 78 | no |
+| `input-boundary-gap` | 78 | yes |
+| `agent-tool-supply-chain-gap` | 78 | yes |
+| `release-readiness-gap` | 80 | no |
+| `missing-rust-property-or-integration-tests` | 82 | no |
+| `no-agent-friendly-exception-pattern` | 76 | no |
+| `missing-agent-readable-docs` | 80 | no |
+| `streaming-runtime-drift` | 78 | no |
+| `rust-bad-behavior` | 72 | yes |
+| `sql-bad-behavior` | 72 | no |
+| `typescript-bad-behavior` | 72 | no |
+| `docker-bad-behavior` | 72 | no |
+| `python-bad-behavior` | 72 | no |
+| `ci-bad-behavior` | 70 | no |
+| `git-bad-behavior` | 70 | no |
+| `gittools-bad-behavior` | 70 | no |
+| `release-bad-behavior` | 70 | no |
+| `web-security-bad-behavior` | 68 | no |
+| `repo-rot-bad-behavior` | 88 | no |
+| `comment-hygiene-dangerous-residue` | 72 | no |
+| `ci-local-parity` | 70 | no |
+
+## Copy-Code Redundancy
+
+- Status: `review` hard=`1` warning=`86` files=`365`
+- Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
+- Duplicate volume: lines=`250` tokens=`761` bytes=`7607`
+
+- Notes:
+  - hard classes are limited to exact active-source file matches and substantial exact same-name units
+  - warning classes include same-body different-name units and token/block duplication
+  - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
+  - showing the top 50 classes and omitting 37 lower-ranked classes
+
+| Kind | Severity | Language | Lines | Tokens | Instances | Reason |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| `ExactUnitSameName` | `Hard` | `rust` | 47 | 172 | `crates/bench/src/feature_workloads.rs:639-686, crates/bench/src/workload.rs:459-506` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 13 | 42 | `crates/sql/src/exec/cross_db.rs:194-207, crates/sql/src/exec/cte.rs:137-150, crates/sql/src/exec/view.rs:179-192` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 22 | 66 | `crates/bench/src/feature_workloads.rs:688-710, crates/bench/src/workload.rs:508-530` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 16 | 37 | `crates/sql/src/exec/agg/select.rs:82-98, crates/sql/src/planner/access/projection.rs:150-166` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 15 | 36 | `crates/sql/src/exec/json_tv.rs:37-52, crates/sql/src/json/scalar.rs:323-338` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174, crates/kernel/src/catalog/store.rs:857-858, crates/kernel/src/catalog/store.rs:867-868, crates/kernel/src/catalog/store.rs:877-878, crates/kernel/src/catalog/store.rs:887-888, crates/kernel/src/catalog/store.rs:897-898, crates/kernel/src/catalog/store.rs:920-921, crates/redlinedb-sqlx/src/bridge.rs:636-637, crates/redlinedb-sqlx/src/bridge.rs:733-734, crates/redlinedb/src/value_conv.rs:261-262, crates/sql/src/exec/index_access.rs:732-733, crates/sql/src/exec/json_tv.rs:231-232` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 11 | 57 | `crates/sql/src/datetime/format.rs:75-86, crates/sql/src/datetime/modifiers.rs:145-156` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/json_tv.rs:218-223, crates/sql/src/exec/json_tv.rs:273-278, crates/sql/src/exec/pragma_tv.rs:192-197` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/pragma_tv.rs:70-75, crates/sql/src/exec/pragma_tv.rs:102-107, crates/sql/src/exec/pragma_tv.rs:128-133` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/config.rs:413-414, crates/bench/src/config.rs:434-435, crates/redlinedb/src/value.rs:43-44, crates/redlinedb/src/value.rs:57-58, crates/redlinedb/src/value.rs:64-65, crates/redlinedb/src/value.rs:71-72, crates/redlinedb/src/value.rs:78-79, crates/sql/src/exec/expr/scalar/row/model.rs:64-65, crates/sql/src/exec/expr/scalar/row/model.rs:77-78, crates/sql/src/exec/expr/scalar/row/model.rs:87-88` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 7 | 15 | `crates/sql/src/parser/select.rs:938-945, crates/sql/src/parser/select.rs:1009-1016` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/bridge.rs:219-220, crates/redlinedb-sqlx/src/bridge.rs:298-299, crates/redlinedb-sqlx/src/bridge.rs:303-304, crates/redlinedb-sqlx/src/bridge.rs:327-328, crates/redlinedb-sqlx/src/bridge.rs:342-343, crates/redlinedb-sqlx/src/bridge.rs:357-358, crates/redlinedb-sqlx/src/bridge.rs:447-448` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:250-250, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:214-214, crates/kernel/src/integrity/page_csum.rs:107-107, crates/redlinedb-sqlx/src/bridge.rs:249-250, crates/redlinedb-sqlx/src/bridge.rs:373-374, crates/sql/src/connection/session.rs:670-670` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:269-273` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/format/bytes.rs:44-46, crates/kernel/src/format/bytes.rs:49-51, crates/kernel/src/format/bytes.rs:54-56` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 9 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:56-60, crates/sql/src/exec/expr/scalar/row/lookup.rs:117-121` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:147-149, crates/kernel/src/storage/tx_status_checkpoint.rs:147-149` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 5 | `crates/redlinedb/src/connection.rs:90-94, crates/redlinedb/src/connection.rs:105-109` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb-sqlx/src/bridge.rs:205-206, crates/redlinedb-sqlx/src/bridge.rs:212-213, crates/redlinedb-sqlx/src/bridge.rs:284-285, crates/redlinedb-sqlx/src/bridge.rs:291-292` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/vector/diskann/sectors.rs:419-420, crates/redlinedb/src/value_conv.rs:336-337, crates/redlinedb/src/value_conv.rs:357-358, crates/redlinedb/src/value_conv.rs:378-379` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 10 | `crates/sql/src/exec/index_batch.rs:450-453, crates/sql/src/exec/index_batch.rs:458-461` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 3 | 5 | `crates/ffi/src/sqlite3_api/hooks.rs:72-75, crates/ffi/src/sqlite3_api/hooks_fire.rs:37-40` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/driver.rs:399-400, crates/redlinedb-sqlx/src/driver.rs:414-415, crates/redlinedb-sqlx/src/driver.rs:429-430` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/sql/src/json/path.rs:543-544, crates/sql/src/json/path.rs:551-552, crates/sql/src/json/path.rs:559-560` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb-sqlx/src/bridge.rs:245-246, crates/redlinedb-sqlx/src/bridge.rs:251-252, crates/redlinedb-sqlx/src/bridge.rs:375-376` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/catalog/stats/wire.rs:198-199, crates/kernel/src/catalog/store.rs:785-786, crates/kernel/src/catalog/store.rs:974-975` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/connection.rs:228-229, crates/redlinedb/src/connection.rs:237-238, crates/redlinedb/src/connection.rs:247-248` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/kernel/src/catalog/store.rs:943-944, crates/kernel/src/catalog/store.rs:951-952, crates/kernel/src/catalog/store.rs:959-960` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/kernel/src/catalog/store.rs:574-575, crates/kernel/src/catalog/store.rs:731-732, crates/kernel/src/catalog/store.rs:747-748` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/bench/src/engine/mod.rs:204-206, crates/bench/src/workload.rs:449-451` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/json/path_bytecode.rs:138-140, crates/sql/src/parser.rs:188-190` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/connection.rs:52-53, crates/redlinedb/src/connection.rs:118-119, crates/redlinedb/src/connection.rs:124-125` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 4 | `crates/sql/src/planner/helpers.rs:490-492, crates/sql/src/planner/helpers.rs:494-496` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/config.rs:650-651, crates/redlinedb/src/statement.rs:180-181, crates/redlinedb/src/value.rs:226-227` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 4 | `crates/sql/src/planner/helpers.rs:467-469, crates/sql/src/planner/helpers.rs:471-473` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/index/mod.rs:332-333, crates/kernel/src/index/mod.rs:404-405, crates/kernel/src/index/mod.rs:730-731` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:268-270, crates/redlinedb/src/pool.rs:199-201` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:263-265, crates/redlinedb/src/pool.rs:204-206` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 2 | `crates/bench/src/process_metrics.rs:150-152, crates/bench/src/process_metrics.rs:155-157` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/certify/scheduler/dispatch.rs:196-198, crates/kernel/src/engine/runtime/commit.rs:30-32` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:161-162, crates/sql/src/exec/expr/scalar/row/lookup.rs:165-166` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/redlinedb/src/value_conv.rs:245-246, crates/redlinedb/src/value_conv.rs:253-254` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:211-212, crates/redlinedb/src/statement.rs:204-205` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/kernel/src/index/mod.rs:779-780, crates/kernel/src/index/mod.rs:787-788` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/driver.rs:159-160, crates/redlinedb-sqlx/src/driver.rs:187-188` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/bridge.rs:219-220, crates/redlinedb-sqlx/src/bridge.rs:298-299` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:69-70, crates/redlinedb/src/connection.rs:75-76` | `same body appears under different names across files` |
+
+## Dimensions
+
+| Dimension | Weight | Score | Weighted | Evidence |
+| --- | ---: | ---: | ---: | --- |
+| Ownership and navigation surface | 13 | 100 | 13.00 | root `AGENTS.md` present; `CODEOWNERS` present |
+| Contract and boundary integrity | 13 | 88 | 11.44 | contract surface found; generated contract artifacts found |
+| Proof lanes and test routing | 12 | 72 | 8.64 | one-command setup/validation lane found; deterministic fast lane found |
+| Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
+| Code shape and semantic surface | 12 | 0 | 0.00 | largest authored code file: crates/sql/src/exec/select_top.rs (1179 LOC); code file exceeds 500 LOC |
+| Data truth and workflow safety | 8 | 85 | 6.80 | database surface present; migration directory present |
+| Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
+| Context economy and agent instructions | 7 | 91 | 6.37 | root `AGENTS.md` present; root `AGENTS.md` stays short |
+| Jankurai tool adoption and CI replacement | 7 | 71 | 4.97 | control-plane files present; applicable=17 |
+| Python containment and polyglot hygiene | 4 | 0 | 0.00 | Python appears outside the allowed roots: scripts/bench/export_benchmark_results.py; non-optimal product language marker: crates/ffi/include/sqlite3.h |
+| Build speed signals | 4 | 80 | 3.20 | build acceleration markers found; targeted test/build commands found |
+
+## Reference Profile Structure
+
+- Applicable cells: `9` canonical=`9` noncanonical=`0` guidance missing=`0`
+
+| Cell | Status | Canonical | Detected | Aliases | Guidance | Owner | Proof lane | Agent fix |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `web` | `not_applicable` | `apps/web/` | `-` | `frontend/, ui/, packages/web/, packages/ui/` | `not_required` | `apps/web` | `rendered UX / Playwright` | `no action` |
+| `api` | `canonical` | `apps/api/` | `apps/api` | `api/, server/, backend/` | `present` | `apps/api` | `edge handler / contract tests` | `keep `apps/api/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `domain` | `canonical` | `crates/domain/` | `crates/domain` | `domain/, core/` | `present` | `crates/domain` | `unit / property tests` | `keep `crates/domain/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `application` | `canonical` | `crates/application/` | `crates/application` | `application/, usecases/, use-cases/` | `present` | `crates/application` | `use-case / authz tests` | `keep `crates/application/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `adapters` | `canonical` | `crates/adapters/` | `crates/adapters` | `adapters/, infra/, integrations/` | `present` | `crates/adapters` | `adapter integration tests` | `keep `crates/adapters/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `workers` | `canonical` | `crates/workers/` | `crates/workers` | `workers/, jobs/, scheduler/, queue/` | `present` | `crates/workers` | `workflow / replay tests` | `keep `crates/workers/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `contracts` | `canonical` | `contracts/` | `contracts` | `openapi/, protobuf/, json-schema/, generated/` | `present` | `contracts` | `generation / drift checks` | `keep `contracts/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `db` | `canonical` | `db/` | `db` | `migrations/, constraints/, sql/` | `present` | `db` | `migration / constraint tests` | `keep `db/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `python-ai` | `canonical` | `python/ai-service/` | `python, python/ai-service` | `python/, ai-service/, evals/, embeddings/, model/` | `present` | `python/ai-service` | `eval / contract tests` | `keep `python/ai-service/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `ops` | `canonical` | `ops/` | `.github, .github/workflows, ops` | `.github/, .github/workflows/, ci/, release/, observability/, security/` | `present` | `ops` | `security lane / workflow lint` | `keep `ops/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+
+## Rendered UX QA
+
+- Web surface: `true`
+- Layered UX lane: `false`
+- Missing: `Playwright screenshot capture, visual review or geometry runtime, layout stability checks, generated API mocks, design token discipline`
+
+## Tool Adoption
+
+- Control plane present: `true`
+- Applicable tools: `17`
+- Configured: `0`
+- CI evidence: `16`
+- Artifact verified: `8`
+- Replaced count: `16`
+- Missing CI evidence: `audit-ci, proof-routing, ux-qa, contract-drift, authz-matrix, input-boundary, agent-tool-supply, release-readiness, cost-budget`
+
+| Tool | Category | Mode | Status | Replaced | Artifacts |
+| --- | --- | --- | --- | --- | --- |
+| `audit-ci` | `audit` | `auto` | `ci_evidence` | `manual repo scoring, ad hoc score gates` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+| `proof-routing` | `proof` | `auto` | `ci_evidence` | `ad hoc proof lane selection, manual proof receipts` | `.jankurai/repo-score.json, .jankurai/repo-score.md, target/jankurai/repair-queue.jsonl` |
+| `proofbind` | `proof` | `auto` | `artifact_verified` | `manual changed-surface routing, ad hoc proof obligation lists` | `target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json` |
+| `proofmark-rust` | `proof` | `auto` | `artifact_verified` | `line-only coverage review, manual in-diff mutation review` | `target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json` |
+| `copy-code` | `audit` | `auto` | `artifact_verified` | `ad hoc copy-code review, manual duplication triage` | `target/jankurai/copy-code.json, target/jankurai/copy-code.md` |
+| `security` | `security` | `auto` | `artifact_verified` | `gitleaks, dependency review, SBOM/provenance` | `target/jankurai/security/evidence.json` |
+| `ci-bad-behavior` | `security` | `auto` | `artifact_verified` | `mutable workflow refs, secret echo/debug workflow checks, non-blocking security scans` | `target/jankurai/language-bad-behavior.log` |
+| `git-bad-behavior` | `audit` | `auto` | `artifact_verified` | `destructive git automation, force-push release scripts, hidden stash-based state` | `target/jankurai/language-bad-behavior.log` |
+| `release-bad-behavior` | `release` | `auto` | `artifact_verified` | `manual release checklist, ad hoc tag and artifact review, manual provenance review` | `target/jankurai/language-bad-behavior.log` |
+| `ux-qa` | `ux` | `auto` | `missing` | `playwright, axe-core, visual baselines` | `target/jankurai/ux-qa.json` |
+| `db-migration-analyze` | `db` | `auto` | `not_applicable` | `manual migration review` | `target/jankurai/migration-report.json` |
+| `contract-drift` | `contract` | `auto` | `ci_evidence` | `handwritten contract drift checks, openapi diff` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+| `rust-witness` | `rust` | `auto` | `artifact_verified` | `manual witness graphing` | `target/jankurai/rust/witness-graph.json` |
+| `vibe-coverage` | `audit` | `auto` | `not_applicable` | `manual vibe-coding coverage spreadsheet` | `target/jankurai/vibe-coverage.json, target/jankurai/vibe-coverage.md` |
+| `coverage-evidence` | `proof` | `auto` | `not_applicable` | `manual coverage report review, ad hoc mutation survivor review` | `target/jankurai/coverage/coverage-audit.json, target/jankurai/coverage/coverage-audit.md` |
+| `authz-matrix` | `security` | `auto` | `ci_evidence` | `manual authz matrix review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+| `input-boundary` | `security` | `auto` | `ci_evidence` | `manual unsafe sink review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+| `agent-tool-supply` | `security` | `auto` | `ci_evidence` | `manual MCP/tool trust review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+| `release-readiness` | `release` | `auto` | `ci_evidence` | `manual launch checklist` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+| `cost-budget` | `release` | `auto` | `ci_evidence` | `manual spend review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+
+## Boundary Reclassifications
+
+No audited runtime boundary reclassifications declared.
+
+## Findings
+
+1. `medium` `shape` `.`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: `Code shape and semantic surface` scored 0 below the standard floor of 85
+   Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
+   Rerun: `just fast`
+   Fingerprint: `sha256:1bf2051c3ede322aac30e63d3e8f02fb2c6e034ffea9ff5f4b1a9f9a98339b18`
+   Evidence: largest authored code file: crates/sql/src/exec/select_top.rs (1179 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
+2. `high` `security` `.github/workflows/jankurai.yml:24`
+   Rule: `HLT-024-AGENT-TOOL-SUPPLY-GAP`
+   Check: `HLT-024-AGENT-TOOL-SUPPLY-GAP:security` `hard` confidence `0.88`
+   Route: TLR `Security, secrets, agency`, lane `security`, owner `ops`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `agent tool supply`
+   Reason: agent tool supply-chain changes alter execution authority
+   Fix: pin and review agent tools, MCP servers, hooks, and rule files; keep untrusted tool output separate from trusted policy
+   Rerun: `just security`
+   Fingerprint: `sha256:a0b183cccf351e772870fdea98ef049ff39ef4dae945f0e6a4dab65c82f50bd6`
+   Evidence: runs-on: ubuntu-latest
+3. `medium` `proof` `Justfile`
+   Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
+   Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
+   Route: TLR `Verification`, lane `fast`, owner `workspace`
+   Docs: `docs/testing.md`
+   Reason: `Build speed signals` scored 80 below the standard floor of 85
+   Fix: add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+   Rerun: `just fast`
+   Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
+   Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
+4. `medium` `proof` `.jankurai/test-map.json`
+   Rule: `HLT-004-UNMAPPED-PROOF`
+   Check: `HLT-004-UNMAPPED-PROOF:proof` `soft` confidence `0.76`
+   Route: TLR `Verification`, lane `fast`, owner `agent`
+   Docs: `.jankurai/JANKURAI_STANDARD.md#proof-lanes`
+   Reason: `Proof lanes and test routing` scored 72 below the standard floor of 85
+   Fix: route each owned path to a deterministic proof command and make the lane executable in CI
+   Rerun: `just fast`
+   Fingerprint: `sha256:d0fa8e0b5e98e9cafa378977779506705d963100e1c0a419ab38778aec9a7f2e`
+   Evidence: one-command setup/validation lane found, deterministic fast lane found, test runner present in automation surface, GitHub workflow files present
+5. `high` `test` `apps/web`
+   Rule: `HLT-013-RENDERED-UX-GAP`
+   Check: `HLT-013-RENDERED-UX-GAP:test` `hard` confidence `0.88`
+   Route: TLR `Verification and rendered UX`, lane `web`, owner `tools`
+   Docs: `docs/testing.md`
+   Reason: web surface lacks a Playwright/Cypress e2e lane
+   Fix: add Playwright e2e tests for critical user flows and wire them into the fast or CI proof map
+   Rerun: `just ux-qa`
+   Fingerprint: `sha256:baba171f944c5384a440bd31dbe0783c2a295323e516450d3b28505654cb406d`
+   Evidence: web surface detected
+6. `high` `ux-qa` `apps/web`
+   Rule: `HLT-013-RENDERED-UX-GAP`
+   Check: `HLT-013-RENDERED-UX-GAP:ux-qa` `hard` confidence `0.88`
+   Route: TLR `Verification and rendered UX`, lane `web`, owner `tools`
+   Docs: `docs/testing.md`
+   Reason: web surface lacks layered rendered UX QA evidence
+   Fix: add Storybook state coverage, Playwright screenshots, visual review or `@jankurai/ux-qa`, accessibility scans, CLS checks, generated mocks, and design tokens
+   Rerun: `just ux-qa`
+   Fingerprint: `sha256:571d35c2e730a393b782bac14825b197c0543920bb21967079d264ac602ea5b1`
+   Evidence: rendered UX QA lane missing
+7. `high` `vibe` `crates/bench/src/bin/chaos_report/main.rs:163`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: fallback soup detected in product code
+   Fix: collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
+   Rerun: `just fast`
+   Fingerprint: `sha256:ab77b994862e1cba9b451d12303492c275e1cc8767e4a07ad302baf786dfdd00`
+   Evidence: crates/bench/src/bin/chaos_report/main.rs:163 .unwrap_or_default()
+8. `high` `copy-code` `crates/bench/src/feature_workloads.rs:639`
+   Rule: `HLT-043-COPY-PASTE-BAD-BEHAVIOR`
+   Check: `HLT-043-COPY-PASTE-BAD-BEHAVIOR:copy-code` `hard` confidence `0.95`
+   Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
+   Docs: `docs/BAD_COPY.md`
+   Matched term: `checksum_from_rows`
+   Reason: same-name semantic unit copied across multiple files
+   Fix: keep the named unit in one owner and call it from the other sites
+   Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
+   Fingerprint: `sha256:c11dea32b68100d51d71ad5b7cf29f9e4a0cd9cf035c5e7868486eda405b2a04`
+   Evidence: kind=ExactUnitSameName, language=rust, duplicate_lines=47, duplicate_tokens=172, duplicate_bytes=1836, instances=crates/bench/src/feature_workloads.rs:639-686, crates/bench/src/workload.rs:459-506
+9. `high` `security` `crates/bench/src/fuzz/sqlsmith.rs:203`
+   Rule: `HLT-023-INPUT-BOUNDARY-GAP`
+   Check: `HLT-023-INPUT-BOUNDARY-GAP:security` `hard` confidence `0.88`
+   Route: TLR `Security, secrets, agency`, lane `security`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `string sql`
+   Reason: input handling risk needs deterministic negative tests
+   Fix: replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
+   Rerun: `just security`
+   Fingerprint: `sha256:da42a27ce6b43093f9b412eb3d6929f450df64223f676dde755e319672dbbdc1`
+   Evidence: format!("SELECT {proj} FROM {table}{where_clause}{order}{limit}")
+10. `high` `security` `crates/bench/src/process_metrics.rs:119`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.zeroed`
+   Reason: all-zero validity was not proven
+   Fix: construct the type with a valid initializer instead of zeroing it
+   Rerun: `just fast`
+   Fingerprint: `sha256:aa96f629630b057efa0f1786eb528e79e8c6482d4ada20e64ec5019e02ebfcd0`
+   Evidence: detector=zeroed, proof-window=NearbySafetyComment, snippet=let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+11. `high` `security` `crates/bench/src/process_metrics.rs:127`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:a48d8a99038147ce527ec88ff61047d549efc9b2f913f5f9c5ca6c9d2df660f3`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage as *mut libc::rusage) };
+12. `high` `stack` `crates/ffi/include/sqlite3.h`
+   Check: `HLT-000-SCORE-DIMENSION:stack` `hard` confidence `0.88`
+   Route: TLR `Context/setup`, lane `audit`, owner `tools`
+   Reason: runtime code uses a language outside the chosen optimal stack
+   Fix: move product runtime behavior to Rust core, TypeScript web, SQL migrations, or generated contracts; Python needs a dated advanced-ML/data exception
+   Rerun: `just score`
+   Fingerprint: `sha256:58ded11d14f8db77863cc7266cfcb5332d3a1068faf4bd43a3e1ea1dea7ed27a`
+   Evidence: crates/ffi/include/sqlite3.h uses `.h`, Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service
+13. `high` `security` `crates/ffi/src/error.rs:42`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:c93da4a982dc672a5605ff73cfe6bcc5cbac5445f7e49deffd735f851846a9a2`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+14. `high` `security` `crates/ffi/src/error.rs:43`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.raw-parts`
+   Reason: ownership provenance is missing
+   Fix: use the matching constructor/destructor pair or add a documented ownership proof
+   Rerun: `just fast`
+   Fingerprint: `sha256:fb68a65ce20650b76a90bc88edfe06a198128b0d750b32b32f7c2a0727384404`
+   Evidence: detector=CString::from_raw, proof-window=NearbySafetyComment, snippet=drop(CString::from_raw(ptr as *mut c_char));
+15. `high` `security` `crates/ffi/src/lifecycle.rs:81`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:0c336bebb472adeb8cd62352f231caf2314357706b37a0c936a91483d23d771a`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+16. `high` `security` `crates/ffi/src/lifecycle.rs:82`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.raw-parts`
+   Reason: ownership provenance is missing
+   Fix: use the matching constructor/destructor pair or add a documented ownership proof
+   Rerun: `just fast`
+   Fingerprint: `sha256:bdbc8665d06771630a270b7628b5ce1d4ea68b943861e02146cd65daab567c1f`
+   Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(db));
+17. `high` `security` `crates/ffi/src/snapshot.rs:94`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:b347036fe1a347edd74341c921e2d343b3f975cbae79807321ed1d8b66412c39`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+18. `high` `security` `crates/ffi/src/snapshot.rs:95`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.raw-parts`
+   Reason: ownership provenance is missing
+   Fix: use the matching constructor/destructor pair or add a documented ownership proof
+   Rerun: `just fast`
+   Fingerprint: `sha256:abc9d33162968df3c2f0a73e25bee873f289b0f867d2811f1feb4de200a60990`
+   Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=drop(Box::from_raw(backup));
+19. `high` `security` `crates/ffi/src/sqlite3_api/blob.rs:214`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:ed2809a423d6faeb9c44e73134ec63c87c2af6068dcf28e83badbd75e9387908`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let _ = unsafe { Box::from_raw(blob) };
+20. `high` `security` `crates/ffi/src/sqlite3_api/collation.rs:112`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:0df87d707956d3e26b654a87e3656a26d8c504ab7838a4de37b7b43bd82ec3f8`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+21. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:139`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+22. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:150`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:d931c05f64fba820fd603013535bb6a38c2b8958ba2ab3bc8dce978493cf2162`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let _ = unsafe { Box::from_raw(ptr) };
+23. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:158`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:ec8a5493aec13c69af26caf1463956c9a9c1731045a0fdb4fd9ed90a62192384`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let ctx_ref = unsafe { &*ctx_ptr };
+24. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:166`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:8af1ba398db74bafc5ba13305b7bc42e408e2b7266216aa5712ac73670d41dc8`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let _ = unsafe { Box::from_raw(ctx_ptr) };
+25. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:175`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+26. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:185`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:412eb4d329fc0cf05931b6c54313f969bfd285d6eb01bd2f3db862822cc66f28`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let ctx_box = unsafe { Box::from_raw(ctx_ptr) };
+27. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:234`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+28. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:243`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:412eb4d329fc0cf05931b6c54313f969bfd285d6eb01bd2f3db862822cc66f28`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let ctx_box = unsafe { Box::from_raw(ctx_ptr) };
+29. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:252`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:d931c05f64fba820fd603013535bb6a38c2b8958ba2ab3bc8dce978493cf2162`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let _ = unsafe { Box::from_raw(ptr) };
+30. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:295`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+31. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:325`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:0e322fa4c99d6e5cec38e42e03ec78203b889be8211671771651b92dfe9a4872`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let name = match unsafe { name_to_string(name) } {
+32. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:375`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+33. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:419`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:84cd48e1540a652aa0f49bff099546223baf77a177694fa3ccdb967175492e5b`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
+34. `high` `security` `crates/ffi/src/sqlite3_api/udf.rs:432`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe {
+35. `high` `security` `crates/ffi/src/stmt.rs:178`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.raw-parts`
+   Reason: ownership provenance is missing
+   Fix: use the matching constructor/destructor pair or add a documented ownership proof
+   Rerun: `just fast`
+   Fingerprint: `sha256:b4f1a6ca90b064a685ea26de401a4ea01a4018f38fbe80c7f14d209db28ce468`
+   Evidence: detector=Box::from_raw, proof-window=NearbySafetyComment, snippet=let boxed = unsafe { Box::from_raw(stmt) };
+36. `high` `security` `crates/ffi/src/util.rs:157`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:6e04cc93e77a387c83a93748c8a3651bdcd9fe78794dd8d741cc40e0a2de034d`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=unsafe { std::slice::from_raw_parts(ptr, len) }
+37. `high` `vibe` `crates/sql/src/exec/attach.rs:66`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `temp` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:3fe6c92be1d3e15233bbe0147ded0a573e8f92de381cd5bce03f4c69886ff41c`
+   Evidence: crates/sql/src/exec/attach.rs:66, future-hostile/dead-language term `temp` appears
+38. `high` `vibe` `crates/sql/src/exec/attach.rs:87`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `temp` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:3edececb4f93d801a028e3bc1ebfbfe1147cd307c658574bf65400d955345cfc`
+   Evidence: crates/sql/src/exec/attach.rs:87, future-hostile/dead-language term `temp` appears
+39. `high` `security` `crates/sql/src/exec/mod.rs:611`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:90bdf58bb1ca657de5b89f0dd907bd0cad0c8d6bffcb6196f4e43f8cc15577a3`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let session_ref: &mut SessionState = unsafe { &mut *session_ptr };
+40. `high` `security` `crates/sql/src/exec/mod.rs:612`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:8b0de0dabe33b5278a3aa01cf20b5a0f422df7e74f32a84d2e1a476bdf36bd4b`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let tx_ref: &mut Txn = unsafe { &mut *tx_ptr };
+41. `high` `security` `crates/sql/src/exec/mod.rs:660`
+   Rule: `HLT-029-RUST-BAD-BEHAVIOR`
+   Check: `HLT-029-RUST-BAD-BEHAVIOR:security` `hard` confidence `0.95`
+   Route: TLR `Security, secrets, agency`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `rust.unsafe.undocumented-block`
+   Reason: no nearby SAFETY comment was found
+   Fix: add a precise `SAFETY:` comment or remove the unsafe block
+   Rerun: `just fast`
+   Fingerprint: `sha256:80d7b05f79961607fb46f21588e38a787868590be75485961d0a192bbbfff091`
+   Evidence: detector=unsafe {, proof-window=NearbySafetyComment, snippet=let tx_ref = unsafe { &mut *tx_ptr };
+42. `high` `vibe` `crates/sql/src/exec/trigger.rs:56`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `old` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:cab48fe346b9eeb551a5d33e424db975487696667dc2794bb9b209dc78fa27bd`
+   Evidence: crates/sql/src/exec/trigger.rs:56, future-hostile/dead-language term `old` appears
+43. `high` `vibe` `crates/sql/src/exec/trigger.rs:80`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `old` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:b1986cc5a4176cbd289c01d3aa1770906a7a00bae9cf0fff8ded63493e4f1797`
+   Evidence: crates/sql/src/exec/trigger.rs:80, future-hostile/dead-language term `old` appears
+44. `high` `vibe` `crates/sql/src/exec/trigger.rs:124`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `old` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:71efcef919d07234c00c51b24fa22dacdaf63c3ca70644a5029ae9d608f49e3e`
+   Evidence: crates/sql/src/exec/trigger.rs:124, future-hostile/dead-language term `old` appears
+45. `high` `vibe` `crates/sql/src/exec/trigger.rs:135`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `old` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:b0adaa6421da25e3db44a502722e6e83af57ce23eb92f46bd0fbff4cdc8ca30a`
+   Evidence: crates/sql/src/exec/trigger.rs:135, future-hostile/dead-language term `old` appears
+46. `high` `vibe` `crates/sql/src/exec/trigger.rs:144`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `old` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:05c3cc7708281408962277fb3ea7cd4b8fec741ed0c3ad67a06c298778279cd6`
+   Evidence: crates/sql/src/exec/trigger.rs:144, future-hostile/dead-language term `old` appears
+47. `high` `vibe` `crates/sql/src/exec/trigger.rs:147`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `old` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:481e2eea4fc08a5a116ac04e8e8b43e52bbb58175d8ff451e8420dfbb8b805e2`
+   Evidence: crates/sql/src/exec/trigger.rs:147, future-hostile/dead-language term `old` appears
+48. `high` `vibe` `crates/sql/src/parser/bind.rs:22`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `temporary` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:8e84d46e0643be9cc351afac25862bc37dcc09a63c4916fc2912505971744960`
+   Evidence: crates/sql/src/parser/bind.rs:22, future-hostile/dead-language term `temporary` appears
+49. `high` `vibe` `crates/sql/src/parser/ddl.rs:729`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `temporary` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:26cfc733c9b78bcda8c63ca207f726d948a15321f726324dc82d72eba423091a`
+   Evidence: crates/sql/src/parser/ddl.rs:729, future-hostile/dead-language term `temporary` appears
+50. `medium` `proof` `crates/sql/src/parser/pragma.rs:133`
+   Rule: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP`
+   Check: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof` `soft` confidence `0.88`
+   Route: TLR `Repair`, lane `audit`, owner `tools`
+   Docs: `docs/testing.md`
+   Matched term: `review evidence`
+   Reason: proof and review claims need receipts
+   Fix: attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
+   Rerun: `just score`
+   Fingerprint: `sha256:fc6f88d2efbc9bc5842122404dcbc1b4dc2e893f8bcb734d980f3f575b5d708f`
+   Evidence: // previous fabricated `(busy, log, checkpointed)` row so callers
+51. `high` `python` `python/`
+   Rule: `HLT-005-PYTHON-PRODUCT-TRUTH`
+   Check: `HLT-005-PYTHON-PRODUCT-TRUTH:python` `hard` confidence `0.88`
+   Route: TLR `Business truth`, lane `contract`, owner `tools`
+   Docs: `docs/agent-native-standard.md`
+   Reason: Python appears without a rare advanced-ML/data exception or owns product truth
+   Fix: remove Python or box it under `python/ai-service` only when a dated advanced-ML/data exception exists; otherwise migrate it to Rust
+   Rerun: `just fast`
+   Fingerprint: `sha256:a9ed62b36b036c9cc50ca8f42844065f4bb44a12c1b6a715d99db7453617b019`
+   Evidence: Python must stay away from product truth, repo tooling, proof lanes, backend glue, and production DB ownership
+52. `medium` `python` `python/ai-service`
+   Rule: `HLT-005-PYTHON-PRODUCT-TRUTH`
+   Check: `HLT-005-PYTHON-PRODUCT-TRUTH:python` `soft` confidence `0.76`
+   Route: TLR `Business truth`, lane `contract`, owner `tools`
+   Docs: `docs/agent-native-standard.md`
+   Reason: `Python containment and polyglot hygiene` scored 0 below the standard floor of 85
+   Fix: remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts
+   Rerun: `just fast`
+   Fingerprint: `sha256:1b59adb77c53a24a7a7a7d6e9ff02708d7763a74ad7140534c1e57a54ff8d3b0`
+   Evidence: Python appears outside the allowed roots: scripts/bench/export_benchmark_results.py, non-optimal product language marker: crates/ffi/include/sqlite3.h, Python leaks into product surface, runtime code should converge to Rust, TypeScript, SQL, generated contracts, and rare advanced-ML/data Python exceptions
+
+## Policy
+
+- Policy file: `./.jankurai/audit-policy.toml`
+- Minimum score: `85`
+- Fail on: `critical, high`
+
+## Agent Fix Queue
+
+1. `high` `HLT-005-PYTHON-PRODUCT-TRUTH` `python/` - remove Python or box it under `python/ai-service` only when a dated advanced-ML/data exception exists; otherwise migrate it to Rust
+   Route: `Business truth`/`contract`
+2. `medium` `HLT-005-PYTHON-PRODUCT-TRUTH` `python/ai-service` - remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts
+   Route: `Business truth`/`contract`
+3. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+   Route: `Verification`/`fast`
+4. `medium` `HLT-004-UNMAPPED-PROOF` `.jankurai/test-map.json` - route each owned path to a deterministic proof command and make the lane executable in CI
+   Route: `Verification`/`fast`
+5. `medium` `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP` `crates/sql/src/parser/pragma.rs` - attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
+   Route: `Repair`/`audit`
+6. `high` `crates/ffi/include/sqlite3.h` - move product runtime behavior to Rust core, TypeScript web, SQL migrations, or generated contracts; Python needs a dated advanced-ML/data exception
+   Route: `Context/setup`/`audit`
+7. `high` `HLT-024-AGENT-TOOL-SUPPLY-GAP` `.github/workflows/jankurai.yml` - pin and review agent tools, MCP servers, hooks, and rule files; keep untrusted tool output separate from trusted policy
+   Route: `Security, secrets, agency`/`security`
+8. `high` `HLT-013-RENDERED-UX-GAP` `apps/web` - add Playwright e2e tests for critical user flows and wire them into the fast or CI proof map
+   Route: `Verification and rendered UX`/`web`
+9. `high` `HLT-013-RENDERED-UX-GAP` `apps/web` - add Storybook state coverage, Playwright screenshots, visual review or `@jankurai/ux-qa`, accessibility scans, CLS checks, generated mocks, and design tokens
+   Route: `Verification and rendered UX`/`web`
+10. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/bin/chaos_report/main.rs` - collapse fallback chains into explicit typed states with bounded retry policy, telemetry, and documented repair guidance
+   Route: `Entropy`/`fast`
+11. `high` `HLT-043-COPY-PASTE-BAD-BEHAVIOR` `crates/bench/src/feature_workloads.rs` - keep the named unit in one owner and call it from the other sites
+   Route: `Maintainability entropy`/`copy-code`
+12. `high` `HLT-023-INPUT-BOUNDARY-GAP` `crates/bench/src/fuzz/sqlsmith.rs` - replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests
+   Route: `Security, secrets, agency`/`security`
+13. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/bench/src/process_metrics.rs` - construct the type with a valid initializer instead of zeroing it
+   Route: `Security, secrets, agency`/`fast`
+14. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/bench/src/process_metrics.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+15. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+16. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/error.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+   Route: `Security, secrets, agency`/`fast`
+17. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+18. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/lifecycle.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+   Route: `Security, secrets, agency`/`fast`
+19. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/snapshot.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+20. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/snapshot.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+   Route: `Security, secrets, agency`/`fast`
+21. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/sqlite3_api/blob.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+22. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/sqlite3_api/collation.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+23. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/sqlite3_api/udf.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+24. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/stmt.rs` - use the matching constructor/destructor pair or add a documented ownership proof
+   Route: `Security, secrets, agency`/`fast`
+25. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/ffi/src/util.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+26. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/attach.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+27. `high` `HLT-029-RUST-BAD-BEHAVIOR` `crates/sql/src/exec/mod.rs` - add a precise `SAFETY:` comment or remove the unsafe block
+   Route: `Security, secrets, agency`/`fast`
+28. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/exec/trigger.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+29. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/parser/bind.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+30. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/parser/ddl.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+31. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+   Route: `Entropy`/`fast`

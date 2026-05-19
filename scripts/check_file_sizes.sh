@@ -10,10 +10,10 @@ while IFS= read -r file; do
     Cargo.lock)
       continue
       ;;
-    agent/repo-score.json|agent/repo-score.md)
+    .jankurai/repo-score.json|.jankurai/repo-score.md)
       continue
       ;;
-    agent/score-history.csv|agent/score-history.jsonl)
+    .jankurai/score-history.csv|.jankurai/score-history.jsonl)
       continue
       ;;
     docs/archive/*|paper/figs/*.eps|target/*)
@@ -22,7 +22,7 @@ while IFS= read -r file; do
     benchmark-results/*)
       continue
       ;;
-    agent/baselines/*)
+    .jankurai/baselines/*)
       continue
       ;;
     docs/architecture/ENGINEERING_SPEC.md)

@@ -41,7 +41,7 @@ The remaining closure gaps are:
 
 ## Parallel Execution Map
 
-All workers must read `agent/owner-map.json`, `agent/test-map.json`, `agent/proof-lanes.toml`, `agent/generated-zones.toml`, and `agent/unsafe-ledger.toml` before editing. Every worker must avoid reverting changes made by others.
+All workers must read `.jankurai/owner-map.json`, `.jankurai/test-map.json`, `.jankurai/proof-lanes.toml`, `.jankurai/generated-zones.toml`, and `.jankurai/unsafe-ledger.toml` before editing. Every worker must avoid reverting changes made by others.
 
 High-conflict files must be fused by one integrator: `crates/kernel/src/engine/mod.rs`, `crates/kernel/src/engine/page_heap.rs`, `crates/kernel/src/index/mod.rs`, SQL executor files, SQL planner files, and benchmark report/config files.
 
@@ -110,7 +110,7 @@ Required actions:
 
 ### Lane G: xbabe1/Docker/Proof-Lane Integration
 
-Owns Dockerfile updates for `strace` and benchmark tooling, `xbabe1` scripts, `agent/proof-lanes.toml`, `agent/test-map.json`, and justfile benchmark commands.
+Owns Dockerfile updates for `strace` and benchmark tooling, `xbabe1` scripts, `.jankurai/proof-lanes.toml`, `.jankurai/test-map.json`, and justfile benchmark commands.
 
 Required actions:
 
