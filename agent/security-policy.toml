@@ -92,8 +92,8 @@ than the tenant-isolation proof.
 [[proofs]]
 rule = "HLT-023-INPUT-BOUNDARY-GAP"
 cap = "input-boundary-gap"
-trigger_site = "crates/ffi/include/redlinedb.h:124"
-trigger_term = "shell execution"
+trigger_site = "crates/ffi/src/exec.rs:20"
+trigger_term = "rldb_exec"
 evidence_test = "crates/ffi/tests/exec_input_boundary.rs"
 evidence_command = "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked"
 proof_lane = "fast"

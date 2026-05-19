@@ -4,7 +4,7 @@ use crate::Result;
 use crate::format::PageId;
 use crate::telemetry::Phase11Counters;
 
-use super::super::super::cells::LeafEntry;
+use super::super::super::cells::{LeafCell, LeafCellRef, LeafEntry};
 use super::super::SnapshotView;
 use super::super::{BtreeIndex, KeyRange, bound_to_owned};
 
@@ -71,38 +71,19 @@ impl<'idx> RawIndexCursor<'idx> {
     }
 
     fn in_range(&self, logical_key: &[u8]) -> bool {
-        let lower_ok = self.lower_bound_allows(logical_key);
-        if !lower_ok {
-            return false;
-        }
-        !self.at_or_past_end(logical_key)
+        bound_in_range(&self.start, &self.end, logical_key)
     }
 
     fn lower_bound_allows(&self, logical_key: &[u8]) -> bool {
-        match &self.start {
-            Bound::Included(b) => logical_key >= b.as_slice(),
-            Bound::Excluded(b) => logical_key > b.as_slice(),
-            Bound::Unbounded => true,
-        }
+        bound_lower_allows(&self.start, logical_key)
     }
 
     fn at_or_past_end(&self, logical_key: &[u8]) -> bool {
-        match &self.end {
-            Bound::Included(b) => logical_key > b.as_slice(),
-            Bound::Excluded(b) => logical_key >= b.as_slice(),
-            Bound::Unbounded => false,
-        }
+        bound_at_or_past_end(&self.end, logical_key)
     }
 
     fn leaf_chain_past_end(&self) -> bool {
-        let Some(last) = self.last_logical_key.as_deref() else {
-            return false;
-        };
-        match &self.end {
-            Bound::Excluded(b) => last >= b.as_slice(),
-            Bound::Included(b) => last > b.as_slice(),
-            Bound::Unbounded => false,
-        }
+        bound_leaf_chain_past_end(&self.end, self.last_logical_key.as_deref())
     }
 
     fn advance_to(&mut self, next_id: PageId) -> Result<()> {
@@ -150,10 +131,98 @@ impl<'idx> RawIndexCursor<'idx> {
         Ok(())
     }
 
+    fn scan_current_leaf_entries<F>(&mut self, mut on_entry: F) -> Result<bool>
+    where
+        F: FnMut(LeafCellRef<'_>) -> Result<bool>,
+    {
+        let Some(leaf_id) = self.current_leaf else {
+            self.exhausted = true;
+            return Ok(false);
+        };
+        let leaf_latch = self.index.inner.latches.get(leaf_id);
+        let _leaf_read = leaf_latch.read();
+        let guard = self.index.inner.buffer.pin(leaf_id)?;
+        self.index
+            .inner
+            .range_scan_leaves_visited
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if let Some(c) = self.counters {
+            c.leaf_visits
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        let mut next_leaf = None;
+        let mut next_entry_idx = self.entry_idx;
+        let mut stop_at_end_bound = false;
+        let batch_result = guard.with_page(|page| {
+            let header = BtreeIndex::read_page_header(page)?;
+            next_leaf = header.right;
+            let slot_count = usize::from(page.slot_count()?);
+            let mut slot = self.entry_idx;
+            while slot < slot_count {
+                let entry = LeafCell::decode_ref(page.cell(slot as u16)?)?;
+                if self.at_or_past_end(entry.logical_key) {
+                    stop_at_end_bound = true;
+                    break;
+                }
+                if !on_entry(entry)? {
+                    slot += 1;
+                    break;
+                }
+                slot += 1;
+            }
+            next_entry_idx = slot;
+            Ok(())
+        });
+        batch_result?;
+        self.entry_idx = next_entry_idx;
+        self.next_leaf = next_leaf;
+        self.last_logical_key = None;
+        Ok(stop_at_end_bound)
+    }
+
     fn prefetch_hint(&mut self, target: PageId) {
         self.prefetch_hints_emitted = self.prefetch_hints_emitted.saturating_add(1);
         if let Some(c) = self.counters {
             self.index.inner.buffer.prefetch(target, c);
         }
+    }
+}
+
+pub(super) fn bound_lower_allows(start: &Bound<Vec<u8>>, logical_key: &[u8]) -> bool {
+    match start {
+        Bound::Included(b) => logical_key >= b.as_slice(),
+        Bound::Excluded(b) => logical_key > b.as_slice(),
+        Bound::Unbounded => true,
+    }
+}
+
+pub(super) fn bound_at_or_past_end(end: &Bound<Vec<u8>>, logical_key: &[u8]) -> bool {
+    match end {
+        Bound::Included(b) => logical_key > b.as_slice(),
+        Bound::Excluded(b) => logical_key >= b.as_slice(),
+        Bound::Unbounded => false,
+    }
+}
+
+pub(super) fn bound_in_range(
+    start: &Bound<Vec<u8>>,
+    end: &Bound<Vec<u8>>,
+    logical_key: &[u8],
+) -> bool {
+    bound_lower_allows(start, logical_key) && !bound_at_or_past_end(end, logical_key)
+}
+
+pub(super) fn bound_leaf_chain_past_end(
+    end: &Bound<Vec<u8>>,
+    last_logical_key: Option<&[u8]>,
+) -> bool {
+    let Some(last) = last_logical_key else {
+        return false;
+    };
+    match end {
+        Bound::Excluded(b) => last >= b.as_slice(),
+        Bound::Included(b) => last > b.as_slice(),
+        Bound::Unbounded => false,
     }
 }

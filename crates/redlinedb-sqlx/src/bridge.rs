@@ -19,7 +19,7 @@ use sqlx::ext::ustr::UStr;
 use sqlx::transaction::Transaction;
 use url::Url;
 
-use crate::dummy::RedlineDb;
+use crate::driver::RedlineDb;
 
 const DEFAULT_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const REDLINE_URL_SCHEMES: &[&str] = &["redline", "redlinedb"];
@@ -392,7 +392,10 @@ impl AnyConnectionBackend for RedlineConnection {
 
         Box::pin(
             stream::once(async move {
-                let outcome = execute_query(state, sql, args.unwrap_or_default()).await?;
+                let outcome = match args {
+                    Some(args) => execute_query(state, sql, args).await?,
+                    None => execute_query(state, sql, Vec::new()).await?,
+                };
                 Ok::<_, Error>(outcome.into_stream())
             })
             .try_flatten(),
@@ -410,7 +413,11 @@ impl AnyConnectionBackend for RedlineConnection {
         let args = arguments.map(any_arguments_to_redline);
 
         Box::pin(async move {
-            match execute_query(state, sql, args.unwrap_or_default()).await? {
+            let outcome = match args {
+                Some(args) => execute_query(state, sql, args).await?,
+                None => execute_query(state, sql, Vec::new()).await?,
+            };
+            match outcome {
                 QueryOutcome::Rows(mut rows) => Ok(rows.drain(..).next()),
                 QueryOutcome::Result(_) => Ok(None),
             }
@@ -607,9 +614,14 @@ fn inline_qmark_parameters(sql: &str, args: &[redlinedb::Value]) -> Result<Strin
                 out.push(ch);
             }
             '?' if !in_single_quote && !in_double_quote => {
-                let value = args.get(arg_index).ok_or_else(|| {
-                    Error::Protocol("not enough bind values for parameterized WITH query".into())
-                })?;
+                let value = match args.get(arg_index) {
+                    Some(value) => value,
+                    None => {
+                        return Err(Error::Protocol(
+                            "not enough bind values for parameterized WITH query".into(),
+                        ));
+                    }
+                };
                 out.push_str(&redline_value_literal(value));
                 arg_index += 1;
             }
@@ -772,7 +784,7 @@ pub(crate) fn join_error(err: tokio::task::JoinError) -> Error {
 pub(crate) fn install_redline_driver_once() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        any::driver::install_drivers(&[crate::dummy::REDLINE_DRIVER])
+        any::driver::install_drivers(&[crate::driver::REDLINE_DRIVER])
             .expect("redline driver already installed")
     });
 }

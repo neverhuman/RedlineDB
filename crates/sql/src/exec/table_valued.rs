@@ -33,7 +33,7 @@ pub(crate) struct TvResult {
 /// Anything callable as `name(arg1, arg2, ...)` in a `FROM` list.
 pub(crate) trait TvFunc: Send + Sync {
     fn name(&self) -> &'static str;
-    fn eval(&self, conn: &Connection, schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult>;
+    fn run(&self, conn: &Connection, schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult>;
 }
 
 /// Normalised single argument value.

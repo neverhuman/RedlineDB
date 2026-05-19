@@ -252,7 +252,7 @@ impl Engine {
             let mut has_expression_key = false;
             for key in &index.keys {
                 let attnum = match &key.source {
-                    IndexKeySource::Column { attnum } => *attnum,
+                    IndexKeySource::Column { attnum } => attnum,
                     IndexKeySource::Expression { .. } => {
                         // Kernel cannot evaluate SQL expressions; the SQL
                         // layer is the source of truth for expression
@@ -262,7 +262,7 @@ impl Engine {
                     }
                 };
                 let value = record
-                    .value_at(&scratch, attnum as usize + col_offset)
+                    .value_at(&scratch, *attnum as usize + col_offset)
                     .map_err(|_| Error::CorruptPage("index backfill: column out of range"))?;
                 parts.push(value);
             }

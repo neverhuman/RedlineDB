@@ -1,9 +1,5 @@
-use std::sync::atomic::Ordering as AtomicOrdering;
-
 use crate::Result;
 
-use super::super::super::super::BtreeIndex;
-use super::super::super::super::cells::LeafCell;
 use super::super::super::CursorYield;
 use super::super::shared::{self, BatchKind};
 use super::RawIndexCursor;
@@ -15,53 +11,33 @@ impl<'idx> RawIndexCursor<'idx> {
         }
         let mut pushed = 0_usize;
         let mut visibility_cache = Vec::new();
+        let start = self.start.clone();
+        let end = self.end.clone();
+        let view = self.view;
         loop {
             if pushed > 0 && pushed >= max_batch {
                 return shared::finish_batch(self.counters, BatchKind::Range, pushed);
             }
-            let Some(leaf_id) = self.current_leaf else {
+            if self.current_leaf.is_none() {
                 self.exhausted = true;
                 break;
-            };
-            let leaf_latch = self.index.inner.latches.get(leaf_id);
-            let _leaf_read = leaf_latch.read();
-            let guard = self.index.inner.buffer.pin(leaf_id)?;
-            self.index
-                .inner
-                .range_scan_leaves_visited
-                .fetch_add(1, AtomicOrdering::Relaxed);
-            if let Some(c) = self.counters {
-                c.leaf_visits.fetch_add(1, AtomicOrdering::Relaxed);
             }
-            let mut next_leaf = None;
-            let mut next_entry_idx = self.entry_idx;
-            let batch_result = guard.with_page(|page| {
-                let header = BtreeIndex::read_page_header(page)?;
-                next_leaf = header.right;
-                let slot_count = usize::from(page.slot_count()?);
-                let mut slot = self.entry_idx;
-                while slot < slot_count {
-                    if pushed > 0 && pushed >= max_batch {
-                        break;
-                    }
-                    let entry = LeafCell::decode_ref(page.cell(slot as u16)?)?;
-                    if shared::matches_ref_cached(self.view, &entry, &mut visibility_cache)
-                        && self.in_range(entry.logical_key)
-                    {
-                        pushed += 1;
-                    }
-                    slot += 1;
+            let stop_at_end_bound = self.scan_current_leaf_entries(|entry| {
+                if pushed > 0 && pushed >= max_batch {
+                    return Ok(false);
                 }
-                next_entry_idx = slot;
-                Ok(())
+                if shared::matches_ref_cached(view, &entry, &mut visibility_cache)
+                    && super::bound_in_range(&start, &end, entry.logical_key)
+                {
+                    pushed += 1;
+                }
+                Ok(true)
             });
-            batch_result?;
-            self.entry_idx = next_entry_idx;
-            self.next_leaf = next_leaf;
+            let stop_at_end_bound = stop_at_end_bound?;
             if pushed > 0 && pushed >= max_batch {
                 return shared::finish_batch(self.counters, BatchKind::Range, pushed);
             }
-            if self.leaf_chain_past_end() {
+            if stop_at_end_bound || self.leaf_chain_past_end() {
                 self.exhausted = true;
                 break;
             }
@@ -89,51 +65,24 @@ impl<'idx> RawIndexCursor<'idx> {
         }
         let mut count = 0_usize;
         let mut visibility_cache = Vec::new();
+        let start = self.start.clone();
+        let end = self.end.clone();
+        let view = self.view;
         loop {
-            let Some(leaf_id) = self.current_leaf else {
+            if self.current_leaf.is_none() {
                 self.exhausted = true;
                 break;
-            };
-            let leaf_latch = self.index.inner.latches.get(leaf_id);
-            let _leaf_read = leaf_latch.read();
-            let guard = self.index.inner.buffer.pin(leaf_id)?;
-            self.index
-                .inner
-                .range_scan_leaves_visited
-                .fetch_add(1, AtomicOrdering::Relaxed);
-            if let Some(c) = self.counters {
-                c.leaf_visits.fetch_add(1, AtomicOrdering::Relaxed);
             }
-
-            let mut next_leaf = None;
-            let mut next_entry_idx = self.entry_idx;
-            let mut stop_at_end_bound = false;
-            let batch_result = guard.with_page(|page| {
-                let header = BtreeIndex::read_page_header(page)?;
-                next_leaf = header.right;
-                let slot_count = usize::from(page.slot_count()?);
-                let mut slot = self.entry_idx;
-                while slot < slot_count {
-                    let entry = LeafCell::decode_ref(page.cell(slot as u16)?)?;
-                    if self.at_or_past_end(entry.logical_key) {
-                        stop_at_end_bound = true;
-                        break;
-                    }
-                    if self.lower_bound_allows(entry.logical_key)
-                        && shared::matches_ref_cached(self.view, &entry, &mut visibility_cache)
-                    {
-                        count = count.saturating_add(1);
-                    }
-                    slot += 1;
+            let stop_at_end_bound = self.scan_current_leaf_entries(|entry| {
+                if super::bound_lower_allows(&start, entry.logical_key)
+                    && !super::bound_at_or_past_end(&end, entry.logical_key)
+                    && shared::matches_ref_cached(view, &entry, &mut visibility_cache)
+                {
+                    count = count.saturating_add(1);
                 }
-                next_entry_idx = slot;
-                Ok(())
+                Ok(true)
             });
-            batch_result?;
-
-            self.entry_idx = next_entry_idx;
-            self.next_leaf = next_leaf;
-            self.last_logical_key = None;
+            let stop_at_end_bound = stop_at_end_bound?;
             if stop_at_end_bound {
                 self.exhausted = true;
                 break;

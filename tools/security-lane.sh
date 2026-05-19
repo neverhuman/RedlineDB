@@ -15,6 +15,8 @@
 #   cargo audit
 #   cargo deny check
 #   gitleaks detect
+#   syft
+#   actionlint
 #   dependency-review-action
 #
 # Usage:
@@ -24,9 +26,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# cargo audit + cargo deny check + gitleaks detect (hard-gated end-to-end
-# except for cargo deny, which is soft-gated inside ops/ci/security.sh
-# per agent/ci-soft-gate-ledger.toml#cargo-deny-check).
+# cargo audit + cargo deny check + gitleaks detect + syft SBOM +
+# actionlint workflow lint (hard-gated end-to-end inside
+# ops/ci/security.sh).
 bash "$ROOT/ops/ci/security.sh"
 
 # dependency-review-action mirror (soft-gated inside the script per

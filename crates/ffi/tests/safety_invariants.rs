@@ -94,10 +94,21 @@ fn null_db_pointer_returns_misuse_for_every_public_function() {
 
     // rldb_exec / rldb_prepare_v2 / rldb_stats_json: null db is misuse.
     let sql = CString::new("SELECT 1").unwrap();
+    let errmsg_seed = CString::new("seed").unwrap().into_raw();
+    let mut errmsg = errmsg_seed;
     assert_eq!(
-        rldb_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()),
+        rldb_exec(db, sql.as_ptr(), None, ptr::null_mut(), &mut errmsg),
         RLDB_MISUSE
     );
+    assert!(
+        errmsg.is_null(),
+        "rldb_exec must clear errmsg before boundary checks"
+    );
+    // Reclaim the original seed allocation after the FFI call overwrote
+    // the out-pointer with NULL.
+    unsafe {
+        let _ = CString::from_raw(errmsg_seed);
+    }
     let mut stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
         rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()),
@@ -114,6 +125,8 @@ fn null_db_pointer_returns_misuse_for_every_public_function() {
 fn null_sql_pointer_returns_misuse() {
     let db = open_test_db("null-sql");
     let mut stmt: *mut rldb_stmt = ptr::null_mut();
+    let errmsg_seed = CString::new("seed").unwrap().into_raw();
+    let mut errmsg = errmsg_seed;
 
     assert_eq!(
         rldb_prepare_v2(db, ptr::null(), -1, &mut stmt, ptr::null_mut()),
@@ -122,9 +135,16 @@ fn null_sql_pointer_returns_misuse() {
     assert!(stmt.is_null());
 
     assert_eq!(
-        rldb_exec(db, ptr::null(), None, ptr::null_mut(), ptr::null_mut()),
+        rldb_exec(db, ptr::null(), None, ptr::null_mut(), &mut errmsg),
         RLDB_MISUSE
     );
+    assert!(
+        errmsg.is_null(),
+        "rldb_exec must clear errmsg before null-sql checks"
+    );
+    unsafe {
+        let _ = CString::from_raw(errmsg_seed);
+    }
 
     assert_eq!(rldb_close(db), RLDB_OK);
 }

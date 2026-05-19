@@ -21,7 +21,7 @@ jobs:
     # skipped via the `installed` output check; the job still exits 0
     # without `continue-on-error: true` (HLT-034). Soft-gate reasoning is
     # recorded in agent/ci-soft-gate-ledger.toml#jankurai-install.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -72,12 +72,15 @@ jobs:
           fi
       - run: jankurai --version
         if: steps.install-jankurai.outputs.installed == 'true'
+      - name: Repo score
+        if: steps.install-jankurai.outputs.installed == 'true'
+        run: jankurai . --json agent/repo-score.json --md agent/repo-score.md
       - name: Proofbind verify
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: jankurai proofbind verify . --changed-from origin/main
+        run: jankurai proofbind verify --changed-from origin/main
       - name: Proofmark rust
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+        run: jankurai proofmark rust --obligations target/jankurai/proofbind/obligations.json
       - name: Rust witness build
         if: steps.install-jankurai.outputs.installed == 'true'
         run: jankurai rust witness build .
@@ -86,7 +89,19 @@ jobs:
         run: jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
       - name: Copy-code audit
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+        run: |
+          . ops/ci/lib.sh
+          copy_code_json=target/jankurai/copy-code.json
+          copy_code_md=target/jankurai/copy-code.md
+          copy_code_log=target/jankurai/copy-code.log
+          ci_soft_gate jankurai-copy-code "$copy_code_log" -- \
+            jankurai copy-code . --json "$copy_code_json" --md "$copy_code_md"
+          if [ ! -s "$copy_code_json" ]; then
+            printf '%s\n' '{"status":"soft-gated","reason":"copy-code subcommand unavailable in installed jankurai binary"}' >"$copy_code_json"
+          fi
+          if [ ! -s "$copy_code_md" ]; then
+            printf '%s\n\n%s\n' '# copy-code' 'soft-gated: copy-code subcommand unavailable in installed jankurai binary.' >"$copy_code_md"
+          fi
       - name: Language bad-behavior tests
         if: steps.install-jankurai.outputs.installed == 'true'
         run: |
@@ -145,7 +160,7 @@ jobs:
     # Hard gate end-to-end. Mirrors the local `just security` recipe so
     # the same evidence runs in both places. Audit reference:
     # HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -177,10 +192,8 @@ jobs:
             | tar -xz -C /usr/local/bin syft
       # Thin dispatcher: all supply-chain logic lives in ops/ci/security.sh
       # so CI and local (`scripts/ci-local.sh security`, `just security`)
-      # run identical commands. Cargo-deny is soft-gated INSIDE the script
-      # (see agent/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
-      # and gitleaks remain hard gates. actionlint and syft are soft-gated
-      # (see ledger entries actionlint-workflow-lint, syft-sbom).
+      # run identical commands. cargo-audit, cargo-deny, gitleaks, syft,
+      # and actionlint are hard gates.
       - name: security lane (ops/ci/security.sh)
         run: bash ops/ci/security.sh
 
@@ -196,7 +209,7 @@ jobs:
     # script, and the soft-gate semantics live there (see
     # agent/ci-soft-gate-ledger.toml#dependency-review-action).
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

@@ -33,6 +33,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repo-score:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with: { fetch-depth: 0 }
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: { toolchain: 1.95.0 }
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install jankurai
+        run: cargo install --git https://github.com/jeppsontaylor/Jankurai.git --tag v0.8.16 --package jankurai --locked
+      - name: Repo score
+        run: jankurai . --json agent/repo-score.json --md agent/repo-score.md
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: jankurai-repo-score
+          if-no-files-found: ignore
+          path: |
+            agent/repo-score.json
+            agent/repo-score.md
+
   audit-ci:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -14,6 +14,6 @@ pub mod wire;
 
 pub use decode::{decode, root_kind};
 pub use encode::{encode, encode_blob, encode_blob_value};
-pub use path_bytecode::{CompiledPath, Op, compile_path, path_eval, path_kind};
+pub use path_bytecode::{CompiledPath, Op, compile_path, path_kind, path_resolve};
 pub use simd_key::{SIMD_KEY_MAX, SIMD_THRESHOLD, key_eq, key_eq_scalar, should_use_simd};
 pub use wire::{FORMAT_VERSION, MAGIC, NodeKind};

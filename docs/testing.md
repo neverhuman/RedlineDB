@@ -18,6 +18,8 @@ readable repair receipts.
 | `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Default for edits. |
 | `fast-check`                         | Workspace compile proof for the default health lane.                                                  |
 | `fast-test`                          | Workspace test proof for the default health lane.                                                     |
+| `fast-score`                         | Target-only repo score artifact at `target/jankurai/fast-score.json`.                                |
+| `audit-fast`                         | Changed-fast audit artifact at `target/jankurai/audit-fast.json`.                                    |
 | `hygiene`                            | Format and file-size only; cheapest pre-commit gate.                                                  |
 | `clippy`                             | `cargo clippy --workspace --all-targets -- -D warnings`.                                              |
 | `medium`                             | `fast` plus `--help` smoke for `cli` and `server`.                                                    |
@@ -50,7 +52,7 @@ readable repair receipts.
 | `phase11-oltp-gap`                   | OLTP gap workload certify.                                                                            |
 | `phase11-ephemeral-db`               | Ephemeral DB integration test.                                                                        |
 | `phase11-sql-contracts`              | Phase-11 SQL contract tests (temp roots, queue, xdoug-compat).                                        |
-| `security`                           | `cargo audit` + `cargo deny check` + `gitleaks detect`.                                               |
+| `security`                           | `cargo audit` + `cargo deny check` + `gitleaks detect` + cargo metadata SBOM + `syft` + `actionlint`. |
 | `security-local`                     | Same as `security`; pinned for local-only invocation.                                                 |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
 

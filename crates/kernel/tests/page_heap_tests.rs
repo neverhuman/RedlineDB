@@ -299,6 +299,47 @@ fn page_backed_heap_vacuum_leaves_aborted_latest_version_unpruned() {
 }
 
 #[test]
+fn page_backed_heap_write_falls_back_through_aborted_current_version() {
+    let (_temp, heap, txs) = page_heap();
+    let tx = txs.begin();
+    let row = heap.reserve_row_id();
+    heap.insert_with_row_id(tx, row, b"base".to_vec(), Lsn(10))
+        .unwrap();
+    let csn = txs.reserve_csn();
+    txs.publish_commit(tx, csn);
+
+    let aborted_tx = txs.begin();
+    heap.update(
+        aborted_tx,
+        &txs.snapshot(),
+        &txs,
+        row,
+        b"aborted".to_vec(),
+        Lsn(20),
+    )
+    .unwrap();
+    txs.abort(aborted_tx);
+
+    let writer_tx = txs.begin();
+    heap.update(
+        writer_tx,
+        &txs.snapshot(),
+        &txs,
+        row,
+        b"next".to_vec(),
+        Lsn(30),
+    )
+    .unwrap();
+    let writer_csn = txs.reserve_csn();
+    txs.publish_commit(writer_tx, writer_csn);
+
+    assert_eq!(
+        heap.get(&txs, &txs.snapshot(), None, row).unwrap(),
+        Some(b"next".to_vec())
+    );
+}
+
+#[test]
 fn page_backed_heap_reuses_empty_pages_after_vacuum() {
     let (_temp, heap, txs) = page_heap();
 

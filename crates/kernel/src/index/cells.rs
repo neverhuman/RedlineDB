@@ -1,12 +1,14 @@
 use std::cmp::Ordering;
 
-use crate::engine::ConcurrentTxStatus;
 use crate::format::bytes::{read_u16, read_u32, read_u64};
-use crate::format::{Csn, PageGeneration, PageId, TuplePtr, TxId};
-use crate::txn::{Snapshot, TxState};
+use crate::format::{PageGeneration, PageId, TuplePtr, TxId};
 use crate::{Error, Result};
 
 use super::{IndexRowRef, NON_TRANSACTIONAL_DELETE_TX};
+
+#[path = "visibility.rs"]
+mod visibility;
+pub(crate) use visibility::{delete_marker_visible, entry_visible, leaf_entry_visible};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Entry {
@@ -77,19 +79,6 @@ impl Entry {
     pub(super) fn physically_live(&self) -> bool {
         matches!(self, Entry::Leaf { delete_tx, .. } if *delete_tx == TxId::ZERO)
     }
-
-    pub(super) fn is_committed_deleted_before(
-        &self,
-        tx_status: &ConcurrentTxStatus,
-        horizon: Csn,
-    ) -> bool {
-        match self {
-            Entry::Leaf { delete_tx, .. } if *delete_tx != TxId::ZERO => {
-                matches!(tx_status.state(*delete_tx), TxState::Committed(csn) if csn < horizon)
-            }
-            _ => false,
-        }
-    }
 }
 
 pub(super) struct LeafCell;
@@ -103,81 +92,24 @@ impl LeafCell {
         create_tx: TxId,
         delete_tx: TxId,
     ) -> Vec<u8> {
-        let mut out = Vec::with_capacity(42 + logical_key.len() + physical.len());
-        out.extend_from_slice(&(logical_key.len() as u16).to_le_bytes());
-        out.extend_from_slice(&(physical.len() as u16).to_le_bytes());
-        out.extend_from_slice(&row.row_id.0.to_le_bytes());
-        out.extend_from_slice(&row.tuple.page_id.0.to_le_bytes());
-        out.extend_from_slice(&row.tuple.slot.to_le_bytes());
-        out.extend_from_slice(&row.tuple.generation.0.to_le_bytes());
-        out.extend_from_slice(&create_tx.0.to_le_bytes());
-        out.extend_from_slice(&delete_tx.0.to_le_bytes());
-        out.extend_from_slice(logical_key);
-        out.extend_from_slice(physical);
-        out
+        encode_leaf_cell(logical_key, row, physical, create_tx, delete_tx)
     }
 
     pub(super) fn decode(bytes: &[u8]) -> Result<Entry> {
-        if bytes.len() < 42 {
-            return Err(Error::BufferTooSmall {
-                needed: 42,
-                actual: bytes.len(),
-            });
-        }
-        let logical_len = read_u16(bytes, 0)? as usize;
-        let physical_len = read_u16(bytes, 2)? as usize;
-        let row = IndexRowRef {
-            row_id: crate::format::RowId(read_u64(bytes, 4)?),
-            tuple: TuplePtr::new_with_generation(
-                PageId(read_u64(bytes, 12)?),
-                read_u16(bytes, 20)?,
-                PageGeneration(read_u32(bytes, 22)?),
-            ),
-        };
-        let create_tx = TxId(read_u64(bytes, 26)?);
-        let delete_tx = TxId(read_u64(bytes, 34)?);
-        let logical_start = 42;
-        let physical_start = logical_start + logical_len;
-        let physical_end = physical_start + physical_len;
-        if physical_end > bytes.len() {
-            return Err(Error::CorruptPage("leaf cell overflow"));
-        }
+        let (logical_key, row, physical, create_tx, delete_tx) = decode_leaf_parts(bytes)?;
         Ok(Entry::Leaf {
-            logical_key: bytes[logical_start..physical_start].to_vec(),
+            logical_key,
             row,
-            physical: bytes[physical_start..physical_end].to_vec(),
+            physical,
             create_tx,
             delete_tx,
         })
     }
 
     pub(super) fn decode_leaf_entry(bytes: &[u8]) -> Result<LeafEntry> {
-        if bytes.len() < 42 {
-            return Err(Error::BufferTooSmall {
-                needed: 42,
-                actual: bytes.len(),
-            });
-        }
-        let logical_len = read_u16(bytes, 0)? as usize;
-        let physical_len = read_u16(bytes, 2)? as usize;
-        let row = IndexRowRef {
-            row_id: crate::format::RowId(read_u64(bytes, 4)?),
-            tuple: TuplePtr::new_with_generation(
-                PageId(read_u64(bytes, 12)?),
-                read_u16(bytes, 20)?,
-                PageGeneration(read_u32(bytes, 22)?),
-            ),
-        };
-        let create_tx = TxId(read_u64(bytes, 26)?);
-        let delete_tx = TxId(read_u64(bytes, 34)?);
-        let logical_start = 42;
-        let physical_start = logical_start + logical_len;
-        let physical_end = physical_start + physical_len;
-        if physical_end > bytes.len() {
-            return Err(Error::CorruptPage("leaf cell overflow"));
-        }
+        let (logical_key, row, _physical, create_tx, delete_tx) = decode_leaf_parts(bytes)?;
         Ok(LeafEntry {
-            logical_key: bytes[logical_start..physical_start].to_vec(),
+            logical_key,
             row,
             create_tx,
             delete_tx,
@@ -185,46 +117,38 @@ impl LeafCell {
     }
 
     pub(super) fn decode_ref<'a>(bytes: &'a [u8]) -> Result<LeafCellRef<'a>> {
-        if bytes.len() < 42 {
-            return Err(Error::BufferTooSmall {
-                needed: 42,
-                actual: bytes.len(),
-            });
-        }
-        let logical_len = read_u16(bytes, 0)? as usize;
-        let physical_len = read_u16(bytes, 2)? as usize;
-        let row = IndexRowRef {
-            row_id: crate::format::RowId(read_u64(bytes, 4)?),
-            tuple: TuplePtr::new_with_generation(
-                PageId(read_u64(bytes, 12)?),
-                read_u16(bytes, 20)?,
-                PageGeneration(read_u32(bytes, 22)?),
-            ),
-        };
-        let create_tx = TxId(read_u64(bytes, 26)?);
-        let delete_tx = TxId(read_u64(bytes, 34)?);
-        let logical_start = 42;
-        let physical_start = logical_start + logical_len;
-        let physical_end = physical_start + physical_len;
+        let header = read_leaf_header(bytes)?;
+        let (logical_start, physical_start, physical_end) = leaf_payload_bounds(&header);
         if physical_end > bytes.len() {
             return Err(Error::CorruptPage("leaf cell overflow"));
         }
         Ok(LeafCellRef {
             logical_key: &bytes[logical_start..physical_start],
-            row,
-            create_tx,
-            delete_tx,
+            row: header.row,
+            create_tx: header.create_tx,
+            delete_tx: header.delete_tx,
         })
     }
 }
 
+fn decode_leaf_parts(bytes: &[u8]) -> Result<(Vec<u8>, IndexRowRef, Vec<u8>, TxId, TxId)> {
+    let header = read_leaf_header(bytes)?;
+    let (logical_start, physical_start, physical_end) = leaf_payload_bounds(&header);
+    if physical_end > bytes.len() {
+        return Err(Error::CorruptPage("leaf cell overflow"));
+    }
+    Ok((
+        bytes[logical_start..physical_start].to_vec(),
+        header.row,
+        bytes[physical_start..physical_end].to_vec(),
+        header.create_tx,
+        header.delete_tx,
+    ))
+}
+
 impl InternalCell {
     pub(super) fn encode(separator: &[u8], child: PageId) -> Vec<u8> {
-        let mut out = Vec::with_capacity(10 + separator.len());
-        out.extend_from_slice(&(separator.len() as u16).to_le_bytes());
-        out.extend_from_slice(&child.0.to_le_bytes());
-        out.extend_from_slice(separator);
-        out
+        encode_internal_cell(separator, child)
     }
 
     pub(super) fn decode(bytes: &[u8]) -> Result<Entry> {
@@ -247,64 +171,86 @@ impl InternalCell {
     }
 }
 
-pub(super) fn entry_visible(
-    entry: &Entry,
-    tx_status: &ConcurrentTxStatus,
-    snapshot: &Snapshot,
-    owner: Option<TxId>,
-) -> bool {
-    let Entry::Leaf {
-        create_tx,
-        delete_tx,
-        ..
-    } = entry
-    else {
-        return false;
-    };
-    let create_check =
-        *create_tx != TxId::ZERO && !tx_status.is_tx_visible(*create_tx, snapshot, owner);
-    if create_check {
-        return false;
-    }
-    if *delete_tx == NON_TRANSACTIONAL_DELETE_TX {
-        return false;
-    }
-    if *delete_tx != TxId::ZERO && tx_status.is_tx_visible(*delete_tx, snapshot, owner) {
-        return false;
-    }
-    true
-}
-
-pub(super) fn leaf_entry_visible(
-    entry: &LeafEntry,
-    tx_status: &ConcurrentTxStatus,
-    snapshot: &Snapshot,
-    owner: Option<TxId>,
-) -> bool {
-    if entry.create_tx != TxId::ZERO && !tx_status.is_tx_visible(entry.create_tx, snapshot, owner) {
-        return false;
-    }
-    if entry.delete_tx == NON_TRANSACTIONAL_DELETE_TX {
-        return false;
-    }
-    if entry.delete_tx != TxId::ZERO && tx_status.is_tx_visible(entry.delete_tx, snapshot, owner) {
-        return false;
-    }
-    true
-}
-
-pub(super) fn delete_marker_visible(
+#[derive(Clone, Copy)]
+struct LeafCellHeader {
+    logical_len: usize,
+    physical_len: usize,
+    row: IndexRowRef,
+    create_tx: TxId,
     delete_tx: TxId,
-    visibility: Option<(&ConcurrentTxStatus, &Snapshot, Option<TxId>)>,
-) -> bool {
-    if delete_tx == TxId::ZERO {
-        return false;
-    }
-    if delete_tx == NON_TRANSACTIONAL_DELETE_TX {
-        return true;
-    }
-    let Some((tx_status, snapshot, owner)) = visibility else {
-        return true;
-    };
-    tx_status.is_tx_visible(delete_tx, snapshot, owner)
 }
+
+fn encode_leaf_cell(
+    logical_key: &[u8],
+    row: IndexRowRef,
+    physical: &[u8],
+    create_tx: TxId,
+    delete_tx: TxId,
+) -> Vec<u8> {
+    let mut out = Vec::with_capacity(42 + logical_key.len() + physical.len());
+    push_u16(&mut out, logical_key.len() as u16);
+    push_u16(&mut out, physical.len() as u16);
+    push_u64(&mut out, row.row_id.0);
+    push_u64(&mut out, row.tuple.page_id.0);
+    push_u16(&mut out, row.tuple.slot);
+    push_u32(&mut out, row.tuple.generation.0);
+    push_u64(&mut out, create_tx.0);
+    push_u64(&mut out, delete_tx.0);
+    out.extend_from_slice(logical_key);
+    out.extend_from_slice(physical);
+    out
+}
+
+fn encode_internal_cell(separator: &[u8], child: PageId) -> Vec<u8> {
+    let mut out = Vec::with_capacity(10 + separator.len());
+    push_u16(&mut out, separator.len() as u16);
+    push_u64(&mut out, child.0);
+    out.extend_from_slice(separator);
+    out
+}
+
+fn read_leaf_header(bytes: &[u8]) -> Result<LeafCellHeader> {
+    if bytes.len() < 42 {
+        return Err(Error::BufferTooSmall {
+            needed: 42,
+            actual: bytes.len(),
+        });
+    }
+    Ok(LeafCellHeader {
+        logical_len: read_u16(bytes, 0)? as usize,
+        physical_len: read_u16(bytes, 2)? as usize,
+        row: IndexRowRef {
+            row_id: crate::format::RowId(read_u64(bytes, 4)?),
+            tuple: TuplePtr::new_with_generation(
+                PageId(read_u64(bytes, 12)?),
+                read_u16(bytes, 20)?,
+                PageGeneration(read_u32(bytes, 22)?),
+            ),
+        },
+        create_tx: TxId(read_u64(bytes, 26)?),
+        delete_tx: TxId(read_u64(bytes, 34)?),
+    })
+}
+
+fn leaf_payload_bounds(header: &LeafCellHeader) -> (usize, usize, usize) {
+    let logical_start = 42;
+    let physical_start = logical_start + header.logical_len;
+    let physical_end = physical_start + header.physical_len;
+    (logical_start, physical_start, physical_end)
+}
+
+fn push_u16(out: &mut Vec<u8>, value: u16) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
+fn push_u32(out: &mut Vec<u8>, value: u32) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
+fn push_u64(out: &mut Vec<u8>, value: u64) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;

@@ -34,6 +34,16 @@ name = "fast-test"
 purpose = "workspace test proof for the default health lane"
 
 [[lane]]
+command = "just fast-score"
+name = "fast-score"
+purpose = "target-only score artifact for quick local health evidence"
+
+[[lane]]
+command = "just audit-fast"
+name = "audit-fast"
+purpose = "changed-fast audit artifact for quick local health evidence"
+
+[[lane]]
 command = "just kernel-cursor"
 name = "kernel-cursor"
 purpose = "kernel raw cursor and equivalence regression proof"

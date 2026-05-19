@@ -1,11 +1,20 @@
 # Changelog
 
+## [1.0.13] - 2026-05-19
+
 ## Unreleased
 
 SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Added
 
+- **SQLite parity cache hardening**: prepared templates that embed
+  view-materialized rows are kept out of both shared and local statement
+  caches, with regressions proving repeated prepares observe base-table
+  changes for direct view reads and joins.
+- **JSON table-valued oracle checks**: invalid JSON cases for `json_each`
+  and `json_tree` now compare RedlineDB and rusqlite rejection content while
+  normalizing prepare-vs-step timing.
 - **SQL ingress compatibility hardening**:
   - `PRAGMA journal_mode = WAL` now round-trips as `wal` for RedlineDB's
     WAL-style journal, while `truncate` / `persist` stay rejected.

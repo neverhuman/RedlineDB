@@ -11,6 +11,11 @@ use crate::util::{
     api, exec_value, flatten_code, map_error, record_status_with_message, set_errmsg,
 };
 
+struct ExecInput {
+    db: *mut rldb,
+    sql: String,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_exec(
     db: *mut rldb,
@@ -21,30 +26,45 @@ pub extern "C" fn rldb_exec(
     ctx: *mut c_void,
     errmsg: *mut *mut c_char,
 ) -> c_int {
-    // Initialize errmsg to NULL up-front (sqlite3_exec contract).
-    if !errmsg.is_null() {
-        // SAFETY: `errmsg` non-null (checked); per redlinedb.h:124 it is a
-        // writable char** out-pointer; we write NULL so failed paths cannot
-        // leave an uninitialized pointer.
-        unsafe {
-            *errmsg = ptr::null_mut();
-        }
-    }
     flatten_code(api(|| {
-        if db.is_null() || sql.is_null() {
-            return Err(RLDB_MISUSE);
-        }
+        let input = prepare_exec_input(db, sql, errmsg)?;
         // Scope the UDF/collation dispatcher to this connection for the
         // duration of the exec walk.
-        redlinedb_sql::udf::with_db(db as usize, || {
-            rldb_exec_inner(db, sql, callback, ctx, errmsg)
+        redlinedb_sql::udf::with_db(input.db as usize, || {
+            rldb_exec_inner(input.db, &input.sql, callback, ctx, errmsg)
         })
     }))
 }
 
-fn rldb_exec_inner(
+fn prepare_exec_input(
     db: *mut rldb,
     sql: *const c_char,
+    errmsg: *mut *mut c_char,
+) -> Result<ExecInput, c_int> {
+    if !errmsg.is_null() {
+        // SAFETY: `errmsg` non-null (checked); per redlinedb.h:124 it is a
+        // writable char** out-pointer. We clear it up-front so null/db/sql
+        // failures never leave a stale error pointer behind.
+        unsafe {
+            *errmsg = ptr::null_mut();
+        }
+    }
+    if db.is_null() || sql.is_null() {
+        return Err(RLDB_MISUSE);
+    }
+    // SAFETY: `sql` non-null (checked); per redlinedb.h:124 it is a
+    // NUL-terminated C string. We copy into owned UTF-8 before the exec
+    // walk so the boundary handling is explicit and testable.
+    let sql = unsafe { CStr::from_ptr(sql) }
+        .to_str()
+        .map_err(|_| RLDB_MISMATCH)?
+        .to_owned();
+    Ok(ExecInput { db, sql })
+}
+
+fn rldb_exec_inner(
+    db: *mut rldb,
+    sql: &str,
     callback: Option<
         extern "C" fn(*mut c_void, c_int, *mut *mut c_char, *mut *mut c_char) -> c_int,
     >,
@@ -54,12 +74,7 @@ fn rldb_exec_inner(
     // SAFETY: `db` non-null (checked); per redlinedb.h:124 from
     // rldb_open not yet closed; shared borrow scoped to api() closure.
     let db_ref = unsafe { &*db };
-    // SAFETY: `sql` non-null (checked); per redlinedb.h:124 it is a
-    // NUL-terminated C string; &str borrow stays inside this closure.
-    let sql_text = unsafe { CStr::from_ptr(sql) }
-        .to_str()
-        .map_err(|_| RLDB_MISMATCH)?;
-    let mut rest = sql_text;
+    let mut rest = sql;
     // Walk the multi-statement input one statement at a time. SQLite's
     // sqlite3_exec halts at the first failing statement and reports its
     // error via errmsg; later statements are not executed.

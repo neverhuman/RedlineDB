@@ -61,14 +61,9 @@ fn parameter_unset(state: &mut CliState, rest: &[&str]) -> Result<DotOutcome, St
 /// `name`. We strip a single leading sigil so the storage key matches what
 /// `bind_named` expects (the sigil-prefixed form used in SQL).
 fn normalize_param_name(input: &str) -> String {
-    if let Some(rest) = input
-        .strip_prefix(':')
-        .or_else(|| input.strip_prefix('@'))
-        .or_else(|| input.strip_prefix('$'))
-    {
-        format!(":{rest}")
-    } else {
-        format!(":{input}")
+    match input.as_bytes().first().copied() {
+        Some(b':') | Some(b'@') | Some(b'$') => format!(":{}", &input[1..]),
+        _ => format!(":{input}"),
     }
 }
 

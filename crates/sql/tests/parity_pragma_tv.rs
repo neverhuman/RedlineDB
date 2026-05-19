@@ -237,7 +237,7 @@ fn pragma_compile_options_tv_form_lists_features() {
 }
 
 // ---------------------------------------------------------------------------
-// PRAGMA truth pass: previously-silent or fabricated PRAGMAs.
+// PRAGMA truth pass: rejected or normalized PRAGMAs covered by parity tests.
 // ---------------------------------------------------------------------------
 
 #[test]

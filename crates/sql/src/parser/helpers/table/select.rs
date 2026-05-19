@@ -448,7 +448,7 @@ fn try_rewrite_tvf_factor(
         return Ok(());
     };
     let lowered = crate::exec::table_valued::lower_args(call_args)?;
-    let result = func.eval(conn, schema, &lowered)?;
+    let result = func.run(conn, schema, &lowered)?;
     let sentinel = format!("__rldb_tvf_{}_", *counter);
     *counter += 1;
     // Build the CteDef under the sentinel key so the binder finds it via
@@ -495,7 +495,7 @@ fn try_table_valued_source(
         return Ok(None);
     };
     let lowered = crate::exec::table_valued::lower_args(args)?;
-    let result = func.eval(conn, schema, &lowered)?;
+    let result = func.run(conn, schema, &lowered)?;
     let alias_arc: Option<Arc<str>> = alias.map(|a| Arc::from(a.name.value.as_str()));
     Ok(Some(SelectSource::Cte {
         name: Arc::from(func.name()),

@@ -59,7 +59,10 @@
   "security-local": [
     "rtk cargo audit",
     "rtk cargo deny check",
-    "rtk gitleaks detect --source ."
+    "rtk gitleaks detect --source .",
+    "rtk cargo metadata --format-version 1 --locked",
+    "rtk syft . -o cyclonedx-json=target/jankurai/security/sbom-syft.json",
+    "rtk actionlint .github/workflows/*.yml"
   ],
   "tests": {
     "AGENTS.md": {

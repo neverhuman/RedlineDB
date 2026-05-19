@@ -130,6 +130,20 @@ fn view_with_predicate_and_projection() {
     lab.assert_match("SELECT SUM(amount) FROM ok_orders");
 }
 
+#[test]
+fn repeated_prepare_of_view_observes_base_table_changes() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(a INTEGER)");
+    lab.execute("INSERT INTO t VALUES (1)");
+    lab.execute("CREATE VIEW v AS SELECT a FROM t");
+
+    let sql = "SELECT a FROM v ORDER BY a";
+    lab.assert_match(sql);
+
+    lab.execute("INSERT INTO t VALUES (2)");
+    lab.assert_match(sql);
+}
+
 // ── Joins involving a view ─────────────────────────────────────────────────
 
 #[test]
@@ -144,6 +158,54 @@ fn join_two_tables_through_view() {
     );
     lab.assert_match(
         "SELECT u.name, t.total FROM users u JOIN user_totals t ON u.id = t.uid ORDER BY u.name",
+    );
+}
+
+#[test]
+fn repeated_prepare_of_view_join_observes_base_table_changes_across_connections() {
+    let dir = tempdir().expect("temp dir");
+    let path = dir.path().join("shared.db");
+    let db = Database::create(&path, DbOptions::default()).expect("create db");
+    let writer = db.connect();
+    let reader = db.connect();
+
+    writer
+        .execute("CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT)")
+        .expect("create users");
+    writer
+        .execute("CREATE TABLE orders(uid INTEGER, total INTEGER)")
+        .expect("create orders");
+    writer
+        .execute("INSERT INTO users VALUES (1, 'a'), (2, 'b')")
+        .expect("insert users");
+    writer
+        .execute("INSERT INTO orders VALUES (1, 10), (2, 20)")
+        .expect("insert orders");
+    writer
+        .execute(
+            "CREATE VIEW user_totals AS SELECT uid, SUM(total) AS total FROM orders GROUP BY uid",
+        )
+        .expect("create view");
+
+    let sql =
+        "SELECT u.name, t.total FROM users u JOIN user_totals t ON u.id = t.uid ORDER BY u.name";
+    assert_eq!(
+        query_redline(&writer, sql),
+        vec![
+            vec![SqlValue::Text(Arc::from("a")), SqlValue::Integer(10)],
+            vec![SqlValue::Text(Arc::from("b")), SqlValue::Integer(20)],
+        ],
+    );
+
+    writer
+        .execute("INSERT INTO orders VALUES (1, 30)")
+        .expect("insert changed order");
+    assert_eq!(
+        query_redline(&reader, sql),
+        vec![
+            vec![SqlValue::Text(Arc::from("a")), SqlValue::Integer(40)],
+            vec![SqlValue::Text(Arc::from("b")), SqlValue::Integer(20)],
+        ],
     );
 }
 

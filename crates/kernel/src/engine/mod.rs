@@ -1,5 +1,6 @@
 pub mod concurrent_heap;
 pub mod lock;
+pub(crate) mod lock_fifo;
 pub mod page_heap;
 pub mod tx;
 

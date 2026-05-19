@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb-sql"
-version = "1.0.11"
+version = "1.0.13"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -13,7 +13,7 @@ serde_json = { version = "1.0", features = ["preserve_order"] }
 sqlparser = "0.61"
 tempfile = "3.23"
 thiserror = "2.0"
-redlinedb-kernel = { path = "../kernel" }
+redlinedb-kernel = { path = "../kernel", version = "1.0.13" }
 
 [dev-dependencies]
 tempfile = "3.23"

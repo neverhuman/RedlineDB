@@ -1,8 +1,10 @@
+use std::collections::hash_map::Entry as HashEntry;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Instant;
 
+use crate::engine::lock_fifo;
 use crate::telemetry::{Phase11Counters, phase11_bucket_index};
 use crate::{Error, Result};
 
@@ -69,27 +71,12 @@ impl UniqueKeyLockTable {
 
         // Fast path: free or re-entrant. No FIFO touch.
         let state = map.entry(key.clone()).or_default();
-        match state.owner {
-            None => {
-                state.owner = Some(owner);
-                state.depth = 1;
-                return Ok(UniqueKeyGuard {
-                    table: Arc::clone(self),
-                    shard,
-                    key,
-                    owner,
-                });
-            }
-            Some(current) if current == owner => {
-                state.depth += 1;
-                return Ok(UniqueKeyGuard {
-                    table: Arc::clone(self),
-                    shard,
-                    key,
-                    owner,
-                });
-            }
-            Some(_) => {}
+        if state.owner.is_none() {
+            return Ok(self.grant_guard(state, shard, key, owner, 1));
+        }
+        if state.owner == Some(owner) {
+            let depth = state.depth + 1;
+            return Ok(self.grant_guard(state, shard, key, owner, depth));
         }
 
         // Slow path: enqueue ourselves and park on our own Condvar so
@@ -102,68 +89,25 @@ impl UniqueKeyLockTable {
                 .wait(map)
                 .map_err(|_| Error::CorruptPage("unique lock wait poisoned"))?;
             let state = map.entry(key.clone()).or_default();
-            match state.owner {
-                None => {
-                    // Pop from the head if we're the front of the FIFO.
-                    if state
-                        .waiters
-                        .front()
-                        .is_some_and(|cv| Arc::ptr_eq(cv, &my_cv))
-                    {
-                        state.waiters.pop_front();
-                    } else if !state.waiters.iter().any(|cv| Arc::ptr_eq(cv, &my_cv)) {
-                        // Spurious wake while we'd been removed; re-park.
-                        state.waiters.push_back(Arc::clone(&my_cv));
-                        continue;
-                    }
-                    state.owner = Some(owner);
-                    state.depth = 1;
-                    self.record_lock_wait_us(wait_started.elapsed());
-                    return Ok(UniqueKeyGuard {
-                        table: Arc::clone(self),
-                        shard,
-                        key,
-                        owner,
-                    });
-                }
-                Some(current) if current == owner => {
-                    // Re-entrant grab snuck in — drop FIFO slot.
-                    if let Some(pos) = state.waiters.iter().position(|cv| Arc::ptr_eq(cv, &my_cv)) {
-                        state.waiters.remove(pos);
-                    }
-                    state.depth += 1;
-                    self.record_lock_wait_us(wait_started.elapsed());
-                    return Ok(UniqueKeyGuard {
-                        table: Arc::clone(self),
-                        shard,
-                        key,
-                        owner,
-                    });
-                }
-                Some(_) => continue,
+            let grant = lock_fifo::wake_decision(&mut state.waiters, state.owner, owner, &my_cv);
+            if let Some(guard) =
+                self.complete_wake(grant, state, shard, key.clone(), owner, wait_started)
+            {
+                return Ok(guard);
             }
         }
     }
 
     fn unlock(&self, shard: usize, key: Vec<u8>, owner: u64) {
         if let Ok(mut map) = self.shards[shard].lock() {
-            let drop_entry = if let Some(state) = map.get_mut(&key) {
-                if state.owner == Some(owner) {
-                    state.depth = state.depth.saturating_sub(1);
-                    if state.depth == 0 {
-                        state.owner = None;
-                        // Targeted handoff to the front of the FIFO.
-                        if let Some(next) = state.waiters.front().cloned() {
-                            next.notify_one();
-                        }
+            match map.entry(key) {
+                HashEntry::Occupied(mut entry) => {
+                    let drop_entry = self.release_lock_state(entry.get_mut(), owner);
+                    if drop_entry {
+                        entry.remove();
                     }
                 }
-                state.owner.is_none() && state.waiters.is_empty()
-            } else {
-                false
-            };
-            if drop_entry {
-                map.remove(&key);
+                HashEntry::Vacant(_) => {}
             }
         }
     }
@@ -180,6 +124,68 @@ impl UniqueKeyLockTable {
 
     fn shard(&self, key: &[u8]) -> usize {
         poly_hash_u64(key) as usize % self.shards.len().max(1)
+    }
+
+    fn build_guard(self: &Arc<Self>, shard: usize, key: Vec<u8>, owner: u64) -> UniqueKeyGuard {
+        UniqueKeyGuard {
+            table: Arc::clone(self),
+            shard,
+            key,
+            owner,
+        }
+    }
+
+    fn grant_guard(
+        self: &Arc<Self>,
+        state: &mut UniqueKeyLockState,
+        shard: usize,
+        key: Vec<u8>,
+        owner: u64,
+        depth: usize,
+    ) -> UniqueKeyGuard {
+        state.owner = Some(owner);
+        state.depth = depth;
+        self.build_guard(shard, key, owner)
+    }
+
+    fn complete_wake(
+        self: &Arc<Self>,
+        grant: lock_fifo::WakeDecision,
+        state: &mut UniqueKeyLockState,
+        shard: usize,
+        key: Vec<u8>,
+        owner: u64,
+        wait_started: Instant,
+    ) -> Option<UniqueKeyGuard> {
+        match grant {
+            lock_fifo::WakeDecision::AcquireFree => {
+                self.record_lock_wait_us(wait_started.elapsed());
+                Some(self.grant_guard(state, shard, key, owner, 1))
+            }
+            lock_fifo::WakeDecision::AcquireReentrant => {
+                let depth = state.depth + 1;
+                self.record_lock_wait_us(wait_started.elapsed());
+                Some(self.grant_guard(state, shard, key, owner, depth))
+            }
+            lock_fifo::WakeDecision::Continue => None,
+        }
+    }
+
+    fn release_lock_state(&self, state: &mut UniqueKeyLockState, owner: u64) -> bool {
+        if state.owner != Some(owner) {
+            return false;
+        }
+        match state.depth {
+            0 => false,
+            1 => {
+                state.depth = 0;
+                lock_fifo::release_owner(&mut state.owner, owner, &state.waiters)
+            }
+            depth => {
+                state.depth = depth - 1;
+                false
+            }
+        }
     }
 }
 

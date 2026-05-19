@@ -179,7 +179,7 @@ fn path_eval_happy() {
     let v = json!({"users": [{"name": "ada"}, {"name": "lin"}]});
     let bytes = json::encode(&v);
     let p = json::compile_path("$.users[1].name").unwrap();
-    let slice = json::path_eval(&bytes, &p).unwrap().unwrap();
+    let slice = json::path_resolve(&bytes, &p).unwrap().unwrap();
     let prefixed = {
         let mut b = vec![json::MAGIC, json::FORMAT_VERSION];
         b.extend_from_slice(slice);
@@ -193,7 +193,7 @@ fn path_eval_missing_key() {
     let v = json!({"a": 1});
     let bytes = json::encode(&v);
     let p = json::compile_path("$.b").unwrap();
-    assert!(json::path_eval(&bytes, &p).unwrap().is_none());
+    assert!(json::path_resolve(&bytes, &p).unwrap().is_none());
 }
 
 #[test]
@@ -201,7 +201,7 @@ fn path_eval_array_oor() {
     let v = json!([1, 2, 3]);
     let bytes = json::encode(&v);
     let p = json::compile_path("$[99]").unwrap();
-    assert!(json::path_eval(&bytes, &p).unwrap().is_none());
+    assert!(json::path_resolve(&bytes, &p).unwrap().is_none());
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn path_eval_type_mismatch_returns_none() {
     let v = json!({"a": 1});
     let bytes = json::encode(&v);
     let p = json::compile_path("$[0]").unwrap();
-    assert!(json::path_eval(&bytes, &p).unwrap().is_none());
+    assert!(json::path_resolve(&bytes, &p).unwrap().is_none());
 }
 
 #[test]
@@ -217,7 +217,7 @@ fn path_eval_root_returns_whole_doc() {
     let v = json!({"x": 1, "y": 2});
     let bytes = json::encode(&v);
     let p = json::compile_path("$").unwrap();
-    let slice = json::path_eval(&bytes, &p).unwrap().unwrap();
+    let slice = json::path_resolve(&bytes, &p).unwrap().unwrap();
     let prefixed = {
         let mut b = vec![json::MAGIC, json::FORMAT_VERSION];
         b.extend_from_slice(slice);

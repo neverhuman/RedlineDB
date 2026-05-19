@@ -145,7 +145,7 @@ fn is_ident(b: u8) -> bool {
 /// its tag byte) so callers can re-decode or reinterpret it. Returns
 /// `Ok(None)` when the path doesn't resolve (missing key, out-of-range
 /// index, type mismatch).
-pub fn path_eval<'a>(jsonb: &'a [u8], compiled: &CompiledPath) -> Result<Option<&'a [u8]>> {
+pub fn path_resolve<'a>(jsonb: &'a [u8], compiled: &CompiledPath) -> Result<Option<&'a [u8]>> {
     let body_off = parse_preamble(jsonb)?;
     let mut cursor = body_off;
     for op in &compiled.ops {
@@ -224,7 +224,7 @@ fn find_array_value(jsonb: &[u8], arr_off: usize, idx: u32) -> Result<Option<usi
 /// Helper: returns the [`NodeKind`] of the matched value, if any, without
 /// allocating.
 pub fn path_kind(jsonb: &[u8], compiled: &CompiledPath) -> Result<Option<NodeKind>> {
-    match path_eval(jsonb, compiled)? {
+    match path_resolve(jsonb, compiled)? {
         None => Ok(None),
         Some(slice) => {
             let (_, kind) = node_span(slice, 0)?;
@@ -283,7 +283,7 @@ mod tests {
         let v = json!({"users": [{"name": "ada"}, {"name": "lin"}, {"name": "yo"}]});
         let bytes = encode(&v);
         let p = compile_path("$.users[2].name").unwrap();
-        let slice = path_eval(&bytes, &p).unwrap().unwrap();
+        let slice = path_resolve(&bytes, &p).unwrap().unwrap();
         // The slice should be a TEXT node encoding "yo".
         assert_eq!(slice[0] & tag::TYPE_MASK, tag::TEXT);
     }
@@ -293,7 +293,7 @@ mod tests {
         let v = json!({"a": 1});
         let bytes = encode(&v);
         let p = compile_path("$.b").unwrap();
-        assert!(path_eval(&bytes, &p).unwrap().is_none());
+        assert!(path_resolve(&bytes, &p).unwrap().is_none());
     }
 
     #[test]
@@ -301,6 +301,6 @@ mod tests {
         let v = json!([1, 2]);
         let bytes = encode(&v);
         let p = compile_path("$[5]").unwrap();
-        assert!(path_eval(&bytes, &p).unwrap().is_none());
+        assert!(path_resolve(&bytes, &p).unwrap().is_none());
     }
 }

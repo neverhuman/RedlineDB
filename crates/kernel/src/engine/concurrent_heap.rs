@@ -1,6 +1,7 @@
+use crate::engine::page_heap::{resolve_visible_payload_for_read, resolve_visible_tuple_for_write};
 use crate::engine::tx::ConcurrentTxStatus;
 use crate::format::{RelId, RowId, TuplePtr, TupleVersion, TxId, UndoPtr};
-use crate::txn::{Snapshot, TupleVisibility, TxState, UndoKind, UndoRecord};
+use crate::txn::{Snapshot, UndoKind, UndoRecord};
 use crate::{Error, Result};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -142,33 +143,7 @@ impl ConcurrentHeap {
             return Ok(None);
         };
         let current = self.read_tuple(ptr)?;
-        match current.visibility_concurrent(tx_status, snapshot, owner) {
-            TupleVisibility::Visible => Ok(Some(current.payload)),
-            TupleVisibility::Deleted => Ok(None),
-            TupleVisibility::Invisible => {
-                self.get_from_undo(tx_status, snapshot, owner, current.undo_head)
-            }
-        }
-    }
-
-    fn get_from_undo(
-        &self,
-        tx_status: &ConcurrentTxStatus,
-        snapshot: &Snapshot,
-        owner: Option<TxId>,
-        undo_ptr: UndoPtr,
-    ) -> Result<Option<Vec<u8>>> {
-        let mut cursor = undo_ptr;
-        while cursor != UndoPtr::ZERO {
-            let undo = self.read_undo(cursor)?;
-            let tuple = TupleVersion::decode(&undo.before_image)?;
-            match tuple.visibility_concurrent(tx_status, snapshot, owner) {
-                TupleVisibility::Visible => return Ok(Some(tuple.payload)),
-                TupleVisibility::Deleted => return Ok(None),
-                TupleVisibility::Invisible => cursor = undo.prev_undo,
-            }
-        }
-        Ok(None)
+        self.payload_from_current(current, tx_status, snapshot, owner)
     }
 
     fn visible_tuple_for_write(
@@ -179,28 +154,31 @@ impl ConcurrentHeap {
         row_id: RowId,
     ) -> Result<TupleVersion> {
         let current = self.current_tuple(row_id)?;
-        match current.visibility_concurrent(tx_status, snapshot, Some(tx_id)) {
-            TupleVisibility::Visible => return Ok(current),
-            TupleVisibility::Deleted => return Err(Error::NotVisible),
-            TupleVisibility::Invisible => {}
-        }
+        self.write_version_from_current(current, tx_id, snapshot, tx_status)
+    }
 
-        match tx_status.state(current.begin_tx) {
-            TxState::Aborted => {
-                let mut cursor = current.undo_head;
-                while cursor != UndoPtr::ZERO {
-                    let undo = self.read_undo(cursor)?;
-                    let tuple = TupleVersion::decode(&undo.before_image)?;
-                    match tuple.visibility_concurrent(tx_status, snapshot, Some(tx_id)) {
-                        TupleVisibility::Visible => return Ok(tuple),
-                        TupleVisibility::Deleted => return Err(Error::NotVisible),
-                        TupleVisibility::Invisible => cursor = undo.prev_undo,
-                    }
-                }
-                Err(Error::NotVisible)
-            }
-            TxState::Committed(_) | TxState::InProgress => Err(Error::SerializationFailure),
-        }
+    fn payload_from_current(
+        &self,
+        current: TupleVersion,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+    ) -> Result<Option<Vec<u8>>> {
+        resolve_visible_payload_for_read(current, tx_status, snapshot, owner, |undo_ptr| {
+            self.read_undo(undo_ptr)
+        })
+    }
+
+    fn write_version_from_current(
+        &self,
+        current: TupleVersion,
+        tx_id: TxId,
+        snapshot: &Snapshot,
+        tx_status: &ConcurrentTxStatus,
+    ) -> Result<TupleVersion> {
+        resolve_visible_tuple_for_write(current, tx_id, snapshot, tx_status, |undo_ptr| {
+            self.read_undo(undo_ptr)
+        })
     }
 
     fn current_tuple(&self, row_id: RowId) -> Result<TupleVersion> {
@@ -290,15 +268,6 @@ impl ConcurrentHeap {
     }
 }
 
-trait ConcurrentVisibility {
-    fn visibility_concurrent(
-        &self,
-        tx_status: &ConcurrentTxStatus,
-        snapshot: &Snapshot,
-        owner: Option<TxId>,
-    ) -> TupleVisibility;
-}
-
 fn advance_atomic_past(value: &AtomicU64, seen: u64) {
     let target = seen.saturating_add(1);
     let mut current = value.load(Ordering::SeqCst);
@@ -306,27 +275,6 @@ fn advance_atomic_past(value: &AtomicU64, seen: u64) {
         match value.compare_exchange(current, target, Ordering::SeqCst, Ordering::SeqCst) {
             Ok(_) => break,
             Err(next) => current = next,
-        }
-    }
-}
-
-impl ConcurrentVisibility for TupleVersion {
-    fn visibility_concurrent(
-        &self,
-        tx_status: &ConcurrentTxStatus,
-        snapshot: &Snapshot,
-        owner: Option<TxId>,
-    ) -> TupleVisibility {
-        if !tx_status.is_tx_visible(self.begin_tx, snapshot, owner) {
-            return TupleVisibility::Invisible;
-        }
-        if self.end_tx != TxId::ZERO && tx_status.is_tx_visible(self.end_tx, snapshot, owner) {
-            return TupleVisibility::Invisible;
-        }
-        if self.flags & crate::format::TUPLE_FLAG_DELETED != 0 {
-            TupleVisibility::Deleted
-        } else {
-            TupleVisibility::Visible
         }
     }
 }

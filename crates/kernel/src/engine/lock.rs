@@ -1,3 +1,4 @@
+use super::lock_fifo;
 use crate::format::{RelId, RowId, TxId};
 use crate::telemetry::{Phase11Counters, phase11_bucket_index};
 use crate::{Error, Result};
@@ -119,33 +120,9 @@ impl RowLockManager {
             // ours — but `wait_timeout` is allowed to spuriously wake,
             // so we still loop on a contention check.
             let state = rows.entry(key).or_default();
-            match state.owner {
-                None => {
-                    // Confirm the front-of-FIFO targeting: pop ourselves
-                    // off the head if present, then take ownership.
-                    if state
-                        .waiters
-                        .front()
-                        .is_some_and(|cv| Arc::ptr_eq(cv, &my_cv))
-                    {
-                        state.waiters.pop_front();
-                    } else {
-                        // Spurious wake; ensure we're still parked.
-                        if !state.waiters.iter().any(|cv| Arc::ptr_eq(cv, &my_cv)) {
-                            state.waiters.push_back(Arc::clone(&my_cv));
-                        }
-                    }
-                    state.owner = Some(tx_id);
-                    self.record_lock_wait_us(wait_started.elapsed());
-                    return Ok(());
-                }
-                Some(owner) if owner == tx_id => {
-                    // Re-entrant acquire that snuck in — drop our slot.
-                    self.dequeue_waiter_inner(state, &my_cv);
-                    self.record_lock_wait_us(wait_started.elapsed());
-                    return Ok(());
-                }
-                Some(_) => continue,
+            let grant = lock_fifo::wake_decision(&mut state.waiters, state.owner, tx_id, &my_cv);
+            if self.complete_wake(grant, state, tx_id, wait_started) {
+                return Ok(());
             }
         }
     }
@@ -155,15 +132,7 @@ impl RowLockManager {
         let shard = self.shard(key);
         if let Ok(mut rows) = shard.rows.lock() {
             let drop_entry = if let Some(state) = rows.get_mut(&key) {
-                if state.owner == Some(tx_id) {
-                    state.owner = None;
-                    // Targeted handoff: wake exactly the next-in-line
-                    // waiter (if any). No-op if FIFO is empty.
-                    if let Some(next) = state.waiters.front().cloned() {
-                        next.notify_one();
-                    }
-                }
-                state.owner.is_none() && state.waiters.is_empty()
+                lock_fifo::release_owner(&mut state.owner, tx_id, &state.waiters)
             } else {
                 false
             };
@@ -180,23 +149,15 @@ impl RowLockManager {
         cv: &Arc<Condvar>,
     ) {
         if let Some(state) = rows.get_mut(&key) {
-            self.dequeue_waiter_inner(state, cv);
+            lock_fifo::drop_waiter(&mut state.waiters, cv);
             // If we removed the front waiter and the lock is currently
             // free, notify the new front so the FIFO keeps draining.
-            if state.owner.is_none()
-                && let Some(next) = state.waiters.front().cloned()
-            {
-                next.notify_one();
+            if state.owner.is_none() && !state.waiters.is_empty() {
+                lock_fifo::notify_front(&state.waiters);
             }
             if state.owner.is_none() && state.waiters.is_empty() {
                 rows.remove(&key);
             }
-        }
-    }
-
-    fn dequeue_waiter_inner(&self, state: &mut RowLockState, cv: &Arc<Condvar>) {
-        if let Some(pos) = state.waiters.iter().position(|c| Arc::ptr_eq(c, cv)) {
-            state.waiters.remove(pos);
         }
     }
 
@@ -214,6 +175,27 @@ impl RowLockManager {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         key.hash(&mut hasher);
         &self.shards[hasher.finish() as usize % self.shards.len()]
+    }
+
+    fn complete_wake(
+        &self,
+        grant: lock_fifo::WakeDecision,
+        state: &mut RowLockState,
+        tx_id: TxId,
+        wait_started: Instant,
+    ) -> bool {
+        match grant {
+            lock_fifo::WakeDecision::AcquireFree => {
+                state.owner = Some(tx_id);
+                self.record_lock_wait_us(wait_started.elapsed());
+                true
+            }
+            lock_fifo::WakeDecision::AcquireReentrant => {
+                self.record_lock_wait_us(wait_started.elapsed());
+                true
+            }
+            lock_fifo::WakeDecision::Continue => false,
+        }
     }
 }
 

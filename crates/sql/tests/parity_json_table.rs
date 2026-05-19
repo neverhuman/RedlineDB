@@ -81,6 +81,47 @@ impl Pair {
         let sl = self.sqlite_rows(sql);
         assert_eq!(rl, sl, "rows differ for: {sql}");
     }
+
+    fn redline_error(&self, sql: &str) -> Option<String> {
+        let mut stmt = match self.redline.prepare(sql) {
+            Ok(stmt) => stmt,
+            Err(err) => return Some(err.to_string()),
+        };
+        loop {
+            match stmt.step() {
+                Ok(Step::Row) => {}
+                Ok(Step::Done) => return None,
+                Err(err) => return Some(err.to_string()),
+            }
+        }
+    }
+
+    fn sqlite_error(&self, sql: &str) -> Option<String> {
+        let mut stmt = match self.sqlite.prepare(sql) {
+            Ok(stmt) => stmt,
+            Err(err) => return Some(err.to_string()),
+        };
+        let mut rows = match stmt.query([]) {
+            Ok(rows) => rows,
+            Err(err) => return Some(err.to_string()),
+        };
+        loop {
+            match rows.next() {
+                Ok(Some(_)) => {}
+                Ok(None) => return None,
+                Err(err) => return Some(err.to_string()),
+            }
+        }
+    }
+}
+
+fn assert_malformed_json_error(engine: &str, err: Option<String>, sql: &str) {
+    let err = err.unwrap_or_else(|| panic!("{engine} unexpectedly accepted {sql:?}"));
+    let normalized = err.to_ascii_lowercase();
+    assert!(
+        normalized.contains("malformed") && normalized.contains("json"),
+        "{engine} returned wrong invalid-JSON error for {sql:?}: {err}"
+    );
 }
 
 #[test]
@@ -159,28 +200,17 @@ fn json_each_with_missing_path_returns_zero_rows() {
 #[test]
 fn json_each_invalid_json_raises_error() {
     let pair = Pair::new();
-    let err_rl = pair
-        .redline
-        .prepare("SELECT key FROM json_each('not json')")
-        .err();
-    // rusqlite returns the error at step time; SQLite raises it on prepare
-    // in some builds. Either way, both engines must reject the input.
-    let mut sl_failed = false;
-    if let Ok(mut stmt) = pair.sqlite.prepare("SELECT key FROM json_each('not json')")
-        && stmt.query_map([], |_| Ok(())).is_err()
-    {
-        sl_failed = true;
-    }
-    if let Err(_) = pair.sqlite.prepare("SELECT key FROM json_each('not json')") {
-        sl_failed = true;
-    }
-    assert!(
-        err_rl.is_some() || sl_failed,
-        "expected invalid-JSON error from at least one engine"
-    );
-    // Always assert RedlineDB rejects it (this is the actionable invariant
-    // for the parity story; rusqlite's exact prepare/step boundary varies).
-    assert!(err_rl.is_some(), "redlinedb must reject malformed JSON");
+    let sql = "SELECT key FROM json_each('not json')";
+    assert_malformed_json_error("redline", pair.redline_error(sql), sql);
+    assert_malformed_json_error("sqlite", pair.sqlite_error(sql), sql);
+}
+
+#[test]
+fn json_tree_invalid_json_raises_error() {
+    let pair = Pair::new();
+    let sql = "SELECT key FROM json_tree('not json')";
+    assert_malformed_json_error("redline", pair.redline_error(sql), sql);
+    assert_malformed_json_error("sqlite", pair.sqlite_error(sql), sql);
 }
 
 #[test]

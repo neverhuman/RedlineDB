@@ -163,7 +163,7 @@ fn random_path_eval_matches_serde_lookup() {
         let Ok(compiled) = json::compile_path(&escaped) else {
             continue;
         };
-        let slice = json::path_eval(&bytes, &compiled).expect("path_eval err");
+        let slice = json::path_resolve(&bytes, &compiled).expect("path resolve err");
         // Either we found a value or the key contained a quote we filtered out;
         // skip when the modified key no longer exists.
         if let Some(slice_bytes) = slice {

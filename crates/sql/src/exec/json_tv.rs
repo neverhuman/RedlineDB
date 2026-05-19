@@ -215,7 +215,7 @@ impl TvFunc for JsonEach {
     fn name(&self) -> &'static str {
         "json_each"
     }
-    fn eval(
+    fn run(
         &self,
         _conn: &Connection,
         _schema: &SchemaSnapshot,
@@ -270,7 +270,7 @@ impl TvFunc for JsonTree {
     fn name(&self) -> &'static str {
         "json_tree"
     }
-    fn eval(
+    fn run(
         &self,
         _conn: &Connection,
         _schema: &SchemaSnapshot,

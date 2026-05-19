@@ -1,8 +1,10 @@
 use super::{PageBackedHeap, RelationWriteTarget};
-use crate::engine::page_heap::{ConcurrentVisibility, decode_undo_ptr};
+use crate::engine::page_heap::{
+    decode_undo_ptr, resolve_visible_payload_for_read, resolve_visible_tuple_for_write,
+};
 use crate::engine::tx::ConcurrentTxStatus;
 use crate::format::{Lsn, PageId, PageKind, RelId, RowId, TuplePtr, TupleVersion, TxId, UndoPtr};
-use crate::txn::{Snapshot, TupleVisibility, TxState, UndoRecord};
+use crate::txn::{Snapshot, UndoRecord};
 use crate::{Error, Result};
 
 impl PageBackedHeap {
@@ -13,17 +15,7 @@ impl PageBackedHeap {
         owner: Option<TxId>,
         row_id: RowId,
     ) -> Result<Option<Vec<u8>>> {
-        let Some(ptr) = self.head(row_id)? else {
-            return Ok(None);
-        };
-        let current = self.read_tuple(ptr)?;
-        match current.visibility_concurrent(tx_status, snapshot, owner) {
-            TupleVisibility::Visible => Ok(Some(current.payload)),
-            TupleVisibility::Deleted => Ok(None),
-            TupleVisibility::Invisible => {
-                self.get_from_undo(tx_status, snapshot, owner, current.undo_head)
-            }
-        }
+        self.get_for_relation(tx_status, snapshot, owner, self.rel_id, row_id)
     }
 
     pub fn get_for_relation(
@@ -41,33 +33,7 @@ impl PageBackedHeap {
         if current.rel_id != rel_id {
             return Ok(None);
         }
-        match current.visibility_concurrent(tx_status, snapshot, owner) {
-            TupleVisibility::Visible => Ok(Some(current.payload)),
-            TupleVisibility::Deleted => Ok(None),
-            TupleVisibility::Invisible => {
-                self.get_from_undo(tx_status, snapshot, owner, current.undo_head)
-            }
-        }
-    }
-
-    fn get_from_undo(
-        &self,
-        tx_status: &ConcurrentTxStatus,
-        snapshot: &Snapshot,
-        owner: Option<TxId>,
-        undo_ptr: UndoPtr,
-    ) -> Result<Option<Vec<u8>>> {
-        let mut cursor = undo_ptr;
-        while cursor != UndoPtr::ZERO {
-            let undo = self.read_undo(cursor)?;
-            let tuple = TupleVersion::decode(&undo.before_image)?;
-            match tuple.visibility_concurrent(tx_status, snapshot, owner) {
-                TupleVisibility::Visible => return Ok(Some(tuple.payload)),
-                TupleVisibility::Deleted => return Ok(None),
-                TupleVisibility::Invisible => cursor = undo.prev_undo,
-            }
-        }
-        Ok(None)
+        self.visible_payload_from_current(current, tx_status, snapshot, owner)
     }
 
     pub(super) fn visible_tuple_for_write(
@@ -77,8 +43,15 @@ impl PageBackedHeap {
         tx_status: &ConcurrentTxStatus,
         row_id: RowId,
     ) -> Result<TupleVersion> {
-        let current = self.current_tuple_for_relation(self.rel_id, row_id)?;
-        self.visible_current_tuple_for_write(tx_id, snapshot, tx_status, current)
+        self.visible_tuple_for_write_in_relation(
+            tx_id,
+            snapshot,
+            tx_status,
+            RelationWriteTarget {
+                rel_id: self.rel_id,
+                row_id,
+            },
+        )
     }
 
     pub(super) fn visible_tuple_for_write_in_relation(
@@ -89,38 +62,7 @@ impl PageBackedHeap {
         target: RelationWriteTarget,
     ) -> Result<TupleVersion> {
         let current = self.current_tuple_for_relation(target.rel_id, target.row_id)?;
-        self.visible_current_tuple_for_write(tx_id, snapshot, tx_status, current)
-    }
-
-    pub(super) fn visible_current_tuple_for_write(
-        &self,
-        tx_id: TxId,
-        snapshot: &Snapshot,
-        tx_status: &ConcurrentTxStatus,
-        current: TupleVersion,
-    ) -> Result<TupleVersion> {
-        match current.visibility_concurrent(tx_status, snapshot, Some(tx_id)) {
-            TupleVisibility::Visible => return Ok(current),
-            TupleVisibility::Deleted => return Err(Error::NotVisible),
-            TupleVisibility::Invisible => {}
-        }
-
-        match tx_status.state(current.begin_tx) {
-            TxState::Aborted => {
-                let mut cursor = current.undo_head;
-                while cursor != UndoPtr::ZERO {
-                    let undo = self.read_undo(cursor)?;
-                    let tuple = TupleVersion::decode(&undo.before_image)?;
-                    match tuple.visibility_concurrent(tx_status, snapshot, Some(tx_id)) {
-                        TupleVisibility::Visible => return Ok(tuple),
-                        TupleVisibility::Deleted => return Err(Error::NotVisible),
-                        TupleVisibility::Invisible => cursor = undo.prev_undo,
-                    }
-                }
-                Err(Error::NotVisible)
-            }
-            TxState::Committed(_) | TxState::InProgress => Err(Error::SerializationFailure),
-        }
+        self.visible_tuple_for_write_from_current(current, tx_id, snapshot, tx_status)
     }
 
     #[allow(dead_code)]
@@ -183,6 +125,7 @@ impl PageBackedHeap {
                         return Ok(Some(tuple));
                     }
                 }
+
                 Ok(None)
             })?;
             if let Some(current) = current {
@@ -192,6 +135,30 @@ impl PageBackedHeap {
         Err(Error::CorruptPage(
             "row id missing from relation row directory",
         ))
+    }
+
+    fn visible_payload_from_current(
+        &self,
+        current: TupleVersion,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+    ) -> Result<Option<Vec<u8>>> {
+        resolve_visible_payload_for_read(current, tx_status, snapshot, owner, |undo_ptr| {
+            self.read_undo(undo_ptr)
+        })
+    }
+
+    fn visible_tuple_for_write_from_current(
+        &self,
+        current: TupleVersion,
+        tx_id: TxId,
+        snapshot: &Snapshot,
+        tx_status: &ConcurrentTxStatus,
+    ) -> Result<TupleVersion> {
+        resolve_visible_tuple_for_write(current, tx_id, snapshot, tx_status, |undo_ptr| {
+            self.read_undo(undo_ptr)
+        })
     }
 
     pub(crate) fn read_tuple(&self, ptr: TuplePtr) -> Result<TupleVersion> {

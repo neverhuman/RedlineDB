@@ -151,7 +151,7 @@ fn derive_key_bytes(
     let mut parts: Vec<ValueRef<'_>> = Vec::with_capacity(index.keys.len());
     for key in &index.keys {
         let attnum = match &key.source {
-            IndexKeySource::Column { attnum } => *attnum,
+            IndexKeySource::Column { attnum } => attnum,
             IndexKeySource::Expression { .. } => {
                 // A6 SQL-D: kernel-side equivalence skips expression
                 // keys; the SQL layer owns expression index integrity.
@@ -159,7 +159,7 @@ fn derive_key_bytes(
             }
         };
         let value = record
-            .value_at(&scratch, (attnum as usize) + offset)
+            .value_at(&scratch, (*attnum as usize) + offset)
             .map_err(|_| Error::CorruptPage("attnum out of range"))?;
         parts.push(value);
     }

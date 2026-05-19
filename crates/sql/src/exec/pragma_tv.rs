@@ -34,12 +34,7 @@ impl TvFunc for PragmaTableInfo {
     fn name(&self) -> &'static str {
         "pragma_table_info"
     }
-    fn eval(
-        &self,
-        _conn: &Connection,
-        schema: &SchemaSnapshot,
-        args: &[TvArg],
-    ) -> Result<TvResult> {
+    fn run(&self, _conn: &Connection, schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult> {
         let name = single_text_arg("pragma_table_info", args)?;
         let table = lookup_table(
             schema,
@@ -67,12 +62,7 @@ impl TvFunc for PragmaIndexList {
     fn name(&self) -> &'static str {
         "pragma_index_list"
     }
-    fn eval(
-        &self,
-        _conn: &Connection,
-        schema: &SchemaSnapshot,
-        args: &[TvArg],
-    ) -> Result<TvResult> {
+    fn run(&self, _conn: &Connection, schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult> {
         let name = single_text_arg("pragma_index_list", args)?;
         let table = lookup_table(
             schema,
@@ -99,12 +89,7 @@ impl TvFunc for PragmaIndexInfo {
     fn name(&self) -> &'static str {
         "pragma_index_info"
     }
-    fn eval(
-        &self,
-        _conn: &Connection,
-        schema: &SchemaSnapshot,
-        args: &[TvArg],
-    ) -> Result<TvResult> {
+    fn run(&self, _conn: &Connection, schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult> {
         let name = single_text_arg("pragma_index_info", args)?;
         let index = lookup_index(
             schema,
@@ -125,12 +110,7 @@ impl TvFunc for PragmaForeignKeyList {
     fn name(&self) -> &'static str {
         "pragma_foreign_key_list"
     }
-    fn eval(
-        &self,
-        _conn: &Connection,
-        schema: &SchemaSnapshot,
-        args: &[TvArg],
-    ) -> Result<TvResult> {
+    fn run(&self, _conn: &Connection, schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult> {
         let name = single_text_arg("pragma_foreign_key_list", args)?;
         let table = lookup_table(
             schema,
@@ -161,12 +141,7 @@ impl TvFunc for PragmaDatabaseList {
     fn name(&self) -> &'static str {
         "pragma_database_list"
     }
-    fn eval(
-        &self,
-        conn: &Connection,
-        _schema: &SchemaSnapshot,
-        args: &[TvArg],
-    ) -> Result<TvResult> {
+    fn run(&self, conn: &Connection, _schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult> {
         if !args.is_empty() {
             return Err(Error::UnsupportedSql(
                 "pragma_database_list takes no arguments".to_owned(),
@@ -189,7 +164,7 @@ impl TvFunc for PragmaCompileOptions {
     fn name(&self) -> &'static str {
         "pragma_compile_options"
     }
-    fn eval(
+    fn run(
         &self,
         _conn: &Connection,
         _schema: &SchemaSnapshot,
