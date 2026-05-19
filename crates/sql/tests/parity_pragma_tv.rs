@@ -85,11 +85,9 @@ impl Pair {
 fn pragma_table_info_tv_form_matches_sqlite() {
     let pair = Pair::new();
     pair.execute_both("CREATE TABLE t(a INTEGER PRIMARY KEY, b TEXT NOT NULL DEFAULT 'bee')");
-    // Note: `notnull` is intentionally excluded here because the existing
-    // `pragma_table_info` machinery reports `notnull=1` for `INTEGER
-    // PRIMARY KEY` columns while SQLite reports `notnull=0`. That gap is
-    // tracked by workstream A6 (`crates/sql/src/parser/pragma.rs`) and
-    // unrelated to the TV form wrapper validated here.
+    // `notnull` is excluded here because the current `pragma_table_info`
+    // implementation reports `notnull=1` for `INTEGER PRIMARY KEY`
+    // columns while SQLite reports `notnull=0`.
     pair.assert_parity("SELECT cid, name, type, dflt_value, pk FROM pragma_table_info('t')");
 }
 
@@ -237,7 +235,7 @@ fn pragma_compile_options_tv_form_lists_features() {
 }
 
 // ---------------------------------------------------------------------------
-// PRAGMA truth pass: previously-silent or fabricated PRAGMAs.
+// Additional PRAGMA coverage.
 // ---------------------------------------------------------------------------
 
 #[test]

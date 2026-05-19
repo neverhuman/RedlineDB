@@ -609,55 +609,61 @@ impl Connection {
         template.stats_epoch = self.stats_epoch().0;
         template.optimizer_hash = self.optimizer_hash();
         let template = Arc::new(template);
-        // Views (and other binders that execute sub-queries against the
-        // live connection) embed the materialised rows into the template,
-        // so the cached template is correct only for the schema/data
-        // epoch captured at prepare time. We skip the shared db cache
-        // when the template depends on the current connection's row
-        // store; views are detected by checking whether the prepared
-        // SELECT plan contains a `SelectSource::Cte` that did not come
-        // from a CTE (i.e. is unbound in the current scope). For now we
-        // simply cache locally to avoid cross-connection staleness.
-        if !template_contains_view_materialisation(&template) {
-            self.db
-                .stmt_cache
-                .insert(key.clone(), Arc::clone(&template));
+        // Some binders execute subqueries during prepare and embed the
+        // resulting rows in the prepared template (views, CTE row stores,
+        // table-valued functions). That template is valid for the returned
+        // statement, but it must not be reused by either cache: base-table
+        // DML does not advance the schema/stats cache key.
+        if template_embeds_materialised_rows(&template) {
+            return Ok(template);
         }
+        self.db
+            .stmt_cache
+            .insert(key.clone(), Arc::clone(&template));
         self.local_cache.insert(key, Arc::clone(&template));
         Ok(template)
     }
 }
 
-/// True if the prepared template embeds view-materialised rows. Such
-/// templates must not be shared across connections because the embedded
-/// row set captures point-in-time data, not just schema. CTE templates
-/// share the same `SelectSource::Cte` shape but are produced from query
-/// SQL that contains `WITH`, so we conservatively skip caching any
-/// template whose SQL is not a `WITH`-prefixed SELECT but still embeds
-/// pre-materialised rows.
-fn template_contains_view_materialisation(template: &PreparedTemplate) -> bool {
-    use crate::statement::{PreparedKind, SelectSource};
+/// True if the prepared template embeds rows materialised during binding.
+/// Such templates are valid for the statement produced by this prepare
+/// call, but must not be reused by the local or shared statement caches
+/// because ordinary base-table DML does not change the cache key.
+fn template_embeds_materialised_rows(template: &PreparedTemplate) -> bool {
+    use crate::statement::{BoundTable, JoinSource, PreparedKind, SelectPlan, SelectSource};
     let plan = match &template.kind {
         PreparedKind::Select(plan) => plan,
         _ => return false,
     };
-    fn source_has_view(src: &SelectSource) -> bool {
+
+    fn table_embeds_materialised_rows(table: &BoundTable) -> bool {
+        crate::exec::view::is_view_table_def(&table.table)
+    }
+
+    fn join_embeds_materialised_rows(join: &JoinSource) -> bool {
+        table_embeds_materialised_rows(&join.base)
+            || join
+                .joins
+                .iter()
+                .any(|step| table_embeds_materialised_rows(&step.right))
+    }
+
+    fn plan_embeds_materialised_rows(plan: &SelectPlan) -> bool {
+        source_embeds_materialised_rows(&plan.source)
+    }
+
+    fn source_embeds_materialised_rows(src: &SelectSource) -> bool {
         match src {
             SelectSource::Cte { .. } => true,
+            SelectSource::Tables(tables) => tables.iter().any(table_embeds_materialised_rows),
+            SelectSource::Joined(join) => join_embeds_materialised_rows(join),
             SelectSource::CompoundAll(branches) | SelectSource::CompoundSet { branches, .. } => {
-                branches.iter().any(|p| source_has_view(&p.source))
+                branches.iter().any(plan_embeds_materialised_rows)
             }
             _ => false,
         }
     }
-    if !source_has_view(&plan.source) {
-        return false;
-    }
-    let sql_trimmed = template.sql.trim_start().to_ascii_lowercase();
-    // CTE prepares always start with `WITH`. Anything else that produced a
-    // `SelectSource::Cte` came from a view or a TVF expansion — keep those
-    // out of the cross-connection cache.
-    !sql_trimmed.starts_with("with")
+    source_embeds_materialised_rows(&plan.source)
 }
 
 #[allow(dead_code)]
