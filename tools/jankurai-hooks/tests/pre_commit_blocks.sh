@@ -10,7 +10,7 @@
 # Usage:
 #   bash tools/jankurai-hooks/tests/pre_commit_blocks.sh
 #
-# Requires `jankurai` 1.4.3+ on PATH (or JANKURAI_BIN env var set).
+# Requires `jankurai` 1.5.1+ on PATH (or JANKURAI_BIN env var set).
 set -euo pipefail
 
 HOOK_SRC="${HOOK_SRC:-$(cd "$(dirname "$0")/.." && pwd)/pre-commit}"

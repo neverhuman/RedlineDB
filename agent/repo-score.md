@@ -1,15 +1,15 @@
 # jankurai Repo Score
 
 - Standard: `jankurai`
-- Auditor: `0.8.16`
+- Auditor: `1.5.1`
 - Schema: `1.7.0`
 - Paper edition: `2026.05-ed8`
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779225221`
-- Started at: `1779225221`
-- Elapsed: `6851` ms
+- Run ID: `1779225828`
+- Started at: `1779225828`
+- Elapsed: `7017` ms
 - Scope: `full`
 - Raw score: `92`
 - Final score: `78`

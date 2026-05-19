@@ -27,7 +27,7 @@ name              = "jankurai-install"
 script_path       = ".github/workflows/jankurai.yml"
 line_number       = 45
 rule_waived       = "ci-bad-behavior.audit-job-nonblocking"
-unblock_condition = "Confirm that `cargo install --git https://github.com/jeppsontaylor/Jankurai.git --tag v0.8.16 --package jankurai --locked` completes successfully from a GitHub Actions ubuntu-latest runner. When confirmed, the install step's soft-gate output check can be removed and all downstream jankurai steps made unconditional."
+unblock_condition = "Confirm that `cargo install --git https://github.com/jeppsontaylor/Jankurai.git --tag v1.5.1 --package jankurai --locked` completes successfully from a GitHub Actions ubuntu-latest runner. When confirmed, the install step's soft-gate output check can be removed and all downstream jankurai steps made unconditional."
 unblock_owner     = "jepson@veox.ai"
 
 [[entry]]
