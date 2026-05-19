@@ -8,11 +8,12 @@
 //! `TableDef` returned by [`try_resolve_view_bound_table`].
 //!
 //! Like CTE materialization, view rows live for the duration of the
-//! prepared statement. Cached prepared statements that survive across
-//! data changes can therefore observe cached view rows; per-step
-//! re-binding happens automatically when the schema epoch advances.
-//! A followup task (`docs/sqlite-parity.md`) lifts this restriction by
-//! materializing at runtime instead of bind time.
+//! prepared statement. The connection layer keeps templates that embed
+//! those rows out of both statement caches, so preparing the same SQL
+//! after base-table changes re-materializes the view from live data.
+//! A followup task (`docs/sqlite-parity.md`) can still move this to
+//! execution-time materialization for statements prepared before a data
+//! change.
 
 use std::sync::Arc;
 
@@ -32,7 +33,6 @@ use crate::value::SqlValue;
 pub(crate) const VIEW_RELATION_TAG: u64 = 0xC1E0_0000_0000_0000;
 
 /// True if this `TableDef` was synthesized for a view expansion.
-#[allow(dead_code)]
 pub(crate) fn is_view_table_def(def: &TableDef) -> bool {
     (def.relation_id.0 & 0xFFFF_0000_0000_0000) == VIEW_RELATION_TAG
 }

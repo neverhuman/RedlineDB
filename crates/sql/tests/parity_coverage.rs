@@ -301,8 +301,8 @@ fn nested_savepoint_release() {
 
 #[test]
 fn pragma_auto_vacuum() {
-    // RedlineDB has no auto-vacuum machine; `PRAGMA auto_vacuum` is now
-    // rejected instead of returning a fabricated `0` row.
+    // RedlineDB rejects `PRAGMA auto_vacuum`; this test checks the
+    // rejection boundary directly.
     let (_d, c) = open();
     assert!(c.prepare("PRAGMA auto_vacuum").is_err());
 }
