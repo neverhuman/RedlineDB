@@ -23,6 +23,7 @@ Status values are deliberately narrow:
 | Basic `SELECT` projection/filter/order | pass | `crates/sql/tests/smoke_select.rs`, `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Covered for scalar values and simple predicates. |
 | `INSERT`, `UPDATE`, `DELETE` basics | pass | `crates/sql/tests/smoke_dml.rs`, `crates/bench/compat/**` | sql-parser-planner-executor | Cross-engine SQLLogicTest corpus covers representative DML. |
 | `CREATE TABLE`, `DROP TABLE` basics | partial | `crates/bench/compat/**`, `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Basic create/drop behavior is covered; SQLite metadata compatibility is not complete. |
+| `CREATE TABLE AS SELECT` | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | CTAS names, declared types, row order, `IF NOT EXISTS` short-circuiting, and rollback on source-query failure are covered against `rusqlite`. |
 | `CREATE INDEX`, `DROP INDEX` basics | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Basic B-tree-backed indexes only. |
 | `ALTER TABLE RENAME TABLE/COLUMN` | partial | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Rename table/column behavior is covered; add/drop-column variants remain partial. |
 | `RETURNING` expressions | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Insert/update expressions covered. |
