@@ -18,7 +18,7 @@
 //! continue to behave as `mode=rwc`.
 
 mod bridge;
-mod dummy;
+mod redline_driver;
 
 /// Install the RedlineDB driver into SQLx's `Any` registry.
 ///
