@@ -18,7 +18,7 @@
 //! application-level equivalent of database `RLS` (row level security): the
 //! `WHERE tenant = ?` predicate is the only thing standing between tenants,
 //! so we prove owner/non-owner separation directly against the engine. See
-//! `agent/security-policy.toml` for the rule-id binding.
+//! `.jankurai/security-policy.toml` for the rule-id binding.
 //!
 //! The schema mirrors `RedlineEngine::setup_schema` exactly
 //! (`crates/bench/src/engine/redline.rs`) so the assertions speak about the

@@ -151,7 +151,7 @@ pub(crate) unsafe fn caller_buffer<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
     // lifetime of the returned borrow); ownership invariant: the borrow is
     // immediately consumed by .to_vec()/from_utf8 at every call site so the
     // caller's allocation regains exclusive access on return; ledgered at
-    // agent/unsafe-ledger.toml (file=crates/ffi/src/util.rs, line=155,
+    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/util.rs, line=155,
     // detector=rust.unsafe.raw-parts); proof: the # Safety contract above plus
     // crates/ffi/tests/safety_invariants.rs FFI input-boundary tests.
     unsafe { std::slice::from_raw_parts(ptr, len) }

@@ -133,7 +133,7 @@ typedef int (*rldb_exec_callback)(void *, int, char **, char **);
  * Negative-test proofs for the rldb_exec input boundary (HLT-023-INPUT-
  * BOUNDARY-GAP, Section E) live in crates/ffi/tests/exec_input_boundary.rs
  * and crates/ffi/tests/safety_invariants.rs (Section D1). See
- * agent/security-policy.toml for the proof routing.
+ * .jankurai/security-policy.toml for the proof routing.
  */
 int rldb_exec(rldb *db, const char *sql, rldb_exec_callback callback, void *ctx, char **errmsg);
 

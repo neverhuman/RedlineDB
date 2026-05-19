@@ -6,7 +6,7 @@
 # locally (`just security`, `scripts/ci-local.sh security`) and in CI.
 # Audit reference: HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
 #
-# Soft-gate rationale: see agent/ci-soft-gate-ledger.toml#cargo-deny-check
+# Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check
 # The workflow YAML carries NO `continue-on-error: true`. The cargo-deny
 # soft-gate semantics live in this script via `ci_soft_gate`, which
 # always returns 0 for the wrapped command while writing an explicit
@@ -45,7 +45,7 @@ cargo metadata --format-version 1 --locked \
 # SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
 # artifact alongside the cargo-metadata evidence. Requires syft in PATH;
 # installed in CI by the jankurai.yml security job.
-# See ledger: agent/ci-soft-gate-ledger.toml#syft-sbom.
+# See ledger: .jankurai/ci-soft-gate-ledger.toml#syft-sbom.
 ci_soft_gate \
     syft-sbom \
     target/jankurai/security/syft.log \
@@ -54,7 +54,7 @@ ci_soft_gate \
 # Workflow linting via actionlint — soft-gated; validates CI YAML for
 # schema correctness and security best practices. Requires actionlint
 # in PATH; installed in CI by the jankurai.yml security job.
-# See ledger: agent/ci-soft-gate-ledger.toml#actionlint-workflow-lint.
+# See ledger: .jankurai/ci-soft-gate-ledger.toml#actionlint-workflow-lint.
 ci_soft_gate \
     actionlint-workflow-lint \
     target/jankurai/security/actionlint.log \

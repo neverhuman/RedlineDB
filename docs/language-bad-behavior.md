@@ -40,7 +40,7 @@ by accident.
 
 Generated and ABI surfaces (where some of these terms are unavoidable
 because they describe external contracts) are listed in
-`agent/generated-zones.toml`. Per-file carve-outs live in
+`.jankurai/generated-zones.toml`. Per-file carve-outs live in
 `docs/exceptions/` once those files are authored.
 
 ## web-security-and-repo-rot-detectors
@@ -52,14 +52,14 @@ markers). RedlineDB ships no web frontend, so the web detectors fire
 only on documentation; the repo-rot detectors govern bench TOMLs and
 module headers under `crates/{bench,ffi,redlinedb}/`. The full
 detector reference and the local exception schema are tracked in
-`agent/audit-policy.toml`; mitigations land via Section B of the
+`.jankurai/audit-policy.toml`; mitigations land via Section B of the
 repair plan.
 
 ## Rerunning the detector
 
 ```
 jankurai audit . --mode advisory \
-  --json agent/repo-score.json --md agent/repo-score.md
+  --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 ```
 
 The audit's `future-hostile-dead-language-in-product-code` cap and

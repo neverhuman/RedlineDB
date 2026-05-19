@@ -1,7 +1,7 @@
 # Architecture — RedlineDB
 
 This is a one-screen agent-readable map of the RedlineDB workspace.
-Pair with `agent/owner-map.json` for ownership, `agent/proof-lanes.toml`
+Pair with `.jankurai/owner-map.json` for ownership, `.jankurai/proof-lanes.toml`
 for how to rerun proofs, and `docs/audit-rubric.md` for the dimension
 mapping the audit scores.
 
@@ -26,7 +26,7 @@ under `crates/` depends on `crates/bench`.
 ## Layering rule
 
 Higher layers may depend on lower layers; lower layers must not
-reach upward. The audit enforces this via `agent/boundaries.toml`
+reach upward. The audit enforces this via `.jankurai/boundaries.toml`
 and `docs/boundaries.md`. Domain types (`DomainError`,
 `storage::PageId`, vector types) live in the lowest layer so every
 layer above can produce structured failures without a backward
@@ -48,7 +48,7 @@ dependency.
 - Build: `rtk cargo build --workspace`.
 - Default proof: `just fast` (fmt + file-size + check + test).
 - Wider proof: `just check`, `just security`, lane-specific commands
-  in `agent/proof-lanes.toml`.
+  in `.jankurai/proof-lanes.toml`.
 - Failure repair: read the `DomainError` displayed by the failing
   test or run; follow `docs_url` and `repair_hint` to the named
   proof lane.
@@ -56,8 +56,8 @@ dependency.
 ## Where to start (agent router)
 
 1. `AGENTS.md` (root) for the rules.
-2. `agent/owner-map.json` for who owns what.
-3. `agent/proof-lanes.toml` for how to rerun.
+2. `.jankurai/owner-map.json` for who owns what.
+3. `.jankurai/proof-lanes.toml` for how to rerun.
 4. `docs/audit-rubric.md` for dimension-to-evidence mapping.
 5. `docs/boundaries.md` for cross-crate edges.
 6. `docs/language-bad-behavior.md` for the detector terms.

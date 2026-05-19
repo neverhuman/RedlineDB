@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # JANKURAI MANAGED HOOK: pre-commit (staged-files save-gate)
 #
-# Runs `jankurai audit-file` against each staged file's *staged* content
-# (not on-disk content) in save-gate mode. Aborts the commit on any new hard
-# finding. Designed to complete in <2s for a typical 5-file commit.
+# Requires the current branch to already contain the latest `origin/main`
+# before the commit proceeds, then runs `jankurai audit-file` against each
+# staged file's *staged* content (not on-disk content) in save-gate mode.
+# Aborts the commit on any new hard finding. Designed to complete in <2s for
+# a typical 5-file commit.
 #
 # Bypass: JANKURAI_SKIP_HOOKS=1 git commit ...
 # Chain:  set JANKURAI_PRE_COMMIT_CHAIN to a prior hook executable
@@ -26,6 +28,34 @@ env_file="$jankurai_dir/env"
 if [ -f "$env_file" ]; then
   # shellcheck disable=SC1090
   . "$env_file"
+fi
+
+main_branch="${JANKURAI_MAIN_BRANCH:-main}"
+remote="${JANKURAI_MAIN_REMOTE:-origin}"
+
+current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+if [ -n "$current_branch" ] && [ "$current_branch" != "$main_branch" ]; then
+  echo "Checking whether '$current_branch' is up to date with $remote/$main_branch..." >&2
+  if ! git fetch "$remote" "$main_branch" --quiet; then
+    echo "Unable to fetch $remote/$main_branch; commit blocked." >&2
+    exit 1
+  fi
+  main_ref="$remote/$main_branch"
+
+  if ! git merge-base --is-ancestor "$main_ref" HEAD; then
+    cat >&2 <<EOF
+
+❌ Commit blocked.
+Your branch does not contain the latest $main_ref.
+
+Run:
+  git fetch $remote
+  git rebase $main_ref
+
+Then try committing again.
+EOF
+    exit 1
+  fi
 fi
 
 if [ -n "${JANKURAI_PRE_COMMIT_CHAIN:-}" ] && [ -x "$JANKURAI_PRE_COMMIT_CHAIN" ] && [ -z "${JANKURAI_CHAINED_HOOK:-}" ]; then

@@ -27,7 +27,7 @@ Post-split proof:
 
 Three lanes landed on top of `phase9-baseline` (1d0561c) and tagged `wave1-fused`:
 
-- Lane G — Docker / proof-lane integration (3 commits): `1c934d1`, `321e89f`, `7f10bb9`. Added `strace` to Dockerfile, replaced `compare` with `certify` across `agent/proof-lanes.toml`, `agent/test-map.json`, `justfile`; added `phase9-failpoint-matrix` placeholder lane; pointed compat lanes at `crates/bench/compat` (recursive); `xbabe1_run.sh` exports `REDLINEDB_BENCH_IMAGE_DIGEST`.
+- Lane G — Docker / proof-lane integration (3 commits): `1c934d1`, `321e89f`, `7f10bb9`. Added `strace` to Dockerfile, replaced `compare` with `certify` across `.jankurai/proof-lanes.toml`, `.jankurai/test-map.json`, `justfile`; added `phase9-failpoint-matrix` placeholder lane; pointed compat lanes at `crates/bench/compat` (recursive); `xbabe1_run.sh` exports `REDLINEDB_BENCH_IMAGE_DIGEST`.
 - Lane D — Failpoint infrastructure (1 commit): `2e104c6`. Added `fail` crate as optional dep gated on the new `failpoints` feature in `crates/kernel/Cargo.toml`; `crates/kernel/src/failpoints/{mod,macros}.rs` provide `fail_point!` (no-op when feature off); smoke test `crates/kernel/tests/failpoint_smoke.rs`.
 - Lane F — Bench telemetry (3 commits): `0a3879d`, `50fec7c`, `af7d490`. Added `crates/bench/src/{process_metrics,strace_capture}.rs`; extended `RunRecord.process_metrics`; SQLite PRAGMA snapshot + validation; extended `CertificationManifest` with `pragmas`, `pragma_validation`, `checksums`, `strace_reason`, `strace_syscall_counts`, `process_metrics_per_run`.
 

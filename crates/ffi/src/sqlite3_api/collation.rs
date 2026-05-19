@@ -107,7 +107,7 @@ fn invoke_needed(db: *mut rldb, name: &str) {
             // registrar provided (stored as usize, cast back here) and
             // remains valid for the lifetime guaranteed by the SQLite ABI;
             // cstr lives for the entire call; ledgered at
-            // agent/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/collation.rs,
+            // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/collation.rs,
             // line=184, detector=rust.unsafe.extern-fn).
             unsafe {
                 (entry.cb)(user_data, db, 1 /* SQLITE_UTF8 */, cstr.as_ptr());

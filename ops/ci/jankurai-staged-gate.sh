@@ -10,7 +10,7 @@
 #   bash ops/ci/jankurai-staged-gate.sh                # uses origin/main
 #   BASE_REF=origin/main bash ops/ci/jankurai-staged-gate.sh
 #
-# Required: `jankurai` 1.4.3+ on PATH.
+# Required: `jankurai` 1.5.1+ on PATH.
 
 set -euo pipefail
 

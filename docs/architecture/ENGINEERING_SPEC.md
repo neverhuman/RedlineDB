@@ -74,7 +74,7 @@ redlinedb-bench ──► all of the above (dev/test only)
 | `redlinedb-server` | — | TCP server with custom binary protocol (JSON serialization over framed stream). |
 | `redlinedb-bench` | 5,144 | Certification harness, failpoint matrix, recovery matrix, cross-engine compat, chaos workloads. |
 
-### Boundary Rules (`agent/boundaries.toml`)
+### Boundary Rules (`.jankurai/boundaries.toml`)
 
 - **No back-edges.** `kernel` must not import `sql`; `sql` must not import `redlinedb`.
 - **Forbidden stdlib in kernel/sql.** `std::fs`, `std::net`, `std::time::SystemTime`, `std::process` are blocked to keep the kernel portable and mockable.
@@ -1484,7 +1484,7 @@ pub(crate) fn api<T>(f: impl FnOnce() -> T) -> c_int {
 
 ### Unsafe Sites (FFI crate, 46 of 89 total)
 
-All unsafe blocks in the FFI crate are ledgered in `agent/unsafe-ledger.toml`. The primary patterns:
+All unsafe blocks in the FFI crate are ledgered in `.jankurai/unsafe-ledger.toml`. The primary patterns:
 
 | Pattern | Count | Justification |
 |---------|-------|---------------|
@@ -1590,7 +1590,7 @@ Uses a fixed-capacity max-heap of size `k`. For each candidate: compute distance
 ### ANN Indexes
 
 - **HNSW** (`vector/hnsw/`): Hierarchical Navigable Small World graph (Lane V2). Configurable `ef_construction`, `ef_search`, `m` (max connections per node).
-- **DiskANN** (`vector/diskann/`): Sector-aligned on-disk graph index (Lane V3). Uses `unsafe { slice::align_to::<f32>() }` for alignment validation (ledgered in `agent/unsafe-ledger.toml`).
+- **DiskANN** (`vector/diskann/`): Sector-aligned on-disk graph index (Lane V3). Uses `unsafe { slice::align_to::<f32>() }` for alignment validation (ledgered in `.jankurai/unsafe-ledger.toml`).
 
 ### `vector_v1_unmerged` Feature Flag
 

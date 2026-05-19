@@ -103,12 +103,12 @@ Repository routing/proof metadata:
 - `AGENTS.md`
 - `Cargo.toml`
 - `README.md`
-- `agent/owner-map.json`
-- `agent/test-map.json`
-- `agent/proof-lanes.toml`
-- `agent/generated-zones.toml`
-- `agent/unsafe-ledger.toml`
-- `agent/proof-receipt-template.md`
+- `.jankurai/owner-map.json`
+- `.jankurai/test-map.json`
+- `.jankurai/proof-lanes.toml`
+- `.jankurai/generated-zones.toml`
+- `.jankurai/unsafe-ledger.toml`
+- `.jankurai/proof-receipt-template.md`
 - `docs/WORKPLAN_CLAUDE.md`
 - `docs/WORKPLAN_slam.md`
 

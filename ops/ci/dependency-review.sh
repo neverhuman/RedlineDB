@@ -10,7 +10,7 @@
 # the soft-gate semantics so the workflow YAML can stay hard-gated.
 # Audit references: HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
 #
-# Soft-gate rationale: see agent/ci-soft-gate-ledger.toml#dependency-review-action
+# Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml#dependency-review-action
 # GitHub Advanced Security `Dependency graph` is not yet enabled at the
 # repo level (Settings -> Security -> Code security and analysis ->
 # Dependency graph). The action exits non-zero until that toggle is on.

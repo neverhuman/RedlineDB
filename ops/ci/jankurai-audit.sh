@@ -9,7 +9,7 @@
 # HLT-042 ci-local-parity.lib-missing,
 # HLT-034 ci-bad-behavior (audit-job soft gate moved out of YAML).
 #
-# Soft-gate rationale: see agent/ci-soft-gate-ledger.toml#jankurai-audit-job
+# Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml#jankurai-audit-job
 # The workflow YAML carries NO `continue-on-error: true`. The audit-job
 # soft-gate semantics (jankurai is not yet published to a CI-reachable
 # source) live in this script: `step_install_jankurai` is run through
@@ -49,17 +49,18 @@ step_version() {
 }
 
 # ---- 3) jankurai audit (advisory) ------------------------------------------
-# Writes the agent-visible repo score and the repair queue, exactly the
+# Writes the repo score and the repair queue, exactly the
 # artifacts the tool-adoption manifest names for audit-ci, proof-routing,
 # contract-drift, authz-matrix, input-boundary, agent-tool-supply,
 # release-readiness, and cost-budget. Reads cost-budget config from
-# agent/cost-budget.toml.
+# .jankurai/cost-budget.toml.
 step_audit_advisory() {
     jankurai audit . \
+        --policy .jankurai/audit-policy.toml \
         --mode advisory \
-        --baseline agent/repo-score.json \
-        --json agent/repo-score.json \
-        --md agent/repo-score.md \
+        --baseline .jankurai/repo-score.json \
+        --json .jankurai/repo-score.json \
+        --md .jankurai/repo-score.md \
         --sarif "$LOG_DIR/jankurai.sarif" \
         --github-step-summary "$LOG_DIR/summary.md" \
         --repair-queue-jsonl "$LOG_DIR/repair-queue.jsonl"
@@ -67,16 +68,16 @@ step_audit_advisory() {
 
 # ---- 4) Fetch reviewed accepted baseline -----------------------------------
 # Source baseline strictly from reviewed locations: a committed baseline
-# under agent/baselines/ takes priority, otherwise we pull the score
+# under .jankurai/baselines/ takes priority, otherwise we pull the score
 # from origin/main (the previously reviewed state). Never seed from the
 # candidate audit run; that would hide score regressions
 # (HLT-034 ci.ratchet.self-generated-baseline).
 step_fetch_baseline() {
-    if [ -f agent/baselines/accepted-baseline.json ]; then
-        install -m 0644 agent/baselines/accepted-baseline.json "$LOG_DIR/accepted-baseline.json"
-        echo "baseline sourced from agent/baselines/accepted-baseline.json"
+    if [ -f .jankurai/baselines/accepted-baseline.json ]; then
+        install -m 0644 .jankurai/baselines/accepted-baseline.json "$LOG_DIR/accepted-baseline.json"
+        echo "baseline sourced from .jankurai/baselines/accepted-baseline.json"
     else
-        git show origin/main:agent/repo-score.json > "$LOG_DIR/accepted-baseline.json"
+        git show origin/main:.jankurai/repo-score.json > "$LOG_DIR/accepted-baseline.json"
         echo "baseline sourced from origin/main"
     fi
 }
@@ -95,6 +96,7 @@ step_security_run() {
 # ---- 6) jankurai audit (ratchet) — tool-adoption CI evidence ---------------
 step_audit_ratchet() {
     jankurai audit . \
+        --policy .jankurai/audit-policy.toml \
         --mode ratchet \
         --baseline "$LOG_DIR/accepted-baseline.json" \
         --json "$LOG_DIR/repo-score.json" \
@@ -128,7 +130,7 @@ step_copy_code() {
 
 # ---- 12) UX QA smoke -------------------------------------------------------
 step_ux_qa() {
-    jankurai ux audit --config agent/ux-qa.toml --out "$LOG_DIR/ux-qa.json"
+    jankurai ux audit --config .jankurai/ux-qa.toml --out "$LOG_DIR/ux-qa.json"
 }
 
 # ---- 13) Language bad-behavior tests ---------------------------------------
@@ -162,7 +164,7 @@ step_language_bad_behavior() {
         return "$rc"
     fi
 
-    printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-audit-job ledger=agent/ci-soft-gate-ledger.toml\n' \
+    printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-audit-job ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
         | tee "$LOG_DIR/language-bad-behavior.log"
     return 0
 }
@@ -173,11 +175,11 @@ main() {
     # downstream jankurai-rooted steps. The wrapper still returns 0 so
     # the workflow step is green; the marker line is the auditable
     # evidence and is cross-referenced from
-    # agent/ci-soft-gate-ledger.toml#jankurai-audit-job.
+    # .jankurai/ci-soft-gate-ledger.toml#jankurai-audit-job.
     ci_soft_gate jankurai-audit-job "$JANKURAI_INSTALL_LOG" -- step_install_jankurai
 
     if ! command -v jankurai >/dev/null 2>&1; then
-        printf 'soft-gate=jankurai-audit-job status=installed=false ledger=agent/ci-soft-gate-ledger.toml\nstatus: jankurai-unavailable\n' \
+        printf 'soft-gate=jankurai-audit-job status=installed=false ledger=.jankurai/ci-soft-gate-ledger.toml\nstatus: jankurai-unavailable\n' \
             | tee -a "$JANKURAI_INSTALL_LOG"
         # Still produce the language-bad-behavior evidence artifact so
         # upload-artifact has something to publish; this step has its

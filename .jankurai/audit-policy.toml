@@ -28,7 +28,7 @@ excluded_paths = [
   "scripts/bench/export_benchmark_results.py",
   # python-ai cell adapter marker: AGENTS.md is the cell routing stub and
   # carries no proof-bearing code; the python-ai cell is reserved per the
-  # jankurai standard (see agent/repo-score.md python-ai row) and has no
+  # jankurai standard (see .jankurai/repo-score.md python-ai row) and has no
   # runnable test-map proof of its own. Exclude from scan to clear
   # HLT-004-UNMAPPED-PROOF.
   "python/ai-service/AGENTS.md",
@@ -47,7 +47,7 @@ excluded_paths = [
 # The `crates/ffi/src/{error,lifecycle,snapshot,stmt,util}.rs` files
 # implement the C ABI (rldb_open/close/exec/...). Every `unsafe { ... }`
 # block in these files carries an exhaustive `// SAFETY:` comment AND a
-# matching `[[entries]]` row in `agent/unsafe-ledger.toml` naming the
+# matching `[[entries]]` row in `.jankurai/unsafe-ledger.toml` naming the
 # owner, invariant, and proof lane (see crates/ffi/tests/safety_invariants.rs).
 # The HLT-029-RUST-BAD-BEHAVIOR detector (`rust.unsafe.raw-parts`,
 # `rust.unsafe.zeroed`) is a pattern matcher that fires unconditionally on
@@ -140,7 +140,7 @@ extra_excluded_paths = [
   # B1-B5 FFI surface added in 2026-05-17 sqlite3 ABI completion: see
   # docs/exceptions/ffi-unsafe-blocks.md. Each unsafe block in these files
   # carries an exhaustive `// SAFETY:` comment AND a matching `[[entries]]`
-  # row in `agent/unsafe-ledger.toml`. Excluded for the same reason as the
+  # row in `.jankurai/unsafe-ledger.toml`. Excluded for the same reason as the
   # other `crates/ffi/src/*` rows above (the HLT-029
   # `rust.unsafe.undocumented-block` detector's `NearbySafetyComment`
   # proof-window does not match the workstream's comment style).
@@ -159,7 +159,7 @@ extra_excluded_paths = [
   # sqlite3_db_handle, sqlite3_stmt_readonly, ...) and necessarily contain
   # `unsafe { ... }` blocks that dereference SQLite's documented `*mut sqlite3`
   # / `*mut sqlite3_stmt` pointers. Each block carries the same
-  # exhaustive `// SAFETY:` comment + `agent/unsafe-ledger.toml` entry
+  # exhaustive `// SAFETY:` comment + `.jankurai/unsafe-ledger.toml` entry
   # pattern; the HLT-029 detector still does not gate on the proof-window,
   # so the path-level exclusion remains the only documented suppression.
   "crates/ffi/src/sqlite3_api/bind.rs",

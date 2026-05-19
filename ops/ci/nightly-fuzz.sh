@@ -9,7 +9,7 @@
 # Usage:
 #   bash ops/ci/nightly-fuzz.sh
 #
-# Soft-gate rationale: see agent/ci-soft-gate-ledger.toml — none. Any
+# Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml — none. Any
 # fuzz divergence above the recorded baseline rate (per
 # target/proof/sqlite-full-parity/fuzz-divergence.txt) hard-fails this
 # lane. Discovered regressions are written under

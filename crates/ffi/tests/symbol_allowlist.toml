@@ -4,7 +4,7 @@
 # in the active fresh-application scope of `docs/sqlite-parity.md` must
 # appear here with a one-line justification.
 #
-# IMPORTANT: per `agent/JANKURAI_STANDARD.md` and the parity closure plan
+# IMPORTANT: per `.jankurai/JANKURAI_STANDARD.md` and the parity closure plan
 # at /Users/bentaylor/.claude/plans/it-is-important-that-dazzling-leaf.md
 # (rule "do not skip any libsqlite3 symbol to make the gate pass"), this
 # file MUST NOT include symbols that are merely "planned" by workstream

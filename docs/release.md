@@ -92,7 +92,7 @@ The `security` job runs `cargo audit`, `cargo deny check`, and
 `gitleaks detect`; it is a required check on every PR and push to
 `main`. The `dependency-review` step (PR-only) compares the base and
 head manifests for vulnerable adds. The audit job uploads
-`agent/repo-score.json` + the SARIF security feed. Sample runs are
+`.jankurai/repo-score.json` + the SARIF security feed. Sample runs are
 linked from the Actions tab of the repository — pick any green run on
 a release tag for permalink evidence.
 

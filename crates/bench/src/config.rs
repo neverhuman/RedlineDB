@@ -311,7 +311,7 @@ pub enum WorkloadKind {
     ///     `tenant_id` still sees 0 rows pre- and post-delete).
     /// Runnable via `rtk cargo test -p redlinedb-bench --test
     /// tenant_isolation --quiet --locked`. See also
-    /// `agent/security-policy.toml` [[proofs]] entry for
+    /// `.jankurai/security-policy.toml` [[proofs]] entry for
     /// `HLT-022-AUTHZ-ISOLATION-GAP` for proof routing.
     SecondaryIndexCount,
     /// Phase 11 wave 1a: ordered range with `LIMIT` early-stop. The
