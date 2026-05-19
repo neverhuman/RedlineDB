@@ -25,15 +25,15 @@
 [[entry]]
 name              = "jankurai-install"
 script_path       = ".github/workflows/jankurai.yml"
-line_number       = 45
+line_number       = 59
 rule_waived       = "ci-bad-behavior.audit-job-nonblocking"
-unblock_condition = "Confirm that `cargo install --git https://github.com/jeppsontaylor/Jankurai.git --tag v1.5.1 --package jankurai --locked` completes successfully from a GitHub Actions ubuntu-latest runner. When confirmed, the install step's soft-gate output check can be removed and all downstream jankurai steps made unconditional."
+unblock_condition = "Confirm that `cargo install --git https://github.com/neverhuman/jankurai.git --tag v1.5.1 --locked jankurai` completes successfully from a GitHub Actions ubuntu-latest runner. When confirmed, the install step's soft-gate output check can be removed and all downstream jankurai steps made unconditional."
 unblock_owner     = "jepson@veox.ai"
 
 [[entry]]
 name              = "jankurai-audit-job"
 script_path       = "ops/ci/jankurai-audit.sh"
-line_number       = 165
+line_number       = 174
 rule_waived       = "ci-bad-behavior.audit-job-nonblocking"
 unblock_condition = "Local-only script; CI now uses inline steps in .github/workflows/jankurai.yml. This ledger entry covers the ops/ci/jankurai-audit.sh local proof lane path only. Unblock: same as jankurai-install entry above."
 unblock_owner     = "jepson@veox.ai"
@@ -41,7 +41,7 @@ unblock_owner     = "jepson@veox.ai"
 [[entry]]
 name              = "jankurai-language-bad-behavior"
 script_path       = ".github/workflows/jankurai.yml"
-line_number       = 75
+line_number       = 91
 rule_waived       = "ci-bad-behavior.language-tests-clone-optional"
 unblock_condition = "Confirm that `git clone --depth 1 https://github.com/jeppsontaylor/Jankurai.git` completes from a GitHub Actions runner. When confirmed, remove the clone-failed soft-gate branch."
 unblock_owner     = "jepson@veox.ai"
@@ -49,7 +49,7 @@ unblock_owner     = "jepson@veox.ai"
 [[entry]]
 name              = "cargo-deny-check"
 script_path       = "ops/ci/security.sh"
-line_number       = 32
+line_number       = 31
 rule_waived       = "supply-chain-drift.cargo-deny-nonblocking"
 unblock_condition = "cargo-deny upstream fixes the `cargo metadata` JSON parser drift against rust 1.95.0 on a 158-dep workspace (current failure: `expected ',' or '}' at line 1 column ~365k`). Track at https://github.com/EmbarkStudios/cargo-deny/issues. cargo-audit + gitleaks remain hard gates for supply chain. When fixed, drop the `ci_soft_gate` wrapper inside ops/ci/security.sh and call `cargo deny --all-features check` directly."
 unblock_owner     = "jepson@veox.ai"
@@ -57,7 +57,7 @@ unblock_owner     = "jepson@veox.ai"
 [[entry]]
 name              = "syft-sbom"
 script_path       = "ops/ci/security.sh"
-line_number       = 54
+line_number       = 49
 rule_waived       = "supply-chain-drift.syft-sbom-optional"
 unblock_condition = "syft SBOM generation completes without error in a full CI run and the CycloneDX output is reviewed for accuracy. Promote to hard gate once baseline SBOM is established."
 unblock_owner     = "jepson@veox.ai"
@@ -65,7 +65,7 @@ unblock_owner     = "jepson@veox.ai"
 [[entry]]
 name              = "actionlint-workflow-lint"
 script_path       = "ops/ci/security.sh"
-line_number       = 61
+line_number       = 58
 rule_waived       = "supply-chain-drift.actionlint-optional"
 unblock_condition = "actionlint exits 0 on all workflow YAML files in a full CI run. Promote to hard gate once baseline lint is clean."
 unblock_owner     = "jepson@veox.ai"

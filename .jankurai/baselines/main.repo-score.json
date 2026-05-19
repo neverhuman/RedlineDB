@@ -518,7 +518,7 @@
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-        "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+        "ci_command": "jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "artifact_paths": [
           ".jankurai/repo-score.json",
           ".jankurai/repo-score.md"
@@ -541,12 +541,12 @@
         "missing": [
           "CI command evidence"
         ],
-        "local_command": "jankurai proof . --changed-from origin/main --out target/jankurai/proof-plan.json --md target/jankurai/proof-plan.md",
-        "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+        "local_command": "jankurai proof . --changed-from origin/main --out .jankurai/proof-plan.json --md .jankurai/proof-plan.md",
+        "ci_command": "jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "artifact_paths": [
           ".jankurai/repo-score.json",
           ".jankurai/repo-score.md",
-          "target/jankurai/repair-queue.jsonl"
+          ".jankurai/repair-queue.jsonl"
         ]
       },
       {
@@ -563,14 +563,14 @@
           "mode=auto",
           "tool-adoption config entry present",
           "CI command found in workflow",
-          "artifact uploads found: target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json"
+          "artifact uploads found: .jankurai/proofbind/surface-witness.json, .jankurai/proofbind/obligations.json"
         ],
         "missing": [],
         "local_command": "jankurai proofbind verify . --changed-from origin/main",
         "ci_command": "jankurai proofbind verify . --changed-from origin/main",
         "artifact_paths": [
-          "target/jankurai/proofbind/surface-witness.json",
-          "target/jankurai/proofbind/obligations.json"
+          ".jankurai/proofbind/surface-witness.json",
+          ".jankurai/proofbind/obligations.json"
         ]
       },
       {
@@ -587,14 +587,14 @@
           "mode=auto",
           "tool-adoption config entry present",
           "CI command found in workflow",
-          "artifact uploads found: target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json"
+          "artifact uploads found: .jankurai/proofmark/proofmark-receipt.json, .jankurai/proofmark/proof-receipt.json"
         ],
         "missing": [],
-        "local_command": "jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json",
-        "ci_command": "jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json",
+        "local_command": "jankurai proofmark rust . --obligations .jankurai/proofbind/obligations.json",
+        "ci_command": "jankurai proofmark rust . --obligations .jankurai/proofbind/obligations.json",
         "artifact_paths": [
-          "target/jankurai/proofmark/proofmark-receipt.json",
-          "target/jankurai/proofmark/proof-receipt.json"
+          ".jankurai/proofmark/proofmark-receipt.json",
+          ".jankurai/proofmark/proof-receipt.json"
         ]
       },
       {
@@ -611,14 +611,14 @@
           "mode=auto",
           "tool-adoption config entry present",
           "CI command found in workflow",
-          "artifact uploads found: target/jankurai/copy-code.json, target/jankurai/copy-code.md"
+          "artifact uploads found: .jankurai/copy-code.json, .jankurai/copy-code.md"
         ],
         "missing": [],
-        "local_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
-        "ci_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+        "local_command": "cargo run -p jankurai -- copy-code . --json .jankurai/copy-code.json --md .jankurai/copy-code.md",
+        "ci_command": "cargo run -p jankurai -- copy-code . --json .jankurai/copy-code.json --md .jankurai/copy-code.md",
         "artifact_paths": [
-          "target/jankurai/copy-code.json",
-          "target/jankurai/copy-code.md"
+          ".jankurai/copy-code.json",
+          ".jankurai/copy-code.md"
         ]
       },
       {
@@ -639,10 +639,10 @@
         "missing": [
           "CI command evidence"
         ],
-        "local_command": "jankurai security run . --out target/jankurai/security/evidence.json",
-        "ci_command": "jankurai security run . --out target/jankurai/security/evidence.json",
+        "local_command": "jankurai security run . --out .jankurai/security/evidence.json",
+        "ci_command": "jankurai security run . --out .jankurai/security/evidence.json",
         "artifact_paths": [
-          "target/jankurai/security/evidence.json"
+          ".jankurai/security/evidence.json"
         ]
       },
       {
@@ -660,13 +660,13 @@
           "mode=auto",
           "tool-adoption config entry present",
           "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "artifact uploads found: .jankurai/language-bad-behavior.log"
         ],
         "missing": [],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
-          "target/jankurai/language-bad-behavior.log"
+          ".jankurai/language-bad-behavior.log"
         ]
       },
       {
@@ -684,13 +684,13 @@
           "mode=auto",
           "tool-adoption config entry present",
           "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "artifact uploads found: .jankurai/language-bad-behavior.log"
         ],
         "missing": [],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
-          "target/jankurai/language-bad-behavior.log"
+          ".jankurai/language-bad-behavior.log"
         ]
       },
       {
@@ -708,13 +708,13 @@
           "mode=auto",
           "tool-adoption config entry present",
           "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "artifact uploads found: .jankurai/language-bad-behavior.log"
         ],
         "missing": [],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
-          "target/jankurai/language-bad-behavior.log"
+          ".jankurai/language-bad-behavior.log"
         ]
       },
       {
@@ -732,10 +732,10 @@
           "mode=auto"
         ],
         "missing": [],
-        "local_command": "jankurai ux audit --config .jankurai/ux-qa.toml --out target/jankurai/ux-qa.json",
-        "ci_command": "jankurai ux audit --config .jankurai/ux-qa.toml --out target/jankurai/ux-qa.json",
+        "local_command": "jankurai ux audit --config .jankurai/ux-qa.toml --out .jankurai/ux-qa.json",
+        "ci_command": "jankurai ux audit --config .jankurai/ux-qa.toml --out .jankurai/ux-qa.json",
         "artifact_paths": [
-          "target/jankurai/ux-qa.json"
+          ".jankurai/ux-qa.json"
         ]
       },
       {
@@ -751,10 +751,10 @@
           "mode=auto"
         ],
         "missing": [],
-        "local_command": "jankurai migrate . --analyze --json target/jankurai/migration-report.json",
-        "ci_command": "jankurai migrate . --analyze --json target/jankurai/migration-report.json",
+        "local_command": "jankurai migrate . --analyze --json .jankurai/migration-report.json",
+        "ci_command": "jankurai migrate . --analyze --json .jankurai/migration-report.json",
         "artifact_paths": [
-          "target/jankurai/migration-report.json"
+          ".jankurai/migration-report.json"
         ]
       },
       {
@@ -775,7 +775,7 @@
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-        "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+        "ci_command": "jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "artifact_paths": [
           ".jankurai/repo-score.json",
           ".jankurai/repo-score.md"
@@ -794,13 +794,13 @@
           "mode=auto",
           "tool-adoption config entry present",
           "CI command found in workflow",
-          "artifact uploads found: target/jankurai/rust/witness-graph.json"
+          "artifact uploads found: .jankurai/rust/witness-graph.json"
         ],
         "missing": [],
         "local_command": "jankurai rust witness build .",
         "ci_command": "jankurai rust witness build .",
         "artifact_paths": [
-          "target/jankurai/rust/witness-graph.json"
+          ".jankurai/rust/witness-graph.json"
         ]
       },
       {
@@ -816,11 +816,11 @@
           "mode=auto"
         ],
         "missing": [],
-        "local_command": "jankurai vibe coverage --source .jankurai/vibe-coverage.toml --tips tips/vibe_coding --json target/jankurai/vibe-coverage.json --md target/jankurai/vibe-coverage.md",
-        "ci_command": "jankurai vibe coverage --source .jankurai/vibe-coverage.toml --tips tips/vibe_coding --json target/jankurai/vibe-coverage.json --md target/jankurai/vibe-coverage.md",
+        "local_command": "jankurai vibe coverage --source .jankurai/vibe-coverage.toml --tips tips/vibe_coding --json .jankurai/vibe-coverage.json --md .jankurai/vibe-coverage.md",
+        "ci_command": "jankurai vibe coverage --source .jankurai/vibe-coverage.toml --tips tips/vibe_coding --json .jankurai/vibe-coverage.json --md .jankurai/vibe-coverage.md",
         "artifact_paths": [
-          "target/jankurai/vibe-coverage.json",
-          "target/jankurai/vibe-coverage.md"
+          ".jankurai/vibe-coverage.json",
+          ".jankurai/vibe-coverage.md"
         ]
       },
       {
@@ -837,11 +837,11 @@
           "mode=auto"
         ],
         "missing": [],
-        "local_command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
-        "ci_command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
+        "local_command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md",
+        "ci_command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md",
         "artifact_paths": [
-          "target/jankurai/coverage/coverage-audit.json",
-          "target/jankurai/coverage/coverage-audit.md"
+          ".jankurai/coverage/coverage-audit.json",
+          ".jankurai/coverage/coverage-audit.md"
         ]
       },
       {
@@ -861,7 +861,7 @@
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-        "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+        "ci_command": "jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "artifact_paths": [
           ".jankurai/repo-score.json",
           ".jankurai/repo-score.md"
@@ -884,7 +884,7 @@
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-        "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+        "ci_command": "jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "artifact_paths": [
           ".jankurai/repo-score.json",
           ".jankurai/repo-score.md"
@@ -907,7 +907,7 @@
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-        "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+        "ci_command": "jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "artifact_paths": [
           ".jankurai/repo-score.json",
           ".jankurai/repo-score.md"
@@ -930,7 +930,7 @@
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-        "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+        "ci_command": "jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "artifact_paths": [
           ".jankurai/repo-score.json",
           ".jankurai/repo-score.md"
@@ -953,7 +953,7 @@
           "CI command evidence"
         ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-        "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+        "ci_command": "jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "artifact_paths": [
           ".jankurai/repo-score.json",
           ".jankurai/repo-score.md"
@@ -1036,7 +1036,7 @@
   },
   "security_evidence": {
     "artifact": {
-      "path": "target/jankurai/security/evidence.json",
+      "path": ".jankurai/security/evidence.json",
       "envelope_exit_code": 0,
       "elapsed_ms": 45837,
       "wrapper_strict": true,

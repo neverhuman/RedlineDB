@@ -27,20 +27,17 @@ set -euo pipefail
 # shellcheck source=ops/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
 
-LOG_DIR="target/jankurai"
+LOG_DIR=".jankurai"
 mkdir -p "$LOG_DIR" "$LOG_DIR/security" "$LOG_DIR/proofbind" "$LOG_DIR/proofmark" "$LOG_DIR/rust"
 JANKURAI_INSTALL_LOG="$LOG_DIR/jankurai-install.log"
 
 # ---- 1) Install jankurai ----------------------------------------------------
-# Try the canonical git source first, then the fallback fork, then the
-# crates.io publication if/when one exists. Matches the install logic
-# previously inline in .github/workflows/jankurai.yml.
+# Install the pinned jankurai release from crates.io. This keeps the
+# install path aligned with the repo-wide `.jankurai` artifact root.
 #
 # Returns the install exit code so `ci_soft_gate` can stamp the marker.
 step_install_jankurai() {
-    cargo install --git "${CI_JANKURAI_GIT}" --locked jankurai \
-        || cargo install --git https://github.com/anthropics/jankurai --locked jankurai \
-        || cargo install jankurai --locked
+    ci_install_jankurai
 }
 
 # ---- 2) jankurai --version --------------------------------------------------
@@ -139,24 +136,23 @@ step_ux_qa() {
 #   cargo test -p jankurai --test language_bad_behavior
 # Run against the upstream jankurai source (jankurai is not a workspace
 # member here) and capture the output as the canonical evidence artifact
-# target/jankurai/language-bad-behavior.log.
+# .jankurai/language-bad-behavior.log.
 #
 # Hard gate: the workflow YAML carries NO `continue-on-error: true` for
 # this step. Soft-gate semantics (upstream-clone-failed -> exit 0) live
 # here, and we ALWAYS write a machine-grep-able
 # `status: upstream-{clone-failed|tests-passed|tests-failed}` line.
 step_language_bad_behavior() {
-    rm -rf target/jankurai-src
+    rm -rf .jankurai/jankurai-src
 
     local cloned=0
-    if git clone --depth 1 "${CI_JANKURAI_GIT}.git" target/jankurai-src \
-        || git clone --depth 1 https://github.com/anthropics/jankurai.git target/jankurai-src; then
+    if git clone --depth 1 https://github.com/anthropics/jankurai.git .jankurai/jankurai-src; then
         cloned=1
     fi
 
-    if [ "${cloned}" -eq 1 ] && [ -d target/jankurai-src ]; then
+    if [ "${cloned}" -eq 1 ] && [ -d .jankurai/jankurai-src ]; then
         local rc=0
-        ( cd target/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
+        ( cd .jankurai/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
             > >(tee "$LOG_DIR/language-bad-behavior.log") 2>&1 || rc=$?
         printf 'status: %s\n' "$( [ "$rc" -eq 0 ] && echo upstream-tests-passed || echo upstream-tests-failed )" \
             >> "$LOG_DIR/language-bad-behavior.log"

@@ -18,6 +18,18 @@ impl Drop for GroupEvalCacheGuard {
     }
 }
 
+struct GroupCaseEvaluator<'group, 'ctx> {
+    group: &'group [SqlRow],
+    first_context: Option<&'ctx RowContext<'ctx>>,
+    bindings: &'group [Option<SqlValue>],
+}
+
+impl<'group, 'ctx> CaseEvaluator for GroupCaseEvaluator<'group, 'ctx> {
+    fn eval_case_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        eval_group_scalar_with_ctx(expr, self.group, self.first_context, self.bindings)
+    }
+}
+
 pub(super) fn project_group_row(
     projection: &[SelectItem],
     group: &[SqlRow],
@@ -313,12 +325,19 @@ pub(super) fn eval_group_scalar_with_ctx(
                 conditions,
                 else_result,
                 ..
-            } => eval_case_with(
-                operand.as_deref(),
-                conditions,
-                else_result.as_deref(),
-                |expr| eval_group_scalar_with_ctx(expr, group, first_context, bindings),
-            ),
+            } => {
+                let mut evaluator = GroupCaseEvaluator {
+                    group,
+                    first_context,
+                    bindings,
+                };
+                eval_case(
+                    operand.as_deref(),
+                    conditions,
+                    else_result.as_deref(),
+                    &mut evaluator,
+                )
+            }
             _ => Err(Error::UnsupportedSql(
                 "aggregate expressions in this query are not supported".to_owned(),
             )),

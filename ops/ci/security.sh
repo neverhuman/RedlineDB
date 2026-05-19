@@ -21,7 +21,7 @@ set -euo pipefail
 # shellcheck source=ops/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
 
-mkdir -p target/jankurai/security
+mkdir -p .jankurai/security
 
 # Hard gate: cargo-audit must succeed for the lane to pass.
 cargo audit
@@ -30,7 +30,7 @@ cargo audit
 # rust 1.95.0 on the current workspace. See ledger for unblock.
 ci_soft_gate \
     cargo-deny-check \
-    target/jankurai/security/cargo-deny.log \
+    .jankurai/security/cargo-deny.log \
     -- cargo deny --all-features check
 
 # Hard gate: gitleaks must succeed for the lane to pass.
@@ -40,7 +40,7 @@ gitleaks detect --source . --redact --no-banner
 # manifest so the supply-chain lane writes a reviewable artifact
 # alongside the audit/deny/gitleaks outputs. Hard gate: must succeed.
 cargo metadata --format-version 1 --locked \
-    > target/jankurai/security/sbom-cargo-metadata.json
+    > .jankurai/security/sbom-cargo-metadata.json
 
 # SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
 # artifact alongside the cargo-metadata evidence. Requires syft in PATH;
@@ -48,8 +48,8 @@ cargo metadata --format-version 1 --locked \
 # See ledger: .jankurai/ci-soft-gate-ledger.toml#syft-sbom.
 ci_soft_gate \
     syft-sbom \
-    target/jankurai/security/syft.log \
-    -- syft . -o cyclonedx-json=target/jankurai/security/sbom-syft.json
+    .jankurai/security/syft.log \
+    -- syft . -o cyclonedx-json=.jankurai/security/sbom-syft.json
 
 # Workflow linting via actionlint — soft-gated; validates CI YAML for
 # schema correctness and security best practices. Requires actionlint
@@ -57,5 +57,5 @@ ci_soft_gate \
 # See ledger: .jankurai/ci-soft-gate-ledger.toml#actionlint-workflow-lint.
 ci_soft_gate \
     actionlint-workflow-lint \
-    target/jankurai/security/actionlint.log \
+    .jankurai/security/actionlint.log \
     -- actionlint .github/workflows/*.yml

@@ -70,7 +70,7 @@ fi
 
 cd "$repo_root"
 
-report_dir="${JANKURAI_HOOK_REPORT_DIR:-target/jankurai/hooks}"
+report_dir="${JANKURAI_HOOK_REPORT_DIR:-.jankurai/hooks}"
 mkdir -p "$report_dir"
 agg_report="$report_dir/pre-commit-staged.json"
 agg_log="$report_dir/pre-commit-staged.log"

@@ -79,7 +79,7 @@
       "purpose": "verify benchmark-results artifacts export cleanly and stay reproducible"
     },
     ".jankurai/coverage-sources.toml": {
-      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage evidence source routing and score import"
     },
     ".agents/": {
@@ -223,7 +223,7 @@
       "purpose": "verify app surfaces remain routed through the audit"
     },
     "contracts/": {
-      "command": "jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+      "command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
       "purpose": "advisory contract drift scan until project-specific contract checks exist"
     },
     "crates/": {
@@ -231,15 +231,15 @@
       "purpose": "verify Rust behavior and audit checks"
     },
     "crates/jankurai/src/audit/coverage.rs": {
-      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage parsers and evidence normalization"
     },
     "crates/jankurai/src/commands/coverage.rs": {
-      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md && just score",
+      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage audit command behavior"
     },
     "crates/jankurai/tests/fixtures/coverage/": {
-      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
+      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md",
       "purpose": "verify coverage parser fixture contracts"
     },
     "db/": {
@@ -263,11 +263,11 @@
       "purpose": "verify coverage evidence docs remain routed"
     },
     "docs/architecture/": {
-      "command": "jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+      "command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
       "purpose": "verify architecture docs remain visible to the audit"
     },
     "docs/decisions/": {
-      "command": "jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
+      "command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
       "purpose": "verify decision records remain visible to the audit"
     },
     "examples/perfect-web-api-db/backend/src/background_job.rs": {

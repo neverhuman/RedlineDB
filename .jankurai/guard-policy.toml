@@ -20,7 +20,6 @@ max_audit_ms = 4000
 [paths]
 extra_excluded_paths = [
     ".jankurai/",
-    "target/jankurai/",
     "target/",
     "node_modules/",
     ".git/",
