@@ -27,14 +27,18 @@ blocking gap is that the pinned Jeryu `autonomy` binary rejects
 its accepted URL schemes are currently `postgres://`, `postgresql://`, and
 `sqlite:`. RedlineDB provides the `redlinedb-sqlx` integration layer and
 `redline://` tests, but consuming binaries still must link that crate and call
-`redlinedb_sqlx::install_default_drivers()` before the first `sqlx::AnyPool` or
-`sqlx::AnyConnection`.
+`redlinedb_sqlx::install_default_drivers()` before the first `sqlx::AnyPool`
+or `sqlx::AnyConnection` is created. The canonical autonomy ledger target is
+`target/jeryu/autonomy.redlineDB`, addressed via
+`redline:///absolute/path/to/target/jeryu/autonomy.redlineDB?mode=rwc` for the
+owner and `redlinedb://` as the compatibility alias once the driver is
+installed.
 
 **Required fix:** make the Jeryu/autonomy SQLx bootstrap path install the
 RedlineDB driver before opening the launch ledger, document the canonical
 RedlineDB ledger URL/path, and add an integration proof that
-`JERYU_DATABASE_URL=redline://.../target/jeryu/autonomy.redlineDB` (or the final
-canonical URL form) passes `autonomy kill-bell status` and
+`JERYU_DATABASE_URL=redline:///absolute/path/to/target/jeryu/autonomy.redlineDB?mode=rwc`
+(or the final canonical URL form) passes `autonomy kill-bell status` and
 `autonomy profile validate --profile sovereign_plus`.
 
 **Proof target:** a consuming-project smoke that fails without RedlineDB driver

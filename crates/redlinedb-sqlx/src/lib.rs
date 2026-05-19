@@ -1,8 +1,8 @@
 //! SQLx Any driver bridge for RedlineDB.
 //!
-//! Call [`install_default_drivers`] before the first `sqlx::AnyPool` or
-//! `sqlx::AnyConnection` is created so the `redline://` and `redlinedb://`
-//! URL schemes are registered.
+//! This crate does not auto-register with SQLx. Call [`install_default_drivers`]
+//! before the first `sqlx::AnyPool` or `sqlx::AnyConnection` is created so the
+//! `redline://` and `redlinedb://` URL schemes are registered.
 //!
 //! Canonical owning/server URL:
 //! `redline:///absolute/path/to/target/jeryu/autonomy.redlineDB?mode=rwc`.
@@ -23,7 +23,7 @@ mod driver;
 /// Install the RedlineDB driver into SQLx's `Any` registry.
 ///
 /// Call this before the first `sqlx::AnyPool` or `sqlx::AnyConnection`
-/// is created.
+/// is created. The bridge is not installed automatically.
 pub fn install_default_drivers() {
     bridge::install_redline_driver_once();
 }

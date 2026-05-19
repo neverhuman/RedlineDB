@@ -48,34 +48,48 @@ async fn mixed_case_redlinedb_scheme_is_normalized() {
 async fn file_backed_jeryu_autonomy_ledger_url_connects() {
     install_default_drivers();
 
-    let target_dir =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/jeryu/redlinedb-sqlx");
-    fs::create_dir_all(&target_dir).expect("create target/jeryu test dir");
-    let temp_dir = tempfile::Builder::new()
-        .prefix("driver-registration-")
-        .tempdir_in(&target_dir)
-        .expect("temp dir in target/jeryu");
-    let db_path = temp_dir.path().join("autonomy.redlineDB");
-    let url = format!("redline://{}", db_path.display());
+    let db_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/jeryu/autonomy.redlineDB");
+    if let Some(parent) = db_path.parent() {
+        fs::create_dir_all(parent).expect("create target/jeryu test dir");
+    }
+    let _ = fs::remove_file(&db_path);
 
-    let pool = AnyPool::connect(&url).await.expect("connect file ledger");
+    assert_file_backed_round_trip(&format!("redline://{}", db_path.display()), 1, "kill-bell")
+        .await;
+    assert_file_backed_round_trip(&format!("redlinedb://{}", db_path.display()), 2, "status").await;
+
+    let alias_url = format!("redlineDB://{}", db_path.display());
+    assert_file_backed_round_trip(&alias_url, 3, "validate").await;
+}
+
+async fn assert_file_backed_round_trip(url: &str, id: i64, kind: &str) {
+    let pool = AnyPool::connect(url)
+        .await
+        .unwrap_or_else(|err| panic!("connect {url}: {err}"));
+
     sqlx::query::query(
-        "CREATE TABLE IF NOT EXISTS ledger_events(id INTEGER PRIMARY KEY, kind TEXT)",
+        "CREATE TABLE IF NOT EXISTS ledger_events(
+            id INTEGER PRIMARY KEY,
+            kind TEXT NOT NULL
+        )",
     )
     .execute(&pool)
     .await
-    .expect("create ledger table");
-    sqlx::query::query("INSERT INTO ledger_events(kind) VALUES ('kill-bell')")
+    .unwrap_or_else(|err| panic!("create ledger_events via {url}: {err}"));
+
+    sqlx::query::query("INSERT INTO ledger_events(id, kind) VALUES (?, ?)")
+        .bind(id)
+        .bind(kind)
         .execute(&pool)
         .await
-        .expect("insert ledger event");
-    let row = sqlx::query::query("SELECT count(*) AS n FROM ledger_events")
+        .unwrap_or_else(|err| panic!("insert ledger row via {url}: {err}"));
+
+    let row = sqlx::query::query("SELECT kind FROM ledger_events WHERE id = ?")
+        .bind(id)
         .fetch_one(&pool)
         .await
-        .expect("read ledger table");
-    assert_eq!(row.try_get::<i64, _>("n").unwrap(), 1);
-    pool.close().await;
+        .unwrap_or_else(|err| panic!("select ledger row via {url}: {err}"));
 
-    let alias_url = format!("redlineDB://{}", db_path.display());
-    assert_select_one(&alias_url).await;
+    assert_eq!(row.try_get::<String, _>(0).unwrap(), kind);
 }
