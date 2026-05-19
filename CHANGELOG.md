@@ -60,6 +60,9 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
   for new paths) as the baseline. Blocks on any new hard finding.
   Typical commits now run <2 s instead of 10–60 s.
   `JANKURAI_SKIP_HOOKS=1` and `JANKURAI_PRE_COMMIT_CHAIN` still work.
+- **Branch freshness gate**: the managed pre-commit hook and PR
+  preflight now require the current branch to contain the latest
+  `origin/main` before a commit or merge proceeds.
 - **CI staged-gate** (`.github/workflows/jankurai.yml`,
   `ops/ci/jankurai-staged-gate.sh`): PR runs the same per-file save-gate
   against `origin/main`'s merge base so PRs can't sneak past local

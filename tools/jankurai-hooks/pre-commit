@@ -28,6 +28,10 @@ if [ -f "$env_file" ]; then
   . "$env_file"
 fi
 
+if ! bash "$repo_root/ops/ci/require-main-up-to-date.sh"; then
+  exit 1
+fi
+
 if [ -n "${JANKURAI_PRE_COMMIT_CHAIN:-}" ] && [ -x "$JANKURAI_PRE_COMMIT_CHAIN" ] && [ -z "${JANKURAI_CHAINED_HOOK:-}" ]; then
   JANKURAI_CHAINED_HOOK=1 "$JANKURAI_PRE_COMMIT_CHAIN" "$@"
 fi
