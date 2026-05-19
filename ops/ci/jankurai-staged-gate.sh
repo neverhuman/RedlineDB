@@ -17,6 +17,9 @@ set -euo pipefail
 BASE_REF="${BASE_REF:-origin/main}"
 LOG_DIR="${LOG_DIR:-target/jankurai/staged-gate}"
 mkdir -p "$LOG_DIR"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+bash "$ROOT/ops/ci/require-main-up-to-date.sh"
 
 if ! command -v jankurai >/dev/null 2>&1; then
   echo "jankurai not on PATH; skipping staged-gate (soft gate)" >&2
