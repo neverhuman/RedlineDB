@@ -196,7 +196,7 @@ TeX Live install.
    cargo clippy --workspace --all-targets --locked -- -D warnings
    cargo test --workspace --quiet --locked
    cargo test --workspace --features failpoints --quiet --locked
-   cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7
+   cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7
    cargo run -p redlinedb-bench -- recover-matrix --config crates/bench/bench/recovery-matrix.toml --out target/bench/phase10-recovery.json --seed 7
    cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/phase10-failpoint.json --seed 7
    cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/phase10-smoke --seed 7 --repetitions 1 --warmup 0
@@ -355,7 +355,7 @@ cargo fmt --check                     # green
 cargo check --workspace --locked      # green
 cargo clippy --workspace --all-targets --locked -- -D warnings  # green
 cargo test --workspace --quiet --locked                 # 691 pass, 3 ignored
-cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7  # 40/40 cases
+cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7  # 40/40 cases
 ```
 
 ### Bench artifact still on disk locally

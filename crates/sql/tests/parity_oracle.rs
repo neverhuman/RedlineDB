@@ -64,6 +64,9 @@ struct TagReport {
     tag: String,
     files: usize,
     passed: usize,
+    has_null_heavy: bool,
+    has_type_coercion: bool,
+    has_nested_expression: bool,
     failures: Vec<(String, String)>, // (file name, diff)
 }
 
@@ -87,14 +90,18 @@ fn run_tag(tag: &str) -> TagReport {
                 continue;
             }
         };
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("?")
+            .to_owned();
+        let lower_name = name.to_ascii_lowercase();
+        report.has_null_heavy |= lower_name.contains("null");
+        report.has_type_coercion |= lower_name.contains("type") || lower_name.contains("cast");
+        report.has_nested_expression |= lower_name.contains("nested");
         match harness::check_parity(&sql) {
             Ok(()) => report.passed += 1,
             Err(diff) => {
-                let name = path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("?")
-                    .to_owned();
                 report.failures.push((name, diff));
             }
         }
@@ -171,6 +178,21 @@ fn parity_oracle_baseline() {
             "parity tag {} has only {} files; the A1 corpus floor is 25 per tag",
             r.tag,
             r.files
+        );
+        assert!(
+            r.has_null_heavy,
+            "parity tag {} is missing a NULL-heavy corpus file",
+            r.tag
+        );
+        assert!(
+            r.has_type_coercion,
+            "parity tag {} is missing a type-coercion corpus file",
+            r.tag
+        );
+        assert!(
+            r.has_nested_expression,
+            "parity tag {} is missing a nested-expression corpus file",
+            r.tag
         );
     }
 

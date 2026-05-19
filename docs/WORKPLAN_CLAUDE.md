@@ -161,7 +161,7 @@ rtk cargo test --workspace --quiet --locked
 rtk cargo test -p redlinedb-kernel --quiet --locked
 rtk cargo test -p redlinedb-sql --quiet --locked
 rtk cargo test -p redlinedb-bench --quiet --locked
-rtk cargo run -p redlinedb-bench -- compat --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/compat-full.json
+rtk cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7 --out target/bench/compat-full.json
 rtk cargo run -p redlinedb-bench -- failpoint-matrix --config crates/bench/bench/failpoint-matrix.toml --out target/bench/failpoint-matrix.json --seed 7
 rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/certify-smoke --seed 7 --repetitions 1 --warmup 0
 ```
