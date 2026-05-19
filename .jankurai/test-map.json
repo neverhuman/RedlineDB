@@ -286,6 +286,10 @@
       "command": "just fast",
       "purpose": "verify Rust behavior and audit checks"
     },
+    "tools/security-lane.sh": {
+      "command": "bash tools/security-lane.sh",
+      "purpose": "verify the canonical security lane wrapper stays aligned with CI"
+    },
     "crates/bench/tests/tenant_isolation.rs": {
       "command": "rtk cargo test -p redlinedb-bench --test tenant_isolation --quiet --locked",
       "purpose": "prove cross-tenant data isolation under the kv_tenant_idx fixture",

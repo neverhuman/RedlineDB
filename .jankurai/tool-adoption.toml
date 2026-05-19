@@ -13,6 +13,10 @@ id = "security"
 mode = "auto"
 
 [[tools]]
+id = "security-lane"
+mode = "auto"
+
+[[tools]]
 id = "ux-qa"
 mode = "auto"
 
