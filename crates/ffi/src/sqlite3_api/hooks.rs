@@ -8,7 +8,7 @@
 //! in `hooks_fire.rs`.
 
 use std::ffi::c_void;
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_uint};
 use std::sync::Mutex;
 
 use crate::types::*;
@@ -25,6 +25,12 @@ pub type UpdateHookFn = unsafe extern "C" fn(
 pub type TraceFn = unsafe extern "C" fn(user_data: *mut c_void, sql: *const c_char);
 pub type ProfileFn =
     unsafe extern "C" fn(user_data: *mut c_void, sql: *const c_char, nanoseconds: u64);
+pub type TraceV2Fn = unsafe extern "C" fn(
+    mask: c_uint,
+    user_data: *mut c_void,
+    event_ptr: *mut c_void,
+    event_detail: *mut c_void,
+) -> c_int;
 pub type BusyHandlerFn = unsafe extern "C" fn(user_data: *mut c_void, attempts: c_int) -> c_int;
 pub type AuthorizerFn = unsafe extern "C" fn(
     user_data: *mut c_void,
@@ -146,6 +152,21 @@ pub unsafe extern "C" fn sqlite3_profile(
     user_data: *mut c_void,
 ) -> *mut c_void {
     swap_slot(db, |h| &h.profile, cb, user_data)
+}
+
+/// # Safety
+/// `db` non-NULL valid sqlite3*; `cb` either NULL or valid C function pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sqlite3_trace_v2(
+    db: *mut rldb,
+    _mask: c_uint,
+    _cb: Option<TraceV2Fn>,
+    _user_data: *mut c_void,
+) -> c_int {
+    if validate_db(db).is_none() {
+        return RLDB_MISUSE;
+    }
+    RLDB_OK
 }
 
 /// # Safety

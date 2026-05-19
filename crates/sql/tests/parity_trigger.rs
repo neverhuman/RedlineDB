@@ -219,3 +219,59 @@ fn trigger_survives_reopen() {
     let rows = query_redline(&conn, "SELECT a FROM seen");
     assert_eq!(rows, vec![vec![SqlValue::Integer(42)]]);
 }
+
+#[test]
+fn recursive_triggers_off_blocks_nested_trigger_dml() {
+    use redlinedb_sql::{Database, DbOptions};
+    let dir = tempfile::tempdir().expect("dir");
+    let path = dir.path().join("rt.db");
+    let db = Database::create(&path, DbOptions::default()).expect("create");
+    let conn = db.connect();
+    conn.execute("CREATE TABLE driver(a INTEGER)")
+        .expect("driver");
+    conn.execute("CREATE TABLE mirror(a INTEGER)")
+        .expect("mirror");
+    conn.execute("CREATE TABLE log(msg TEXT)").expect("log");
+    // driver INSERT → driver_after fires → INSERTs into mirror.
+    // mirror_after would normally fire next; when recursive_triggers is
+    // OFF the executor skips it because trigger_depth() > 0.
+    conn.execute(
+        "CREATE TRIGGER driver_after AFTER INSERT ON driver FOR EACH ROW \
+         BEGIN INSERT INTO mirror VALUES (NEW.a); END",
+    )
+    .expect("driver trigger");
+    conn.execute(
+        "CREATE TRIGGER mirror_after AFTER INSERT ON mirror FOR EACH ROW \
+         BEGIN INSERT INTO log VALUES ('mirror'); END",
+    )
+    .expect("mirror trigger");
+
+    conn.execute("PRAGMA recursive_triggers = OFF")
+        .expect("off");
+    conn.execute("INSERT INTO driver VALUES (1)")
+        .expect("insert");
+    let off_rows = query_redline(&conn, "SELECT count(*) FROM log");
+    assert_eq!(
+        off_rows,
+        vec![vec![SqlValue::Integer(0)]],
+        "OFF: nested mirror_after must not fire"
+    );
+    let mirror_rows = query_redline(&conn, "SELECT count(*) FROM mirror");
+    assert_eq!(
+        mirror_rows,
+        vec![vec![SqlValue::Integer(1)]],
+        "OFF: outer driver_after must still write to mirror"
+    );
+
+    conn.execute("DELETE FROM log").expect("clear log");
+    conn.execute("DELETE FROM mirror").expect("clear mirror");
+    conn.execute("PRAGMA recursive_triggers = ON").expect("on");
+    conn.execute("INSERT INTO driver VALUES (2)")
+        .expect("insert");
+    let on_rows = query_redline(&conn, "SELECT count(*) FROM log");
+    assert_eq!(
+        on_rows,
+        vec![vec![SqlValue::Integer(1)]],
+        "ON: nested mirror_after fires once"
+    );
+}

@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779074347`
-- Started at: `1779074347`
-- Elapsed: `3884` ms
+- Run ID: `1779203367`
+- Started at: `1779203367`
+- Elapsed: `4115` ms
 - Scope: `full`
-- Raw score: `92`
-- Final score: `92`
+- Raw score: `96`
+- Final score: `96`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,9 +70,9 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`44` files=`279`
+- Status: `review` hard=`0` warning=`20` files=`197`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`97` tokens=`283` bytes=`2670`
+- Duplicate volume: lines=`44` tokens=`95` bytes=`971`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
@@ -81,50 +81,26 @@
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
-| `ExactUnitSameName` | `Warning` | `rust` | 13 | 42 | `crates/sql/src/exec/cte.rs:135-148, crates/sql/src/exec/view.rs:179-192` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 11 | 57 | `crates/sql/src/datetime/format.rs:75-86, crates/sql/src/datetime/modifiers.rs:145-156` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/pragma_tv.rs:69-74, crates/sql/src/exec/pragma_tv.rs:101-106, crates/sql/src/exec/pragma_tv.rs:127-132` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/value.rs:43-44, crates/redlinedb/src/value.rs:57-58, crates/redlinedb/src/value.rs:64-65, crates/redlinedb/src/value.rs:71-72, crates/redlinedb/src/value.rs:78-79, crates/sql/src/exec/expr/scalar/row/model.rs:64-65, crates/sql/src/exec/expr/scalar/row/model.rs:77-78, crates/sql/src/exec/expr/scalar/row/model.rs:87-88` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/json_tv.rs:218-223, crates/sql/src/exec/json_tv.rs:273-278` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:215-219` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 9 | 31 | `crates/kernel/src/engine/concurrent_heap.rs:271-280, crates/kernel/src/engine/page_heap.rs:121-130` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 6 | 12 | `crates/redlinedb/src/value_conv/postgres.rs:99-105, crates/redlinedb/src/value_conv/postgres.rs:107-113` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/format/bytes.rs:44-46, crates/kernel/src/format/bytes.rs:49-51, crates/kernel/src/format/bytes.rs:54-56` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 9 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:56-60, crates/sql/src/exec/expr/scalar/row/lookup.rs:117-121` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:147-149, crates/kernel/src/storage/tx_status_checkpoint.rs:147-149` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/value.rs:43-44, crates/redlinedb/src/value.rs:57-58, crates/redlinedb/src/value.rs:64-65, crates/redlinedb/src/value.rs:71-72, crates/redlinedb/src/value.rs:78-79` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 5 | `crates/redlinedb/src/connection.rs:90-94, crates/redlinedb/src/connection.rs:105-109` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174, crates/sql/src/exec/json_tv.rs:231-232` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:249-249, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:214-214, crates/kernel/src/integrity/page_csum.rs:107-107` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/connection.rs:224-225, crates/redlinedb/src/connection.rs:233-234, crates/redlinedb/src/connection.rs:243-244` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/json/path_bytecode.rs:138-140, crates/sql/src/parser.rs:186-188` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:250-250, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:214-214, crates/kernel/src/integrity/page_csum.rs:107-107` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/index/cells.rs:242-243, crates/kernel/src/index/cells.rs:246-247, crates/kernel/src/index/cells.rs:250-251` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/connection.rs:228-229, crates/redlinedb/src/connection.rs:237-238, crates/redlinedb/src/connection.rs:247-248` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/connection.rs:52-53, crates/redlinedb/src/connection.rs:118-119, crates/redlinedb/src/connection.rs:124-125` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:268-270, crates/redlinedb/src/pool.rs:199-201` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:263-265, crates/redlinedb/src/pool.rs:204-206` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:147-149` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/pool.rs:63-65, crates/redlinedb/src/pool.rs:199-201` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/pool.rs:59-61, crates/redlinedb/src/pool.rs:204-206` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/certify/scheduler/dispatch.rs:196-198, crates/kernel/src/engine/runtime/commit.rs:30-32` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:163-164, crates/sql/src/exec/expr/scalar/row/lookup.rs:167-168` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:207-208, crates/redlinedb/src/statement.rs:204-205` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:69-70, crates/redlinedb/src/connection.rs:75-76` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 5 | `crates/kernel/src/json/wire/iter.rs:20-21, crates/kernel/src/json/wire/iter.rs:91-92` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/redlinedb/src/value.rs:331-332, crates/redlinedb/src/value.rs:343-344` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb/src/value_conv.rs:163-164, crates/redlinedb/src/value_conv.rs:193-194` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb/src/statement.rs:142-143, crates/redlinedb/src/statement.rs:226-227` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb/src/statement.rs:150-151, crates/redlinedb/src/statement.rs:234-235` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/domain/src/error.rs:73-74, crates/domain/src/error.rs:91-92` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/savepoint.rs:64-65, crates/sql/src/parser/savepoint.rs:83-84` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb/src/value.rs:427-428, crates/redlinedb/src/value_conv.rs:260-261` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:119-120, crates/redlinedb/src/statement.rs:200-201` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:138-139, crates/redlinedb/src/statement.rs:222-223` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:182-183, crates/sql/src/exec/expr/scalar/row/lookup.rs:219-220` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:134-135, crates/redlinedb/src/statement.rs:218-219` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:146-147, crates/redlinedb/src/statement.rs:230-231` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:130-131, crates/redlinedb/src/statement.rs:214-215` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:154-155, crates/redlinedb/src/statement.rs:264-265` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/statement.rs:114-115, crates/redlinedb/src/statement.rs:195-196` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/params.rs:15-16, crates/redlinedb/src/params.rs:25-26` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/json/wire/iter.rs:44-45, crates/kernel/src/json/wire/iter.rs:115-116` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/statement.rs:180-181, crates/redlinedb/src/value.rs:226-227` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb-tokio/src/lib.rs:435-436, crates/redlinedb/src/pool.rs:245-246` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb-tokio/src/pool.rs:216-217, crates/redlinedb/src/pool.rs:248-249` | `same body appears under different names across files` |
 
 ## Dimensions
 
@@ -134,13 +110,13 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 65 | 7.80 | largest authored code file: crates/redlinedb-tokio/src/lib.rs (524 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 100 | 12.00 | largest authored code file: crates/kernel/src/telemetry/mod.rs (338 LOC); most code files stay under 300 LOC |
 | Data truth and workflow safety | 8 | 95 | 7.60 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
-| Jankurai tool adoption and CI replacement | 7 | 100 | 7.00 | control-plane files present; applicable=16 |
+| Jankurai tool adoption and CI replacement | 7 | 87 | 6.09 | control-plane files present; applicable=16 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
-| Build speed signals | 4 | 80 | 3.20 | build acceleration markers found; targeted test/build commands found |
+| Build speed signals | 4 | 95 | 3.80 | build acceleration markers found; targeted test/build commands found |
 
 ## Reference Profile Structure
 
@@ -170,18 +146,18 @@
 - Control plane present: `true`
 - Applicable tools: `16`
 - Configured: `16`
-- CI evidence: `16`
-- Artifact verified: `16`
-- Replaced count: `16`
-- Missing CI evidence: `none`
+- CI evidence: `13`
+- Artifact verified: `13`
+- Replaced count: `13`
+- Missing CI evidence: `proofbind, proofmark-rust, copy-code`
 
 | Tool | Category | Mode | Status | Replaced | Artifacts |
 | --- | --- | --- | --- | --- | --- |
 | `audit-ci` | `audit` | `auto` | `artifact_verified` | `manual repo scoring, ad hoc score gates` | `agent/repo-score.json, agent/repo-score.md` |
 | `proof-routing` | `proof` | `auto` | `artifact_verified` | `ad hoc proof lane selection, manual proof receipts` | `agent/repo-score.json, agent/repo-score.md, target/jankurai/repair-queue.jsonl` |
-| `proofbind` | `proof` | `auto` | `artifact_verified` | `manual changed-surface routing, ad hoc proof obligation lists` | `target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json` |
-| `proofmark-rust` | `proof` | `auto` | `artifact_verified` | `line-only coverage review, manual in-diff mutation review` | `target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json` |
-| `copy-code` | `audit` | `auto` | `artifact_verified` | `ad hoc copy-code review, manual duplication triage` | `target/jankurai/copy-code.json, target/jankurai/copy-code.md` |
+| `proofbind` | `proof` | `auto` | `configured` | `manual changed-surface routing, ad hoc proof obligation lists` | `target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json` |
+| `proofmark-rust` | `proof` | `auto` | `configured` | `line-only coverage review, manual in-diff mutation review` | `target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json` |
+| `copy-code` | `audit` | `auto` | `configured` | `ad hoc copy-code review, manual duplication triage` | `target/jankurai/copy-code.json, target/jankurai/copy-code.md` |
 | `security` | `security` | `auto` | `artifact_verified` | `gitleaks, dependency review, SBOM/provenance` | `target/jankurai/security/evidence.json` |
 | `ci-bad-behavior` | `security` | `auto` | `artifact_verified` | `mutable workflow refs, secret echo/debug workflow checks, non-blocking security scans` | `target/jankurai/language-bad-behavior.log` |
 | `git-bad-behavior` | `audit` | `auto` | `artifact_verified` | `destructive git automation, force-push release scripts, hidden stash-based state` | `target/jankurai/language-bad-behavior.log` |
@@ -198,6 +174,14 @@
 | `release-readiness` | `release` | `auto` | `artifact_verified` | `manual launch checklist` | `agent/repo-score.json, agent/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `artifact_verified` | `manual spend review` | `agent/repo-score.json, agent/repo-score.md` |
 
+## Security evidence (ingested)
+
+- Source: `target/jankurai/security/evidence.json`
+- Envelope exit code: `0` · elapsed: `40367` ms · strict: `true`
+- Commands — ran: `1`, skipped: `0`, failed: `0`
+- Generated at: `1779172484`
+- Git HEAD (envelope): `3525435dccc4517b13e59c903eb0eea7f5a125ce`
+
 ## Boundary manifest (ingested)
 
 - Path: `agent/boundaries.toml`
@@ -211,26 +195,7 @@ No audited runtime boundary reclassifications declared.
 
 ## Findings
 
-1. `medium` `shape` `.`
-   Rule: `HLT-001-DEAD-MARKER`
-   Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
-   Route: TLR `Entropy`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 65 below the standard floor of 85
-   Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
-   Rerun: `just fast`
-   Fingerprint: `sha256:ac96a920a0ad4aaedebd6256075386f24aa83564f81748469eae4429cb06205d`
-   Evidence: largest authored code file: crates/redlinedb-tokio/src/lib.rs (524 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 44 (advisory only, no score impact)
-2. `medium` `proof` `Justfile`
-   Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
-   Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
-   Route: TLR `Verification`, lane `fast`, owner `workspace`
-   Docs: `docs/testing.md`
-   Reason: `Build speed signals` scored 80 below the standard floor of 85
-   Fix: add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
-   Rerun: `just fast`
-   Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
-   Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
+No findings.
 
 ## Policy
 
@@ -240,7 +205,4 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
-   Route: `Verification`/`fast`
-2. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
-   Route: `Entropy`/`fast`
+No queued fixes.

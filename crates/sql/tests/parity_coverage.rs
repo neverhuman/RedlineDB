@@ -7,6 +7,7 @@
 //! nested SAVEPOINTs, and NULL IN/NOT IN edge cases.
 
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
+use rusqlite::types::Value as RuValue;
 use std::sync::Arc;
 use tempfile::tempdir;
 
@@ -235,40 +236,33 @@ fn pragma_integrity_check_ok() {
 }
 
 // ── WAL checkpoint modes ──────────────────────────────────────────────────────
+//
+// RedlineDB has no WAL journal, so `PRAGMA wal_checkpoint` is now rejected
+// at prepare time. Detailed coverage lives in
+// `parity_pragma_tv.rs::pragma_wal_checkpoint_is_rejected`.
 
 #[test]
 fn pragma_wal_checkpoint_passive() {
     let (_d, c) = open();
-    // Should not error; checkpoint returns row(s) with counts
-    let mut stmt = c
-        .prepare("PRAGMA wal_checkpoint(PASSIVE)")
-        .expect("prepare");
-    while let Step::Row = stmt.step().unwrap() {}
+    assert!(c.prepare("PRAGMA wal_checkpoint(PASSIVE)").is_err());
 }
 
 #[test]
 fn pragma_wal_checkpoint_full() {
     let (_d, c) = open();
-    let mut stmt = c.prepare("PRAGMA wal_checkpoint(FULL)").expect("prepare");
-    while let Step::Row = stmt.step().unwrap() {}
+    assert!(c.prepare("PRAGMA wal_checkpoint(FULL)").is_err());
 }
 
 #[test]
 fn pragma_wal_checkpoint_restart() {
     let (_d, c) = open();
-    let mut stmt = c
-        .prepare("PRAGMA wal_checkpoint(RESTART)")
-        .expect("prepare");
-    while let Step::Row = stmt.step().unwrap() {}
+    assert!(c.prepare("PRAGMA wal_checkpoint(RESTART)").is_err());
 }
 
 #[test]
 fn pragma_wal_checkpoint_truncate() {
     let (_d, c) = open();
-    let mut stmt = c
-        .prepare("PRAGMA wal_checkpoint(TRUNCATE)")
-        .expect("prepare");
-    while let Step::Row = stmt.step().unwrap() {}
+    assert!(c.prepare("PRAGMA wal_checkpoint(TRUNCATE)").is_err());
 }
 
 // ── Nested SAVEPOINT ──────────────────────────────────────────────────────────
@@ -307,13 +301,10 @@ fn nested_savepoint_release() {
 
 #[test]
 fn pragma_auto_vacuum() {
+    // RedlineDB has no auto-vacuum machine; `PRAGMA auto_vacuum` is now
+    // rejected instead of returning a fabricated `0` row.
     let (_d, c) = open();
-    // Read current auto_vacuum setting
-    let v = q1(&c, "PRAGMA auto_vacuum");
-    assert!(
-        matches!(v, SqlValue::Integer(_)),
-        "expected integer, got {v:?}"
-    );
+    assert!(c.prepare("PRAGMA auto_vacuum").is_err());
 }
 
 #[test]
@@ -371,4 +362,126 @@ fn inner_join_chain() {
     assert_eq!(rows[0][0], SqlValue::Text(Arc::from("alice")));
     assert_eq!(rows[0][1], SqlValue::Text(Arc::from("beta")));
     assert_eq!(rows[0][2], SqlValue::Text(Arc::from("extra")));
+}
+
+// ── CREATE TABLE AS SELECT parity ────────────────────────────────────────────
+
+struct CtasLab {
+    _dir: tempfile::TempDir,
+    redline: Arc<Connection>,
+    sqlite: rusqlite::Connection,
+}
+
+impl CtasLab {
+    fn new() -> Self {
+        let dir = tempdir().expect("temp dir");
+        let redline_path = dir.path().join("ctas.db");
+        let sqlite_path = dir.path().join("ctas.sqlite");
+        let db = Database::create(&redline_path, DbOptions::default()).expect("create db");
+        Self {
+            _dir: dir,
+            redline: db.connect(),
+            sqlite: rusqlite::Connection::open(&sqlite_path).expect("rusqlite open"),
+        }
+    }
+
+    fn execute_both(&self, sql: &str) {
+        self.sqlite.execute_batch(sql).unwrap_or_else(|e| {
+            panic!("sqlite failed for {sql:?}: {e}");
+        });
+        self.redline.execute(sql).unwrap_or_else(|e| {
+            panic!("redline failed for {sql:?}: {e:?}");
+        });
+    }
+
+    fn query_sqlite(&self, sql: &str) -> Vec<Vec<SqlValue>> {
+        let mut stmt = self.sqlite.prepare(sql).expect("sqlite prepare");
+        let cols = stmt.column_count();
+        let mut rows = stmt.query([]).expect("sqlite query");
+        let mut out = Vec::new();
+        while let Some(row) = rows.next().expect("sqlite next") {
+            let current: Vec<SqlValue> = (0..cols)
+                .map(|i| to_sql_value(row.get::<usize, RuValue>(i).expect("sqlite get")))
+                .collect();
+            out.push(current);
+        }
+        out
+    }
+
+    fn query_redline(&self, sql: &str) -> Vec<Vec<SqlValue>> {
+        query_all(&self.redline, sql)
+    }
+
+    fn assert_parity(&self, sql: &str) {
+        let sqlite = self.query_sqlite(sql);
+        let redline = self.query_redline(sql);
+        assert_eq!(redline, sqlite, "row mismatch for {sql}");
+    }
+}
+
+fn to_sql_value(v: RuValue) -> SqlValue {
+    match v {
+        RuValue::Null => SqlValue::Null,
+        RuValue::Integer(i) => SqlValue::Integer(i),
+        RuValue::Real(f) => SqlValue::Real(f),
+        RuValue::Text(s) => SqlValue::Text(Arc::from(s)),
+        RuValue::Blob(b) => SqlValue::Blob(Arc::from(b)),
+    }
+}
+
+#[test]
+fn ctas_basic_data_and_row_order_match_sqlite() {
+    let lab = CtasLab::new();
+    lab.execute_both("CREATE TABLE src(id INTEGER, label TEXT)");
+    lab.execute_both("INSERT INTO src VALUES (2, 'two'), (1, 'one'), (3, 'three')");
+    lab.execute_both("CREATE TABLE dst AS SELECT id, label FROM src ORDER BY id DESC");
+    lab.assert_parity("SELECT rowid, id, label FROM dst ORDER BY rowid");
+}
+
+#[test]
+fn ctas_table_info_metadata_matches_sqlite() {
+    let lab = CtasLab::new();
+    lab.execute_both("CREATE TABLE src(i INTEGER, r REAL, t TEXT, b BLOB)");
+    lab.execute_both("INSERT INTO src VALUES (7, 7.5, 'hello', x'0102')");
+    lab.execute_both(
+        "CREATE TABLE dst AS SELECT i, r, t, b, CAST(i AS TEXT) AS text_i, CAST(i AS INT) AS int_i, CAST(i AS NUMERIC) AS num_i, CAST(i AS REAL) AS real_i FROM src",
+    );
+    lab.assert_parity("PRAGMA table_info('dst')");
+}
+
+#[test]
+fn ctas_duplicate_and_aliased_names_match_sqlite() {
+    let lab = CtasLab::new();
+    lab.execute_both("CREATE TABLE src(a INTEGER, b INTEGER)");
+    lab.execute_both("INSERT INTO src VALUES (1, 2)");
+    lab.execute_both(
+        "CREATE TABLE dup AS SELECT a AS x, b AS X, a, a AS \"1\", b AS \"\" FROM src",
+    );
+    lab.assert_parity("PRAGMA table_info('dup')");
+}
+
+#[test]
+fn ctas_if_not_exists_short_circuits_before_source_bind() {
+    let lab = CtasLab::new();
+    lab.execute_both("CREATE TABLE existing(id INTEGER)");
+    lab.execute_both("INSERT INTO existing VALUES (1)");
+    lab.execute_both("CREATE TABLE IF NOT EXISTS existing AS SELECT * FROM missing_source");
+    lab.assert_parity("SELECT id FROM existing");
+}
+
+#[test]
+fn ctas_rolls_back_on_source_runtime_error() {
+    let lab = CtasLab::new();
+    let sql = "CREATE TABLE fail AS SELECT json_extract('not json', '$.')";
+
+    let sqlite_err = lab.sqlite.execute_batch(sql).err();
+    assert!(sqlite_err.is_some(), "sqlite unexpectedly accepted {sql:?}");
+
+    let redline_err = lab.redline.execute(sql).err();
+    assert!(
+        redline_err.is_some(),
+        "redline unexpectedly accepted {sql:?}"
+    );
+
+    lab.assert_parity("SELECT count(*) FROM sqlite_schema WHERE name = 'fail'");
 }

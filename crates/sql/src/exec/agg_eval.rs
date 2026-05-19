@@ -44,7 +44,7 @@ pub(super) fn eval_group_scalar_with_ctx(
         };
     }
     match expr {
-        Expr::Function(func) => eval_group_function(func, group, bindings),
+        Expr::Function(func) => eval_group_function_or_scalar(func, group, first_context, bindings),
         Expr::BinaryOp { left, op, right } => {
             let left_value = eval_group_scalar_with_ctx(left, group, first_context, bindings)?;
             let right_value = eval_group_scalar_with_ctx(right, group, first_context, bindings)?;
@@ -277,6 +277,136 @@ pub(super) fn eval_group_scalar_with_ctx(
     }
 }
 
+fn eval_group_function_or_scalar(
+    func: &sqlparser::ast::Function,
+    group: &[SqlRow],
+    first_context: Option<&RowContext<'_>>,
+    bindings: &[Option<SqlValue>],
+) -> Result<SqlValue> {
+    let name = func.name.to_string().to_ascii_lowercase();
+    if is_builtin_aggregate(&name) || crate::udf::is_registered_aggregate(&name) {
+        return eval_group_function(func, group, bindings);
+    }
+
+    let FunctionArguments::List(list) = &func.args else {
+        return Err(Error::UnsupportedSql(
+            "unsupported aggregate function call form".to_owned(),
+        ));
+    };
+    let mut values = Vec::with_capacity(list.args.len());
+    for arg in &list.args {
+        match arg {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
+                values.push(eval_group_scalar_with_ctx(
+                    expr,
+                    group,
+                    first_context,
+                    bindings,
+                )?);
+            }
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "unsupported function argument".to_owned(),
+                ));
+            }
+        }
+    }
+
+    match name.as_str() {
+        "coalesce" | "ifnull" => {
+            for value in values {
+                if !matches!(value, SqlValue::Null) {
+                    return Ok(value);
+                }
+            }
+            Ok(SqlValue::Null)
+        }
+        "nullif" => {
+            if values.len() != 2 {
+                return Err(Error::UnsupportedSql("nullif requires 2 args".to_owned()));
+            }
+            if compare_values(&values[0], &values[1]) == Ordering::Equal {
+                Ok(SqlValue::Null)
+            } else {
+                Ok(values.remove(0))
+            }
+        }
+        _ => Err(Error::UnsupportedSql(format!(
+            "unsupported scalar function around aggregate: {name}"
+        ))),
+    }
+}
+
+fn is_builtin_aggregate(name: &str) -> bool {
+    matches!(
+        name,
+        "count"
+            | "sum"
+            | "avg"
+            | "min"
+            | "max"
+            | "group_concat"
+            | "string_agg"
+            | "total"
+            | "json_group_array"
+            | "json_group_object"
+    )
+}
+
+fn aggregate_order_by(func: &sqlparser::ast::Function) -> Result<Option<&[OrderByExpr]>> {
+    let FunctionArguments::List(list) = &func.args else {
+        return Ok(None);
+    };
+    let mut order_by = None;
+    for clause in &list.clauses {
+        match clause {
+            FunctionArgumentClause::OrderBy(items) => order_by = Some(items.as_slice()),
+            other => {
+                return Err(Error::UnsupportedSql(format!(
+                    "unsupported aggregate function clause: {other:?}"
+                )));
+            }
+        }
+    }
+    Ok(order_by)
+}
+
+fn rows_in_aggregate_order<'a>(
+    func: &sqlparser::ast::Function,
+    group: &'a [SqlRow],
+    bindings: &[Option<SqlValue>],
+) -> Result<Vec<&'a SqlRow>> {
+    let Some(order_by) = aggregate_order_by(func)? else {
+        return Ok(group.iter().collect());
+    };
+
+    let mut keyed = Vec::with_capacity(group.len());
+    for (idx, row) in group.iter().enumerate() {
+        let ctx = row.context();
+        let mut keys = Vec::with_capacity(order_by.len());
+        for order in order_by {
+            keys.push(eval_scalar(&order.expr, &ctx, bindings)?);
+        }
+        keyed.push((idx, row, keys));
+    }
+
+    keyed.sort_by(|(left_idx, _, left_keys), (right_idx, _, right_keys)| {
+        for (idx, order) in order_by.iter().enumerate() {
+            let ord = compare_values(&left_keys[idx], &right_keys[idx]);
+            if ord != Ordering::Equal {
+                return if matches!(order.options.asc, Some(false)) {
+                    ord.reverse()
+                } else {
+                    ord
+                };
+            }
+        }
+        left_idx.cmp(right_idx)
+    });
+
+    Ok(keyed.into_iter().map(|(_, row, _)| row).collect())
+}
+
 fn eval_group_function(
     func: &sqlparser::ast::Function,
     group: &[SqlRow],
@@ -473,7 +603,7 @@ fn eval_group_function(
                 ",".to_owned()
             };
             let mut parts: Vec<String> = Vec::new();
-            for row in group {
+            for row in rows_in_aggregate_order(func, group, bindings)? {
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
@@ -495,7 +625,7 @@ fn eval_group_function(
         "json_group_array" => {
             use crate::json::scalar::sql_to_json_value;
             let mut arr = Vec::new();
-            for row in group {
+            for row in rows_in_aggregate_order(func, group, bindings)? {
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
@@ -513,7 +643,7 @@ fn eval_group_function(
             use crate::json::scalar::sql_to_json_value;
             use serde_json::Map;
             let mut obj: Map<String, serde_json::Value> = Map::new();
-            for row in group {
+            for row in rows_in_aggregate_order(func, group, bindings)? {
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
                     && list.args.len() >= 2

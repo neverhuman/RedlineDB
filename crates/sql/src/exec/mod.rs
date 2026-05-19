@@ -13,8 +13,8 @@ use redlinedb_kernel::engine::{CommitOutcome, Engine, Txn};
 use redlinedb_kernel::format::RowId;
 use redlinedb_kernel::txn::Isolation;
 use sqlparser::ast::{
-    BinaryOperator, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, OrderByExpr, SelectItem,
-    UnaryOperator, Value,
+    BinaryOperator, Expr, FunctionArg, FunctionArgExpr, FunctionArgumentClause, FunctionArguments,
+    OrderByExpr, SelectItem, UnaryOperator, Value,
 };
 
 use crate::batch::{
@@ -25,8 +25,9 @@ use crate::error::{Error, Result};
 use crate::planner::{self, ExplainMetrics};
 use crate::session::SessionState;
 use crate::statement::{
-    AnalyzePlan, ExecutionResult, ExplainPlan, PragmaPlan, PreparedKind, PreparedTemplate,
-    RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource, SelectRuntimeTx, SelectSource,
+    AnalyzePlan, CreateTableAsSelectSpec, ExecutionResult, ExplainPlan, PragmaPlan, PreparedKind,
+    PreparedTemplate, RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource,
+    SelectRuntimeTx, SelectSource,
 };
 use crate::value::{SqlValue, canonicalize, compare_values, is_truthy};
 
@@ -49,6 +50,7 @@ use insert::*;
 mod select_top;
 use select_top::*;
 pub(crate) mod attach;
+pub(crate) mod cross_db;
 pub(crate) mod cte;
 pub(crate) mod fk;
 pub(crate) mod json_tv;
@@ -85,6 +87,10 @@ fn with_current_session<T>(ptr: *mut SessionState, f: impl FnOnce() -> T) -> T {
         cell.set(prev);
         result
     })
+}
+
+pub(crate) fn current_session_ptr() -> Option<*mut SessionState> {
+    with_current_session_ptr()
 }
 
 fn with_current_session_ptr() -> Option<*mut SessionState> {
@@ -204,6 +210,16 @@ pub fn execute_prepared(
     template: &PreparedTemplate,
     bindings: &[Option<SqlValue>],
 ) -> Result<ExecutionResult> {
+    // PRAGMA query_only mirrors SQLite: prevent any write-side DDL/DML
+    // while still allowing reads, transaction control, and PRAGMA setters
+    // that read-only callers legitimately need.
+    if template_writes(&template.kind)
+        && with_session_reentrant(conn, |session| Ok(session.query_only))?
+    {
+        return Err(Error::UnsupportedSql(
+            "attempt to write while PRAGMA query_only is set".to_owned(),
+        ));
+    }
     match &template.kind {
         PreparedKind::Begin(mode) => {
             conn.begin(*mode)?;
@@ -227,6 +243,27 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::Pragma(plan) => {
+            if let PragmaPlan::SetJournalMode(value) = plan {
+                execute_pragma(conn, plan)?;
+                return Ok(ExecutionResult {
+                    runtime: RuntimeState::Select(SelectRuntime {
+                        tx: SelectRuntimeTx::Empty,
+                        restore_tx: false,
+                        source: SelectRuntimeSource::StaticRows {
+                            rows: Arc::from(vec![vec![SqlValue::Text(Arc::from(value.as_str()))]]),
+                            cursor: 0,
+                        },
+                        selection: None,
+                        projection: Vec::new(),
+                        limit: usize::MAX,
+                        offset: 0,
+                        seen: 0,
+                        yielded: 0,
+                        memory: QueryMemoryBroker::new(0, 0, None),
+                    }),
+                    affected_rows: 0,
+                });
+            }
             execute_pragma(conn, plan)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
@@ -245,6 +282,9 @@ pub fn execute_prepared(
                 runtime: RuntimeState::Done,
                 affected_rows: 1,
             })
+        }
+        PreparedKind::CreateTableAsSelect(spec) => {
+            execute_create_table_as_select(conn, spec, bindings)
         }
         PreparedKind::CreateIndex(spec) => {
             with_write_tx(conn, |session, tx| {
@@ -446,6 +486,78 @@ pub(crate) fn materialize_select_plan_rows(
     materialize_prepared_rows(conn, &template, bindings)
 }
 
+/// True when `kind` would mutate database or schema state. Used by the
+/// `PRAGMA query_only` gate to reject writes without enumerating every
+/// statement variant at the call site.
+fn template_writes(kind: &PreparedKind) -> bool {
+    match kind {
+        PreparedKind::Begin(_)
+        | PreparedKind::Commit
+        | PreparedKind::Rollback
+        | PreparedKind::Pragma(_)
+        | PreparedKind::Analyze(_)
+        | PreparedKind::Explain(_)
+        | PreparedKind::Select(_)
+        | PreparedKind::Attach(_) => false,
+        PreparedKind::CreateTable(_)
+        | PreparedKind::CreateTableAsSelect(_)
+        | PreparedKind::CreateIndex(_)
+        | PreparedKind::CreateView(_)
+        | PreparedKind::CreateTrigger(_)
+        | PreparedKind::DropTable(_)
+        | PreparedKind::DropIndex(_)
+        | PreparedKind::DropView(_)
+        | PreparedKind::DropTrigger(_)
+        | PreparedKind::AlterTable(_)
+        | PreparedKind::Insert(_)
+        | PreparedKind::Update(_)
+        | PreparedKind::Delete(_) => true,
+    }
+}
+
+fn execute_create_table_as_select(
+    conn: &Connection,
+    spec: &CreateTableAsSelectSpec,
+    bindings: &[Option<SqlValue>],
+) -> Result<ExecutionResult> {
+    let Some(select) = spec.select.as_ref() else {
+        return Ok(ExecutionResult {
+            runtime: RuntimeState::Done,
+            affected_rows: 0,
+        });
+    };
+
+    let inserted = with_write_tx(conn, |session, tx| {
+        let table = conn.engine().create_table(tx, spec.table.clone())?;
+        let mut runtime = execute_select(conn, select, bindings)?;
+        let mut current_row = None;
+        let mut inserted = 0usize;
+        loop {
+            if step_select_runtime(conn, &mut runtime, bindings, &mut current_row)? {
+                break;
+            }
+            let values = current_row.take().unwrap_or_default();
+            let values = apply_row_affinity(&table, values)?;
+            let rowid = RowId::new((inserted + 1) as u64);
+            let payload = encode_sql_row(table.table_id.0, &values)?;
+            conn.engine()
+                .insert_for_relation(tx, table.relation_id, rowid, payload)?;
+            inserted += 1;
+            session.last_insert_rowid = Some(rowid.0 as i64);
+        }
+        if inserted > 0 {
+            session.changes += inserted;
+            session.total_changes += inserted;
+        }
+        Ok(inserted)
+    })?;
+
+    Ok(ExecutionResult {
+        runtime: RuntimeState::Done,
+        affected_rows: inserted,
+    })
+}
+
 fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
     match plan {
         PragmaPlan::SetForeignKeys(value) => {
@@ -453,6 +565,30 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             Ok(())
         }
         PragmaPlan::SetUserVersion(value) => conn.set_user_version(*value),
+        PragmaPlan::SetRecursiveTriggers(value) => {
+            conn.set_recursive_triggers(*value);
+            Ok(())
+        }
+        PragmaPlan::SetJournalMode(value) => {
+            conn.set_journal_mode(*value);
+            Ok(())
+        }
+        PragmaPlan::SetSynchronous(value) => {
+            conn.set_synchronous(*value);
+            Ok(())
+        }
+        PragmaPlan::SetTempStore(value) => {
+            conn.set_temp_store(*value);
+            Ok(())
+        }
+        PragmaPlan::SetCacheSize(value) => {
+            conn.set_cache_size(*value);
+            Ok(())
+        }
+        PragmaPlan::SetQueryOnly(value) => {
+            conn.set_query_only(*value);
+            Ok(())
+        }
     }
 }
 

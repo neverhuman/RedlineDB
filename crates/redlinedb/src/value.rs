@@ -383,6 +383,113 @@ mod tests {
         assert!(diff <= 1);
     }
 
+    #[test]
+    fn system_time_integer_epoch_micros_round_trips() {
+        let time = std::time::UNIX_EPOCH + std::time::Duration::from_micros(1_700_000_000_123_456);
+        let value: Value = time.into();
+        assert_eq!(value, Value::Integer(1_700_000_000_123_456));
+        assert_eq!(std::time::SystemTime::try_from(&value).unwrap(), time);
+    }
+
+    #[test]
+    fn system_time_accepts_rfc3339_z_datetime_text() {
+        let value = Value::from("1970-01-01T00:00:00Z");
+        assert_eq!(
+            std::time::SystemTime::try_from(&value).unwrap(),
+            std::time::UNIX_EPOCH
+        );
+    }
+
+    #[test]
+    fn system_time_accepts_sqlite_datetime_text_as_utc() {
+        let value = Value::from("1970-01-01 00:00:00");
+        assert_eq!(
+            std::time::SystemTime::try_from(&value).unwrap(),
+            std::time::UNIX_EPOCH
+        );
+    }
+
+    #[test]
+    fn system_time_preserves_fractional_microseconds_from_text() {
+        let value = Value::from("1970-01-01T00:00:01.123456Z");
+        assert_eq!(
+            micros_since_epoch(std::time::SystemTime::try_from(&value).unwrap()),
+            1_123_456
+        );
+    }
+
+    #[test]
+    fn system_time_normalizes_offset_datetime_text_to_utc() {
+        let value = Value::from("1970-01-01T01:30:00+01:30");
+        assert_eq!(
+            std::time::SystemTime::try_from(&value).unwrap(),
+            std::time::UNIX_EPOCH
+        );
+
+        let value = Value::from("1969-12-31T18:30:00-05:30");
+        assert_eq!(
+            std::time::SystemTime::try_from(&value).unwrap(),
+            std::time::UNIX_EPOCH
+        );
+    }
+
+    #[test]
+    fn system_time_accepts_pre_epoch_datetime_text() {
+        let value = Value::from("1969-12-31T23:59:59.500000Z");
+        assert_eq!(
+            micros_since_epoch(std::time::SystemTime::try_from(&value).unwrap()),
+            -500_000
+        );
+    }
+
+    #[test]
+    fn system_time_invalid_datetime_text_returns_mismatch() {
+        let value = Value::from("not a datetime");
+        let err = std::time::SystemTime::try_from(&value).expect_err("invalid text should fail");
+        assert_eq!(err.code(), ErrorCode::Mismatch);
+    }
+
+    #[test]
+    fn datetime_text_insert_select_keeps_text_and_system_time_accepts_it() {
+        use crate::{Database, Step};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("datetime_text.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute("CREATE TABLE src(ts DATETIME)", ())
+            .expect("create src");
+        conn.execute("CREATE TABLE dst(ts INTEGER)", ())
+            .expect("create dst");
+        conn.execute(
+            "INSERT INTO src(ts) VALUES (datetime('1970-01-01 00:00:00'))",
+            (),
+        )
+        .expect("insert src");
+        conn.execute("INSERT INTO dst(ts) SELECT ts FROM src", ())
+            .expect("insert select");
+
+        let mut stmt = conn.prepare("SELECT ts FROM dst").expect("prepare");
+        match stmt.step().expect("step") {
+            Step::Row(row) => {
+                let value = row.get::<Value>(0).expect("value");
+                assert_eq!(value, Value::Text(Arc::from("1970-01-01 00:00:00")));
+                assert_eq!(
+                    std::time::SystemTime::try_from(&value).unwrap(),
+                    std::time::UNIX_EPOCH
+                );
+            }
+            Step::Done => panic!("expected row"),
+        }
+    }
+
+    fn micros_since_epoch(value: std::time::SystemTime) -> i128 {
+        match value.duration_since(std::time::UNIX_EPOCH) {
+            Ok(duration) => duration.as_micros() as i128,
+            Err(err) => -(err.duration().as_micros() as i128),
+        }
+    }
+
     #[cfg(feature = "chrono")]
     #[test]
     fn chrono_datetime_round_trips_through_value() {

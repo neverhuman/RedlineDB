@@ -59,6 +59,37 @@ term.
 """
 
 [[proofs]]
+rule = "HLT-022-AUTHZ-ISOLATION-GAP"
+cap = "authz-or-data-isolation-gap"
+trigger_site = "crates/redlinedb-sqlx/src/bridge.rs:134"
+trigger_term = "owner.lock"
+evidence_test = "crates/redlinedb-sqlx/tests/attach_mode.rs"
+evidence_command = "rtk cargo test -p redlinedb-sqlx --test attach_mode --quiet --locked -- --test-threads=1"
+proof_lane = "fast"
+owner = "public-rust-facade"
+scenarios = [
+  "mode_rwc_still_opens_and_writes",
+  "mode_ro_attaches_to_live_database_and_blocks_writes",
+  "ro_attach_is_rejected_for_in_memory_urls",
+  "owner_process_holds_database_open",
+]
+primary_negative_proof = "mode_ro_attaches_to_live_database_and_blocks_writes"
+negative_assertions = [
+  "contains(\"read-only\")",
+  "contains(\"database already open\")",
+]
+notes = """
+Attach-mode negative proofs for the SQLx RedlineDB bridge boundary. The
+bridge now accepts explicit `mode=rwc` and `mode=ro` query strings. The
+integration regression proves the owner process can still open and write,
+the non-owner attach path can read live rows but rejects writes, a second
+writer still gets the owner-lock busy failure, and `:memory:` is rejected
+for read-only attach. The proof target is the bridge's owner.lock
+boundary, so the auditor should follow the attach_mode regression rather
+than the tenant-isolation proof.
+"""
+
+[[proofs]]
 rule = "HLT-023-INPUT-BOUNDARY-GAP"
 cap = "input-boundary-gap"
 trigger_site = "crates/ffi/include/redlinedb.h:124"

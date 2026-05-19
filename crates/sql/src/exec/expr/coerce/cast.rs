@@ -21,7 +21,9 @@ pub(crate) fn cast_value(
         return Ok(match value {
             SqlValue::Text(_) => value,
             SqlValue::Integer(v) => SqlValue::Text(Arc::from(v.to_string())),
-            SqlValue::Real(v) => SqlValue::Text(Arc::from(v.to_string())),
+            SqlValue::Real(v) => SqlValue::Text(Arc::from(
+                crate::exec::expr::scalar::value::format_real_sqlite(v),
+            )),
             SqlValue::Blob(v) => {
                 SqlValue::Text(Arc::from(String::from_utf8_lossy(&v).into_owned()))
             }

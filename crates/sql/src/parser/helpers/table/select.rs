@@ -271,6 +271,16 @@ pub(crate) fn bind_select_table_factor(
             {
                 return Ok(bound);
             }
+            // Cross-database resolution: `alias.table` where `alias` is an
+            // ATTACHed sidecar database resolves to a synthetic BoundTable
+            // materialized from the sidecar engine at bind time.
+            if let Some(bound) = crate::exec::cross_db::try_resolve_cross_db_bound_table(
+                schema,
+                &name,
+                alias_arc.as_ref(),
+            )? {
+                return Ok(bound);
+            }
             Ok(BoundTable {
                 table: bind_table_name(schema, &name)?,
                 alias: alias.map(|alias| Arc::from(alias.name.value)),
@@ -363,7 +373,9 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
     match name.0.as_slice() {
         [part] => object_name_part_to_string(part)
             .map(|s| {
-                s.eq_ignore_ascii_case("sqlite_schema") || s.eq_ignore_ascii_case("sqlite_master")
+                s.eq_ignore_ascii_case("sqlite_schema")
+                    || s.eq_ignore_ascii_case("sqlite_master")
+                    || s.eq_ignore_ascii_case("redline_master")
             })
             .unwrap_or(false),
         [schema, table] => {
@@ -371,7 +383,9 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
             let table = object_name_part_to_string(table).ok();
             matches!(
                 (schema.as_deref(), table.as_deref()),
-                (Some("main"), Some("sqlite_schema")) | (Some("main"), Some("sqlite_master"))
+                (Some("main"), Some("sqlite_schema"))
+                    | (Some("main"), Some("sqlite_master"))
+                    | (Some("main"), Some("redline_master"))
             )
         }
         _ => false,

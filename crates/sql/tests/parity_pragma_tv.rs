@@ -30,10 +30,11 @@ struct Pair {
 impl Pair {
     fn new() -> Self {
         let dir = tempdir().expect("tempdir");
-        let path = dir.path().join("lab.db");
-        let db = Database::create(&path, DbOptions::default()).expect("create");
+        let redline_path = dir.path().join("lab.db");
+        let sqlite_path = dir.path().join("lab.sqlite");
+        let db = Database::create(&redline_path, DbOptions::default()).expect("create");
         let redline = db.connect();
-        let sqlite = rusqlite::Connection::open_in_memory().expect("rusqlite open");
+        let sqlite = rusqlite::Connection::open(&sqlite_path).expect("rusqlite open");
         Pair {
             _dir: dir,
             redline,
@@ -179,4 +180,227 @@ fn pragma_tv_unknown_table_errors() {
         .prepare("SELECT * FROM pragma_table_info('does_not_exist')")
         .err();
     assert!(err.is_some(), "expected an error for unknown table");
+}
+
+#[test]
+fn pragma_recursive_triggers_default_is_on() {
+    let pair = Pair::new();
+    let rows = pair.redline_rows("PRAGMA recursive_triggers");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], SqlValue::Integer(1));
+}
+
+#[test]
+fn pragma_recursive_triggers_set_and_get() {
+    let pair = Pair::new();
+    pair.redline
+        .execute("PRAGMA recursive_triggers = OFF")
+        .expect("set off");
+    let rows = pair.redline_rows("PRAGMA recursive_triggers");
+    assert_eq!(rows[0][0], SqlValue::Integer(0));
+    pair.redline
+        .execute("PRAGMA recursive_triggers = 1")
+        .expect("set on");
+    let rows = pair.redline_rows("PRAGMA recursive_triggers");
+    assert_eq!(rows[0][0], SqlValue::Integer(1));
+}
+
+#[test]
+fn pragma_compile_options_lists_redlinedb_features() {
+    let pair = Pair::new();
+    let rows = pair.redline_rows("PRAGMA compile_options");
+    let opts: Vec<String> = rows
+        .iter()
+        .filter_map(|r| match r.first() {
+            Some(SqlValue::Text(s)) => Some(s.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(opts.contains(&"REDLINEDB=1".to_string()));
+    assert!(opts.contains(&"ENABLE_JSON1".to_string()));
+    assert!(opts.contains(&"ENABLE_FOREIGN_KEY".to_string()));
+}
+
+#[test]
+fn pragma_compile_options_tv_form_lists_features() {
+    let pair = Pair::new();
+    let rows = pair.redline_rows("SELECT compile_options FROM pragma_compile_options() ORDER BY 1");
+    let opts: Vec<String> = rows
+        .iter()
+        .filter_map(|r| match r.first() {
+            Some(SqlValue::Text(s)) => Some(s.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(opts.contains(&"REDLINEDB=1".to_string()));
+    assert!(opts.contains(&"ENABLE_JSON1".to_string()));
+}
+
+// ---------------------------------------------------------------------------
+// PRAGMA truth pass: previously-silent or fabricated PRAGMAs.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pragma_journal_mode_round_trips_supported_values() {
+    let pair = Pair::new();
+    for mode in ["memory", "off", "delete"] {
+        pair.redline
+            .execute(&format!("PRAGMA journal_mode = {mode}"))
+            .unwrap_or_else(|_| panic!("set journal_mode={mode}"));
+        let rows = pair.redline_rows("PRAGMA journal_mode");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0][0],
+            SqlValue::Text(Arc::from(mode)),
+            "journal_mode round-trip"
+        );
+    }
+}
+
+#[test]
+fn pragma_journal_mode_accepts_wal_and_reads_back_wal() {
+    let pair = Pair::new();
+    pair.assert_parity("PRAGMA journal_mode = WAL");
+    pair.assert_parity("PRAGMA journal_mode");
+}
+
+#[test]
+fn pragma_synchronous_round_trips_supported_values() {
+    let pair = Pair::new();
+    for (input, expected) in [
+        ("OFF", 0_i64),
+        ("0", 0),
+        ("NORMAL", 1),
+        ("1", 1),
+        ("FULL", 2),
+        ("2", 2),
+        ("EXTRA", 3),
+        ("3", 3),
+    ] {
+        pair.redline
+            .execute(&format!("PRAGMA synchronous = {input}"))
+            .unwrap_or_else(|_| panic!("set synchronous={input}"));
+        let rows = pair.redline_rows("PRAGMA synchronous");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0], SqlValue::Integer(expected));
+    }
+}
+
+#[test]
+fn pragma_temp_store_round_trips() {
+    let pair = Pair::new();
+    for (input, expected) in [
+        ("DEFAULT", 0_i64),
+        ("0", 0),
+        ("FILE", 1),
+        ("1", 1),
+        ("MEMORY", 2),
+        ("2", 2),
+    ] {
+        pair.redline
+            .execute(&format!("PRAGMA temp_store = {input}"))
+            .unwrap_or_else(|_| panic!("set temp_store={input}"));
+        let rows = pair.redline_rows("PRAGMA temp_store");
+        assert_eq!(rows[0][0], SqlValue::Integer(expected));
+    }
+}
+
+#[test]
+fn pragma_cache_size_round_trips_signed_values() {
+    let pair = Pair::new();
+    for value in [-2000_i64, -1, 0, 100, 4096] {
+        pair.redline
+            .execute(&format!("PRAGMA cache_size = {value}"))
+            .unwrap_or_else(|_| panic!("set cache_size={value}"));
+        let rows = pair.redline_rows("PRAGMA cache_size");
+        assert_eq!(rows[0][0], SqlValue::Integer(value));
+    }
+}
+
+#[test]
+fn pragma_query_only_round_trips_and_blocks_writes() {
+    let pair = Pair::new();
+    pair.redline
+        .execute("CREATE TABLE t(a INTEGER)")
+        .expect("create table");
+
+    pair.redline
+        .execute("PRAGMA query_only = ON")
+        .expect("enable query_only");
+    let rows = pair.redline_rows("PRAGMA query_only");
+    assert_eq!(rows[0][0], SqlValue::Integer(1));
+
+    let rows = pair.redline_rows("SELECT * FROM t");
+    assert_eq!(rows.len(), 0);
+
+    let err = pair
+        .redline
+        .execute("INSERT INTO t(a) VALUES (1)")
+        .expect_err("query_only should block INSERT");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("query_only"),
+        "write rejection should mention query_only: {msg}"
+    );
+
+    pair.redline
+        .execute("PRAGMA query_only = OFF")
+        .expect("disable query_only");
+    pair.redline
+        .execute("INSERT INTO t(a) VALUES (1)")
+        .expect("write after disabling query_only");
+}
+
+#[test]
+fn pragma_auto_vacuum_is_rejected() {
+    let pair = Pair::new();
+    for stmt in [
+        "PRAGMA auto_vacuum",
+        "PRAGMA auto_vacuum = FULL",
+        "PRAGMA auto_vacuum = 0",
+    ] {
+        let err = pair
+            .redline
+            .execute(stmt)
+            .expect_err("auto_vacuum should be rejected");
+        let msg = format!("{err}");
+        assert!(
+            msg.to_ascii_lowercase().contains("auto_vacuum"),
+            "rejection should mention auto_vacuum: {msg}"
+        );
+    }
+}
+
+#[test]
+fn pragma_wal_checkpoint_is_rejected() {
+    let pair = Pair::new();
+    for stmt in [
+        "PRAGMA wal_checkpoint",
+        "PRAGMA wal_checkpoint(PASSIVE)",
+        "PRAGMA wal_checkpoint(FULL)",
+    ] {
+        let err = pair
+            .redline
+            .execute(stmt)
+            .expect_err("wal_checkpoint should be rejected");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("WAL") || msg.to_ascii_lowercase().contains("wal_checkpoint"),
+            "rejection should mention WAL: {msg}"
+        );
+    }
+}
+
+#[test]
+fn pragma_unknown_name_is_rejected() {
+    let pair = Pair::new();
+    let err = pair
+        .redline
+        .execute("PRAGMA not_a_real_pragma = 1")
+        .expect_err("unknown PRAGMA must be rejected");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("not_a_real_pragma"),
+        "unknown-PRAGMA rejection should name the pragma: {msg}"
+    );
 }

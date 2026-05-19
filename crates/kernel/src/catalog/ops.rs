@@ -391,6 +391,9 @@ pub fn apply_create_index(
         .lookup_index(schema_id, spec.name.folded())
         .is_some()
     {
+        if spec.if_not_exists {
+            return Ok(snapshot);
+        }
         return Err(Error::ObjectExists);
     }
     let table = lookup_table(&snapshot, &spec.table)?;

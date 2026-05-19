@@ -1,3 +1,4 @@
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
 #[allow(unused_imports)]
@@ -12,10 +13,11 @@ use redlinedb_kernel::catalog::{
 use sqlparser::ast::{
     AlterTableOperation, Analyze as SqlAnalyze, AnalyzeFormat, AnalyzeFormatKind, BinaryOperator,
     ColumnDef, ColumnOption, ConflictTarget, Distinct, Expr, FunctionArg, FunctionArgExpr,
-    FunctionArguments, GroupByExpr, Ident, IndexColumn, JoinConstraint, JoinOperator, LimitClause,
-    ObjectName, ObjectNamePart, OnConflictAction, OnInsert, OrderByExpr, OrderByKind, Query,
-    SelectItem, SetExpr, SetOperator, SetQuantifier, SqliteOnConflict, Statement as SqlStatement,
-    TableFactor, TableObject, TableWithJoins, UnaryOperator, Value, ValueWithSpan,
+    FunctionArgumentClause, FunctionArguments, GroupByExpr, Ident, IndexColumn, JoinConstraint,
+    JoinOperator, LimitClause, ObjectName, ObjectNamePart, OnConflictAction, OnInsert, OrderByExpr,
+    OrderByKind, Query, SelectItem, SetExpr, SetOperator, SetQuantifier, SqliteOnConflict,
+    Statement as SqlStatement, TableFactor, TableObject, TableWithJoins, UnaryOperator, Value,
+    ValueWithSpan,
 };
 #[allow(unused_imports)]
 use sqlparser::dialect::SQLiteDialect;
@@ -252,6 +254,16 @@ pub fn split_statements(sql: &str) -> Vec<&str> {
 }
 
 pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
+    match catch_unwind(AssertUnwindSafe(|| parse_prepared_template_impl(conn, sql))) {
+        Ok(result) => result,
+        Err(payload) => Err(Error::Parse(format!(
+            "sql parser panic: {}",
+            panic_payload_to_string(payload)
+        ))),
+    }
+}
+
+fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
     let trimmed = sql.trim();
     let lower = trimmed.trim_end_matches(';').trim().to_ascii_lowercase();
     let engine = conn.engine();
@@ -303,7 +315,9 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
     }
 
     let dialect = SQLiteDialect {};
-    let mut statements = Parser::parse_sql(&dialect, sql)?;
+    let sql_for_parser = strip_cte_materialized_hints(sql);
+    let mut statements = Parser::parse_sql(&dialect, &sql_for_parser)?;
+    apply_cte_materialized_hints(&mut statements, sql);
     if statements.len() != 1 {
         return Err(Error::UnsupportedSql(
             "only single-statement prepares are supported".to_owned(),
@@ -311,6 +325,72 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
     }
 
     bind_statement(conn, schema, schema_epoch, trimmed, statements.remove(0))
+}
+
+pub(crate) fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
+    match payload.downcast::<String>() {
+        Ok(msg) => *msg,
+        Err(payload) => match payload.downcast::<&'static str>() {
+            Ok(msg) => (*msg).to_owned(),
+            Err(_) => "non-string panic payload".to_owned(),
+        },
+    }
+}
+
+fn strip_cte_materialized_hints(sql: &str) -> String {
+    let mut out = sql.to_owned();
+    loop {
+        if let Some(next) = replace_case_insensitive_once(&out, "AS NOT MATERIALIZED", "AS") {
+            out = next;
+            continue;
+        }
+        if let Some(next) = replace_case_insensitive_once(&out, "AS MATERIALIZED", "AS") {
+            out = next;
+            continue;
+        }
+        break out;
+    }
+}
+
+fn apply_cte_materialized_hints(statements: &mut [SqlStatement], sql: &str) {
+    let lower = sql.to_ascii_lowercase();
+    let hint = if lower.contains("as not materialized") {
+        Some(sqlparser::ast::CteAsMaterialized::NotMaterialized)
+    } else if lower.contains("as materialized") {
+        Some(sqlparser::ast::CteAsMaterialized::Materialized)
+    } else {
+        None
+    };
+    let Some(hint) = hint else {
+        return;
+    };
+    for statement in statements {
+        if let SqlStatement::Query(query) = statement {
+            apply_cte_materialized_hints_to_query(query.as_mut(), hint);
+        }
+    }
+}
+
+fn apply_cte_materialized_hints_to_query(
+    query: &mut Query,
+    hint: sqlparser::ast::CteAsMaterialized,
+) {
+    if let Some(with) = &mut query.with {
+        for cte in &mut with.cte_tables {
+            cte.materialized = Some(hint);
+        }
+    }
+}
+
+fn replace_case_insensitive_once(input: &str, needle: &str, replacement: &str) -> Option<String> {
+    let lower_input = input.to_ascii_lowercase();
+    let lower_needle = needle.to_ascii_lowercase();
+    let idx = lower_input.find(&lower_needle)?;
+    let mut out = String::with_capacity(input.len() - needle.len() + replacement.len());
+    out.push_str(&input[..idx]);
+    out.push_str(replacement);
+    out.push_str(&input[idx + needle.len()..]);
+    Some(out)
 }
 
 fn bind_statement(
@@ -326,7 +406,7 @@ fn bind_statement(
         SqlStatement::Update(update) => bind_update(schema, schema_epoch, sql, update),
         SqlStatement::Delete(delete) => bind_delete(schema, schema_epoch, sql, delete),
         SqlStatement::CreateTable(create_table) => {
-            bind_create_table(schema_epoch, sql, create_table)
+            bind_create_table(conn, schema, schema_epoch, sql, create_table)
         }
         SqlStatement::CreateIndex(create_index) => {
             bind_create_index(schema_epoch, sql, create_index)

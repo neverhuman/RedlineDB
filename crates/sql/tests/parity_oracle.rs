@@ -10,11 +10,8 @@
 //! drives the `#[test]` matrix below; each tag (basic, compound, …) gets
 //! one test function so failures localise to a feature surface.
 //!
-//! NOTE: this test is intentionally *non-fatal* on per-file mismatches
-//! (it logs them, then writes a divergence summary). The test only fails
-//! if the harness itself cannot run (e.g. no corpus files for a tag).
-//! That is by design: A1 is the *foundation*; subsequent workstreams
-//! will tighten the gate to fail on any divergence.
+//! The test writes the divergence summary before asserting, so a failing
+//! run still leaves a raw receipt for triage.
 
 #[path = "parity_oracle/harness.rs"]
 mod harness;
@@ -167,15 +164,23 @@ fn parity_oracle_baseline() {
         total.0, total.1, total.2
     );
 
-    // Ensure each tag has at least 5 files so the foundation is real.
+    // Ensure each tag has at least 25 files so the foundation is real.
     for r in &reports {
         assert!(
-            r.files >= 5,
-            "parity tag {} has only {} files; the A1 corpus floor is 5 per tag",
+            r.files >= 25,
+            "parity tag {} has only {} files; the A1 corpus floor is 25 per tag",
             r.tag,
             r.files
         );
     }
+
+    assert_eq!(
+        total.2,
+        0,
+        "parity_oracle found {} divergent corpus file(s); see {}",
+        total.2,
+        proof_dir().join("baseline-divergence.txt").display()
+    );
 }
 
 #[test]

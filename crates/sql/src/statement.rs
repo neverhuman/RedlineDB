@@ -91,6 +91,7 @@ pub enum PreparedKind {
     Rollback,
     Pragma(PragmaPlan),
     CreateTable(CreateTableSpec),
+    CreateTableAsSelect(CreateTableAsSelectSpec),
     CreateIndex(CreateIndexSpec),
     CreateView(CreateViewSpec),
     CreateTrigger(CreateTriggerSpec),
@@ -130,6 +131,12 @@ pub struct AnalyzePlan {
     pub table: Option<Arc<TableDef>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CreateTableAsSelectSpec {
+    pub table: CreateTableSpec,
+    pub select: Option<SelectPlan>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExplainFormat {
     QueryPlan,
@@ -148,6 +155,57 @@ pub struct ExplainPlan {
 pub enum PragmaPlan {
     SetForeignKeys(bool),
     SetUserVersion(i64),
+    SetRecursiveTriggers(bool),
+    SetJournalMode(JournalMode),
+    SetSynchronous(SynchronousLevel),
+    SetTempStore(TempStoreMode),
+    SetCacheSize(i64),
+    SetQueryOnly(bool),
+}
+
+/// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the
+/// requested mode and exposes a truthful `wal` response for the WAL-style
+/// journal it already uses internally; `truncate` and `persist` remain
+/// rejected because their on-disk semantics are not implemented.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JournalMode {
+    Delete,
+    Memory,
+    Wal,
+    Off,
+}
+
+impl JournalMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            JournalMode::Delete => "delete",
+            JournalMode::Memory => "memory",
+            JournalMode::Wal => "wal",
+            JournalMode::Off => "off",
+        }
+    }
+}
+
+/// SQLite-compatible `PRAGMA synchronous` values. Stored on the session;
+/// the underlying engine's fsync policy is workspace-wide so the value is
+/// recall-only (documented in `docs/sqlite-parity.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SynchronousLevel {
+    Off = 0,
+    Normal = 1,
+    Full = 2,
+    Extra = 3,
+}
+
+/// SQLite-compatible `PRAGMA temp_store` values. RedlineDB honours the
+/// `MEMORY` selection by routing spill artifacts to in-memory buffers; the
+/// `FILE` selection requires a caller-supplied temp root (see
+/// `Database::create_in_memory`). `DEFAULT` means "engine default".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TempStoreMode {
+    Default = 0,
+    File = 1,
+    Memory = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

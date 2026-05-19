@@ -9,7 +9,10 @@
 #[path = "parity_oracle/harness.rs"]
 mod harness;
 
-use redlinedb_sql::{Database, DbOptions};
+use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
+use rusqlite::types::Value as RuValue;
+use std::sync::Arc;
+use tempfile::tempdir;
 
 const SETUP: &str = "
     CREATE TABLE a(v INTEGER);
@@ -17,6 +20,91 @@ const SETUP: &str = "
     INSERT INTO a VALUES (1), (2), (3);
     INSERT INTO b VALUES (3), (4), (5);
 ";
+
+fn to_sql_value(v: RuValue) -> SqlValue {
+    match v {
+        RuValue::Null => SqlValue::Null,
+        RuValue::Integer(n) => SqlValue::Integer(n),
+        RuValue::Real(r) => SqlValue::Real(r),
+        RuValue::Text(s) => SqlValue::Text(Arc::from(s)),
+        RuValue::Blob(b) => SqlValue::Blob(Arc::from(b)),
+    }
+}
+
+struct ParamPair {
+    _dir: tempfile::TempDir,
+    redline: Arc<Connection>,
+    sqlite: rusqlite::Connection,
+}
+
+impl ParamPair {
+    fn new() -> Self {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("params.db");
+        let db = Database::create(&path, DbOptions::default()).expect("create");
+        let redline = db.connect();
+        let sqlite = rusqlite::Connection::open_in_memory().expect("sqlite open");
+        Self {
+            _dir: dir,
+            redline,
+            sqlite,
+        }
+    }
+
+    fn redline_rows_numbered(&self, sql: &str, left: i64, right: i64) -> Vec<Vec<SqlValue>> {
+        let mut stmt = self.redline.prepare(sql).expect("redline prepare");
+        stmt.bind_i64(1, left).expect("bind 1");
+        stmt.bind_i64(2, right).expect("bind 2");
+        collect_redline_rows(&mut stmt)
+    }
+
+    fn sqlite_rows_numbered(&self, sql: &str, left: i64, right: i64) -> Vec<Vec<SqlValue>> {
+        collect_sqlite_rows(&self.sqlite, sql, rusqlite::params![left, right])
+    }
+
+    fn redline_rows_named(&self, sql: &str, value: i64) -> Vec<Vec<SqlValue>> {
+        let mut stmt = self.redline.prepare(sql).expect("redline prepare");
+        stmt.bind_named(":v", SqlValue::Integer(value))
+            .expect("bind named");
+        collect_redline_rows(&mut stmt)
+    }
+
+    fn sqlite_rows_named(&self, sql: &str, value: i64) -> Vec<Vec<SqlValue>> {
+        collect_sqlite_rows(&self.sqlite, sql, rusqlite::named_params! {":v": value})
+    }
+}
+
+fn collect_redline_rows(stmt: &mut redlinedb_sql::Statement) -> Vec<Vec<SqlValue>> {
+    let ncols = stmt.column_count();
+    let mut rows = Vec::new();
+    while let Step::Row = stmt.step().expect("redline step") {
+        rows.push(
+            (0..ncols)
+                .map(|i| stmt.column_value(i).expect("redline col").clone())
+                .collect(),
+        );
+    }
+    rows
+}
+
+fn collect_sqlite_rows<P: rusqlite::Params>(
+    conn: &rusqlite::Connection,
+    sql: &str,
+    params: P,
+) -> Vec<Vec<SqlValue>> {
+    let mut stmt = conn.prepare(sql).expect("sqlite prepare");
+    let ncols = stmt.column_count();
+    let mut query = stmt.query(params).expect("sqlite query");
+    let mut rows = Vec::new();
+    while let Some(row) = query.next().expect("sqlite next") {
+        rows.push(
+            (0..ncols)
+                .map(|i| to_sql_value(row.get::<usize, RuValue>(i).expect("sqlite get")))
+                .collect(),
+        );
+    }
+    rows
+}
 
 #[test]
 fn union_all_keeps_duplicates() {
@@ -67,6 +155,28 @@ fn union_all_order_by_position_matches_fuzz_iter_110() {
         INSERT INTO t2 VALUES (4, 1), (5, 2), (6, 7);
         SELECT id FROM t1 WHERE x > 6 UNION ALL SELECT id FROM t2 WHERE price < 6 ORDER BY 1";
     harness::assert_parity(sql);
+}
+
+#[test]
+fn compound_union_all_numbered_parameters_share_slots() {
+    let pair = ParamPair::new();
+    let sql = "SELECT ?1 AS v UNION ALL SELECT ?2 AS v ORDER BY 1";
+    assert_eq!(
+        pair.redline_rows_numbered(sql, 11, 22),
+        pair.sqlite_rows_numbered(sql, 11, 22),
+        "numbered parameters should stay aligned across UNION ALL branches"
+    );
+}
+
+#[test]
+fn compound_union_all_named_parameters_share_slots() {
+    let pair = ParamPair::new();
+    let sql = "SELECT :v AS v UNION ALL SELECT :v AS v ORDER BY 1";
+    assert_eq!(
+        pair.redline_rows_named(sql, 7),
+        pair.sqlite_rows_named(sql, 7),
+        "named parameters should reuse the same slot across UNION ALL branches"
+    );
 }
 
 #[test]

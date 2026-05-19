@@ -172,6 +172,20 @@ pub(crate) fn create_in_memory_database(options: &OpenOptions) -> Result<Arc<Dat
 
 fn normalize_path(path: &Path, create: bool) -> Result<PathBuf> {
     if path.exists() {
+        if path.is_file() {
+            if create && fs::metadata(path)?.len() == 0 {
+                fs::remove_file(path)?;
+            } else {
+                return Err(Error::new(
+                    ErrorCode::Misuse,
+                    "database path exists as a regular file",
+                ));
+            }
+        } else {
+            return Ok(fs::canonicalize(path)?);
+        }
+    }
+    if path.exists() {
         return Ok(fs::canonicalize(path)?);
     }
     if create {

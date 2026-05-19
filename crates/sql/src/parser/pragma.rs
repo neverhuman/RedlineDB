@@ -128,55 +128,119 @@ pub(crate) fn parse_pragma_template(
             pragma_static_select(sql, schema_epoch, vec![String::from("quick_check")], rows)
         }
         "wal_checkpoint" => {
-            let mode = match value {
-                None => String::from("PASSIVE"),
-                Some(v) => parse_pragma_object_name(&v)?,
-            };
-            let stats = conn.engine().checkpoint_with_stats()?;
-            let (busy, log, checkpointed) = match mode.to_ascii_uppercase().as_str() {
-                "PASSIVE" | "FULL" | "RESTART" | "TRUNCATE" => (
-                    0_i64,
-                    stats.control.page_count as i64,
-                    stats.flushed_pages as i64,
-                ),
-                other => {
-                    return Err(Error::UnsupportedSql(format!(
-                        "unsupported PRAGMA wal_checkpoint mode: {other}"
-                    )));
-                }
-            };
-            pragma_static_select(
-                sql,
-                schema_epoch,
-                vec![
-                    String::from("busy"),
-                    String::from("log"),
-                    String::from("checkpointed"),
-                ],
-                vec![vec![
-                    SqlValue::Integer(busy),
-                    SqlValue::Integer(log),
-                    SqlValue::Integer(checkpointed),
-                ]],
-            )
+            // RedlineDB does not implement a WAL journal, so there is no
+            // checkpoint to drive. Return an explicit error rather than the
+            // previous fabricated `(busy, log, checkpointed)` row so callers
+            // can't mistake the stub for real checkpoint progress.
+            return Err(Error::UnsupportedSql(
+                "PRAGMA wal_checkpoint requires a WAL journal; RedlineDB does not implement WAL"
+                    .to_owned(),
+            ));
         }
         "auto_vacuum" => {
-            if value.is_some() {
-                // SQLite accepts setting the pragma, but the current engine
-                // does not persist an auto-vacuum mode. Treat it as a
-                // compatibility no-op so callers can probe the setting.
+            // SQLite's auto-vacuum machinery is page-level; RedlineDB's
+            // storage engine doesn't track free-page lists in the same
+            // shape, so we can neither honour a setting nor truthfully
+            // report a value. Reject so callers see the gap explicitly.
+            return Err(Error::UnsupportedSql(
+                "PRAGMA auto_vacuum is not supported by RedlineDB".to_owned(),
+            ));
+        }
+        "journal_mode" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_journal_mode(&raw)?;
+                let mut template = template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetJournalMode(parsed)),
+                );
+                template.output_columns = Arc::from([String::from("journal_mode")]);
+                template
+            } else {
                 pragma_static_select(
                     sql,
                     schema_epoch,
-                    vec![String::from("auto_vacuum")],
-                    vec![vec![SqlValue::Integer(0)]],
+                    vec![String::from("journal_mode")],
+                    vec![vec![SqlValue::Text(Arc::from(
+                        conn.journal_mode().as_str(),
+                    ))]],
+                )
+            }
+        }
+        "synchronous" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_synchronous(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetSynchronous(parsed)),
                 )
             } else {
                 pragma_static_select(
                     sql,
                     schema_epoch,
-                    vec![String::from("auto_vacuum")],
-                    vec![vec![SqlValue::Integer(0)]],
+                    vec![String::from("synchronous")],
+                    vec![vec![SqlValue::Integer(conn.synchronous() as i64)]],
+                )
+            }
+        }
+        "temp_store" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_temp_store(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetTempStore(parsed)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("temp_store")],
+                    vec![vec![SqlValue::Integer(conn.temp_store() as i64)]],
+                )
+            }
+        }
+        "cache_size" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetCacheSize(parsed)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("cache_size")],
+                    vec![vec![SqlValue::Integer(conn.cache_size())]],
+                )
+            }
+        }
+        "query_only" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_bool(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetQueryOnly(parsed)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("query_only")],
+                    vec![vec![SqlValue::Integer(if conn.query_only() {
+                        1
+                    } else {
+                        0
+                    })]],
                 )
             }
         }
@@ -408,9 +472,81 @@ pub(crate) fn parse_pragma_template(
                 pragma_foreign_key_list_rows(&table),
             )
         }
-        _ => return Ok(None),
+        "recursive_triggers" => {
+            if let Some(value) = value {
+                let value = parse_pragma_bool(&value)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetRecursiveTriggers(value)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("recursive_triggers")],
+                    vec![vec![SqlValue::Integer(if conn.recursive_triggers() {
+                        1
+                    } else {
+                        0
+                    })]],
+                )
+            }
+        }
+        "compile_options" => {
+            if value.is_some() {
+                return Err(Error::UnsupportedSql(
+                    "PRAGMA compile_options does not accept arguments".to_owned(),
+                ));
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("compile_options")],
+                compile_options_rows(),
+            )
+        }
+        _ => {
+            // PRAGMAs RedlineDB does not implement reach this arm. SQLite
+            // silently accepts most unknown PRAGMAs (returns no rows); we
+            // surface an explicit `UnsupportedSql` instead so callers see
+            // the gap rather than discovering silent no-ops in production.
+            return Err(Error::UnsupportedSql(format!(
+                "PRAGMA {name} is not supported by RedlineDB"
+            )));
+        }
     };
     Ok(Some(template))
+}
+
+/// Static list of RedlineDB compile-time-enabled feature flags exposed
+/// through `PRAGMA compile_options` / `pragma_compile_options()`. Order
+/// is alphabetical to keep the surface diffable.
+pub(crate) fn pragma_compile_options_rows() -> Vec<Vec<SqlValue>> {
+    compile_options_rows()
+}
+
+fn compile_options_rows() -> Vec<Vec<SqlValue>> {
+    const OPTIONS: &[&str] = &[
+        "ENABLE_ATTACH",
+        "ENABLE_CTE",
+        "ENABLE_EXPRESSION_INDEX",
+        "ENABLE_FOREIGN_KEY",
+        "ENABLE_GENERATED_COLUMNS",
+        "ENABLE_JSON1",
+        "ENABLE_PARTIAL_INDEX",
+        "ENABLE_RECURSIVE_TRIGGERS",
+        "ENABLE_TRIGGERS",
+        "ENABLE_VIEWS",
+        "ENABLE_WINDOW_FUNCTIONS",
+        "REDLINEDB=1",
+        "THREADSAFE=1",
+    ];
+    OPTIONS
+        .iter()
+        .map(|opt| vec![SqlValue::Text(Arc::from(*opt))])
+        .collect()
 }
 
 fn pragma_static_select(
@@ -496,6 +632,50 @@ fn parse_pragma_integer(input: &str) -> Result<i64> {
     value
         .parse::<i64>()
         .map_err(|_| Error::UnsupportedSql(format!("invalid integer PRAGMA value: {value}")))
+}
+
+fn parse_pragma_journal_mode(input: &str) -> Result<crate::statement::JournalMode> {
+    use crate::statement::JournalMode;
+    let token = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    match token.to_ascii_lowercase().as_str() {
+        "delete" => Ok(JournalMode::Delete),
+        "memory" => Ok(JournalMode::Memory),
+        "wal" => Ok(JournalMode::Wal),
+        "off" => Ok(JournalMode::Off),
+        other @ ("truncate" | "persist") => Err(Error::UnsupportedSql(format!(
+            "PRAGMA journal_mode={other} is not supported by RedlineDB; accepted modes: delete, memory, off, wal"
+        ))),
+        other => Err(Error::UnsupportedSql(format!(
+            "invalid PRAGMA journal_mode value: {other}"
+        ))),
+    }
+}
+
+fn parse_pragma_synchronous(input: &str) -> Result<crate::statement::SynchronousLevel> {
+    use crate::statement::SynchronousLevel;
+    let token = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    match token.to_ascii_lowercase().as_str() {
+        "0" | "off" => Ok(SynchronousLevel::Off),
+        "1" | "normal" => Ok(SynchronousLevel::Normal),
+        "2" | "full" => Ok(SynchronousLevel::Full),
+        "3" | "extra" => Ok(SynchronousLevel::Extra),
+        other => Err(Error::UnsupportedSql(format!(
+            "invalid PRAGMA synchronous value: {other}"
+        ))),
+    }
+}
+
+fn parse_pragma_temp_store(input: &str) -> Result<crate::statement::TempStoreMode> {
+    use crate::statement::TempStoreMode;
+    let token = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    match token.to_ascii_lowercase().as_str() {
+        "0" | "default" => Ok(TempStoreMode::Default),
+        "1" | "file" => Ok(TempStoreMode::File),
+        "2" | "memory" => Ok(TempStoreMode::Memory),
+        other => Err(Error::UnsupportedSql(format!(
+            "invalid PRAGMA temp_store value: {other}"
+        ))),
+    }
 }
 
 fn parse_pragma_object_name(input: &str) -> Result<String> {

@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb-sql"
-version = "1.0.2"
+version = "1.0.12"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,7 @@ parking_lot = "0.12"
 regex = { version = "1.11", default-features = false, features = ["std", "perf"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 sqlparser = "0.61"
+tempfile = "3.23"
 thiserror = "2.0"
 redlinedb-kernel = { path = "../kernel" }
 
@@ -18,7 +19,7 @@ redlinedb-kernel = { path = "../kernel" }
 tempfile = "3.23"
 fail = { version = "0.5", features = ["failpoints"] }
 proptest = "1.5"
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.37.0", features = ["bundled", "functions"] }
 
 [features]
 default = []

@@ -1,3 +1,4 @@
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -35,12 +36,20 @@ impl Connection {
     /// silently dropped. Use [`Connection::prepare_v2`] for the
     /// `sqlite3_prepare_v2`-style API that returns the unconsumed tail.
     pub fn prepare(self: &Arc<Self>, sql: &str) -> Result<Statement> {
-        let (stmt, _tail) = self.prepare_v2(sql)?;
-        match stmt {
-            Some(stmt) => Ok(stmt),
-            None => Err(Error::UnsupportedSql(
-                "no statement in SQL input".to_owned(),
-            )),
+        match catch_unwind(AssertUnwindSafe(|| self.prepare_v2(sql))) {
+            Ok(result) => {
+                let (stmt, _tail) = result?;
+                match stmt {
+                    Some(stmt) => Ok(stmt),
+                    None => Err(Error::UnsupportedSql(
+                        "no statement in SQL input".to_owned(),
+                    )),
+                }
+            }
+            Err(payload) => Err(Error::Parse(format!(
+                "sql parser panic: {}",
+                crate::parser::panic_payload_to_string(payload)
+            ))),
         }
     }
 
@@ -54,21 +63,29 @@ impl Connection {
     /// side-effects fire during preparation and the returned statement is a
     /// fully-completed no-op (`step` immediately yields `Step::Done`).
     pub fn prepare_v2<'a>(self: &Arc<Self>, sql: &'a str) -> Result<(Option<Statement>, &'a str)> {
-        let (head, tail) = crate::parser::split_first_statement(sql);
-        if crate::parser::is_blank_sql(head) {
-            // Either fully blank input, or a remaining comment-only tail.
-            return Ok((None, tail));
+        match catch_unwind(AssertUnwindSafe(|| {
+            let (head, tail) = crate::parser::split_first_statement(sql);
+            if crate::parser::is_blank_sql(head) {
+                // Either fully blank input, or a remaining comment-only tail.
+                return Ok((None, tail));
+            }
+            if let Some(action) = try_parse_savepoint(head)? {
+                self.apply_savepoint_action(&action)?;
+                // Build a no-op completed statement so the FFI still returns a
+                // valid handle that the caller can step() / finalize().
+                let template = self.savepoint_marker_template(head);
+                let stmt = Statement::new_completed(Arc::clone(self), template);
+                return Ok((Some(stmt), tail));
+            }
+            let template = self.prepare_cached(head)?;
+            Ok((Some(Statement::new(Arc::clone(self), template)), tail))
+        })) {
+            Ok(result) => result,
+            Err(payload) => Err(Error::Parse(format!(
+                "sql parser panic: {}",
+                crate::parser::panic_payload_to_string(payload)
+            ))),
         }
-        if let Some(action) = try_parse_savepoint(head)? {
-            self.apply_savepoint_action(&action)?;
-            // Build a no-op completed statement so the FFI still returns a
-            // valid handle that the caller can step() / finalize().
-            let template = self.savepoint_marker_template(head);
-            let stmt = Statement::new_completed(Arc::clone(self), template);
-            return Ok((Some(stmt), tail));
-        }
-        let template = self.prepare_cached(head)?;
-        Ok((Some(Statement::new(Arc::clone(self), template)), tail))
     }
 
     /// Execute every statement in `sql`. For multi-statement input, runs
@@ -418,6 +435,60 @@ impl Connection {
 
     pub(crate) fn set_foreign_keys(&self, value: bool) {
         self.session.lock().expect("session poisoned").foreign_keys = value;
+    }
+
+    pub(crate) fn recursive_triggers(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .recursive_triggers
+    }
+
+    pub(crate) fn set_recursive_triggers(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .recursive_triggers = value;
+    }
+
+    pub(crate) fn journal_mode(&self) -> crate::statement::JournalMode {
+        self.session.lock().expect("session poisoned").journal_mode
+    }
+
+    pub(crate) fn set_journal_mode(&self, value: crate::statement::JournalMode) {
+        self.session.lock().expect("session poisoned").journal_mode = value;
+    }
+
+    pub(crate) fn synchronous(&self) -> crate::statement::SynchronousLevel {
+        self.session.lock().expect("session poisoned").synchronous
+    }
+
+    pub(crate) fn set_synchronous(&self, value: crate::statement::SynchronousLevel) {
+        self.session.lock().expect("session poisoned").synchronous = value;
+    }
+
+    pub(crate) fn temp_store(&self) -> crate::statement::TempStoreMode {
+        self.session.lock().expect("session poisoned").temp_store
+    }
+
+    pub(crate) fn set_temp_store(&self, value: crate::statement::TempStoreMode) {
+        self.session.lock().expect("session poisoned").temp_store = value;
+    }
+
+    pub(crate) fn cache_size(&self) -> i64 {
+        self.session.lock().expect("session poisoned").cache_size
+    }
+
+    pub(crate) fn set_cache_size(&self, value: i64) {
+        self.session.lock().expect("session poisoned").cache_size = value;
+    }
+
+    pub(crate) fn query_only(&self) -> bool {
+        self.session.lock().expect("session poisoned").query_only
+    }
+
+    pub(crate) fn set_query_only(&self, value: bool) {
+        self.session.lock().expect("session poisoned").query_only = value;
     }
 
     pub(crate) fn user_version(&self) -> i64 {

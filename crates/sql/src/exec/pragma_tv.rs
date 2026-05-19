@@ -25,6 +25,7 @@ pub(super) fn registry() -> &'static [&'static dyn TvFunc] {
         &PragmaIndexInfo,
         &PragmaForeignKeyList,
         &PragmaDatabaseList,
+        &PragmaCompileOptions,
     ]
 }
 
@@ -179,6 +180,29 @@ impl TvFunc for PragmaDatabaseList {
         Ok(TvResult {
             columns: vec!["seq".into(), "name".into(), "file".into()],
             rows: vec![row],
+        })
+    }
+}
+
+struct PragmaCompileOptions;
+impl TvFunc for PragmaCompileOptions {
+    fn name(&self) -> &'static str {
+        "pragma_compile_options"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        if !args.is_empty() {
+            return Err(Error::UnsupportedSql(
+                "pragma_compile_options takes no arguments".to_owned(),
+            ));
+        }
+        Ok(TvResult {
+            columns: vec!["compile_options".into()],
+            rows: crate::parser::pragma_compile_options_rows(),
         })
     }
 }

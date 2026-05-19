@@ -1,8 +1,11 @@
+use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
+use std::hash::{Hash, Hasher};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
@@ -13,7 +16,7 @@ use redlinedb_kernel::engine::{
 };
 use redlinedb_kernel::error::Error as KernelError;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::session::{SessionState, UniqueLockTable};
 
 use super::cache::StatementCache;
@@ -36,10 +39,73 @@ pub struct Database {
     pub(super) temp_dir: Option<PathBuf>,
     pub(super) optimizer: OptimizerConfig,
     pub(super) user_version: Mutex<i64>,
+    _ephemeral_root: Option<Arc<EphemeralRoot>>,
 }
 
 impl Database {
     pub fn create(path: impl AsRef<Path>, opts: DbOptions) -> Result<Arc<Self>> {
+        Self::create_with_ephemeral_root(path.as_ref(), opts, None)
+    }
+
+    /// Create a private process-local ephemeral database.
+    ///
+    /// The backing root is owned by the returned handle and is removed when
+    /// the final [`Arc<Database>`] owner drops. Connections opened from the
+    /// returned database share the same transient state.
+    pub fn create_in_memory(opts: DbOptions) -> Result<Arc<Self>> {
+        let id = EPHEMERAL_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+        let root = EphemeralRoot::new_private(id, &opts)?;
+        let path = root.path().to_path_buf();
+        Self::create_with_ephemeral_root(&path, opts, Some(Arc::new(root)))
+    }
+
+    /// Create or reuse a named process-local ephemeral database.
+    ///
+    /// Calls with the same `session_name` return the same live database while
+    /// at least one owner is alive. A reuse with incompatible options fails
+    /// instead of silently attaching a connection to a differently configured
+    /// engine.
+    pub fn create_ephemeral(session_name: &str, opts: DbOptions) -> Result<Arc<Self>> {
+        if session_name.trim().is_empty() {
+            return Err(Error::Config(
+                "ephemeral session name must not be empty".to_string(),
+            ));
+        }
+
+        let mut registry = ephemeral_registry()
+            .lock()
+            .expect("ephemeral registry poisoned");
+        if let Some(existing) = registry
+            .sessions
+            .get(session_name)
+            .and_then(EphemeralSession::upgrade)
+        {
+            if existing.options != opts {
+                return Err(Error::Config(format!(
+                    "ephemeral session {session_name:?} already exists with incompatible options"
+                )));
+            }
+            return Ok(existing.db);
+        }
+
+        let root = EphemeralRoot::new_named(session_name, &opts)?;
+        let path = root.path().to_path_buf();
+        let db = Self::create_with_ephemeral_root(&path, opts.clone(), Some(Arc::new(root)))?;
+        registry.sessions.insert(
+            session_name.to_string(),
+            EphemeralSession {
+                options: opts,
+                db: Arc::downgrade(&db),
+            },
+        );
+        Ok(db)
+    }
+
+    fn create_with_ephemeral_root(
+        path: &Path,
+        opts: DbOptions,
+        ephemeral_root: Option<Arc<EphemeralRoot>>,
+    ) -> Result<Arc<Self>> {
         let base = path.as_ref();
         let engine = Engine::create(base, opts.engine)?;
         save_user_version(base, 0)?;
@@ -62,6 +128,7 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(load_user_version(base)?),
+            _ephemeral_root: ephemeral_root,
         }))
     }
 
@@ -88,6 +155,7 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
+            _ephemeral_root: None,
         }))
     }
 
@@ -118,6 +186,7 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
+            _ephemeral_root: None,
         }))
     }
 
@@ -201,7 +270,7 @@ impl Database {
         self.engine.config().clone()
     }
 
-    pub(crate) fn path(&self) -> &Path {
+    pub fn path(&self) -> &Path {
         self.path.as_ref()
     }
 
@@ -214,6 +283,78 @@ impl Database {
         *self.user_version.lock().expect("user_version poisoned") = value;
         Ok(())
     }
+}
+
+#[derive(Debug)]
+struct EphemeralRoot {
+    dir: tempfile::TempDir,
+}
+
+impl EphemeralRoot {
+    fn new_private(id: u64, opts: &DbOptions) -> Result<Self> {
+        Self::new(
+            format!("redlinedb-memory-{}-{id}-", std::process::id()),
+            opts,
+        )
+    }
+
+    fn new_named(session_name: &str, opts: &DbOptions) -> Result<Self> {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        session_name.hash(&mut hasher);
+        let digest = hasher.finish();
+        Self::new(
+            format!("redlinedb-ephemeral-{}-{digest:016x}-", std::process::id()),
+            opts,
+        )
+    }
+
+    fn new(prefix: String, opts: &DbOptions) -> Result<Self> {
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(&prefix);
+        let dir = match opts.temp_dir.as_deref() {
+            Some(root) => {
+                fs::create_dir_all(root).map_err(KernelError::Io)?;
+                builder.tempdir_in(root).map_err(KernelError::Io)?
+            }
+            None => builder.tempdir().map_err(KernelError::Io)?,
+        };
+        Ok(Self { dir })
+    }
+
+    fn path(&self) -> &Path {
+        self.dir.path()
+    }
+}
+
+#[derive(Default)]
+struct EphemeralRegistry {
+    sessions: HashMap<String, EphemeralSession>,
+}
+
+struct EphemeralSession {
+    options: DbOptions,
+    db: Weak<Database>,
+}
+
+struct LiveEphemeralSession {
+    options: DbOptions,
+    db: Arc<Database>,
+}
+
+impl EphemeralSession {
+    fn upgrade(&self) -> Option<LiveEphemeralSession> {
+        self.db.upgrade().map(|db| LiveEphemeralSession {
+            options: self.options.clone(),
+            db,
+        })
+    }
+}
+
+static EPHEMERAL_REGISTRY: OnceLock<Mutex<EphemeralRegistry>> = OnceLock::new();
+static EPHEMERAL_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+fn ephemeral_registry() -> &'static Mutex<EphemeralRegistry> {
+    EPHEMERAL_REGISTRY.get_or_init(|| Mutex::new(EphemeralRegistry::default()))
 }
 
 pub(super) fn hash_optimizer(optimizer: &OptimizerConfig, query_memory: &QueryMemoryConfig) -> u64 {

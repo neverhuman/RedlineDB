@@ -9,10 +9,7 @@ lane="${1:?lane name required}"
 case "$lane" in
   fast)
     ./scripts/just/cache-warm.sh
-    rtk cargo fmt --check
-    ./scripts/check_file_sizes.sh
-    ./scripts/just/fast-check.sh
-    ./scripts/just/fast-test.sh
+    bash ops/ci/fast.sh
     ;;
   fast-check)
     ./scripts/just/fast-check.sh
@@ -123,16 +120,28 @@ case "$lane" in
     rtk cargo test -p redlinedb-sql --test parity_coverage --test parity_scalar_funcs --test parity_agg_funcs --test differential_lab --test sqlite_full_parity --quiet --locked
     ;;
   sql-parity-full)
+    set +e
     rtk cargo test -p redlinedb-sql --test parity_oracle --quiet --locked
+    test_status=$?
+    rtk bash scripts/parity/write-sqlite-full-parity-receipts.sh
+    receipt_status=$?
+    set -e
+    if [[ "$test_status" -ne 0 ]]; then
+      exit "$test_status"
+    fi
+    exit "$receipt_status"
     ;;
   ffi-abi)
     rtk cargo test -p redlinedb-ffi --quiet --locked
     ;;
   ffi-parity-full)
-    rtk cargo test -p redlinedb-ffi --test parity_oracle --quiet --locked
+    "$0" ffi-abi
+    "$0" ffi-symbol-diff
     ;;
   ffi-symbol-diff)
-    rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked
+    rtk bash scripts/parity/dump-sqlite-symbols.sh
+    rtk cargo build -p redlinedb-ffi --quiet --locked
+    rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked -- --ignored
     ;;
   cli-shell)
     rtk cargo test -p redlinedb-cli --quiet --locked

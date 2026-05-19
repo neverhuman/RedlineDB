@@ -86,11 +86,56 @@ pub(crate) fn expr_to_kernel_ast(
             Box::new(ExprAst::Const(OwnedValue::Null)),
         ),
         Expr::Cast { expr, .. } => expr_to_kernel_ast(expr, column_lookup)?,
+        Expr::InList {
+            expr,
+            list,
+            negated,
+        } => in_list_to_kernel_ast(expr, list, *negated, column_lookup)?,
         other => {
             return Err(Error::UnsupportedSql(format!(
                 "unsupported DDL expression: {other:?}"
             )));
         }
+    })
+}
+
+fn in_list_to_kernel_ast(
+    expr: &Expr,
+    list: &[Expr],
+    negated: bool,
+    column_lookup: &std::collections::HashMap<String, usize>,
+) -> Result<ExprAst> {
+    let left = expr_to_kernel_ast(expr, column_lookup)?;
+    let Some((first, rest)) = list.split_first() else {
+        return Ok(ExprAst::Const(OwnedValue::Integer(if negated {
+            1
+        } else {
+            0
+        })));
+    };
+    let mut acc = in_list_term(&left, first, negated, column_lookup)?;
+    for item in rest {
+        let term = in_list_term(&left, item, negated, column_lookup)?;
+        acc = if negated {
+            ExprAst::And(Box::new(acc), Box::new(term))
+        } else {
+            ExprAst::Or(Box::new(acc), Box::new(term))
+        };
+    }
+    Ok(acc)
+}
+
+fn in_list_term(
+    left: &ExprAst,
+    item: &Expr,
+    negated: bool,
+    column_lookup: &std::collections::HashMap<String, usize>,
+) -> Result<ExprAst> {
+    let item = expr_to_kernel_ast(item, column_lookup)?;
+    Ok(if negated {
+        ExprAst::Ne(Box::new(left.clone()), Box::new(item))
+    } else {
+        ExprAst::Eq(Box::new(left.clone()), Box::new(item))
     })
 }
 

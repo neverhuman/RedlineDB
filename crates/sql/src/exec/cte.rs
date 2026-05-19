@@ -50,13 +50,15 @@ use sqlparser::ast::Query;
 /// bit of u64 keeps us comfortably out of any plausible real-id range.
 const CTE_RELATION_TAG: u64 = 0xC7E0_0000_0000_0000;
 
-/// Returns true if this `TableDef` was synthesized for a CTE or a
-/// view (both share the same row-storage backing via
-/// `register_external_rows` and `rows_for_relation`). The view tag and
-/// the CTE tag share the same row-registry namespace.
+/// Returns true if this `TableDef` was synthesized for a CTE, a view,
+/// or a cross-database alias (all three share the same row-storage
+/// backing via `register_external_rows` and `rows_for_relation`). The
+/// view, CTE, and cross-DB tags share the same row-registry namespace.
 pub(crate) fn is_cte_table_def(def: &TableDef) -> bool {
     let tag = def.relation_id.0 & 0xFFFF_0000_0000_0000;
-    tag == CTE_RELATION_TAG || tag == super::view::VIEW_RELATION_TAG
+    tag == CTE_RELATION_TAG
+        || tag == super::view::VIEW_RELATION_TAG
+        || tag == super::cross_db::CROSS_DB_RELATION_TAG
 }
 
 /// A pre-materialized CTE definition: rows + column names + optional

@@ -62,13 +62,36 @@ pub struct DeferredFkCheck {
     pub fk_index: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SessionState {
     pub tx: Option<Txn>,
     pub failed: bool,
     pub changes: usize,
     pub total_changes: usize,
     pub foreign_keys: bool,
+    /// Mirrors SQLite's `PRAGMA recursive_triggers`. SQLite defaults this
+    /// to ON, so trigger bodies that fire DML matching another trigger
+    /// recurse up to the depth cap. When OFF, the executor skips firing
+    /// any trigger from within an existing trigger body.
+    pub recursive_triggers: bool,
+    /// Mirrors SQLite's `PRAGMA journal_mode`. Stored as a typed value;
+    /// RedlineDB accepts `memory`, `off`, `delete`, and `wal` (which
+    /// round-trips as the WAL-style mode already used internally).
+    pub journal_mode: crate::statement::JournalMode,
+    /// Mirrors SQLite's `PRAGMA synchronous`. The engine's fsync policy is
+    /// workspace-wide so this field is recall-only — set to satisfy
+    /// callers (ORMs) that probe the value at connection open.
+    pub synchronous: crate::statement::SynchronousLevel,
+    /// Mirrors SQLite's `PRAGMA temp_store`. The executor's spill helpers
+    /// consult this when picking between in-memory and on-disk spill.
+    pub temp_store: crate::statement::TempStoreMode,
+    /// Mirrors SQLite's `PRAGMA cache_size`. Negative values mean "KiB",
+    /// positive values mean "pages"; stored as written and exposed back to
+    /// the caller. The underlying page cache budget is engine-managed.
+    pub cache_size: i64,
+    /// Mirrors SQLite's `PRAGMA query_only`. When set, the executor
+    /// rejects any non-read statement before dispatching it.
+    pub query_only: bool,
     pub last_insert_rowid: Option<i64>,
     pub unique_guards: Vec<UniqueKeyGuard>,
     /// Kernel-level unique-key reservations held until end-of-transaction.
@@ -90,6 +113,31 @@ pub struct SessionState {
     pub deferred_fk_checks: Vec<DeferredFkCheck>,
 }
 
+impl Default for SessionState {
+    fn default() -> Self {
+        Self {
+            tx: None,
+            failed: false,
+            changes: 0,
+            total_changes: 0,
+            foreign_keys: false,
+            recursive_triggers: true,
+            journal_mode: crate::statement::JournalMode::Memory,
+            synchronous: crate::statement::SynchronousLevel::Normal,
+            temp_store: crate::statement::TempStoreMode::Default,
+            cache_size: -2000,
+            query_only: false,
+            last_insert_rowid: None,
+            unique_guards: Vec::new(),
+            kernel_unique_guards: Vec::new(),
+            journal: Vec::new(),
+            savepoints: Vec::new(),
+            replay_in_progress: false,
+            deferred_fk_checks: Vec::new(),
+        }
+    }
+}
+
 impl SessionState {
     #[allow(dead_code)]
     pub fn clear(&mut self) {
@@ -98,6 +146,12 @@ impl SessionState {
         self.changes = 0;
         self.total_changes = 0;
         self.foreign_keys = false;
+        self.recursive_triggers = true;
+        self.journal_mode = crate::statement::JournalMode::Memory;
+        self.synchronous = crate::statement::SynchronousLevel::Normal;
+        self.temp_store = crate::statement::TempStoreMode::Default;
+        self.cache_size = -2000;
+        self.query_only = false;
         self.last_insert_rowid = None;
         self.unique_guards.clear();
         self.kernel_unique_guards.clear();

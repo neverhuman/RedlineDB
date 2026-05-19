@@ -14,6 +14,7 @@ use redlinedb::Database;
 pub mod control;
 pub mod display;
 pub mod io_cmd;
+pub mod parameter;
 pub mod schema;
 
 /// Output formatting modes accepted by `.mode` and the flag parser.
@@ -92,6 +93,14 @@ pub struct CliState {
     pub widths: Vec<usize>,
     pub limits: Vec<(String, i64)>,
     pub output: OutputTarget,
+    /// `.parameter set NAME VALUE` populates this map; the REPL binds
+    /// these values to matching `:name`/`@name`/`$name` placeholders in
+    /// any subsequent statement.
+    pub params: std::collections::BTreeMap<String, String>,
+    /// `.once FILE` arms a one-shot output redirect for the next executed
+    /// statement. The REPL takes ownership when running the next query and
+    /// resets `output` afterwards.
+    pub once: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,6 +161,8 @@ impl CliState {
             widths: Vec::new(),
             limits: Vec::new(),
             output: OutputTarget::Stdout,
+            params: std::collections::BTreeMap::new(),
+            once: None,
         }
     }
 }
@@ -184,12 +195,15 @@ pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> 
         ".help" => print_help(state),
         ".tables" => schema::tables(state, &args),
         ".schema" => schema::schema(state, &args),
+        ".fullschema" => schema::fullschema(state, &args),
         ".indexes" | ".indices" => schema::indexes(state, &args),
         ".databases" => schema::databases(state, &args),
         ".dump" => io_cmd::dump(state, &args),
         ".save" => io_cmd::save(state, &args),
         ".restore" => io_cmd::restore(state, &args),
         ".output" => io_cmd::output(state, &args),
+        ".once" => io_cmd::once(state, &args),
+        ".parameter" | ".param" => parameter::parameter(state, &args),
         ".print" => io_cmd::print(state, &args),
         ".import" => io_cmd::import(state, &args),
         ".read" => io_cmd::read(state, &args),
@@ -230,13 +244,16 @@ fn print_help(_state: &mut CliState) -> Result<DotOutcome, String> {
         ".limit ?OPT? ?N?        Inspect or set SQLITE_LIMIT values",
         ".mode MODE              Set output mode",
         ".nullvalue STRING       Use STRING in place of NULL",
+        ".once ?FILE?            Redirect the next single query to FILE",
         ".output ?FILE?          Send output to FILENAME or stdout",
+        ".parameter CMD ...      set|unset|list|clear named SQL parameters",
         ".print STRING...        Print literal STRING",
         ".quit                   Exit this program",
         ".read FILENAME          Execute SQL from FILENAME",
         ".restore FILE           Restore content of database from FILE",
         ".save FILE              Write in-memory database into FILE",
         ".schema ?TABLE?         Show CREATE statements",
+        ".fullschema ?TABLE?     Show CREATE statements plus sqlite_master",
         ".separator SEP          Change separator string",
         ".show                   Show the current values for various settings",
         ".tables ?TABLE?         List names of tables matching PATTERN",

@@ -21,11 +21,13 @@ pub(crate) const RLDB_ERROR: c_int = 1;
 pub(crate) const RLDB_INTERNAL: c_int = 2;
 pub(crate) const RLDB_BUSY: c_int = 5;
 pub(crate) const RLDB_LOCKED: c_int = 6;
+pub(crate) const RLDB_NOMEM: c_int = 7;
 pub(crate) const RLDB_INTERRUPT: c_int = 9;
 pub(crate) const RLDB_IOERR: c_int = 10;
 pub(crate) const RLDB_READONLY: c_int = 8;
 pub(crate) const RLDB_CANTOPEN: c_int = 14;
 pub(crate) const RLDB_SCHEMA: c_int = 17;
+pub(crate) const RLDB_TOOBIG: c_int = 18;
 pub(crate) const RLDB_CONSTRAINT: c_int = 19;
 pub(crate) const RLDB_MISMATCH: c_int = 20;
 pub(crate) const RLDB_MISUSE: c_int = 21;
@@ -79,6 +81,7 @@ pub struct rldb_stmt {
     pub(crate) sql_text: CString,
     pub(crate) column_names: Vec<CString>,
     pub(crate) text_cache: Vec<CString>,
+    pub(crate) value_cache: Vec<Option<Box<crate::sqlite3_api::value::RldbValue>>>,
 }
 
 #[allow(non_camel_case_types)]

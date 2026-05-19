@@ -4,7 +4,7 @@ use redlinedb_kernel::catalog::{
     TableConstraintSpec,
 };
 use sqlparser::ast::{
-    ColumnDef, ColumnOption, DeferrableInitial, Expr, ForeignKeyConstraint,
+    ColumnDef, ColumnOption, DataType, DeferrableInitial, Expr, ForeignKeyConstraint,
     GeneratedExpressionMode, IndexColumn, ObjectNamePart, ReferentialAction,
 };
 
@@ -32,6 +32,21 @@ pub(crate) fn convert_column_def(
     } else {
         Some(column.data_type.to_string())
     };
+    let has_autoincrement = column
+        .options
+        .iter()
+        .any(|option| is_sqlite_autoincrement_option(&option.option));
+    if has_autoincrement
+        && (!matches!(column.data_type, DataType::Integer(_))
+            || !column
+                .options
+                .iter()
+                .any(|option| matches!(option.option, ColumnOption::PrimaryKey(_))))
+    {
+        return Err(Error::UnsupportedSql(
+            "AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY".to_owned(),
+        ));
+    }
 
     // Phase-10 Lane V1: a `VECTOR(d)` / `VECTOR(d, f32)` column gets an
     // auto-generated CHECK constraint that pins the encoded blob length to
@@ -111,6 +126,7 @@ pub(crate) fn convert_column_def(
                     expr_sql: expr_text.into_boxed_str(),
                 });
             }
+            ColumnOption::DialectSpecific(tokens) if is_sqlite_autoincrement_tokens(&tokens) => {}
             ColumnOption::DialectSpecific(_)
             | ColumnOption::CharacterSet(_)
             | ColumnOption::Comment(_)
@@ -142,6 +158,17 @@ pub(crate) fn convert_column_def(
         default_value,
         generated,
     })
+}
+
+fn is_sqlite_autoincrement_option(option: &ColumnOption) -> bool {
+    match option {
+        ColumnOption::DialectSpecific(tokens) => is_sqlite_autoincrement_tokens(tokens),
+        _ => false,
+    }
+}
+
+fn is_sqlite_autoincrement_tokens(tokens: &[sqlparser::tokenizer::Token]) -> bool {
+    tokens.len() == 1 && tokens[0].to_string().eq_ignore_ascii_case("AUTOINCREMENT")
 }
 
 pub(crate) fn convert_table_constraint(

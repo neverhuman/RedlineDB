@@ -25,6 +25,14 @@ pub(crate) fn bind_table_name(
     if let Some(bound) = crate::exec::view::try_resolve_view_bound_table(schema, name, None)? {
         return Ok(bound.table);
     }
+    // Cross-database write rejection: callers from DML paths reach here with
+    // `alias.table`. Reads route through `bind_select_table_factor` and never
+    // hit this code path for cross-DB names; only writes do.
+    if crate::exec::cross_db::is_cross_db_name(name) {
+        return Err(Error::UnsupportedSql(
+            "cross-database writes are not yet supported".to_owned(),
+        ));
+    }
     let qualified = parse_qualified_name(name.clone())?;
     Ok(lookup_table(schema, &qualified)?)
 }
