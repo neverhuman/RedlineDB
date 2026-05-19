@@ -121,7 +121,7 @@ jobs:
         run: jankurai security run . --strict --profile ci --out .jankurai/security/evidence.json
       - name: Copy-code audit
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: cargo run -p jankurai -- copy-code . --json .jankurai/copy-code.json --md .jankurai/copy-code.md
+        run: jankurai copy-code . --json .jankurai/copy-code.json --md .jankurai/copy-code.md
       - name: Language bad-behavior tests
         if: steps.install-jankurai.outputs.installed == 'true'
         run: |
