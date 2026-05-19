@@ -19,7 +19,7 @@ use sqlx::ext::ustr::UStr;
 use sqlx::transaction::Transaction;
 use url::Url;
 
-use crate::dummy::RedlineDb;
+use crate::redline_driver::RedlineDb;
 
 const DEFAULT_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 const REDLINE_URL_SCHEMES: &[&str] = &["redline", "redlinedb"];
@@ -772,7 +772,7 @@ pub(crate) fn join_error(err: tokio::task::JoinError) -> Error {
 pub(crate) fn install_redline_driver_once() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        any::driver::install_drivers(&[crate::dummy::REDLINE_DRIVER])
+        any::driver::install_drivers(&[crate::redline_driver::REDLINE_DRIVER])
             .expect("redline driver already installed")
     });
 }
