@@ -91,6 +91,7 @@ pub enum PreparedKind {
     Rollback,
     Pragma(PragmaPlan),
     CreateTable(CreateTableSpec),
+    CreateTableAsSelect(CreateTableAsSelectSpec),
     CreateIndex(CreateIndexSpec),
     CreateView(CreateViewSpec),
     CreateTrigger(CreateTriggerSpec),
@@ -128,6 +129,12 @@ pub(crate) fn is_savepoint_marker_template(template: &PreparedTemplate) -> bool 
 #[derive(Debug, Clone)]
 pub struct AnalyzePlan {
     pub table: Option<Arc<TableDef>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateTableAsSelectSpec {
+    pub table: CreateTableSpec,
+    pub select: Option<SelectPlan>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
