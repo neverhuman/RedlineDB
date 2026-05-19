@@ -45,14 +45,14 @@ impl std::fmt::Debug for ConnectionState {
 
 #[derive(Clone, Debug)]
 pub struct RedlineConnectOptions {
-    database_url: Url,
-    location: RedlineLocation,
-    open_options: redlinedb::OpenOptions,
-    busy_timeout: Duration,
+    pub(crate) database_url: Url,
+    pub(crate) location: RedlineLocation,
+    pub(crate) open_options: redlinedb::OpenOptions,
+    pub(crate) busy_timeout: Duration,
 }
 
 #[derive(Clone, Debug)]
-enum RedlineLocation {
+pub(crate) enum RedlineLocation {
     File(PathBuf),
     InMemory,
 }
@@ -780,11 +780,18 @@ pub(crate) fn install_redline_driver_once() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::install_default_drivers;
     use sqlx::{any::AnyPoolOptions, row::Row};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::{Child, Command, Stdio};
     use std::time::{Duration, Instant};
+
+    const HELPER_ROLE_ENV: &str = "REDLINEDB_SQLX_ATTACH_ROLE";
+    const HELPER_DB_PATH_ENV: &str = "REDLINEDB_SQLX_ATTACH_DB_PATH";
+    const HELPER_READY_PATH_ENV: &str = "REDLINEDB_SQLX_ATTACH_READY_PATH";
+    const HELPER_HOLD_PATH_ENV: &str = "REDLINEDB_SQLX_ATTACH_HOLD_PATH";
+    const HELPER_TEST_NAME: &str = "bridge::tests::owner_process_holds_database_open";
 
     #[test]
     fn mode_ro_disables_owner_lock_and_creation() {
@@ -819,12 +826,7 @@ mod tests {
         let hold_path = tempdir.path().join("owner.hold");
         fs::write(&hold_path, b"hold").expect("create hold file");
 
-        let mut child = spawn_helper(
-            "owner_process_holds_database_open",
-            &db_path,
-            &ready_path,
-            &hold_path,
-        );
+        let mut child = spawn_helper(HELPER_TEST_NAME, &db_path, &ready_path, &hold_path);
 
         wait_for_marker(
             &mut child,
