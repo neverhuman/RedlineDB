@@ -34,7 +34,7 @@ jobs:
       # exceeds the GitHub timeout.
       - run: CI_FAST_STAGE=preflight bash ops/ci/fast.sh
 
-  test:
+  tests:
     strategy:
       fail-fast: false
       matrix:
@@ -64,9 +64,18 @@ jobs:
       - name: Run fast test shard
         run: CI_FAST_STAGE=${{ matrix.stage }} bash ops/ci/fast.sh
 
-  # The branch ruleset requires checks named build/lint/typecheck/cli.
-  # These relay jobs propagate the test result under those names so the
-  # required status checks are satisfied without duplicating the build.
+  # The branch ruleset requires checks named test/build/lint/typecheck/cli.
+  # The aggregate test relay emits the required `test` context, while the
+  # other relay jobs propagate the aggregate result under their required
+  # names without duplicating the build.
+  test:
+    needs: [preflight, tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.preflight.result }}" = "success"
+      - run: test "${{ needs.tests.result }}" = "success"
+
   build:
     needs: [preflight, test]
     if: always()

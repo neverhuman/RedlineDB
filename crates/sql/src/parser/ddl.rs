@@ -1,15 +1,12 @@
 use super::*;
 
 pub(crate) fn bind_create_table(
+    conn: &Connection,
+    schema: Arc<SchemaSnapshot>,
     schema_epoch: SchemaEpoch,
     sql: &str,
     create_table: sqlparser::ast::CreateTable,
 ) -> Result<PreparedTemplate> {
-    if create_table.query.is_some() {
-        return Err(Error::UnsupportedSql(
-            "CREATE TABLE AS SELECT is not supported".to_owned(),
-        ));
-    }
     if create_table.or_replace
         || crate::parser::bind::create_table_is_session_scoped(&create_table)
         || create_table.external
@@ -18,7 +15,6 @@ pub(crate) fn bind_create_table(
         || create_table.transient
         || create_table.volatile
         || create_table.iceberg
-        || create_table.query.is_some()
         || create_table.like.is_some()
         || create_table.clone.is_some()
         || create_table.version.is_some()
@@ -40,6 +36,10 @@ pub(crate) fn bind_create_table(
         return Err(Error::UnsupportedSql(
             "CREATE TABLE modifiers are not supported".to_owned(),
         ));
+    }
+
+    if create_table.query.is_some() {
+        return bind_create_table_as_select(conn, schema, schema_epoch, sql, create_table);
     }
 
     let (schema, name) = split_name(create_table.name)?;
@@ -82,6 +82,344 @@ pub(crate) fn bind_create_table(
             normalized_sql: Some(sql.to_owned()),
         }),
     })
+}
+
+fn bind_create_table_as_select(
+    conn: &Connection,
+    schema: Arc<SchemaSnapshot>,
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    create_table: sqlparser::ast::CreateTable,
+) -> Result<PreparedTemplate> {
+    if !create_table.columns.is_empty() || !create_table.constraints.is_empty() {
+        return Err(Error::UnsupportedSql(
+            "CREATE TABLE AS SELECT does not accept column definitions".to_owned(),
+        ));
+    }
+
+    let (schema_name, table_name) = split_name(create_table.name)?;
+    if create_table.if_not_exists
+        && let Some(schema_id) = match schema_name.as_ref() {
+            Some(name) if name.folded().eq_ignore_ascii_case("main") => {
+                schema.lookup_namespace("main")
+            }
+            Some(_) => {
+                return Err(Error::UnsupportedSql(
+                    "only the main schema is supported".to_owned(),
+                ));
+            }
+            None => schema.lookup_namespace("main"),
+        }
+        && schema
+            .lookup_table(schema_id, table_name.folded())
+            .is_some()
+    {
+        return Ok(PreparedTemplate {
+            sql: Arc::from(sql),
+            schema_epoch,
+            stats_epoch: 0,
+            optimizer_hash: 0,
+            param_layout: ParamLayout::default(),
+            output_columns: Arc::from([]),
+            readonly: false,
+            kind: PreparedKind::CreateTableAsSelect(crate::statement::CreateTableAsSelectSpec {
+                table: CreateTableSpec {
+                    schema: schema_name,
+                    name: table_name,
+                    if_not_exists: true,
+                    columns: Vec::new(),
+                    constraints: Vec::new(),
+                    strict: create_table.strict,
+                    without_rowid: create_table.without_rowid,
+                    normalized_sql: Some(sql.to_owned()),
+                },
+                select: None,
+            }),
+        });
+    }
+
+    let query = create_table.query.ok_or_else(|| {
+        Error::UnsupportedSql("CREATE TABLE AS SELECT requires a source query".to_owned())
+    })?;
+    let mut select_template =
+        crate::parser::select::bind_query(conn, Arc::clone(&schema), schema_epoch, sql, *query)?;
+    let select_plan = match select_template.kind.clone() {
+        PreparedKind::Select(plan) => plan,
+        _ => {
+            return Err(Error::UnsupportedSql(
+                "CTAS query did not bind to a SELECT plan".to_owned(),
+            ));
+        }
+    };
+    let columns = build_ctas_columns(&select_plan)?;
+    select_template.kind =
+        PreparedKind::CreateTableAsSelect(crate::statement::CreateTableAsSelectSpec {
+            table: CreateTableSpec {
+                schema: schema_name,
+                name: table_name,
+                if_not_exists: create_table.if_not_exists,
+                columns,
+                constraints: Vec::new(),
+                strict: create_table.strict,
+                without_rowid: create_table.without_rowid,
+                normalized_sql: Some(sql.to_owned()),
+            },
+            select: Some(select_plan),
+        });
+    select_template.readonly = false;
+    select_template.output_columns = Arc::from([]);
+    Ok(select_template)
+}
+
+fn build_ctas_columns(select: &SelectPlan) -> Result<Vec<ColumnSpec>> {
+    let names = select_plan_output_names(select);
+    let affinities = ctas_projection_affinities(select);
+    if names.len() != affinities.len() {
+        return Err(Error::UnsupportedSql(
+            "CTAS column-name and affinity counts diverged".to_owned(),
+        ));
+    }
+    let mut counts = std::collections::HashMap::<String, usize>::new();
+    let mut columns = Vec::with_capacity(names.len());
+    for (name, affinity) in names.into_iter().zip(affinities.into_iter()) {
+        let folded = name.to_ascii_lowercase();
+        let ordinal = counts.entry(folded).or_insert(0);
+        let column_name = if *ordinal == 0 {
+            name
+        } else {
+            format!("{name}:{ordinal}")
+        };
+        *ordinal += 1;
+        columns.push(ColumnSpec {
+            name: DbName::new(column_name),
+            declared_type: ctas_declared_type(affinity),
+            constraints: Vec::new(),
+            collation: None,
+            default_value: None,
+            generated: None,
+        });
+    }
+    Ok(columns)
+}
+
+fn ctas_projection_affinities(select: &SelectPlan) -> Vec<redlinedb_kernel::catalog::Affinity> {
+    if select.projection.is_empty() {
+        return source_output_affinities(&select.source);
+    }
+
+    let source_names = source_output_names(&select.source);
+    let source_affinities = source_output_affinities(&select.source);
+    let mut affinities = Vec::new();
+    for item in &select.projection {
+        match item {
+            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {
+                affinities.extend(source_output_affinities(&select.source));
+            }
+            SelectItem::UnnamedExpr(expr) => {
+                affinities.push(expr_ctas_affinity(expr, &source_names, &source_affinities))
+            }
+            SelectItem::ExprWithAlias { expr, .. } => {
+                affinities.push(expr_ctas_affinity(expr, &source_names, &source_affinities))
+            }
+        }
+    }
+    affinities
+}
+
+fn expr_ctas_affinity(
+    expr: &Expr,
+    source_names: &[String],
+    source_affinities: &[redlinedb_kernel::catalog::Affinity],
+) -> redlinedb_kernel::catalog::Affinity {
+    match expr {
+        Expr::Cast { data_type, .. } => ctas_affinity_from_declared_type(&data_type.to_string())
+            .unwrap_or(redlinedb_kernel::catalog::Affinity::Blob),
+        Expr::Nested(inner) | Expr::Collate { expr: inner, .. } => {
+            expr_ctas_affinity(inner, source_names, source_affinities)
+        }
+        Expr::Identifier(ident) => {
+            lookup_source_affinity(&ident.value, None, source_names, source_affinities)
+                .unwrap_or(redlinedb_kernel::catalog::Affinity::Blob)
+        }
+        Expr::CompoundIdentifier(parts) => {
+            let column = match parts.last() {
+                Some(part) => part.value.as_str(),
+                None => return redlinedb_kernel::catalog::Affinity::Blob,
+            };
+            let qualifier = if parts.len() > 1 {
+                parts.first().map(|part| part.value.as_str())
+            } else {
+                None
+            };
+            lookup_source_affinity(column, qualifier, source_names, source_affinities)
+                .unwrap_or(redlinedb_kernel::catalog::Affinity::Blob)
+        }
+        _ => redlinedb_kernel::catalog::Affinity::Blob,
+    }
+}
+
+fn lookup_source_affinity(
+    column: &str,
+    qualifier: Option<&str>,
+    source_names: &[String],
+    source_affinities: &[redlinedb_kernel::catalog::Affinity],
+) -> Option<redlinedb_kernel::catalog::Affinity> {
+    if let Some(qualifier) = qualifier {
+        let qualified = format!("{qualifier}.{column}");
+        if let Some((idx, _)) = source_names
+            .iter()
+            .enumerate()
+            .find(|(_, name)| name.eq_ignore_ascii_case(&qualified))
+        {
+            return source_affinities.get(idx).copied();
+        }
+    }
+    source_names
+        .iter()
+        .enumerate()
+        .find(|(_, name)| name.eq_ignore_ascii_case(column))
+        .and_then(|(idx, _)| source_affinities.get(idx).copied())
+}
+
+fn source_output_names(source: &SelectSource) -> Vec<String> {
+    match source {
+        SelectSource::Table(table) => table
+            .columns
+            .iter()
+            .map(|column| column.name.to_string())
+            .collect(),
+        SelectSource::Tables(tables) => tables
+            .iter()
+            .flat_map(|table| {
+                table
+                    .table
+                    .columns
+                    .iter()
+                    .map(|column| column.name.to_string())
+            })
+            .collect(),
+        SelectSource::Joined(join) => {
+            let mut names = source_output_names(&SelectSource::Table(Arc::clone(&join.base.table)));
+            for step in &join.joins {
+                names.extend(source_output_names(&SelectSource::Table(Arc::clone(
+                    &step.right.table,
+                ))));
+            }
+            names
+        }
+        SelectSource::Cte { columns, .. } => columns.iter().map(|c| c.to_string()).collect(),
+        SelectSource::StaticRows { .. } => Vec::new(),
+        SelectSource::CompoundAll(branches) | SelectSource::CompoundSet { branches, .. } => {
+            branches
+                .first()
+                .map(select_plan_output_names)
+                .unwrap_or_default()
+        }
+        SelectSource::SqliteSchema => [
+            "type".to_owned(),
+            "name".to_owned(),
+            "tbl_name".to_owned(),
+            "rootpage".to_owned(),
+            "sql".to_owned(),
+        ]
+        .into(),
+        SelectSource::Empty => Vec::new(),
+    }
+}
+
+fn source_output_affinities(source: &SelectSource) -> Vec<redlinedb_kernel::catalog::Affinity> {
+    match source {
+        SelectSource::Table(table) => table.columns.iter().map(|column| column.affinity).collect(),
+        SelectSource::Tables(tables) => tables
+            .iter()
+            .flat_map(|table| table.table.columns.iter().map(|column| column.affinity))
+            .collect(),
+        SelectSource::Joined(join) => {
+            let mut affs =
+                source_output_affinities(&SelectSource::Table(Arc::clone(&join.base.table)));
+            for step in &join.joins {
+                affs.extend(source_output_affinities(&SelectSource::Table(Arc::clone(
+                    &step.right.table,
+                ))));
+            }
+            affs
+        }
+        SelectSource::Cte { rows, columns, .. } => columns
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| infer_affinity(rows, idx))
+            .collect(),
+        SelectSource::StaticRows { rows, .. } => rows
+            .first()
+            .map(|first| {
+                first
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, _)| infer_affinity(rows.as_ref(), idx))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        SelectSource::CompoundAll(branches) | SelectSource::CompoundSet { branches, .. } => {
+            branches
+                .first()
+                .map(|plan| ctas_projection_affinities(plan))
+                .unwrap_or_default()
+        }
+        SelectSource::SqliteSchema => vec![
+            redlinedb_kernel::catalog::Affinity::Text,
+            redlinedb_kernel::catalog::Affinity::Text,
+            redlinedb_kernel::catalog::Affinity::Text,
+            redlinedb_kernel::catalog::Affinity::Integer,
+            redlinedb_kernel::catalog::Affinity::Text,
+        ],
+        SelectSource::Empty => Vec::new(),
+    }
+}
+
+fn infer_affinity(rows: &[Vec<SqlValue>], col: usize) -> redlinedb_kernel::catalog::Affinity {
+    for row in rows {
+        if let Some(value) = row.get(col) {
+            match value {
+                SqlValue::Integer(_) => return redlinedb_kernel::catalog::Affinity::Integer,
+                SqlValue::Real(_) => return redlinedb_kernel::catalog::Affinity::Real,
+                SqlValue::Text(_) => return redlinedb_kernel::catalog::Affinity::Text,
+                SqlValue::Blob(_) => return redlinedb_kernel::catalog::Affinity::Blob,
+                SqlValue::Null => continue,
+            }
+        }
+    }
+    redlinedb_kernel::catalog::Affinity::Blob
+}
+
+fn ctas_affinity_from_declared_type(
+    declared_type: &str,
+) -> Option<redlinedb_kernel::catalog::Affinity> {
+    let affinity = redlinedb_kernel::catalog::derive_affinity(Some(declared_type));
+    match affinity {
+        redlinedb_kernel::catalog::Affinity::Blob => None,
+        redlinedb_kernel::catalog::Affinity::Text => {
+            Some(redlinedb_kernel::catalog::Affinity::Text)
+        }
+        redlinedb_kernel::catalog::Affinity::Numeric => {
+            Some(redlinedb_kernel::catalog::Affinity::Numeric)
+        }
+        redlinedb_kernel::catalog::Affinity::Integer => {
+            Some(redlinedb_kernel::catalog::Affinity::Integer)
+        }
+        redlinedb_kernel::catalog::Affinity::Real => {
+            Some(redlinedb_kernel::catalog::Affinity::Real)
+        }
+    }
+}
+
+fn ctas_declared_type(affinity: redlinedb_kernel::catalog::Affinity) -> Option<String> {
+    match affinity {
+        redlinedb_kernel::catalog::Affinity::Blob => None,
+        redlinedb_kernel::catalog::Affinity::Text => Some("TEXT".to_owned()),
+        redlinedb_kernel::catalog::Affinity::Numeric => Some("NUM".to_owned()),
+        redlinedb_kernel::catalog::Affinity::Integer => Some("INT".to_owned()),
+        redlinedb_kernel::catalog::Affinity::Real => Some("REAL".to_owned()),
+    }
 }
 
 pub(crate) fn bind_create_index(

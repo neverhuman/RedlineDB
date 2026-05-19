@@ -83,6 +83,7 @@ pub extern "C" fn rldb_prepare_v2(
             sql_text: CString::new(head_text).map_err(|_| RLDB_MISMATCH)?,
             column_names: Vec::new(),
             text_cache: Vec::new(),
+            value_cache: Vec::new(),
         });
         for index in 0..boxed.stmt.column_count() {
             boxed
@@ -124,10 +125,14 @@ pub extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
         // their `*mut sqlite3` connection identity.
         redlinedb_sql::udf::with_db(db as usize, || match stmt_ref.stmt.step() {
             Ok(Step::Row) => {
+                stmt_ref.value_cache.clear();
                 refresh_text_cache(stmt_ref)?;
                 Ok(RLDB_ROW)
             }
-            Ok(Step::Done) => Ok(RLDB_DONE),
+            Ok(Step::Done) => {
+                stmt_ref.value_cache.clear();
+                Ok(RLDB_DONE)
+            }
             Err(err) => {
                 let msg = err.to_string();
                 let code = map_error(err);
@@ -149,6 +154,7 @@ pub extern "C" fn rldb_reset(stmt: *mut rldb_stmt) -> c_int {
         let stmt = unsafe { &mut *stmt };
         sql_result(stmt.stmt.reset())?;
         stmt.text_cache.clear();
+        stmt.value_cache.clear();
         Ok(RLDB_OK)
     }))
 }

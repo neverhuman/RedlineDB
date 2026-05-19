@@ -191,22 +191,23 @@ proptest! {
     /// will be rejected, which is fine — only that the parser produces an
     /// `Ok`/`Err` instead of a panic.
     ///
-    /// **KNOWN PARSER BUG (discovered by this property, batch F3):** the
-    /// upstream `sqlparser 0.61` SQLite-dialect lexer panics with
-    /// `"end byte index N is not a char boundary"` on inputs such as
-    /// `SELECT '\u{80}'` — it slices the input string at byte boundaries
-    /// without checking UTF-8 char alignment. Minimal failing input shrunk
-    /// by proptest: `s = "\u{80}"`. This test is `#[ignore]`d until the
-    /// underlying parser is fixed (or wrapped with a panic guard at the
-    /// `Connection::prepare` boundary). Run explicitly with
-    /// `cargo test -p redlinedb-sql --test parser_proptest -- --ignored`.
+    /// This property previously uncovered an upstream `sqlparser 0.61`
+    /// SQLite-dialect lexer panic on inputs such as `SELECT '\u{80}'`.
+    /// The prepare boundary now catches that panic and converts it into a
+    /// normal `Error::Parse`, so the property runs by default.
     #[test]
-    #[ignore = "known sqlparser 0.61 UTF-8 boundary panic; tracked separately"]
     fn unicode_string_literal_no_panic(s in ".{0,64}") {
         let (_dir, conn) = open_database();
         let sql = format!("SELECT {}", sql_quote_string(&s));
         let _ = conn.prepare(&sql);
     }
+}
+
+#[test]
+fn unicode_string_literal_boundary_regression_no_panic() {
+    let (_dir, conn) = open_database();
+    let sql = "SELECT '\u{80}'";
+    let _ = conn.prepare(sql);
 }
 
 // --- Hand-rolled numeric edge-case suite ------------------------------------

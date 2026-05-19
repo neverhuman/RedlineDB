@@ -15,6 +15,7 @@
 target/jankurai/
 .jankurai/
 :memory:/
+FUCKIT.md
 
 # Local jeryu daemon artifacts (not part of repo)
 .jeryu/

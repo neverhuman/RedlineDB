@@ -3,6 +3,7 @@
 //! Covers: group_concat, string_agg, total, json_group_array, json_group_object.
 
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
+use rusqlite::types::Value as RuValue;
 use std::sync::Arc;
 use tempfile::tempdir;
 
@@ -26,6 +27,45 @@ fn query_all(conn: &Arc<Connection>, sql: &str) -> Vec<Vec<SqlValue>> {
     out
 }
 
+fn to_sql_value(value: RuValue) -> SqlValue {
+    match value {
+        RuValue::Null => SqlValue::Null,
+        RuValue::Integer(value) => SqlValue::Integer(value),
+        RuValue::Real(value) => SqlValue::Real(value),
+        RuValue::Text(value) => SqlValue::Text(Arc::from(value)),
+        RuValue::Blob(value) => SqlValue::Blob(Arc::from(value)),
+    }
+}
+
+fn sqlite_query_all(conn: &rusqlite::Connection, sql: &str) -> Vec<Vec<SqlValue>> {
+    let mut stmt = conn.prepare(sql).expect("sqlite prepare");
+    let ncols = stmt.column_count();
+    let mut rows = Vec::new();
+    let mut query = stmt.query([]).expect("sqlite query");
+    while let Some(row) = query.next().expect("sqlite next") {
+        let current: Vec<SqlValue> = (0..ncols)
+            .map(|i| to_sql_value(row.get::<usize, RuValue>(i).expect("sqlite value")))
+            .collect();
+        rows.push(current);
+    }
+    rows
+}
+
+fn assert_matches_sqlite(conn: &Arc<Connection>, setup: &[&str], sql: &str) {
+    let sqlite = rusqlite::Connection::open_in_memory().expect("sqlite open");
+    for statement in setup {
+        sqlite
+            .execute_batch(statement)
+            .unwrap_or_else(|err| panic!("sqlite setup failed for {statement:?}: {err}"));
+    }
+    let sqlite_rows = sqlite_query_all(&sqlite, sql);
+    let redline_rows = query_all(conn, sql);
+    assert_eq!(
+        redline_rows, sqlite_rows,
+        "rows differ for {sql:?}\nsqlite={sqlite_rows:?}\nredline={redline_rows:?}"
+    );
+}
+
 fn q1(conn: &Arc<Connection>, sql: &str) -> SqlValue {
     query_all(conn, sql)
         .into_iter()
@@ -35,62 +75,57 @@ fn q1(conn: &Arc<Connection>, sql: &str) -> SqlValue {
 }
 
 fn setup_words(conn: &Arc<Connection>) {
-    conn.execute("CREATE TABLE words(w TEXT, grp INTEGER)")
-        .expect("create");
-    conn.execute(
-        "INSERT INTO words VALUES ('alpha', 1), ('beta', 1), ('gamma', 2), (NULL, 1), ('delta', 2)",
-    )
-    .expect("insert");
+    for statement in SETUP_WORDS {
+        conn.execute(statement).expect("setup words");
+    }
 }
+
+const SETUP_WORDS: &[&str] = &[
+    "CREATE TABLE words(w TEXT, grp INTEGER)",
+    "INSERT INTO words VALUES ('alpha', 1), ('beta', 1), ('gamma', 2), (NULL, 1), ('delta', 2)",
+];
 
 // ── group_concat ──────────────────────────────────────────────────────────────
 
 #[test]
 fn group_concat_basic_default_separator() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t(v TEXT)").expect("create");
-    c.execute("INSERT INTO t VALUES ('a'), ('b'), ('c')")
-        .expect("insert");
-    let v = q1(&c, "SELECT group_concat(v) FROM t");
-    // group_concat order is implementation-defined without ORDER BY; check set equality
-    let s = match v {
-        SqlValue::Text(s) => s,
-        other => panic!("expected text, got {other:?}"),
-    };
-    let mut parts: Vec<&str> = s.split(',').collect();
-    parts.sort_unstable();
-    assert_eq!(parts, vec!["a", "b", "c"]);
+    let setup = [
+        "CREATE TABLE t(v TEXT)",
+        "INSERT INTO t VALUES ('b'), ('c'), ('a')",
+    ];
+    for statement in setup {
+        c.execute(statement).expect("setup");
+    }
+    assert_matches_sqlite(&c, &setup, "SELECT group_concat(v ORDER BY v) FROM t");
 }
 
 #[test]
 fn group_concat_custom_separator() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t(v TEXT)").expect("create");
-    c.execute("INSERT INTO t VALUES ('x'), ('y'), ('z')")
-        .expect("insert");
-    let v = q1(&c, "SELECT group_concat(v, ' | ') FROM t");
-    let s = match v {
-        SqlValue::Text(s) => s,
-        other => panic!("expected text, got {other:?}"),
-    };
-    let mut parts: Vec<&str> = s.split(" | ").collect();
-    parts.sort_unstable();
-    assert_eq!(parts, vec!["x", "y", "z"]);
+    let setup = [
+        "CREATE TABLE t(v TEXT)",
+        "INSERT INTO t VALUES ('z'), ('x'), ('y')",
+    ];
+    for statement in setup {
+        c.execute(statement).expect("setup");
+    }
+    assert_matches_sqlite(
+        &c,
+        &setup,
+        "SELECT group_concat(v, ' | ' ORDER BY v) FROM t",
+    );
 }
 
 #[test]
 fn group_concat_skips_nulls() {
     let (_d, c) = open();
     setup_words(&c);
-    // grp=1 has: alpha, beta, NULL — NULL should be skipped; order is impl-defined
-    let v = q1(&c, "SELECT group_concat(w) FROM words WHERE grp = 1");
-    let s = match v {
-        SqlValue::Text(s) => s,
-        other => panic!("expected text, got {other:?}"),
-    };
-    let mut parts: Vec<&str> = s.split(',').collect();
-    parts.sort_unstable();
-    assert_eq!(parts, vec!["alpha", "beta"]);
+    assert_matches_sqlite(
+        &c,
+        SETUP_WORDS,
+        "SELECT group_concat(w ORDER BY w) FROM words WHERE grp = 1",
+    );
 }
 
 #[test]
@@ -115,17 +150,11 @@ fn group_concat_empty_table_returns_null() {
 fn group_concat_with_group_by() {
     let (_d, c) = open();
     setup_words(&c);
-    let rows = query_all(
+    assert_matches_sqlite(
         &c,
-        "SELECT grp, group_concat(w) FROM words WHERE w IS NOT NULL GROUP BY grp ORDER BY grp",
+        SETUP_WORDS,
+        "SELECT grp, group_concat(w ORDER BY w) FROM words WHERE w IS NOT NULL GROUP BY grp ORDER BY grp",
     );
-    assert_eq!(rows.len(), 2, "expected 2 groups");
-    assert_eq!(rows[0][0], SqlValue::Integer(1));
-    let v1 = match &rows[0][1] {
-        SqlValue::Text(s) => s.as_ref().to_owned(),
-        v => panic!("expected text, got {v:?}"),
-    };
-    assert!(v1.contains("alpha") && v1.contains("beta"), "grp1: {v1}");
 }
 
 // ── string_agg (alias) ────────────────────────────────────────────────────────
@@ -133,17 +162,14 @@ fn group_concat_with_group_by() {
 #[test]
 fn string_agg_alias_works() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t(v TEXT)").expect("create");
-    c.execute("INSERT INTO t VALUES ('p'), ('q')")
-        .expect("insert");
-    let v = q1(&c, "SELECT string_agg(v, '-') FROM t");
-    let s = match v {
-        SqlValue::Text(s) => s,
-        other => panic!("expected text, got {other:?}"),
-    };
-    let mut parts: Vec<&str> = s.split('-').collect();
-    parts.sort_unstable();
-    assert_eq!(parts, vec!["p", "q"]);
+    let setup = [
+        "CREATE TABLE t(v TEXT)",
+        "INSERT INTO t VALUES ('q'), ('p')",
+    ];
+    for statement in setup {
+        c.execute(statement).expect("setup");
+    }
+    assert_matches_sqlite(&c, &setup, "SELECT string_agg(v, '-' ORDER BY v) FROM t");
 }
 
 // ── total ─────────────────────────────────────────────────────────────────────

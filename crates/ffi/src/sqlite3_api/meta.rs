@@ -30,6 +30,17 @@ pub extern "C" fn sqlite3_interrupt(db: *mut sqlite3) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn sqlite3_is_interrupted(db: *mut sqlite3) -> c_int {
+    use std::sync::atomic::Ordering;
+
+    if db.is_null() {
+        return 0;
+    }
+    // SAFETY: `db` non-null (checked); reads atomic interrupt flag only.
+    unsafe { (*db).interrupted.load(Ordering::Relaxed) as c_int }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_busy_timeout(db: *mut sqlite3, milliseconds: c_int) -> c_int {
     let rc = rldb_busy_timeout(db, milliseconds);
     record_status(db, rc);

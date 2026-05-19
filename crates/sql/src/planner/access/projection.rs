@@ -104,6 +104,7 @@ pub(crate) fn expr_contains_aggregate(expr: &Expr) -> bool {
         Expr::Function(func) => {
             let name = func.name.to_string().to_ascii_lowercase();
             matches!(name.as_str(), "count" | "sum" | "avg" | "min" | "max")
+                || function_args_contain_aggregate(func)
         }
         Expr::BinaryOp { left, right, .. } => {
             expr_contains_aggregate(left) || expr_contains_aggregate(right)
@@ -144,6 +145,24 @@ pub(crate) fn expr_contains_aggregate(expr: &Expr) -> bool {
         }
         _ => false,
     }
+}
+
+fn function_args_contain_aggregate(func: &sqlparser::ast::Function) -> bool {
+    let FunctionArguments::List(list) = &func.args else {
+        return false;
+    };
+    list.args.iter().any(|arg| match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+        | FunctionArg::Named {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        }
+        | FunctionArg::ExprNamed {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        } => expr_contains_aggregate(expr),
+        _ => false,
+    })
 }
 
 pub(crate) fn has_group_by_ordering(plan: &SelectPlan) -> bool {

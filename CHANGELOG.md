@@ -6,6 +6,33 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Added
 
+- **SQL ingress compatibility hardening**:
+  - `PRAGMA journal_mode = WAL` now round-trips as `wal` for RedlineDB's
+    WAL-style journal, while `truncate` / `persist` stay rejected.
+  - Compound `SELECT` now shares parameter slots across branches and tail
+    `ORDER BY` / `LIMIT` wrappers.
+  - Nested `SELECT` wrappers with trailing `ORDER BY` / `LIMIT` now bind
+    correctly instead of rejecting the wrapper form.
+  - `WITH ... AS MATERIALIZED` / `AS NOT MATERIALIZED` CTE hints are
+    accepted as no-op syntax.
+  - The parser boundary now catches upstream `sqlparser` panics and
+    converts them into `Error::Parse`.
+- **SQLx attach mode**: `redlinedb-sqlx` now parses `mode=rwc` / `mode=ro`
+  on RedlineDB URLs. Owning/server processes keep the existing owner-lock
+  behavior with `mode=rwc`; dashboard/TUI/inspection clients can attach
+  read-only to a live file-backed database with `mode=ro` and get a read-only
+  error on writes.
+- **SQLite parity coverage expansion**: `sqlite_full_parity.rs` now writes a
+  reference-build PRAGMA corpus from bundled SQLite metadata and asserts the
+  remaining unsupported PRAGMAs and SQLite-native file-format gaps explicitly;
+  `parity_oracle` now requires 25 seed files per tag.
+- **SQLite parity receipts**: `just sql-parity-full` now regenerates the
+  required `target/proof/sqlite-full-parity/` receipts for git status, diff
+  stat, rusqlite reference metadata, unsupported SQL sites, ignored tests,
+  sqllogictest inventory, and SQL parity test inventory.
+- **SQLite parity ledger lint**: the fast preflight lane rejects `pass` rows in
+  `docs/sqlite-parity.md` whose notes admit known gaps, and prevents rejected
+  PRAGMA rows from being counted as parity passes.
 - **PRAGMA truth pass**: real implementations for `PRAGMA journal_mode`
   (`memory`/`off`/`delete`), `synchronous`, `temp_store`, `cache_size`,
   `query_only` round-trip on the session; `query_only` additionally blocks
@@ -42,6 +69,15 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Changed (potentially BREAKING for callers that probe unknown PRAGMAs)
 
+- `sql-parity-full` now fails on any SQLite parity corpus divergence after
+  writing `baseline-divergence.txt`; the corpus is no longer a non-fatal
+  baseline recorder.
+- The fuzz parity gate no longer skips implemented CTE or compound SELECT
+  forms, and a missing fuzz baseline only passes when the current run observes
+  zero divergences.
+- SQLite parity documentation now distinguishes `pass`, `partial`, `fail`,
+  `not-started`, and `rejects-by-design` so covered subsets and intentional
+  PRAGMA rejections are not counted as full parity.
 - `PRAGMA auto_vacuum` and `PRAGMA wal_checkpoint(MODE)` previously
   returned fabricated rows; they now return `UnsupportedSql`. Callers
   that branched on the row shape need to handle the error instead.
@@ -55,6 +91,22 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 ### Notes
 
 - Jankurai 1.4.3 is the supported version.
+
+## [1.0.8] - 2026-05-18
+
+### Added
+
+- `redlinedb-sqlx` now registers both SQLx `Any` URL schemes used by Jeryu
+  autonomy ledgers: canonical `redline://` and compatibility alias
+  `redlinedb://`. Mixed-case inputs such as `redlineDB://` are accepted after
+  URL scheme normalization.
+
+### Notes for Jeryu consumers
+
+- Preferred autonomy ledger URL:
+  `redline:///absolute/path/to/target/jeryu/autonomy.redlineDB`.
+- Compatibility alias:
+  `redlineDB:///absolute/path/to/target/jeryu/autonomy.redlineDB`.
 
 ## [1.0.2] - 2026-05-17
 
