@@ -406,7 +406,7 @@ fn bind_statement(
         SqlStatement::Update(update) => bind_update(schema, schema_epoch, sql, update),
         SqlStatement::Delete(delete) => bind_delete(schema, schema_epoch, sql, delete),
         SqlStatement::CreateTable(create_table) => {
-            bind_create_table(schema_epoch, sql, create_table)
+            bind_create_table(conn, schema, schema_epoch, sql, create_table)
         }
         SqlStatement::CreateIndex(create_index) => {
             bind_create_index(schema_epoch, sql, create_index)

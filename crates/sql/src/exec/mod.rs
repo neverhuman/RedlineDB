@@ -25,8 +25,9 @@ use crate::error::{Error, Result};
 use crate::planner::{self, ExplainMetrics};
 use crate::session::SessionState;
 use crate::statement::{
-    AnalyzePlan, ExecutionResult, ExplainPlan, PragmaPlan, PreparedKind, PreparedTemplate,
-    RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource, SelectRuntimeTx, SelectSource,
+    AnalyzePlan, CreateTableAsSelectSpec, ExecutionResult, ExplainPlan, PragmaPlan, PreparedKind,
+    PreparedTemplate, RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource,
+    SelectRuntimeTx, SelectSource,
 };
 use crate::value::{SqlValue, canonicalize, compare_values, is_truthy};
 
@@ -282,6 +283,9 @@ pub fn execute_prepared(
                 affected_rows: 1,
             })
         }
+        PreparedKind::CreateTableAsSelect(spec) => {
+            execute_create_table_as_select(conn, spec, bindings)
+        }
         PreparedKind::CreateIndex(spec) => {
             with_write_tx(conn, |session, tx| {
                 conn.engine().create_index(tx, spec.clone())?;
@@ -496,6 +500,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Select(_)
         | PreparedKind::Attach(_) => false,
         PreparedKind::CreateTable(_)
+        | PreparedKind::CreateTableAsSelect(_)
         | PreparedKind::CreateIndex(_)
         | PreparedKind::CreateView(_)
         | PreparedKind::CreateTrigger(_)
@@ -508,6 +513,49 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Update(_)
         | PreparedKind::Delete(_) => true,
     }
+}
+
+fn execute_create_table_as_select(
+    conn: &Connection,
+    spec: &CreateTableAsSelectSpec,
+    bindings: &[Option<SqlValue>],
+) -> Result<ExecutionResult> {
+    let Some(select) = spec.select.as_ref() else {
+        return Ok(ExecutionResult {
+            runtime: RuntimeState::Done,
+            affected_rows: 0,
+        });
+    };
+
+    let inserted = with_write_tx(conn, |session, tx| {
+        let table = conn.engine().create_table(tx, spec.table.clone())?;
+        let mut runtime = execute_select(conn, select, bindings)?;
+        let mut current_row = None;
+        let mut inserted = 0usize;
+        loop {
+            if step_select_runtime(conn, &mut runtime, bindings, &mut current_row)? {
+                break;
+            }
+            let values = current_row.take().unwrap_or_default();
+            let values = apply_row_affinity(&table, values)?;
+            let rowid = RowId::new((inserted + 1) as u64);
+            let payload = encode_sql_row(table.table_id.0, &values)?;
+            conn.engine()
+                .insert_for_relation(tx, table.relation_id, rowid, payload)?;
+            inserted += 1;
+            session.last_insert_rowid = Some(rowid.0 as i64);
+        }
+        if inserted > 0 {
+            session.changes += inserted;
+            session.total_changes += inserted;
+        }
+        Ok(inserted)
+    })?;
+
+    Ok(ExecutionResult {
+        runtime: RuntimeState::Done,
+        affected_rows: inserted,
+    })
 }
 
 fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {

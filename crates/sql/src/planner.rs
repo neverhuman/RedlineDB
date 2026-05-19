@@ -287,7 +287,7 @@ pub(crate) fn build_plan(
         PreparedKind::Begin(_) => simple_node(PhysicalKind::Constant, "BEGIN".to_owned()),
         PreparedKind::Commit => simple_node(PhysicalKind::Constant, "COMMIT".to_owned()),
         PreparedKind::Rollback => simple_node(PhysicalKind::Constant, "ROLLBACK".to_owned()),
-        PreparedKind::CreateTable(_) => {
+        PreparedKind::CreateTable(_) | PreparedKind::CreateTableAsSelect(_) => {
             simple_node(PhysicalKind::Constant, "CREATE TABLE".to_owned())
         }
         PreparedKind::CreateIndex(_) => {
