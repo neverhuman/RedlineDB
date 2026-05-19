@@ -180,6 +180,12 @@ fn diff_outer_and_cross_join_matrix() {
         "SELECT a.id, b.payload FROM a LEFT JOIN b ON a.id = b.aid ORDER BY a.id, b.payload",
         "SELECT a.id, b.payload FROM b LEFT JOIN a ON a.id = b.aid ORDER BY b.rowid, a.id",
         "SELECT a.id, b.payload FROM a JOIN b ON a.id = b.aid ORDER BY a.id, b.payload",
+        "SELECT a.id FROM a LEFT JOIN b ON a.id = b.aid WHERE b.aid IS NULL ORDER BY a.id",
+        "SELECT a.id, b.payload FROM a LEFT JOIN b ON a.id = b.aid AND b.payload IS NOT NULL ORDER BY a.id, b.payload",
+        "SELECT a.id, COALESCE(b.payload, 'missing') FROM a LEFT JOIN b ON a.id = b.aid ORDER BY a.id, b.payload",
+        "SELECT b.aid, a.v FROM b LEFT JOIN a ON a.id = b.aid WHERE a.id IS NULL ORDER BY b.aid, b.payload",
+        "SELECT a.id, count(b.payload) FROM a LEFT JOIN b ON a.id = b.aid GROUP BY a.id ORDER BY a.id",
+        "SELECT a.id, b.payload FROM a CROSS JOIN b WHERE b.aid = a.id ORDER BY a.id, b.payload",
     ]);
 }
 
@@ -196,11 +202,17 @@ fn diff_group_by_having_matrix() {
         "SELECT grp, sum(v), total(v) FROM t GROUP BY grp HAVING sum(COALESCE(v, 0)) >= 3 ORDER BY grp",
         "SELECT grp, min(v), max(v) FROM t GROUP BY grp HAVING max(v) IS NOT NULL ORDER BY grp",
         "SELECT grp, avg(v) FROM t GROUP BY grp HAVING avg(v) > 1 ORDER BY grp",
+        "SELECT grp, count(*) FROM t GROUP BY grp HAVING count(v) < count(*) ORDER BY grp",
+        "SELECT grp, sum(COALESCE(v, 0)) FROM t GROUP BY grp HAVING count(v) BETWEEN 1 AND 2 ORDER BY grp",
+        "SELECT grp, total(v) FROM t GROUP BY grp HAVING total(v) >= 4.0 ORDER BY grp",
+        "SELECT grp, count(*) FROM t GROUP BY grp HAVING grp IN ('A', 'B', 'C') ORDER BY grp",
+        "SELECT grp, min(COALESCE(v, -1)) FROM t GROUP BY grp HAVING min(COALESCE(v, -1)) <= 1 ORDER BY grp",
+        "SELECT grp, max(v) FROM t GROUP BY grp HAVING sum(COALESCE(v, 0)) <> 0 ORDER BY grp",
     ]);
 }
 
 #[test]
-fn diff_window_null_semantics_matrix() {
+fn diff_window_matrix() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, grp TEXT, v INTEGER)");
     lab.execute(
@@ -213,6 +225,38 @@ fn diff_window_null_semantics_matrix() {
         "SELECT id, grp, v, lag(v) OVER (PARTITION BY grp ORDER BY id) FROM t ORDER BY id",
         "SELECT id, grp, v, lead(v) OVER (PARTITION BY grp ORDER BY id) FROM t ORDER BY id",
         "SELECT id, grp, v, sum(COALESCE(v, 0)) OVER (PARTITION BY grp ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t ORDER BY id",
+        "SELECT id, grp, v, rank() OVER (PARTITION BY grp ORDER BY v) FROM t ORDER BY grp, v, id",
+        "SELECT id, grp, v, dense_rank() OVER (PARTITION BY grp ORDER BY v) FROM t ORDER BY grp, v, id",
+        "SELECT id, grp, v, first_value(v) OVER (PARTITION BY grp ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM t ORDER BY id",
+        "SELECT id, grp, v, last_value(v) OVER (PARTITION BY grp ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM t ORDER BY id",
+        "SELECT id, grp, v, nth_value(v, 2) OVER (PARTITION BY grp ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM t ORDER BY id",
+        "SELECT id, grp, v, count(*) OVER (PARTITION BY grp) FROM t ORDER BY id",
+        "SELECT id, grp, v, avg(v) OVER (PARTITION BY grp ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) FROM t ORDER BY id",
+    ]);
+}
+
+#[test]
+fn diff_null_semantics_matrix() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, a INTEGER, b INTEGER, label TEXT)");
+    lab.execute(
+        "INSERT INTO t(id, a, b, label) VALUES \
+         (1, 1, 1, 'one'), (2, 1, NULL, 'missing-b'), (3, NULL, 1, 'missing-a'), \
+         (4, NULL, NULL, NULL), (5, 2, 3, 'two')",
+    );
+
+    lab.assert_queries(&[
+        "SELECT id FROM t WHERE a = b ORDER BY id",
+        "SELECT id FROM t WHERE a IS NULL ORDER BY id",
+        "SELECT id FROM t WHERE a IS NOT NULL ORDER BY id",
+        "SELECT id, COALESCE(label, 'fallback') FROM t ORDER BY id",
+        "SELECT id, NULLIF(a, b) FROM t ORDER BY id",
+        "SELECT count(*), count(a), count(label) FROM t",
+        "SELECT id FROM t WHERE a IN (1, NULL) ORDER BY id",
+        "SELECT id FROM t WHERE a NOT IN (1, NULL) ORDER BY id",
+        "SELECT id FROM t WHERE NOT (a = 1) ORDER BY id",
+        "SELECT id FROM t WHERE (a = 1) OR b IS NULL ORDER BY id",
+        "SELECT id FROM t WHERE (a = 1) AND b IS NULL ORDER BY id",
     ]);
 }
 

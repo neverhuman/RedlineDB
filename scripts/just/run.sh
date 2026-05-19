@@ -147,6 +147,12 @@ case "$lane" in
     rtk cargo test -p redlinedb-cli --quiet --locked
     ;;
   cli-parity-full)
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+      printf 'sqlite3 CLI is required for cli-parity-full\n' >&2
+      exit 127
+    fi
+    printf 'sqlite3_version='
+    sqlite3 --version
     rtk cargo test -p redlinedb-cli --test dot_commands --quiet --locked
     ;;
   fuzz-parity)
