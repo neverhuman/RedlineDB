@@ -17,6 +17,11 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
     accepted as no-op syntax.
   - The parser boundary now catches upstream `sqlparser` panics and
     converts them into `Error::Parse`.
+- **SQLx attach mode**: `redlinedb-sqlx` now parses `mode=rwc` / `mode=ro`
+  on RedlineDB URLs. Owning/server processes keep the existing owner-lock
+  behavior with `mode=rwc`; dashboard/TUI/inspection clients can attach
+  read-only to a live file-backed database with `mode=ro` and get a read-only
+  error on writes.
 - **SQLite parity coverage expansion**: `sqlite_full_parity.rs` now writes a
   reference-build PRAGMA corpus from bundled SQLite metadata and asserts the
   remaining unsupported PRAGMAs and SQLite-native file-format gaps explicitly;
