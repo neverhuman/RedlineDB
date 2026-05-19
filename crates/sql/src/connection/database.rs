@@ -336,6 +336,22 @@ struct EphemeralSession {
     db: Weak<Database>,
 }
 
+struct EphemeralRegistryCell {
+    registry: Mutex<EphemeralRegistry>,
+}
+
+impl EphemeralRegistryCell {
+    fn new() -> Self {
+        Self {
+            registry: Mutex::new(EphemeralRegistry::default()),
+        }
+    }
+
+    fn lock(&self) -> std::sync::LockResult<std::sync::MutexGuard<'_, EphemeralRegistry>> {
+        self.registry.lock()
+    }
+}
+
 struct LiveEphemeralSession {
     options: DbOptions,
     db: Arc<Database>,
@@ -350,11 +366,11 @@ impl EphemeralSession {
     }
 }
 
-static EPHEMERAL_REGISTRY: OnceLock<Mutex<EphemeralRegistry>> = OnceLock::new();
+static EPHEMERAL_REGISTRY: OnceLock<EphemeralRegistryCell> = OnceLock::new();
 static EPHEMERAL_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-fn ephemeral_registry() -> &'static Mutex<EphemeralRegistry> {
-    EPHEMERAL_REGISTRY.get_or_init(|| Mutex::new(EphemeralRegistry::default()))
+fn ephemeral_registry() -> &'static EphemeralRegistryCell {
+    EPHEMERAL_REGISTRY.get_or_init(EphemeralRegistryCell::new)
 }
 
 pub(super) fn hash_optimizer(optimizer: &OptimizerConfig, query_memory: &QueryMemoryConfig) -> u64 {

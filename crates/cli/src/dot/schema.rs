@@ -132,7 +132,11 @@ pub fn fullschema(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, Str
         let name: String = row.get(1).map_err(|err| err.to_string())?;
         let tbl_name: String = row.get(2).map_err(|err| err.to_string())?;
         let rootpage: i64 = row.get(3).unwrap_or(0);
-        let sql: String = row.get(4).unwrap_or_default();
+        let sql = match row.get::<Option<String>>(4) {
+            Ok(Some(sql)) => sql,
+            Ok(None) => String::new(),
+            Err(err) => return Err(err.to_string()),
+        };
         let line = format!("{ty}|{name}|{tbl_name}|{rootpage}|{sql}");
         state
             .output
