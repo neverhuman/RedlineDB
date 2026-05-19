@@ -37,17 +37,18 @@ fn run_script(db: Option<&std::path::Path>, script: &str) -> (String, String, i3
     (stdout, stderr, code)
 }
 
-fn sqlite3_version() -> String {
-    let output = Command::new("sqlite3")
-        .arg("--version")
-        .output()
-        .expect("sqlite3 binary is required for CLI parity tests");
+fn sqlite3_version() -> Option<String> {
+    let output = match Command::new("sqlite3").arg("--version").output() {
+        Ok(output) => output,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(err) => panic!("failed to invoke sqlite3: {err}"),
+    };
     assert!(
         output.status.success(),
         "sqlite3 --version failed: stderr={:?}",
         output.stderr
     );
-    String::from_utf8(output.stdout).expect("sqlite3 version utf8")
+    Some(String::from_utf8(output.stdout).expect("sqlite3 version utf8"))
 }
 
 #[test]
@@ -155,7 +156,11 @@ fn dot_show_dumps_current_settings() {
 
 #[test]
 fn dot_dump_round_trips_through_sqlite3() {
-    eprintln!("sqlite3_version={}", sqlite3_version().trim());
+    let Some(version) = sqlite3_version() else {
+        eprintln!("sqlite3 binary not found; skipping sqlite3 round-trip test");
+        return;
+    };
+    eprintln!("sqlite3_version={}", version.trim());
     let dir = tempdir().expect("tempdir");
     let dump_path = dir.path().join("dump.sql");
 

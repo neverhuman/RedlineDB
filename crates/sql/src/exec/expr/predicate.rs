@@ -7,6 +7,46 @@ pub(crate) fn truthy_opt(value: &SqlValue) -> Option<bool> {
     }
 }
 
+pub(crate) fn eval_case_with<E>(
+    operand: Option<&Expr>,
+    conditions: &[sqlparser::ast::CaseWhen],
+    else_result: Option<&Expr>,
+    mut eval: E,
+) -> Result<SqlValue>
+where
+    E: FnMut(&Expr) -> Result<SqlValue>,
+{
+    if let Some(operand) = operand {
+        let operand = eval(operand)?;
+        if matches!(operand, SqlValue::Null) {
+            return match else_result {
+                Some(expr) => eval(expr),
+                None => Ok(SqlValue::Null),
+            };
+        }
+        for when in conditions {
+            let condition = eval(&when.condition)?;
+            if matches!(condition, SqlValue::Null) {
+                continue;
+            }
+            if compare_values(&operand, &condition) == Ordering::Equal {
+                return eval(&when.result);
+            }
+        }
+    } else {
+        for when in conditions {
+            let condition = eval(&when.condition)?;
+            if !matches!(condition, SqlValue::Null) && is_truthy(&condition) {
+                return eval(&when.result);
+            }
+        }
+    }
+    match else_result {
+        Some(expr) => eval(expr),
+        None => Ok(SqlValue::Null),
+    }
+}
+
 pub(crate) fn eval_case(
     operand: Option<&Expr>,
     conditions: &[sqlparser::ast::CaseWhen],
@@ -14,29 +54,9 @@ pub(crate) fn eval_case(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    if let Some(operand) = operand {
-        let operand = eval_scalar(operand, row, bindings)?;
-        for when in conditions {
-            let condition = eval_scalar(&when.condition, row, bindings)?;
-            if matches!(condition, SqlValue::Null) {
-                continue;
-            }
-            if compare_values(&operand, &condition) == Ordering::Equal {
-                return eval_scalar(&when.result, row, bindings);
-            }
-        }
-    } else {
-        for when in conditions {
-            let condition = eval_scalar(&when.condition, row, bindings)?;
-            if !matches!(condition, SqlValue::Null) && is_truthy(&condition) {
-                return eval_scalar(&when.result, row, bindings);
-            }
-        }
-    }
-    match else_result {
-        Some(expr) => eval_scalar(expr, row, bindings),
-        None => Ok(SqlValue::Null),
-    }
+    eval_case_with(operand, conditions, else_result, |expr| {
+        eval_scalar(expr, row, bindings)
+    })
 }
 
 pub(crate) fn eval_subquery_value(
