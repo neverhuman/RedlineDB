@@ -179,7 +179,7 @@ tagged release must satisfy:
   (`cargo test -p redlinedb-kernel backup`); restore round-trip
   proven by the failpoint matrix lane.
 - **Monitoring** — bench `kill_receipt.json` plus
-  `target/jankurai/repo-score.json` archived per release; the
+  `.jankurai/repo-score.json` archived per release; the
   audit upload step in `jankurai.yml` is the canonical artifact.
 - **Rollback** — `gh release delete` + `cargo yank` runbook in
   `docs/release.md`; `release-bad-behavior` lane in

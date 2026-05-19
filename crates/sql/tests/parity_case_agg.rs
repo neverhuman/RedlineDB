@@ -69,6 +69,8 @@ const SETUP: &[&str] = &[
     "INSERT INTO t VALUES (1, 'a', 1), (2, 'a', NULL), (3, 'a', 2), (4, 'b', NULL), (5, 'b', NULL)",
 ];
 
+const NO_SETUP: &[&str] = &[];
+
 #[test]
 fn searched_case_with_count_star() {
     let (_d, c) = open();
@@ -131,5 +133,25 @@ fn null_sensitive_case_branch_matches_sqlite() {
         &c,
         SETUP,
         "SELECT CASE sum(v) WHEN NULL THEN 'matched-null' ELSE 'fallback' END FROM t WHERE grp = 'b'",
+    );
+}
+
+#[test]
+fn simple_case_null_operand_uses_else_branch_like_sqlite() {
+    let (_d, c) = open();
+    assert_matches_sqlite(
+        &c,
+        NO_SETUP,
+        "SELECT CASE NULL WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'fallback' END",
+    );
+}
+
+#[test]
+fn searched_case_skips_null_conditions_like_sqlite() {
+    let (_d, c) = open();
+    assert_matches_sqlite(
+        &c,
+        NO_SETUP,
+        "SELECT CASE WHEN NULL THEN 'nope' WHEN 0 THEN 'also-nope' WHEN 1 THEN 'hit' ELSE 'fallback' END",
     );
 }

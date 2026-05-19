@@ -22,7 +22,9 @@ set -euo pipefail
 readonly CI_RUST_TOOLCHAIN="${CI_RUST_TOOLCHAIN:-1.95.0}"
 readonly CI_CARGO_DENY_VERSION="${CI_CARGO_DENY_VERSION:-0.18.0}"
 readonly CI_GITLEAKS_VERSION="${CI_GITLEAKS_VERSION:-8.21.2}"
-readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-https://github.com/jeppsontaylor/Jankurai}"
+readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-https://github.com/neverhuman/jankurai.git}"
+readonly CI_JANKURAI_TAG="${CI_JANKURAI_TAG:-v1.5.1}"
+readonly CI_JANKURAI_REV="${CI_JANKURAI_REV:-6f1aa45fca09ebb523f79b38ad465da28a86dfb1}"
 
 # ---- Artifact assertions ----------------------------------------------------
 # Every CI lane that produces an evidence artifact should call
@@ -80,4 +82,32 @@ ci_soft_gate() {
     # are the auditable evidence that this failure was non-blocking by
     # design.
     return 0
+}
+
+# Verify the pinned upstream tag resolves to the exact commit we expect
+# before any install path uses it.
+ci_verify_jankurai_source() {
+    local resolved_rev
+    resolved_rev="$(
+        git ls-remote "${CI_JANKURAI_GIT}" "refs/tags/${CI_JANKURAI_TAG}^{}" \
+            | awk 'NR == 1 { print $1 }' || true
+    )"
+
+    if [ -z "$resolved_rev" ]; then
+        printf 'expected jankurai tag %s to resolve at %s\n' \
+            "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" >&2
+        return 1
+    fi
+
+    if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
+        printf 'jankurai tag %s resolved to %s, expected %s\n' \
+            "$CI_JANKURAI_TAG" "$resolved_rev" "$CI_JANKURAI_REV" >&2
+        return 1
+    fi
+}
+
+# Install the pinned upstream jankurai release directly from the git tag.
+ci_install_jankurai() {
+    ci_verify_jankurai_source
+    cargo install --git "${CI_JANKURAI_GIT}" --tag "${CI_JANKURAI_TAG}" --locked jankurai
 }

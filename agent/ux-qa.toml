@@ -1,5 +1,5 @@
 outputRoot = "."
-artifactRoot = "target/jankurai/ux-qa"
+artifactRoot = ".jankurai/ux-qa"
 readyState = "domcontentloaded"
 timeoutMs = 15000
 screenshotRequired = true

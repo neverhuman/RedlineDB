@@ -7,56 +7,48 @@ pub(crate) fn truthy_opt(value: &SqlValue) -> Option<bool> {
     }
 }
 
-pub(crate) fn eval_case_with<E>(
+pub(crate) trait CaseEvaluator {
+    fn eval_case_expr(&mut self, expr: &Expr) -> Result<SqlValue>;
+}
+
+pub(crate) fn eval_case<E>(
     operand: Option<&Expr>,
     conditions: &[sqlparser::ast::CaseWhen],
     else_result: Option<&Expr>,
-    mut eval: E,
+    evaluator: &mut E,
 ) -> Result<SqlValue>
 where
-    E: FnMut(&Expr) -> Result<SqlValue>,
+    E: CaseEvaluator,
 {
     if let Some(operand) = operand {
-        let operand = eval(operand)?;
+        let operand = evaluator.eval_case_expr(operand)?;
         if matches!(operand, SqlValue::Null) {
             return match else_result {
-                Some(expr) => eval(expr),
+                Some(expr) => evaluator.eval_case_expr(expr),
                 None => Ok(SqlValue::Null),
             };
         }
         for when in conditions {
-            let condition = eval(&when.condition)?;
+            let condition = evaluator.eval_case_expr(&when.condition)?;
             if matches!(condition, SqlValue::Null) {
                 continue;
             }
             if compare_values(&operand, &condition) == Ordering::Equal {
-                return eval(&when.result);
+                return evaluator.eval_case_expr(&when.result);
             }
         }
     } else {
         for when in conditions {
-            let condition = eval(&when.condition)?;
+            let condition = evaluator.eval_case_expr(&when.condition)?;
             if !matches!(condition, SqlValue::Null) && is_truthy(&condition) {
-                return eval(&when.result);
+                return evaluator.eval_case_expr(&when.result);
             }
         }
     }
     match else_result {
-        Some(expr) => eval(expr),
+        Some(expr) => evaluator.eval_case_expr(expr),
         None => Ok(SqlValue::Null),
     }
-}
-
-pub(crate) fn eval_case(
-    operand: Option<&Expr>,
-    conditions: &[sqlparser::ast::CaseWhen],
-    else_result: Option<&Expr>,
-    row: &RowContext<'_>,
-    bindings: &[Option<SqlValue>],
-) -> Result<SqlValue> {
-    eval_case_with(operand, conditions, else_result, |expr| {
-        eval_scalar(expr, row, bindings)
-    })
 }
 
 pub(crate) fn eval_subquery_value(

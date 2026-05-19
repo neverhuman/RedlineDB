@@ -18,6 +18,17 @@
 
 use super::*;
 
+struct ScalarCaseEvaluator<'row, 'bindings> {
+    row: &'row RowContext<'bindings>,
+    bindings: &'row [Option<SqlValue>],
+}
+
+impl<'row, 'bindings> CaseEvaluator for ScalarCaseEvaluator<'row, 'bindings> {
+    fn eval_case_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
+        eval_scalar(expr, self.row, self.bindings)
+    }
+}
+
 pub(crate) mod coerce;
 pub(crate) mod json_dispatch;
 mod predicate;
@@ -332,13 +343,15 @@ pub(crate) fn eval_scalar(
             conditions,
             else_result,
             ..
-        } => eval_case(
-            operand.as_deref(),
-            conditions,
-            else_result.as_deref(),
-            row,
-            bindings,
-        )?,
+        } => {
+            let mut evaluator = ScalarCaseEvaluator { row, bindings };
+            eval_case(
+                operand.as_deref(),
+                conditions,
+                else_result.as_deref(),
+                &mut evaluator,
+            )?
+        }
         other => {
             return Err(Error::UnsupportedSql(format!(
                 "unsupported expression: {other:?}"

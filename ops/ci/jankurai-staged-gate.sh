@@ -15,7 +15,7 @@
 set -euo pipefail
 
 BASE_REF="${BASE_REF:-origin/main}"
-LOG_DIR="${LOG_DIR:-target/jankurai/staged-gate}"
+LOG_DIR="${LOG_DIR:-.jankurai/staged-gate}"
 mkdir -p "$LOG_DIR"
 
 if ! command -v jankurai >/dev/null 2>&1; then
