@@ -1,4 +1,23 @@
 use super::*;
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+thread_local! {
+    static GROUP_EVAL_CACHE: RefCell<Option<HashMap<String, SqlValue>>> = const {
+        RefCell::new(None)
+    };
+}
+
+struct GroupEvalCacheGuard;
+
+impl Drop for GroupEvalCacheGuard {
+    fn drop(&mut self) {
+        GROUP_EVAL_CACHE.with(|cache| {
+            *cache.borrow_mut() = None;
+        });
+    }
+}
+
 pub(super) fn project_group_row(
     projection: &[SelectItem],
     group: &[SqlRow],
@@ -37,244 +56,281 @@ pub(super) fn eval_group_scalar_with_ctx(
     first_context: Option<&RowContext<'_>>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    if !expr_contains_aggregate(expr) {
-        return match first_context {
+    let cache_key = expr.to_string();
+    let mut cache_guard = None;
+    let cached = GROUP_EVAL_CACHE.with(|cache| {
+        let mut slot = cache.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(HashMap::new());
+            cache_guard = Some(GroupEvalCacheGuard);
+        }
+        slot.as_ref()
+            .and_then(|cache| cache.get(&cache_key).cloned())
+    });
+    if let Some(value) = cached {
+        return Ok(value);
+    }
+    let result = if !expr_contains_aggregate(expr) {
+        match first_context {
             Some(ctx) => eval_scalar(expr, ctx, bindings),
             None => eval_scalar(expr, &RowContext::Empty, bindings),
-        };
-    }
-    match expr {
-        Expr::Function(func) => eval_group_function_or_scalar(func, group, first_context, bindings),
-        Expr::BinaryOp { left, op, right } => {
-            let left_value = eval_group_scalar_with_ctx(left, group, first_context, bindings)?;
-            let right_value = eval_group_scalar_with_ctx(right, group, first_context, bindings)?;
-            Ok(match op {
-                BinaryOperator::And => match (truthy_opt(&left_value), truthy_opt(&right_value)) {
-                    (Some(false), _) | (_, Some(false)) => SqlValue::Integer(0),
-                    (Some(true), Some(true)) => SqlValue::Integer(1),
-                    _ => SqlValue::Null,
-                },
-                BinaryOperator::Or => match (truthy_opt(&left_value), truthy_opt(&right_value)) {
-                    (Some(true), _) | (_, Some(true)) => SqlValue::Integer(1),
-                    (Some(false), Some(false)) => SqlValue::Integer(0),
-                    _ => SqlValue::Null,
-                },
-                BinaryOperator::Plus => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| Some(a.wrapping_add(b)),
-                    |a, b| Some(a + b),
-                )?,
-                BinaryOperator::Minus => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| Some(a.wrapping_sub(b)),
-                    |a, b| Some(a - b),
-                )?,
-                BinaryOperator::Multiply => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| Some(a.wrapping_mul(b)),
-                    |a, b| Some(a * b),
-                )?,
-                BinaryOperator::Divide => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| if b == 0 { None } else { a.checked_div(b) },
-                    |a, b| if b == 0.0 { None } else { Some(a / b) },
-                )?,
-                BinaryOperator::Modulo => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| if b == 0 { None } else { a.checked_rem(b) },
-                    |a, b| if b == 0.0 { None } else { Some(a % b) },
-                )?,
-                BinaryOperator::Eq => {
-                    compare_binary(left_value, right_value, |o| o == Ordering::Equal)?
-                }
-                BinaryOperator::NotEq | BinaryOperator::Spaceship => {
-                    compare_binary(left_value, right_value, |o| o != Ordering::Equal)?
-                }
-                BinaryOperator::Gt => {
-                    compare_binary(left_value, right_value, |o| o == Ordering::Greater)?
-                }
-                BinaryOperator::GtEq => {
-                    compare_binary(left_value, right_value, |o| o != Ordering::Less)?
-                }
-                BinaryOperator::Lt => {
-                    compare_binary(left_value, right_value, |o| o == Ordering::Less)?
-                }
-                BinaryOperator::LtEq => {
-                    compare_binary(left_value, right_value, |o| o != Ordering::Greater)?
-                }
-                BinaryOperator::StringConcat => {
-                    if matches!(left_value, SqlValue::Null) || matches!(right_value, SqlValue::Null)
-                    {
-                        SqlValue::Null
-                    } else {
-                        SqlValue::Text(Arc::from(format!(
-                            "{}{}",
-                            value_to_string(&left_value),
-                            value_to_string(&right_value)
-                        )))
-                    }
-                }
-                other => {
-                    return Err(Error::UnsupportedSql(format!(
-                        "unsupported binary op {other:?}"
-                    )));
-                }
-            })
         }
-        Expr::UnaryOp { op, expr } => {
-            let value = eval_group_scalar_with_ctx(expr, group, first_context, bindings)?;
-            match op {
-                UnaryOperator::Not => match truthy_opt(&value) {
-                    Some(v) => Ok(SqlValue::Integer(if !v { 1 } else { 0 })),
-                    None => Ok(SqlValue::Null),
-                },
-                UnaryOperator::Minus => negate(value),
-                UnaryOperator::Plus => Ok(value),
-                _ => Err(Error::UnsupportedSql(format!(
-                    "unsupported unary op {op:?}"
-                ))),
+    } else {
+        match expr {
+            Expr::Function(func) => {
+                eval_group_function_or_scalar(func, group, first_context, bindings)
             }
-        }
-        Expr::Nested(expr) => eval_group_scalar_with_ctx(expr, group, first_context, bindings),
-        Expr::Cast {
-            expr, data_type, ..
-        } => cast_value(
-            eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
-            data_type,
-        ),
-        Expr::Between {
-            expr,
-            negated,
-            low,
-            high,
-        } => {
-            let value = eval_group_scalar_with_ctx(expr, group, first_context, bindings)?;
-            let low = eval_group_scalar_with_ctx(low, group, first_context, bindings)?;
-            let high = eval_group_scalar_with_ctx(high, group, first_context, bindings)?;
-            if matches!(value, SqlValue::Null)
-                || matches!(low, SqlValue::Null)
-                || matches!(high, SqlValue::Null)
-            {
-                Ok(SqlValue::Null)
-            } else {
-                let mut ok = compare_values(&value, &low) != Ordering::Less
-                    && compare_values(&value, &high) != Ordering::Greater;
-                if *negated {
-                    ok = !ok;
-                }
-                Ok(SqlValue::Integer(if ok { 1 } else { 0 }))
-            }
-        }
-        Expr::InList {
-            expr,
-            list,
-            negated,
-        } => {
-            let value = eval_group_scalar_with_ctx(expr, group, first_context, bindings)?;
-            if matches!(value, SqlValue::Null) {
-                Ok(SqlValue::Null)
-            } else {
-                let mut found = false;
-                let mut saw_null = false;
-                for item in list {
-                    let candidate =
-                        eval_group_scalar_with_ctx(item, group, first_context, bindings)?;
-                    match candidate {
-                        SqlValue::Null => saw_null = true,
-                        _ if compare_values(&value, &candidate) == Ordering::Equal => {
-                            found = true;
-                            break;
+            Expr::BinaryOp { left, op, right } => {
+                let left_value = eval_group_scalar_with_ctx(left, group, first_context, bindings)?;
+                let right_value =
+                    eval_group_scalar_with_ctx(right, group, first_context, bindings)?;
+                Ok(match op {
+                    BinaryOperator::And => {
+                        match (truthy_opt(&left_value), truthy_opt(&right_value)) {
+                            (Some(false), _) | (_, Some(false)) => SqlValue::Integer(0),
+                            (Some(true), Some(true)) => SqlValue::Integer(1),
+                            _ => SqlValue::Null,
                         }
-                        _ => {}
                     }
+                    BinaryOperator::Or => match (truthy_opt(&left_value), truthy_opt(&right_value))
+                    {
+                        (Some(true), _) | (_, Some(true)) => SqlValue::Integer(1),
+                        (Some(false), Some(false)) => SqlValue::Integer(0),
+                        _ => SqlValue::Null,
+                    },
+                    BinaryOperator::Plus => arithmetic(
+                        left_value,
+                        right_value,
+                        |a, b| Some(a.wrapping_add(b)),
+                        |a, b| Some(a + b),
+                    )?,
+                    BinaryOperator::Minus => arithmetic(
+                        left_value,
+                        right_value,
+                        |a, b| Some(a.wrapping_sub(b)),
+                        |a, b| Some(a - b),
+                    )?,
+                    BinaryOperator::Multiply => arithmetic(
+                        left_value,
+                        right_value,
+                        |a, b| Some(a.wrapping_mul(b)),
+                        |a, b| Some(a * b),
+                    )?,
+                    BinaryOperator::Divide => arithmetic(
+                        left_value,
+                        right_value,
+                        |a, b| if b == 0 { None } else { a.checked_div(b) },
+                        |a, b| if b == 0.0 { None } else { Some(a / b) },
+                    )?,
+                    BinaryOperator::Modulo => arithmetic(
+                        left_value,
+                        right_value,
+                        |a, b| if b == 0 { None } else { a.checked_rem(b) },
+                        |a, b| if b == 0.0 { None } else { Some(a % b) },
+                    )?,
+                    BinaryOperator::Eq => {
+                        compare_binary(left_value, right_value, |o| o == Ordering::Equal)?
+                    }
+                    BinaryOperator::NotEq | BinaryOperator::Spaceship => {
+                        compare_binary(left_value, right_value, |o| o != Ordering::Equal)?
+                    }
+                    BinaryOperator::Gt => {
+                        compare_binary(left_value, right_value, |o| o == Ordering::Greater)?
+                    }
+                    BinaryOperator::GtEq => {
+                        compare_binary(left_value, right_value, |o| o != Ordering::Less)?
+                    }
+                    BinaryOperator::Lt => {
+                        compare_binary(left_value, right_value, |o| o == Ordering::Less)?
+                    }
+                    BinaryOperator::LtEq => {
+                        compare_binary(left_value, right_value, |o| o != Ordering::Greater)?
+                    }
+                    BinaryOperator::StringConcat => {
+                        if matches!(left_value, SqlValue::Null)
+                            || matches!(right_value, SqlValue::Null)
+                        {
+                            SqlValue::Null
+                        } else {
+                            SqlValue::Text(Arc::from(format!(
+                                "{}{}",
+                                value_to_string(&left_value),
+                                value_to_string(&right_value)
+                            )))
+                        }
+                    }
+                    other => {
+                        return Err(Error::UnsupportedSql(format!(
+                            "unsupported binary op {other:?}"
+                        )));
+                    }
+                })
+            }
+            Expr::UnaryOp { op, expr } => {
+                let value = eval_group_scalar_with_ctx(expr, group, first_context, bindings)?;
+                match op {
+                    UnaryOperator::Not => match truthy_opt(&value) {
+                        Some(v) => Ok(SqlValue::Integer(if !v { 1 } else { 0 })),
+                        None => Ok(SqlValue::Null),
+                    },
+                    UnaryOperator::Minus => negate(value),
+                    UnaryOperator::Plus => Ok(value),
+                    _ => Err(Error::UnsupportedSql(format!(
+                        "unsupported unary op {op:?}"
+                    ))),
                 }
-                let mut ok = found;
-                if *negated {
-                    ok = !ok;
-                }
-                if !ok && saw_null {
+            }
+            Expr::Nested(expr) => eval_group_scalar_with_ctx(expr, group, first_context, bindings),
+            Expr::Cast {
+                expr, data_type, ..
+            } => cast_value(
+                eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
+                data_type,
+            ),
+            Expr::Between {
+                expr,
+                negated,
+                low,
+                high,
+            } => {
+                let value = eval_group_scalar_with_ctx(expr, group, first_context, bindings)?;
+                let low = eval_group_scalar_with_ctx(low, group, first_context, bindings)?;
+                let high = eval_group_scalar_with_ctx(high, group, first_context, bindings)?;
+                if matches!(value, SqlValue::Null)
+                    || matches!(low, SqlValue::Null)
+                    || matches!(high, SqlValue::Null)
+                {
                     Ok(SqlValue::Null)
                 } else {
+                    let mut ok = compare_values(&value, &low) != Ordering::Less
+                        && compare_values(&value, &high) != Ordering::Greater;
+                    if *negated {
+                        ok = !ok;
+                    }
                     Ok(SqlValue::Integer(if ok { 1 } else { 0 }))
                 }
             }
+            Expr::InList {
+                expr,
+                list,
+                negated,
+            } => {
+                let value = eval_group_scalar_with_ctx(expr, group, first_context, bindings)?;
+                if matches!(value, SqlValue::Null) {
+                    Ok(SqlValue::Null)
+                } else {
+                    let mut found = false;
+                    let mut saw_null = false;
+                    for item in list {
+                        let candidate =
+                            eval_group_scalar_with_ctx(item, group, first_context, bindings)?;
+                        match candidate {
+                            SqlValue::Null => saw_null = true,
+                            _ if compare_values(&value, &candidate) == Ordering::Equal => {
+                                found = true;
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                    let mut ok = found;
+                    if *negated {
+                        ok = !ok;
+                    }
+                    if !ok && saw_null {
+                        Ok(SqlValue::Null)
+                    } else {
+                        Ok(SqlValue::Integer(if ok { 1 } else { 0 }))
+                    }
+                }
+            }
+            Expr::IsNull(expr) => Ok(SqlValue::Integer(
+                if matches!(
+                    eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
+                    SqlValue::Null
+                ) {
+                    1
+                } else {
+                    0
+                },
+            )),
+            Expr::IsNotNull(expr) => Ok(SqlValue::Integer(
+                if !matches!(
+                    eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
+                    SqlValue::Null
+                ) {
+                    1
+                } else {
+                    0
+                },
+            )),
+            Expr::IsTrue(expr) => Ok(sql_truth_result(eval_group_scalar_with_ctx(
+                expr,
+                group,
+                first_context,
+                bindings,
+            )?)),
+            Expr::IsNotTrue(expr) => Ok(sql_truth_result_not(eval_group_scalar_with_ctx(
+                expr,
+                group,
+                first_context,
+                bindings,
+            )?)),
+            Expr::IsFalse(expr) => Ok(sql_false_result(eval_group_scalar_with_ctx(
+                expr,
+                group,
+                first_context,
+                bindings,
+            )?)),
+            Expr::IsNotFalse(expr) => Ok(sql_false_result_not(eval_group_scalar_with_ctx(
+                expr,
+                group,
+                first_context,
+                bindings,
+            )?)),
+            Expr::IsUnknown(expr) => Ok(SqlValue::Integer(
+                if matches!(
+                    eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
+                    SqlValue::Null
+                ) {
+                    1
+                } else {
+                    0
+                },
+            )),
+            Expr::IsNotUnknown(expr) => Ok(SqlValue::Integer(
+                if !matches!(
+                    eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
+                    SqlValue::Null
+                ) {
+                    1
+                } else {
+                    0
+                },
+            )),
+            Expr::Case {
+                operand,
+                conditions,
+                else_result,
+                ..
+            } => eval_case_with(
+                operand.as_deref(),
+                conditions,
+                else_result.as_deref(),
+                |expr| eval_group_scalar_with_ctx(expr, group, first_context, bindings),
+            ),
+            _ => Err(Error::UnsupportedSql(
+                "aggregate expressions in this query are not supported".to_owned(),
+            )),
         }
-        Expr::IsNull(expr) => Ok(SqlValue::Integer(
-            if matches!(
-                eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
-                SqlValue::Null
-            ) {
-                1
-            } else {
-                0
-            },
-        )),
-        Expr::IsNotNull(expr) => Ok(SqlValue::Integer(
-            if !matches!(
-                eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
-                SqlValue::Null
-            ) {
-                1
-            } else {
-                0
-            },
-        )),
-        Expr::IsTrue(expr) => Ok(sql_truth_result(eval_group_scalar_with_ctx(
-            expr,
-            group,
-            first_context,
-            bindings,
-        )?)),
-        Expr::IsNotTrue(expr) => Ok(sql_truth_result_not(eval_group_scalar_with_ctx(
-            expr,
-            group,
-            first_context,
-            bindings,
-        )?)),
-        Expr::IsFalse(expr) => Ok(sql_false_result(eval_group_scalar_with_ctx(
-            expr,
-            group,
-            first_context,
-            bindings,
-        )?)),
-        Expr::IsNotFalse(expr) => Ok(sql_false_result_not(eval_group_scalar_with_ctx(
-            expr,
-            group,
-            first_context,
-            bindings,
-        )?)),
-        Expr::IsUnknown(expr) => Ok(SqlValue::Integer(
-            if matches!(
-                eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
-                SqlValue::Null
-            ) {
-                1
-            } else {
-                0
-            },
-        )),
-        Expr::IsNotUnknown(expr) => Ok(SqlValue::Integer(
-            if !matches!(
-                eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
-                SqlValue::Null
-            ) {
-                1
-            } else {
-                0
-            },
-        )),
-        Expr::Case { .. } => Err(Error::UnsupportedSql(
-            "aggregate expressions in CASE are not supported".to_owned(),
-        )),
-        _ => Err(Error::UnsupportedSql(
-            "aggregate expressions in this query are not supported".to_owned(),
-        )),
-    }
+    }?;
+    GROUP_EVAL_CACHE.with(|cache| {
+        if let Some(slot) = cache.borrow_mut().as_mut() {
+            slot.insert(cache_key, result.clone());
+        }
+    });
+    drop(cache_guard);
+    Ok(result)
 }
 
 fn eval_group_function_or_scalar(

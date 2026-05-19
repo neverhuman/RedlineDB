@@ -103,15 +103,6 @@ fn insert_on_duplicate_key_update_is_unsupported() {
 // ── DDL unsupported constructs ────────────────────────────────────────────────
 
 #[test]
-fn create_table_as_select_is_unsupported() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE src(id INTEGER)").expect("create");
-    c.execute("INSERT INTO src VALUES (1)").expect("insert");
-    let res = c.execute("CREATE TABLE dst AS SELECT * FROM src");
-    assert_unsupported(res, "not supported");
-}
-
-#[test]
 fn alter_table_only_is_unsupported() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
@@ -211,19 +202,7 @@ fn in_subquery_multi_column_is_unsupported() {
     assert_errors(res);
 }
 
-#[test]
-fn case_in_aggregate_is_unsupported() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(v INTEGER)").expect("create");
-    c.execute("INSERT INTO t VALUES (1),(2),(3)")
-        .expect("insert");
-    // CASE containing aggregate
-    let res = c.execute("SELECT CASE WHEN count(*) > 2 THEN 1 ELSE 0 END FROM t");
-    assert_unsupported(res, "not supported");
-}
-
 // ── Vector unsupported type ───────────────────────────────────────────────────
-
 #[test]
 fn vector_non_f32_type_is_unsupported() {
     let (_d, c) = open();

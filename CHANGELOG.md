@@ -6,6 +6,13 @@ SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Added
 
+- **SQLite CASE aggregate parity**: grouped `CASE` expressions now evaluate
+  aggregate-containing conditions and branches instead of rejecting them, so
+  queries like `CASE WHEN count(*) > 2 THEN ... END` match SQLite. Simple
+  `CASE` now also follows SQLite null semantics for `CASE NULL WHEN NULL`.
+
+### Added
+
 - **SQL ingress compatibility hardening**:
   - `PRAGMA journal_mode = WAL` now round-trips as `wal` for RedlineDB's
     WAL-style journal, while `truncate` / `persist` stay rejected.
