@@ -763,6 +763,9 @@ fn encode_expr_op(out: &mut BytesWriter, op: &ExprOp) -> Result<()> {
             out.u8(1);
             out.u16(*col);
         }
+        ExprOp::CurrentDate => out.u8(12),
+        ExprOp::CurrentTime => out.u8(13),
+        ExprOp::CurrentTimestamp => out.u8(14),
         ExprOp::Not => out.u8(2),
         ExprOp::And => out.u8(3),
         ExprOp::Or => out.u8(4),
@@ -786,6 +789,9 @@ fn decode_expr_op(reader: &mut BytesReader<'_>) -> Result<ExprOp> {
     Ok(match reader.u8()? {
         0 => ExprOp::Const(read_value(reader)?),
         1 => ExprOp::Column(reader.u16()?),
+        12 => ExprOp::CurrentDate,
+        13 => ExprOp::CurrentTime,
+        14 => ExprOp::CurrentTimestamp,
         2 => ExprOp::Not,
         3 => ExprOp::And,
         4 => ExprOp::Or,

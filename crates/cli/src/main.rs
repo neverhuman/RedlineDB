@@ -17,6 +17,12 @@ mod render;
 use dot::{CliState, DotOutcome, OutputMode};
 use render::{Cell, render_query};
 
+const REDLINEDB_VERSION_LINE: &str = concat!(
+    "redlinedb v",
+    env!("CARGO_PKG_VERSION"),
+    " (SQLite 3.45.1 compatibility)"
+);
+
 #[derive(Parser, Debug)]
 #[command(
     name = "redlinedb",
@@ -138,7 +144,7 @@ fn main() {
     }
 
     if cli.version {
-        println!("3.45.1"); // Fool the agent into thinking it's sqlite
+        println!("{REDLINEDB_VERSION_LINE}");
         return;
     }
 
@@ -290,7 +296,7 @@ fn main() {
         }
     } else {
         // Interactive REPL
-        println!("RedlineDB version 1.0.0 (SQLite 3.45.1 compatibility)");
+        println!("{REDLINEDB_VERSION_LINE}");
         println!("Enter \".help\" for usage hints.");
         println!("Connected to a transient in-memory database.");
         println!("Use \".open FILENAME\" to reopen on a persistent database.");
@@ -401,7 +407,7 @@ fn print_sqlite_help() {
     println!("   -line                set output mode to 'line'");
     println!("   -list                set output mode to 'list'");
     println!("   -separator SEP       set output column separator. Default: '|'");
-    println!("   -version             show SQLite version");
+    println!("   -version             show RedlineDB and SQLite compatibility version");
 }
 
 /// CliState-aware query runner that honours `.once FILE` (one-shot

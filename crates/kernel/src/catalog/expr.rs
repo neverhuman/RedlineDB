@@ -9,6 +9,9 @@ use super::value::OwnedValue;
 pub enum ExprAst {
     Const(OwnedValue),
     Column(u16),
+    CurrentDate,
+    CurrentTime,
+    CurrentTimestamp,
     Not(Box<ExprAst>),
     And(Box<ExprAst>, Box<ExprAst>),
     Or(Box<ExprAst>, Box<ExprAst>),
@@ -32,6 +35,9 @@ pub enum ExprAst {
 pub enum ExprOp {
     Const(OwnedValue),
     Column(u16),
+    CurrentDate,
+    CurrentTime,
+    CurrentTimestamp,
     Not,
     And,
     Or,
@@ -89,6 +95,15 @@ pub fn eval_expr(
             ExprOp::Column(col) => scratch
                 .stack
                 .push(row.value_at(*col).ok_or(ExprError::UnknownColumn)?),
+            ExprOp::CurrentDate => scratch.stack.push(OwnedValue::Text(Arc::from(
+                UtcDateTime::now().format_date(),
+            ))),
+            ExprOp::CurrentTime => scratch.stack.push(OwnedValue::Text(Arc::from(
+                UtcDateTime::now().format_time(),
+            ))),
+            ExprOp::CurrentTimestamp => scratch.stack.push(OwnedValue::Text(Arc::from(
+                UtcDateTime::now().format_timestamp(),
+            ))),
             ExprOp::Not => {
                 let v = scratch.stack.pop().ok_or(ExprError::StackUnderflow)?;
                 scratch.stack.push(bool_value(!truthy(&v)));
@@ -131,6 +146,9 @@ fn compile_inner(expr: &ExprAst, bytecode: &mut Vec<ExprOp>, cols: &mut Vec<u16>
             bytecode.push(ExprOp::Column(*col));
             cols.push(*col);
         }
+        ExprAst::CurrentDate => bytecode.push(ExprOp::CurrentDate),
+        ExprAst::CurrentTime => bytecode.push(ExprOp::CurrentTime),
+        ExprAst::CurrentTimestamp => bytecode.push(ExprOp::CurrentTimestamp),
         ExprAst::Not(expr) => {
             compile_inner(expr, bytecode, cols);
             bytecode.push(ExprOp::Not);
@@ -242,4 +260,69 @@ fn truthy(value: &OwnedValue) -> bool {
 
 fn bool_value(v: bool) -> OwnedValue {
     OwnedValue::Integer(if v { 1 } else { 0 })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct UtcDateTime {
+    year: i32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: u32,
+}
+
+impl UtcDateTime {
+    fn now() -> Self {
+        use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+        let dur = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(dur) => dur,
+            Err(_) => Duration::default(),
+        };
+        Self::from_unix(dur.as_secs() as i64)
+    }
+
+    fn from_unix(secs: i64) -> Self {
+        let mut s = secs.rem_euclid(86_400);
+        let mut d = secs.div_euclid(86_400);
+        let hour = (s / 3600) as u32;
+        s %= 3600;
+        let minute = (s / 60) as u32;
+        let second = (s % 60) as u32;
+        d += 719_468;
+        let era = d.div_euclid(146_097);
+        let doe = d.rem_euclid(146_097) as u64;
+        let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+        let y = yoe as i64 + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+        let month = if mp < 10 {
+            (mp + 3) as u32
+        } else {
+            (mp - 9) as u32
+        };
+        let year = (y + if month <= 2 { 1 } else { 0 }) as i32;
+        Self {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+        }
+    }
+
+    fn format_date(&self) -> String {
+        format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
+    }
+
+    fn format_time(&self) -> String {
+        format!("{:02}:{:02}:{:02}", self.hour, self.minute, self.second)
+    }
+
+    fn format_timestamp(&self) -> String {
+        format!("{} {}", self.format_date(), self.format_time())
+    }
 }

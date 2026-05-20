@@ -10,7 +10,7 @@ use sqlparser::ast::{
 
 use crate::error::{Error, Result};
 
-use super::expr::expr_to_kernel_ast;
+use super::expr::{default_expr_to_kernel_ast, expr_to_kernel_ast};
 
 pub(crate) fn is_param_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
@@ -65,7 +65,7 @@ pub(crate) fn convert_column_def(
                 conflict: ConflictAction::Abort,
             }),
             ColumnOption::Default(expr) => {
-                let expr_ast = expr_to_kernel_ast(&expr, column_lookup)?;
+                let expr_ast = default_expr_to_kernel_ast(&expr, column_lookup)?;
                 if let ExprAst::Const(value) = &expr_ast {
                     default_value = Some(value.clone());
                 }

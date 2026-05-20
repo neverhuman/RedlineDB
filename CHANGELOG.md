@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## [1.0.17] - 2026-05-20
+
+SQLite dynamic-default compatibility and release version alignment.
+
+### Fixed
+
+- `CURRENT_DATE`, `CURRENT_TIME`, and `CURRENT_TIMESTAMP` column defaults now
+  parse, persist through catalog reopen, evaluate at insert time, and appear in
+  `PRAGMA table_info` output using SQLite-compatible default text.
+- `redlinedb --version` now identifies the RedlineDB release version while
+  still reporting SQLite 3.45.1 compatibility, instead of printing only the
+  SQLite compatibility version.
+
+### Added
+
+- SQLite parity coverage for current date/time defaults, including the Jansu
+  `cluster` table default shape used by storage integration smoke tests.
+
+### Changed
+
+- Workspace package metadata and lockfile entries now target `1.0.17`.
+
 ## [1.0.16] - 2026-05-20
 
 Release-readiness pass for CI and local proof lanes.

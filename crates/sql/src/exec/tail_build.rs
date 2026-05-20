@@ -133,11 +133,12 @@ pub(crate) fn build_default_values(
     table: &Arc<TableDef>,
     mut values: Vec<SqlValue>,
 ) -> Result<Vec<SqlValue>> {
+    let mut scratch = EvalScratch::default();
     for (idx, column) in table.columns.iter().enumerate() {
         if matches!(values[idx], SqlValue::Null)
-            && let Some(default) = &column.default_value
+            && let Some(default) = column_default_value(column, &mut scratch)?
         {
-            values[idx] = default.clone();
+            values[idx] = default;
         }
     }
     let values = apply_row_affinity(table, values)?;
@@ -149,16 +150,40 @@ fn build_default_values_for_omitted(
     mut values: Vec<SqlValue>,
     provided: &[bool],
 ) -> Result<Vec<SqlValue>> {
+    let mut scratch = EvalScratch::default();
     for (idx, column) in table.columns.iter().enumerate() {
         if !provided.get(idx).copied().unwrap_or(false)
             && matches!(values[idx], SqlValue::Null)
-            && let Some(default) = &column.default_value
+            && let Some(default) = column_default_value(column, &mut scratch)?
         {
-            values[idx] = default.clone();
+            values[idx] = default;
         }
     }
     let values = apply_row_affinity(table, values)?;
     compute_stored_generated_columns(table, values)
+}
+
+fn column_default_value(
+    column: &redlinedb_kernel::catalog::ColumnDef,
+    scratch: &mut EvalScratch,
+) -> Result<Option<SqlValue>> {
+    if let Some(default) = &column.default_value {
+        return Ok(Some(default.clone()));
+    }
+    let Some(default_expr) = &column.default_expr else {
+        return Ok(None);
+    };
+    eval_expr(default_expr, &EmptyDefaultRow, scratch)
+        .map(Some)
+        .map_err(|err| Error::UnsupportedSql(format!("invalid default expression: {err}")))
+}
+
+struct EmptyDefaultRow;
+
+impl RowValueSource for EmptyDefaultRow {
+    fn value_at(&self, _col: u16) -> Option<OwnedValue> {
+        None
+    }
 }
 
 /// Phase-11 SQL-D A6: compute every STORED generated column from the
