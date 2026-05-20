@@ -6,7 +6,8 @@
 use std::sync::Arc;
 
 use redlinedb_sql::{
-    BeginMode, Database, DbOptions, Step, is_blank_sql, split_first_statement, split_statements,
+    BeginMode, Database, DbOptions, Step, first_statement_complete, is_blank_sql,
+    split_first_statement, split_statements,
 };
 use tempfile::tempdir;
 
@@ -60,6 +61,19 @@ fn split_first_statement_respects_line_comment() {
     let (head, tail) = split_first_statement("SELECT 1 -- has ; in comment\n; SELECT 2;");
     assert_eq!(head, "SELECT 1 -- has ; in comment\n;");
     assert_eq!(tail, " SELECT 2;");
+}
+
+#[test]
+fn statement_complete_requires_top_level_semicolon() {
+    assert!(first_statement_complete("SELECT 1;"));
+    assert!(!first_statement_complete("SELECT 1"));
+    assert!(!first_statement_complete("SELECT ';'"));
+    assert!(!first_statement_complete(
+        "CREATE TRIGGER tr AFTER INSERT ON t BEGIN SELECT 1;"
+    ));
+    assert!(first_statement_complete(
+        "CREATE TRIGGER tr AFTER INSERT ON t BEGIN SELECT 1; END;"
+    ));
 }
 
 #[test]

@@ -17,7 +17,7 @@ pub use connection::{
     Connection, Database, DbOptions, OptimizerConfig, QueryMemoryConfig, StatsConfig,
 };
 pub use error::{Error, Result};
-pub use parser::{is_blank_sql, split_first_statement, split_statements};
+pub use parser::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};
 pub use redlinedb_kernel::engine::{Engine, RecoveryTarget};
 pub use session::BeginMode;
 pub use statement::{

@@ -53,6 +53,7 @@ pub(super) fn eval_function(
         "length" => match values.first() {
             // SQLite: length(NULL) is NULL, not 0.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
+            Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
             Some(other) => Ok(SqlValue::Integer(value_to_string(other).len() as i64)),
         },
         "lower" => match values.first() {
@@ -318,9 +319,7 @@ fn eval_raise_function(func: &sqlparser::ast::Function) -> Result<SqlValue> {
     };
     let action = raise_action(list.args.first())?;
     if action == "ignore" {
-        return Err(Error::UnsupportedSql(
-            "RAISE(IGNORE) is not supported in trigger bodies".to_owned(),
-        ));
+        return Err(Error::TriggerIgnore);
     }
     if !matches!(action.as_str(), "abort" | "fail" | "rollback") {
         return Err(Error::UnsupportedSql(format!(

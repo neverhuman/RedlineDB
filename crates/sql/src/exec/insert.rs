@@ -29,6 +29,13 @@ pub(super) fn execute_insert(
         let mut returning_rows = Vec::new();
         if plan.default_values {
             let mut values = build_default_row(&plan.table)?;
+            if fire_before_insert_triggers(conn, tx, &plan.table, &values)? {
+                return Ok(build_dml_execution_result(
+                    0,
+                    returning_rows,
+                    plan.returning.is_some(),
+                ));
+            }
             match insert_row_with_resolution(
                 conn,
                 session,
@@ -91,6 +98,9 @@ pub(super) fn execute_insert(
                     ));
                 }
                 let mut values = build_row_from_values(&plan.table, row, &plan.columns)?;
+                if fire_before_insert_triggers(conn, tx, &plan.table, &values)? {
+                    continue;
+                }
                 match insert_row_with_resolution(
                     conn,
                     session,
@@ -142,6 +152,9 @@ pub(super) fn execute_insert(
                 ));
             }
             let mut values = build_row(&plan.table, row, &plan.columns, bindings)?;
+            if fire_before_insert_triggers(conn, tx, &plan.table, &values)? {
+                continue;
+            }
             match insert_row_with_resolution(
                 conn,
                 session,
@@ -188,6 +201,35 @@ pub(super) fn execute_insert(
             plan.returning.is_some(),
         ))
     })
+}
+
+/// Fire BEFORE INSERT triggers attached to `table`. Returning `true` means a
+/// trigger raised `IGNORE`, so the caller should skip the candidate row.
+fn fire_before_insert_triggers(
+    conn: &Connection,
+    tx: &mut redlinedb_kernel::engine::Txn,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    values: &[SqlValue],
+) -> Result<bool> {
+    let schema = conn.engine().schema_snapshot();
+    match crate::exec::trigger::fire_triggers(
+        conn,
+        tx,
+        &schema,
+        table,
+        TriggerEventKind::Insert,
+        TriggerTimeKind::Before,
+        None,
+        Some(crate::exec::trigger::TriggerRowValues {
+            rowid: RowId::ZERO,
+            values: values.to_vec(),
+        }),
+        None,
+    ) {
+        Ok(()) => Ok(false),
+        Err(Error::TriggerIgnore) => Ok(true),
+        Err(err) => Err(err),
+    }
 }
 
 /// Fire AFTER INSERT triggers attached to `table`. NEW is the row just

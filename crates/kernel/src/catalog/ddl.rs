@@ -157,8 +157,6 @@ pub enum AlterTableOperationSpec {
         column: ColumnSpec,
         if_not_exists: bool,
     },
-    /// Lane SQL-D phase 10: parsed-only. Execution layer should reject with
-    /// a `not yet implemented` error when the target column exists.
     DropColumn {
         column_name: DbName,
         if_exists: bool,

@@ -6,8 +6,8 @@ use std::process::exit;
 
 use clap::Parser;
 use redlinedb::{
-    ArchiveMode, BackupOptions, Database, OpenOptions, PhysicalBackupOptions, RecoveryTarget,
-    RestoreOptions, Step, ValueRef,
+    ArchiveMode, BackupOptions, Database, OpenOptions, OwnedStep, PhysicalBackupOptions,
+    RecoveryTarget, RestoreOptions, ValueRef,
 };
 use serde_json::json;
 
@@ -178,7 +178,13 @@ fn main() {
     } else {
         PathBuf::from(&filename)
     };
-    let mut state = CliState::new(db, db_path, mode, separator, show_header);
+    let mut state = match CliState::new(db, db_path, mode, separator, show_header) {
+        Ok(state) => state,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            exit(1);
+        }
+    };
     state.bail = cli.bail;
     state.echo = cli.echo;
 
@@ -235,7 +241,7 @@ fn main() {
             }
             buffer.push_str(&line);
             buffer.push('\n');
-            if line.trim_end().ends_with(';') {
+            if redlinedb::sql_input_complete(&buffer) {
                 if state.echo {
                     println!("{}", buffer.trim_end());
                 }
@@ -297,7 +303,7 @@ fn main() {
                     buffer.push_str(line);
                     buffer.push('\n');
 
-                    if line.ends_with(';') {
+                    if redlinedb::sql_input_complete(&buffer) {
                         if let Err(e) = run_query_with_state(&mut state, &buffer) {
                             eprintln!("Error: {}", e);
                         }
@@ -333,7 +339,7 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
         }
         buffer.push_str(raw_line);
         buffer.push('\n');
-        if raw_line.trim_end().ends_with(';') {
+        if redlinedb::sql_input_complete(&buffer) {
             run_query_with_state(state, &buffer)?;
             buffer.clear();
         }
@@ -381,22 +387,26 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
         let file = std::fs::File::create(&path)
             .map_err(|err| format!("Error: cannot open {}: {err}", path.display()))?;
         let mut writer = io::BufWriter::new(file);
+        let mode = state.mode;
+        let separator = state.separator.clone();
         let result = run_query_writer(
-            &state.db,
+            &mut state.conn,
             sql,
-            &state.mode,
-            &state.separator,
+            &mode,
+            &separator,
             &mut writer,
             &params,
         );
         writer.flush().map_err(|err| err.to_string())?;
         result
     } else {
+        let mode = state.mode;
+        let separator = state.separator.clone();
         run_query_writer(
-            &state.db,
+            &mut state.conn,
             sql,
-            &state.mode,
-            &state.separator,
+            &mode,
+            &separator,
             &mut io::stdout(),
             &params,
         )
@@ -404,24 +414,19 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
 }
 
 fn run_query_writer<W: Write>(
-    db: &Database,
+    conn: &mut redlinedb::Connection,
     sql: &str,
     mode: &OutputMode,
     separator: &str,
     out: &mut W,
     params: &[(String, String)],
 ) -> Result<(), String> {
-    let mut conn = db.connect().map_err(|err| err.to_string())?;
-
-    let statements: Vec<&str> = sql
-        .split(';')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    for statement in statements {
-        let full_stmt = format!("{};", statement);
-        let mut stmt = conn.prepare(&full_stmt).map_err(|err| err.to_string())?;
+    let mut rest = sql;
+    while !rest.trim().is_empty() {
+        let (stmt_opt, tail) = conn.prepare_v2(rest).map_err(|err| err.to_string())?;
+        let Some(mut stmt) = stmt_opt else {
+            break;
+        };
         // SQLite ignores params that don't appear in the SQL, so we treat
         // any `bind_named` error as a soft signal and continue.
         for (name, value) in params {
@@ -434,11 +439,11 @@ fn run_query_writer<W: Write>(
 
         let mut json_results = Vec::new();
 
-        while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
+        while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
             if *mode == OutputMode::Json {
                 let mut obj = serde_json::Map::new();
                 for index in 0..column_count {
-                    let val = match row.get_ref(index).map_err(|err| err.to_string())? {
+                    let val = match stmt.column_ref(index).map_err(|err| err.to_string())? {
                         ValueRef::Null => serde_json::Value::Null,
                         ValueRef::Integer(v) => json!(v),
                         ValueRef::Real(v) => json!(v),
@@ -455,7 +460,7 @@ fn run_query_writer<W: Write>(
                         write!(out, "{separator}").map_err(|err| err.to_string())?;
                     }
                     first = false;
-                    match row.get_ref(index).map_err(|err| err.to_string())? {
+                    match stmt.column_ref(index).map_err(|err| err.to_string())? {
                         ValueRef::Null => {}
                         ValueRef::Integer(value) => {
                             write!(out, "{value}").map_err(|err| err.to_string())?;
@@ -495,6 +500,7 @@ fn run_query_writer<W: Write>(
             )
             .map_err(|err| err.to_string())?;
         }
+        rest = tail;
     }
 
     Ok(())
