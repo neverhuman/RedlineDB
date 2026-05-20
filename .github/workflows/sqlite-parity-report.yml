@@ -32,4 +32,4 @@ jobs:
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ secrets.REDLINEDB_REPORT_BOT_TOKEN || github.token }}
-        run: bash ops/ci/sqlite-parity-report.sh publish-pr
+        run: bash ops/ci/fast.sh sqlite-parity-report-publish-pr

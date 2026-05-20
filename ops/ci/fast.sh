@@ -24,6 +24,11 @@ if [ -z "${REDLINEDB_BENCH_GIT_SHA:-}" ]; then
     export REDLINEDB_BENCH_GIT_SHA="$(git rev-parse HEAD)"
 fi
 
+if [ "${1:-}" = "sqlite-parity-report-publish-pr" ]; then
+    bash ops/ci/sqlite-parity-report.sh publish-pr
+    exit 0
+fi
+
 run_preflight() {
     cargo fmt --check
     bash scripts/check_file_sizes.sh

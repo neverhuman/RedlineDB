@@ -77,9 +77,32 @@ is_generated_zone_path() {
   return 1
 }
 
+is_same_pr_script_missing_only() {
+  local json_out="$1"
+  local script_path
+
+  if ! grep -q '"summary":[[:space:]]*"blocked: 1 new hard, 0 worsened, 0 always-block finding(s)"' "$json_out"; then
+    return 1
+  fi
+  if ! grep -q '"matched_term":[[:space:]]*"ci.local-parity.script-missing"' "$json_out"; then
+    return 1
+  fi
+
+  script_path="$(
+    sed -n 's/.*workflow references missing script `\([^`]*\)`.*/\1/p' "$json_out" |
+      head -n 1
+  )"
+  if [ -z "$script_path" ]; then
+    return 1
+  fi
+
+  git cat-file -e "HEAD:$script_path" 2>/dev/null
+}
+
 failed=0
 blocked_files=()
 skipped_generated=0
+skipped_same_pr_scripts=0
 i=0
 for path in "${changed_files[@]}"; do
   [ -z "$path" ] && continue
@@ -123,6 +146,12 @@ for path in "${changed_files[@]}"; do
   set -e
 
   if [ "$rc" -ne 0 ]; then
+    if [ -s "$json_out" ] && is_same_pr_script_missing_only "$json_out"; then
+      skipped_same_pr_scripts=$((skipped_same_pr_scripts + 1))
+      printf 'jankurai staged-gate: %s references script added in this PR; continuing\n' \
+        "$path"
+      continue
+    fi
     failed=1
     blocked_files+=("$path")
     cp "$json_out" "$LOG_DIR/blocked-$i.json" 2>/dev/null || true
@@ -145,4 +174,8 @@ fi
 
 printf 'jankurai staged-gate: %d file(s) clean vs %s (%d generated-zone file(s) skipped)\n' \
   "${#changed_files[@]}" "$BASE_REF" "$skipped_generated"
+if [ "$skipped_same_pr_scripts" -ne 0 ]; then
+  printf 'jankurai staged-gate: %d same-PR workflow script reference(s) verified in HEAD\n' \
+    "$skipped_same_pr_scripts"
+fi
 exit 0
