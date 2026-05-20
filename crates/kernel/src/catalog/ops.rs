@@ -13,7 +13,7 @@ use super::key::{IndexKeyDef, IndexKeySource, NullOrder};
 use super::names::{DbName, QualifiedName};
 use super::schema::{
     CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef, SchemaEpoch,
-    SchemaSnapshot, TableDef,
+    SchemaSnapshot, TABLE_FLAG_STRICT, TABLE_FLAG_WITHOUT_ROWID, TableDef,
 };
 use crate::format::{PageId, RelId};
 use crate::{Error, Result};
@@ -47,10 +47,6 @@ pub fn apply_create_table(
     mut snapshot: SchemaSnapshot,
     spec: CreateTableSpec,
 ) -> Result<SchemaSnapshot> {
-    if spec.without_rowid {
-        return Err(Error::UnsupportedDdl("WITHOUT ROWID is not supported yet"));
-    }
-
     let schema_id = resolve_schema_id(&snapshot, spec.schema.as_ref())?;
     if snapshot
         .lookup_table(schema_id, spec.name.folded())
@@ -94,7 +90,10 @@ pub fn apply_create_table(
             match constraint {
                 ColumnConstraintSpec::PrimaryKey { sort_dir, conflict } => {
                     not_null = true;
-                    if rowid_alias_column.is_none() && affinity == super::Affinity::Integer {
+                    if !spec.without_rowid
+                        && rowid_alias_column.is_none()
+                        && affinity == super::Affinity::Integer
+                    {
                         rowid_alias_column = Some(ordinal as u16);
                     }
                     let constraint_id = ConstraintId(next_object_id.0);
@@ -337,6 +336,14 @@ pub fn apply_create_table(
         }
     }
 
+    let mut flags = 0;
+    if spec.strict {
+        flags |= TABLE_FLAG_STRICT;
+    }
+    if spec.without_rowid {
+        flags |= TABLE_FLAG_WITHOUT_ROWID;
+    }
+
     let table = Arc::new(TableDef {
         table_id,
         schema_id,
@@ -349,7 +356,7 @@ pub fn apply_create_table(
         checks,
         foreign_keys,
         rowid_alias_column,
-        flags: u64::from(spec.strict),
+        flags,
         normalized_sql: spec.normalized_sql.map(|sql| sql.into_boxed_str()),
     });
 
@@ -615,15 +622,11 @@ pub fn apply_alter_table(
                 generated: None,
             });
         }
-        AlterTableOperationSpec::DropColumn { .. } => {
-            // Lane SQL-D phase 10: ALTER TABLE ... DROP COLUMN reaches the
-            // catalog only via parser-only paths today. The SQL crate is
-            // expected to reject before it gets here; if the operation is
-            // ever applied we surface an UnsupportedDdl rather than corrupt
-            // the schema by silently dropping data we cannot rewrite.
-            return Err(Error::UnsupportedDdl(
-                "ALTER TABLE DROP COLUMN is parsed-only; execution not yet implemented",
-            ));
+        AlterTableOperationSpec::DropColumn {
+            column_name,
+            if_exists,
+        } => {
+            apply_drop_column(&mut table, column_name.folded(), if_exists)?;
         }
     }
 
@@ -632,6 +635,137 @@ pub fn apply_alter_table(
     snapshot.meta.schema_epoch = SchemaEpoch(snapshot.meta.schema_epoch.0.saturating_add(1));
     snapshot.rebuild_indexes();
     Ok(snapshot)
+}
+
+fn apply_drop_column(table: &mut TableDef, folded_name: &str, if_exists: bool) -> Result<()> {
+    let Some(drop_ordinal) = table
+        .columns
+        .iter()
+        .position(|column| column.folded.as_ref() == folded_name)
+    else {
+        return if if_exists {
+            Ok(())
+        } else {
+            Err(Error::ObjectNotFound)
+        };
+    };
+    if table.columns.len() == 1 {
+        return Err(Error::UnsupportedDdl(
+            "ALTER TABLE DROP COLUMN cannot drop the last column",
+        ));
+    }
+    if table.rowid_alias_column == Some(drop_ordinal as u16) {
+        return Err(Error::UnsupportedDdl(
+            "ALTER TABLE DROP COLUMN cannot drop an INTEGER PRIMARY KEY rowid alias",
+        ));
+    }
+    if table.columns[drop_ordinal].generated.is_some()
+        || table
+            .columns
+            .iter()
+            .any(|column| column.generated.is_some())
+    {
+        return Err(Error::UnsupportedDdl(
+            "ALTER TABLE DROP COLUMN with generated columns is not supported",
+        ));
+    }
+
+    reject_drop_column_references(table, drop_ordinal as u16)?;
+
+    table.columns.remove(drop_ordinal);
+    for (ordinal, column) in table.columns.iter_mut().enumerate() {
+        column.ordinal = ordinal as u16;
+    }
+    renumber_drop_column_ordinals(table, drop_ordinal as u16);
+    table.normalized_sql = None;
+    Ok(())
+}
+
+fn reject_drop_column_references(table: &TableDef, drop_ordinal: u16) -> Result<()> {
+    let dropped = &table.columns[drop_ordinal as usize];
+    if table.constraints.iter().any(|constraint| {
+        constraint.column_id == Some(dropped.column_id)
+            || constraint
+                .expr
+                .as_ref()
+                .is_some_and(|expr| expr.referenced_cols.iter().any(|col| *col >= drop_ordinal))
+    }) {
+        return Err(Error::UnsupportedDdl(
+            "ALTER TABLE DROP COLUMN cannot drop a constrained column",
+        ));
+    }
+    if table.checks.iter().any(|check| {
+        check
+            .expr
+            .referenced_cols
+            .iter()
+            .any(|col| *col >= drop_ordinal)
+    }) {
+        return Err(Error::UnsupportedDdl(
+            "ALTER TABLE DROP COLUMN with CHECK constraints is not supported",
+        ));
+    }
+    for index in &table.indexes {
+        if index.predicate_sql.is_some() {
+            return Err(Error::UnsupportedDdl(
+                "ALTER TABLE DROP COLUMN with partial indexes is not supported",
+            ));
+        }
+        for key in &index.keys {
+            match &key.source {
+                IndexKeySource::Column { attnum } if *attnum == drop_ordinal => {
+                    return Err(Error::UnsupportedDdl(
+                        "ALTER TABLE DROP COLUMN cannot drop an indexed column",
+                    ));
+                }
+                IndexKeySource::Expression {
+                    referenced_cols, ..
+                } if referenced_cols.iter().any(|col| *col >= drop_ordinal) => {
+                    return Err(Error::UnsupportedDdl(
+                        "ALTER TABLE DROP COLUMN with expression indexes is not supported",
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
+    if table
+        .foreign_keys
+        .iter()
+        .any(|fk| fk.columns.contains(&drop_ordinal))
+    {
+        return Err(Error::UnsupportedDdl(
+            "ALTER TABLE DROP COLUMN cannot drop a foreign-key column",
+        ));
+    }
+    Ok(())
+}
+
+fn renumber_drop_column_ordinals(table: &mut TableDef, drop_ordinal: u16) {
+    if let Some(alias) = &mut table.rowid_alias_column
+        && *alias > drop_ordinal
+    {
+        *alias -= 1;
+    }
+    for index in &mut table.indexes {
+        for key in &mut index.keys {
+            if key.ordinal > drop_ordinal {
+                key.ordinal -= 1;
+            }
+            if let IndexKeySource::Column { attnum } = &mut key.source
+                && *attnum > drop_ordinal
+            {
+                *attnum -= 1;
+            }
+        }
+    }
+    for fk in &mut table.foreign_keys {
+        for column in &mut fk.columns {
+            if *column > drop_ordinal {
+                *column -= 1;
+            }
+        }
+    }
 }
 
 struct TableConstraintIndexInput<'a> {

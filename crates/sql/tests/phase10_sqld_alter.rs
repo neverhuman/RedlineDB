@@ -57,18 +57,38 @@ fn alter_table_add_column_default_fill() {
 }
 
 #[test]
-fn alter_table_drop_column_is_parser_only() {
+fn alter_table_drop_column_updates_empty_table_schema() {
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER, b INTEGER)")
         .expect("create");
+    conn.execute("ALTER TABLE t ADD COLUMN c TEXT DEFAULT 'd'")
+        .expect("add");
+    conn.execute("ALTER TABLE t DROP COLUMN b")
+        .expect("drop column");
+    conn.execute("INSERT INTO t(a) VALUES (1)").expect("insert");
+    let mut stmt = conn.prepare("SELECT a, c FROM t").expect("prepare");
+    assert_eq!(stmt.step().expect("step"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("a"), 1);
+    assert_eq!(stmt.column_text(1).expect("c"), "d");
+    assert_eq!(stmt.step().expect("done"), Step::Done);
+}
+
+#[test]
+fn alter_table_drop_column_rejects_nonempty_rewrite_case() {
+    let (_dir, conn) = open();
+    conn.execute("CREATE TABLE t(a INTEGER, b INTEGER, c INTEGER)")
+        .expect("create");
+    conn.execute("INSERT INTO t VALUES (1, 2, 3)")
+        .expect("insert");
     let res = conn.execute("ALTER TABLE t DROP COLUMN b");
-    // Parser must accept the syntax; execution surfaces UnsupportedDdl /
-    // UnsupportedSql so a future writer can convert it into a rewrite.
-    assert!(res.is_err(), "drop column should be parser-only-error");
+    assert!(
+        res.is_err(),
+        "drop column should reject rewrite-needed table"
+    );
     let msg = format!("{:?}", res.unwrap_err());
     assert!(
-        msg.to_ascii_lowercase().contains("not yet implemented")
+        msg.to_ascii_lowercase().contains("rewrite")
             || msg.to_ascii_lowercase().contains("unsupported"),
-        "expected unsupported/not-yet message, got {msg}"
+        "expected unsupported rewrite message, got {msg}"
     );
 }

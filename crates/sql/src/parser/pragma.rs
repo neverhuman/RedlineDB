@@ -778,8 +778,8 @@ fn pragma_table_list_rows(schema: &SchemaSnapshot) -> Vec<Vec<SqlValue>> {
                 SqlValue::Text(Arc::from(table.name.as_ref())),
                 SqlValue::Text(Arc::from("table")),
                 SqlValue::Integer(table.columns.len() as i64),
-                SqlValue::Integer(0),
-                SqlValue::Integer(if table.flags != 0 { 1 } else { 0 }),
+                SqlValue::Integer(if table.is_without_rowid() { 1 } else { 0 }),
+                SqlValue::Integer(if table.is_strict() { 1 } else { 0 }),
             ]
         })
         .collect()

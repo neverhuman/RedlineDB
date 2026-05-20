@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use redlinedb::Database;
+use redlinedb::{Connection, Database};
 
 pub mod control;
 pub mod display;
@@ -79,6 +79,7 @@ impl OutputMode {
 /// Mutable shell state that dot-commands read and update.
 pub struct CliState {
     pub db: Database,
+    pub conn: Connection,
     pub db_path: PathBuf,
     pub mode: OutputMode,
     pub separator: String,
@@ -144,9 +145,11 @@ impl CliState {
         mode: OutputMode,
         separator: String,
         header: bool,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, String> {
+        let conn = db.connect().map_err(|err| err.to_string())?;
+        Ok(Self {
             db,
+            conn,
             db_path,
             mode,
             separator,
@@ -163,7 +166,12 @@ impl CliState {
             output: OutputTarget::Stdout,
             params: std::collections::BTreeMap::new(),
             once: None,
-        }
+        })
+    }
+
+    pub fn reconnect(&mut self) -> Result<(), String> {
+        self.conn = self.db.connect().map_err(|err| err.to_string())?;
+        Ok(())
     }
 }
 

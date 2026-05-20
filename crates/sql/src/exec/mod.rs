@@ -6,8 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use redlinedb_kernel::catalog::{
     ColumnStats, ConstraintKind, EvalScratch, HistogramBucket, IndexStats, MostCommonValue,
-    OwnedValue, RecordRef, RecordScratch, RowValueSource, SqliteSchemaRow, StatsEpoch,
-    StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity, encode_record, eval_expr,
+    OwnedValue, RecordRef, RecordScratch, RowValueSource, SchemaSnapshot, SqliteSchemaRow,
+    StatsEpoch, StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity, encode_record,
+    eval_expr,
 };
 use redlinedb_kernel::engine::{CommitOutcome, Engine, Txn};
 use redlinedb_kernel::format::RowId;
@@ -203,6 +204,20 @@ pub(crate) fn current_tx() -> Option<*mut Txn> {
         let ptr = cell.get();
         if ptr.is_null() { None } else { Some(ptr) }
     })
+}
+
+pub(crate) fn current_tx_schema_snapshot(conn: &Connection) -> Option<Arc<SchemaSnapshot>> {
+    let tx_ptr = current_tx()?;
+    if let Some(active) = current_connection()
+        && !std::ptr::eq(active, conn)
+    {
+        return None;
+    }
+    // SAFETY: `tx_ptr` is installed by `with_write_tx` for a strictly
+    // synchronous execution scope. Re-entrant trigger preparation can read
+    // its pending schema snapshot without re-locking the session mutex.
+    let tx_ref: &Txn = unsafe { &*tx_ptr };
+    Some(conn.engine().schema_snapshot_for_tx(tx_ref))
 }
 
 pub fn execute_prepared(

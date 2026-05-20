@@ -53,3 +53,25 @@ fn delete_then_aggregate_scan_stays_in_rowid_order() {
         ",
     );
 }
+
+#[test]
+fn without_rowid_schema_persists_clause() {
+    assert_parity(
+        "
+        CREATE TABLE t(a TEXT, b INT, PRIMARY KEY(a,b)) WITHOUT ROWID;
+        INSERT INTO t VALUES('x',1);
+        SELECT sql LIKE '%WITHOUT ROWID%' FROM sqlite_schema WHERE name='t';
+        ",
+    );
+}
+
+#[test]
+fn without_rowid_hides_implicit_rowid_aliases() {
+    assert_parity(
+        "
+        CREATE TABLE t(a TEXT, b INT, PRIMARY KEY(a,b)) WITHOUT ROWID;
+        INSERT INTO t VALUES('x',1);
+        SELECT rowid FROM t;
+        ",
+    );
+}

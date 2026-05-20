@@ -213,7 +213,7 @@ fn validate_strict_storage(
     column: &redlinedb_kernel::catalog::ColumnDef,
     value: &SqlValue,
 ) -> Result<()> {
-    if table.flags == 0 || matches!(value, SqlValue::Null) || strict_declared_any(column) {
+    if !table.is_strict() || matches!(value, SqlValue::Null) || strict_declared_any(column) {
         return Ok(());
     }
     let allowed = match column.affinity {

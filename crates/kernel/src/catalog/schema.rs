@@ -135,6 +135,38 @@ pub struct TableDef {
     pub normalized_sql: Option<Box<str>>,
 }
 
+pub const TABLE_FLAG_STRICT: u64 = 1 << 0;
+pub const TABLE_FLAG_WITHOUT_ROWID: u64 = 1 << 1;
+
+impl TableDef {
+    pub fn is_strict(&self) -> bool {
+        self.flags & TABLE_FLAG_STRICT != 0
+    }
+
+    pub fn is_without_rowid(&self) -> bool {
+        self.flags & TABLE_FLAG_WITHOUT_ROWID != 0
+    }
+
+    pub fn has_public_rowid(&self) -> bool {
+        !self.is_without_rowid()
+    }
+
+    pub fn is_public_rowid_name(&self, name: &str) -> bool {
+        self.has_public_rowid()
+            && (name.eq_ignore_ascii_case("rowid")
+                || name.eq_ignore_ascii_case("_rowid_")
+                || name.eq_ignore_ascii_case("oid"))
+    }
+
+    pub fn rowid_alias_column_name_matches(&self, name: &str) -> bool {
+        self.has_public_rowid()
+            && self
+                .rowid_alias_column
+                .and_then(|alias| self.columns.get(alias as usize))
+                .is_some_and(|column| column.folded.as_ref().eq_ignore_ascii_case(name))
+    }
+}
+
 /// Parsed foreign-key constraint attached to a [`TableDef`]. Captures the
 /// child-side column ordinals plus the parent table/column names so the
 /// SQL executor can resolve the parent table at write time (snapshots are
@@ -404,6 +436,17 @@ fn render_create_table(table: &TableDef) -> String {
         }
     }
     out.push(')');
+    let mut table_options = Vec::new();
+    if table.is_strict() {
+        table_options.push("STRICT");
+    }
+    if table.is_without_rowid() {
+        table_options.push("WITHOUT ROWID");
+    }
+    if !table_options.is_empty() {
+        out.push(' ');
+        out.push_str(&table_options.join(", "));
+    }
     out
 }
 

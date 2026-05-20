@@ -368,6 +368,12 @@ fn randomblob_produces_blob_of_right_size() {
     assert!(matches!(v, SqlValue::Blob(ref b) if b.len() == 8));
 }
 
+#[test]
+fn length_counts_blob_bytes() {
+    let (_d, c) = open();
+    assert_eq!(q1(&c, "SELECT length(randomblob(4))"), SqlValue::Integer(4));
+}
+
 // ── functions in column expressions after INSERT ───────────────────────────────
 
 #[test]

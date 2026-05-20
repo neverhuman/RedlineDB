@@ -266,9 +266,8 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
 fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
     let trimmed = sql.trim();
     let lower = trimmed.trim_end_matches(';').trim().to_ascii_lowercase();
-    let engine = conn.engine();
-    let schema = engine.schema_snapshot();
-    let schema_epoch = engine.schema_epoch();
+    let schema = conn.schema_snapshot();
+    let schema_epoch = conn.schema_epoch();
 
     if lower == "begin" || lower == "begin deferred" {
         return Ok(template(

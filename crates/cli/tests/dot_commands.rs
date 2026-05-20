@@ -147,6 +147,93 @@ fn dot_bail_terminates_on_error() {
 }
 
 #[test]
+fn sql_transaction_state_persists_across_input_lines() {
+    let (out, err, code) = run_script(
+        None,
+        ".bail on\n\
+         .mode list\n\
+         BEGIN;\n\
+         CREATE TABLE t(x INT);\n\
+         INSERT INTO t VALUES(1);\n\
+         COMMIT;\n\
+         SELECT count(*) FROM t;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.lines().any(|line| line.trim() == "1"), "stdout={out}");
+}
+
+#[test]
+fn sql_rollback_state_persists_across_input_lines() {
+    let (out, err, code) = run_script(
+        None,
+        ".bail on\n\
+         .mode list\n\
+         CREATE TABLE t(x INT);\n\
+         BEGIN;\n\
+         INSERT INTO t VALUES(1);\n\
+         ROLLBACK;\n\
+         SELECT count(*) FROM t;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.lines().any(|line| line.trim() == "0"), "stdout={out}");
+}
+
+#[test]
+fn sql_savepoint_state_persists_across_input_lines() {
+    let (out, err, code) = run_script(
+        None,
+        ".bail on\n\
+         .mode list\n\
+         CREATE TABLE t(x INT);\n\
+         SAVEPOINT s1;\n\
+         INSERT INTO t VALUES(1);\n\
+         SAVEPOINT s2;\n\
+         INSERT INTO t VALUES(2);\n\
+         ROLLBACK TO s2;\n\
+         RELEASE s2;\n\
+         RELEASE s1;\n\
+         SELECT group_concat(x,'') FROM t;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.lines().any(|line| line.trim() == "1"), "stdout={out}");
+}
+
+#[test]
+fn sql_multiline_trigger_body_is_one_statement() {
+    let (out, err, code) = run_script(
+        None,
+        ".bail on\n\
+         .mode list\n\
+         CREATE TABLE src(x INT);\n\
+         CREATE TABLE log(y INT);\n\
+         CREATE TRIGGER src_ai AFTER INSERT ON src BEGIN\n\
+           INSERT INTO log VALUES (new.x);\n\
+         END;\n\
+         INSERT INTO src VALUES(7);\n\
+         SELECT y FROM log;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.lines().any(|line| line.trim() == "7"), "stdout={out}");
+}
+
+#[test]
+fn foreign_keys_pragma_persists_across_input_lines() {
+    let (_out, err, code) = run_script(
+        None,
+        ".bail on\n\
+         PRAGMA foreign_keys=ON;\n\
+         CREATE TABLE p(id INT PRIMARY KEY);\n\
+         CREATE TABLE c(pid INT REFERENCES p(id));\n\
+         INSERT INTO c VALUES(99);\n",
+    );
+    assert_eq!(code, 1);
+    assert!(
+        err.contains("FOREIGN KEY constraint failed"),
+        "stderr={err}"
+    );
+}
+
+#[test]
 fn dot_show_dumps_current_settings() {
     let (out, _err, code) = run_script(None, ".show\n");
     assert_eq!(code, 0);

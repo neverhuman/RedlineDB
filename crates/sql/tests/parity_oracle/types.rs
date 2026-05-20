@@ -50,6 +50,7 @@ pub fn classify_err(msg: &str) -> ErrorClass {
         || lower.contains("no such column")
         || lower.contains("unknown table")
         || lower.contains("unknown column")
+        || lower.contains("unknowncolumn")
     {
         return ErrorClass::NoSuchTable;
     }

@@ -43,7 +43,8 @@ pub use record::{RecordRef, RecordScratch, encode_record};
 pub use schema::{
     CatalogError, CatalogMeta, CheckDef, ClassKind, ColumnDef, ConstraintDef, ConstraintKind,
     ForeignKeyDef, GeneratedColumnKind, GeneratedColumnSpec, IndexDef, NamespaceDef, SchemaEpoch,
-    SchemaSnapshot, SqliteSchemaRow, TableDef, TriggerDef, ViewDef,
+    SchemaSnapshot, SqliteSchemaRow, TABLE_FLAG_STRICT, TABLE_FLAG_WITHOUT_ROWID, TableDef,
+    TriggerDef, ViewDef,
 };
 pub use stats::{
     ColumnStats, HistogramBucket, IndexStats, MostCommonValue, StatsEpoch, StatsSnapshot,
