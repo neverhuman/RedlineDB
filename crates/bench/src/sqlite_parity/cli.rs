@@ -5,9 +5,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use super::capability;
 use super::catalog;
-use super::engine::{EngineSpec, resolve_engine_bin};
+use super::engine::{EngineSpec, partition_cases, resolve_engine_bin};
 use super::filter::Selection;
 use super::runner;
 
@@ -153,7 +152,7 @@ fn run_selected(args: RunArgs) -> Result<()> {
     let bin = resolve_engine_bin(&args.engine_name, args.sqlite_bin, args.target_bin)?;
     let engine = EngineSpec::new(args.engine_name, bin);
     let capabilities = engine.sqlite_shell_capabilities()?;
-    let partition = capability::partition_cases(cases, capabilities.as_ref());
+    let partition = partition_cases(cases, capabilities.as_ref());
     runner::run_cases(
         &partition.runnable,
         &partition.skipped,
@@ -170,7 +169,7 @@ fn compare_selected(args: CompareArgs) -> Result<()> {
     let reference = EngineSpec::new(args.reference_name, args.reference_bin);
     let target = EngineSpec::new(args.target_name, args.target_bin);
     let capabilities = reference.sqlite_shell_capabilities()?;
-    let partition = capability::partition_cases(cases, capabilities.as_ref());
+    let partition = partition_cases(cases, capabilities.as_ref());
     runner::compare_cases(
         &partition.runnable,
         &partition.skipped,

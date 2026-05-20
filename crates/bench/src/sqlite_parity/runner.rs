@@ -3,9 +3,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 
-use super::capability::SkippedCase;
 use super::case::Case;
-use super::engine::{EngineOutput, EngineSpec, default_tmp_root};
+use super::engine::{EngineOutput, EngineSpec, SkippedCase, default_tmp_root};
 use super::normalize::normalize_output;
 use super::report::{self, CompareRecord};
 
