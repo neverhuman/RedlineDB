@@ -22,6 +22,7 @@ pub(crate) struct OpenFingerprint {
     pub optimizer: crate::options::OptimizerOptions,
     pub query_memory: crate::options::QueryMemoryOptions,
     pub stats: crate::options::AnalyzeOptions,
+    pub statement_cache_capacity: usize,
     pub process_owner_lock: bool,
     pub temp_dir: Option<PathBuf>,
 }
@@ -35,6 +36,7 @@ impl OpenFingerprint {
             optimizer: options.optimizer.clone(),
             query_memory: options.query_memory.clone(),
             stats: options.stats.clone(),
+            statement_cache_capacity: options.statement_cache_capacity,
             process_owner_lock: options.process_owner_lock,
             temp_dir: options.temp_dir.clone(),
         }
@@ -46,6 +48,7 @@ impl OpenFingerprint {
             && self.optimizer == other.optimizer
             && self.query_memory == other.query_memory
             && self.stats == other.stats
+            && self.statement_cache_capacity == other.statement_cache_capacity
             && self.process_owner_lock == other.process_owner_lock
             && self.temp_dir == other.temp_dir
     }
@@ -152,6 +155,14 @@ pub(crate) fn create_ephemeral_database(
     session_name: &str,
     options: &OpenOptions,
 ) -> Result<Arc<DatabaseEntry>> {
+    create_ephemeral_database_inner(session_name, options, false)
+}
+
+fn create_ephemeral_database_inner(
+    session_name: &str,
+    options: &OpenOptions,
+    private_memory: bool,
+) -> Result<Arc<DatabaseEntry>> {
     let path = ephemeral_session_path(options.temp_dir.as_deref(), session_name);
     let fingerprint = OpenFingerprint::from_options(options);
     let open_lock = {
@@ -164,7 +175,7 @@ pub(crate) fn create_ephemeral_database(
 
     let _open_guard = open_lock.lock().expect("database open mutex poisoned");
     {
-        let mut registry = registry().lock().expect("registry poisoned");
+        let registry = registry().lock().expect("registry poisoned");
         if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
             return validate_existing_entry(existing, &fingerprint);
         }
@@ -174,8 +185,14 @@ pub(crate) fn create_ephemeral_database(
         fs::remove_dir_all(&path)?;
     }
     let temp_root = OwnedTempRoot::new(path.clone())?;
-    let sql_options = crate::sql_options(options);
-    let db = redlinedb_sql::Database::create(&path, sql_options)?;
+    let db = if private_memory {
+        redlinedb_sql::Database::create_private_in_memory_at(
+            &path,
+            crate::private_in_memory_sql_options(options),
+        )?
+    } else {
+        redlinedb_sql::Database::create(&path, crate::sql_options(options))?
+    };
     let owner_lock = if options.process_owner_lock && !options.read_only {
         Some(Arc::new(acquire_owner_lock(&path)?))
     } else {
@@ -199,7 +216,7 @@ pub(crate) fn create_ephemeral_database(
 pub(crate) fn create_in_memory_database(options: &OpenOptions) -> Result<Arc<DatabaseEntry>> {
     let session_id = EPHEMERAL_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
     let session_name = format!("memory-{}-{session_id}", std::process::id());
-    create_ephemeral_database(&session_name, options)
+    create_ephemeral_database_inner(&session_name, options, true)
 }
 
 fn normalize_path(path: &Path, create: bool) -> Result<PathBuf> {
@@ -250,7 +267,7 @@ fn open_database_at(
 
     let _open_guard = open_lock.lock().expect("database open mutex poisoned");
     {
-        let mut registry = registry().lock().expect("registry poisoned");
+        let registry = registry().lock().expect("registry poisoned");
         if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
             return validate_existing_entry(existing, &fingerprint);
         }

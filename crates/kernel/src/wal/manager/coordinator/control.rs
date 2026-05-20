@@ -8,6 +8,9 @@ use super::*;
 
 impl WalCoordinator {
     pub fn written_lsn(&self) -> Result<Lsn> {
+        if self.volatile {
+            return Ok(Lsn::ZERO);
+        }
         self.shared
             .state
             .lock()
@@ -16,6 +19,9 @@ impl WalCoordinator {
     }
 
     pub fn durable_lsn(&self) -> Result<Lsn> {
+        if self.volatile {
+            return Ok(Lsn::ZERO);
+        }
         self.shared
             .state
             .lock()
@@ -41,6 +47,10 @@ impl WalCoordinator {
     }
 
     pub fn prune_segments_below_checkpoint_lsn(&self, checkpoint_lsn: Lsn) -> Result<usize> {
+        if self.volatile {
+            let _ = checkpoint_lsn;
+            return Ok(0);
+        }
         let keep_segment = segment_for_lsn(checkpoint_lsn, self.config.segment_bytes);
         let active_segment = self
             .shared

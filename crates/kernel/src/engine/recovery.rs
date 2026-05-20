@@ -22,27 +22,50 @@ use super::{
 
 impl Engine {
     pub fn create(path: impl AsRef<Path>, config: EngineConfig) -> Result<Arc<Self>> {
-        std::fs::create_dir_all(path.as_ref())?;
-        let data_path = path.as_ref().join(&config.data_file_name);
-        let wal_dir = path.as_ref().join("wal");
+        Self::create_inner(path.as_ref(), config, false)
+    }
+
+    /// Create a private volatile engine for process-local in-memory database
+    /// handles. The engine still uses the regular heap and catalog state
+    /// machines, but skips recovery sidecars and WAL writer startup because
+    /// there is no durable image to recover.
+    pub fn create_volatile(path: impl AsRef<Path>, config: EngineConfig) -> Result<Arc<Self>> {
+        Self::create_inner(path.as_ref(), config, true)
+    }
+
+    fn create_inner(path: &Path, config: EngineConfig, volatile: bool) -> Result<Arc<Self>> {
+        std::fs::create_dir_all(path)?;
+        let data_path = path.join(&config.data_file_name);
+        let wal_dir = path.join("wal");
         let page_file = Arc::new(PageFile::create(&data_path, config.page_size)?);
         let buffer = Arc::new(BufferPool::new(page_file, config.buffer_pool_pages)?);
-        let wal = Arc::new(WalCoordinator::create_with_shutdown_flush(
-            &wal_dir,
-            config.wal.clone(),
-            flush_wal_on_shutdown(config.commit_durability),
-        )?);
-        let control = ControlStore::new(path.as_ref())?;
-        let tx_status_store = TxStatusStore::new(path.as_ref())?;
-        let checkpoint = control.load_latest()?;
-        let catalog_store =
-            CatalogStore::new_with_sync_policy(path.as_ref(), catalog_sync_policy(&config));
-        let loaded_catalog = catalog_store.load().ok().flatten();
+        let wal = if volatile {
+            Arc::new(WalCoordinator::volatile(config.wal.clone()))
+        } else {
+            Arc::new(WalCoordinator::create_with_shutdown_flush(
+                &wal_dir,
+                config.wal.clone(),
+                flush_wal_on_shutdown(config.commit_durability),
+            )?)
+        };
+        let control = ControlStore::new(path)?;
+        let tx_status_store = TxStatusStore::new(path)?;
+        let checkpoint = if volatile {
+            None
+        } else {
+            control.load_latest()?
+        };
+        let catalog_store = CatalogStore::new_with_sync_policy(path, catalog_sync_policy(&config));
+        let loaded_catalog = if volatile {
+            None
+        } else {
+            catalog_store.load().ok().flatten()
+        };
         let initial_catalog = match loaded_catalog.clone() {
             Some(catalog) => catalog,
             None => bootstrap_schema(RelId(10_000)),
         };
-        if loaded_catalog.is_none() {
+        if !volatile && loaded_catalog.is_none() {
             catalog_store.save_atomic(&initial_catalog)?;
         }
         let buffer = Arc::clone(&buffer);
@@ -54,19 +77,20 @@ impl Engine {
         // gets bumped per fdatasync.
         locks.set_phase11_counters(Arc::clone(&phase11_counters));
         wal.set_phase11_counters(Arc::clone(&phase11_counters));
+        let heap_wal = if volatile {
+            None
+        } else {
+            Some(Arc::clone(&wal))
+        };
         Ok(Arc::new(Self {
             config: config.clone(),
+            volatile,
             data_path,
             wal_dir,
             rel_id: config.rel_id,
             txs: ConcurrentTxStatus::new(),
             buffer: Arc::clone(&buffer),
-            heap: PageBackedHeap::new_with_wal(
-                config.rel_id,
-                config.heap_lanes,
-                buffer,
-                Some(Arc::clone(&wal)),
-            )?,
+            heap: PageBackedHeap::new_with_wal(config.rel_id, config.heap_lanes, buffer, heap_wal)?,
             catalog: CatalogManager::new(initial_catalog),
             catalog_store,
             locks,
@@ -199,6 +223,7 @@ impl Engine {
         wal.set_phase11_counters(Arc::clone(&phase11_counters));
         let engine = Arc::new(Self {
             config: config.clone(),
+            volatile: false,
             data_path: page_path,
             wal_dir,
             rel_id: config.rel_id,

@@ -14,6 +14,32 @@ use super::writer::wal_writer_loop;
 use super::*;
 
 impl WalCoordinator {
+    pub(crate) fn volatile(config: WalConfig) -> Self {
+        let shared = Arc::new(WalCoordinatorShared {
+            state: Mutex::new(WalCoordinatorState {
+                reserved_lsn: Lsn::ZERO,
+                written_lsn: Lsn::ZERO,
+                prev_lsn: Lsn::ZERO,
+                durable_lsn: Lsn::ZERO,
+                pending: VecDeque::new(),
+                pending_bytes: 0,
+                flush_requested_lsn: Lsn::ZERO,
+                shutdown: false,
+                failure: None,
+            }),
+            cvar: Condvar::new(),
+            phase11: std::sync::RwLock::new(None),
+        });
+        Self {
+            shared,
+            writer: Mutex::new(None),
+            config,
+            dir: PathBuf::new(),
+            volatile: true,
+            sync_counters: Arc::new(WalSyncCounters::default()),
+        }
+    }
+
     pub fn create(path: impl AsRef<Path>, config: WalConfig) -> Result<Self> {
         Self::create_with_shutdown_flush(path, config, true)
     }
@@ -81,6 +107,7 @@ impl WalCoordinator {
             writer: Mutex::new(Some(writer)),
             config,
             dir,
+            volatile: false,
             sync_counters,
         })
     }
@@ -94,6 +121,16 @@ impl WalCoordinator {
         tx_id: TxId,
         reserve_csn: impl FnOnce() -> Csn,
     ) -> Result<(Csn, WalAppend)> {
+        if self.volatile {
+            let csn = reserve_csn();
+            return Ok((
+                csn,
+                WalAppend {
+                    start_lsn: Lsn::ZERO,
+                    end_lsn: Lsn::ZERO,
+                },
+            ));
+        }
         let encoded_len = WAL_HEADER_LEN
             .checked_add(17)
             .ok_or(Error::CorruptWal("record length overflow"))?;
@@ -113,6 +150,13 @@ impl WalCoordinator {
     }
 
     pub fn append_commit_with_csn(&self, tx_id: TxId, csn: Csn) -> Result<WalAppend> {
+        if self.volatile {
+            let _ = tx_id;
+            return Ok(WalAppend {
+                start_lsn: Lsn::ZERO,
+                end_lsn: Lsn::ZERO,
+            });
+        }
         let encoded_len = WAL_HEADER_LEN
             .checked_add(17)
             .ok_or(Error::CorruptWal("record length overflow"))?;
@@ -131,6 +175,10 @@ impl WalCoordinator {
     }
 
     pub fn flush_until(&self, target_lsn: Lsn) -> Result<Lsn> {
+        if self.volatile {
+            let _ = target_lsn;
+            return Ok(Lsn::ZERO);
+        }
         // Lane E failpoint: coordinator entry to the durability barrier; any
         // injection here aborts before the writer thread is signalled.
         crate::fail_point!("wal::flush_until");
@@ -160,6 +208,10 @@ impl WalCoordinator {
     }
 
     pub fn write_until(&self, target_lsn: Lsn) -> Result<Lsn> {
+        if self.volatile {
+            let _ = target_lsn;
+            return Ok(Lsn::ZERO);
+        }
         let mut state = self
             .shared
             .state
@@ -181,6 +233,9 @@ impl WalCoordinator {
     }
 
     pub fn flush_all(&self) -> Result<Lsn> {
+        if self.volatile {
+            return Ok(Lsn::ZERO);
+        }
         // Lane E failpoint: full-WAL flush is the checkpoint barrier; injection
         // here lets harnesses crash between commit-fsync and checkpoint-fsync.
         crate::fail_point!("wal::flush_all");
@@ -199,6 +254,13 @@ impl WalCoordinator {
         tx_id: TxId,
         payload: Vec<u8>,
     ) -> Result<WalAppend> {
+        if self.volatile {
+            let _ = (kind, tx_id, payload);
+            return Ok(WalAppend {
+                start_lsn: Lsn::ZERO,
+                end_lsn: Lsn::ZERO,
+            });
+        }
         let encoded_len = WAL_HEADER_LEN
             .checked_add(payload.len())
             .ok_or(Error::CorruptWal("record length overflow"))?;

@@ -58,7 +58,15 @@ impl Database {
         let id = EPHEMERAL_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
         let root = EphemeralRoot::new_private(id, &opts)?;
         let path = root.path().to_path_buf();
-        Self::create_with_ephemeral_root(&path, opts, Some(Arc::new(root)))
+        Self::create_private_in_memory_with_root(&path, opts, Some(Arc::new(root)))
+    }
+
+    #[doc(hidden)]
+    pub fn create_private_in_memory_at(
+        path: impl AsRef<Path>,
+        opts: DbOptions,
+    ) -> Result<Arc<Self>> {
+        Self::create_private_in_memory_with_root(path.as_ref(), volatile_db_options(opts), None)
     }
 
     /// Create or reuse a named process-local ephemeral database.
@@ -109,22 +117,50 @@ impl Database {
         opts: DbOptions,
         ephemeral_root: Option<Arc<EphemeralRoot>>,
     ) -> Result<Arc<Self>> {
+        Self::create_with_mode(path, opts, ephemeral_root, false)
+    }
+
+    fn create_private_in_memory_with_root(
+        path: &Path,
+        opts: DbOptions,
+        ephemeral_root: Option<Arc<EphemeralRoot>>,
+    ) -> Result<Arc<Self>> {
+        Self::create_with_mode(path, opts, ephemeral_root, true)
+    }
+
+    fn create_with_mode(
+        path: &Path,
+        opts: DbOptions,
+        ephemeral_root: Option<Arc<EphemeralRoot>>,
+        private_memory: bool,
+    ) -> Result<Arc<Self>> {
         let base = path.as_ref();
-        let metadata_sync_policy =
-            MetadataSyncPolicy::from_commit_durability(opts.engine.commit_durability);
-        let engine = Engine::create(base, opts.engine)?;
+        let metadata_sync_policy = if private_memory {
+            MetadataSyncPolicy::Disabled
+        } else {
+            MetadataSyncPolicy::from_commit_durability(opts.engine.commit_durability)
+        };
+        let engine = if private_memory {
+            Engine::create_volatile(base, opts.engine)?
+        } else {
+            Engine::create(base, opts.engine)?
+        };
         save_user_version(base, 0, metadata_sync_policy)?;
         let stats_store = StatsStore::new(base);
-        let stats = match stats_store.load()? {
-            Some(s) => s,
-            None => Arc::new(StatsSnapshot::default()),
+        let stats = if private_memory {
+            Arc::new(StatsSnapshot::default())
+        } else {
+            match stats_store.load()? {
+                Some(s) => s,
+                None => Arc::new(StatsSnapshot::default()),
+            }
         };
         let optimizer_hash = hash_optimizer(&opts.optimizer, &opts.query_memory);
         Ok(Arc::new(Self {
             path: Arc::new(base.to_path_buf()),
             engine,
             unique_locks: UniqueLockTable::new(opts.unique_lock_shards, opts.busy_timeout),
-            stmt_cache: StatementCache::new(),
+            stmt_cache: StatementCache::with_capacity(opts.statement_cache_capacity),
             optimizer_hash,
             stats_store,
             stats: ArcSwap::from(stats),
@@ -132,7 +168,11 @@ impl Database {
             query_memory: opts.query_memory,
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
-            user_version: Mutex::new(load_user_version(base)?),
+            user_version: Mutex::new(if private_memory {
+                0
+            } else {
+                load_user_version(base)?
+            }),
             metadata_sync_policy,
             _ephemeral_root: ephemeral_root,
         }))
@@ -154,7 +194,7 @@ impl Database {
             path: Arc::new(base.to_path_buf()),
             engine,
             unique_locks: UniqueLockTable::new(opts.unique_lock_shards, opts.busy_timeout),
-            stmt_cache: StatementCache::new(),
+            stmt_cache: StatementCache::with_capacity(opts.statement_cache_capacity),
             optimizer_hash,
             stats_store,
             stats: ArcSwap::from(stats),
@@ -188,7 +228,7 @@ impl Database {
             path: Arc::new(base.to_path_buf()),
             engine,
             unique_locks: UniqueLockTable::new(opts.unique_lock_shards, opts.busy_timeout),
-            stmt_cache: StatementCache::new(),
+            stmt_cache: StatementCache::with_capacity(opts.statement_cache_capacity),
             optimizer_hash,
             stats_store,
             stats: ArcSwap::from(stats),
@@ -206,7 +246,7 @@ impl Database {
         Arc::new(Connection {
             db: Arc::clone(self),
             session: Mutex::new(SessionState::default()),
-            local_cache: StatementCache::new(),
+            local_cache: StatementCache::with_capacity(self.stmt_cache.capacity()),
             attach_map: crate::exec::attach::AttachMap::new(),
         })
     }
@@ -245,7 +285,9 @@ impl Database {
     }
 
     pub(crate) fn publish_stats(&self, snapshot: Arc<StatsSnapshot>) -> Result<()> {
-        self.stats_store.save(snapshot.as_ref())?;
+        if self.metadata_sync_policy.writes_metadata() {
+            self.stats_store.save(snapshot.as_ref())?;
+        }
         self.stats.store(snapshot);
         Ok(())
     }
@@ -301,6 +343,7 @@ impl Database {
 enum MetadataSyncPolicy {
     Durable,
     Volatile,
+    Disabled,
 }
 
 impl MetadataSyncPolicy {
@@ -313,6 +356,10 @@ impl MetadataSyncPolicy {
 
     fn syncs_metadata(self) -> bool {
         matches!(self, Self::Durable)
+    }
+
+    fn writes_metadata(self) -> bool {
+        !matches!(self, Self::Disabled)
     }
 }
 
@@ -474,6 +521,9 @@ pub(super) fn load_user_version(base: &Path) -> Result<i64> {
 }
 
 fn save_user_version(base: &Path, value: i64, sync_policy: MetadataSyncPolicy) -> Result<()> {
+    if !sync_policy.writes_metadata() {
+        return Ok(());
+    }
     fs::create_dir_all(base).map_err(KernelError::Io)?;
     let path = base.join(USER_VERSION_FILE);
     let temp_path = base.join(format!("{USER_VERSION_FILE}.tmp"));

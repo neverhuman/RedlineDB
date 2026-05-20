@@ -7,6 +7,7 @@ use redlinedb_kernel::engine::EngineConfig;
 pub struct DbOptions {
     pub engine: EngineConfig,
     pub unique_lock_shards: usize,
+    pub statement_cache_capacity: usize,
     pub busy_timeout: Duration,
     pub optimizer: OptimizerConfig,
     pub query_memory: QueryMemoryConfig,
@@ -19,6 +20,7 @@ impl Default for DbOptions {
         Self {
             engine: EngineConfig::default(),
             unique_lock_shards: 128,
+            statement_cache_capacity: 128,
             busy_timeout: Duration::from_secs(5),
             optimizer: OptimizerConfig::default(),
             query_memory: QueryMemoryConfig::default(),
