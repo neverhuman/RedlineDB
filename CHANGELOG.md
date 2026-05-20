@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## [1.0.16] - 2026-05-20
+
+Release-readiness pass for CI and local proof lanes.
+
+### Fixed
+
+- Nightly fuzz CI installs `mold` before running `ops/ci/nightly-fuzz.sh`,
+  matching the linker expected by the release fuzz lane.
+
+### Changed
+
+- Fast CI now smoke-tests the checksum-verified RedlineDB `v1.0.1` Linux
+  release binary from the project GitHub release before current-branch tests.
+- CI and local jankurai gates now install the pinned `jankurai` `v1.5.1`
+  GitHub release binary, verify its `.sha256` file, and install runtime schema
+  data for the release binary instead of building jankurai from source.
+- Workspace package metadata and lockfile entries now target `1.0.16`.
+
 SQLite parity truth pass + faster, blocking jankurai pre-commit hook.
 
 ### Added

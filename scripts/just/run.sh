@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
+# shellcheck source=ops/ci/lib.sh
+. "$repo_root/ops/ci/lib.sh"
+
 lane="${1:?lane name required}"
 
 case "$lane" in
@@ -74,6 +77,9 @@ case "$lane" in
     ;;
   ci-doctor)
     bash scripts/ci-doctor.sh
+    ;;
+  release-binary-smoke)
+    ci_verify_redlinedb_release_smoke
     ;;
   release)
     rtk cargo build --workspace --release --locked

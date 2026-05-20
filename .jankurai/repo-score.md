@@ -7,13 +7,13 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779268276`
-- Started at: `1779268276`
-- Elapsed: `11818` ms
+- Run ID: `1779279472`
+- Started at: `1779279472`
+- Elapsed: `11831` ms
 - Scope: `full`
 - Raw score: `72`
 - Final score: `64`
-- Decision: `advisory`
+- Decision: `fail`
 - Minimum score: `85`
 - Caps applied: `python-direct-product-truth-or-db-ownership, non-optimal-product-language-found, fallback-soup-in-product-code, future-hostile-dead-language-in-product-code, severe-duplication-in-product-code, input-boundary-gap, agent-tool-supply-chain-gap, rust-bad-behavior, repo-rot-bad-behavior`
 
@@ -70,15 +70,15 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`1` warning=`88` files=`1507`
+- Status: `review` hard=`1` warning=`90` files=`1508`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`263` tokens=`796` bytes=`7860`
+- Duplicate volume: lines=`265` tokens=`802` bytes=`7908`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 39 lower-ranked classes
+  - showing the top 50 classes and omitting 41 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
@@ -110,6 +110,7 @@
 | `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/driver.rs:399-400, crates/redlinedb-sqlx/src/driver.rs:414-415, crates/redlinedb-sqlx/src/driver.rs:429-430` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/sql/src/json/path.rs:543-544, crates/sql/src/json/path.rs:551-552, crates/sql/src/json/path.rs:559-560` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/bench/src/sqlite_parity/engine.rs:307-308, crates/bench/src/sqlite_parity/engine.rs:351-352, crates/bench/src/sqlite_parity/engine.rs:362-363` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb-sqlx/src/bridge/options.rs:249-250, crates/redlinedb-sqlx/src/bridge/options.rs:255-256, crates/redlinedb-sqlx/src/bridge/runtime.rs:129-130` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/catalog/stats/wire.rs:198-199, crates/kernel/src/catalog/store.rs:785-786, crates/kernel/src/catalog/store.rs:974-975` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/connection.rs:250-251, crates/redlinedb/src/connection.rs:259-260, crates/redlinedb/src/connection.rs:269-270` | `same body appears under different names across files` |
@@ -124,14 +125,13 @@
 | `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:268-270, crates/redlinedb/src/pool.rs:199-201` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:263-265, crates/redlinedb/src/pool.rs:204-206` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 2 | `crates/bench/src/process_metrics.rs:150-152, crates/bench/src/process_metrics.rs:155-157` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/sqlite_parity/engine.rs:296-297, crates/cli/src/dot/control.rs:149-150, crates/cli/src/render.rs:544-545` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/certify/scheduler/dispatch.rs:196-198, crates/kernel/src/engine/runtime/commit.rs:30-32` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:155-156, crates/sql/src/exec/expr/scalar/row/lookup.rs:159-160` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/redlinedb/src/value_conv.rs:245-246, crates/redlinedb/src/value_conv.rs:253-254` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:233-234, crates/redlinedb/src/statement.rs:204-205` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/kernel/src/index/mod.rs:779-780, crates/kernel/src/index/mod.rs:787-788` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/driver.rs:159-160, crates/redlinedb-sqlx/src/driver.rs:187-188` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/bridge/options.rs:223-224, crates/redlinedb-sqlx/src/bridge/runtime.rs:52-53` | `same-name semantic unit copied across multiple files` |
 
 ## Dimensions
 

@@ -52,6 +52,9 @@ pre-push:
 ci-doctor:
   ./scripts/just/run.sh ci-doctor
 
+release-binary-smoke:
+  ./scripts/just/run.sh release-binary-smoke
+
 release:
   ./scripts/just/run.sh release
 

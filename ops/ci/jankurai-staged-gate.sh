@@ -10,7 +10,7 @@
 #   bash ops/ci/jankurai-staged-gate.sh                # uses origin/main
 #   BASE_REF=origin/main bash ops/ci/jankurai-staged-gate.sh
 #
-# Required: `jankurai` 1.5.1+ on PATH.
+# Required: pinned `jankurai` release binary installed by ops/ci/lib.sh.
 
 set -euo pipefail
 
@@ -18,10 +18,9 @@ BASE_REF="${BASE_REF:-origin/main}"
 LOG_DIR="${LOG_DIR:-.jankurai/staged-gate}"
 mkdir -p "$LOG_DIR"
 
-if ! command -v jankurai >/dev/null 2>&1; then
-  echo "jankurai not on PATH; skipping staged-gate (soft gate)" >&2
-  exit 0
-fi
+# shellcheck source=ops/ci/lib.sh
+. "$(dirname "$0")/lib.sh"
+ci_install_jankurai_logged "$LOG_DIR/install.log"
 
 # Resolve the merge base so we diff against the branch divergence point,
 # not a moving target on the base branch.

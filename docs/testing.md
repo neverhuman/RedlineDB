@@ -55,7 +55,9 @@ readable repair receipts.
 | `phase11-sql-contracts`              | Phase-11 SQL contract tests (temp roots, queue, xdoug-compat).                                        |
 | `security`                           | `cargo audit` + `cargo deny check` + `gitleaks detect`.                                               |
 | `security-local`                     | Same as `security`; pinned for local-only invocation.                                                 |
+| `release-binary-smoke`               | Downloads the pinned RedlineDB `v1.0.1` Linux release tarball, verifies its `.sha256`, and runs a CLI smoke query. |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
+| `jankurai-tools`                     | Local mirror for every `.github/workflows/jankurai-tools.yml` matrix job. Run with `scripts/ci-local.sh jankurai-tools`. |
 | `pr-gate`                            | Local mirror for PR branch freshness plus `jankurai staged-gate` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |
 
 Lane definitions: `.jankurai/proof-lanes.toml`. To rerun a lane:
@@ -85,6 +87,17 @@ rtk scripts/ci-local.sh pr-gate
 That command fetches `origin/main`, applies the same branch-freshness check as
 `.github/workflows/jankurai.yml`, then runs `ops/ci/jankurai-staged-gate.sh`
 with `BASE_REF=origin/main`.
+
+To reproduce the complete PR CI surface locally, run:
+
+```
+rtk scripts/ci-local.sh all
+```
+
+That command runs the same shared dispatchers used by `.github/workflows/ci.yml`,
+`.github/workflows/jankurai.yml`, and `.github/workflows/jankurai-tools.yml`,
+including dependency review, branch freshness, staged jankurai gate, and the
+input-boundary FFI cross-check.
 
 ## Budgets and kill-switches
 
