@@ -26,7 +26,7 @@ set -euo pipefail
 # shellcheck source=ops/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
 
-LOG_PATH="target/jankurai/dependency-review.log"
+LOG_PATH=".jankurai/dependency-review.log"
 mkdir -p "$(dirname "$LOG_PATH")"
 
 # Local equivalent: `cargo deny check advisories bans licenses sources`

@@ -13,11 +13,11 @@ name: jankurai-tools
 # the per-tool "CI command found in workflow" evidence row resolves.
 #
 # The shared canonical audit command is:
-#   jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md
+#   jankurai audit . --mode ratchet --baseline .jankurai/accepted-baseline.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 # The canonical security command is:
-#   jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
+#   jankurai security run . --strict --profile ci --out .jankurai/security/evidence.json
 # Tool-adoption expects the variant:
-#   jankurai security run . --out target/jankurai/security/evidence.json
+#   jankurai security run . --out .jankurai/security/evidence.json
 # Both are kept verbatim in ops/ci/jankurai-tools.sh.
 
 on:
@@ -50,10 +50,10 @@ jobs:
           name: jankurai-audit-ci-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/audit-ci/receipt.json.txt
-            target/jankurai/audit-ci/install.log
-            target/jankurai/repo-score.json
-            target/jankurai/repo-score.md
+            .jankurai/audit-ci/receipt.json.txt
+            .jankurai/audit-ci/install.log
+            .jankurai/repo-score.json
+            .jankurai/repo-score.md
 
   proof-routing:
     runs-on: ubuntu-latest
@@ -72,8 +72,8 @@ jobs:
           name: jankurai-proof-routing-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/proof-routing/receipt.json.txt
-            target/jankurai/proof-routing/install.log
+            .jankurai/proof-routing/receipt.json.txt
+            .jankurai/proof-routing/install.log
 
   security:
     runs-on: ubuntu-latest
@@ -92,8 +92,8 @@ jobs:
           name: jankurai-security-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/security/evidence.json
-            target/jankurai/security/install.log
+            .jankurai/security/evidence.json
+            .jankurai/security/install.log
 
   contract-drift:
     runs-on: ubuntu-latest
@@ -112,8 +112,8 @@ jobs:
           name: jankurai-contract-drift-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/contract-drift/receipt.json.txt
-            target/jankurai/contract-drift/install.log
+            .jankurai/contract-drift/receipt.json.txt
+            .jankurai/contract-drift/install.log
             contracts/c-abi/redlinedb.h
 
   authz-matrix:
@@ -133,8 +133,8 @@ jobs:
           name: jankurai-authz-matrix-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/authz-matrix/receipt.json.txt
-            target/jankurai/authz-matrix/install.log
+            .jankurai/authz-matrix/receipt.json.txt
+            .jankurai/authz-matrix/install.log
 
   input-boundary:
     runs-on: ubuntu-latest
@@ -157,8 +157,8 @@ jobs:
           name: jankurai-input-boundary-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/input-boundary/receipt.json.txt
-            target/jankurai/input-boundary/install.log
+            .jankurai/input-boundary/receipt.json.txt
+            .jankurai/input-boundary/install.log
 
   agent-tool-supply:
     runs-on: ubuntu-latest
@@ -177,8 +177,8 @@ jobs:
           name: jankurai-agent-tool-supply-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/agent-tool-supply/receipt.json.txt
-            target/jankurai/agent-tool-supply/install.log
+            .jankurai/agent-tool-supply/receipt.json.txt
+            .jankurai/agent-tool-supply/install.log
             .jankurai/tool-adoption.toml
 
   release-readiness:
@@ -198,8 +198,8 @@ jobs:
           name: jankurai-release-readiness-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/release-readiness/receipt.json.txt
-            target/jankurai/release-readiness/install.log
+            .jankurai/release-readiness/receipt.json.txt
+            .jankurai/release-readiness/install.log
             CHANGELOG.md
 
   cost-budget:
@@ -219,6 +219,6 @@ jobs:
           name: jankurai-cost-budget-receipt
           if-no-files-found: ignore
           path: |
-            target/jankurai/cost-budget/receipt.json.txt
-            target/jankurai/cost-budget/install.log
+            .jankurai/cost-budget/receipt.json.txt
+            .jankurai/cost-budget/install.log
             .jankurai/cost-budget.toml

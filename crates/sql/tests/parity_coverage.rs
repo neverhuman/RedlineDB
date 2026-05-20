@@ -66,6 +66,19 @@ fn alter_table_rename_column() {
     assert_eq!(v, SqlValue::Integer(7));
 }
 
+// ── CREATE TABLE AS SELECT ───────────────────────────────────────────────────
+
+#[test]
+fn create_table_as_select_executes() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE src(id INTEGER)").expect("create");
+    c.execute("INSERT INTO src VALUES (1)").expect("insert");
+    c.execute("CREATE TABLE dst AS SELECT * FROM src")
+        .expect("ctas");
+    let v = q1(&c, "SELECT id FROM dst");
+    assert_eq!(v, SqlValue::Integer(1));
+}
+
 // ── DROP INDEX ────────────────────────────────────────────────────────────────
 
 #[test]

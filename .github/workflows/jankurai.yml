@@ -53,23 +53,41 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install mold linker
+        run: sudo apt-get install -y mold
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --version 0.18.0
+      - name: Install gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+      - name: Install actionlint (workflow linter)
+        run: |
+          curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin actionlint
+      - name: Install syft (SBOM generator)
+        run: |
+          curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin syft
       - name: Prepare accepted baseline
         run: |
           set -euo pipefail
-          mkdir -p target/jankurai
+          mkdir -p .jankurai
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin main --depth=1
-            if git show origin/main:.jankurai/baselines/main.repo-score.json > target/jankurai/accepted-baseline.json 2>/dev/null; then
+            if git show origin/main:.jankurai/baselines/main.repo-score.json > .jankurai/accepted-baseline.json 2>/dev/null; then
               echo "baseline sourced from origin/main"
             elif [ -f .jankurai/baselines/main.repo-score.json ]; then
-              cp .jankurai/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
+              cp .jankurai/baselines/main.repo-score.json .jankurai/accepted-baseline.json
               echo "baseline sourced from local (first-time commit)"
             else
               echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2
               exit 1
             fi
           elif [ -f .jankurai/baselines/main.repo-score.json ]; then
-            cp .jankurai/baselines/main.repo-score.json target/jankurai/accepted-baseline.json
+            cp .jankurai/baselines/main.repo-score.json .jankurai/accepted-baseline.json
           else
             echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2
             exit 1
@@ -77,15 +95,16 @@ jobs:
       - name: Install jankurai
         id: install-jankurai
         run: |
-          mkdir -p target/jankurai
-          if cargo install --git https://github.com/jeppsontaylor/Jankurai.git \
-              --tag v1.5.1 --package jankurai --locked 2>target/jankurai/jankurai-install.log \
-              || cargo install jankurai --locked 2>>target/jankurai/jankurai-install.log; then
+          set -euo pipefail
+          source ops/ci/lib.sh
+          mkdir -p .jankurai
+          ci_soft_gate jankurai-install .jankurai/jankurai-install.log -- ci_install_jankurai
+          if command -v jankurai >/dev/null 2>&1; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "installed=false" >> "$GITHUB_OUTPUT"
             printf 'soft-gate=jankurai-install status=soft-failed ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-              | tee -a target/jankurai/jankurai-install.log
+              | tee -a .jankurai/jankurai-install.log
             echo "::warning::jankurai install failed; tool-adoption CI evidence steps will be skipped"
           fi
       - run: jankurai --version
@@ -95,26 +114,26 @@ jobs:
         run: jankurai proofbind verify . --changed-from origin/main
       - name: Proofmark rust
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+        run: jankurai proofmark rust . --obligations .jankurai/proofbind/obligations.json
       - name: Rust witness build
         if: steps.install-jankurai.outputs.installed == 'true'
         run: jankurai rust witness build .
       - name: Security lane
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
+        run: jankurai security run . --strict --profile ci --out .jankurai/security/evidence.json
       - name: Copy-code audit
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+        run: jankurai copy-code . --json .jankurai/copy-code.json --md .jankurai/copy-code.md
       - name: Language bad-behavior tests
         if: steps.install-jankurai.outputs.installed == 'true'
         run: |
-          rm -rf target/jankurai-src
-          if git clone --depth 1 https://github.com/jeppsontaylor/Jankurai.git target/jankurai-src 2>/dev/null; then
-            ( cd target/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
-              > >(tee target/jankurai/language-bad-behavior.log) 2>&1
+          rm -rf .jankurai/jankurai-src
+          if git clone --depth 1 https://github.com/jeppsontaylor/Jankurai.git .jankurai/jankurai-src 2>/dev/null; then
+            ( cd .jankurai/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
+              > >(tee .jankurai/language-bad-behavior.log) 2>&1
           else
             printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-              | tee target/jankurai/language-bad-behavior.log
+              | tee .jankurai/language-bad-behavior.log
           fi
       - name: jankurai staged-gate (PR changed files)
         # Mirrors tools/jankurai-hooks/pre-commit but compares against the
@@ -127,12 +146,12 @@ jobs:
         run: bash ops/ci/jankurai-staged-gate.sh
       - name: jankurai audit
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl
+        run: jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --sarif .jankurai/jankurai.sarif --github-step-summary .jankurai/summary.md --repair-queue-jsonl .jankurai/repair-queue.jsonl
       - name: Upload jankurai SARIF (if produced)
-        if: always() && hashFiles('target/jankurai/jankurai.sarif') != ''
+        if: always() && hashFiles('.jankurai/jankurai.sarif') != ''
         uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
         with:
-          sarif_file: target/jankurai/jankurai.sarif
+          sarif_file: .jankurai/jankurai.sarif
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -143,21 +162,21 @@ jobs:
             .jankurai/repo-score.md
             .jankurai/cost-budget.toml
             .jankurai/baselines/main.repo-score.json
-            target/jankurai/repo-score.json
-            target/jankurai/repo-score.md
-            target/jankurai/jankurai.sarif
-            target/jankurai/repair-queue.jsonl
-            target/jankurai/proofbind/obligations.json
-            target/jankurai/proofbind/surface-witness.json
-            target/jankurai/proofmark/proofmark-receipt.json
-            target/jankurai/proofmark/proof-receipt.json
-            target/jankurai/rust/witness-graph.json
-            target/jankurai/copy-code.json
-            target/jankurai/copy-code.md
-            target/jankurai/security/evidence.json
-            target/jankurai/migration-report.json
-            target/jankurai/language-bad-behavior.log
-            target/jankurai/jankurai-install.log
+            .jankurai/repo-score.json
+            .jankurai/repo-score.md
+            .jankurai/jankurai.sarif
+            .jankurai/repair-queue.jsonl
+            .jankurai/proofbind/obligations.json
+            .jankurai/proofbind/surface-witness.json
+            .jankurai/proofmark/proofmark-receipt.json
+            .jankurai/proofmark/proof-receipt.json
+            .jankurai/rust/witness-graph.json
+            .jankurai/copy-code.json
+            .jankurai/copy-code.md
+            .jankurai/security/evidence.json
+            .jankurai/migration-report.json
+            .jankurai/language-bad-behavior.log
+            .jankurai/jankurai-install.log
 
   security:
     # Hard gate end-to-end. Mirrors the local `just security` recipe so
