@@ -15,7 +15,10 @@ mod dot;
 mod render;
 
 use dot::{CliState, DotOutcome, OutputMode};
-use render::{Cell, render_query};
+use render::{
+    Cell, is_streaming_delimited_mode, render_query, write_delimited_row,
+    write_stream_delimited_value,
+};
 
 const REDLINEDB_VERSION_LINE: &str = concat!(
     "redlinedb v",
@@ -193,7 +196,7 @@ fn main() {
     // the SQLite shell semantics where in-memory state never spills to a real
     // file. Other paths fall through to the regular on-disk open path.
     let db_res = if filename == ":memory:" || filename.is_empty() {
-        Database::create_in_memory(OpenOptions::default())
+        Database::create_in_memory(OpenOptions::default().with_statement_cache_capacity(16))
     } else {
         Database::open(&filename)
     };
@@ -478,29 +481,65 @@ fn run_query_writer<W: Write>(
             );
         }
         let column_count = stmt.column_count();
-        let column_names: Vec<String> = (0..column_count)
-            .map(|index| stmt.column_name(index).to_owned())
-            .collect();
-        let mut rows: Vec<Vec<Cell>> = Vec::new();
-
-        while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
-            let mut row = Vec::with_capacity(column_count);
-            for index in 0..column_count {
-                row.push(Cell::from_value_ref(
-                    stmt.column_ref(index).map_err(|err| err.to_string())?,
-                ));
+        if is_streaming_delimited_mode(*mode) {
+            let mut wrote_anything = false;
+            if show_header && column_count > 0 {
+                write_delimited_row(
+                    out,
+                    (0..column_count).map(|index| stmt.column_name(index)),
+                    *mode,
+                    separator,
+                    false,
+                )?;
+                wrote_anything = true;
             }
-            rows.push(row);
+            while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
+                if wrote_anything {
+                    writeln!(out).map_err(|err| err.to_string())?;
+                }
+                for index in 0..column_count {
+                    if index > 0 {
+                        out.write_all(separator.as_bytes())
+                            .map_err(|err| err.to_string())?;
+                    }
+                    write_stream_delimited_value(
+                        out,
+                        *mode,
+                        separator,
+                        null_value,
+                        stmt.column_ref(index).map_err(|err| err.to_string())?,
+                    )?;
+                }
+                wrote_anything = true;
+            }
+            if wrote_anything {
+                writeln!(out).map_err(|err| err.to_string())?;
+            }
+        } else {
+            let column_names: Vec<String> = (0..column_count)
+                .map(|index| stmt.column_name(index).to_owned())
+                .collect();
+            let mut rows: Vec<Vec<Cell>> = Vec::new();
+
+            while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
+                let mut row = Vec::with_capacity(column_count);
+                for index in 0..column_count {
+                    row.push(Cell::from_value_ref(
+                        stmt.column_ref(index).map_err(|err| err.to_string())?,
+                    ));
+                }
+                rows.push(row);
+            }
+            render_query(
+                out,
+                *mode,
+                separator,
+                show_header,
+                null_value,
+                &column_names,
+                &rows,
+            )?;
         }
-        render_query(
-            out,
-            *mode,
-            separator,
-            show_header,
-            null_value,
-            &column_names,
-            &rows,
-        )?;
         rest = tail;
     }
 

@@ -252,6 +252,24 @@ fn render_delimited<W: Write>(
     Ok(())
 }
 
+pub(crate) fn is_streaming_delimited_mode(mode: OutputMode) -> bool {
+    matches!(mode, OutputMode::Csv | OutputMode::List | OutputMode::Tabs)
+}
+
+pub(crate) fn write_stream_delimited_value<W: Write>(
+    out: &mut W,
+    mode: OutputMode,
+    separator: &str,
+    null_value: &str,
+    value: ValueRef<'_>,
+) -> Result<(), String> {
+    match mode {
+        OutputMode::Csv => write_csv_value_ref(out, value, separator, null_value),
+        OutputMode::List | OutputMode::Tabs => write_text_value_ref(out, value, null_value),
+        _ => Err("streaming renderer only supports delimited modes".to_owned()),
+    }
+}
+
 fn render_column<W: Write>(
     out: &mut W,
     column_names: &[String],
@@ -393,7 +411,7 @@ fn column_widths(column_names: &[String], rows: &[Vec<Cell>], null_value: &str) 
     widths
 }
 
-fn write_delimited_row<W: Write, I, S>(
+pub(crate) fn write_delimited_row<W: Write, I, S>(
     out: &mut W,
     cells: I,
     mode: OutputMode,
@@ -434,6 +452,37 @@ fn write_csv_cell<W: Write>(out: &mut W, text: &str, separator: &str) -> Result<
     } else {
         out.write_all(text.as_bytes())
             .map_err(|err| err.to_string())
+    }
+}
+
+fn write_csv_value_ref<W: Write>(
+    out: &mut W,
+    value: ValueRef<'_>,
+    separator: &str,
+    null_value: &str,
+) -> Result<(), String> {
+    match value {
+        ValueRef::Null => write_csv_cell(out, null_value, separator),
+        ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
+        ValueRef::Real(v) => write!(out, "{v}").map_err(|err| err.to_string()),
+        ValueRef::Text(v) => write_csv_cell(out, v, separator),
+        ValueRef::Blob(v) => write_csv_cell(out, &format!("<blob:{}>", v.len()), separator),
+    }
+}
+
+fn write_text_value_ref<W: Write>(
+    out: &mut W,
+    value: ValueRef<'_>,
+    null_value: &str,
+) -> Result<(), String> {
+    match value {
+        ValueRef::Null => out
+            .write_all(null_value.as_bytes())
+            .map_err(|err| err.to_string()),
+        ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
+        ValueRef::Real(v) => write!(out, "{v}").map_err(|err| err.to_string()),
+        ValueRef::Text(v) => out.write_all(v.as_bytes()).map_err(|err| err.to_string()),
+        ValueRef::Blob(v) => write!(out, "<blob:{}>", v.len()).map_err(|err| err.to_string()),
     }
 }
 
