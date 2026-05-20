@@ -7,13 +7,15 @@ use std::process::exit;
 use clap::Parser;
 use redlinedb::{
     ArchiveMode, BackupOptions, Database, OpenOptions, OwnedStep, PhysicalBackupOptions,
-    RecoveryTarget, RestoreOptions, ValueRef,
+    RecoveryTarget, RestoreOptions,
 };
 use serde_json::json;
 
 mod dot;
+mod render;
 
 use dot::{CliState, DotOutcome, OutputMode};
+use render::{Cell, render_query};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -37,6 +39,18 @@ struct Cli {
 
     #[arg(long)]
     csv: bool,
+
+    #[arg(long = "column")]
+    column: bool,
+
+    #[arg(long = "box")]
+    boxed: bool,
+
+    #[arg(long = "html")]
+    html: bool,
+
+    #[arg(long = "ascii")]
+    ascii: bool,
 
     #[arg(long)]
     echo: bool,
@@ -145,17 +159,29 @@ fn main() {
         mode = OutputMode::Markdown;
     } else if cli.quote {
         mode = OutputMode::Quote;
-    } else if cli.table {
+    } else if cli.boxed || cli.table {
         mode = OutputMode::Table;
+    } else if cli.column {
+        mode = OutputMode::Column;
+    } else if cli.html {
+        mode = OutputMode::Html;
     } else if cli.tabs {
         mode = OutputMode::Tabs;
+    } else if cli.ascii {
+        mode = OutputMode::Ascii;
     }
 
     let separator = cli
         .separator
         .unwrap_or_else(|| mode.default_separator().to_owned());
 
-    let show_header = cli.header && !cli.noheader;
+    let show_header = if cli.noheader {
+        false
+    } else if cli.header {
+        true
+    } else {
+        mode.headers_by_default()
+    };
 
     // `:memory:` and `""` open a fresh per-process ephemeral database, matching
     // the SQLite shell semantics where in-memory state never spills to a real
@@ -364,6 +390,10 @@ fn print_sqlite_help() {
     println!("   -bail                stop after hitting an error");
     println!("   -batch               force batch I/O");
     println!("   -csv                 set output mode to 'csv'");
+    println!("   -column              set output mode to 'column'");
+    println!("   -box                 set output mode to 'box'");
+    println!("   -html                set output mode to 'html'");
+    println!("   -ascii               set output mode to 'ascii'");
     println!("   -echo                print inputs before execution");
     println!("   -[no]header          turn headers on or off");
     println!("   -help                show this message");
@@ -394,6 +424,8 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
             sql,
             &mode,
             &separator,
+            state.show_header,
+            &state.null_value,
             &mut writer,
             &params,
         );
@@ -407,6 +439,8 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
             sql,
             &mode,
             &separator,
+            state.show_header,
+            &state.null_value,
             &mut io::stdout(),
             &params,
         )
@@ -418,6 +452,8 @@ fn run_query_writer<W: Write>(
     sql: &str,
     mode: &OutputMode,
     separator: &str,
+    show_header: bool,
+    null_value: &str,
     out: &mut W,
     params: &[(String, String)],
 ) -> Result<(), String> {
@@ -436,70 +472,29 @@ fn run_query_writer<W: Write>(
             );
         }
         let column_count = stmt.column_count();
-
-        let mut json_results = Vec::new();
+        let column_names: Vec<String> = (0..column_count)
+            .map(|index| stmt.column_name(index).to_owned())
+            .collect();
+        let mut rows: Vec<Vec<Cell>> = Vec::new();
 
         while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
-            if *mode == OutputMode::Json {
-                let mut obj = serde_json::Map::new();
-                for index in 0..column_count {
-                    let val = match stmt.column_ref(index).map_err(|err| err.to_string())? {
-                        ValueRef::Null => serde_json::Value::Null,
-                        ValueRef::Integer(v) => json!(v),
-                        ValueRef::Real(v) => json!(v),
-                        ValueRef::Text(v) => json!(v),
-                        ValueRef::Blob(v) => json!(v),
-                    };
-                    obj.insert(format!("column{}", index), val);
-                }
-                json_results.push(serde_json::Value::Object(obj));
-            } else {
-                let mut first = true;
-                for index in 0..column_count {
-                    if !first {
-                        write!(out, "{separator}").map_err(|err| err.to_string())?;
-                    }
-                    first = false;
-                    match stmt.column_ref(index).map_err(|err| err.to_string())? {
-                        ValueRef::Null => {}
-                        ValueRef::Integer(value) => {
-                            write!(out, "{value}").map_err(|err| err.to_string())?;
-                        }
-                        ValueRef::Real(value) => {
-                            write!(out, "{value}").map_err(|err| err.to_string())?;
-                        }
-                        ValueRef::Text(value) => {
-                            if *mode == OutputMode::Csv {
-                                let escaped = value.replace('"', "\"\"");
-                                if escaped.contains(',')
-                                    || escaped.contains('"')
-                                    || escaped.contains('\n')
-                                {
-                                    write!(out, "\"{escaped}\"").map_err(|err| err.to_string())?;
-                                } else {
-                                    write!(out, "{escaped}").map_err(|err| err.to_string())?;
-                                }
-                            } else {
-                                write!(out, "{value}").map_err(|err| err.to_string())?;
-                            }
-                        }
-                        ValueRef::Blob(value) => {
-                            write!(out, "<blob:{}>", value.len()).map_err(|err| err.to_string())?;
-                        }
-                    }
-                }
-                writeln!(out).map_err(|err| err.to_string())?;
+            let mut row = Vec::with_capacity(column_count);
+            for index in 0..column_count {
+                row.push(Cell::from_value_ref(
+                    stmt.column_ref(index).map_err(|err| err.to_string())?,
+                ));
             }
+            rows.push(row);
         }
-
-        if *mode == OutputMode::Json && !json_results.is_empty() {
-            writeln!(
-                out,
-                "{}",
-                serde_json::to_string_pretty(&json_results).unwrap_or_default()
-            )
-            .map_err(|err| err.to_string())?;
-        }
+        render_query(
+            out,
+            *mode,
+            separator,
+            show_header,
+            null_value,
+            &column_names,
+            &rows,
+        )?;
         rest = tail;
     }
 

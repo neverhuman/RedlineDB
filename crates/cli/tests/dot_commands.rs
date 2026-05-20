@@ -13,9 +13,20 @@ use assert_cmd::cargo::cargo_bin;
 use tempfile::tempdir;
 
 fn run_script(db: Option<&std::path::Path>, script: &str) -> (String, String, i32) {
+    run_script_with_args(&[], db, script)
+}
+
+fn run_script_with_args(
+    extra_args: &[&str],
+    db: Option<&std::path::Path>,
+    script: &str,
+) -> (String, String, i32) {
     let bin = cargo_bin("redlinedb-cli");
     let mut cmd = Command::new(bin);
     cmd.arg("-batch");
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
     if let Some(path) = db {
         cmd.arg(path);
     } else {
@@ -126,6 +137,93 @@ fn dot_mode_and_headers_apply_to_following_query() {
     assert_eq!(code, 0, "stderr={err}");
     assert!(out.contains("1,a"), "stdout={out}");
     assert!(out.contains("2,b"), "stdout={out}");
+}
+
+#[test]
+fn dot_nullvalue_and_headers_apply_to_list_output() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode list\n\
+         .headers on\n\
+         .nullvalue NULL\n\
+         SELECT 1 AS a, 'x' AS b, NULL AS c;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("a|b|c"), "stdout={out}");
+    assert!(out.contains("1|x|NULL"), "stdout={out}");
+}
+
+#[test]
+fn cli_flags_select_the_expected_renderers() {
+    let cases: &[(&str, &str, &[&str])] = &[
+        (
+            "-json",
+            "SELECT 1 AS a, 'x' AS b, NULL AS c;\n",
+            &["\"a\":1", "\"b\":\"x\"", "\"c\":null"],
+        ),
+        (
+            "-line",
+            ".nullvalue NULL\nSELECT 1 AS a, 'x' AS b, NULL AS c;\n",
+            &["a = 1", "b = x", "c = NULL"],
+        ),
+        (
+            "-column",
+            ".headers on\nSELECT 1 AS a, 'x' AS b;\n",
+            &["a", "x"],
+        ),
+        (
+            "-box",
+            "SELECT 1 AS a, 'x' AS b;\n",
+            &["| a | b |", "| 1 | x |"],
+        ),
+        (
+            "-table",
+            "SELECT 1 AS a, 'x' AS b;\n",
+            &["| a | b |", "| 1 | x |"],
+        ),
+        (
+            "-html",
+            ".headers on\nSELECT 1 AS a, '<tag>' AS b;\n",
+            &["<TH>a</TH>", "&lt;tag&gt;"],
+        ),
+        (
+            "-ascii",
+            "SELECT 1 AS a, 'x' AS b UNION ALL SELECT 2, 'y';\n",
+            &["1\u{1f}x\u{1e}2\u{1f}y\u{1e}"],
+        ),
+    ];
+
+    for &(flag, script, needles) in cases {
+        let (out, err, code) = run_script_with_args(&[flag], None, script);
+        assert_eq!(code, 0, "flag={flag} stderr={err}");
+        for &needle in needles {
+            assert!(out.contains(needle), "flag={flag} stdout={out}");
+        }
+    }
+}
+
+#[test]
+fn dot_mode_quote_renders_sql_literals() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode quote\n\
+         .separator ;\n\
+         SELECT 1 AS a, 'x''y' AS b, NULL AS c;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("1,'x''y',NULL"), "stdout={out}");
+}
+
+#[test]
+fn dot_mode_markdown_renders_pipe_table() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode markdown\n\
+         SELECT 1 AS a, 'x' AS b;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("| a | b |"), "stdout={out}");
+    assert!(out.contains("| --- | --- |"), "stdout={out}");
 }
 
 #[test]
