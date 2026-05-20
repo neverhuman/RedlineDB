@@ -91,11 +91,40 @@ pub(crate) fn expr_to_kernel_ast(
             list,
             negated,
         } => in_list_to_kernel_ast(expr, list, *negated, column_lookup)?,
+        Expr::Between {
+            expr,
+            negated,
+            low,
+            high,
+        } => between_to_kernel_ast(expr, *negated, low, high, column_lookup)?,
         other => {
             return Err(Error::UnsupportedSql(format!(
                 "unsupported DDL expression: {other:?}"
             )));
         }
+    })
+}
+
+fn between_to_kernel_ast(
+    expr: &Expr,
+    negated: bool,
+    low: &Expr,
+    high: &Expr,
+    column_lookup: &std::collections::HashMap<String, usize>,
+) -> Result<ExprAst> {
+    let value = expr_to_kernel_ast(expr, column_lookup)?;
+    let low = expr_to_kernel_ast(low, column_lookup)?;
+    let high = expr_to_kernel_ast(high, column_lookup)?;
+    Ok(if negated {
+        ExprAst::Or(
+            Box::new(ExprAst::Lt(Box::new(value.clone()), Box::new(low))),
+            Box::new(ExprAst::Gt(Box::new(value), Box::new(high))),
+        )
+    } else {
+        ExprAst::And(
+            Box::new(ExprAst::Ge(Box::new(value.clone()), Box::new(low))),
+            Box::new(ExprAst::Le(Box::new(value), Box::new(high))),
+        )
     })
 }
 

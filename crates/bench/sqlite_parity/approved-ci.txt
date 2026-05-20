@@ -1,0 +1,6 @@
+# SQLite parity cases approved for required RedlineDB-vs-SQLite CI.
+00004
+00005
+00009
+00013
+00017

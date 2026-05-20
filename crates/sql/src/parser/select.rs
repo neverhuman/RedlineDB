@@ -11,7 +11,7 @@ pub(crate) fn bind_query(
     bind_query_with_params(conn, schema, schema_epoch, sql, query, &mut params)
 }
 
-fn bind_query_with_params(
+pub(crate) fn bind_query_with_params(
     conn: &Connection,
     schema: Arc<SchemaSnapshot>,
     schema_epoch: SchemaEpoch,

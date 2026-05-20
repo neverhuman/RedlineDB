@@ -25,6 +25,9 @@ readable repair receipts.
 | `kernel-cursor`                      | Cursor-specific kernel regression tests without the full workspace sweep.                             |
 | `cache-warm`                         | Prime the workspace build cache before a wider proof run.                                             |
 | `sql-parity`                         | Focused SQLite parity tests for SQL planner/executor changes.                                         |
+| `sqlite-parity-scale-smoke`          | Bench-owned SQLite shell parity scale smoke over P0 memory cases from `crates/bench/sqlite_parity/`.  |
+| `sqlite-parity-scale-ci`             | Bench-owned hard gate over the approved RedlineDB-vs-SQLite allowlist in `crates/bench/sqlite_parity/approved-ci.txt`. |
+| `sqlite-parity-scale-full`           | Full non-quarantine SQLite shell scale sweep for diagnostics before cases are promoted to approved CI. |
 | `ffi-abi`                            | C ABI compatibility tests for the SQLite shim surface.                                                |
 | `cli-shell`                          | CLI compatibility tests for the shell/batch front end.                                                |
 | `kernel-check`                       | Targeted `redlinedb-kernel` compile proof.                                                            |
@@ -62,6 +65,13 @@ rtk just <lane-name>
 ```
 
 (or invoke the command list from the TOML directly).
+
+SQLite parity scale policy: required CI runs `sqlite-parity-scale-ci`, which
+compares RedlineDB against `sqlite3` only for the reviewed case IDs in
+`crates/bench/sqlite_parity/approved-ci.txt`. The full extracted corpus under
+`crates/bench/sqlite_parity/` stays in the repo as evidence and future work
+input; broad sweeps remain local/manual diagnostics until cases are promoted
+into that allowlist.
 
 For narrow repair loops, prefer the package-scoped lanes above over `fast` when the touched surface is already known. They stay deterministic without forcing a workspace-wide run.
 

@@ -59,6 +59,21 @@ name = "sql-parity-full"
 purpose = "full SQL differential parity gate against rusqlite oracle (zero-divergence)"
 
 [[lane]]
+command = "just sqlite-parity-scale-smoke"
+name = "sqlite-parity-scale-smoke"
+purpose = "bench-owned SQLite shell parity scale smoke over P0 memory cases"
+
+[[lane]]
+command = "just sqlite-parity-scale-ci"
+name = "sqlite-parity-scale-ci"
+purpose = "bench-owned SQLite parity CI hard gate over approved RedlineDB-vs-SQLite cases"
+
+[[lane]]
+command = "just sqlite-parity-scale-full"
+name = "sqlite-parity-scale-full"
+purpose = "bench-owned SQLite shell parity scale full non-quarantine sweep"
+
+[[lane]]
 command = "rtk cargo test -p redlinedb-sql --test parity_fk_enforce --quiet --locked"
 name = "sql-parity-fk"
 purpose = "A6 SQLite parity — FK enforcement (NO ACTION/RESTRICT/CASCADE/SET NULL/SET DEFAULT + DEFERRABLE + PRAGMA toggle)"
