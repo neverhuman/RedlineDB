@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## [1.0.19] - 2026-05-20
+
+Latency pass 3 for volatile SQLite parity cases.
+
+### Changed
+
+- Private in-memory databases now use an internal volatile engine path that
+  skips WAL writer startup, WAL segment creation, catalog sidecar writes, and
+  user-version sidecar writes while keeping persistent databases on the
+  durable path.
+- CLI `list`, `tabs`, and `csv` output modes now stream rows directly from
+  stepped statements instead of materializing full result sets first.
+- `OpenOptions::statement_cache_capacity` now flows into the SQL statement
+  caches, and private in-memory opens use smaller default lock/cache/heap
+  sizing for one-shot scripts.
+- SQLite parity latency report artifacts were regenerated on 2026-05-20 after
+  the volatile fixed-cost reductions.
+- Workspace package metadata and lockfile entries now target `1.0.19`.
+
 ## [1.0.18] - 2026-05-20
 
 Latency round 2 for volatile SQLite parity cases.
