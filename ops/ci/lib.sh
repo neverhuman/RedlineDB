@@ -22,6 +22,10 @@ set -euo pipefail
 readonly CI_RUST_TOOLCHAIN="${CI_RUST_TOOLCHAIN:-1.95.0}"
 readonly CI_CARGO_DENY_VERSION="${CI_CARGO_DENY_VERSION:-0.18.0}"
 readonly CI_GITLEAKS_VERSION="${CI_GITLEAKS_VERSION:-8.21.2}"
+readonly CI_GITLEAKS_ASSET="${CI_GITLEAKS_ASSET:-gitleaks_${CI_GITLEAKS_VERSION}_linux_x64.tar.gz}"
+readonly CI_GITLEAKS_RELEASE_BASE_URL="${CI_GITLEAKS_RELEASE_BASE_URL:-https://github.com/gitleaks/gitleaks/releases/download/v${CI_GITLEAKS_VERSION}}"
+readonly CI_GITLEAKS_ASSET_URL="${CI_GITLEAKS_ASSET_URL:-${CI_GITLEAKS_RELEASE_BASE_URL}/${CI_GITLEAKS_ASSET}}"
+readonly CI_GITLEAKS_CHECKSUMS_URL="${CI_GITLEAKS_CHECKSUMS_URL:-${CI_GITLEAKS_RELEASE_BASE_URL}/gitleaks_${CI_GITLEAKS_VERSION}_checksums.txt}"
 readonly CI_REDLINEDB_RELEASE_TAG="${CI_REDLINEDB_RELEASE_TAG:-v1.0.1}"
 readonly CI_REDLINEDB_RELEASE_ARTIFACT="${CI_REDLINEDB_RELEASE_ARTIFACT:-linux-x86_64}"
 readonly CI_REDLINEDB_RELEASE_ASSET="${CI_REDLINEDB_RELEASE_ASSET:-redlinedb-${CI_REDLINEDB_RELEASE_TAG}-${CI_REDLINEDB_RELEASE_ARTIFACT}.tar.gz}"
@@ -110,6 +114,48 @@ ci_verify_redlinedb_release_smoke() {
         return 1
     fi
     printf 'RedlineDB release smoke passed: %s\n' "$redlinedb_bin" >&2
+}
+
+ci_install_gitleaks() {
+    local install_dir
+    install_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
+    mkdir -p "$install_dir"
+    export PATH="$install_dir:$PATH"
+    if [ -n "${GITHUB_PATH:-}" ]; then
+        printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
+    fi
+
+    local tmp_dir
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/gitleaks-release.XXXXXX")"
+
+    curl --fail --location --retry 5 --retry-all-errors --silent --show-error \
+        -o "$tmp_dir/$CI_GITLEAKS_ASSET" "$CI_GITLEAKS_ASSET_URL"
+    curl --fail --location --retry 5 --retry-all-errors --silent --show-error \
+        -o "$tmp_dir/gitleaks-checksums.txt" "$CI_GITLEAKS_CHECKSUMS_URL"
+    grep "  ${CI_GITLEAKS_ASSET}$" "$tmp_dir/gitleaks-checksums.txt" \
+        > "$tmp_dir/$CI_GITLEAKS_ASSET.sha256"
+    (
+        cd "$tmp_dir"
+        sha256sum -c "$CI_GITLEAKS_ASSET.sha256"
+    )
+
+    tar -xzf "$tmp_dir/$CI_GITLEAKS_ASSET" -C "$tmp_dir" gitleaks
+    install -m 0755 "$tmp_dir/gitleaks" "$install_dir/gitleaks"
+    hash -r 2>/dev/null || true
+
+    local version_output
+    version_output="$(gitleaks version)"
+    case "$version_output" in
+        "$CI_GITLEAKS_VERSION"*) ;;
+        *)
+            printf 'installed gitleaks version mismatch: got %s, expected %s\n' \
+                "$version_output" "$CI_GITLEAKS_VERSION" >&2
+            return 1
+            ;;
+    esac
+    printf 'gitleaks release asset verified: %s\n' "$CI_GITLEAKS_ASSET_URL"
+    printf 'gitleaks installed: %s (%s)\n' "$(command -v gitleaks)" "$version_output"
+    rm -rf "$tmp_dir"
 }
 
 # ---- Soft-gate runner -------------------------------------------------------

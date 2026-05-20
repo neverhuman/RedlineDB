@@ -23,6 +23,11 @@ set -euo pipefail
 
 mkdir -p .jankurai/security
 
+if ! command -v gitleaks >/dev/null 2>&1 \
+    || [ "$(gitleaks version 2>/dev/null || true)" != "$CI_GITLEAKS_VERSION" ]; then
+    ci_install_gitleaks
+fi
+
 # Hard gate: cargo-audit must succeed for the lane to pass.
 cargo audit
 
