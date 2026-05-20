@@ -4,7 +4,7 @@ set -e
 echo "Building RedlineDB CLI..."
 cargo build --release -p redlinedb-cli
 
-BIN_PATH="target/release/redlinedb"
+BIN_PATH="target/release/redlinedb-cli"
 
 if [ ! -f "$BIN_PATH" ]; then
     echo "Build failed! Binary not found at $BIN_PATH"

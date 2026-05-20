@@ -8,9 +8,10 @@
 # Options (env vars):
 #   PREFIX   — install root (default: /usr/local)
 #   VERSION  — release tag to install (default: latest)
+#   REDLINEDB_SHA256 — expected tarball SHA-256 digest (optional hard pin)
 #
 # Example — install to ~/redlinedb:
-#   PREFIX=~/redlinedb curl -LsSf ... | bash
+#   curl -LsSf ... | PREFIX=~/redlinedb bash
 #
 # After install:
 #   # Rust crate: add to Cargo.toml — redlinedb = "1"
@@ -21,6 +22,32 @@ set -euo pipefail
 REPO="neverhuman/RedlineDB"
 PREFIX="${PREFIX:-/usr/local}"
 VERSION="${VERSION:-latest}"
+REDLINEDB_SHA256="${REDLINEDB_SHA256:-}"
+
+usage() {
+  cat <<'USAGE'
+usage: scripts/install.sh
+
+Environment:
+  PREFIX            install root (default: /usr/local)
+  VERSION           release tag to install (default: latest)
+  REDLINEDB_SHA256  expected tarball SHA-256 digest (optional hard pin)
+USAGE
+}
+
+case "${1:-}" in
+  -h|--help|help)
+    usage
+    exit 0
+    ;;
+  "")
+    ;;
+  *)
+    printf 'error: unknown argument %s\n\n' "$1" >&2
+    usage >&2
+    exit 64
+    ;;
+esac
 
 # ── Platform detection ────────────────────────────────────────────────────────
 
@@ -60,23 +87,43 @@ trap 'rm -rf "${TMP}"' EXIT
 
 printf 'Downloading redlinedb %s for %s...\n' "${TAG}" "${ARTIFACT}"
 curl -fsSL "${URL}"     -o "${TMP}/${PKG}.tar.gz"
-curl -fsSL "${SHA_URL}" -o "${TMP}/${PKG}.tar.gz.sha256" 2>/dev/null || true
 
-if [ -f "${TMP}/${PKG}.tar.gz.sha256" ]; then
-  printf 'Verifying checksum...\n'
-  if command -v sha256sum >/dev/null 2>&1; then
-    (cd "${TMP}" && sha256sum -c "${PKG}.tar.gz.sha256" --status)
-  else
-    EXPECTED="$(awk '{print $1}' "${TMP}/${PKG}.tar.gz.sha256")"
-    ACTUAL="$(shasum -a 256 "${TMP}/${PKG}.tar.gz" | awk '{print $1}')"
-    if [ "${EXPECTED}" != "${ACTUAL}" ]; then
-      printf 'error: checksum mismatch\n' >&2
-      exit 1
-    fi
+if [ -n "${REDLINEDB_SHA256}" ]; then
+  EXPECTED_SHA256="${REDLINEDB_SHA256}"
+else
+  if ! curl -fsSL "${SHA_URL}" -o "${TMP}/${PKG}.tar.gz.sha256"; then
+    printf 'error: missing checksum asset %s\n' "${SHA_URL}" >&2
+    printf 'Refusing to install an unverified release archive.\n' >&2
+    exit 1
   fi
+  EXPECTED_SHA256="$(awk 'NR == 1 { print $1 }' "${TMP}/${PKG}.tar.gz.sha256")"
+fi
+
+if ! printf '%s\n' "${EXPECTED_SHA256}" | grep -Eq '^[0-9a-fA-F]{64}$'; then
+  printf 'error: invalid SHA-256 digest for %s\n' "${PKG}.tar.gz" >&2
+  exit 1
+fi
+
+printf 'Verifying checksum...\n'
+if command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL_SHA256="$(sha256sum "${TMP}/${PKG}.tar.gz" | awk '{print $1}')"
+else
+  ACTUAL_SHA256="$(shasum -a 256 "${TMP}/${PKG}.tar.gz" | awk '{print $1}')"
+fi
+
+if [ "${EXPECTED_SHA256}" != "${ACTUAL_SHA256}" ]; then
+  printf 'error: checksum mismatch for %s\n' "${PKG}.tar.gz" >&2
+  printf 'expected: %s\n' "${EXPECTED_SHA256}" >&2
+  printf 'actual:   %s\n' "${ACTUAL_SHA256}" >&2
+  exit 1
 fi
 
 tar -xzf "${TMP}/${PKG}.tar.gz" -C "${TMP}"
+
+if [ ! -x "${TMP}/${PKG}/bin/redlinedb" ]; then
+  printf 'error: release archive is missing bin/redlinedb\n' >&2
+  exit 1
+fi
 
 # ── Install ───────────────────────────────────────────────────────────────────
 
