@@ -7,6 +7,12 @@ cd "$repo_root"
 # shellcheck source=ops/ci/lib.sh
 . "$repo_root/ops/ci/lib.sh"
 
+if ! command -v rtk >/dev/null 2>&1; then
+  rtk() {
+    "$@"
+  }
+fi
+
 lane="${1:?lane name required}"
 
 case "$lane" in
@@ -143,6 +149,18 @@ case "$lane" in
   sqlite-parity-scale-ci)
     rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --out target/sqlite-parity/compare-approved-ci.jsonl
+    ;;
+  sqlite-parity-report-update)
+    rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
+    mkdir -p benchmark-results/sqlite-parity/latest assets
+    rm -f benchmark-results/sqlite-parity/latest/raw.jsonl
+    updated_date="$(date -u +%F)"
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --repetitions 3 --warmup 1 --jobs auto --out benchmark-results/sqlite-parity/latest/raw.jsonl
+    printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
+    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --updated-date "$updated_date"
+    ;;
+  sqlite-parity-report-check)
+    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --updated-date "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)" --check
     ;;
   sqlite-parity-scale-full)
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory,tempfile --priorities P0,P1,P2,P3 --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl

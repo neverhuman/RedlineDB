@@ -1,0 +1,35 @@
+{
+  "command": [
+    "target/debug/sqlite_parity",
+    "report",
+    "--input",
+    "benchmark-results/sqlite-parity/latest/raw.jsonl",
+    "--case-list",
+    "crates/bench/sqlite_parity/approved-ci.txt",
+    "--out-dir",
+    "benchmark-results/sqlite-parity/latest",
+    "--readme",
+    "README.md",
+    "--plot",
+    "assets/sqlite-parity-latency-gap.svg",
+    "--updated-date",
+    "2026-05-20"
+  ],
+  "git_sha": "89fe0143ea2bc89dac63d6110b36b88a5fd4a3f3",
+  "sqlite_version": "3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)",
+  "updated_date": "2026-05-20",
+  "repetitions": 3,
+  "warmup": 1,
+  "input_hashes": {
+    "benchmark-results/sqlite-parity/latest/raw.jsonl": "d3608c0a9427c984fef498fbf053694e832f51f3ff3835af78b76383e4f2ea4c",
+    "crates/bench/sqlite_parity/approved-ci.txt": "a3e70a287482596f12fe740c7dec686bb3b688afe29bf568c7516a34e13df103",
+    "crates/bench/sqlite_parity/generated_manifest.json": "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3"
+  },
+  "output_hashes": {
+    "README.md": "edacfeb1090e7453f75a4b48684a831225136ff65b18ec3c8cc62d84ff2162af",
+    "assets/sqlite-parity-latency-gap.svg": "d1955a09216318207c84183f7d508b315e959d79dea09caa036fb6512f55c126",
+    "ranked.csv": "0701af0fcb991093ed8a96d8cc582b3749270899e0f8db8a695de2080e66844b",
+    "raw.jsonl": "d3608c0a9427c984fef498fbf053694e832f51f3ff3835af78b76383e4f2ea4c",
+    "summary.json": "fa4e30c003a08f2026e21a2995ba835108bf5aeb288b054ddcc06e21d3409fec"
+  }
+}

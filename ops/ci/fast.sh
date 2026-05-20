@@ -60,6 +60,7 @@ run_test_stage() {
         sqlite-parity-scale)
             cargo build -p redlinedb-cli --release --locked
             cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --out target/sqlite-parity/compare-approved-ci.jsonl
+            cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --updated-date "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)" --check
             ;;
         *)
             printf 'unknown fast test stage: %s\n' "$1" >&2

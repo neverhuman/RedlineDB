@@ -6,4 +6,5 @@ pub mod engine;
 pub mod filter;
 pub mod normalize;
 pub mod report;
+pub mod report_gen;
 pub mod runner;
