@@ -1,11 +1,24 @@
 use std::sync::Arc;
 
 use redlinedb_kernel::catalog::{DbName, ExprAst, OwnedValue, QualifiedName};
-use sqlparser::ast::{BinaryOperator, Expr, ObjectName, UnaryOperator, Value, ValueWithSpan};
+use sqlparser::ast::{
+    BinaryOperator, Expr, Function, FunctionArguments, ObjectName, UnaryOperator, Value,
+    ValueWithSpan,
+};
 
 use crate::error::{Error, Result};
 
 use super::table::object_name_part_to_string;
+
+pub(crate) fn default_expr_to_kernel_ast(
+    expr: &Expr,
+    column_lookup: &std::collections::HashMap<String, usize>,
+) -> Result<ExprAst> {
+    if let Some(expr) = current_datetime_default_ast(expr) {
+        return Ok(expr);
+    }
+    expr_to_kernel_ast(expr, column_lookup)
+}
 
 pub(crate) fn expr_to_kernel_ast(
     expr: &Expr,
@@ -103,6 +116,38 @@ pub(crate) fn expr_to_kernel_ast(
             )));
         }
     })
+}
+
+fn current_datetime_default_ast(expr: &Expr) -> Option<ExprAst> {
+    match expr {
+        Expr::Function(func) => current_datetime_function_ast(func),
+        Expr::Identifier(ident) => current_datetime_name_ast(&ident.value),
+        _ => None,
+    }
+}
+
+fn current_datetime_function_ast(func: &Function) -> Option<ExprAst> {
+    if !function_has_no_args(&func.args) {
+        return None;
+    }
+    current_datetime_name_ast(&func.name.to_string())
+}
+
+fn function_has_no_args(args: &FunctionArguments) -> bool {
+    match args {
+        FunctionArguments::None => true,
+        FunctionArguments::List(list) => list.args.is_empty(),
+        _ => false,
+    }
+}
+
+fn current_datetime_name_ast(name: &str) -> Option<ExprAst> {
+    match name.to_ascii_lowercase().as_str() {
+        "current_date" => Some(ExprAst::CurrentDate),
+        "current_time" => Some(ExprAst::CurrentTime),
+        "current_timestamp" => Some(ExprAst::CurrentTimestamp),
+        _ => None,
+    }
 }
 
 fn between_to_kernel_ast(

@@ -63,6 +63,44 @@ fn sqlite3_version() -> Option<String> {
 }
 
 #[test]
+fn version_identifies_redlinedb_release_and_sqlite_compatibility() {
+    let output = Command::new(cargo_bin("redlinedb-cli"))
+        .arg("--version")
+        .output()
+        .expect("run redlinedb --version");
+    assert!(output.status.success(), "stderr={:?}", output.stderr);
+    let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
+    assert!(
+        stdout.contains(concat!("redlinedb v", env!("CARGO_PKG_VERSION"))),
+        "stdout={stdout}"
+    );
+    assert!(
+        stdout.contains("SQLite 3.45.1 compatibility"),
+        "stdout={stdout}"
+    );
+    assert_ne!(stdout.trim(), "3.45.1");
+}
+
+#[test]
+fn memory_mode_query_leaves_working_directory_clean() {
+    let dir = tempdir().expect("tempdir");
+    let output = Command::new(cargo_bin("redlinedb-cli"))
+        .current_dir(dir.path())
+        .arg(":memory:")
+        .arg("SELECT 1;")
+        .output()
+        .expect("run redlinedb :memory:");
+    assert!(output.status.success(), "stderr={:?}", output.stderr);
+    let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
+    assert_eq!(stdout.trim(), "1");
+    let entries = std::fs::read_dir(dir.path())
+        .expect("read tempdir")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("collect tempdir entries");
+    assert!(entries.is_empty(), "memory mode created files: {entries:?}");
+}
+
+#[test]
 fn dot_tables_lists_user_tables() {
     let (out, err, code) = run_script(
         None,

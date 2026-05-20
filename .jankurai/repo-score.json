@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:58cbfa73be6e8a447b202c0cec515dc645f68498575a34a8c354739674094733",
-  "input_fingerprint": "sha256:8f99afb8bd40019b49d71122e07ffdc7cfc8ed25be84067cc11370629040c22b",
+  "report_fingerprint": "sha256:e0bdcf279da04dcf7773ee9d210781f8801b2f0275436314780ce59298a431de",
+  "input_fingerprint": "sha256:929a4daa5158cdf80330686ae14403b8ccf2e6cf368b766de5e0f37b1a7a6500",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779279472",
+  "generated_at": "1779283868",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -82,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779279472",
-  "started_at": "1779279472",
-  "elapsed_ms": 11831,
+  "run_id": "1779283868",
+  "started_at": "1779283868",
+  "elapsed_ms": 12165,
   "scope": {
     "mode": "full",
     "paths": []
@@ -92,18 +92,18 @@
   "score": 64,
   "raw_score": 72,
   "decision": {
-    "status": "fail",
+    "status": "advisory",
     "minimum_score": 85,
-    "passed": false,
+    "passed": true,
     "hard_findings": 63,
     "soft_findings": 5,
     "ratchet": {
       "baseline_score": 64,
       "allowed_drop": 0,
-      "passed": true,
+      "passed": false,
       "score_delta": 0,
-      "baseline_report_fingerprint": "sha256:a489f44152d7943cb18d1146529efcbb49b1ba2e61221e7a73ce931fe61b40c0",
-      "baseline_input_fingerprint": "sha256:2c9c8e3cd17a4a247b9010034cec410e3eb7edc20b3683ca05186afda69658ce",
+      "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "baseline_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "new_caps": [],
       "new_hard_findings": [],
@@ -111,7 +111,7 @@
     }
   },
   "git": {
-    "head": "e1e1484",
+    "head": "f1c8818",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -128,7 +128,7 @@
       "medium",
       "low"
     ],
-    "mode": "ratchet",
+    "mode": "advisory",
     "standard_version": "0.9.0",
     "auditor_version": "1.5.1",
     "schema_version": "1.9.0",
@@ -398,11 +398,11 @@
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
         "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=23 missing=23 high_or_critical_missing=12 verdict=review"
+        "proofbind artifact found: surfaces=28 missing=28 high_or_critical_missing=14 verdict=review"
       ],
       "notes": [
-        "proofbind reports 23 unresolved obligation(s)",
-        "proofbind reports 12 missing high/critical semantic proof obligation(s)"
+        "proofbind reports 28 unresolved obligation(s)",
+        "proofbind reports 14 missing high/critical semantic proof obligation(s)"
       ]
     },
     {
@@ -1098,7 +1098,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-20T12:17:41.245037649+00:00",
+    "generated_at": "2026-05-20T13:30:56.581198966+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1136,7 +1136,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 2189,
+      "files_scanned": 2190,
       "files_considered": 1508,
       "active_files": 1508,
       "exact_file_classes": 0,
@@ -1437,43 +1437,43 @@
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 857,
-            "end_line": 858,
+            "start_line": 863,
+            "end_line": 864,
             "unit_name": "write_opt_str"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 867,
-            "end_line": 868,
+            "start_line": 873,
+            "end_line": 874,
             "unit_name": "write_opt_u16"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 877,
-            "end_line": 878,
+            "start_line": 883,
+            "end_line": 884,
             "unit_name": "write_opt_u64"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 887,
-            "end_line": 888,
+            "start_line": 893,
+            "end_line": 894,
             "unit_name": "write_opt_value"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 897,
-            "end_line": 898,
+            "start_line": 903,
+            "end_line": 904,
             "unit_name": "write_value"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 920,
-            "end_line": 921,
+            "start_line": 926,
+            "end_line": 927,
             "unit_name": "write_opt_expr"
           },
           {
@@ -2552,15 +2552,15 @@
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 785,
-            "end_line": 786,
+            "start_line": 788,
+            "end_line": 789,
             "unit_name": "decode_expr_op"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 974,
-            "end_line": 975,
+            "start_line": 980,
+            "end_line": 981,
             "unit_name": "read_value"
           }
         ]
@@ -2629,22 +2629,22 @@
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 943,
-            "end_line": 944,
+            "start_line": 949,
+            "end_line": 950,
             "unit_name": "read_opt_box_str"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 951,
-            "end_line": 952,
+            "start_line": 957,
+            "end_line": 958,
             "unit_name": "read_opt_u16"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 959,
-            "end_line": 960,
+            "start_line": 965,
+            "end_line": 966,
             "unit_name": "read_opt_u64"
           }
         ]

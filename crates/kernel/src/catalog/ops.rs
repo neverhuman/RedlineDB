@@ -85,7 +85,7 @@ pub fn apply_create_table(
         let affinity = derive_affinity(column.declared_type.as_deref());
         let mut not_null = false;
         let mut default_value = column.default_value.clone();
-        let default_expr = None;
+        let mut default_expr = None;
         for constraint in &column.constraints {
             match constraint {
                 ColumnConstraintSpec::PrimaryKey { sort_dir, conflict } => {
@@ -199,6 +199,8 @@ pub fn apply_create_table(
                 } => {
                     if let ExprAst::Const(value) = expr {
                         default_value = Some(value.clone());
+                    } else {
+                        default_expr = Some(compile_expr(expr));
                     }
                 }
                 ColumnConstraintSpec::Check { expr, .. } => {

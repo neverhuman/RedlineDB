@@ -757,7 +757,7 @@ fn pragma_column_rows(
                 SqlValue::Text(Arc::from(column.name.as_ref())),
                 SqlValue::Text(Arc::from(column.declared_type.as_deref().unwrap_or(""))),
                 SqlValue::Integer(if column.not_null { 1 } else { 0 }),
-                render_default_value(column.default_value.as_ref()),
+                render_column_default(column),
                 SqlValue::Integer(pk[cid]),
             ];
             if include_hidden {
@@ -985,6 +985,28 @@ fn pragma_redline_full_check_rows(conn: &Connection) -> Result<Vec<Vec<SqlValue>
         ]);
     }
     Ok(rows)
+}
+
+fn render_column_default(column: &redlinedb_kernel::catalog::ColumnDef) -> SqlValue {
+    let value = render_default_value(column.default_value.as_ref());
+    if !matches!(value, SqlValue::Null) {
+        return value;
+    }
+    render_default_expr(column.default_expr.as_deref())
+}
+
+fn render_default_expr(expr: Option<&redlinedb_kernel::catalog::CompiledExpr>) -> SqlValue {
+    use redlinedb_kernel::catalog::ExprOp;
+
+    let Some(expr) = expr else {
+        return SqlValue::Null;
+    };
+    match expr.bytecode.as_ref() {
+        [ExprOp::CurrentDate] => SqlValue::Text(Arc::from("CURRENT_DATE")),
+        [ExprOp::CurrentTime] => SqlValue::Text(Arc::from("CURRENT_TIME")),
+        [ExprOp::CurrentTimestamp] => SqlValue::Text(Arc::from("CURRENT_TIMESTAMP")),
+        _ => SqlValue::Null,
+    }
 }
 
 fn render_default_value(value: Option<&OwnedValue>) -> SqlValue {
