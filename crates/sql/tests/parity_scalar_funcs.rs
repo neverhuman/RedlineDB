@@ -225,6 +225,28 @@ fn printf_null_format_returns_null() {
     assert_eq!(q1(&c, "SELECT printf(NULL)"), SqlValue::Null);
 }
 
+#[test]
+fn printf_zero_pads_integer_width() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT printf('%04d', 7)");
+    assert_eq!(v, SqlValue::Text(Arc::from("0007")));
+}
+
+// ── min / max ────────────────────────────────────────────────────────────────
+
+#[test]
+fn min_and_max_scalar_multiple_args() {
+    let (_d, c) = open();
+    assert_eq!(q1(&c, "SELECT min(5, 2, 8)"), SqlValue::Integer(2));
+    assert_eq!(q1(&c, "SELECT max(5, 2, 8)"), SqlValue::Integer(8));
+}
+
+#[test]
+fn min_scalar_returns_null_when_any_arg_is_null() {
+    let (_d, c) = open();
+    assert_eq!(q1(&c, "SELECT min(1, NULL, 2)"), SqlValue::Null);
+}
+
 // ── iif ───────────────────────────────────────────────────────────────────────
 
 #[test]

@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:cfc0111261981996e87b2731e29f89f5e8d7c16352b5c565ffc588f406db8192",
-  "input_fingerprint": "sha256:c70441cab8bc59803bb6763f2e4986281069a4f20ad6cf9bab7aed60ebc97df2",
+  "report_fingerprint": "sha256:a489f44152d7943cb18d1146529efcbb49b1ba2e61221e7a73ce931fe61b40c0",
+  "input_fingerprint": "sha256:2c9c8e3cd17a4a247b9010034cec410e3eb7edc20b3683ca05186afda69658ce",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779241868",
+  "generated_at": "1779268276",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -82,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779241868",
-  "started_at": "1779241868",
-  "elapsed_ms": 11620,
+  "run_id": "1779268276",
+  "started_at": "1779268276",
+  "elapsed_ms": 11818,
   "scope": {
     "mode": "full",
     "paths": []
@@ -111,7 +111,7 @@
     }
   },
   "git": {
-    "head": "cfa7996",
+    "head": "184cc4b",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -397,13 +397,9 @@
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=6 missing=6 high_or_critical_missing=4 verdict=review"
+        "Rust property/integration tests present or no Rust surface"
       ],
-      "notes": [
-        "proofbind reports 6 unresolved obligation(s)",
-        "proofbind reports 4 missing high/critical semantic proof obligation(s)"
-      ]
+      "notes": []
     },
     {
       "name": "Security and supply-chain posture",
@@ -433,7 +429,7 @@
       "score": 0,
       "weighted_points": 0.0,
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/select_top.rs (1179 LOC)",
+        "largest authored code file: crates/sql/src/exec/select_top.rs (1165 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
@@ -521,7 +517,7 @@
       "score": 0,
       "weighted_points": 0.0,
       "evidence": [
-        "Python appears outside the allowed roots: scripts/bench/export_benchmark_results.py",
+        "Python appears outside the allowed roots: ops/ci/filter-generated-sarif.py",
         "non-optimal product language marker: crates/ffi/include/sqlite3.h"
       ],
       "notes": [
@@ -1093,30 +1089,14 @@
       "cost-budget"
     ]
   },
-  "security_evidence": {
-    "artifact": {
-      "path": "target/jankurai/security/evidence.json",
-      "envelope_exit_code": 0,
-      "elapsed_ms": 40367,
-      "wrapper_strict": true,
-      "profile": "ci",
-      "commands_ran": 1,
-      "commands_skipped": 0,
-      "commands_failed": 0,
-      "required_commands_skipped": 0,
-      "required_commands_failed": 0,
-      "blocking_commands": [],
-      "generated_at": "1779172484",
-      "git_head": "3525435dccc4517b13e59c903eb0eea7f5a125ce"
-    }
-  },
+  "security_evidence": {},
   "boundaries": {
     "reclassifications": []
   },
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-20T01:50:57.488525878+00:00",
+    "generated_at": "2026-05-20T09:11:05.179398532+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1154,20 +1134,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 2180,
-      "files_considered": 1505,
-      "active_files": 1505,
+      "files_scanned": 2188,
+      "files_considered": 1507,
+      "active_files": 1507,
       "exact_file_classes": 0,
       "hard_classes": 1,
-      "warning_classes": 84,
+      "warning_classes": 88,
       "hard_instances": 2,
-      "warning_instances": 215,
-      "duplicate_lines": 248,
-      "duplicate_tokens": 759,
-      "duplicate_bytes": 7559,
-      "total_redundant_lines": 317,
-      "total_redundant_tokens": 940,
-      "total_redundant_bytes": 9262
+      "warning_instances": 226,
+      "duplicate_lines": 263,
+      "duplicate_tokens": 796,
+      "duplicate_bytes": 7860,
+      "total_redundant_lines": 350,
+      "total_redundant_tokens": 1019,
+      "total_redundant_bytes": 9983
     },
     "classes": [
       {
@@ -1250,6 +1230,62 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-622958fd1e7d3bca",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 6,
+        "duplicate_tokens": 14,
+        "duplicate_bytes": 140,
+        "instance_count": 5,
+        "total_redundant_lines": 24,
+        "total_redundant_tokens": 56,
+        "total_redundant_bytes": 560,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "47bc35c6398c280e",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 187,
+            "end_line": 193,
+            "unit_name": "render_ascii"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 255,
+            "end_line": 261,
+            "unit_name": "render_column"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 280,
+            "end_line": 286,
+            "unit_name": "render_table"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 313,
+            "end_line": 319,
+            "unit_name": "render_markdown"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 342,
+            "end_line": 348,
+            "unit_name": "render_html"
+          }
+        ]
+      },
+      {
         "id": "copy-code-unit-rust-32063cd40f86739f",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -1308,15 +1344,15 @@
           {
             "path": "crates/sql/src/exec/agg/select.rs",
             "language": "rust",
-            "start_line": 82,
-            "end_line": 98,
+            "start_line": 83,
+            "end_line": 99,
             "unit_name": "function_args_contain_aggregate"
           },
           {
             "path": "crates/sql/src/planner/access/projection.rs",
             "language": "rust",
-            "start_line": 150,
-            "end_line": 166,
+            "start_line": 153,
+            "end_line": 169,
             "unit_name": "function_args_contain_aggregate"
           }
         ]
@@ -1852,8 +1888,8 @@
           {
             "path": "crates/kernel/src/catalog/ddl.rs",
             "language": "rust",
-            "start_line": 250,
-            "end_line": 250,
+            "start_line": 248,
+            "end_line": 248,
             "unit_name": "_keep_type_use"
           },
           {
@@ -1894,9 +1930,45 @@
           {
             "path": "crates/sql/src/connection/session.rs",
             "language": "rust",
-            "start_line": 670,
-            "end_line": 670,
+            "start_line": 682,
+            "end_line": 682,
             "unit_name": "_keep_txn_use"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-ce971d3e603f01c8",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "function_is_single_arg_aggregate",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 13,
+        "duplicate_bytes": 113,
+        "instance_count": 2,
+        "total_redundant_lines": 5,
+        "total_redundant_tokens": 13,
+        "total_redundant_bytes": 113,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "634f447a75d1cb97",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/agg/select.rs",
+            "language": "rust",
+            "start_line": 101,
+            "end_line": 106,
+            "unit_name": "function_is_single_arg_aggregate"
+          },
+          {
+            "path": "crates/sql/src/planner/access/projection.rs",
+            "language": "rust",
+            "start_line": 171,
+            "end_line": 176,
+            "unit_name": "function_is_single_arg_aggregate"
           }
         ]
       },
@@ -2014,6 +2086,41 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-b739b5bc80d41e5d",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 4,
+        "duplicate_tokens": 8,
+        "duplicate_bytes": 57,
+        "instance_count": 2,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 8,
+        "total_redundant_bytes": 57,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "ea72bf0e3c620d2a",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 466,
+            "end_line": 470,
+            "unit_name": "write_padded_row"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 530,
+            "end_line": 534,
+            "unit_name": "write_markdown_row"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-8bd94ae20fc58e41",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -2077,15 +2184,15 @@
           {
             "path": "crates/redlinedb/src/connection.rs",
             "language": "rust",
-            "start_line": 90,
-            "end_line": 94,
+            "start_line": 112,
+            "end_line": 116,
             "unit_name": "query_row"
           },
           {
             "path": "crates/redlinedb/src/connection.rs",
             "language": "rust",
-            "start_line": 105,
-            "end_line": 109,
+            "start_line": 127,
+            "end_line": 131,
             "unit_name": "query_row_opt"
           }
         ]
@@ -2436,22 +2543,22 @@
           {
             "path": "crates/redlinedb/src/connection.rs",
             "language": "rust",
-            "start_line": 228,
-            "end_line": 229,
+            "start_line": 250,
+            "end_line": 251,
             "unit_name": "commit"
           },
           {
             "path": "crates/redlinedb/src/connection.rs",
             "language": "rust",
-            "start_line": 237,
-            "end_line": 238,
+            "start_line": 259,
+            "end_line": 260,
             "unit_name": "rollback"
           },
           {
             "path": "crates/redlinedb/src/connection.rs",
             "language": "rust",
-            "start_line": 247,
-            "end_line": 248,
+            "start_line": 269,
+            "end_line": 270,
             "unit_name": "drop"
           }
         ]
@@ -2576,41 +2683,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-1a163c5fc7d1a227",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 2,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 44,
-        "instance_count": 2,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 5,
-        "total_redundant_bytes": 44,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "0cd586b6eacbf6aa",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/kernel/src/json/path_bytecode.rs",
-            "language": "rust",
-            "start_line": 138,
-            "end_line": 140,
-            "unit_name": "is_ident"
-          },
-          {
-            "path": "crates/sql/src/parser.rs",
-            "language": "rust",
-            "start_line": 188,
-            "end_line": 190,
-            "unit_name": "is_ident_byte"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-ea2a7bb6e53a78a5",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -2639,15 +2711,15 @@
           {
             "path": "crates/redlinedb/src/connection.rs",
             "language": "rust",
-            "start_line": 118,
-            "end_line": 119,
+            "start_line": 140,
+            "end_line": 141,
             "unit_name": "begin"
           },
           {
             "path": "crates/redlinedb/src/connection.rs",
             "language": "rust",
-            "start_line": 124,
-            "end_line": 125,
+            "start_line": 146,
+            "end_line": 147,
             "unit_name": "commit"
           }
         ]
@@ -2674,15 +2746,15 @@
           {
             "path": "crates/sql/src/planner/helpers.rs",
             "language": "rust",
-            "start_line": 490,
-            "end_line": 492,
+            "start_line": 484,
+            "end_line": 486,
             "unit_name": "push_json_opt_usize"
           },
           {
             "path": "crates/sql/src/planner/helpers.rs",
             "language": "rust",
-            "start_line": 494,
-            "end_line": 496,
+            "start_line": 488,
+            "end_line": 490,
             "unit_name": "push_json_opt_num"
           }
         ]
@@ -2751,15 +2823,15 @@
           {
             "path": "crates/sql/src/planner/helpers.rs",
             "language": "rust",
-            "start_line": 467,
-            "end_line": 469,
+            "start_line": 461,
+            "end_line": 463,
             "unit_name": "push_json_num"
           },
           {
             "path": "crates/sql/src/planner/helpers.rs",
             "language": "rust",
-            "start_line": 471,
-            "end_line": 473,
+            "start_line": 465,
+            "end_line": 467,
             "unit_name": "push_json_usize"
           }
         ]
@@ -3005,15 +3077,15 @@
           {
             "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
             "language": "rust",
-            "start_line": 161,
-            "end_line": 162,
+            "start_line": 155,
+            "end_line": 156,
             "unit_name": "row_matches_qualifier"
           },
           {
             "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
             "language": "rust",
-            "start_line": 165,
-            "end_line": 166,
+            "start_line": 159,
+            "end_line": 160,
             "unit_name": "row_matches_joined_qualifier"
           }
         ]
@@ -3075,8 +3147,8 @@
           {
             "path": "crates/redlinedb/src/connection.rs",
             "language": "rust",
-            "start_line": 211,
-            "end_line": 212,
+            "start_line": 233,
+            "end_line": 234,
             "unit_name": "check_interrupt"
           },
           {
@@ -3194,84 +3266,13 @@
             "unit_name": "ping"
           }
         ]
-      },
-      {
-        "id": "copy-code-body-rust-b0fe3954fd3e1021",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 6,
-        "duplicate_bytes": 42,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 6,
-        "total_redundant_bytes": 42,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "82fa5b808a7f3ab7",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/redlinedb/src/connection.rs",
-            "language": "rust",
-            "start_line": 69,
-            "end_line": 70,
-            "unit_name": "query"
-          },
-          {
-            "path": "crates/redlinedb/src/connection.rs",
-            "language": "rust",
-            "start_line": 75,
-            "end_line": 76,
-            "unit_name": "execute"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-unit-rust-e358ec9d0ac666e0",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "load",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 42,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 5,
-        "total_redundant_bytes": 42,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "c2d8c9622b72d99a",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/bench/src/config.rs",
-            "language": "rust",
-            "start_line": 561,
-            "end_line": 562,
-            "unit_name": "load"
-          },
-          {
-            "path": "crates/bench/src/config.rs",
-            "language": "rust",
-            "start_line": 635,
-            "end_line": 636,
-            "unit_name": "load"
-          }
-        ]
       }
     ],
     "notes": [
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 35 lower-ranked classes"
+      "showing the top 50 classes and omitting 39 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3570,7 +3571,7 @@
       "problem": "`Code shape and semantic surface` scored 0 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/select_top.rs (1179 LOC)",
+        "largest authored code file: crates/sql/src/exec/select_top.rs (1165 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC"
@@ -3580,7 +3581,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:1bf2051c3ede322aac30e63d3e8f02fb2c6e034ffea9ff5f4b1a9f9a98339b18",
+      "fingerprint": "sha256:60319ac517f7037726cb33690cb55372c5c8c7fbad6f4149600e633e4ebd1a8c",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -4916,7 +4917,7 @@
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "tools",
-      "line": 611,
+      "line": 626,
       "matched_term": "rust.unsafe.undocumented-block",
       "reason": "no nearby SAFETY comment was found"
     },
@@ -4942,7 +4943,7 @@
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "tools",
-      "line": 612,
+      "line": 627,
       "matched_term": "rust.unsafe.undocumented-block",
       "reason": "no nearby SAFETY comment was found"
     },
@@ -4968,7 +4969,7 @@
       "lane": "fast",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "tools",
-      "line": 660,
+      "line": 675,
       "matched_term": "rust.unsafe.undocumented-block",
       "reason": "no nearby SAFETY comment was found"
     },
@@ -5208,7 +5209,7 @@
       "problem": "`Python containment and polyglot hygiene` scored 0 below the standard floor of 85",
       "agent_fix": "remove Python unless it is a dated advanced-ML/data exception and move product truth into Rust, SQL, and generated contracts",
       "evidence": [
-        "Python appears outside the allowed roots: scripts/bench/export_benchmark_results.py",
+        "Python appears outside the allowed roots: ops/ci/filter-generated-sarif.py",
         "non-optimal product language marker: crates/ffi/include/sqlite3.h",
         "Python leaks into product surface",
         "runtime code should converge to Rust, TypeScript, SQL, generated contracts, and rare advanced-ML/data Python exceptions"
@@ -5218,7 +5219,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:1b59adb77c53a24a7a7a7d6e9ff02708d7763a74ad7140534c1e57a54ff8d3b0",
+      "fingerprint": "sha256:254f6154c00212a765420e3d814338ca1f80cc43eb7bfbaf48473348b617bf08",
       "rule_id": "HLT-005-PYTHON-PRODUCT-TRUTH",
       "tlr": "Business truth",
       "lane": "contract",

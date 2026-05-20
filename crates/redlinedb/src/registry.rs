@@ -82,12 +82,13 @@ pub(crate) struct DatabaseEntry {
 #[derive(Default)]
 struct Registry {
     entries: HashMap<PathBuf, Weak<DatabaseEntry>>,
+    open_locks: HashMap<PathBuf, Weak<Mutex<()>>>,
 }
 
 // Global registry: an immutable `OnceLock<Mutex<Registry>>` (no unsynchronised
-// global state). All interior mutation goes through the inner Mutex so
-// concurrent open_database / create_ephemeral_database calls are serialised
-// by the guard returned from `registry().lock()`.
+// global state). Interior mutation is short-lived; path-specific open work is
+// coordinated by per-path locks so unrelated opens do not contend on the
+// registry mutex while the engine is opening a database.
 // SAFETY: OnceLock + Mutex; serialised access; no raw global aliasing.
 static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
 // SAFETY: AtomicU64 fetch_add(Relaxed); unique session IDs without ordering reqs.
@@ -108,6 +109,37 @@ fn registry() -> &'static RegistryHandle {
     REGISTRY.get_or_init(|| Mutex::new(Registry::default()))
 }
 
+fn open_lock_for_path(registry: &mut Registry, path: &Path) -> Arc<Mutex<()>> {
+    if let Some(lock) = registry.open_locks.get(path).and_then(Weak::upgrade) {
+        return lock;
+    }
+
+    let lock = Arc::new(Mutex::new(()));
+    registry
+        .open_locks
+        .insert(path.to_path_buf(), Arc::downgrade(&lock));
+    lock
+}
+
+fn validate_existing_entry(
+    existing: Arc<DatabaseEntry>,
+    fingerprint: &OpenFingerprint,
+) -> Result<Arc<DatabaseEntry>> {
+    if existing.fingerprint.read_only && !fingerprint.read_only {
+        return Err(Error::new(
+            ErrorCode::Busy,
+            "database already open read-only in this process",
+        ));
+    }
+    if !existing.fingerprint.compatible_with(fingerprint) {
+        return Err(Error::new(
+            ErrorCode::Misuse,
+            "database already open with incompatible options",
+        ));
+    }
+    Ok(existing)
+}
+
 pub(crate) fn open_database(
     path: impl AsRef<Path>,
     options: &OpenOptions,
@@ -122,21 +154,20 @@ pub(crate) fn create_ephemeral_database(
 ) -> Result<Arc<DatabaseEntry>> {
     let path = ephemeral_session_path(options.temp_dir.as_deref(), session_name);
     let fingerprint = OpenFingerprint::from_options(options);
-    let mut registry = registry().lock().expect("registry poisoned");
-    if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
-        if existing.fingerprint.read_only && !fingerprint.read_only {
-            return Err(Error::new(
-                ErrorCode::Busy,
-                "database already open read-only in this process",
-            ));
+    let open_lock = {
+        let mut registry = registry().lock().expect("registry poisoned");
+        if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
+            return validate_existing_entry(existing, &fingerprint);
         }
-        if !existing.fingerprint.compatible_with(&fingerprint) {
-            return Err(Error::new(
-                ErrorCode::Misuse,
-                "database already open with incompatible options",
-            ));
+        open_lock_for_path(&mut registry, &path)
+    };
+
+    let _open_guard = open_lock.lock().expect("database open mutex poisoned");
+    {
+        let mut registry = registry().lock().expect("registry poisoned");
+        if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
+            return validate_existing_entry(existing, &fingerprint);
         }
-        return Ok(existing);
     }
 
     if path.exists() {
@@ -160,6 +191,7 @@ pub(crate) fn create_ephemeral_database(
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
     });
+    let mut registry = registry().lock().expect("registry poisoned");
     registry.entries.insert(path, Arc::downgrade(&entry));
     Ok(entry)
 }
@@ -208,21 +240,20 @@ fn open_database_at(
 ) -> Result<Arc<DatabaseEntry>> {
     let path = normalize_path(path, create)?;
     let fingerprint = OpenFingerprint::from_options(options);
-    let mut registry = registry().lock().expect("registry poisoned");
-    if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
-        if existing.fingerprint.read_only && !fingerprint.read_only {
-            return Err(Error::new(
-                ErrorCode::Busy,
-                "database already open read-only in this process",
-            ));
+    let open_lock = {
+        let mut registry = registry().lock().expect("registry poisoned");
+        if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
+            return validate_existing_entry(existing, &fingerprint);
         }
-        if !existing.fingerprint.compatible_with(&fingerprint) {
-            return Err(Error::new(
-                ErrorCode::Misuse,
-                "database already open with incompatible options",
-            ));
+        open_lock_for_path(&mut registry, &path)
+    };
+
+    let _open_guard = open_lock.lock().expect("database open mutex poisoned");
+    {
+        let mut registry = registry().lock().expect("registry poisoned");
+        if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
+            return validate_existing_entry(existing, &fingerprint);
         }
-        return Ok(existing);
     }
 
     if create {
@@ -257,6 +288,7 @@ fn open_database_at(
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
     });
+    let mut registry = registry().lock().expect("registry poisoned");
     registry.entries.insert(path, Arc::downgrade(&entry));
     Ok(entry)
 }
