@@ -67,6 +67,18 @@ pub(crate) fn eval_subquery_value(
     }
 }
 
+fn bind_subquery(conn: &Connection, subquery: &sqlparser::ast::Query) -> Result<PreparedTemplate> {
+    let schema =
+        current_tx_schema_snapshot(conn).unwrap_or_else(|| conn.engine().schema_snapshot());
+    crate::parser::bind_query(
+        conn,
+        schema,
+        conn.schema_epoch(),
+        "<subquery>",
+        subquery.clone(),
+    )
+}
+
 /// Evaluate a subquery, pushing the caller's row onto the correlated-scope
 /// stack so qualified references (`outer.col`) resolve through
 /// `lookup_correlated`. The row snapshot is dropped automatically once
@@ -81,18 +93,29 @@ pub(crate) fn evaluate_subquery_rows(
             "subquery evaluation requires an active connection",
         ));
     };
-    let schema = conn.engine().schema_snapshot();
-    let template = crate::parser::bind_query(
-        conn,
-        schema,
-        conn.schema_epoch(),
-        "<subquery>",
-        subquery.clone(),
-    )?;
+    let template = bind_subquery(conn, subquery)?;
     let owned = outer_row.to_owned_row();
     crate::exec::with_outer_row(owned, || {
         materialize_prepared_rows(conn, &template, bindings)
     })
+}
+
+pub(crate) fn evaluate_subquery_exists(
+    subquery: &sqlparser::ast::Query,
+    outer_row: &RowContext<'_>,
+    bindings: &[Option<SqlValue>],
+) -> Result<bool> {
+    let Some(conn) = current_connection() else {
+        return Err(Error::TransactionState(
+            "subquery evaluation requires an active connection",
+        ));
+    };
+    let template = bind_subquery(conn, subquery)?;
+    let owned = outer_row.to_owned_row();
+    let rows = crate::exec::with_outer_row(owned, || {
+        materialize_prepared_rows_limited(conn, &template, bindings, Some(1))
+    })?;
+    Ok(!rows.is_empty())
 }
 
 fn row_values_for_expr(
@@ -173,14 +196,7 @@ pub(crate) fn in_subquery_result(
             "subquery evaluation requires an active connection",
         ));
     };
-    let schema = conn.engine().schema_snapshot();
-    let template = crate::parser::bind_query(
-        conn,
-        schema,
-        conn.schema_epoch(),
-        "<subquery>",
-        subquery.clone(),
-    )?;
+    let template = bind_subquery(conn, subquery)?;
     if template.output_columns.len() != value.len() {
         return Err(Error::UnsupportedSql(
             "IN subquery must return the same number of columns as the row value".to_owned(),

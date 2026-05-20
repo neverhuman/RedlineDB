@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions as FsOpenOptions};
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -293,12 +293,51 @@ fn open_database_at(
     Ok(entry)
 }
 
+const SHARED_MEMORY_EPHEMERAL_ROOT: &str = "/dev/shm/redlinedb-ephemeral";
+
+pub(crate) fn standard_volatile_root() -> PathBuf {
+    volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT))
+}
+
+fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
+    if ensure_writable_volatile_root(candidate) {
+        candidate.to_path_buf()
+    } else {
+        std::env::temp_dir()
+    }
+}
+
+fn ensure_writable_volatile_root(root: &Path) -> bool {
+    if fs::create_dir_all(root).is_err() {
+        return false;
+    }
+    let probe_id = EPHEMERAL_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let probe = root.join(format!(
+        ".redlinedb-volatile-probe-{}-{probe_id}",
+        std::process::id()
+    ));
+    let result = (|| -> io::Result<()> {
+        let mut file = FsOpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&probe)?;
+        file.write_all(b"ok")?;
+        drop(file);
+        fs::remove_file(&probe)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&probe);
+    }
+    result.is_ok()
+}
+
 fn ephemeral_session_path(temp_dir: Option<&Path>, session_name: &str) -> PathBuf {
     let default_root;
     let root = match temp_dir {
         Some(path) => path,
         None => {
-            default_root = std::env::temp_dir();
+            default_root = standard_volatile_root();
             default_root.as_path()
         }
     };

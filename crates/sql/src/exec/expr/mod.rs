@@ -286,8 +286,7 @@ pub(crate) fn eval_scalar(
             negated,
         } => in_list_result(expr, list, *negated, row, bindings)?,
         Expr::Exists { subquery, negated } => {
-            let rows = evaluate_subquery_rows(subquery, row, bindings)?;
-            let exists = !rows.is_empty();
+            let exists = evaluate_subquery_exists(subquery, row, bindings)?;
             SqlValue::Integer(if exists ^ *negated { 1 } else { 0 })
         }
         Expr::InSubquery {

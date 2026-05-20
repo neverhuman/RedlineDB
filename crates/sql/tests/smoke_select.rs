@@ -9,7 +9,7 @@
 mod common;
 
 use common::open_database;
-use redlinedb_sql::Step;
+use redlinedb_sql::{BeginMode, Step};
 
 #[test]
 fn create_insert_select_round_trip() {
@@ -35,6 +35,32 @@ fn create_insert_select_round_trip() {
     assert_eq!(stmt.column_text(1).expect("b"), "two");
 
     assert_eq!(stmt.step().expect("done"), Step::Done);
+}
+
+#[test]
+fn nested_select_reuses_enclosing_transaction_snapshot() {
+    let (_dir, conn) = open_database();
+
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT)")
+        .expect("create table");
+    conn.begin(BeginMode::Deferred).expect("begin");
+    conn.execute("INSERT INTO t VALUES (1, 'one')")
+        .expect("insert uncommitted row");
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT (SELECT COUNT(*) FROM t), \
+                    EXISTS(SELECT 1 FROM t WHERE id = outer_t.id) \
+             FROM t AS outer_t",
+        )
+        .expect("prepare nested select");
+    assert_eq!(stmt.step().expect("row"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("count"), 1);
+    assert_eq!(stmt.column_i64(1).expect("exists"), 1);
+    assert_eq!(stmt.step().expect("done"), Step::Done);
+    drop(stmt);
+
+    conn.rollback().expect("rollback");
 }
 
 #[test]

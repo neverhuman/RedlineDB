@@ -1,5 +1,52 @@
 use redlinedb::{Database, OpenOptions, Step};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use tempfile::tempdir;
+
+fn expected_default_volatile_root() -> PathBuf {
+    let root = PathBuf::from("/dev/shm/redlinedb-ephemeral");
+    if writable_root(&root) {
+        root
+    } else {
+        std::env::temp_dir()
+    }
+}
+
+fn writable_root(root: &Path) -> bool {
+    if std::fs::create_dir_all(root).is_err() {
+        return false;
+    }
+    let probe = root.join(format!(".redlinedb-test-probe-{}", std::process::id()));
+    let result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&probe)?;
+        file.write_all(b"ok")?;
+        drop(file);
+        std::fs::remove_file(&probe)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&probe);
+    }
+    result.is_ok()
+}
+
+#[test]
+fn in_memory_database_uses_default_volatile_root() {
+    let expected_root = expected_default_volatile_root();
+    let db = Database::create_in_memory(OpenOptions::default()).expect("create in-memory db");
+    let db_path = db.path().to_path_buf();
+
+    assert!(
+        db_path.starts_with(&expected_root),
+        "default volatile root should be under {:?}, got {:?}",
+        expected_root,
+        db_path
+    );
+}
 
 #[test]
 fn in_memory_database_shares_state_and_cleans_up() {

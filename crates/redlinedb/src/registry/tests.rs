@@ -134,3 +134,30 @@ fn registry_open_locks_are_scoped_per_path() {
         "distinct paths must not share an open lock"
     );
 }
+
+#[test]
+fn volatile_session_path_keeps_explicit_root() {
+    let root = PathBuf::from(format!(
+        "/tmp/redlinedb-explicit-root-{}-{}",
+        std::process::id(),
+        EPHEMERAL_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let path = ephemeral_session_path(Some(root.as_path()), "explicit-root-session");
+
+    assert!(
+        path.starts_with(&root),
+        "explicit OpenOptions::temp_dir must own the volatile root"
+    );
+}
+
+#[test]
+fn volatile_root_from_unusable_candidate_uses_process_scratch() {
+    let root = tempfile::tempdir().expect("scratch dir");
+    let file_path = root.path().join("not-a-directory");
+    std::fs::write(&file_path, b"x").expect("probe file");
+
+    assert_eq!(
+        volatile_root_from_candidate(&file_path),
+        std::env::temp_dir()
+    );
+}
