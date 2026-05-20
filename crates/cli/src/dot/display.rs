@@ -9,11 +9,12 @@ pub fn mode(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     };
     let Some(parsed) = OutputMode::parse(token) else {
         return Err(format!(
-            "Error: mode should be one of: list csv json line markdown table tabs insert column html quote (got: {token})"
+            "Error: mode should be one of: list csv json line ascii markdown table tabs insert column html quote (got: {token})"
         ));
     };
     state.mode = parsed;
     state.separator = parsed.default_separator().to_owned();
+    state.show_header = parsed.headers_by_default();
     Ok(DotOutcome::Ok)
 }
 
