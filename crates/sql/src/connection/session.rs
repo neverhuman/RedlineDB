@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use redlinedb_kernel::catalog::{StatsEpoch, StatsSnapshot};
+use redlinedb_kernel::catalog::{SchemaEpoch, SchemaSnapshot, StatsEpoch, StatsSnapshot};
 use redlinedb_kernel::engine::{CommitOutcome, Engine, Txn};
 use redlinedb_kernel::txn::Isolation;
 
@@ -499,8 +499,20 @@ impl Connection {
         self.db.set_user_version(value)
     }
 
-    pub(crate) fn schema_epoch(&self) -> redlinedb_kernel::catalog::SchemaEpoch {
-        self.db.engine.schema_epoch()
+    pub(crate) fn schema_snapshot(&self) -> Arc<SchemaSnapshot> {
+        if let Some(snapshot) = crate::exec::current_tx_schema_snapshot(self) {
+            return snapshot;
+        }
+        let session = self.session.lock().expect("session poisoned");
+        if let Some(tx) = session.tx.as_ref() {
+            return self.db.engine.schema_snapshot_for_tx(tx);
+        }
+        drop(session);
+        self.db.schema_snapshot()
+    }
+
+    pub(crate) fn schema_epoch(&self) -> SchemaEpoch {
+        self.schema_snapshot().meta.schema_epoch
     }
 
     pub(crate) fn stats_epoch(&self) -> StatsEpoch {

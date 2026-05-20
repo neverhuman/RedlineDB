@@ -950,16 +950,8 @@ fn covering_projection_for_index(
         // Rowid alias (and explicit `rowid` / `_rowid_` / `oid`) lives
         // on `IndexRowRef.row_id` — covered without decoding the leaf
         // key.
-        let rowid_alias_name: Option<String> = table
-            .rowid_alias_column
-            .and_then(|alias| table.columns.get(alias as usize))
-            .map(|col| col.folded.as_ref().to_owned());
-        if column_name.eq_ignore_ascii_case("rowid")
-            || column_name.eq_ignore_ascii_case("_rowid_")
-            || column_name.eq_ignore_ascii_case("oid")
-            || rowid_alias_name
-                .as_deref()
-                .is_some_and(|alias| alias.eq_ignore_ascii_case(column_name))
+        if table.is_public_rowid_name(column_name)
+            || table.rowid_alias_column_name_matches(column_name)
         {
             out.push(index_access::OutputColumnSource::Rowid);
             continue;
@@ -1022,13 +1014,7 @@ fn order_by_rowid_alias(
         return false;
     }
     let rowid_col = |name: &str| {
-        name.eq_ignore_ascii_case("rowid")
-            || name.eq_ignore_ascii_case("_rowid_")
-            || name.eq_ignore_ascii_case("oid")
-            || table
-                .rowid_alias_column
-                .and_then(|alias| table.columns.get(alias as usize))
-                .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
+        table.is_public_rowid_name(name) || table.rowid_alias_column_name_matches(name)
     };
     match &item.expr {
         Expr::Identifier(ident) => rowid_col(&ident.value),

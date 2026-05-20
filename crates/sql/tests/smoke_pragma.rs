@@ -171,6 +171,28 @@ fn pragma_introspection_and_state_round_trips_work() {
 }
 
 #[test]
+fn pragma_table_list_reports_without_rowid_and_strict_bits_separately() {
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE wr(a TEXT, b INT, PRIMARY KEY(a,b)) WITHOUT ROWID")
+        .expect("create without rowid table");
+    conn.execute("CREATE TABLE strict_t(a INTEGER) STRICT")
+        .expect("create strict table");
+
+    let mut stmt = conn.prepare("PRAGMA table_list").expect("table_list");
+    let mut rows = Vec::new();
+    while let Step::Row = stmt.step().expect("step table_list") {
+        rows.push((
+            stmt.column_text(1).expect("name").to_owned(),
+            stmt.column_i64(4).expect("wr"),
+            stmt.column_i64(5).expect("strict"),
+        ));
+    }
+
+    assert!(rows.iter().any(|row| row == &("wr".to_owned(), 1, 0)));
+    assert!(rows.iter().any(|row| row == &("strict_t".to_owned(), 0, 1)));
+}
+
+#[test]
 fn pragma_user_version_survives_reopen() {
     let dir = tempdir().expect("temp dir");
     let path = dir.path().join("user-version.db");

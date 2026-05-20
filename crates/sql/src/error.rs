@@ -47,6 +47,9 @@ pub enum Error {
 
     #[error("not authorized")]
     NotAuthorized,
+
+    #[error("trigger ignored row")]
+    TriggerIgnore,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -69,6 +72,7 @@ impl PartialEq for Error {
             (Self::DatatypeMismatch, Self::DatatypeMismatch) => true,
             (Self::Config(a), Self::Config(b)) => a == b,
             (Self::NotAuthorized, Self::NotAuthorized) => true,
+            (Self::TriggerIgnore, Self::TriggerIgnore) => true,
             _ => false,
         }
     }

@@ -62,6 +62,28 @@ impl Connection {
         })
     }
 
+    pub fn prepare_v2<'sql>(
+        &mut self,
+        sql: &'sql str,
+    ) -> Result<(Option<OwnedStatement>, &'sql str)> {
+        self.check_interrupt()?;
+        let (stmt, tail) = self.inner.prepare_v2(sql)?;
+        let Some(stmt) = stmt else {
+            return Ok((None, tail));
+        };
+        if self.read_only && !stmt.is_readonly() {
+            return Err(Error::new(ErrorCode::ReadOnly, "connection is read-only"));
+        }
+        Ok((
+            Some(OwnedStatement {
+                inner: stmt,
+                interrupted: Arc::clone(&self.interrupted),
+                _marker: Rc::new(()),
+            }),
+            tail,
+        ))
+    }
+
     pub fn prepare_cached<'c>(&'c mut self, sql: &str) -> Result<Statement<'c>> {
         self.prepare(sql)
     }

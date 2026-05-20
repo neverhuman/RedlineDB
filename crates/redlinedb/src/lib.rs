@@ -59,6 +59,15 @@ pub use value::{Value, ValueRef};
 // path stable by re-exporting the implementation hosted in `handle`.
 pub(crate) use handle::sql_options;
 
+pub fn sql_input_complete(sql: &str) -> bool {
+    if !sql.trim_end().ends_with(';') {
+        return false;
+    }
+    let probe = format!("{sql}\nSELECT 1;");
+    let (_head, tail) = redlinedb_sql::split_first_statement(&probe);
+    !tail.trim().is_empty()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
