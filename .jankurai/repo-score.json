@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:af1dd6be0ce4d6f9d592e06ba041dfbc9bdfeee6fd1bedd72e7ce90d211befba",
-  "input_fingerprint": "sha256:3b0b8b4da361393da46feed5a948da2298cd1a84f89e31b38ad45b22add64529",
+  "report_fingerprint": "sha256:58cbfa73be6e8a447b202c0cec515dc645f68498575a34a8c354739674094733",
+  "input_fingerprint": "sha256:8f99afb8bd40019b49d71122e07ffdc7cfc8ed25be84067cc11370629040c22b",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779277746",
+  "generated_at": "1779279472",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -82,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779277746",
-  "started_at": "1779277746",
-  "elapsed_ms": 13134,
+  "run_id": "1779279472",
+  "started_at": "1779279472",
+  "elapsed_ms": 11831,
   "scope": {
     "mode": "full",
     "paths": []
@@ -111,7 +111,7 @@
     }
   },
   "git": {
-    "head": "a3ed488",
+    "head": "e1e1484",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -398,9 +398,12 @@
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
         "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=0 missing=0 high_or_critical_missing=0 verdict=pass"
+        "proofbind artifact found: surfaces=23 missing=23 high_or_critical_missing=12 verdict=review"
       ],
-      "notes": []
+      "notes": [
+        "proofbind reports 23 unresolved obligation(s)",
+        "proofbind reports 12 missing high/critical semantic proof obligation(s)"
+      ]
     },
     {
       "name": "Security and supply-chain posture",
@@ -1095,7 +1098,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-20T11:48:53.254578505+00:00",
+    "generated_at": "2026-05-20T12:17:41.245037649+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",

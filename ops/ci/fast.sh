@@ -24,6 +24,7 @@ run_preflight() {
     cargo fmt --check
     bash scripts/check_file_sizes.sh
     bash scripts/parity/lint-sqlite-parity-ledger.sh
+    ci_verify_redlinedb_release_smoke
     cargo check --workspace --locked
 }
 
