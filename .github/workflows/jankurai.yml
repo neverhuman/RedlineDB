@@ -146,7 +146,10 @@ jobs:
         run: bash ops/ci/jankurai-staged-gate.sh
       - name: jankurai audit
         if: steps.install-jankurai.outputs.installed == 'true'
-        run: jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --sarif .jankurai/jankurai.sarif --github-step-summary .jankurai/summary.md --repair-queue-jsonl .jankurai/repair-queue.jsonl
+        run: jankurai audit . --policy .jankurai/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --sarif .jankurai/jankurai.sarif --github-step-summary .jankurai/summary.md --repair-queue-jsonl .jankurai/repair-queue.jsonl
+      - name: Filter generated-zone SARIF findings
+        if: steps.install-jankurai.outputs.installed == 'true' && hashFiles('.jankurai/jankurai.sarif') != ''
+        run: python3 ops/ci/filter-generated-sarif.py .jankurai/jankurai.sarif
       - name: Upload jankurai SARIF (if produced)
         if: always() && hashFiles('.jankurai/jankurai.sarif') != ''
         uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b

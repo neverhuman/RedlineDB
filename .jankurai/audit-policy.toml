@@ -26,6 +26,10 @@ excluded_paths = [
   "tips/",
   "paper/scripts/",
   "scripts/bench/export_benchmark_results.py",
+  # Generated SQLite parity corpus wrappers are retained as evidence and
+  # runner input. They are audited through generated_manifest.json,
+  # approved-ci.txt, and the sqlite_parity runner instead of per-wrapper SARIF.
+  "crates/bench/sqlite_parity/cases/",
   # python-ai cell adapter marker: AGENTS.md is the cell routing stub and
   # carries no proof-bearing code; the python-ai cell is reserved per the
   # jankurai standard (see .jankurai/repo-score.md python-ai row) and has no
