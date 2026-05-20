@@ -12,6 +12,10 @@ fn in_memory_database_shares_state_and_cleans_up() {
     let db = Database::create_in_memory(opts).expect("create in-memory db");
     let db_path = db.path().to_path_buf();
     assert!(db_path.starts_with(root.path()));
+    assert!(
+        !db_path.join("owner.lock").exists(),
+        "volatile in-memory databases should not take an owner lock"
+    );
 
     let mut conn1 = db.connect().expect("conn1");
     let mut conn2 = db.connect().expect("conn2");
@@ -22,6 +26,14 @@ fn in_memory_database_shares_state_and_cleans_up() {
     conn1
         .execute("INSERT INTO t VALUES (1, 'one')", ())
         .expect("insert row");
+    assert_eq!(
+        db.benchmark_stats()
+            .expect("benchmark stats")
+            .wal
+            .fdatasyncs_issued,
+        0,
+        "volatile in-memory DDL/DML should not issue WAL fdatasyncs"
+    );
 
     let mut stmt = conn2
         .prepare("SELECT v FROM t WHERE id = 1")

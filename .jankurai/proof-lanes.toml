@@ -69,6 +69,11 @@ name = "sqlite-parity-scale-ci"
 purpose = "bench-owned SQLite parity CI hard gate over approved RedlineDB-vs-SQLite cases"
 
 [[lane]]
+command = "just sqlite-parity-volatile-sentinel"
+name = "sqlite-parity-volatile-sentinel"
+purpose = "bench-owned advisory sentinel over volatile :memory: fast-path cases"
+
+[[lane]]
 command = "just sqlite-parity-report-check"
 name = "sqlite-parity-report-check"
 purpose = "deterministic SQLite parity report artifact drift check"

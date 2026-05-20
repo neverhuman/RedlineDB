@@ -154,6 +154,12 @@ case "$lane" in
     rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --out target/sqlite-parity/compare-approved-ci.jsonl
     ;;
+  sqlite-parity-volatile-sentinel)
+    rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
+    rm -f target/sqlite-parity/volatile-fastpath-sentinel.jsonl
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/volatile-fastpath-sentinel.txt --repetitions "${REDLINEDB_VOLATILE_SENTINEL_REPETITIONS:-3}" --warmup "${REDLINEDB_VOLATILE_SENTINEL_WARMUP:-1}" --jobs auto --out target/sqlite-parity/volatile-fastpath-sentinel.jsonl
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- sentinel --input target/sqlite-parity/volatile-fastpath-sentinel.jsonl --ceiling-ns 00003=250000000 --ceiling-ns 00274=200000000 --ceiling-ns 00807=500000000 --ceiling-ns 00949=750000000 ${REDLINEDB_VOLATILE_SENTINEL_ENFORCE:+--enforce}
+    ;;
   sqlite-parity-report-update)
     rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
     mkdir -p benchmark-results/sqlite-parity/latest assets

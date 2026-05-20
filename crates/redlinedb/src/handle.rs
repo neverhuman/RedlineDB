@@ -61,8 +61,7 @@ impl Database {
     /// same transient state. The backing directory disappears when the last
     /// `Database` owner drops.
     pub fn create_in_memory(options: OpenOptions) -> Result<Self> {
-        let mut options = options;
-        options.create = true;
+        let options = volatile_open_options(options);
         let inner = registry::create_in_memory_database(&options)?;
         Ok(Self { inner })
     }
@@ -75,8 +74,7 @@ impl Database {
     /// alive. When the final owner drops, the owned ephemeral root is
     /// removed.
     pub fn create_ephemeral(session_name: &str, options: OpenOptions) -> Result<Self> {
-        let mut options = options;
-        options.create = true;
+        let options = volatile_open_options(options);
         let inner = registry::create_ephemeral_database(session_name, &options)?;
         Ok(Self { inner })
     }
@@ -269,6 +267,13 @@ impl Database {
     pub fn path(&self) -> &Path {
         &self.inner.path
     }
+}
+
+fn volatile_open_options(mut options: OpenOptions) -> OpenOptions {
+    options.create = true;
+    options.durability = Durability::UnsafeDev;
+    options.process_owner_lock = false;
+    options
 }
 
 impl Clone for Database {
