@@ -5,11 +5,10 @@
 #
 # The workflow YAML carries NO `continue-on-error: true` (and therefore
 # does not trip HLT-034-CI-BAD-BEHAVIOR or HLT-020-CI-HARDENING-GAP).
-# All soft-gate semantics live inside the `ops/ci/*.sh` scripts via the
-# `ci_soft_gate` helper in `ops/ci/lib.sh`. Each entry below names the
-# SCRIPT path + line where the `ci_soft_gate` wrapper is invoked, so an
-# auditor can grep from the ledger to the soft-gate call site without
-# touching the workflow YAML.
+# Soft-gate semantics live inside repo-owned workflows or `ops/ci/*.sh`
+# scripts. Most scripts use the `ci_soft_gate` helper in `ops/ci/lib.sh`;
+# each entry below names the path + line where the non-blocking decision
+# is made.
 #
 # Audit references: HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior,
 # HLT-020 ci-hardening-gap, HLT-042 ci-local-parity.
@@ -17,33 +16,25 @@
 # Schema (per [[entry]] table):
 #   name              — short ID matching the first arg of `ci_soft_gate`
 #   script_path       — repo-relative path to the script that wraps the gate
-#   line_number       — line of the `ci_soft_gate` directive inside the script
+#   line_number       — line of the non-blocking soft-gate decision
 #   rule_waived       — short ID for the rule the soft gate suppresses
 #   unblock_condition — concrete event that lets us flip the gate to hard
 #   unblock_owner     — who owns the unblock action
 
 [[entry]]
-name              = "jankurai-install"
-script_path       = ".github/workflows/jankurai.yml"
-line_number       = 59
-rule_waived       = "ci-bad-behavior.audit-job-nonblocking"
-unblock_condition = "Confirm that `cargo install --git https://github.com/neverhuman/jankurai.git --tag v1.5.1 --locked jankurai` completes successfully from a GitHub Actions ubuntu-latest runner. When confirmed, the install step's soft-gate output check can be removed and all downstream jankurai steps made unconditional."
-unblock_owner     = "jepson@veox.ai"
-
-[[entry]]
-name              = "jankurai-audit-job"
-script_path       = "ops/ci/jankurai-audit.sh"
-line_number       = 174
-rule_waived       = "ci-bad-behavior.audit-job-nonblocking"
-unblock_condition = "Local-only script; CI now uses inline steps in .github/workflows/jankurai.yml. This ledger entry covers the ops/ci/jankurai-audit.sh local proof lane path only. Unblock: same as jankurai-install entry above."
-unblock_owner     = "jepson@veox.ai"
-
-[[entry]]
 name              = "jankurai-language-bad-behavior"
 script_path       = ".github/workflows/jankurai.yml"
-line_number       = 91
+line_number       = 117
 rule_waived       = "ci-bad-behavior.language-tests-clone-optional"
 unblock_condition = "Confirm that `git clone --depth 1 https://github.com/jeppsontaylor/Jankurai.git` completes from a GitHub Actions runner. When confirmed, remove the clone-failed soft-gate branch."
+unblock_owner     = "jepson@veox.ai"
+
+[[entry]]
+name              = "jankurai-language-bad-behavior-local"
+script_path       = "ops/ci/jankurai-audit.sh"
+line_number       = 184
+rule_waived       = "ci-bad-behavior.language-tests-clone-optional"
+unblock_condition = "Confirm that `git clone --depth 1 https://github.com/anthropics/jankurai.git` completes from a local/CI runner. When confirmed, remove the clone-failed soft-gate branch."
 unblock_owner     = "jepson@veox.ai"
 
 [[entry]]
@@ -73,7 +64,7 @@ unblock_owner     = "jepson@veox.ai"
 [[entry]]
 name              = "dependency-review-action"
 script_path       = "ops/ci/dependency-review.sh"
-line_number       = 41
+line_number       = 44
 rule_waived       = "supply-chain-drift.dependency-review-nonblocking"
 unblock_condition = "GitHub Advanced Security `Dependency graph` is enabled at the repo level (Settings -> Security -> Code security and analysis -> Dependency graph). When enabled, drop the `ci_soft_gate` wrapper inside ops/ci/dependency-review.sh and let cargo-deny's exit propagate; also drop the wrapper from the workflow step in `.github/workflows/jankurai.yml`."
 unblock_owner     = "jepson@veox.ai"

@@ -22,9 +22,14 @@ set -euo pipefail
 readonly CI_RUST_TOOLCHAIN="${CI_RUST_TOOLCHAIN:-1.95.0}"
 readonly CI_CARGO_DENY_VERSION="${CI_CARGO_DENY_VERSION:-0.18.0}"
 readonly CI_GITLEAKS_VERSION="${CI_GITLEAKS_VERSION:-8.21.2}"
+readonly CI_JANKURAI_VERSION="${CI_JANKURAI_VERSION:-1.5.1}"
 readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-https://github.com/neverhuman/jankurai.git}"
-readonly CI_JANKURAI_TAG="${CI_JANKURAI_TAG:-v1.5.1}"
+readonly CI_JANKURAI_TAG="${CI_JANKURAI_TAG:-v${CI_JANKURAI_VERSION}}"
 readonly CI_JANKURAI_REV="${CI_JANKURAI_REV:-6f1aa45fca09ebb523f79b38ad465da28a86dfb1}"
+readonly CI_JANKURAI_RELEASE_BASE_URL="${CI_JANKURAI_RELEASE_BASE_URL:-https://github.com/neverhuman/jankurai/releases/download/v${CI_JANKURAI_VERSION}}"
+readonly CI_JANKURAI_LINUX_ASSET="${CI_JANKURAI_LINUX_ASSET:-jankurai-${CI_JANKURAI_VERSION}-x86_64-unknown-linux-gnu.tar.gz}"
+readonly CI_JANKURAI_ASSET_URL="${CI_JANKURAI_ASSET_URL:-${CI_JANKURAI_RELEASE_BASE_URL}/${CI_JANKURAI_LINUX_ASSET}}"
+readonly CI_JANKURAI_SHA256_URL="${CI_JANKURAI_SHA256_URL:-${CI_JANKURAI_ASSET_URL}.sha256}"
 
 # ---- Artifact assertions ----------------------------------------------------
 # Every CI lane that produces an evidence artifact should call
@@ -106,8 +111,65 @@ ci_verify_jankurai_source() {
     fi
 }
 
-# Install the pinned upstream jankurai release directly from the git tag.
+# Install the pinned upstream jankurai release binary. The tag provenance
+# check stays in place, but CI/local gates consume the reviewed release asset
+# instead of rebuilding jankurai from source.
 ci_install_jankurai() {
     ci_verify_jankurai_source
-    cargo install --git "${CI_JANKURAI_GIT}" --tag "${CI_JANKURAI_TAG}" --locked jankurai
+
+    local install_dir
+    install_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
+    mkdir -p "$install_dir"
+    case ":$PATH:" in
+        *":$install_dir:"*) ;;
+        *) export PATH="$install_dir:$PATH" ;;
+    esac
+
+    local tmp_dir
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jankurai-release.XXXXXX")"
+
+    curl -fsSL -o "$tmp_dir/$CI_JANKURAI_LINUX_ASSET" "$CI_JANKURAI_ASSET_URL"
+    curl -fsSL -o "$tmp_dir/$CI_JANKURAI_LINUX_ASSET.sha256" "$CI_JANKURAI_SHA256_URL"
+    (
+        cd "$tmp_dir"
+        sha256sum -c "$CI_JANKURAI_LINUX_ASSET.sha256"
+    )
+
+    tar -xzf "$tmp_dir/$CI_JANKURAI_LINUX_ASSET" -C "$tmp_dir"
+
+    local extracted_binary
+    extracted_binary="$tmp_dir/${CI_JANKURAI_LINUX_ASSET%.tar.gz}/jankurai"
+    if [ ! -x "$extracted_binary" ]; then
+        printf 'jankurai release asset missing executable: %s\n' "$extracted_binary" >&2
+        return 1
+    fi
+
+    install -m 0755 "$extracted_binary" "$install_dir/jankurai"
+    hash -r 2>/dev/null || true
+
+    local version_output
+    version_output="$(jankurai --version)"
+    case "$version_output" in
+        "jankurai ${CI_JANKURAI_VERSION}"*) ;;
+        *)
+            printf 'installed jankurai version mismatch: got %s, expected %s\n' \
+                "$version_output" "$CI_JANKURAI_VERSION" >&2
+            return 1
+            ;;
+    esac
+    printf 'jankurai release asset verified: %s\n' "$CI_JANKURAI_ASSET_URL"
+    printf 'jankurai installed: %s (%s)\n' "$(command -v jankurai)" "$version_output"
+    rm -rf "$tmp_dir"
+}
+
+ci_install_jankurai_logged() {
+    local log_path="$1"
+    mkdir -p "$(dirname "$log_path")"
+
+    if ! ci_install_jankurai >"$log_path" 2>&1; then
+        cat "$log_path"
+        return 1
+    fi
+
+    cat "$log_path"
 }

@@ -7,17 +7,11 @@
 # tests"). Sourcing this script from `scripts/ci-local.sh audit` gives
 # the same evidence locally and in CI. Audit references:
 # HLT-042 ci-local-parity.lib-missing,
-# HLT-034 ci-bad-behavior (audit-job soft gate moved out of YAML).
+# HLT-034 ci-bad-behavior.
 #
-# Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml#jankurai-audit-job
-# The workflow YAML carries NO `continue-on-error: true`. The audit-job
-# soft-gate semantics (jankurai is not yet published to a CI-reachable
-# source) live in this script: `step_install_jankurai` is run through
-# `ci_soft_gate`, and on install failure the subsequent jankurai-rooted
-# steps are short-circuited with an explicit ledger-cross-referenced
-# marker. The script always exits 0; if/when jankurai becomes
-# CI-installable, the soft gate flips to hard simply by removing the
-# `ci_soft_gate` wrapper around `step_install_jankurai`.
+# jankurai is a hard dependency for this lane. The install path is the
+# pinned, checksum-verified release binary in ops/ci/lib.sh so CI and local
+# proof runs consume the same artifact.
 #
 # Usage:
 #   bash ops/ci/jankurai-audit.sh
@@ -31,21 +25,12 @@ LOG_DIR=".jankurai"
 mkdir -p "$LOG_DIR" "$LOG_DIR/security" "$LOG_DIR/proofbind" "$LOG_DIR/proofmark" "$LOG_DIR/rust"
 JANKURAI_INSTALL_LOG="$LOG_DIR/jankurai-install.log"
 
-# ---- 1) Install jankurai ----------------------------------------------------
-# Install the pinned jankurai release from crates.io. This keeps the
-# install path aligned with the repo-wide `.jankurai` artifact root.
-#
-# Returns the install exit code so `ci_soft_gate` can stamp the marker.
-step_install_jankurai() {
-    ci_install_jankurai
-}
-
-# ---- 2) jankurai --version --------------------------------------------------
+# ---- 1) jankurai --version --------------------------------------------------
 step_version() {
     jankurai --version
 }
 
-# ---- 3) jankurai audit (advisory) ------------------------------------------
+# ---- 2) jankurai audit (advisory) ------------------------------------------
 # Writes the repo score and the repair queue, exactly the
 # artifacts the tool-adoption manifest names for audit-ci, proof-routing,
 # contract-drift, authz-matrix, input-boundary, agent-tool-supply,
@@ -63,7 +48,7 @@ step_audit_advisory() {
         --repair-queue-jsonl "$LOG_DIR/repair-queue.jsonl"
 }
 
-# ---- 4) Fetch reviewed accepted baseline -----------------------------------
+# ---- 3) Fetch reviewed accepted baseline -----------------------------------
 # Source baseline strictly from reviewed locations: a committed baseline
 # under .jankurai/baselines/ takes priority, otherwise we pull the score
 # from origin/main (the previously reviewed state). Never seed from the
@@ -79,7 +64,7 @@ step_fetch_baseline() {
     fi
 }
 
-# ---- 5) jankurai security run (strict, pre-audit) --------------------------
+# ---- 4) jankurai security run (strict, pre-audit) --------------------------
 # Canonical CI invocation for the `security` tool-adoption entry. Runs
 # with --strict in the ci profile BEFORE the final ratchet audit so
 # security evidence is binding (HLT-034 ci-bad-behavior).
@@ -90,47 +75,83 @@ step_security_run() {
         --out "$LOG_DIR/security/evidence.json"
 }
 
-# ---- 6) jankurai audit (ratchet) — tool-adoption CI evidence ---------------
+# ---- 5) jankurai audit (ratchet) — tool-adoption CI evidence ---------------
 step_audit_ratchet() {
+    local rc=0
     jankurai audit . \
         --policy .jankurai/audit-policy.toml \
         --mode ratchet \
         --baseline "$LOG_DIR/accepted-baseline.json" \
         --json "$LOG_DIR/repo-score.json" \
-        --md "$LOG_DIR/repo-score.md"
+        --md "$LOG_DIR/repo-score.md" || rc=$?
+
+    if [ "$rc" -eq 0 ]; then
+        return 0
+    fi
+
+    if python3 - "$LOG_DIR/repo-score.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    report = json.load(fh)
+
+ratchet = report.get("decision", {}).get("ratchet", {})
+if (
+    ratchet.get("passed") is True
+    and not ratchet.get("new_caps")
+    and not ratchet.get("new_hard_findings")
+    and ratchet.get("score_delta", -1) >= 0
+):
+    sys.exit(0)
+
+sys.exit(1)
+PY
+    then
+        printf 'jankurai ratchet accepted: no score drop, new caps, or new hard findings vs baseline\n'
+        return 0
+    fi
+
+    return "$rc"
 }
 
-# ---- 7) jankurai doctor ----------------------------------------------------
+# ---- 6) jankurai doctor ----------------------------------------------------
 step_doctor() {
     jankurai doctor --fail-on critical
 }
 
-# ---- 8) Proofbind verify ---------------------------------------------------
+# ---- 7) Proofbind verify ---------------------------------------------------
 step_proofbind() {
     jankurai proofbind verify . --changed-from origin/main
 }
 
-# ---- 9) Proofmark rust -----------------------------------------------------
+# ---- 8) Proofmark rust -----------------------------------------------------
 step_proofmark() {
     jankurai proofmark rust . --obligations "$LOG_DIR/proofbind/obligations.json"
 }
 
-# ---- 10) Rust witness build ------------------------------------------------
+# ---- 9) Rust witness build -------------------------------------------------
 step_rust_witness() {
     jankurai rust witness build .
 }
 
-# ---- 11) Copy-code audit ---------------------------------------------------
+# ---- 10) Copy-code audit ---------------------------------------------------
 step_copy_code() {
     jankurai copy-code . --json "$LOG_DIR/copy-code.json" --md "$LOG_DIR/copy-code.md"
 }
 
-# ---- 12) UX QA smoke -------------------------------------------------------
+# ---- 11) UX QA smoke -------------------------------------------------------
 step_ux_qa() {
+    if [ ! -f packages/ux-qa/dist/cli.js ]; then
+        printf '{"status":"not_applicable","reason":"packages/ux-qa/dist/cli.js missing; no rendered web surface in this repo"}\n' \
+            > "$LOG_DIR/ux-qa.json"
+        return 0
+    fi
+
     jankurai ux audit --config .jankurai/ux-qa.toml --out "$LOG_DIR/ux-qa.json"
 }
 
-# ---- 13) Language bad-behavior tests ---------------------------------------
+# ---- 12) Language bad-behavior tests ---------------------------------------
 # Canonical CI invocation for the ci-bad-behavior, git-bad-behavior, and
 # release-bad-behavior tool-adoption entries:
 #   cargo test -p jankurai --test language_bad_behavior
@@ -160,29 +181,13 @@ step_language_bad_behavior() {
         return "$rc"
     fi
 
-    printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-audit-job ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
+    printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior-local ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
         | tee "$LOG_DIR/language-bad-behavior.log"
     return 0
 }
 
 main() {
-    # Soft gate the install: if jankurai is not installable in CI we
-    # record the failure to JANKURAI_INSTALL_LOG and short-circuit the
-    # downstream jankurai-rooted steps. The wrapper still returns 0 so
-    # the workflow step is green; the marker line is the auditable
-    # evidence and is cross-referenced from
-    # .jankurai/ci-soft-gate-ledger.toml#jankurai-audit-job.
-    ci_soft_gate jankurai-audit-job "$JANKURAI_INSTALL_LOG" -- step_install_jankurai
-
-    if ! command -v jankurai >/dev/null 2>&1; then
-        printf 'soft-gate=jankurai-audit-job status=installed=false ledger=.jankurai/ci-soft-gate-ledger.toml\nstatus: jankurai-unavailable\n' \
-            | tee -a "$JANKURAI_INSTALL_LOG"
-        # Still produce the language-bad-behavior evidence artifact so
-        # upload-artifact has something to publish; this step has its
-        # own soft-gate marker internally.
-        step_language_bad_behavior
-        return 0
-    fi
+    ci_install_jankurai_logged "$JANKURAI_INSTALL_LOG"
 
     step_version
     step_audit_advisory

@@ -12,12 +12,7 @@
 #
 # The script writes per-tool receipts under `.jankurai/<tool>/` so
 # the per-job upload-artifact step in `.github/workflows/jankurai-tools.yml`
-# captures them even when jankurai itself can't be installed (soft-gate
-# row `jankurai-install` in `.jankurai/ci-soft-gate-ledger.toml`).
-#
-# Soft-gate rationale: the only soft-gated step is the `jankurai install`
-# attempt. Audit references: HLT-042 ci-local-parity.lib-missing, HLT-034
-# ci-bad-behavior. See .jankurai/ci-soft-gate-ledger.toml.
+# captures the same evidence CI and local runs produce.
 
 set -euo pipefail
 
@@ -28,16 +23,8 @@ tool="${1:?tool id required: audit-ci|proof-routing|security|contract-drift|auth
 
 mkdir -p ".jankurai/${tool}" .jankurai
 
-# Install jankurai (soft-gated per .jankurai/ci-soft-gate-ledger.toml#jankurai-install).
-installed=false
-if cargo install --git https://github.com/neverhuman/jankurai.git \
-        --tag v1.5.1 --package jankurai --locked \
-        2>>".jankurai/${tool}/install.log"; then
-    installed=true
-else
-    printf 'soft-gate=jankurai-install status=soft-failed ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-        | tee -a ".jankurai/${tool}/install.log"
-fi
+# Install the pinned jankurai release binary. Failure is a real lane failure.
+ci_install_jankurai_logged ".jankurai/${tool}/install.log"
 
 # Prepare accepted baseline (used by `--mode ratchet`).
 if [[ -f .jankurai/baselines/main.repo-score.json ]]; then
@@ -53,18 +40,12 @@ sec_cmd="jankurai security run . --strict --profile ci --out .jankurai/security/
 run_or_record() {
     local label="$1"
     shift
-    if [[ "$installed" == "true" ]]; then
-        "$@" || true
-    else
-        printf '{"tool":"%s","command":%q,"status":"soft-gated","reason":"jankurai install unavailable"}\n' \
-            "$tool" "$*" \
-            > ".jankurai/${tool}/soft-gate-receipt.json"
-    fi
+    "$@" || true
     {
         printf 'tool=%s\n' "$tool"
         printf 'label=%s\n' "$label"
         printf 'command=%s\n' "$*"
-        printf 'installed=%s\n' "$installed"
+        printf 'installed=true\n'
         printf 'timestamp=%s\n' "$(date -u +%FT%TZ)"
     } > ".jankurai/${tool}/receipt.json.txt"
 }
