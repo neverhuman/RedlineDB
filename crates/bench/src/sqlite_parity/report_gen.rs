@@ -138,9 +138,14 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         options.readme.display().to_string(),
         sha256_hex(readme.as_bytes()),
     );
+    let manifest_git_sha = if options.check {
+        existing_manifest_git_sha(&manifest_out)?.unwrap_or_else(git_sha)
+    } else {
+        git_sha()
+    };
     let manifest = ManifestJson {
         command: normalized_command(&options.command),
-        git_sha: git_sha(),
+        git_sha: manifest_git_sha,
         sqlite_version: report.summary.sqlite_version.clone(),
         updated_date: options.updated_date,
         repetitions: report.repetitions,
@@ -578,6 +583,14 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 fn git_sha() -> String {
+    resolve_git_sha(env_git_sha(), git_head_sha)
+}
+
+fn resolve_git_sha(env_sha: Option<String>, git_fallback: impl FnOnce() -> String) -> String {
+    env_sha.unwrap_or_else(git_fallback)
+}
+
+fn git_head_sha() -> String {
     Command::new("git")
         .args(["rev-parse", "HEAD"])
         .output()
@@ -591,6 +604,31 @@ fn git_sha() -> String {
         })
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "<unknown>".to_owned())
+}
+
+fn env_git_sha() -> Option<String> {
+    normalize_git_sha(std::env::var("REDLINEDB_BENCH_GIT_SHA").ok())
+}
+
+fn normalize_git_sha(value: Option<String>) -> Option<String> {
+    value
+        .map(|candidate| candidate.trim().to_owned())
+        .filter(|candidate| !candidate.is_empty())
+}
+
+fn existing_manifest_git_sha(path: &Path) -> Result<Option<String>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let manifest = fs::read_to_string(path)
+        .with_context(|| format!("read existing manifest {}", path.display()))?;
+    let value: serde_json::Value = serde_json::from_str(&manifest)
+        .with_context(|| format!("parse existing manifest {}", path.display()))?;
+    Ok(value
+        .get("git_sha")
+        .and_then(|git_sha| git_sha.as_str())
+        .map(str::to_owned)
+        .and_then(|git_sha| normalize_git_sha(Some(git_sha))))
 }
 
 fn normalized_command(command: &[String]) -> Vec<String> {
@@ -716,5 +754,32 @@ mod tests {
         assert!(svg.contains("Median latency improvement vs SQLite (%)"));
         assert!(svg.contains("colormap legend"));
         assert!(svg.contains("0% horizontal reference line"));
+    }
+
+    #[test]
+    fn manifest_git_sha_prefers_env_override() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let marker_path = temp.path().join("git-called");
+        let sha = resolve_git_sha(normalize_git_sha(Some(" abc1234 ".to_owned())), || {
+            fs::write(&marker_path, b"called").expect("write marker");
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef".to_owned()
+        });
+
+        assert_eq!(sha, "abc1234");
+        assert!(
+            !marker_path.exists(),
+            "git shim should not have been called"
+        );
+    }
+
+    #[test]
+    fn check_mode_reuses_existing_manifest_git_sha() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let manifest_path = temp.path().join("manifest.json");
+        fs::write(&manifest_path, r#"{ "git_sha": " existing-sha " }"#).expect("write manifest");
+
+        let sha = existing_manifest_git_sha(&manifest_path).expect("read sha");
+
+        assert_eq!(sha.as_deref(), Some("existing-sha"));
     }
 }

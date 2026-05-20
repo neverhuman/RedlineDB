@@ -20,6 +20,10 @@ set -euo pipefail
 # shellcheck source=ops/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
 
+if [ -z "${REDLINEDB_BENCH_GIT_SHA:-}" ]; then
+    export REDLINEDB_BENCH_GIT_SHA="$(git rev-parse HEAD)"
+fi
+
 run_preflight() {
     cargo fmt --check
     bash scripts/check_file_sizes.sh

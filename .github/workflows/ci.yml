@@ -67,6 +67,8 @@ jobs:
         run: |
           curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
       - name: Run fast test shard
+        env:
+          REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
         run: CI_FAST_STAGE=${{ matrix.stage }} bash ops/ci/fast.sh
 
   # The branch ruleset requires checks named test/build/lint/typecheck/cli.
