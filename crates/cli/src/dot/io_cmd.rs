@@ -95,6 +95,7 @@ pub fn restore(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
         .map_err(|err| format!("Error: {err}"))?;
     // Reopen the database so subsequent statements see the restored content.
     state.db = Database::open(&dst).map_err(|err| format!("Error: {err}"))?;
+    state.reconnect()?;
     Ok(DotOutcome::Ok)
 }
 
@@ -110,7 +111,6 @@ pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
         .has_headers(false)
         .flexible(true)
         .from_reader(file);
-    let mut conn = state.db.connect().map_err(|err| err.to_string())?;
     let mut header: Option<Vec<String>> = None;
     let mut insert_sql: Option<String> = None;
     for record in reader.records() {
@@ -143,7 +143,7 @@ pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
                 sql
             }
         };
-        let mut stmt = conn.prepare(&sql).map_err(|err| err.to_string())?;
+        let mut stmt = state.conn.prepare(&sql).map_err(|err| err.to_string())?;
         for (i, field) in record.iter().enumerate() {
             stmt.bind_text(i + 1, field)
                 .map_err(|err| err.to_string())?;

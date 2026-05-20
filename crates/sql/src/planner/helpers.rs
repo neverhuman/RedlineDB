@@ -169,13 +169,7 @@ pub(crate) fn projection_name_covered(
 }
 
 pub(crate) fn is_rowid_name(table: &Arc<TableDef>, name: &str) -> bool {
-    name.eq_ignore_ascii_case("rowid")
-        || name.eq_ignore_ascii_case("_rowid_")
-        || name.eq_ignore_ascii_case("oid")
-        || table
-            .rowid_alias_column
-            .and_then(|alias| table.columns.get(alias as usize))
-            .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
+    table.is_public_rowid_name(name) || table.rowid_alias_column_name_matches(name)
 }
 
 pub(crate) fn order_expr_column_ordinal(expr: &Expr, table: &TableDef) -> Option<usize> {
@@ -551,13 +545,7 @@ where
         return Ok(None);
     };
     let rowid_col = |name: &str| {
-        name.eq_ignore_ascii_case("rowid")
-            || name.eq_ignore_ascii_case("_rowid_")
-            || name.eq_ignore_ascii_case("oid")
-            || table
-                .rowid_alias_column
-                .and_then(|alias| table.columns.get(alias as usize))
-                .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
+        table.is_public_rowid_name(name) || table.rowid_alias_column_name_matches(name)
     };
     let Expr::BinaryOp { left, op, right } = expr else {
         return Ok(None);

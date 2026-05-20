@@ -59,6 +59,11 @@ pub use value::{Value, ValueRef};
 // path stable by re-exporting the implementation hosted in `handle`.
 pub(crate) use handle::sql_options;
 
+/// True when the input contains a complete first SQL statement.
+pub fn sql_input_complete(sql: &str) -> bool {
+    redlinedb_sql::first_statement_complete(sql)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

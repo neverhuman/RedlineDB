@@ -72,6 +72,24 @@ pub(crate) fn is_pragma_sql(sql: &str) -> bool {
 /// `head` and `tail` is empty. If `sql` is purely whitespace/comments, both
 /// `head` and `tail` are returned trimmed appropriately.
 pub fn split_first_statement(sql: &str) -> (&str, &str) {
+    let split = split_first_statement_state(sql);
+    (split.head, split.tail)
+}
+
+/// True when `sql` contains a complete first statement terminated by a
+/// top-level semicolon. Semicolons inside strings, comments, and trigger bodies
+/// do not count as terminators.
+pub fn first_statement_complete(sql: &str) -> bool {
+    split_first_statement_state(sql).terminated
+}
+
+struct StatementSplit<'a> {
+    head: &'a str,
+    tail: &'a str,
+    terminated: bool,
+}
+
+fn split_first_statement_state(sql: &str) -> StatementSplit<'_> {
     let bytes = sql.as_bytes();
     let mut i = 0usize;
     let len = bytes.len();
@@ -135,7 +153,11 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
             }
             b';' if block_depth == 0 => {
                 let head_end = i + 1;
-                return (&sql[..head_end], &sql[head_end..]);
+                return StatementSplit {
+                    head: &sql[..head_end],
+                    tail: &sql[head_end..],
+                    terminated: true,
+                };
             }
             b';' => {
                 i += 1;
@@ -160,7 +182,11 @@ pub fn split_first_statement(sql: &str) -> (&str, &str) {
             }
         }
     }
-    (sql, "")
+    StatementSplit {
+        head: sql,
+        tail: "",
+        terminated: false,
+    }
 }
 
 /// True if `bytes[i..]` starts with `kw` (case-insensitively) AND the
@@ -266,9 +292,8 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
 fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
     let trimmed = sql.trim();
     let lower = trimmed.trim_end_matches(';').trim().to_ascii_lowercase();
-    let engine = conn.engine();
-    let schema = engine.schema_snapshot();
-    let schema_epoch = engine.schema_epoch();
+    let schema = conn.schema_snapshot();
+    let schema_epoch = conn.schema_epoch();
 
     if lower == "begin" || lower == "begin deferred" {
         return Ok(template(

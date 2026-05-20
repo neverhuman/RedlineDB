@@ -145,12 +145,6 @@ fn lookup_cte_column(row: &CteRow, name: &str) -> Result<SqlValue> {
     Err(Error::UnknownColumn(name.to_owned()))
 }
 
-fn is_rowid_alias_name(name: &str) -> bool {
-    name.eq_ignore_ascii_case("rowid")
-        || name.eq_ignore_ascii_case("_rowid_")
-        || name.eq_ignore_ascii_case("oid")
-}
-
 fn matches_table_qualifier(alias: Option<&Arc<str>>, table: &TableDef, qualifier: &str) -> bool {
     if let Some(alias) = alias {
         return alias.as_ref().eq_ignore_ascii_case(qualifier);
@@ -178,7 +172,7 @@ fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
 }
 
 fn lookup_table_column(row: &TableRow, name: &str) -> Result<SqlValue> {
-    if is_rowid_alias_name(name) {
+    if row.table.is_public_rowid_name(name) {
         return Ok(SqlValue::Integer(row.rowid.0 as i64));
     }
     let idx = match row
@@ -197,7 +191,7 @@ fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
     match &row.row {
         Some(present) => lookup_table_column(present, name),
         None => {
-            if is_rowid_alias_name(name) {
+            if row.table.is_public_rowid_name(name) {
                 return Ok(SqlValue::Null);
             }
             match row
@@ -215,7 +209,7 @@ fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
 }
 
 fn lookup_excluded_column(table: &TableDef, excluded: &[SqlValue], name: &str) -> Result<SqlValue> {
-    if is_rowid_alias_name(name) {
+    if table.is_public_rowid_name(name) {
         if let Some(alias) = table.rowid_alias_column
             && let Some(value) = excluded.get(alias as usize)
         {

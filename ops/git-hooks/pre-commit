@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# Pre-commit score ratchet: run the canonical score lane and reject commits
+# that make the advisory score artifacts worse than the pre-hook baseline.
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+artifacts=(
+  ".jankurai/repo-score.json"
+  ".jankurai/repo-score.md"
+  ".jankurai/score-history.jsonl"
+  ".jankurai/score-history.csv"
+)
+
+tmp_dir="$(mktemp -d)"
+restore_artifacts() {
+  local artifact backup
+  for artifact in "${artifacts[@]}"; do
+    backup="$tmp_dir/original/$artifact"
+    if [[ -e "$backup" ]]; then
+      mkdir -p "$(dirname "$artifact")"
+      cp -p "$backup" "$artifact"
+    else
+      rm -f "$artifact"
+    fi
+  done
+  rm -rf "$tmp_dir"
+}
+trap restore_artifacts EXIT
+
+for artifact in "${artifacts[@]}"; do
+  if [[ -e "$artifact" ]]; then
+    mkdir -p "$tmp_dir/original/$(dirname "$artifact")"
+    cp -p "$artifact" "$tmp_dir/original/$artifact"
+  fi
+done
+
+baseline_json="$tmp_dir/original/.jankurai/repo-score.json"
+if [[ ! -f "$baseline_json" ]]; then
+  mkdir -p "$(dirname "$baseline_json")"
+  if ! git show HEAD:.jankurai/repo-score.json >"$baseline_json" 2>/dev/null; then
+    echo "ERROR: no baseline .jankurai/repo-score.json available for score ratchet" >&2
+    exit 1
+  fi
+fi
+
+echo "Running score ratchet: rtk just score"
+rtk just score
+
+python3 - "$baseline_json" ".jankurai/repo-score.json" <<'PY'
+import json
+import sys
+
+before_path, after_path = sys.argv[1], sys.argv[2]
+
+with open(before_path, "r", encoding="utf-8") as handle:
+    before = json.load(handle)
+with open(after_path, "r", encoding="utf-8") as handle:
+    after = json.load(handle)
+
+
+def int_metric(doc, name):
+    value = doc.get(name)
+    if isinstance(value, int):
+        return value
+    decision = doc.get("decision")
+    if isinstance(decision, dict):
+        value = decision.get(name)
+        if isinstance(value, int):
+            return value
+    return None
+
+
+def score_metric(doc, name):
+    value = doc.get(name)
+    if isinstance(value, (int, float)):
+        return value
+    return None
+
+
+def caps(doc):
+    value = doc.get("caps_applied")
+    if isinstance(value, list):
+        return {str(item) for item in value}
+    return set()
+
+
+def finding_count(doc):
+    value = int_metric(doc, "finding_count")
+    if value is not None:
+        return value
+    hard = int_metric(doc, "hard_findings")
+    soft = int_metric(doc, "soft_findings")
+    if hard is not None and soft is not None:
+        return hard + soft
+    return None
+
+
+checks = []
+for name in ("score", "raw_score"):
+    old = score_metric(before, name)
+    new = score_metric(after, name)
+    if old is not None and new is not None and new < old:
+        checks.append(f"{name} decreased: {old} -> {new}")
+
+for name in ("hard_findings", "soft_findings"):
+    old = int_metric(before, name)
+    new = int_metric(after, name)
+    if old is not None and new is not None and new > old:
+        checks.append(f"{name} increased: {old} -> {new}")
+
+old_findings = finding_count(before)
+new_findings = finding_count(after)
+if old_findings is not None and new_findings is not None and new_findings > old_findings:
+    checks.append(f"finding_count increased: {old_findings} -> {new_findings}")
+
+old_caps = caps(before)
+new_caps = caps(after)
+new_cap_names = sorted(new_caps - old_caps)
+if len(new_caps) > len(old_caps):
+    checks.append(f"applied cap count increased: {len(old_caps)} -> {len(new_caps)}")
+if new_cap_names:
+    checks.append("new applied caps: " + ", ".join(new_cap_names))
+
+if checks:
+    print("ERROR: score ratchet rejected this commit:", file=sys.stderr)
+    for check in checks:
+        print(f"  - {check}", file=sys.stderr)
+    sys.exit(1)
+
+print("Score ratchet passed.")
+PY
