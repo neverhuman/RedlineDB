@@ -99,6 +99,7 @@ pub(super) fn eval_function(
                 Ok(values.remove(0))
             }
         }
+        "min" | "max" => eval_scalar_min_max(&values, name == "min"),
         "round" => round_function(&values),
         "hex" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
@@ -311,6 +312,25 @@ pub(super) fn eval_function(
             }
         }
     }
+}
+
+fn eval_scalar_min_max(values: &[SqlValue], is_min: bool) -> Result<SqlValue> {
+    if values.is_empty() || values.iter().any(|value| matches!(value, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let mut best = values[0].clone();
+    for value in &values[1..] {
+        let ord = compare_values(value, &best);
+        let replace = if is_min {
+            ord == Ordering::Less
+        } else {
+            ord == Ordering::Greater
+        };
+        if replace {
+            best = value.clone();
+        }
+    }
+    Ok(best)
 }
 
 fn eval_raise_function(func: &sqlparser::ast::Function) -> Result<SqlValue> {

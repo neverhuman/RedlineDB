@@ -18,13 +18,14 @@ pub(crate) fn expr_contains_aggregate(expr: &Expr) -> bool {
     match expr {
         Expr::Function(func) => {
             let name = func.name.to_string().to_ascii_lowercase();
+            if matches!(name.as_str(), "min" | "max") {
+                return function_is_single_arg_aggregate(func);
+            }
             let is_builtin = matches!(
                 name.as_str(),
                 "count"
                     | "sum"
                     | "avg"
-                    | "min"
-                    | "max"
                     | "group_concat"
                     | "string_agg"
                     | "total"
@@ -95,4 +96,11 @@ fn function_args_contain_aggregate(func: &sqlparser::ast::Function) -> bool {
         } => expr_contains_aggregate(expr),
         _ => false,
     })
+}
+
+fn function_is_single_arg_aggregate(func: &sqlparser::ast::Function) -> bool {
+    let FunctionArguments::List(list) = &func.args else {
+        return false;
+    };
+    list.args.len() == 1
 }

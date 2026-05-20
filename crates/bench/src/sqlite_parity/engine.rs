@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
+use super::capability::{ShellCapabilities, probe_sqlite_shell_capabilities};
 use super::case::{Case, Profile};
 
 #[derive(Debug, Clone)]
@@ -104,6 +105,14 @@ impl EngineSpec {
         })
     }
 
+    pub fn sqlite_shell_capabilities(&self) -> Result<Option<ShellCapabilities>> {
+        if is_sqlite_shell(&self.name) {
+            Ok(Some(probe_sqlite_shell_capabilities(&self.bin)?))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn run_script(
         &self,
         case: &Case,
@@ -150,7 +159,7 @@ fn db_path_for(engine: &str, case: &Case, tmp_root: &Path, case_tmp: &Path) -> R
     }
 }
 
-fn is_sqlite_shell(engine_name: &str) -> bool {
+pub(crate) fn is_sqlite_shell(engine_name: &str) -> bool {
     engine_name.eq_ignore_ascii_case("sqlite3") || engine_name.eq_ignore_ascii_case("sqlite")
 }
 
