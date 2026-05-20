@@ -35,411 +35,273 @@ pub(super) fn execute_select(
     }
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
     let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
-    let mut memory = QueryMemoryBroker::new(
+    let memory = QueryMemoryBroker::new(
         conn.query_memory().work_mem_bytes,
         conn.query_memory().max_spill_bytes,
         temp_dir.clone(),
     );
-    let result = (|| -> Result<SelectRuntime> {
-        let limit = match &plan.limit {
-            Some(expr) => scalar_to_usize(&eval_scalar(expr, &RowContext::Empty, bindings)?)?,
-            None => usize::MAX,
-        };
-        let offset = match &plan.offset {
-            Some(expr) => scalar_to_usize(&eval_scalar(expr, &RowContext::Empty, bindings)?)?,
-            None => 0,
-        };
+    let tx_ptr = select_tx_ptr(&mut tx);
+    let result = if let Some(tx_ptr) = tx_ptr {
+        with_current_tx(tx_ptr, || {
+            build_select_runtime(conn, plan, bindings, &mut tx, restore_tx, temp_dir, memory)
+        })
+    } else {
+        build_select_runtime(conn, plan, bindings, &mut tx, restore_tx, temp_dir, memory)
+    };
 
-        // Phase 11 W1-E: SELECT COUNT(*) FROM t WHERE k BETWEEN ? AND ?
-        // fast-path. Drains the cursor without loading heap rows; the
-        // result is a single integer row that flows through the rest
-        // of the pipeline (LIMIT/OFFSET) like any other StaticRows
-        // source. Materializes early-return rows here; runtime
-        // assembly happens at the end of `result` so the outer
-        // closure can move the transaction out of the runtime without
-        // surprising the borrow checker.
-        let mut fast_path_rows: Option<Vec<Vec<SqlValue>>> = None;
-        if let SelectSource::Table(table) = &plan.source
-            && plan.group_by.is_empty()
-            && !plan.distinct
-            && plan.order_by.is_empty()
-            && plan.having.is_none()
-            && is_count_star_only_projection(&plan.projection)
-            && let Some(matched) = index_access::try_match_index_access(
-                conn.engine(),
-                table,
-                &plan.selection,
-                bindings,
-            )
-            && let index_access::IndexProbe::Range { start, end } = &matched.probe
-            && index_access::open_handle(conn.engine(), &matched.index).is_some()
-        {
-            let tx_ref = tx.as_mut().expect("tx present");
-            let count = index_access::execute_index_count_range(
-                conn.engine(),
-                tx_ref,
-                &matched.index,
-                start,
-                end,
-            )?;
-            fast_path_rows = Some(vec![vec![SqlValue::Integer(count)]]);
-        }
-
-        // Phase 11 W1-E: simple covering scan. Same shape as above:
-        // build the result rows up front, defer runtime assembly to
-        // the unified bottom block.
-        if fast_path_rows.is_none()
-            && let SelectSource::Table(table) = &plan.source
-            && plan.group_by.is_empty()
-            && !plan.distinct
-            && !select_requires_aggregation(plan)
-            && plan.having.is_none()
-            && let Some(matched) = index_access::try_match_index_access(
-                conn.engine(),
-                table,
-                &plan.selection,
-                bindings,
-            )
-            && let index_access::IndexProbe::Range { start, end } = &matched.probe
-            && index_access::open_handle(conn.engine(), &matched.index).is_some()
-            && let Some(out_columns) =
-                covering_projection_for_index(table, &matched.index, &plan.projection)
-            && covering_order_satisfies(&matched.index, table, &plan.order_by)
-        {
-            let tx_ref = tx.as_mut().expect("tx present");
-            let cover_limit = if plan.order_by.is_empty() {
-                None
-            } else if limit < usize::MAX {
-                Some(limit.saturating_add(offset))
-            } else {
-                None
-            };
-            let rows = index_access::execute_index_covering_range(
-                conn.engine(),
-                tx_ref,
-                &matched.index,
-                start,
-                end,
-                &out_columns,
-                cover_limit,
-            )?;
-            fast_path_rows = Some(rows);
-        }
-
-        if let Some(rows) = fast_path_rows {
-            let runtime_tx = std::mem::replace(&mut tx, SelectRuntimeTx::Empty);
-            return Ok(SelectRuntime {
-                tx: runtime_tx,
-                restore_tx,
-                source: SelectRuntimeSource::StaticRows {
-                    rows: Arc::from(rows),
-                    cursor: 0,
-                },
-                selection: None,
-                projection: Vec::new(),
-                limit,
-                offset,
-                seen: 0,
-                yielded: 0,
-                memory,
-            });
-        }
-
-        // Window-function fast-path: when the projection contains an
-        // `OVER (...)` call, route the entire SELECT through the window
-        // pipeline. The window post-processor handles materialization,
-        // partitioning, framing, projection, ORDER BY, and LIMIT/OFFSET
-        // in one pass so non-window items still evaluate per-row against
-        // the original row source.
-        if super::window::projection_has_window(&plan.projection) {
-            let base_rows = collect_select_rows(
-                conn,
-                conn.engine(),
-                tx.as_mut().expect("tx present"),
-                &plan.source,
-                &plan.selection,
-                bindings,
-            )?;
-            let filtered: Vec<SqlRow> = base_rows
-                .into_iter()
-                .filter_map(
-                    |row| match selection_passes(&plan.selection, &row, bindings) {
-                        Ok(true) => Some(Ok(row)),
-                        Ok(false) => None,
-                        Err(e) => Some(Err(e)),
-                    },
-                )
-                .collect::<Result<Vec<_>>>()?;
-            let mut projected =
-                super::window::evaluate_window_functions(&filtered, &plan.projection, bindings)?;
-            if !plan.order_by.is_empty() {
-                super::agg::sort_projected_rows_by_order_by(
-                    &mut projected,
-                    &plan.projection,
-                    &plan.order_by,
-                    bindings,
-                )?;
+    match result {
+        Ok(runtime) => Ok(runtime),
+        Err(err) => {
+            if let Some(tx) = tx.take_owned() {
+                if restore_tx {
+                    conn.with_session(|session| {
+                        session.tx = Some(tx);
+                        Ok(())
+                    })?;
+                } else {
+                    let _ = conn.engine().rollback(tx);
+                }
             }
-            let projected: Vec<Vec<SqlValue>> =
-                projected.into_iter().skip(offset).take(limit).collect();
-            let runtime_tx = std::mem::replace(&mut tx, SelectRuntimeTx::Empty);
-            return Ok(SelectRuntime {
-                tx: runtime_tx,
-                restore_tx,
-                source: SelectRuntimeSource::StaticRows {
-                    rows: Arc::from(projected),
-                    cursor: 0,
-                },
-                selection: None,
-                projection: Vec::new(),
-                limit: usize::MAX,
-                offset: 0,
-                seen: 0,
-                yielded: 0,
-                memory,
-            });
+            Err(err)
         }
+    }
+}
 
-        let source = if plan.group_by.is_empty()
-            && !select_requires_aggregation(plan)
-            && !plan.distinct
-        {
-            match &plan.source {
-                SelectSource::Table(table) => {
-                    if plan.order_by.is_empty() {
-                        // Lane C access-path resolution. Order of
-                        // preference matches the planner:
-                        //   1. rowid PK fast path (already covered by
-                        //      `selection_rowid_eq` / RowIdGet).
-                        //   2. physical-index probe (point or range).
-                        //   3. default path: full heap scan.
-                        let rowids = if let Some(rowid) =
-                            selection_rowid_eq(table, &plan.selection, bindings)?
-                        {
-                            vec![rowid]
-                        } else if let Some(matched) = index_access::try_match_index_access(
-                            conn.engine(),
-                            table,
-                            &plan.selection,
-                            bindings,
-                        ) {
-                            let tx = tx.as_mut().expect("tx present");
-                            // Conservatism: if the kernel can't honor
-                            // the probe (e.g. the index has no live
-                            // physical handle yet), fall through to a
-                            // table scan rather than returning an empty
-                            // result. The planner only emits
-                            // IndexPointLookup/IndexRangeScan when the
-                            // executor can satisfy them, but a lagging
-                            // schema snapshot can still exist.
-                            if index_access::open_handle(conn.engine(), &matched.index).is_some() {
-                                index_access::execute_index_probe(
-                                    conn.engine(),
-                                    tx,
-                                    table,
-                                    &matched.index,
-                                    &matched.probe,
-                                )?
-                            } else {
-                                collect_table_rowids(conn.engine(), tx, table)?
-                            }
-                        } else {
-                            let tx = tx.as_mut().expect("tx present");
-                            collect_table_rowids(conn.engine(), tx, table)?
-                        };
-                        SelectRuntimeSource::Table {
-                            table: Arc::clone(table),
-                            rowids,
-                            cursor: 0,
-                        }
-                    } else if let Some(rowids) = try_ordered_index_limit_path(
-                        conn,
-                        tx.as_mut().expect("tx present"),
-                        plan,
-                        bindings,
+fn build_select_runtime(
+    conn: &Connection,
+    plan: &crate::statement::SelectPlan,
+    bindings: &[Option<SqlValue>],
+    tx: &mut SelectRuntimeTx,
+    restore_tx: bool,
+    temp_dir: Option<std::path::PathBuf>,
+    mut memory: QueryMemoryBroker,
+) -> Result<SelectRuntime> {
+    let limit = match &plan.limit {
+        Some(expr) => scalar_to_usize(&eval_scalar(expr, &RowContext::Empty, bindings)?)?,
+        None => usize::MAX,
+    };
+    let offset = match &plan.offset {
+        Some(expr) => scalar_to_usize(&eval_scalar(expr, &RowContext::Empty, bindings)?)?,
+        None => 0,
+    };
+
+    // Phase 11 W1-E: SELECT COUNT(*) FROM t WHERE k BETWEEN ? AND ?
+    // fast-path. Drains the cursor without loading heap rows; the
+    // result is a single integer row that flows through the rest
+    // of the pipeline (LIMIT/OFFSET) like any other StaticRows
+    // source. Materializes early-return rows here; runtime
+    // assembly happens at the end of `result` so the outer
+    // closure can move the transaction out of the runtime without
+    // surprising the borrow checker.
+    let mut fast_path_rows: Option<Vec<Vec<SqlValue>>> = None;
+    if let SelectSource::Table(table) = &plan.source
+        && plan.group_by.is_empty()
+        && !plan.distinct
+        && plan.order_by.is_empty()
+        && plan.having.is_none()
+        && is_count_star_only_projection(&plan.projection)
+        && let Some(matched) =
+            index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+        && let index_access::IndexProbe::Range { start, end } = &matched.probe
+        && index_access::open_handle(conn.engine(), &matched.index).is_some()
+    {
+        let tx_ref = tx.as_mut().expect("tx present");
+        let count = index_access::execute_index_count_range(
+            conn.engine(),
+            tx_ref,
+            &matched.index,
+            start,
+            end,
+        )?;
+        fast_path_rows = Some(vec![vec![SqlValue::Integer(count)]]);
+    }
+
+    // Phase 11 W1-E: simple covering scan. Same shape as above:
+    // build the result rows up front, defer runtime assembly to
+    // the unified bottom block.
+    if fast_path_rows.is_none()
+        && let SelectSource::Table(table) = &plan.source
+        && plan.group_by.is_empty()
+        && !plan.distinct
+        && !select_requires_aggregation(plan)
+        && plan.having.is_none()
+        && let Some(matched) =
+            index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+        && let index_access::IndexProbe::Range { start, end } = &matched.probe
+        && index_access::open_handle(conn.engine(), &matched.index).is_some()
+        && let Some(out_columns) =
+            covering_projection_for_index(table, &matched.index, &plan.projection)
+        && covering_order_satisfies(&matched.index, table, &plan.order_by)
+    {
+        let tx_ref = tx.as_mut().expect("tx present");
+        let cover_limit = if plan.order_by.is_empty() {
+            None
+        } else if limit < usize::MAX {
+            Some(limit.saturating_add(offset))
+        } else {
+            None
+        };
+        let rows = index_access::execute_index_covering_range(
+            conn.engine(),
+            tx_ref,
+            &matched.index,
+            start,
+            end,
+            &out_columns,
+            cover_limit,
+        )?;
+        fast_path_rows = Some(rows);
+    }
+
+    if let Some(rows) = fast_path_rows {
+        let runtime_tx = std::mem::replace(tx, SelectRuntimeTx::Empty);
+        return Ok(SelectRuntime {
+            tx: runtime_tx,
+            restore_tx,
+            source: SelectRuntimeSource::StaticRows {
+                rows: Arc::from(rows),
+                cursor: 0,
+            },
+            selection: None,
+            projection: Vec::new(),
+            limit,
+            offset,
+            seen: 0,
+            yielded: 0,
+            memory,
+        });
+    }
+
+    // Window-function fast-path: when the projection contains an
+    // `OVER (...)` call, route the entire SELECT through the window
+    // pipeline. The window post-processor handles materialization,
+    // partitioning, framing, projection, ORDER BY, and LIMIT/OFFSET
+    // in one pass so non-window items still evaluate per-row against
+    // the original row source.
+    if super::window::projection_has_window(&plan.projection) {
+        let base_rows = collect_select_rows(
+            conn,
+            conn.engine(),
+            tx.as_mut().expect("tx present"),
+            &plan.source,
+            &plan.selection,
+            bindings,
+        )?;
+        let filtered: Vec<SqlRow> = base_rows
+            .into_iter()
+            .filter_map(
+                |row| match selection_passes(&plan.selection, &row, bindings) {
+                    Ok(true) => Some(Ok(row)),
+                    Ok(false) => None,
+                    Err(e) => Some(Err(e)),
+                },
+            )
+            .collect::<Result<Vec<_>>>()?;
+        let mut projected =
+            super::window::evaluate_window_functions(&filtered, &plan.projection, bindings)?;
+        if !plan.order_by.is_empty() {
+            super::agg::sort_projected_rows_by_order_by(
+                &mut projected,
+                &plan.projection,
+                &plan.order_by,
+                bindings,
+            )?;
+        }
+        let projected: Vec<Vec<SqlValue>> =
+            projected.into_iter().skip(offset).take(limit).collect();
+        let runtime_tx = std::mem::replace(tx, SelectRuntimeTx::Empty);
+        return Ok(SelectRuntime {
+            tx: runtime_tx,
+            restore_tx,
+            source: SelectRuntimeSource::StaticRows {
+                rows: Arc::from(projected),
+                cursor: 0,
+            },
+            selection: None,
+            projection: Vec::new(),
+            limit: usize::MAX,
+            offset: 0,
+            seen: 0,
+            yielded: 0,
+            memory,
+        });
+    }
+
+    let source = if plan.group_by.is_empty() && !select_requires_aggregation(plan) && !plan.distinct
+    {
+        match &plan.source {
+            SelectSource::Table(table) => {
+                if plan.order_by.is_empty() {
+                    // Lane C access-path resolution. Order of
+                    // preference matches the planner:
+                    //   1. rowid PK fast path (already covered by
+                    //      `selection_rowid_eq` / RowIdGet).
+                    //   2. physical-index probe (point or range).
+                    //   3. default path: full heap scan.
+                    let rowids = if let Some(rowid) =
+                        selection_rowid_eq(table, &plan.selection, bindings)?
+                    {
+                        vec![rowid]
+                    } else if let Some(matched) = index_access::try_match_index_access(
+                        conn.engine(),
                         table,
-                        limit,
-                        offset,
-                    )? {
-                        // Phase 11 W1-D: ORDER BY k LIMIT n where the
-                        // index leading column matches `k`. The cursor
-                        // emits in key order, so we collect rowids in
-                        // that order with an early stop and let the
-                        // standard runtime project + apply LIMIT/OFFSET
-                        // without re-sorting.
-                        SelectRuntimeSource::Table {
-                            table: Arc::clone(table),
-                            rowids,
-                            cursor: 0,
+                        &plan.selection,
+                        bindings,
+                    ) {
+                        let tx = tx.as_mut().expect("tx present");
+                        // Conservatism: if the kernel can't honor
+                        // the probe (e.g. the index has no live
+                        // physical handle yet), fall through to a
+                        // table scan rather than returning an empty
+                        // result. The planner only emits
+                        // IndexPointLookup/IndexRangeScan when the
+                        // executor can satisfy them, but a lagging
+                        // schema snapshot can still exist.
+                        if index_access::open_handle(conn.engine(), &matched.index).is_some() {
+                            index_access::execute_index_probe(
+                                conn.engine(),
+                                tx,
+                                table,
+                                &matched.index,
+                                &matched.probe,
+                            )?
+                        } else {
+                            collect_table_rowids(conn.engine(), tx, table)?
                         }
                     } else {
                         let tx = tx.as_mut().expect("tx present");
-                        let rows =
-                            table_rows_for_select(conn, tx, table, &plan.selection, bindings)?
-                                .into_iter()
-                                .map(SqlRow::Table)
-                                .collect::<Vec<_>>();
-                        SelectRuntimeSource::Batched {
-                            node: MaterializeNode::new(order_and_project_rows(
-                                rows,
-                                &plan.selection,
-                                &plan.order_by,
-                                bindings,
-                                &plan.projection,
-                                limit,
-                                offset,
-                                &mut memory,
-                            )?),
-                            ctx: ExecContext::new(
-                                conn.query_memory().work_mem_bytes,
-                                conn.query_memory().max_spill_bytes,
-                                temp_dir.clone(),
-                            ),
-                            batch: RowBatch::new(Arc::new(RowLayout {
-                                columns: Arc::from([]),
-                            })),
-                            cursor: 0,
-                        }
-                    }
-                }
-                SelectSource::Tables(tables) => {
-                    let rows =
-                        collect_join_rows(conn.engine(), tx.as_mut().expect("tx present"), tables)?;
-                    SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
-                            rows,
-                            &plan.selection,
-                            &plan.order_by,
-                            bindings,
-                            &plan.projection,
-                            limit,
-                            offset,
-                            &mut memory,
-                        )?),
-                        ctx: ExecContext::new(
-                            conn.query_memory().work_mem_bytes,
-                            conn.query_memory().max_spill_bytes,
-                            temp_dir.clone(),
-                        ),
-                        batch: RowBatch::new(Arc::new(RowLayout {
-                            columns: Arc::from([]),
-                        })),
+                        collect_table_rowids(conn.engine(), tx, table)?
+                    };
+                    SelectRuntimeSource::Table {
+                        table: Arc::clone(table),
+                        rowids,
                         cursor: 0,
                     }
-                }
-                SelectSource::Joined(source) => {
-                    let rows = collect_join_source_rows(
-                        conn.engine(),
-                        tx.as_mut().expect("tx present"),
-                        source,
-                        bindings,
-                    )?;
-                    SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
-                            rows,
-                            &plan.selection,
-                            &plan.order_by,
-                            bindings,
-                            &plan.projection,
-                            limit,
-                            offset,
-                            &mut memory,
-                        )?),
-                        ctx: ExecContext::new(
-                            conn.query_memory().work_mem_bytes,
-                            conn.query_memory().max_spill_bytes,
-                            temp_dir.clone(),
-                        ),
-                        batch: RowBatch::new(Arc::new(RowLayout {
-                            columns: Arc::from([]),
-                        })),
+                } else if let Some(rowids) = try_ordered_index_limit_path(
+                    conn,
+                    tx.as_mut().expect("tx present"),
+                    plan,
+                    bindings,
+                    table,
+                    limit,
+                    offset,
+                )? {
+                    // Phase 11 W1-D: ORDER BY k LIMIT n where the
+                    // index leading column matches `k`. The cursor
+                    // emits in key order, so we collect rowids in
+                    // that order with an early stop and let the
+                    // standard runtime project + apply LIMIT/OFFSET
+                    // without re-sorting.
+                    SelectRuntimeSource::Table {
+                        table: Arc::clone(table),
+                        rowids,
                         cursor: 0,
                     }
-                }
-                SelectSource::SqliteSchema => {
-                    let rows = conn.engine().sqlite_schema();
-                    if !plan.order_by.is_empty() {
-                        let sqlite_rows = rows
-                            .into_iter()
-                            .map(SqlRow::SqliteSchema)
-                            .collect::<Vec<_>>();
-                        SelectRuntimeSource::Batched {
-                            node: MaterializeNode::new(order_and_project_rows(
-                                sqlite_rows,
-                                &plan.selection,
-                                &plan.order_by,
-                                bindings,
-                                &plan.projection,
-                                limit,
-                                offset,
-                                &mut memory,
-                            )?),
-                            ctx: ExecContext::new(
-                                conn.query_memory().work_mem_bytes,
-                                conn.query_memory().max_spill_bytes,
-                                temp_dir.clone(),
-                            ),
-                            batch: RowBatch::new(Arc::new(RowLayout {
-                                columns: Arc::from([]),
-                            })),
-                            cursor: 0,
-                        }
-                    } else {
-                        SelectRuntimeSource::SqliteSchema { rows, cursor: 0 }
-                    }
-                }
-                SelectSource::StaticRows { rows } => SelectRuntimeSource::StaticRows {
-                    rows: Arc::clone(rows),
-                    cursor: 0,
-                },
-                SelectSource::Cte {
-                    name,
-                    alias,
-                    columns,
-                    rows,
-                } => {
-                    // CTE rows go through the Batched path so projection /
-                    // selection / order-by can resolve column names. Pre-wrap
-                    // each row as `SqlRow::Cte` to retain column metadata.
-                    let sql_rows: Vec<SqlRow> = rows
-                        .iter()
-                        .cloned()
-                        .map(|values| {
-                            SqlRow::Cte(crate::exec::expr::scalar::row::CteRow {
-                                name: Arc::clone(name),
-                                alias: alias.clone(),
-                                columns: Arc::clone(columns),
-                                values,
-                            })
-                        })
-                        .collect();
-                    SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
-                            sql_rows,
-                            &plan.selection,
-                            &plan.order_by,
-                            bindings,
-                            &plan.projection,
-                            limit,
-                            offset,
-                            &mut memory,
-                        )?),
-                        ctx: ExecContext::new(
-                            conn.query_memory().work_mem_bytes,
-                            conn.query_memory().max_spill_bytes,
-                            temp_dir.clone(),
-                        ),
-                        batch: RowBatch::new(Arc::new(RowLayout {
-                            columns: Arc::from([]),
-                        })),
-                        cursor: 0,
-                    }
-                }
-                SelectSource::CompoundAll(branches) => {
-                    let column_names = compound_output_column_names(branches);
-                    let rows = collect_compound_all_rows(conn, branches, bindings)?
+                } else {
+                    let tx = tx.as_mut().expect("tx present");
+                    let rows = table_rows_for_select(conn, tx, table, &plan.selection, bindings)?
                         .into_iter()
-                        .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
+                        .map(SqlRow::Table)
                         .collect::<Vec<_>>();
                     SelectRuntimeSource::Batched {
                         node: MaterializeNode::new(order_and_project_rows(
@@ -463,16 +325,71 @@ pub(super) fn execute_select(
                         cursor: 0,
                     }
                 }
-                SelectSource::CompoundSet { op, branches } => {
-                    let column_names = compound_output_column_names(branches);
-                    let rows =
-                        super::set_ops::collect_compound_set_rows(conn, *op, branches, bindings)?
-                            .into_iter()
-                            .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
-                            .collect::<Vec<_>>();
+            }
+            SelectSource::Tables(tables) => {
+                let rows =
+                    collect_join_rows(conn.engine(), tx.as_mut().expect("tx present"), tables)?;
+                SelectRuntimeSource::Batched {
+                    node: MaterializeNode::new(order_and_project_rows(
+                        rows,
+                        &plan.selection,
+                        &plan.order_by,
+                        bindings,
+                        &plan.projection,
+                        limit,
+                        offset,
+                        &mut memory,
+                    )?),
+                    ctx: ExecContext::new(
+                        conn.query_memory().work_mem_bytes,
+                        conn.query_memory().max_spill_bytes,
+                        temp_dir.clone(),
+                    ),
+                    batch: RowBatch::new(Arc::new(RowLayout {
+                        columns: Arc::from([]),
+                    })),
+                    cursor: 0,
+                }
+            }
+            SelectSource::Joined(source) => {
+                let rows = collect_join_source_rows(
+                    conn.engine(),
+                    tx.as_mut().expect("tx present"),
+                    source,
+                    bindings,
+                )?;
+                SelectRuntimeSource::Batched {
+                    node: MaterializeNode::new(order_and_project_rows(
+                        rows,
+                        &plan.selection,
+                        &plan.order_by,
+                        bindings,
+                        &plan.projection,
+                        limit,
+                        offset,
+                        &mut memory,
+                    )?),
+                    ctx: ExecContext::new(
+                        conn.query_memory().work_mem_bytes,
+                        conn.query_memory().max_spill_bytes,
+                        temp_dir.clone(),
+                    ),
+                    batch: RowBatch::new(Arc::new(RowLayout {
+                        columns: Arc::from([]),
+                    })),
+                    cursor: 0,
+                }
+            }
+            SelectSource::SqliteSchema => {
+                let rows = conn.engine().sqlite_schema();
+                if !plan.order_by.is_empty() {
+                    let sqlite_rows = rows
+                        .into_iter()
+                        .map(SqlRow::SqliteSchema)
+                        .collect::<Vec<_>>();
                     SelectRuntimeSource::Batched {
                         node: MaterializeNode::new(order_and_project_rows(
-                            rows,
+                            sqlite_rows,
                             &plan.selection,
                             &plan.order_by,
                             bindings,
@@ -491,64 +408,153 @@ pub(super) fn execute_select(
                         })),
                         cursor: 0,
                     }
-                }
-                SelectSource::Empty => SelectRuntimeSource::Empty,
-            }
-        } else {
-            let rows = collect_select_rows(
-                conn,
-                conn.engine(),
-                tx.as_mut().expect("tx present"),
-                &plan.source,
-                &plan.selection,
-                bindings,
-            )?;
-            let rows = execute_grouped_select(plan, rows, bindings, limit, offset, &mut memory)?;
-            SelectRuntimeSource::Batched {
-                node: MaterializeNode::new(rows),
-                ctx: ExecContext::new(
-                    conn.query_memory().work_mem_bytes,
-                    conn.query_memory().max_spill_bytes,
-                    temp_dir.clone(),
-                ),
-                batch: RowBatch::new(Arc::new(RowLayout {
-                    columns: Arc::from([]),
-                })),
-                cursor: 0,
-            }
-        };
-
-        let runtime_tx = std::mem::replace(&mut tx, SelectRuntimeTx::Empty);
-        Ok(SelectRuntime {
-            tx: runtime_tx,
-            restore_tx,
-            source,
-            selection: plan.selection.clone(),
-            projection: plan.projection.clone(),
-            limit,
-            offset,
-            seen: 0,
-            yielded: 0,
-            memory,
-        })
-    })();
-
-    match result {
-        Ok(runtime) => Ok(runtime),
-        Err(err) => {
-            if let Some(tx) = tx.take_owned() {
-                if restore_tx {
-                    conn.with_session(|session| {
-                        session.tx = Some(tx);
-                        Ok(())
-                    })?;
                 } else {
-                    let _ = conn.engine().rollback(tx);
+                    SelectRuntimeSource::SqliteSchema { rows, cursor: 0 }
                 }
             }
-            Err(err)
+            SelectSource::StaticRows { rows } => SelectRuntimeSource::StaticRows {
+                rows: Arc::clone(rows),
+                cursor: 0,
+            },
+            SelectSource::Cte {
+                name,
+                alias,
+                columns,
+                rows,
+            } => {
+                // CTE rows go through the Batched path so projection /
+                // selection / order-by can resolve column names. Pre-wrap
+                // each row as `SqlRow::Cte` to retain column metadata.
+                let sql_rows: Vec<SqlRow> = rows
+                    .iter()
+                    .cloned()
+                    .map(|values| {
+                        SqlRow::Cte(crate::exec::expr::scalar::row::CteRow {
+                            name: Arc::clone(name),
+                            alias: alias.clone(),
+                            columns: Arc::clone(columns),
+                            values,
+                        })
+                    })
+                    .collect();
+                SelectRuntimeSource::Batched {
+                    node: MaterializeNode::new(order_and_project_rows(
+                        sql_rows,
+                        &plan.selection,
+                        &plan.order_by,
+                        bindings,
+                        &plan.projection,
+                        limit,
+                        offset,
+                        &mut memory,
+                    )?),
+                    ctx: ExecContext::new(
+                        conn.query_memory().work_mem_bytes,
+                        conn.query_memory().max_spill_bytes,
+                        temp_dir.clone(),
+                    ),
+                    batch: RowBatch::new(Arc::new(RowLayout {
+                        columns: Arc::from([]),
+                    })),
+                    cursor: 0,
+                }
+            }
+            SelectSource::CompoundAll(branches) => {
+                let column_names = compound_output_column_names(branches);
+                let rows = collect_compound_all_rows(conn, branches, bindings)?
+                    .into_iter()
+                    .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
+                    .collect::<Vec<_>>();
+                SelectRuntimeSource::Batched {
+                    node: MaterializeNode::new(order_and_project_rows(
+                        rows,
+                        &plan.selection,
+                        &plan.order_by,
+                        bindings,
+                        &plan.projection,
+                        limit,
+                        offset,
+                        &mut memory,
+                    )?),
+                    ctx: ExecContext::new(
+                        conn.query_memory().work_mem_bytes,
+                        conn.query_memory().max_spill_bytes,
+                        temp_dir.clone(),
+                    ),
+                    batch: RowBatch::new(Arc::new(RowLayout {
+                        columns: Arc::from([]),
+                    })),
+                    cursor: 0,
+                }
+            }
+            SelectSource::CompoundSet { op, branches } => {
+                let column_names = compound_output_column_names(branches);
+                let rows =
+                    super::set_ops::collect_compound_set_rows(conn, *op, branches, bindings)?
+                        .into_iter()
+                        .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
+                        .collect::<Vec<_>>();
+                SelectRuntimeSource::Batched {
+                    node: MaterializeNode::new(order_and_project_rows(
+                        rows,
+                        &plan.selection,
+                        &plan.order_by,
+                        bindings,
+                        &plan.projection,
+                        limit,
+                        offset,
+                        &mut memory,
+                    )?),
+                    ctx: ExecContext::new(
+                        conn.query_memory().work_mem_bytes,
+                        conn.query_memory().max_spill_bytes,
+                        temp_dir.clone(),
+                    ),
+                    batch: RowBatch::new(Arc::new(RowLayout {
+                        columns: Arc::from([]),
+                    })),
+                    cursor: 0,
+                }
+            }
+            SelectSource::Empty => SelectRuntimeSource::Empty,
         }
-    }
+    } else {
+        let rows = collect_select_rows(
+            conn,
+            conn.engine(),
+            tx.as_mut().expect("tx present"),
+            &plan.source,
+            &plan.selection,
+            bindings,
+        )?;
+        let rows = execute_grouped_select(plan, rows, bindings, limit, offset, &mut memory)?;
+        SelectRuntimeSource::Batched {
+            node: MaterializeNode::new(rows),
+            ctx: ExecContext::new(
+                conn.query_memory().work_mem_bytes,
+                conn.query_memory().max_spill_bytes,
+                temp_dir.clone(),
+            ),
+            batch: RowBatch::new(Arc::new(RowLayout {
+                columns: Arc::from([]),
+            })),
+            cursor: 0,
+        }
+    };
+
+    let runtime_tx = std::mem::replace(tx, SelectRuntimeTx::Empty);
+    Ok(SelectRuntime {
+        tx: runtime_tx,
+        restore_tx,
+        source,
+        selection: plan.selection.clone(),
+        projection: plan.projection.clone(),
+        limit,
+        offset,
+        seen: 0,
+        yielded: 0,
+        memory,
+    })
 }
 
 fn table_rows_for_select(

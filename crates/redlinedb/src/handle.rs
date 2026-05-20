@@ -54,8 +54,9 @@ impl Database {
     }
 
     /// Create a private ephemeral database rooted under the directory
-    /// named by [`OpenOptions::temp_dir`] when provided, otherwise under
-    /// the directory returned by [`std::env::temp_dir`].
+    /// named by [`OpenOptions::temp_dir`] when provided. Without an
+    /// explicit root, Linux uses `/dev/shm/redlinedb-ephemeral` when it
+    /// is writable, otherwise the process scratch directory.
     ///
     /// Multiple connections opened from the returned [`Database`] share the
     /// same transient state. The backing directory disappears when the last
@@ -273,6 +274,9 @@ fn volatile_open_options(mut options: OpenOptions) -> OpenOptions {
     options.create = true;
     options.durability = Durability::UnsafeDev;
     options.process_owner_lock = false;
+    if options.temp_dir.is_none() {
+        options.temp_dir = Some(registry::standard_volatile_root());
+    }
     options
 }
 

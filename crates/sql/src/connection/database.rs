@@ -318,7 +318,49 @@ impl MetadataSyncPolicy {
 
 fn volatile_db_options(mut opts: DbOptions) -> DbOptions {
     opts.engine.commit_durability = CommitDurability::UnsafeDev;
+    if opts.temp_dir.is_none() {
+        opts.temp_dir = Some(standard_volatile_root());
+    }
     opts
+}
+
+const SHARED_MEMORY_EPHEMERAL_ROOT: &str = "/dev/shm/redlinedb-ephemeral";
+
+fn standard_volatile_root() -> PathBuf {
+    volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT))
+}
+
+fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
+    if ensure_writable_volatile_root(candidate) {
+        candidate.to_path_buf()
+    } else {
+        std::env::temp_dir()
+    }
+}
+
+fn ensure_writable_volatile_root(root: &Path) -> bool {
+    if fs::create_dir_all(root).is_err() {
+        return false;
+    }
+    let probe_id = EPHEMERAL_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+    let probe = root.join(format!(
+        ".redlinedb-volatile-probe-{}-{probe_id}",
+        std::process::id()
+    ));
+    let result = (|| -> std::io::Result<()> {
+        let mut file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&probe)?;
+        file.write_all(b"ok")?;
+        drop(file);
+        fs::remove_file(&probe)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&probe);
+    }
+    result.is_ok()
 }
 
 #[derive(Debug)]
@@ -444,4 +486,35 @@ fn save_user_version(base: &Path, value: i64, sync_policy: MetadataSyncPolicy) -
     }
     fs::rename(&temp_path, &path).map_err(KernelError::Io)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod volatile_root_tests {
+    use super::*;
+
+    #[test]
+    fn explicit_volatile_root_remains_in_options() {
+        let root = tempfile::tempdir().expect("scratch dir");
+        let opts = DbOptions {
+            temp_dir: Some(root.path().to_path_buf()),
+            ..DbOptions::default()
+        };
+
+        assert_eq!(
+            volatile_db_options(opts).temp_dir.as_deref(),
+            Some(root.path())
+        );
+    }
+
+    #[test]
+    fn unusable_shared_memory_candidate_uses_process_scratch() {
+        let root = tempfile::tempdir().expect("scratch dir");
+        let file_path = root.path().join("not-a-directory");
+        fs::write(&file_path, b"x").expect("probe file");
+
+        assert_eq!(
+            volatile_root_from_candidate(&file_path),
+            std::env::temp_dir()
+        );
+    }
 }

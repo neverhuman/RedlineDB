@@ -206,6 +206,10 @@ pub(crate) fn current_tx() -> Option<*mut Txn> {
     })
 }
 
+fn select_tx_ptr(tx: &mut SelectRuntimeTx) -> Option<*mut Txn> {
+    tx.as_mut().map(|tx| tx as *mut Txn)
+}
+
 pub(crate) fn current_tx_schema_snapshot(conn: &Connection) -> Option<Arc<SchemaSnapshot>> {
     let tx_ptr = current_tx()?;
     if let Some(active) = current_connection()
@@ -466,6 +470,15 @@ pub(crate) fn materialize_prepared_rows(
     template: &PreparedTemplate,
     bindings: &[Option<SqlValue>],
 ) -> Result<Vec<Vec<SqlValue>>> {
+    materialize_prepared_rows_limited(conn, template, bindings, None)
+}
+
+pub(crate) fn materialize_prepared_rows_limited(
+    conn: &Connection,
+    template: &PreparedTemplate,
+    bindings: &[Option<SqlValue>],
+    max_rows: Option<usize>,
+) -> Result<Vec<Vec<SqlValue>>> {
     let result = execute_prepared(conn, template, bindings)?;
     let mut rows = Vec::new();
     if let RuntimeState::Select(mut runtime) = result.runtime {
@@ -478,6 +491,10 @@ pub(crate) fn materialize_prepared_rows(
                 Some(row) => row,
                 None => Vec::new(),
             });
+            if max_rows.is_some_and(|max| rows.len() >= max) {
+                finish_select_runtime(conn, &mut runtime)?;
+                break;
+            }
         }
     }
     Ok(rows)
@@ -750,6 +767,21 @@ pub(crate) fn finalize_runtime(conn: &Connection, runtime: &mut RuntimeState) ->
 }
 
 pub(crate) fn step_select_runtime(
+    conn: &Connection,
+    runtime: &mut SelectRuntime,
+    bindings: &[Option<SqlValue>],
+    current_row: &mut Option<Vec<SqlValue>>,
+) -> Result<bool> {
+    let tx_ptr = select_tx_ptr(&mut runtime.tx);
+    if let Some(tx_ptr) = tx_ptr {
+        return with_current_tx(tx_ptr, || {
+            step_select_runtime_inner(conn, runtime, bindings, current_row)
+        });
+    }
+    step_select_runtime_inner(conn, runtime, bindings, current_row)
+}
+
+fn step_select_runtime_inner(
     conn: &Connection,
     runtime: &mut SelectRuntime,
     bindings: &[Option<SqlValue>],
