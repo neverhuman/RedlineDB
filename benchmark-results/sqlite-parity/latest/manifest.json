@@ -15,21 +15,21 @@
     "--updated-date",
     "2026-05-20"
   ],
-  "git_sha": "2837a3667b5fe8ba07ec5a23934c03a780af970a",
+  "git_sha": "ef947df6d1061f9eeb4702a5dd77fa8a34b83da3",
   "sqlite_version": "3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)",
   "updated_date": "2026-05-20",
   "repetitions": 3,
   "warmup": 1,
   "input_hashes": {
-    "benchmark-results/sqlite-parity/latest/raw.jsonl": "e14e7940817b35706de9f5e6368ce4eb28da1b51be864ae7ed9495cfeef69008",
+    "benchmark-results/sqlite-parity/latest/raw.jsonl": "39206fd012c4f02307d21beb605f9aa8fd5130a9fea9f185b3f2ad77ee90f9a6",
     "crates/bench/sqlite_parity/approved-ci.txt": "a3e70a287482596f12fe740c7dec686bb3b688afe29bf568c7516a34e13df103",
     "crates/bench/sqlite_parity/generated_manifest.json": "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3"
   },
   "output_hashes": {
-    "README.md": "907750ec945dd646b1154531569ce74bb622e0d067e1368a62ecadc8b90bfafa",
-    "assets/sqlite-parity-latency-gap.svg": "afd3ff9b31c5c0ef05c2b89e989beb0bb1066cf5149b56721e051f1520b34d2a",
-    "ranked.csv": "3545fc5444c4101573f3491e3ff942319f18047729947ec5f730266f3c88db9a",
-    "raw.jsonl": "e14e7940817b35706de9f5e6368ce4eb28da1b51be864ae7ed9495cfeef69008",
+    "README.md": "9c1be5991fb6ad2d10c1c7f5f1f4a767da03df0d8adb0c2ba11c2658e5e144d6",
+    "assets/sqlite-parity-latency-gap.svg": "033757d9b7a5850158a58ab010878845b360a81a78db783e9077cc2cabce8729",
+    "ranked.csv": "5b4e213f41dfa1d176f401ad775ea3239bdcc14359c4a2b3e319c2308e6eafe2",
+    "raw.jsonl": "39206fd012c4f02307d21beb605f9aa8fd5130a9fea9f185b3f2ad77ee90f9a6",
     "summary.json": "fa4e30c003a08f2026e21a2995ba835108bf5aeb288b054ddcc06e21d3409fec"
   }
 }
