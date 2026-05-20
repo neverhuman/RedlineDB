@@ -1,9 +1,10 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use serde::Deserialize;
 
 use super::catalog;
 use super::engine::{EngineSpec, partition_cases, resolve_engine_bin};
@@ -24,6 +25,7 @@ enum Command {
     Run(RunArgs),
     Compare(CompareArgs),
     Report(ReportArgs),
+    Sentinel(SentinelArgs),
 }
 
 #[derive(Debug, Args)]
@@ -116,6 +118,25 @@ struct ReportArgs {
     check: bool,
 }
 
+#[derive(Debug, Args)]
+struct SentinelArgs {
+    #[arg(long)]
+    input: PathBuf,
+    #[arg(long = "ceiling-ns")]
+    ceiling_ns: Vec<String>,
+    #[arg(long)]
+    enforce: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct SentinelRecord {
+    case_id: String,
+    status: String,
+    repetition_index: Option<usize>,
+    sample_role: String,
+    target_elapsed_ns: u128,
+}
+
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum ListFormat {
     Text,
@@ -129,6 +150,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Run(args) => run_selected(args),
         Command::Compare(args) => compare_selected(args),
         Command::Report(args) => report(args),
+        Command::Sentinel(args) => sentinel(args),
     }
 }
 
@@ -224,6 +246,84 @@ fn report(args: ReportArgs) -> Result<()> {
         check: args.check,
         command: std::env::args().collect(),
     })
+}
+
+fn sentinel(args: SentinelArgs) -> Result<()> {
+    let ceilings = parse_sentinel_ceilings(&args.ceiling_ns)?;
+    let text = fs::read_to_string(&args.input)
+        .with_context(|| format!("read sqlite parity sentinel input {}", args.input.display()))?;
+    let mut samples = BTreeMap::<String, Vec<u128>>::new();
+    for (index, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let record: SentinelRecord = serde_json::from_str(line).with_context(|| {
+            format!(
+                "parse sqlite parity sentinel JSONL line {}",
+                index.saturating_add(1)
+            )
+        })?;
+        if record.status != "passed" {
+            continue;
+        }
+        if record.repetition_index.is_some() || record.sample_role.starts_with("measured") {
+            samples
+                .entry(record.case_id)
+                .or_default()
+                .push(record.target_elapsed_ns);
+        }
+    }
+    if samples.is_empty() {
+        bail!("sqlite parity sentinel found no measured samples");
+    }
+
+    let mut violations = Vec::new();
+    for (case_id, values) in samples.iter_mut() {
+        let median = median_u128(values);
+        if let Some(ceiling) = ceilings.get(case_id) {
+            let status = if median > *ceiling { "over" } else { "ok" };
+            eprintln!(
+                "sqlite_parity sentinel case={case_id} median_ns={median} ceiling_ns={ceiling} status={status}"
+            );
+            if median > *ceiling {
+                violations.push(format!(
+                    "{case_id}: median {median}ns > ceiling {ceiling}ns"
+                ));
+            }
+        } else {
+            eprintln!("sqlite_parity sentinel case={case_id} median_ns={median}");
+        }
+    }
+
+    if args.enforce && !violations.is_empty() {
+        bail!(
+            "sqlite parity sentinel exceeded advisory ceilings: {}",
+            violations.join("; ")
+        );
+    }
+    Ok(())
+}
+
+fn parse_sentinel_ceilings(values: &[String]) -> Result<BTreeMap<String, u128>> {
+    let mut ceilings = BTreeMap::new();
+    for value in values {
+        let (case_id, ceiling) = value
+            .split_once('=')
+            .ok_or_else(|| anyhow::anyhow!("--ceiling-ns must be CASE=NS, got `{value}`"))?;
+        if case_id.len() != 5 || !case_id.bytes().all(|byte| byte.is_ascii_digit()) {
+            bail!("invalid sqlite parity case id `{case_id}` in --ceiling-ns");
+        }
+        let ceiling = ceiling
+            .parse::<u128>()
+            .with_context(|| format!("parse ceiling for sqlite parity case {case_id}"))?;
+        ceilings.insert(case_id.to_owned(), ceiling);
+    }
+    Ok(ceilings)
+}
+
+fn median_u128(values: &mut [u128]) -> u128 {
+    values.sort_unstable();
+    values[values.len() / 2]
 }
 
 fn selected_cases(args: &SelectArgs) -> Result<Vec<super::case::Case>> {
