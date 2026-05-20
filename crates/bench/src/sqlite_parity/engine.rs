@@ -93,7 +93,10 @@ pub struct CasePartition {
     pub skipped: Vec<SkippedCase>,
 }
 
-pub fn partition_cases(cases: Vec<Case>, capabilities: Option<&ShellCapabilities>) -> CasePartition {
+pub fn partition_cases(
+    cases: Vec<Case>,
+    capabilities: Option<&ShellCapabilities>,
+) -> CasePartition {
     let mut partition = CasePartition::default();
     for case in cases {
         let required = required_capabilities(&case);
