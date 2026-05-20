@@ -23,6 +23,7 @@ pub struct CaseRecord {
     pub stdout_sha256: String,
     pub stderr_sha256: String,
     pub artifact_dir: Option<PathBuf>,
+    pub diagnostic: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,6 +42,7 @@ pub struct CompareRecord {
     pub target_elapsed_ns: u128,
     pub latency_ratio: f64,
     pub artifact_dir: Option<PathBuf>,
+    pub diagnostic: Option<String>,
 }
 
 pub fn append_jsonl<T: Serialize>(out: Option<&Path>, value: &T) -> Result<()> {
@@ -69,6 +71,7 @@ pub fn case_record(
     output: &EngineOutput,
     status: impl Into<String>,
     artifact_dir: Option<PathBuf>,
+    diagnostic: Option<String>,
 ) -> CaseRecord {
     CaseRecord {
         case_id: case.display_id(),
@@ -83,6 +86,58 @@ pub fn case_record(
         stdout_sha256: sha256_hex(&output.stdout),
         stderr_sha256: sha256_hex(&output.stderr),
         artifact_dir,
+        diagnostic,
+    }
+}
+
+pub fn skipped_case_record(
+    case: &Case,
+    engine: impl Into<String>,
+    status: impl Into<String>,
+    artifact_dir: Option<PathBuf>,
+    diagnostic: Option<String>,
+) -> CaseRecord {
+    CaseRecord {
+        case_id: case.display_id(),
+        name: case.name.clone(),
+        priority: case.priority.to_string(),
+        profile: case.profile.to_string(),
+        category: case.category.clone(),
+        engine: engine.into(),
+        status: status.into(),
+        exit_code: None,
+        elapsed_ns: 0,
+        stdout_sha256: String::new(),
+        stderr_sha256: String::new(),
+        artifact_dir,
+        diagnostic,
+    }
+}
+
+pub fn skipped_compare_record(
+    case: &Case,
+    reference_engine: impl Into<String>,
+    target_engine: impl Into<String>,
+    status: impl Into<String>,
+    artifact_dir: Option<PathBuf>,
+    diagnostic: Option<String>,
+) -> CompareRecord {
+    CompareRecord {
+        case_id: case.display_id(),
+        name: case.name.clone(),
+        priority: case.priority.to_string(),
+        profile: case.profile.to_string(),
+        category: case.category.clone(),
+        reference_engine: reference_engine.into(),
+        target_engine: target_engine.into(),
+        status: status.into(),
+        reference_exit_code: None,
+        target_exit_code: None,
+        reference_elapsed_ns: 0,
+        target_elapsed_ns: 0,
+        latency_ratio: 0.0,
+        artifact_dir,
+        diagnostic,
     }
 }
 
@@ -111,6 +166,17 @@ pub fn write_failure_artifact(
             format!("{:?}\n", output.status_code),
         )?;
     }
+    Ok(root)
+}
+
+pub fn write_skip_artifact(case: &Case, reason: &str) -> Result<PathBuf> {
+    let root = Path::new("target")
+        .join("sqlite-parity")
+        .join("skips")
+        .join(format!("{}_{}", case.display_id(), std::process::id()));
+    fs::create_dir_all(&root).with_context(|| format!("create {}", root.display()))?;
+    fs::write(root.join("input.sql"), &case.stdin)?;
+    fs::write(root.join("reason.txt"), reason)?;
     Ok(root)
 }
 

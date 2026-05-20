@@ -1,7 +1,9 @@
 use super::*;
 use crate::options::OpenOptions;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Concurrency proof for the `OnceLock<Mutex<Registry>>` global: spawn
 /// several threads that simultaneously create and reuse the same
@@ -106,5 +108,29 @@ fn registry_concurrent_distinct_sessions_are_independent() {
         paths.len(),
         original_len,
         "each distinct session name must map to a distinct registry path"
+    );
+}
+
+#[test]
+fn registry_open_locks_are_scoped_per_path() {
+    let mut registry = registry().lock().expect("registry lock");
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before unix epoch")
+        .as_nanos();
+    let path_a = PathBuf::from(format!("/tmp/redlinedb-open-lock-a-{suffix}"));
+    let path_b = PathBuf::from(format!("/tmp/redlinedb-open-lock-b-{suffix}"));
+
+    let lock_a = open_lock_for_path(&mut registry, &path_a);
+    let lock_a_again = open_lock_for_path(&mut registry, &path_a);
+    let lock_b = open_lock_for_path(&mut registry, &path_b);
+
+    assert!(
+        Arc::ptr_eq(&lock_a, &lock_a_again),
+        "same path should reuse the same open lock"
+    );
+    assert!(
+        !Arc::ptr_eq(&lock_a, &lock_b),
+        "distinct paths must not share an open lock"
     );
 }

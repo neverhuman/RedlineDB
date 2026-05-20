@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::catalog;
-use super::engine::{EngineSpec, resolve_engine_bin};
+use super::engine::{EngineSpec, partition_cases, resolve_engine_bin};
 use super::filter::Selection;
 use super::runner;
 
@@ -151,7 +151,15 @@ fn run_selected(args: RunArgs) -> Result<()> {
     let cases = selected_cases(&args.select)?;
     let bin = resolve_engine_bin(&args.engine_name, args.sqlite_bin, args.target_bin)?;
     let engine = EngineSpec::new(args.engine_name, bin);
-    runner::run_cases(&cases, &engine, args.out.as_deref(), args.tmp_dir)?;
+    let capabilities = engine.sqlite_shell_capabilities()?;
+    let partition = partition_cases(cases, capabilities.as_ref());
+    runner::run_cases(
+        &partition.runnable,
+        &partition.skipped,
+        &engine,
+        args.out.as_deref(),
+        args.tmp_dir,
+    )?;
     Ok(())
 }
 
@@ -160,8 +168,11 @@ fn compare_selected(args: CompareArgs) -> Result<()> {
     let cases = selected_cases(&args.select)?;
     let reference = EngineSpec::new(args.reference_name, args.reference_bin);
     let target = EngineSpec::new(args.target_name, args.target_bin);
+    let capabilities = reference.sqlite_shell_capabilities()?;
+    let partition = partition_cases(cases, capabilities.as_ref());
     runner::compare_cases(
-        &cases,
+        &partition.runnable,
+        &partition.skipped,
         &reference,
         &target,
         args.out.as_deref(),

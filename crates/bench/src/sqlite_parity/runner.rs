@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, bail};
 
 use super::case::Case;
-use super::engine::{EngineOutput, EngineSpec, default_tmp_root};
+use super::engine::{EngineOutput, EngineSpec, SkippedCase, default_tmp_root};
 use super::normalize::normalize_output;
 use super::report::{self, CompareRecord};
 
@@ -13,12 +13,14 @@ pub struct RunSummary {
     pub total: usize,
     pub passed: usize,
     pub failed: usize,
+    pub skipped: usize,
     pub elapsed: Duration,
     pub slowest: Vec<(String, u128)>,
 }
 
 pub fn run_cases(
     cases: &[Case],
+    skipped: &[SkippedCase],
     engine: &EngineSpec,
     out: Option<&Path>,
     tmp_root: Option<PathBuf>,
@@ -29,6 +31,21 @@ pub fn run_cases(
     };
     let started = Instant::now();
     let mut summary = RunSummary::default();
+    for skipped_case in skipped {
+        summary.total += 1;
+        summary.skipped += 1;
+        let artifact = report::write_skip_artifact(&skipped_case.case, &skipped_case.reason)?;
+        report::append_jsonl(
+            out,
+            &report::skipped_case_record(
+                &skipped_case.case,
+                &engine.name,
+                "skipped",
+                Some(artifact),
+                Some(skipped_case.reason.clone()),
+            ),
+        )?;
+    }
     for case in cases {
         summary.total += 1;
         let output = engine.run_case(case, &tmp_root)?;
@@ -49,6 +66,7 @@ pub fn run_cases(
                 &output,
                 if status.is_ok() { "passed" } else { "failed" },
                 artifact,
+                status.as_ref().err().map(|reason| reason.to_string()),
             ),
         )?;
         summary
@@ -66,6 +84,7 @@ pub fn run_cases(
 
 pub fn compare_cases(
     cases: &[Case],
+    skipped: &[SkippedCase],
     reference: &EngineSpec,
     target: &EngineSpec,
     out: Option<&Path>,
@@ -74,6 +93,22 @@ pub fn compare_cases(
     let tmp_root = tmp_root.unwrap_or_else(default_tmp_root);
     let started = Instant::now();
     let mut summary = RunSummary::default();
+    for skipped_case in skipped {
+        summary.total += 1;
+        summary.skipped += 1;
+        let artifact = report::write_skip_artifact(&skipped_case.case, &skipped_case.reason)?;
+        report::append_jsonl(
+            out,
+            &report::skipped_compare_record(
+                &skipped_case.case,
+                &reference.name,
+                &target.name,
+                "skipped",
+                Some(artifact),
+                Some(skipped_case.reason.clone()),
+            ),
+        )?;
+    }
     for case in cases {
         summary.total += 1;
         let reference_output = reference.run_case(case, &tmp_root)?;
@@ -112,6 +147,7 @@ pub fn compare_cases(
                 target_elapsed_ns: target_output.elapsed.as_nanos(),
                 latency_ratio: ratio,
                 artifact_dir: artifact,
+                diagnostic: status.as_ref().err().map(|reason| reason.to_string()),
             },
         )?;
         summary
@@ -198,10 +234,11 @@ fn finish_summary(mut summary: RunSummary) -> Result<RunSummary> {
     summary.slowest.sort_by(|left, right| right.1.cmp(&left.1));
     summary.slowest.truncate(10);
     eprintln!(
-        "sqlite_parity total={} passed={} failed={} elapsed_ns={}",
+        "sqlite_parity total={} passed={} failed={} skipped={} elapsed_ns={}",
         summary.total,
         summary.passed,
         summary.failed,
+        summary.skipped,
         summary.elapsed.as_nanos()
     );
     eprintln!("sqlite_parity slowest={:?}", summary.slowest);

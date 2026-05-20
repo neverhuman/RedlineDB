@@ -24,6 +24,7 @@ pub enum OutputMode {
     Csv,
     Json,
     Line,
+    Ascii,
     Markdown,
     Quote,
     Table,
@@ -40,6 +41,7 @@ impl OutputMode {
             "csv" => Self::Csv,
             "json" => Self::Json,
             "line" | "lines" => Self::Line,
+            "ascii" => Self::Ascii,
             "markdown" => Self::Markdown,
             "quote" => Self::Quote,
             "table" | "box" => Self::Table,
@@ -57,6 +59,7 @@ impl OutputMode {
             Self::Csv => "csv",
             Self::Json => "json",
             Self::Line => "line",
+            Self::Ascii => "ascii",
             Self::Markdown => "markdown",
             Self::Quote => "quote",
             Self::Table => "table",
@@ -71,8 +74,13 @@ impl OutputMode {
         match self {
             Self::Tabs => "\t",
             Self::Csv => ",",
+            Self::Ascii => "\x1f",
             _ => "|",
         }
+    }
+
+    pub fn headers_by_default(self) -> bool {
+        matches!(self, Self::Markdown | Self::Table)
     }
 }
 

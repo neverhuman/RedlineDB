@@ -114,7 +114,7 @@ Total cases: **1127**. Existing curated cases: **227**. Generated deterministic 
 | 0089 | P0 | memory | SQL_JSON | `JSON_TABLE_VALUED_FUNCTIONS` | json_each table-valued function. |
 | 0090 | P0 | memory | SQL_JSON | `JSON_MUTATION_FUNCTIONS` | json_set, json_remove, json_patch. |
 | 0091 | P2 | memory | SQL_FUNCTIONS_OPTIONAL | `MATH_FUNCTIONS_OPTIONAL` | Math functions when compiled/enabled: sin, pow, sqrt, ceil, floor. |
-| 0092 | P3 | memory | SQL_FUNCTIONS_OPTIONAL | `PERCENTILE_FUNCTIONS_OPTIONAL` | Percentile/median aggregate extension when compiled/enabled. |
+| 0092 | P3 | memory | SQL_FUNCTIONS_OPTIONAL | `PERCENTILE_FUNCTIONS_OPTIONAL` | Requires `SQLITE_PERCENTILE_FUNCTIONS`; percentile/median aggregate extension when compiled/enabled. |
 | 0093 | P1 | memory | SQL_VIRTUAL_TABLE_OPTIONAL | `CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL` | CREATE VIRTUAL TABLE USING fts5 and MATCH. |
 | 0094 | P2 | memory | SQL_VIRTUAL_TABLE_OPTIONAL | `FTS5_HIGHLIGHT_OPTIONAL` | FTS5 highlight() auxiliary function. |
 | 0095 | P2 | memory | SQL_VIRTUAL_TABLE_OPTIONAL | `CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL` | CREATE VIRTUAL TABLE USING rtree. |
@@ -156,7 +156,7 @@ Total cases: **1127**. Existing curated cases: **227**. Generated deterministic 
 | 0131 | P0 | memory | CLI_DOT_COMMAND | `DOT_TIMEOUT` | .timeout set busy timeout. |
 | 0132 | P2 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | `DOT_TRACE_STDOUT` | .trace stdout emits SQL trace. |
 | 0133 | P3 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | `DOT_AUTH` | .auth on/off authorizer callback display. |
-| 0134 | P3 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | `DOT_CRLF` | .crlf on/off with normalized line endings; diagnostic on SQLite 3.45.1 shells that do not support `.crlf`. |
+| 0134 | P3 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | `DOT_CRLF` | Requires `CLI_CRLF_COMMAND`; .crlf on/off with normalized line endings; diagnostic on SQLite 3.45.1 shells that do not support `.crlf`. |
 | 0135 | P0 | memory | CLI_DOT_COMMAND | `DOT_PROGRESS` | .progress handler smoke. |
 | 0136 | P0 | memory | CLI_DOT_COMMAND | `DOT_LOG` | .log stdout/on/off smoke. |
 | 0137 | P2 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | `DOT_VERSION` | .version version output smoke. |
@@ -176,9 +176,9 @@ Total cases: **1127**. Existing curated cases: **227**. Generated deterministic 
 | 0151 | P1 | tempfile | CLI_TEMPFILE | `DOT_SAVE_RESTORE_TEMPFILE` | .save alias for backup, then restore. |
 | 0152 | P2 | tempfile | CLI_TEMPFILE | `DOT_CLONE_TEMPFILE` | .clone into short-lived temp database file. |
 | 0153 | P2 | tempfile | CLI_TEMPFILE | `DOT_CD_TEMPFILE` | .cd into temp directory. |
-| 0154 | P3 | tempfile | CLI_TEMPFILE_DIAGNOSTIC | `DOT_DBINFO_TEMPFILE` | .dbinfo on temp database file; diagnostic when sqlite_dbpage support is unavailable. |
-| 0155 | P3 | tempfile | CLI_TEMPFILE | `DOT_DBTOTXT_TEMPFILE` | .dbtotxt hex dump shape. |
-| 0156 | P3 | tempfile | CLI_TEMPFILE | `DOT_RECOVER_TEMPFILE` | .recover on valid short-lived db file emits recovery SQL. |
+| 0154 | P3 | tempfile | CLI_TEMPFILE_DIAGNOSTIC | `DOT_DBINFO_TEMPFILE` | Requires `CLI_DBINFO_COMMAND`; .dbinfo on temp database file; diagnostic when sqlite_dbpage support is unavailable. |
+| 0155 | P3 | tempfile | CLI_TEMPFILE | `DOT_DBTOTXT_TEMPFILE` | Requires `CLI_DBTOTXT_COMMAND`; .dbtotxt hex dump shape. |
+| 0156 | P3 | tempfile | CLI_TEMPFILE | `DOT_RECOVER_TEMPFILE` | Requires `CLI_RECOVER_COMMAND`; .recover on valid short-lived db file emits recovery SQL. |
 | 0157 | P3 | tempfile | CLI_TEMPFILE_OPTIONAL | `DOT_ARCHIVE_TEMPFILE_OPTIONAL` | .archive create/list using short-lived files. |
 | 0158 | P4 | side_effect | CLI_SIDE_EFFECT | `DOT_SHELL_SIDE_EFFECT` | .shell command is excluded by default; enable side-effect profile. |
 | 0159 | P4 | side_effect | CLI_SIDE_EFFECT | `DOT_SYSTEM_SIDE_EFFECT` | .system command is excluded by default; enable side-effect profile. |
@@ -244,7 +244,7 @@ Total cases: **1127**. Existing curated cases: **227**. Generated deterministic 
 | 0219 | P3 | memory | SQL_UPDATE_OPTIONAL | `UPDATE_LIMIT_OPTIONAL` | UPDATE ... ORDER BY ... LIMIT when compiled with update/delete limit support. |
 | 0220 | P3 | memory | SQL_DELETE_OPTIONAL | `DELETE_LIMIT_OPTIONAL` | DELETE ... ORDER BY ... LIMIT when compiled with update/delete limit support. |
 | 0221 | P2 | memory | CLI_OPTION | `OPT_DOUBLE_DASH_END_OPTIONS` | -- ends option parsing. |
-| 0222 | P3 | memory | CLI_OPTION | `OPT_ESCAPE_SYMBOL` | -escape symbol renders control characters with symbolic escapes. |
+| 0222 | P3 | memory | CLI_OPTION | `OPT_ESCAPE_SYMBOL` | Requires `CLI_ESCAPE_SYMBOL_OPTION`; -escape symbol renders control characters with symbolic escapes. |
 | 0223 | P2 | memory | CLI_OPTION | `OPT_NOHEADER` | -noheader overrides header output. |
 | 0224 | P3 | memory | CLI_OPTION_DIAGNOSTIC | `OPT_STATS` | -stats command-line option emits statistics. |
 | 0225 | P2 | memory | CLI_OPTION | `OPT_NONCE_SAFE_MODE` | -nonce with --safe allows one matching .nonce escape. |
