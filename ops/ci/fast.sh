@@ -57,7 +57,8 @@ run_test_stage() {
             cargo test -p redlinedb-bench --quiet --locked
             ;;
         sqlite-parity-scale)
-            cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory,tempfile --priorities P0,P1,P2 --jobs auto --out target/sqlite-parity/sqlite-scale-ci.jsonl
+            cargo build -p redlinedb-cli --release --locked
+            cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --out target/sqlite-parity/compare-approved-ci.jsonl
             ;;
         *)
             printf 'unknown fast test stage: %s\n' "$1" >&2

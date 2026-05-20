@@ -135,7 +135,8 @@ case "$lane" in
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory --priorities P0 --jobs auto --out target/sqlite-parity/sqlite-scale-smoke.jsonl
     ;;
   sqlite-parity-scale-ci)
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory,tempfile --priorities P0,P1,P2 --jobs auto --out target/sqlite-parity/sqlite-scale-ci.jsonl
+    rtk cargo build -p redlinedb-cli --release --locked
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --out target/sqlite-parity/compare-approved-ci.jsonl
     ;;
   sqlite-parity-scale-full)
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory,tempfile --priorities P0,P1,P2,P3 --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl

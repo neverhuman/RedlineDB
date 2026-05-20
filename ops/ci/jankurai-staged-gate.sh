@@ -48,8 +48,39 @@ if [ "${#changed_files[@]}" -eq 0 ]; then
   exit 0
 fi
 
+generated_zone_paths=()
+if [ -f ".jankurai/generated-zones.toml" ]; then
+  while IFS= read -r zone_path; do
+    [ -z "$zone_path" ] && continue
+    generated_zone_paths+=("$zone_path")
+  done < <(sed -n 's/^[[:space:]]*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*$/\1/p' .jankurai/generated-zones.toml)
+fi
+
+is_generated_zone_path() {
+  local candidate="$1"
+
+  if [ "$candidate" = ".jankurai/generated-zones.toml" ]; then
+    return 1
+  fi
+
+  local zone_path
+  for zone_path in "${generated_zone_paths[@]}"; do
+    [ -z "$zone_path" ] && continue
+    if [[ "$zone_path" == */ ]]; then
+      case "$candidate" in
+        "$zone_path"*) return 0 ;;
+      esac
+    elif [ "$candidate" = "$zone_path" ]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 failed=0
 blocked_files=()
+skipped_generated=0
 i=0
 for path in "${changed_files[@]}"; do
   [ -z "$path" ] && continue
@@ -58,6 +89,11 @@ for path in "${changed_files[@]}"; do
   case "$path" in
     target/*|node_modules/*|*.lock) continue ;;
   esac
+
+  if is_generated_zone_path "$path"; then
+    skipped_generated=$((skipped_generated + 1))
+    continue
+  fi
 
   unset baseline_arg
   baseline_arg=()
@@ -108,5 +144,6 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
-printf 'jankurai staged-gate: %d file(s) clean vs %s\n' "${#changed_files[@]}" "$BASE_REF"
+printf 'jankurai staged-gate: %d file(s) clean vs %s (%d generated-zone file(s) skipped)\n' \
+  "${#changed_files[@]}" "$BASE_REF" "$skipped_generated"
 exit 0

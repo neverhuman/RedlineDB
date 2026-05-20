@@ -1,6 +1,8 @@
-use std::path::PathBuf;
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use super::catalog;
@@ -30,6 +32,8 @@ struct SelectArgs {
     profiles: Option<String>,
     #[arg(long)]
     include_quarantine: bool,
+    #[arg(long)]
+    case_list: Option<PathBuf>,
 }
 
 impl SelectArgs {
@@ -168,14 +172,51 @@ fn compare_selected(args: CompareArgs) -> Result<()> {
 
 fn selected_cases(args: &SelectArgs) -> Result<Vec<super::case::Case>> {
     let selection = args.selection()?;
+    let case_list = args.case_list.as_deref().map(parse_case_list).transpose()?;
     let cases = catalog::all_cases()?
         .into_iter()
         .filter(|case| selection.matches(case))
+        .filter(|case| {
+            case_list
+                .as_ref()
+                .map(|ids| ids.contains(&case.display_id()))
+                .unwrap_or(true)
+        })
         .collect::<Vec<_>>();
     if cases.is_empty() {
         bail!("sqlite parity selection matched zero cases");
     }
     Ok(cases)
+}
+
+fn parse_case_list(path: &Path) -> Result<BTreeSet<String>> {
+    let text = fs::read_to_string(path)
+        .with_context(|| format!("read sqlite parity case list {}", path.display()))?;
+    parse_case_list_text(&text)
+}
+
+fn parse_case_list_text(text: &str) -> Result<BTreeSet<String>> {
+    let mut ids = BTreeSet::new();
+    for (index, line) in text.lines().enumerate() {
+        let id = line
+            .split_once('#')
+            .map_or(line, |(prefix, _)| prefix)
+            .trim();
+        if id.is_empty() {
+            continue;
+        }
+        if id.len() != 5 || !id.bytes().all(|byte| byte.is_ascii_digit()) {
+            bail!(
+                "invalid sqlite parity case id `{id}` at {}",
+                index.saturating_add(1)
+            );
+        }
+        ids.insert(id.to_owned());
+    }
+    if ids.is_empty() {
+        bail!("sqlite parity case list is empty");
+    }
+    Ok(ids)
 }
 
 fn validate_jobs(value: &str) -> Result<()> {
@@ -189,4 +230,77 @@ fn validate_jobs(value: &str) -> Result<()> {
         bail!("--jobs must be positive");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use tempfile::NamedTempFile;
+
+    use super::*;
+
+    #[test]
+    fn parses_case_list_with_blank_lines_and_comments() {
+        let ids = parse_case_list_text(
+            r#"
+                # approved cases
+                00004
+
+                00005 # inline note
+                00009
+            "#,
+        )
+        .expect("parse case list");
+
+        assert_eq!(
+            ids.into_iter().collect::<Vec<_>>(),
+            vec!["00004", "00005", "00009"]
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_case_list_ids() {
+        let err = parse_case_list_text("4\n").expect_err("reject non-5-digit id");
+        assert!(err.to_string().contains("invalid sqlite parity case id"));
+    }
+
+    #[test]
+    fn unknown_case_list_ids_are_ignored_when_known_ids_match() {
+        let mut file = NamedTempFile::new().expect("temp case list");
+        writeln!(file, "00004").expect("write known id");
+        writeln!(file, "99999").expect("write unknown id");
+
+        let args = SelectArgs {
+            priorities: None,
+            profiles: None,
+            include_quarantine: false,
+            case_list: Some(file.path().to_path_buf()),
+        };
+
+        let cases = selected_cases(&args).expect("select known case");
+        assert_eq!(
+            cases
+                .iter()
+                .map(super::super::case::Case::display_id)
+                .collect::<Vec<_>>(),
+            vec!["00004"]
+        );
+    }
+
+    #[test]
+    fn case_list_zero_match_keeps_hard_error() {
+        let mut file = NamedTempFile::new().expect("temp case list");
+        writeln!(file, "99999").expect("write unknown id");
+
+        let args = SelectArgs {
+            priorities: None,
+            profiles: None,
+            include_quarantine: false,
+            case_list: Some(file.path().to_path_buf()),
+        };
+
+        let err = selected_cases(&args).expect_err("zero-match selection must fail");
+        assert!(err.to_string().contains("matched zero cases"));
+    }
 }
