@@ -101,6 +101,41 @@ fn memory_mode_query_leaves_working_directory_clean() {
 }
 
 #[test]
+fn batch_bail_memory_mode_is_cwd_clean_and_output_exact() {
+    let dir = tempdir().expect("tempdir");
+    let mut child = Command::new(cargo_bin("redlinedb-cli"))
+        .current_dir(dir.path())
+        .arg("--batch")
+        .arg("--bail")
+        .arg(":memory:")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("run redlinedb --batch --bail :memory:");
+    {
+        use std::io::Write;
+        let stdin = child.stdin.as_mut().expect("stdin");
+        stdin
+            .write_all(
+                b"CREATE TABLE t(x INTEGER);\n\
+                  INSERT INTO t VALUES (1), (2);\n\
+                  SELECT sum(x) FROM t;\n",
+            )
+            .expect("write stdin");
+    }
+    let output = child.wait_with_output().expect("wait redlinedb cli");
+    assert!(output.status.success(), "stderr={:?}", output.stderr);
+    assert_eq!(String::from_utf8(output.stdout).expect("stdout"), "3\n");
+    assert_eq!(String::from_utf8(output.stderr).expect("stderr"), "");
+    let entries = std::fs::read_dir(dir.path())
+        .expect("read tempdir")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("collect tempdir entries");
+    assert!(entries.is_empty(), "memory mode created files: {entries:?}");
+}
+
+#[test]
 fn dot_tables_lists_user_tables() {
     let (out, err, code) = run_script(
         None,

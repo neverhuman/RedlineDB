@@ -79,6 +79,9 @@ sqlite-parity-scale-smoke:
 sqlite-parity-scale-ci:
   ./scripts/just/run.sh sqlite-parity-scale-ci
 
+sqlite-parity-volatile-sentinel:
+  ./scripts/just/run.sh sqlite-parity-volatile-sentinel
+
 sqlite-parity-report-update:
   ./scripts/just/run.sh sqlite-parity-report-update
 
