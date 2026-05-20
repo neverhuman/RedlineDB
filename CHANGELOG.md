@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## [1.0.18] - 2026-05-20
+
+Latency round 2 for volatile SQLite parity cases.
+
+### Changed
+
+- Private volatile databases now honor explicit `OpenOptions::temp_dir` roots
+  and otherwise prefer `/dev/shm/redlinedb-ephemeral` when writable before
+  using the process scratch directory. This brings default `:memory:` backing
+  roots closer to SQLite memory-profile latency on Linux.
+- Nested SELECT, scalar subquery, and `IN (SELECT ...)` evaluation now reuse
+  the enclosing SELECT transaction snapshot when one exists.
+- `EXISTS (SELECT ...)` now stops after the first matching subquery row instead
+  of materializing every row.
+- SQLite parity latency report artifacts were regenerated on 2026-05-20. The
+  previous `JOIN_SUBQUERY_EXISTS` and P0 memory gaps are materially reduced.
+- Workspace package metadata and lockfile entries now target `1.0.18`.
+
 ## [1.0.17] - 2026-05-20
 
 SQLite dynamic-default compatibility and release version alignment.
