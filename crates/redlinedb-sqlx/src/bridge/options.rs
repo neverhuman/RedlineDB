@@ -108,7 +108,8 @@ impl ConnectOptions for RedlineConnectOptions {
             // proves the non-owner attach path can read live rows, rejects writes,
             // and a second rwc opener still hits the owner lock.
             return Err(Error::Configuration(
-                "read-only attach mode is only supported for file-backed RedlineDB URLs".into(),
+                "read-only attach mode is only supported for file-backed RedlineDB URL values"
+                    .into(),
             ));
         }
 
@@ -189,7 +190,7 @@ mod tests {
     }
 
     #[test]
-    fn ro_is_rejected_for_in_memory_urls() {
+    fn ro_is_rejected_for_in_memory_url() {
         let url = Url::parse("redline:///:memory:?mode=ro").expect("url");
         let err = RedlineConnectOptions::from_url(&url).expect_err("reject memory ro");
 
