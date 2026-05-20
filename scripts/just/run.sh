@@ -131,6 +131,15 @@ case "$lane" in
     fi
     exit "$receipt_status"
     ;;
+  sqlite-parity-scale-smoke)
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory --priorities P0 --jobs auto --out target/sqlite-parity/sqlite-scale-smoke.jsonl
+    ;;
+  sqlite-parity-scale-ci)
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory,tempfile --priorities P0,P1,P2 --jobs auto --out target/sqlite-parity/sqlite-scale-ci.jsonl
+    ;;
+  sqlite-parity-scale-full)
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory,tempfile --priorities P0,P1,P2,P3 --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl
+    ;;
   ffi-abi)
     rtk cargo test -p redlinedb-ffi --quiet --locked
     ;;

@@ -11,6 +11,7 @@ mod metrics;
 pub mod process_metrics;
 mod recover;
 pub mod report;
+pub mod sqlite_parity;
 pub mod strace_capture;
 pub mod workload;
 

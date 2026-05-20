@@ -47,6 +47,7 @@ jobs:
           - sql-contracts
           - sql-parity
           - bench
+          - sqlite-parity-scale
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
