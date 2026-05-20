@@ -74,15 +74,22 @@ Ordered steps. Each step is gated by the previous one passing.
    git tag -s vX.Y.Z -m "redlinedb vX.Y.Z"
    git push origin vX.Y.Z
    ```
-6. **Cut the GitHub release**:
+   The `release-build` workflow also runs on `v*` tag pushes. If a release
+   does not exist yet, it creates one with generated notes and uploads the
+   binary assets.
+6. **Cut or verify the GitHub release**:
    ```
    gh release create vX.Y.Z --title "redlinedb vX.Y.Z" \
-     --notes-file CHANGELOG-vX.Y.Z.md \
-     target/release/redlinedb-cli \
-     target/release/redlinedb-server \
-     target/release/SHA256SUMS \
-     target/release/sbom.cdx.json
+     --notes-file CHANGELOG-vX.Y.Z.md
    ```
+   If the release already exists, the workflow uploads or replaces:
+   `redlinedb-vX.Y.Z-linux-x86_64.tar.gz`,
+   `redlinedb-vX.Y.Z-macos-arm64.tar.gz`,
+   `redlinedb-vX.Y.Z-macos-x86_64.tar.gz`, and each matching `.sha256`.
+   To backfill assets for an existing tag, run the `release-build` workflow
+   manually with `tag = vX.Y.Z`. The workflow checks out that tag as the
+   source tree but uses the current release-packaging script, so old tags can
+   be backfilled when packaging logic needed a fix.
 
 ## CI evidence
 
@@ -100,9 +107,11 @@ a release tag for permalink evidence.
 
 Release artifacts MUST ship:
 
-- **SHA-256 manifest** — `cd target/release && sha256sum redlinedb-cli
-  redlinedb-server > SHA256SUMS`. Attach `SHA256SUMS` to the GitHub
-  release.
+- **SHA-256 manifests** — `.github/workflows/release-build.yml` runs
+  `ops/ci/release-build.sh` for Linux x86_64, macOS Apple Silicon, and
+  macOS Intel. Each tarball receives a sibling `.sha256` file. Installers
+  must fail closed when the checksum asset is missing; CI can additionally
+  pin `REDLINEDB_SHA256=<digest>`.
 - **SBOM** — `cargo install cargo-cyclonedx` once, then
   `cargo cyclonedx --format json --output-pattern bom --all`.
   Attach the generated `bom.cdx.json` (renamed `sbom.cdx.json`) to
