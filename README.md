@@ -46,21 +46,21 @@ curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/i
 **Pin to a specific version** (recommended for CI and reproducible environments):
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v1.0.1 bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v1.0.17 bash
 ```
 
 Fully lock the download by pinning both the release tag and the tarball digest:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
-  VERSION=v1.0.1 REDLINEDB_SHA256=<sha256> bash
+  VERSION=v1.0.17 REDLINEDB_SHA256=<sha256> bash
 ```
 
 Custom install prefix:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
-  VERSION=v1.0.1 PREFIX=~/.local bash
+  VERSION=v1.0.17 PREFIX=~/.local bash
 ```
 
 The script requires SHA-256 verification before installing. By default it
@@ -72,7 +72,7 @@ pin the exact digest inline.
 ```bash
 cargo install redlinedb-cli --version 1.0.1 --locked
 # or from a specific git tag:
-cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v1.0.1 --package redlinedb-cli --locked
+cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v1.0.17 --package redlinedb-cli --locked
 ```
 
 `--locked` enforces the committed `Cargo.lock` — ensures you get the exact dependency tree that was tested.
@@ -83,9 +83,9 @@ Pre-built tarballs on the [releases page](https://github.com/neverhuman/RedlineD
 
 | Platform | File |
 |---|---|
-| Linux x86_64 | `redlinedb-v1.0.1-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `redlinedb-v1.0.1-macos-arm64.tar.gz` |
-| macOS Intel | `redlinedb-v1.0.1-macos-x86_64.tar.gz` |
+| Linux x86_64 | `redlinedb-v1.0.17-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `redlinedb-v1.0.17-macos-arm64.tar.gz` |
+| macOS Intel | `redlinedb-v1.0.17-macos-x86_64.tar.gz` |
 
 Each tarball has a matching `.sha256` checksum file and contains:
 `bin/redlinedb`, `lib/libredlinedb.*`, `include/redlinedb.h`, and
