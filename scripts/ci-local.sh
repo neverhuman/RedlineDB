@@ -10,6 +10,7 @@
 #   scripts/ci-local.sh security           # cargo audit + cargo deny + gitleaks
 #   scripts/ci-local.sh audit              # full jankurai audit lane
 #   scripts/ci-local.sh dependency-review  # local dependency-review mirror
+#   scripts/ci-local.sh sqlite-parity-report # local SQLite parity report update
 #   scripts/ci-local.sh pr-gate            # PR freshness + staged jankurai gate
 #   scripts/ci-local.sh jankurai-tools     # local mirror for jankurai-tools.yml matrix
 #   scripts/ci-local.sh all                # full local PR CI mirror
@@ -20,12 +21,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
     cat >&2 <<'USAGE'
-usage: scripts/ci-local.sh {fast|security|audit|dependency-review|jankurai-tools|pr-gate|all}
+usage: scripts/ci-local.sh {fast|security|audit|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
 
   fast                run ops/ci/fast.sh                (fmt + size + check + test)
   security            run ops/ci/security.sh            (cargo audit + deny + gitleaks)
   audit               run ops/ci/jankurai-audit.sh      (full jankurai audit lane)
   dependency-review   run ops/ci/dependency-review.sh   (cargo deny advisories/bans/licenses/sources)
+  sqlite-parity-report run ops/ci/sqlite-parity-report.sh update
   jankurai-tools      run every jankurai-tools matrix lane plus input-boundary cross-check
   pr-gate             run PR freshness + jankurai staged-gate against origin/main
   all                 run the full local PR CI mirror
@@ -49,6 +51,9 @@ case "$1" in
         ;;
     dependency-review)
         bash "$ROOT/ops/ci/dependency-review.sh"
+        ;;
+    sqlite-parity-report)
+        bash "$ROOT/ops/ci/sqlite-parity-report.sh" update
         ;;
     jankurai-tools)
         for tool in \

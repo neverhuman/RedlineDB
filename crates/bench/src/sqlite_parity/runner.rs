@@ -6,7 +6,7 @@ use anyhow::{Result, bail};
 use super::case::Case;
 use super::engine::{EngineOutput, EngineSpec, SkippedCase, default_tmp_root};
 use super::normalize::normalize_output;
-use super::report::{self, CompareRecord};
+use super::report;
 
 #[derive(Debug, Default)]
 pub struct RunSummary {
@@ -89,6 +89,9 @@ pub fn compare_cases(
     target: &EngineSpec,
     out: Option<&Path>,
     tmp_root: Option<PathBuf>,
+    warmup: usize,
+    repetitions: usize,
+    sqlite_version: Option<String>,
 ) -> Result<RunSummary> {
     let tmp_root = tmp_root.unwrap_or_else(default_tmp_root);
     let started = Instant::now();
@@ -103,60 +106,66 @@ pub fn compare_cases(
                 &skipped_case.case,
                 &reference.name,
                 &target.name,
+                sqlite_version.clone(),
                 "skipped",
                 Some(artifact),
                 Some(skipped_case.reason.clone()),
             ),
         )?;
     }
+    let total_samples = warmup.saturating_add(repetitions);
     for case in cases {
         summary.total += 1;
-        let reference_output = reference.run_case(case, &tmp_root)?;
-        let target_output = target.run_case(case, &tmp_root)?;
-        let status = validate_case(case, &reference_output)
-            .and_then(|_| validate_case(case, &target_output))
-            .and_then(|_| validate_compare(case, &reference_output, &target_output));
-        let artifact = if let Err(reason) = &status {
-            Some(report::write_failure_artifact(
-                case,
-                &[&reference_output, &target_output],
-                &reason.to_string(),
-            )?)
-        } else {
-            None
-        };
-        let ratio = latency_ratio(reference_output.elapsed, target_output.elapsed);
-        report::append_jsonl(
-            out,
-            &CompareRecord {
-                case_id: case.display_id(),
-                name: case.name.clone(),
-                priority: case.priority.to_string(),
-                profile: case.profile.to_string(),
-                category: case.category.clone(),
-                reference_engine: reference_output.engine.clone(),
-                target_engine: target_output.engine.clone(),
-                status: if status.is_ok() {
-                    "passed".to_owned()
-                } else {
-                    "failed".to_owned()
-                },
-                reference_exit_code: reference_output.status_code,
-                target_exit_code: target_output.status_code,
-                reference_elapsed_ns: reference_output.elapsed.as_nanos(),
-                target_elapsed_ns: target_output.elapsed.as_nanos(),
-                latency_ratio: ratio,
-                artifact_dir: artifact,
-                diagnostic: status.as_ref().err().map(|reason| reason.to_string()),
-            },
-        )?;
-        summary
-            .slowest
-            .push((case.display_id(), target_output.elapsed.as_nanos()));
-        if status.is_ok() {
-            summary.passed += 1;
-        } else {
+        let mut case_failed = false;
+        for sample_index in 0..total_samples {
+            let measured_index = sample_index.checked_sub(warmup);
+            let sample_role = if let Some(index) = measured_index {
+                format!("measured:{}", index.saturating_add(1))
+            } else {
+                "warmup".to_owned()
+            };
+            let reference_output = reference.run_case(case, &tmp_root)?;
+            let target_output = target.run_case(case, &tmp_root)?;
+            let status = validate_case(case, &reference_output)
+                .and_then(|_| validate_case(case, &target_output))
+                .and_then(|_| validate_compare(case, &reference_output, &target_output));
+            let artifact = if let Err(reason) = &status {
+                Some(report::write_failure_artifact(
+                    case,
+                    &[&reference_output, &target_output],
+                    &reason.to_string(),
+                )?)
+            } else {
+                None
+            };
+            report::append_jsonl(
+                out,
+                &report::compare_record(
+                    case,
+                    &reference_output,
+                    &target_output,
+                    sample_index,
+                    measured_index.map(|index| index.saturating_add(1)),
+                    sample_role,
+                    sqlite_version.clone(),
+                    if status.is_ok() { "passed" } else { "failed" },
+                    artifact,
+                    status.as_ref().err().map(|reason| reason.to_string()),
+                ),
+            )?;
+            if measured_index.is_some() {
+                summary
+                    .slowest
+                    .push((case.display_id(), target_output.elapsed.as_nanos()));
+            }
+            if status.is_err() {
+                case_failed = true;
+            }
+        }
+        if case_failed {
             summary.failed += 1;
+        } else {
+            summary.passed += 1;
         }
     }
     summary.elapsed = started.elapsed();
@@ -223,11 +232,6 @@ fn validate_compare(case: &Case, reference: &EngineOutput, target: &EngineOutput
         bail!("stderr mismatch: reference `{reference_stderr}`, target `{target_stderr}`");
     }
     Ok(())
-}
-
-fn latency_ratio(reference: Duration, target: Duration) -> f64 {
-    let reference_ns = reference.as_nanos().max(1) as f64;
-    target.as_nanos() as f64 / reference_ns
 }
 
 fn finish_summary(mut summary: RunSummary) -> Result<RunSummary> {

@@ -69,6 +69,11 @@ name = "sqlite-parity-scale-ci"
 purpose = "bench-owned SQLite parity CI hard gate over approved RedlineDB-vs-SQLite cases"
 
 [[lane]]
+command = "just sqlite-parity-report-check"
+name = "sqlite-parity-report-check"
+purpose = "deterministic SQLite parity report artifact drift check"
+
+[[lane]]
 command = "just sqlite-parity-scale-full"
 name = "sqlite-parity-scale-full"
 purpose = "bench-owned SQLite shell parity scale full non-quarantine sweep"

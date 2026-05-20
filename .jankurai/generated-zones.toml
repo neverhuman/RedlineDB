@@ -22,6 +22,18 @@ path = "crates/bench/sqlite_parity/cases/"
 read_only = false
 source = "SQLite parity corpus extracted from upstream SQLite test inputs; generated Rust case wrappers are audited through the manifest and runner"
 
+[[zone]]
+command = "just sqlite-parity-report-update"
+path = "benchmark-results/sqlite-parity/latest/"
+read_only = false
+source = "SQLite parity report raw data, ranked CSV, summary, and manifest generated from the approved parity comparison lane"
+
+[[zone]]
+command = "just sqlite-parity-report-update"
+path = "assets/sqlite-parity-latency-gap.svg"
+read_only = false
+source = "SQLite parity median latency improvement plot generated from benchmark-results/sqlite-parity/latest/raw.jsonl"
+
 # NOTE on crates/ffi/include/sqlite3.h: it is a 6-line hand-authored alias
 # shim (`#include "../../../contracts/c-abi/redlinedb.h"`), NOT a generated
 # file. Per the jankurai rubric, generated-zones is for tool-emitted artifacts
