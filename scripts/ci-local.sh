@@ -10,6 +10,7 @@
 #   scripts/ci-local.sh security           # cargo audit + cargo deny + gitleaks
 #   scripts/ci-local.sh audit              # full jankurai audit lane
 #   scripts/ci-local.sh dependency-review  # local dependency-review mirror
+#   scripts/ci-local.sh pr-gate            # PR freshness + staged jankurai gate
 #   scripts/ci-local.sh all                # fast, then security, then audit
 
 set -euo pipefail
@@ -18,12 +19,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
     cat >&2 <<'USAGE'
-usage: scripts/ci-local.sh {fast|security|audit|dependency-review|all}
+usage: scripts/ci-local.sh {fast|security|audit|dependency-review|pr-gate|all}
 
   fast                run ops/ci/fast.sh                (fmt + size + check + test)
   security            run ops/ci/security.sh            (cargo audit + deny + gitleaks)
   audit               run ops/ci/jankurai-audit.sh      (full jankurai audit lane)
   dependency-review   run ops/ci/dependency-review.sh   (cargo deny advisories/bans/licenses/sources)
+  pr-gate             run PR freshness + jankurai staged-gate against origin/main
   all                 run fast, then security, then audit
 USAGE
 }
@@ -45,6 +47,16 @@ case "$1" in
         ;;
     dependency-review)
         bash "$ROOT/ops/ci/dependency-review.sh"
+        ;;
+    pr-gate)
+        git -C "$ROOT" fetch origin main --quiet
+        if ! git -C "$ROOT" merge-base --is-ancestor origin/main HEAD; then
+            echo "PR branch is behind origin/main. Rebase or merge main before committing."
+            exit 1
+        fi
+        LOG_DIR=.jankurai/staged-gate-local \
+            BASE_REF=origin/main \
+            bash "$ROOT/ops/ci/jankurai-staged-gate.sh"
         ;;
     all)
         bash "$ROOT/ops/ci/fast.sh"

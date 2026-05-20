@@ -46,16 +46,26 @@ curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/i
 **Pin to a specific version** (recommended for CI and reproducible environments):
 
 ```bash
-VERSION=v1.0.1 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v1.0.1 bash
+```
+
+Fully lock the download by pinning both the release tag and the tarball digest:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
+  VERSION=v1.0.1 REDLINEDB_SHA256=<sha256> bash
 ```
 
 Custom install prefix:
 
 ```bash
-VERSION=v1.0.1 PREFIX=~/.local curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
+  VERSION=v1.0.1 PREFIX=~/.local bash
 ```
 
-The script verifies a SHA-256 checksum from the release before installing.
+The script requires SHA-256 verification before installing. By default it
+downloads the matching `.sha256` release asset; `REDLINEDB_SHA256` lets CI
+pin the exact digest inline.
 
 ### cargo install (from source, version-pinned)
 
@@ -77,7 +87,9 @@ Pre-built tarballs on the [releases page](https://github.com/neverhuman/RedlineD
 | macOS Apple Silicon | `redlinedb-v1.0.1-macos-arm64.tar.gz` |
 | macOS Intel | `redlinedb-v1.0.1-macos-x86_64.tar.gz` |
 
-Each tarball has a matching `.sha256` checksum file.
+Each tarball has a matching `.sha256` checksum file and contains:
+`bin/redlinedb`, `lib/libredlinedb.*`, `include/redlinedb.h`, and
+`include/sqlite3.h`.
 
 ---
 
