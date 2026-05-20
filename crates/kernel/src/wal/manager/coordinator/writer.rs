@@ -12,6 +12,7 @@ pub(super) fn wal_writer_loop(
     mut wal: WalManager,
     config: WalConfig,
     shared: Arc<WalCoordinatorShared>,
+    flush_on_shutdown: bool,
 ) {
     // Lane GC: track records and bytes that have been written but
     // not yet fsynced, so the histogram bump after `wal.flush()`
@@ -143,7 +144,7 @@ pub(super) fn wal_writer_loop(
                     return;
                 }
             }
-        } else if shutdown && last_written != Lsn::ZERO {
+        } else if shutdown && flush_on_shutdown && last_written != Lsn::ZERO {
             match wal.flush() {
                 Ok(durable_lsn) => {
                     // Lane GC: shutdown drain still counts as a

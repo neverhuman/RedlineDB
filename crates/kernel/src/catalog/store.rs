@@ -23,12 +23,33 @@ const VERSION: u16 = 1;
 #[derive(Debug, Clone)]
 pub struct CatalogStore {
     path: PathBuf,
+    sync_policy: CatalogSyncPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CatalogSyncPolicy {
+    Durable,
+    Volatile,
+}
+
+impl CatalogSyncPolicy {
+    fn syncs_metadata(self) -> bool {
+        matches!(self, Self::Durable)
+    }
 }
 
 impl CatalogStore {
     pub fn new(base: impl AsRef<Path>) -> Self {
+        Self::new_with_sync_policy(base, CatalogSyncPolicy::Durable)
+    }
+
+    pub(crate) fn new_with_sync_policy(
+        base: impl AsRef<Path>,
+        sync_policy: CatalogSyncPolicy,
+    ) -> Self {
         Self {
             path: base.as_ref().join("schema.redline"),
+            sync_policy,
         }
     }
 
@@ -59,8 +80,10 @@ impl CatalogStore {
             // fsync. Crashing here lets the OS keep the staging file in
             // page cache only; recovery must still see the prior atomic
             // snapshot.
-            crate::fail_point!("catalog::save::fsync");
-            file.sync_all()?;
+            if self.sync_policy.syncs_metadata() {
+                crate::fail_point!("catalog::save::fsync");
+                file.sync_all()?;
+            }
         }
         // Lane E failpoint: armed before the atomic rename. The staging
         // file is fully durable on disk; a crash here guarantees the
@@ -73,9 +96,11 @@ impl CatalogStore {
             // makes the rename durable. A crash here may lose the rename even
             // though the inode bytes are durable, exercising the parent-fsync
             // contract.
-            crate::fail_point!("catalog::save::parent_fsync");
-            let dir = fs::File::open(parent)?;
-            dir.sync_all()?;
+            if self.sync_policy.syncs_metadata() {
+                crate::fail_point!("catalog::save::parent_fsync");
+                let dir = fs::File::open(parent)?;
+                dir.sync_all()?;
+            }
         }
         Ok(())
     }

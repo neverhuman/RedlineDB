@@ -15,18 +15,39 @@ use super::*;
 
 impl WalCoordinator {
     pub fn create(path: impl AsRef<Path>, config: WalConfig) -> Result<Self> {
+        Self::create_with_shutdown_flush(path, config, true)
+    }
+
+    pub(crate) fn create_with_shutdown_flush(
+        path: impl AsRef<Path>,
+        config: WalConfig,
+        flush_on_shutdown: bool,
+    ) -> Result<Self> {
         let dir = path.as_ref().to_path_buf();
         let wal = WalManager::create(&dir, config.clone())?;
-        Self::new(dir, wal, config)
+        Self::new(dir, wal, config, flush_on_shutdown)
     }
 
     pub fn open(path: impl AsRef<Path>, config: WalConfig) -> Result<Self> {
-        let dir = path.as_ref().to_path_buf();
-        let wal = WalManager::open(&dir, config.clone())?;
-        Self::new(dir, wal, config)
+        Self::open_with_shutdown_flush(path, config, true)
     }
 
-    fn new(dir: PathBuf, mut wal: WalManager, config: WalConfig) -> Result<Self> {
+    pub(crate) fn open_with_shutdown_flush(
+        path: impl AsRef<Path>,
+        config: WalConfig,
+        flush_on_shutdown: bool,
+    ) -> Result<Self> {
+        let dir = path.as_ref().to_path_buf();
+        let wal = WalManager::open(&dir, config.clone())?;
+        Self::new(dir, wal, config, flush_on_shutdown)
+    }
+
+    fn new(
+        dir: PathBuf,
+        mut wal: WalManager,
+        config: WalConfig,
+        flush_on_shutdown: bool,
+    ) -> Result<Self> {
         let reserved_lsn = wal.written_lsn();
         let prev_lsn = wal.prev_lsn;
         let durable_lsn = wal.durable_lsn();
@@ -54,7 +75,7 @@ impl WalCoordinator {
         let writer_config = config.clone();
         let writer = thread::Builder::new()
             .name("redlinedb-wal-writer".to_owned())
-            .spawn(move || wal_writer_loop(wal, writer_config, writer_shared))?;
+            .spawn(move || wal_writer_loop(wal, writer_config, writer_shared, flush_on_shutdown))?;
         Ok(Self {
             shared,
             writer: Mutex::new(Some(writer)),

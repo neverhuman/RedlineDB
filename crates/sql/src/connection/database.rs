@@ -12,7 +12,7 @@ use arc_swap::ArcSwap;
 use redlinedb_kernel::catalog::{SchemaSnapshot, StatsEpoch, StatsSnapshot, StatsStore};
 use redlinedb_kernel::engine::page_heap::VacuumStats;
 use redlinedb_kernel::engine::{
-    CheckpointStats, Engine, EngineConfig, RecoveryTarget, StorageStatsSnapshot,
+    CheckpointStats, CommitDurability, Engine, EngineConfig, RecoveryTarget, StorageStatsSnapshot,
 };
 use redlinedb_kernel::error::Error as KernelError;
 
@@ -39,6 +39,7 @@ pub struct Database {
     pub(super) temp_dir: Option<PathBuf>,
     pub(super) optimizer: OptimizerConfig,
     pub(super) user_version: Mutex<i64>,
+    metadata_sync_policy: MetadataSyncPolicy,
     _ephemeral_root: Option<Arc<EphemeralRoot>>,
 }
 
@@ -53,6 +54,7 @@ impl Database {
     /// the final [`Arc<Database>`] owner drops. Connections opened from the
     /// returned database share the same transient state.
     pub fn create_in_memory(opts: DbOptions) -> Result<Arc<Self>> {
+        let opts = volatile_db_options(opts);
         let id = EPHEMERAL_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
         let root = EphemeralRoot::new_private(id, &opts)?;
         let path = root.path().to_path_buf();
@@ -71,6 +73,7 @@ impl Database {
                 "ephemeral session name must not be empty".to_string(),
             ));
         }
+        let opts = volatile_db_options(opts);
 
         let mut registry = ephemeral_registry()
             .lock()
@@ -107,8 +110,10 @@ impl Database {
         ephemeral_root: Option<Arc<EphemeralRoot>>,
     ) -> Result<Arc<Self>> {
         let base = path.as_ref();
+        let metadata_sync_policy =
+            MetadataSyncPolicy::from_commit_durability(opts.engine.commit_durability);
         let engine = Engine::create(base, opts.engine)?;
-        save_user_version(base, 0)?;
+        save_user_version(base, 0, metadata_sync_policy)?;
         let stats_store = StatsStore::new(base);
         let stats = match stats_store.load()? {
             Some(s) => s,
@@ -128,12 +133,15 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(load_user_version(base)?),
+            metadata_sync_policy,
             _ephemeral_root: ephemeral_root,
         }))
     }
 
     pub fn open(path: impl AsRef<Path>, opts: DbOptions) -> Result<Arc<Self>> {
         let base = path.as_ref();
+        let metadata_sync_policy =
+            MetadataSyncPolicy::from_commit_durability(opts.engine.commit_durability);
         let engine = Engine::open(base, opts.engine)?;
         let user_version = load_user_version(base)?;
         let stats_store = StatsStore::new(base);
@@ -155,6 +163,7 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
+            metadata_sync_policy,
             _ephemeral_root: None,
         }))
     }
@@ -165,6 +174,8 @@ impl Database {
         target: RecoveryTarget,
     ) -> Result<Arc<Self>> {
         let base = path.as_ref();
+        let metadata_sync_policy =
+            MetadataSyncPolicy::from_commit_durability(opts.engine.commit_durability);
         let engine = Engine::open_with_recovery_target(base, opts.engine, target)?;
         let user_version = load_user_version(base)?;
         let stats_store = StatsStore::new(base);
@@ -186,6 +197,7 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
+            metadata_sync_policy,
             _ephemeral_root: None,
         }))
     }
@@ -279,10 +291,34 @@ impl Database {
     }
 
     pub(crate) fn set_user_version(&self, value: i64) -> Result<()> {
-        save_user_version(self.path.as_ref(), value)?;
+        save_user_version(self.path.as_ref(), value, self.metadata_sync_policy)?;
         *self.user_version.lock().expect("user_version poisoned") = value;
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetadataSyncPolicy {
+    Durable,
+    Volatile,
+}
+
+impl MetadataSyncPolicy {
+    fn from_commit_durability(commit_durability: CommitDurability) -> Self {
+        match commit_durability {
+            CommitDurability::Strict | CommitDurability::Normal => Self::Durable,
+            CommitDurability::UnsafeDev => Self::Volatile,
+        }
+    }
+
+    fn syncs_metadata(self) -> bool {
+        matches!(self, Self::Durable)
+    }
+}
+
+fn volatile_db_options(mut opts: DbOptions) -> DbOptions {
+    opts.engine.commit_durability = CommitDurability::UnsafeDev;
+    opts
 }
 
 #[derive(Debug)]
@@ -395,14 +431,16 @@ pub(super) fn load_user_version(base: &Path) -> Result<i64> {
         .map_err(|_| KernelError::InvalidRecord("invalid user_version sidecar").into())
 }
 
-pub(super) fn save_user_version(base: &Path, value: i64) -> Result<()> {
+fn save_user_version(base: &Path, value: i64, sync_policy: MetadataSyncPolicy) -> Result<()> {
     fs::create_dir_all(base).map_err(KernelError::Io)?;
     let path = base.join(USER_VERSION_FILE);
     let temp_path = base.join(format!("{USER_VERSION_FILE}.tmp"));
     {
         let mut file = File::create(&temp_path).map_err(KernelError::Io)?;
         writeln!(file, "{value}").map_err(KernelError::Io)?;
-        file.sync_all().map_err(KernelError::Io)?;
+        if sync_policy.syncs_metadata() {
+            file.sync_all().map_err(KernelError::Io)?;
+        }
     }
     fs::rename(&temp_path, &path).map_err(KernelError::Io)?;
     Ok(())

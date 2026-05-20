@@ -4,7 +4,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::catalog::{CatalogManager, CatalogStore, IndexId as CatalogIndexId, bootstrap_schema};
+use crate::catalog::{
+    CatalogManager, CatalogStore, CatalogSyncPolicy, IndexId as CatalogIndexId, bootstrap_schema,
+};
 use crate::engine::lock::RowLockManager;
 use crate::engine::page_heap::PageBackedHeap;
 use crate::format::{Csn, Lsn, Page, RelId};
@@ -14,7 +16,8 @@ use crate::wal::{WalCoordinator, WalPayload, WalReader, WalRecord, WalRecordKind
 use crate::{Error, Result};
 
 use super::{
-    ConcurrentTxStatus, Engine, EngineConfig, RecoveryMetrics, RecoveryReport, RecoveryTarget,
+    CommitDurability, ConcurrentTxStatus, Engine, EngineConfig, RecoveryMetrics, RecoveryReport,
+    RecoveryTarget,
 };
 
 impl Engine {
@@ -24,11 +27,16 @@ impl Engine {
         let wal_dir = path.as_ref().join("wal");
         let page_file = Arc::new(PageFile::create(&data_path, config.page_size)?);
         let buffer = Arc::new(BufferPool::new(page_file, config.buffer_pool_pages)?);
-        let wal = Arc::new(WalCoordinator::create(&wal_dir, config.wal.clone())?);
+        let wal = Arc::new(WalCoordinator::create_with_shutdown_flush(
+            &wal_dir,
+            config.wal.clone(),
+            flush_wal_on_shutdown(config.commit_durability),
+        )?);
         let control = ControlStore::new(path.as_ref())?;
         let tx_status_store = TxStatusStore::new(path.as_ref())?;
         let checkpoint = control.load_latest()?;
-        let catalog_store = CatalogStore::new(path.as_ref());
+        let catalog_store =
+            CatalogStore::new_with_sync_policy(path.as_ref(), catalog_sync_policy(&config));
         let loaded_catalog = catalog_store.load().ok().flatten();
         let initial_catalog = match loaded_catalog.clone() {
             Some(catalog) => catalog,
@@ -125,8 +133,12 @@ impl Engine {
                 .map_err(|_| Error::CorruptPage("create buffer pool failed"))?,
         );
         let wal = Arc::new(
-            WalCoordinator::open(&wal_dir, config.wal.clone())
-                .map_err(|_| Error::CorruptWal("open wal coordinator failed"))?,
+            WalCoordinator::open_with_shutdown_flush(
+                &wal_dir,
+                config.wal.clone(),
+                flush_wal_on_shutdown(config.commit_durability),
+            )
+            .map_err(|_| Error::CorruptWal("open wal coordinator failed"))?,
         );
         let heap = PageBackedHeap::new_with_wal(
             config.rel_id,
@@ -135,7 +147,8 @@ impl Engine {
             Some(Arc::clone(&wal)),
         )
         .map_err(|_| Error::CorruptPage("create heap failed"))?;
-        let catalog_store = CatalogStore::new(path.as_ref());
+        let catalog_store =
+            CatalogStore::new_with_sync_policy(path.as_ref(), catalog_sync_policy(&config));
         let initial_catalog = match catalog_store.load().ok().flatten() {
             Some(catalog) => catalog,
             None => bootstrap_schema(RelId(10_000)),
@@ -214,6 +227,17 @@ impl Engine {
             RecoveryReport::from_scan(scan_report, metrics, replay_from_lsn),
         ))
     }
+}
+
+fn catalog_sync_policy(config: &EngineConfig) -> CatalogSyncPolicy {
+    match config.commit_durability {
+        CommitDurability::Strict | CommitDurability::Normal => CatalogSyncPolicy::Durable,
+        CommitDurability::UnsafeDev => CatalogSyncPolicy::Volatile,
+    }
+}
+
+fn flush_wal_on_shutdown(commit_durability: CommitDurability) -> bool {
+    !matches!(commit_durability, CommitDurability::UnsafeDev)
 }
 
 fn recover_heap(
