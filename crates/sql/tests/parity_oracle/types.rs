@@ -64,6 +64,7 @@ pub fn classify_err(msg: &str) -> ErrorClass {
         || lower.contains("unique")
         || lower.contains("not null")
         || lower.contains("primary key")
+        || lower.contains("cannot store")
     {
         return ErrorClass::ConstraintViolation;
     }

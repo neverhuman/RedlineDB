@@ -1,0 +1,45 @@
+// Auto-generated SQLite parity case.
+// Source: SQLITE_PARITY_790_WINDOW_PARTITION_SUM_003
+
+pub fn case() -> crate::ParityCase {
+    crate::ParityCase {
+        id: 790,
+        folder: r"SQLITE_PARITY_790_WINDOW_PARTITION_SUM_003",
+        name: r"WINDOW_PARTITION_SUM_003",
+        category: r"GEN_SQL_WINDOW",
+        priority: r"P2",
+        profile: r"memory",
+        kind: r"sql-generated",
+        description: r"Generated deterministic SQLite parity case for WINDOW_PARTITION_SUM_003.",
+        status: r"active",
+        db: r":memory:",
+        args: &[],
+        stdin: r".mode list
+.headers off
+.separator |
+.nullvalue NULL
+CREATE TABLE t(part INT, val INT);
+INSERT INTO t VALUES (1, 4), (2, 5), (0, 6), (1, 7), (2, 8), (0, 9), (1, 10), (2, 11), (0, 12);
+SELECT part, val, row_number() OVER (PARTITION BY part ORDER BY val), sum(val) OVER (PARTITION BY part ORDER BY val ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM t ORDER BY part, val;
+",
+        expected_exit: 0,
+        compare_stdout: true,
+        expected_stdout: Some(r"0|6|1|6
+0|9|2|15
+0|12|3|27
+1|4|1|4
+1|7|2|11
+1|10|3|21
+2|5|1|5
+2|8|2|13
+2|11|3|24
+"),
+        expected_stdout_contains: &[],
+        expected_stderr_contains: &[],
+        expected_combined_contains: &[],
+        files: &[],
+        script: None,
+        notes: r"Generated from deterministic matrix; expected output produced by Python sqlite3 3.46.1 during artifact creation.",
+    }
+}

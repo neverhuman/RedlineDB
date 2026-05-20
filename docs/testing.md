@@ -25,6 +25,9 @@ readable repair receipts.
 | `kernel-cursor`                      | Cursor-specific kernel regression tests without the full workspace sweep.                             |
 | `cache-warm`                         | Prime the workspace build cache before a wider proof run.                                             |
 | `sql-parity`                         | Focused SQLite parity tests for SQL planner/executor changes.                                         |
+| `sqlite-parity-scale-smoke`          | Bench-owned SQLite shell parity scale smoke over P0 memory cases from `crates/bench/sqlite_parity/`.  |
+| `sqlite-parity-scale-ci`             | Bench-owned hard gate over P0/P1/P2 memory and tempfile scale cases with JSONL timing output.         |
+| `sqlite-parity-scale-full`           | Full non-quarantine SQLite shell scale sweep for diagnostics before widening parity work.             |
 | `ffi-abi`                            | C ABI compatibility tests for the SQLite shim surface.                                                |
 | `cli-shell`                          | CLI compatibility tests for the shell/batch front end.                                                |
 | `kernel-check`                       | Targeted `redlinedb-kernel` compile proof.                                                            |

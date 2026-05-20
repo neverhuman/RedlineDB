@@ -60,6 +60,7 @@ pub(crate) fn bind_insert(
     let mut source_select = None;
     let mut default_values = false;
     if let Some(source) = insert.source {
+        let source = *source;
         match *source.body {
             SetExpr::Values(values) => {
                 for row in values.rows {
@@ -70,15 +71,24 @@ pub(crate) fn bind_insert(
                     rows.push(exprs);
                 }
             }
-            SetExpr::Select(select) => {
-                let template = bind_simple_select_query(
+            body => {
+                let template = bind_query_with_params(
                     conn,
                     Arc::clone(&schema),
                     schema_epoch,
                     sql,
-                    select,
-                    source.order_by,
-                    source.limit_clause,
+                    Query {
+                        body: Box::new(body),
+                        order_by: source.order_by,
+                        limit_clause: source.limit_clause,
+                        with: source.with,
+                        fetch: source.fetch,
+                        locks: source.locks,
+                        for_clause: source.for_clause,
+                        settings: source.settings,
+                        format_clause: source.format_clause,
+                        pipe_operators: source.pipe_operators,
+                    },
                     &mut params,
                 )?;
                 let PreparedKind::Select(plan) = template.kind else {
@@ -87,11 +97,6 @@ pub(crate) fn bind_insert(
                     ));
                 };
                 source_select = Some(Box::new(plan));
-            }
-            _ => {
-                return Err(Error::UnsupportedSql(
-                    "INSERT source must be VALUES or SELECT".to_owned(),
-                ));
             }
         }
     } else {
