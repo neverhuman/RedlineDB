@@ -6,6 +6,9 @@ set -euo pipefail
 : "${LIB_NAME:?LIB_NAME is required}"
 : "${TARGET:?TARGET is required}"
 
+SOURCE_DIR="${SOURCE_DIR:-.}"
+cd "$SOURCE_DIR"
+
 cargo build --release --locked --target "${TARGET}" -p redlinedb-cli --bin redlinedb-cli
 cargo build --release --locked --target "${TARGET}" -p redlinedb-ffi
 

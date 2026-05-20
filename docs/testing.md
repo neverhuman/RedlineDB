@@ -53,6 +53,7 @@ readable repair receipts.
 | `security`                           | `cargo audit` + `cargo deny check` + `gitleaks detect`.                                               |
 | `security-local`                     | Same as `security`; pinned for local-only invocation.                                                 |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
+| `pr-gate`                            | Local mirror for PR branch freshness plus `jankurai staged-gate` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |
 
 Lane definitions: `.jankurai/proof-lanes.toml`. To rerun a lane:
 
@@ -63,6 +64,17 @@ rtk just <lane-name>
 (or invoke the command list from the TOML directly).
 
 For narrow repair loops, prefer the package-scoped lanes above over `fast` when the touched surface is already known. They stay deterministic without forcing a workspace-wide run.
+
+To reproduce the PR-side jankurai failure mode before pushing, commit the
+candidate changes and run:
+
+```
+rtk scripts/ci-local.sh pr-gate
+```
+
+That command fetches `origin/main`, applies the same branch-freshness check as
+`.github/workflows/jankurai.yml`, then runs `ops/ci/jankurai-staged-gate.sh`
+with `BASE_REF=origin/main`.
 
 ## Budgets and kill-switches
 

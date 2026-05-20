@@ -1,5 +1,9 @@
 name: release-build
 
+# Thin dispatcher (HLT-042 ci-local-parity). Release packaging and upload
+# policy live in `ops/ci/release-*.sh` so maintainers can reproduce the same
+# commands locally before pushing a release workflow change.
+
 on:
   push:
     tags:
@@ -45,16 +49,15 @@ jobs:
             artifact: macos-x86_64
             lib_name: libredlinedb.dylib
     steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
       - name: Checkout release source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
           path: source
-      - name: Checkout release tooling
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.sha }}
-          path: release-tools
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
           toolchain: 1.95.0
@@ -64,25 +67,19 @@ jobs:
           key: ${{ matrix.target }}
       - name: Install Linux linker
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mold
+        run: bash ops/ci/release-setup.sh
       - name: Build and Package
         env:
+          SOURCE_DIR: source
           TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
           ARTIFACT: ${{ matrix.artifact }}
           LIB_NAME: ${{ matrix.lib_name }}
           TARGET: ${{ matrix.target }}
-        working-directory: source
-        run: bash ../release-tools/ops/ci/release-build.sh
+        run: bash ops/ci/release-build.sh
 
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_DIR: source
           TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
-        working-directory: source
-        run: |
-          if ! gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release create "${TAG}" --title "redlinedb ${TAG}" --generate-notes
-          fi
-          gh release upload "${TAG}" "${PKG}.tar.gz" "${PKG}.tar.gz.sha256" --clobber
+        run: bash ops/ci/release-upload.sh

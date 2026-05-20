@@ -82,14 +82,17 @@ Ordered steps. Each step is gated by the previous one passing.
    gh release create vX.Y.Z --title "redlinedb vX.Y.Z" \
      --notes-file CHANGELOG-vX.Y.Z.md
    ```
-   If the release already exists, the workflow uploads or replaces:
+   If the release already exists, the workflow uploads missing immutable
+   assets:
    `redlinedb-vX.Y.Z-linux-x86_64.tar.gz`,
    `redlinedb-vX.Y.Z-macos-arm64.tar.gz`,
    `redlinedb-vX.Y.Z-macos-x86_64.tar.gz`, and each matching `.sha256`.
    To backfill assets for an existing tag, run the `release-build` workflow
    manually with `tag = vX.Y.Z`. The workflow checks out that tag as the
    source tree but uses the current release-packaging script, so old tags can
-   be backfilled when packaging logic needed a fix.
+   be backfilled when packaging logic needed a fix. Existing release assets
+   are never overwritten; publish a replacement version if an uploaded asset
+   needs to change.
 
 ## CI evidence
 
