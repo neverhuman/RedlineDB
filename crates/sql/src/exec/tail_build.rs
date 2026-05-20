@@ -203,8 +203,69 @@ pub(crate) fn apply_row_affinity(table: &TableDef, values: Vec<SqlValue>) -> Res
     for (idx, column) in table.columns.iter().enumerate() {
         out[idx] = apply_affinity(out[idx].clone(), column.affinity)
             .map_err(|_| Error::DatatypeMismatch)?;
+        validate_strict_storage(table, column, &out[idx])?;
     }
     Ok(out)
+}
+
+fn validate_strict_storage(
+    table: &TableDef,
+    column: &redlinedb_kernel::catalog::ColumnDef,
+    value: &SqlValue,
+) -> Result<()> {
+    if table.flags == 0 || matches!(value, SqlValue::Null) || strict_declared_any(column) {
+        return Ok(());
+    }
+    let allowed = match column.affinity {
+        redlinedb_kernel::catalog::Affinity::Integer => matches!(value, SqlValue::Integer(_)),
+        redlinedb_kernel::catalog::Affinity::Real => matches!(value, SqlValue::Real(_)),
+        redlinedb_kernel::catalog::Affinity::Text => matches!(value, SqlValue::Text(_)),
+        redlinedb_kernel::catalog::Affinity::Blob => matches!(value, SqlValue::Blob(_)),
+        redlinedb_kernel::catalog::Affinity::Numeric => {
+            matches!(value, SqlValue::Integer(_) | SqlValue::Real(_))
+        }
+    };
+    if allowed {
+        Ok(())
+    } else {
+        Err(Error::ConstraintViolation(format!(
+            "cannot store {} value in {} column {}.{}",
+            storage_class_name(value),
+            strict_type_name(column),
+            table.name,
+            column.name
+        )))
+    }
+}
+
+fn strict_declared_any(column: &redlinedb_kernel::catalog::ColumnDef) -> bool {
+    column
+        .declared_type
+        .as_deref()
+        .is_some_and(|declared| declared.eq_ignore_ascii_case("ANY"))
+}
+
+fn strict_type_name(column: &redlinedb_kernel::catalog::ColumnDef) -> &str {
+    column
+        .declared_type
+        .as_deref()
+        .unwrap_or(match column.affinity {
+            redlinedb_kernel::catalog::Affinity::Integer => "INTEGER",
+            redlinedb_kernel::catalog::Affinity::Real => "REAL",
+            redlinedb_kernel::catalog::Affinity::Text => "TEXT",
+            redlinedb_kernel::catalog::Affinity::Blob => "BLOB",
+            redlinedb_kernel::catalog::Affinity::Numeric => "NUMERIC",
+        })
+}
+
+fn storage_class_name(value: &SqlValue) -> &'static str {
+    match value {
+        SqlValue::Null => "NULL",
+        SqlValue::Integer(_) => "INTEGER",
+        SqlValue::Real(_) => "REAL",
+        SqlValue::Text(_) => "TEXT",
+        SqlValue::Blob(_) => "BLOB",
+    }
 }
 
 pub(crate) fn apply_constraints(table: &TableDef, values: &[SqlValue]) -> Result<()> {

@@ -16,3 +16,7 @@ crossterm = "0.27.0"
 [dev-dependencies]
 assert_cmd = "2"
 tempfile = "3"
+
+[[bin]]
+name = "redlinedb"
+path = "src/main.rs"

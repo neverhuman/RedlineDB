@@ -33,7 +33,8 @@ pub(crate) fn collect_table_rows_with_alias(
         return Ok(Vec::new());
     }
     let mut rows = Vec::new();
-    let rowids = engine.relation_rowids(table.relation_id)?;
+    let mut rowids = engine.relation_rowids(table.relation_id)?;
+    rowids.sort();
     for rowid in rowids {
         if let Some(row) = load_table_row_by_rowid(engine, tx, table, rowid)? {
             let mut row = row;
@@ -132,7 +133,8 @@ pub(crate) fn collect_table_rowids(
         return Ok(Vec::new());
     }
     let mut rowids = Vec::new();
-    let scan = engine.relation_rowids(table.relation_id)?;
+    let mut scan = engine.relation_rowids(table.relation_id)?;
+    scan.sort();
     for rowid in scan {
         if load_table_row_by_rowid(engine, tx, table, rowid)?.is_some() {
             rowids.push(rowid);

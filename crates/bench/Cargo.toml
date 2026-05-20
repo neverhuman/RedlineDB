@@ -37,6 +37,10 @@ walkdir = "2"
 name = "chaos_report"
 path = "src/bin/chaos_report/main.rs"
 
+[[bin]]
+name = "sqlite_parity"
+path = "src/bin/sqlite_parity.rs"
+
 [dev-dependencies]
 # Lane F6: integration tests in `tests/failpoint_matrix.rs` drive
 # the `fail` crate directly to assert that a `return` action takes

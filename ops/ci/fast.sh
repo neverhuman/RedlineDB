@@ -56,6 +56,9 @@ run_test_stage() {
         bench)
             cargo test -p redlinedb-bench --quiet --locked
             ;;
+        sqlite-parity-scale)
+            cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory,tempfile --priorities P0,P1,P2 --jobs auto --out target/sqlite-parity/sqlite-scale-ci.jsonl
+            ;;
         *)
             printf 'unknown fast test stage: %s\n' "$1" >&2
             return 1
@@ -68,7 +71,7 @@ case "$stage" in
     preflight)
         run_preflight
         ;;
-    core|kernel|sql-unit|sql-contracts|sql-parity|bench)
+    core|kernel|sql-unit|sql-contracts|sql-parity|bench|sqlite-parity-scale)
         run_test_stage "$stage"
         ;;
     tests)
@@ -78,6 +81,7 @@ case "$stage" in
         run_test_stage sql-contracts
         run_test_stage sql-parity
         run_test_stage bench
+        run_test_stage sqlite-parity-scale
         ;;
     all)
         run_preflight
@@ -87,6 +91,7 @@ case "$stage" in
         run_test_stage sql-contracts
         run_test_stage sql-parity
         run_test_stage bench
+        run_test_stage sqlite-parity-scale
         ;;
     *)
         printf 'unknown fast stage: %s\n' "$stage" >&2

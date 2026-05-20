@@ -70,6 +70,15 @@ sql-parity:
 sql-parity-full:
   ./scripts/just/run.sh sql-parity-full
 
+sqlite-parity-scale-smoke:
+  ./scripts/just/run.sh sqlite-parity-scale-smoke
+
+sqlite-parity-scale-ci:
+  ./scripts/just/run.sh sqlite-parity-scale-ci
+
+sqlite-parity-scale-full:
+  ./scripts/just/run.sh sqlite-parity-scale-full
+
 ffi-abi:
   ./scripts/just/run.sh ffi-abi
 

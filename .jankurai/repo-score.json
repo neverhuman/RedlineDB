@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:a6938a7ae0c7c5f8aced6c3f215b4d946f634d0c86b984a24050c7517f916e9f",
-  "input_fingerprint": "sha256:f642aa6c0e90e510fa4b6034b173534c7b89ce60c736ee66078b05eda8f62baf",
+  "report_fingerprint": "sha256:cfc0111261981996e87b2731e29f89f5e8d7c16352b5c565ffc588f406db8192",
+  "input_fingerprint": "sha256:c70441cab8bc59803bb6763f2e4986281069a4f20ad6cf9bab7aed60ebc97df2",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779226414",
+  "generated_at": "1779241868",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -18,11 +18,27 @@
   "conformance_decision": "block",
   "conformance_blockers": [
     "HLT-024-AGENT-TOOL-SUPPLY-GAP on .github/workflows/jankurai.yml",
-    "HLT-013-RENDERED-UX-GAP on apps/web",
-    "HLT-013-RENDERED-UX-GAP on apps/web",
+    "HLT-023-INPUT-BOUNDARY-GAP on crates/bench/sqlite_parity/cases/SQLITE_PARITY_001_SELECT_CORE_EXPRESSIONS.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_042_TEMP_TABLE_TEMP_SCHEMA.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_042_TEMP_TABLE_TEMP_SCHEMA.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_096_DBSTAT_OPTIONAL.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_146_DOT_READ_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_147_DOT_IMPORT_CSV_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_148_DOT_OUTPUT_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_149_DOT_ONCE_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_152_DOT_CLONE_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_153_DOT_CD_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_154_DOT_DBINFO_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_192_OPT_INIT_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_193_OPT_READONLY_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_194_OPT_IFEXISTS_NEGATIVE_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_197_OPT_MAXSIZE_DESERIALIZE_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_211_SQL_ATTACH_TEMPFILE_DATABASE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_212_SQL_VACUUM_INTO_TEMPFILE.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/sqlite_parity/cases/SQLITE_PARITY_213_SQL_WAL_CHECKPOINT_TEMPFILE.rs",
     "HLT-001-DEAD-MARKER on crates/bench/src/bin/chaos_report/main.rs",
     "HLT-043-COPY-PASTE-BAD-BEHAVIOR on crates/bench/src/feature_workloads.rs",
-    "HLT-023-INPUT-BOUNDARY-GAP on crates/bench/src/fuzz/sqlsmith.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/bench/src/process_metrics.rs",
     "HLT-029-RUST-BAD-BEHAVIOR on crates/bench/src/process_metrics.rs",
     "HLT-000-SCORE-DIMENSION:stack on crates/ffi/include/sqlite3.h",
@@ -66,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779226414",
-  "started_at": "1779226414",
-  "elapsed_ms": 12024,
+  "run_id": "1779241868",
+  "started_at": "1779241868",
+  "elapsed_ms": 11620,
   "scope": {
     "mode": "full",
     "paths": []
@@ -79,7 +95,7 @@
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 47,
+    "hard_findings": 63,
     "soft_findings": 5,
     "ratchet": {
       "baseline_score": 64,
@@ -95,14 +111,14 @@
     }
   },
   "git": {
-    "head": "1f15fbc",
+    "head": "cfa7996",
     "base": null,
     "changed_files": 0,
     "mode": "full",
     "dirty_worktree": true
   },
   "policy": {
-    "path": "./.jankurai/audit-policy.toml",
+    "path": "./agent/audit-policy.toml",
     "minimum_score": 85,
     "fail_on": [
       "critical",
@@ -125,11 +141,10 @@
     "fallback-soup-in-product-code",
     "future-hostile-dead-language-in-product-code",
     "severe-duplication-in-product-code",
-    "missing-web-e2e-lane",
-    "missing-rendered-ux-qa-lane",
     "input-boundary-gap",
     "agent-tool-supply-chain-gap",
-    "rust-bad-behavior"
+    "rust-bad-behavior",
+    "repo-rot-bad-behavior"
   ],
   "hard_rules": [
     {
@@ -351,7 +366,9 @@
         "authored code file exceeds 500 LOC",
         "authored code file exceeds 1000 LOC"
       ],
-      "notes": []
+      "notes": [
+        "repo-rot hard findings in active source paths: 1"
+      ]
     },
     {
       "name": "Contract and boundary integrity",
@@ -370,20 +387,22 @@
     {
       "name": "Proof lanes and test routing",
       "weight": 12,
-      "score": 72,
-      "weighted_points": 8.64,
+      "score": 98,
+      "weighted_points": 11.76,
       "evidence": [
         "one-command setup/validation lane found",
         "deterministic fast lane found",
         "test runner present in automation surface",
         "GitHub workflow files present",
         "jankurai audit lane found in CI",
-        "DOM geometry UX QA runtime found",
-        "Rust property/integration tests present or no Rust surface"
+        "web e2e lane present or no web surface",
+        "rendered UX QA lane present or no web surface",
+        "Rust property/integration tests present or no Rust surface",
+        "proofbind artifact found: surfaces=6 missing=6 high_or_critical_missing=4 verdict=review"
       ],
       "notes": [
-        "web surface lacks Playwright/Cypress e2e lane",
-        "web surface lacks layered rendered UX QA"
+        "proofbind reports 6 unresolved obligation(s)",
+        "proofbind reports 4 missing high/critical semantic proof obligation(s)"
       ]
     },
     {
@@ -401,6 +420,7 @@
         "agent-readiness audit gate found in CI",
         "rust bad-behavior hard findings: 29",
         "ci bad-behavior advisory signals: 3",
+        "release bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
       "notes": [
@@ -421,7 +441,8 @@
         "fallback soup marker found",
         "future-hostile/dead-language marker found",
         "rust bad-behavior hard findings: 29",
-        "ci bad-behavior advisory signals: 3"
+        "ci bad-behavior advisory signals: 3",
+        "release bad-behavior advisory signals: 1"
       ],
       "notes": [
         "inexcusable copy-code: exact active-source file copy or same-name unit copy across files",
@@ -476,22 +497,22 @@
     {
       "name": "Jankurai tool adoption and CI replacement",
       "weight": 7,
-      "score": 71,
-      "weighted_points": 4.97,
+      "score": 29,
+      "weighted_points": 2.03,
       "evidence": [
         "control-plane files present",
-        "applicable=17",
+        "applicable=16",
         "configured=0",
-        "ci_evidence=16",
-        "artifact_verified=8"
+        "ci_evidence=5",
+        "artifact_verified=0"
       ],
       "notes": [
         "some applicable tools are not configured",
         "some applicable tools lack CI evidence",
         "missing CI evidence for `audit-ci`",
         "missing CI evidence for `proof-routing`",
-        "missing CI evidence for `ux-qa`",
-        "missing CI evidence for `contract-drift`"
+        "missing CI evidence for `proofbind`",
+        "missing CI evidence for `proofmark-rust`"
       ]
     },
     {
@@ -524,72 +545,57 @@
     }
   ],
   "ux_qa": {
-    "web_surface": true,
-    "has_rendered_ux_lane": false,
-    "missing_categories": [
-      "Playwright screenshot capture",
-      "visual review or geometry runtime",
-      "layout stability checks",
-      "generated API mocks",
-      "design token discipline"
-    ],
+    "web_surface": false,
+    "has_rendered_ux_lane": true,
+    "missing_categories": [],
     "evidence": {
-      "accessibility": [
-        ".jankurai/baselines/main.repo-score.json",
-        ".jankurai/repo-score.json"
-      ],
+      "accessibility": [],
       "api_mocks": [],
       "artifact_backed_proof": [
-        ".jankurai/baselines/main.repo-score.json",
-        ".jankurai/proof-lanes.toml",
-        ".jankurai/repo-score.json",
-        ".jankurai/test-map.json",
-        ".jankurai/unsafe-ledger.toml"
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json",
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json",
+        "contracts/c-abi/redlinedb.h",
+        "crates/bench/docker/Dockerfile",
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_132_DOT_TRACE_STDOUT.rs"
       ],
       "design_tokens": [],
-      "geometry_runtime": [
-        ".jankurai/ux-qa.toml"
-      ],
+      "geometry_runtime": [],
       "layout_stability": [],
       "playwright_visual": [],
-      "storybook": [
-        ".jankurai/baselines/main.repo-score.json",
-        ".jankurai/repo-score.json"
-      ],
+      "storybook": [],
       "visual_review": []
     }
   },
   "tool_adoption": {
     "control_plane_present": true,
-    "applicable_count": 17,
+    "applicable_count": 16,
     "configured_count": 0,
-    "ci_evidence_count": 16,
-    "artifact_verified_count": 8,
-    "replaced_count": 16,
+    "ci_evidence_count": 5,
+    "artifact_verified_count": 0,
+    "replaced_count": 5,
     "items": [
       {
         "id": "audit-ci",
         "category": "audit",
         "mode": "auto",
         "applicable": true,
-        "status": "ci_evidence",
+        "status": "missing",
         "replaced_tools": [
           "manual repo scoring",
           "ad hoc score gates"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "artifact upload reference"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
-        "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+        "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
-          ".jankurai/repo-score.json",
-          ".jankurai/repo-score.md"
+          "agent/repo-score.json",
+          "agent/repo-score.md"
         ]
       },
       {
@@ -597,24 +603,23 @@
         "category": "proof",
         "mode": "auto",
         "applicable": true,
-        "status": "ci_evidence",
+        "status": "missing",
         "replaced_tools": [
           "ad hoc proof lane selection",
           "manual proof receipts"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "artifact upload reference"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
         "local_command": "jankurai proof . --changed-from origin/main --out target/jankurai/proof-plan.json --md target/jankurai/proof-plan.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
-          ".jankurai/repo-score.json",
-          ".jankurai/repo-score.md",
+          "agent/repo-score.json",
+          "agent/repo-score.md",
           "target/jankurai/repair-queue.jsonl"
         ]
       },
@@ -623,18 +628,18 @@
         "category": "proof",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "ci_evidence",
         "replaced_tools": [
           "manual changed-surface routing",
           "ad hoc proof obligation lists"
         ],
         "evidence": [
           "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json"
+          "CI command found in workflow"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "artifact upload reference"
         ],
         "local_command": "jankurai proofbind verify . --changed-from origin/main",
         "ci_command": "jankurai proofbind verify . --changed-from origin/main",
@@ -648,18 +653,17 @@
         "category": "proof",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "missing",
         "replaced_tools": [
           "line-only coverage review",
           "manual in-diff mutation review"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
         "local_command": "jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json",
         "ci_command": "jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json",
@@ -673,18 +677,17 @@
         "category": "audit",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "missing",
         "replaced_tools": [
           "ad hoc copy-code review",
           "manual duplication triage"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/copy-code.json, target/jankurai/copy-code.md"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
         "local_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
         "ci_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
@@ -698,19 +701,18 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "missing",
         "replaced_tools": [
           "gitleaks",
           "dependency review",
           "SBOM/provenance"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/security/evidence.json"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
         "local_command": "jankurai security run . --out target/jankurai/security/evidence.json",
         "ci_command": "jankurai security run . --out target/jankurai/security/evidence.json",
@@ -723,7 +725,7 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "ci_evidence",
         "replaced_tools": [
           "mutable workflow refs",
           "secret echo/debug workflow checks",
@@ -731,11 +733,11 @@
         ],
         "evidence": [
           "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "CI command found in workflow"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "artifact upload reference"
         ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
@@ -748,7 +750,7 @@
         "category": "audit",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "ci_evidence",
         "replaced_tools": [
           "destructive git automation",
           "force-push release scripts",
@@ -756,11 +758,11 @@
         ],
         "evidence": [
           "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "CI command found in workflow"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "artifact upload reference"
         ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
@@ -773,7 +775,7 @@
         "category": "release",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "ci_evidence",
         "replaced_tools": [
           "manual release checklist",
           "ad hoc tag and artifact review",
@@ -781,11 +783,11 @@
         ],
         "evidence": [
           "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/language-bad-behavior.log"
+          "CI command found in workflow"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "artifact upload reference"
         ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
@@ -797,8 +799,8 @@
         "id": "ux-qa",
         "category": "ux",
         "mode": "auto",
-        "applicable": true,
-        "status": "missing",
+        "applicable": false,
+        "status": "not_applicable",
         "replaced_tools": [
           "playwright",
           "axe-core",
@@ -807,12 +809,9 @@
         "evidence": [
           "mode=auto"
         ],
-        "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "CI command evidence"
-        ],
-        "local_command": "jankurai ux audit --config .jankurai/ux-qa.toml --out target/jankurai/ux-qa.json",
-        "ci_command": "jankurai ux audit --config .jankurai/ux-qa.toml --out target/jankurai/ux-qa.json",
+        "missing": [],
+        "local_command": "jankurai ux audit --config agent/ux-qa.toml --out target/jankurai/ux-qa.json",
+        "ci_command": "jankurai ux audit --config agent/ux-qa.toml --out target/jankurai/ux-qa.json",
         "artifact_paths": [
           "target/jankurai/ux-qa.json"
         ]
@@ -841,24 +840,23 @@
         "category": "contract",
         "mode": "auto",
         "applicable": true,
-        "status": "ci_evidence",
+        "status": "missing",
         "replaced_tools": [
           "handwritten contract drift checks",
           "openapi diff"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "artifact upload reference"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
-        "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+        "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
-          ".jankurai/repo-score.json",
-          ".jankurai/repo-score.md"
+          "agent/repo-score.json",
+          "agent/repo-score.md"
         ]
       },
       {
@@ -866,17 +864,17 @@
         "category": "rust",
         "mode": "auto",
         "applicable": true,
-        "status": "artifact_verified",
+        "status": "ci_evidence",
         "replaced_tools": [
           "manual witness graphing"
         ],
         "evidence": [
           "mode=auto",
-          "CI command found in workflow",
-          "artifact uploads found: target/jankurai/rust/witness-graph.json"
+          "CI command found in workflow"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry"
+          "agent/tool-adoption.toml entry",
+          "artifact upload reference"
         ],
         "local_command": "jankurai rust witness build .",
         "ci_command": "jankurai rust witness build .",
@@ -897,8 +895,8 @@
           "mode=auto"
         ],
         "missing": [],
-        "local_command": "jankurai vibe coverage --source .jankurai/vibe-coverage.toml --tips tips/vibe_coding --json target/jankurai/vibe-coverage.json --md target/jankurai/vibe-coverage.md",
-        "ci_command": "jankurai vibe coverage --source .jankurai/vibe-coverage.toml --tips tips/vibe_coding --json target/jankurai/vibe-coverage.json --md target/jankurai/vibe-coverage.md",
+        "local_command": "jankurai vibe coverage --source agent/vibe-coverage.toml --tips tips/vibe_coding --json target/jankurai/vibe-coverage.json --md target/jankurai/vibe-coverage.md",
+        "ci_command": "jankurai vibe coverage --source agent/vibe-coverage.toml --tips tips/vibe_coding --json target/jankurai/vibe-coverage.json --md target/jankurai/vibe-coverage.md",
         "artifact_paths": [
           "target/jankurai/vibe-coverage.json",
           "target/jankurai/vibe-coverage.md"
@@ -918,8 +916,8 @@
           "mode=auto"
         ],
         "missing": [],
-        "local_command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
-        "ci_command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
+        "local_command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
+        "ci_command": "jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
         "artifact_paths": [
           "target/jankurai/coverage/coverage-audit.json",
           "target/jankurai/coverage/coverage-audit.md"
@@ -930,23 +928,22 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "ci_evidence",
+        "status": "missing",
         "replaced_tools": [
           "manual authz matrix review"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "artifact upload reference"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
-        "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+        "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
-          ".jankurai/repo-score.json",
-          ".jankurai/repo-score.md"
+          "agent/repo-score.json",
+          "agent/repo-score.md"
         ]
       },
       {
@@ -954,23 +951,22 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "ci_evidence",
+        "status": "missing",
         "replaced_tools": [
           "manual unsafe sink review"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "artifact upload reference"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
-        "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+        "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
-          ".jankurai/repo-score.json",
-          ".jankurai/repo-score.md"
+          "agent/repo-score.json",
+          "agent/repo-score.md"
         ]
       },
       {
@@ -978,23 +974,22 @@
         "category": "security",
         "mode": "auto",
         "applicable": true,
-        "status": "ci_evidence",
+        "status": "missing",
         "replaced_tools": [
           "manual MCP/tool trust review"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "artifact upload reference"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
-        "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+        "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
-          ".jankurai/repo-score.json",
-          ".jankurai/repo-score.md"
+          "agent/repo-score.json",
+          "agent/repo-score.md"
         ]
       },
       {
@@ -1002,23 +997,22 @@
         "category": "release",
         "mode": "auto",
         "applicable": true,
-        "status": "ci_evidence",
+        "status": "missing",
         "replaced_tools": [
           "manual launch checklist"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "artifact upload reference"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
-        "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+        "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
-          ".jankurai/repo-score.json",
-          ".jankurai/repo-score.md"
+          "agent/repo-score.json",
+          "agent/repo-score.md"
         ]
       },
       {
@@ -1026,28 +1020,27 @@
         "category": "release",
         "mode": "auto",
         "applicable": true,
-        "status": "ci_evidence",
+        "status": "missing",
         "replaced_tools": [
           "manual spend review"
         ],
         "evidence": [
-          "mode=auto",
-          "CI command found in workflow"
+          "mode=auto"
         ],
         "missing": [
-          ".jankurai/tool-adoption.toml entry",
-          "artifact upload reference"
+          "agent/tool-adoption.toml entry",
+          "CI command evidence"
         ],
-        "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+        "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
-          ".jankurai/repo-score.json",
-          ".jankurai/repo-score.md"
+          "agent/repo-score.json",
+          "agent/repo-score.md"
         ]
       }
     ],
     "evidence": {
-      "applicable_count": 17,
+      "applicable_count": 16,
       "applicable_tools": [
         "audit-ci",
         "proof-routing",
@@ -1058,7 +1051,6 @@
         "ci-bad-behavior",
         "git-bad-behavior",
         "release-bad-behavior",
-        "ux-qa",
         "contract-drift",
         "rust-witness",
         "authz-matrix",
@@ -1067,35 +1059,15 @@
         "release-readiness",
         "cost-budget"
       ],
-      "artifact_verified_count": 8,
-      "artifact_verified_tools": [
+      "artifact_verified_count": 0,
+      "artifact_verified_tools": [],
+      "ci_evidence_count": 5,
+      "ci_evidence_tools": [
         "proofbind",
-        "proofmark-rust",
-        "copy-code",
-        "security",
         "ci-bad-behavior",
         "git-bad-behavior",
         "release-bad-behavior",
         "rust-witness"
-      ],
-      "ci_evidence_count": 16,
-      "ci_evidence_tools": [
-        "audit-ci",
-        "proof-routing",
-        "proofbind",
-        "proofmark-rust",
-        "copy-code",
-        "security",
-        "ci-bad-behavior",
-        "git-bad-behavior",
-        "release-bad-behavior",
-        "contract-drift",
-        "rust-witness",
-        "authz-matrix",
-        "input-boundary",
-        "agent-tool-supply",
-        "release-readiness",
-        "cost-budget"
       ],
       "config_present": false,
       "configured_count": 0,
@@ -1105,8 +1077,15 @@
     "missing": [
       "audit-ci",
       "proof-routing",
-      "ux-qa",
+      "proofbind",
+      "proofmark-rust",
+      "copy-code",
+      "security",
+      "ci-bad-behavior",
+      "git-bad-behavior",
+      "release-bad-behavior",
       "contract-drift",
+      "rust-witness",
       "authz-matrix",
       "input-boundary",
       "agent-tool-supply",
@@ -1114,14 +1093,30 @@
       "cost-budget"
     ]
   },
-  "security_evidence": {},
+  "security_evidence": {
+    "artifact": {
+      "path": "target/jankurai/security/evidence.json",
+      "envelope_exit_code": 0,
+      "elapsed_ms": 40367,
+      "wrapper_strict": true,
+      "profile": "ci",
+      "commands_ran": 1,
+      "commands_skipped": 0,
+      "commands_failed": 0,
+      "required_commands_skipped": 0,
+      "required_commands_failed": 0,
+      "blocking_commands": [],
+      "generated_at": "1779172484",
+      "git_head": "3525435dccc4517b13e59c903eb0eea7f5a125ce"
+    }
+  },
   "boundaries": {
     "reclassifications": []
   },
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-19T21:33:22.399974464+00:00",
+    "generated_at": "2026-05-20T01:50:57.488525878+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1159,20 +1154,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 1062,
-      "files_considered": 365,
-      "active_files": 365,
+      "files_scanned": 2180,
+      "files_considered": 1505,
+      "active_files": 1505,
       "exact_file_classes": 0,
       "hard_classes": 1,
-      "warning_classes": 86,
+      "warning_classes": 84,
       "hard_instances": 2,
-      "warning_instances": 221,
-      "duplicate_lines": 250,
-      "duplicate_tokens": 761,
-      "duplicate_bytes": 7607,
-      "total_redundant_lines": 321,
-      "total_redundant_tokens": 950,
-      "total_redundant_bytes": 9368
+      "warning_instances": 215,
+      "duplicate_lines": 248,
+      "duplicate_tokens": 759,
+      "duplicate_bytes": 7559,
+      "total_redundant_lines": 317,
+      "total_redundant_tokens": 940,
+      "total_redundant_bytes": 9262
     },
     "classes": [
       {
@@ -1376,7 +1371,7 @@
         "total_redundant_bytes": 221,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "0310042ae4160ea4",
+        "fingerprint": "ea96e9e243c85bb8",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
@@ -1444,17 +1439,17 @@
             "unit_name": "write_opt_expr"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 636,
-            "end_line": 637,
+            "start_line": 390,
+            "end_line": 391,
             "unit_name": "redline_value_literal"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 733,
-            "end_line": 734,
+            "start_line": 487,
+            "end_line": 488,
             "unit_name": "any_value_from_redline"
           },
           {
@@ -1744,57 +1739,57 @@
         "total_redundant_bytes": 264,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "3179d1bd2c1f804c",
+        "fingerprint": "b9b43835fe0149b2",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
             "language": "rust",
-            "start_line": 219,
-            "end_line": 220,
+            "start_line": 223,
+            "end_line": 224,
             "unit_name": "ping"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 298,
-            "end_line": 299,
+            "start_line": 52,
+            "end_line": 53,
             "unit_name": "ping"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 303,
-            "end_line": 304,
+            "start_line": 57,
+            "end_line": 58,
             "unit_name": "begin"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 327,
-            "end_line": 328,
+            "start_line": 81,
+            "end_line": 82,
             "unit_name": "commit"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 342,
-            "end_line": 343,
+            "start_line": 96,
+            "end_line": 97,
             "unit_name": "rollback"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 357,
-            "end_line": 358,
+            "start_line": 111,
+            "end_line": 112,
             "unit_name": "start_rollback"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 447,
-            "end_line": 448,
+            "start_line": 201,
+            "end_line": 202,
             "unit_name": "describe"
           }
         ]
@@ -1850,7 +1845,7 @@
         "total_redundant_bytes": 0,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "c42f280adccc6355",
+        "fingerprint": "2c9b728905190f0c",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
@@ -1883,17 +1878,17 @@
             "unit_name": "_force_use"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
             "language": "rust",
-            "start_line": 249,
-            "end_line": 250,
+            "start_line": 253,
+            "end_line": 254,
             "unit_name": "shrink_buffers"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 373,
-            "end_line": 374,
+            "start_line": 127,
+            "end_line": 128,
             "unit_name": "shrink_buffers"
           },
           {
@@ -2092,55 +2087,6 @@
             "start_line": 105,
             "end_line": 109,
             "unit_name": "query_row_opt"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-791c75d90c344402",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 4,
-        "duplicate_bytes": 29,
-        "instance_count": 4,
-        "total_redundant_lines": 3,
-        "total_redundant_tokens": 12,
-        "total_redundant_bytes": 87,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "91ce83627ef9689e",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
-            "language": "rust",
-            "start_line": 205,
-            "end_line": 206,
-            "unit_name": "close"
-          },
-          {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
-            "language": "rust",
-            "start_line": 212,
-            "end_line": 213,
-            "unit_name": "close_hard"
-          },
-          {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
-            "language": "rust",
-            "start_line": 284,
-            "end_line": 285,
-            "unit_name": "close"
-          },
-          {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
-            "language": "rust",
-            "start_line": 291,
-            "end_line": 292,
-            "unit_name": "close_hard"
           }
         ]
       },
@@ -2399,29 +2345,29 @@
         "total_redundant_bytes": 68,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "8b42339825e30bba",
+        "fingerprint": "5d60c7c0314f97a6",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
             "language": "rust",
-            "start_line": 245,
-            "end_line": 246,
+            "start_line": 249,
+            "end_line": 250,
             "unit_name": "clear_cached_statements"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
             "language": "rust",
-            "start_line": 251,
-            "end_line": 252,
+            "start_line": 255,
+            "end_line": 256,
             "unit_name": "flush"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 375,
-            "end_line": 376,
+            "start_line": 129,
+            "end_line": 130,
             "unit_name": "flush"
           }
         ]
@@ -3229,22 +3175,22 @@
         "total_redundant_bytes": 44,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "0e8edd9ce753bd50",
+        "fingerprint": "d447399aeca0a654",
         "reason": "same-name semantic unit copied across multiple files",
         "recommended_action": "keep the named unit in one owner and call it from the other sites",
         "instances": [
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
             "language": "rust",
-            "start_line": 219,
-            "end_line": 220,
+            "start_line": 223,
+            "end_line": 224,
             "unit_name": "ping"
           },
           {
-            "path": "crates/redlinedb-sqlx/src/bridge.rs",
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
             "language": "rust",
-            "start_line": 298,
-            "end_line": 299,
+            "start_line": 52,
+            "end_line": 53,
             "unit_name": "ping"
           }
         ]
@@ -3283,13 +3229,49 @@
             "unit_name": "execute"
           }
         ]
+      },
+      {
+        "id": "copy-code-unit-rust-e358ec9d0ac666e0",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "load",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 42,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 5,
+        "total_redundant_bytes": 42,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "c2d8c9622b72d99a",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/bench/src/config.rs",
+            "language": "rust",
+            "start_line": 561,
+            "end_line": 562,
+            "unit_name": "load"
+          },
+          {
+            "path": "crates/bench/src/config.rs",
+            "language": "rust",
+            "start_line": 635,
+            "end_line": 636,
+            "unit_name": "load"
+          }
+        ]
       }
     ],
     "notes": [
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 37 lower-ranked classes"
+      "showing the top 50 classes and omitting 35 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3625,7 +3607,7 @@
       "lane": "security",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "ops",
-      "line": 24,
+      "line": 18,
       "matched_term": "agent tool supply",
       "reason": "agent tool supply-chain changes alter execution authority"
     },
@@ -3654,70 +3636,470 @@
       "owner": "workspace"
     },
     {
-      "severity": "medium",
-      "category": "proof",
-      "path": ".jankurai/test-map.json",
-      "problem": "`Proof lanes and test routing` scored 72 below the standard floor of 85",
-      "agent_fix": "route each owned path to a deterministic proof command and make the lane executable in CI",
+      "severity": "high",
+      "category": "security",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_001_SELECT_CORE_EXPRESSIONS.rs",
+      "problem": "unsafe or unvalidated input boundary marker appears in product code",
+      "agent_fix": "replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests",
       "evidence": [
-        "one-command setup/validation lane found",
-        "deterministic fast lane found",
-        "test runner present in automation surface",
-        "GitHub workflow files present"
+        "SELECT 1+2, 'a'||'b', 7/2, 7/2.0, 7%2, -5, +5;"
       ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "policy-manifest",
+      "check_id": "HLT-023-INPUT-BOUNDARY-GAP:security",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just security",
+      "fingerprint": "sha256:1faeff16c70106c6d9b497d0156e37f0f2036139549ab61d01b9b37607dd1af9",
+      "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+      "tlr": "Security, secrets, agency",
+      "lane": "security",
+      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
+      "owner": "tools",
+      "line": 22,
+      "matched_term": "string sql",
+      "reason": "input handling risk needs deterministic negative tests"
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_042_TEMP_TABLE_TEMP_SCHEMA.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_042_TEMP_TABLE_TEMP_SCHEMA.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:d0fa8e0b5e98e9cafa378977779506705d963100e1c0a419ab38778aec9a7f2e",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
+      "fingerprint": "sha256:e2f29eefc049edc0933cb989ee29eb0753183b83b6a0aeece6505275afc59882",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
       "lane": "fast",
-      "docs_url": ".jankurai/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
     },
     {
       "severity": "high",
-      "category": "test",
-      "path": "apps/web",
-      "problem": "web surface lacks a Playwright/Cypress e2e lane",
-      "agent_fix": "add Playwright e2e tests for critical user flows and wire them into the fast or CI proof map",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_042_TEMP_TABLE_TEMP_SCHEMA.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "web surface detected"
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_042_TEMP_TABLE_TEMP_SCHEMA.rs:21",
+        "future-hostile/dead-language term `temp` appears"
       ],
-      "check_id": "HLT-013-RENDERED-UX-GAP:test",
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
       "hardness": "hard",
       "confidence": 0.88,
-      "evidence_kind": "ux-proof",
-      "rerun_command": "just ux-qa",
-      "fingerprint": "sha256:baba171f944c5384a440bd31dbe0783c2a295323e516450d3b28505654cb406d",
-      "rule_id": "HLT-013-RENDERED-UX-GAP",
-      "tlr": "Verification and rendered UX",
-      "lane": "web",
-      "docs_url": "docs/testing.md",
-      "owner": "tools"
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:2ff896240677e030d8467fcbc8ebe50fba8049c57f556c5b19dec87df8b2d918",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 21
     },
     {
       "severity": "high",
-      "category": "ux-qa",
-      "path": "apps/web",
-      "problem": "web surface lacks layered rendered UX QA evidence",
-      "agent_fix": "add Storybook state coverage, Playwright screenshots, visual review or `@jankurai/ux-qa`, accessibility scans, CLS checks, generated mocks, and design tokens",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_096_DBSTAT_OPTIONAL.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
       "evidence": [
-        "rendered UX QA lane missing"
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_096_DBSTAT_OPTIONAL.rs:23",
+        "future-hostile/dead-language term `temp` appears"
       ],
-      "check_id": "HLT-013-RENDERED-UX-GAP:ux-qa",
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
       "hardness": "hard",
       "confidence": 0.88,
-      "evidence_kind": "ux-proof",
-      "rerun_command": "just ux-qa",
-      "fingerprint": "sha256:571d35c2e730a393b782bac14825b197c0543920bb21967079d264ac602ea5b1",
-      "rule_id": "HLT-013-RENDERED-UX-GAP",
-      "tlr": "Verification and rendered UX",
-      "lane": "web",
-      "docs_url": "docs/testing.md",
-      "owner": "tools"
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:ef9286b96db5d4f08a9dd3401529d31a19388aeeea876b8eb1e508454ce8e21e",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 23
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_146_DOT_READ_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_146_DOT_READ_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:6d1748c630527e17f73359642d9e4682f0e192ed45e394383536949e10af34f3",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_147_DOT_IMPORT_CSV_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_147_DOT_IMPORT_CSV_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:d6631129361c4efef625fd7a056da7b696a1f889c57eb634cd55eb0231a46d02",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_148_DOT_OUTPUT_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_148_DOT_OUTPUT_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:564356f3556baed31a88358985f2fd67addae1b1b5187103e84e6dd92a475356",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_149_DOT_ONCE_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_149_DOT_ONCE_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:a42cad470efb357ee45418b23b2168b3951f875d159f45568c820e5cb4d65349",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "medium",
+      "category": "context",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs",
+      "problem": "active source path looks like an old, backup, copied, or parked implementation",
+      "agent_fix": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
+      "evidence": [
+        "detector=repo-rot.path.fake-versioned-source",
+        "path=crates/bench/sqlite_parity/cases/SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs",
+        "line=1",
+        "proof_window=None",
+        "snippet=// Auto-generated SQLite parity case."
+      ],
+      "check_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR:context",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just score",
+      "fingerprint": "sha256:9b80ccf13013d19c92569bafe76f96718badf72ad32430069c488111442882b6",
+      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
+      "tlr": "Context/setup",
+      "lane": "audit",
+      "docs_url": "docs/language-bad-behavior.md#web-security-and-repo-rot-detectors",
+      "owner": "tools",
+      "line": 1,
+      "matched_term": "repo-rot.path.fake-versioned-source",
+      "reason": "ambiguous old-looking active source makes agents and reviewers guess whether code is live"
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:54170d35e6bd711e829d8e8247b20926d02d9b6c4fc2cbbdfd9fd2b9399aef1f",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_152_DOT_CLONE_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_152_DOT_CLONE_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:5adeb42f83175ed7af2cb96732d86031d3f433e0d39b383a6067e49931b157ab",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_153_DOT_CD_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_153_DOT_CD_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:462b3f99bbbac21761c8c525fc6be30d27e12c2da2147c442ed49595730118bc",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_154_DOT_DBINFO_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_154_DOT_DBINFO_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:ae62354d52fad1645632f7086c215c430e305ed03a1aa65f9e4a878041cb0167",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_192_OPT_INIT_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_192_OPT_INIT_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:4248a4a2c1888f75645494221c0133afcd18c2b6edcf39b773abe6f11966958d",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_193_OPT_READONLY_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_193_OPT_READONLY_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:088f106ae6e0fbf4d32ad46a9575281dc53c9b783cde761cfcbdcfcc7ec7064a",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_194_OPT_IFEXISTS_NEGATIVE_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_194_OPT_IFEXISTS_NEGATIVE_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:1466dded868e20f3bc294b3d937ea541ae7734b61aaffbb86ee010a6700e005e",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_197_OPT_MAXSIZE_DESERIALIZE_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_197_OPT_MAXSIZE_DESERIALIZE_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:8af8ac41899c5a656c3db6e93b60ee78430978ddb75207c32e0f195672665cdb",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_211_SQL_ATTACH_TEMPFILE_DATABASE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_211_SQL_ATTACH_TEMPFILE_DATABASE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:9a3eaecd7759376d5014a4eca68d36493b78fc961202ed4c8f8f7da609ca097b",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_212_SQL_VACUUM_INTO_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_212_SQL_VACUUM_INTO_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:80aff3112d419b63005d4e73bb8d59bbb0a43d62c8f4ccf6cb0dc53f5589bb00",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_213_SQL_WAL_CHECKPOINT_TEMPFILE.rs",
+      "problem": "future-hostile/dead-language term `temp` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/sqlite_parity/cases/SQLITE_PARITY_213_SQL_WAL_CHECKPOINT_TEMPFILE.rs:13",
+        "future-hostile/dead-language term `temp` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:d3e5799a68efffc7cb053ac5d0f2cab5293693e7aab20d1135ee415d6707eb7f",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 13
     },
     {
       "severity": "high",
@@ -3769,30 +4151,6 @@
       "line": 639,
       "matched_term": "checksum_from_rows",
       "reason": "same-name semantic unit copied across multiple files"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": "crates/bench/src/fuzz/sqlsmith.rs",
-      "problem": "unsafe or unvalidated input boundary marker appears in product code",
-      "agent_fix": "replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests",
-      "evidence": [
-        "format!(\"SELECT {proj} FROM {table}{where_clause}{order}{limit}\")"
-      ],
-      "check_id": "HLT-023-INPUT-BOUNDARY-GAP:security",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:da42a27ce6b43093f9b412eb3d6929f450df64223f676dde755e319672dbbdc1",
-      "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "tools",
-      "line": 203,
-      "matched_term": "string sql",
-      "reason": "input handling risk needs deterministic negative tests"
     },
     {
       "severity": "high",
@@ -4900,16 +5258,6 @@
       "why": "`Build speed signals` scored 80 below the standard floor of 85"
     },
     {
-      "path": ".jankurai/test-map.json",
-      "priority": "medium",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "route each owned path to a deterministic proof command and make the lane executable in CI",
-      "why": "`Proof lanes and test routing` scored 72 below the standard floor of 85"
-    },
-    {
       "path": "crates/sql/src/parser/pragma.rs",
       "priority": "medium",
       "rule_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP",
@@ -4929,6 +5277,16 @@
       "why": "runtime code uses a language outside the chosen optimal stack"
     },
     {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs",
+      "priority": "medium",
+      "rule_id": "HLT-040-REPO-ROT-BAD-BEHAVIOR",
+      "tlr": "Context/setup",
+      "lane": "audit",
+      "owner": "tools",
+      "task": "delete the stale copy, move history to VCS/archive tooling, or document owner, proof lane, expiry, and migration plan",
+      "why": "active source path looks like an old, backup, copied, or parked implementation"
+    },
+    {
       "path": ".github/workflows/jankurai.yml",
       "priority": "high",
       "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
@@ -4939,24 +5297,184 @@
       "why": "agent tool or configuration trust surface requires supply-chain evidence"
     },
     {
-      "path": "apps/web",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_001_SELECT_CORE_EXPRESSIONS.rs",
       "priority": "high",
-      "rule_id": "HLT-013-RENDERED-UX-GAP",
-      "tlr": "Verification and rendered UX",
-      "lane": "web",
+      "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+      "tlr": "Security, secrets, agency",
+      "lane": "security",
       "owner": "tools",
-      "task": "add Playwright e2e tests for critical user flows and wire them into the fast or CI proof map",
-      "why": "web surface lacks a Playwright/Cypress e2e lane"
+      "task": "replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests",
+      "why": "unsafe or unvalidated input boundary marker appears in product code"
     },
     {
-      "path": "apps/web",
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_042_TEMP_TABLE_TEMP_SCHEMA.rs",
       "priority": "high",
-      "rule_id": "HLT-013-RENDERED-UX-GAP",
-      "tlr": "Verification and rendered UX",
-      "lane": "web",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
       "owner": "tools",
-      "task": "add Storybook state coverage, Playwright screenshots, visual review or `@jankurai/ux-qa`, accessibility scans, CLS checks, generated mocks, and design tokens",
-      "why": "web surface lacks layered rendered UX QA evidence"
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_096_DBSTAT_OPTIONAL.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_146_DOT_READ_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_147_DOT_IMPORT_CSV_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_148_DOT_OUTPUT_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_149_DOT_ONCE_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_152_DOT_CLONE_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_153_DOT_CD_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_154_DOT_DBINFO_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_192_OPT_INIT_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_193_OPT_READONLY_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_194_OPT_IFEXISTS_NEGATIVE_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_197_OPT_MAXSIZE_DESERIALIZE_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_211_SQL_ATTACH_TEMPFILE_DATABASE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_212_SQL_VACUUM_INTO_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/sqlite_parity/cases/SQLITE_PARITY_213_SQL_WAL_CHECKPOINT_TEMPFILE.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `temp` appears in product/runtime code"
     },
     {
       "path": "crates/bench/src/bin/chaos_report/main.rs",
@@ -4977,16 +5495,6 @@
       "owner": "tools",
       "task": "keep the named unit in one owner and call it from the other sites",
       "why": "copy-code hard class `copy-code-unit-rust-2c4d15dc5a66385d` detected"
-    },
-    {
-      "path": "crates/bench/src/fuzz/sqlsmith.rs",
-      "priority": "high",
-      "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "tools",
-      "task": "replace unsafe sinks with typed schemas, parameterized APIs, allowlists, or sandboxed execution plus negative tests",
-      "why": "unsafe or unvalidated input boundary marker appears in product code"
     },
     {
       "path": "crates/bench/src/process_metrics.rs",

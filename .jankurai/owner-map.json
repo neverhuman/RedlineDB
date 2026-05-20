@@ -29,6 +29,8 @@
     "contracts/": "contracts",
     "crates/": "tools",
     "crates/bench": "bench-harness",
+    "crates/bench/sqlite_parity/": "bench-harness",
+    "crates/bench/src/sqlite_parity/": "bench-harness",
     "crates/bench/src/checksum.rs": "phase10-real-row-hashes",
     "crates/bench/src/fuzz/": "sqlite-parity-fuzz-d7",
     "crates/bench/tests/fuzz_parity.rs": "sqlite-parity-fuzz-d7",
