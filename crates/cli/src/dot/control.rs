@@ -1,8 +1,23 @@
-//! Control-knob dot-commands: `.bail`, `.timer`, `.changes`, `.echo`,
-//! `.show`, `.limit`, `.eqp`, `.explain`.
+//! Control-knob dot-commands: `.bail`, `.timer`, `.changes`, `.trace`,
+//! `.show`, `.limit`, `.eqp`, `.explain`, and SQLite-shell compatibility
+//! no-ops used by smoke parity cases.
+
+use std::time::Duration;
 
 use super::display::parse_bool;
 use super::{CliState, DotOutcome, ExplainSetting};
+
+const SQLITE_COMPAT_VERSION: &str = "SQLite 3.45.1 compatibility";
+
+pub fn exit(args: &[&str]) -> Result<DotOutcome, String> {
+    let code = match args.first() {
+        Some(raw) => raw
+            .parse::<i32>()
+            .map_err(|_| format!("Error: invalid exit code: {raw}"))?,
+        None => 0,
+    };
+    Ok(DotOutcome::Exit(code))
+}
 
 pub fn bail(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     state.bail = parse_required_bool(".bail", args)?;
@@ -16,6 +31,19 @@ pub fn timer(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> 
 
 pub fn changes(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     state.changes = parse_required_bool(".changes", args)?;
+    Ok(DotOutcome::Ok)
+}
+
+pub fn trace(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let Some(target) = args.first() else {
+        state.trace_stdout = false;
+        return Ok(DotOutcome::Ok);
+    };
+    match target.to_ascii_lowercase().as_str() {
+        "stdout" => state.trace_stdout = true,
+        "off" | "0" => state.trace_stdout = false,
+        _ => state.trace_stdout = false,
+    }
     Ok(DotOutcome::Ok)
 }
 
@@ -44,6 +72,90 @@ pub fn explain(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
         }
     };
     Ok(DotOutcome::Ok)
+}
+
+pub fn version(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    state
+        .output
+        .write_line(&format!(
+            "redlinedb v{} ({SQLITE_COMPAT_VERSION})",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .map_err(|err| err.to_string())?;
+    Ok(DotOutcome::Ok)
+}
+
+pub fn timeout(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let Some(ms) = args.first() else {
+        return Err("Error: usage: .timeout MS".to_owned());
+    };
+    let millis = ms
+        .parse::<u64>()
+        .map_err(|_| format!("Error: invalid timeout: {ms}"))?;
+    state.conn.set_busy_timeout(Duration::from_millis(millis));
+    Ok(DotOutcome::Ok)
+}
+
+pub fn progress(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn log(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn prompt(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn connection(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn dbconfig(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    match args {
+        [] => {
+            let line = format!("defensive {}", on_off(state.dbconfig_defensive));
+            state
+                .output
+                .write_line(&line)
+                .map_err(|err| err.to_string())?;
+        }
+        [name] => {
+            let value = if name.eq_ignore_ascii_case("defensive") {
+                state.dbconfig_defensive
+            } else {
+                false
+            };
+            state
+                .output
+                .write_line(&format!("{name} {}", on_off(value)))
+                .map_err(|err| err.to_string())?;
+        }
+        [name, value, ..] => {
+            if name.eq_ignore_ascii_case("defensive") {
+                state.dbconfig_defensive = parse_bool(value)?;
+            }
+        }
+    }
+    Ok(DotOutcome::Ok)
+}
+
+pub fn nonce(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let Some(token) = args.first() else {
+        return Err("Error: usage: .nonce TOKEN".to_owned());
+    };
+    if state.safe_nonce.as_deref() == Some(*token) {
+        state.safe_mode = false;
+    }
+    Ok(DotOutcome::Ok)
+}
+
+pub fn shell(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    if state.safe_mode {
+        return Err("Error: safe mode prevents .shell".to_owned());
+    }
+    Err("Error: .shell is not supported by redlinedb".to_owned())
 }
 
 /// `.show` — dump the current configuration to the active output.
