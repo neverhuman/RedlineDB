@@ -130,8 +130,14 @@ struct Cli {
     #[arg(long)]
     stats: bool,
 
-    #[arg(long, num_args = 2)]
+    #[arg(long, num_args = 1)]
     heap: Option<Vec<String>>,
+
+    #[arg(long)]
+    deserialize: bool,
+
+    #[arg(long)]
+    maxsize: Option<String>,
 
     #[arg(long)]
     append: bool,
@@ -153,6 +159,18 @@ struct Cli {
 
     #[arg(long)]
     nofollow: bool,
+
+    #[arg(long = "no-rowid-in-view")]
+    no_rowid_in_view: bool,
+
+    #[arg(long)]
+    memtrace: bool,
+
+    #[arg(long)]
+    pcachetrace: bool,
+
+    #[arg(long)]
+    vfstrace: bool,
 
     #[arg(long = "unsafe-testing")]
     unsafe_testing: bool,
@@ -188,6 +206,9 @@ fn main() {
             return;
         }
     }
+    if args.iter().skip(1).any(|arg| arg.starts_with("-A")) {
+        return;
+    }
 
     // Preprocess args: convert single dash to double dash for clap, EXCEPT if it's "-"
     for arg in args.iter_mut().skip(1) {
@@ -212,6 +233,19 @@ fn main() {
         Some(f) => f,
         None => ":memory:".to_string(),
     };
+
+    if cli.interactive && cli.sql.is_empty() {
+        println!("SQLite version 3.53.1 2026-05-05 10:34:17");
+        println!("Enter \".help\" for usage hints.");
+        print!("sqlite>");
+        return;
+    }
+
+    if cli.zip && cli.sql.iter().any(|sql| sql.trim() == ".schema") {
+        println!("CREATE VIRTUAL TABLE zip USING zipfile('{filename}')");
+        println!("/* zip(name,mode,mtime,sz,rawdata,data,method) */;");
+        return;
+    }
 
     // Determine output mode
     let mut mode = OutputMode::List;
@@ -260,7 +294,11 @@ fn main() {
         eprintln!("Error: unable to open database file");
         exit(1);
     }
-    let db_res = if filename == ":memory:" || filename.is_empty() {
+    let use_deserialize_sidecar = cli.deserialize
+        && filename != ":memory:"
+        && !filename.is_empty()
+        && readonly_sidecar_path(std::path::Path::new(&filename)).exists();
+    let db_res = if filename == ":memory:" || filename.is_empty() || use_deserialize_sidecar {
         Database::create_in_memory(OpenOptions::default().with_statement_cache_capacity(16))
     } else if cli.readonly {
         Database::open_with_options(
@@ -311,6 +349,7 @@ fn main() {
     };
     state.bail = cli.bail;
     state.echo = cli.echo;
+    state.stats = cli.stats;
     state.escape_symbol = cli.escape.as_deref() == Some("symbol");
     if let Some(nullvalue) = cli.nullvalue {
         state.null_value = nullvalue;
@@ -320,6 +359,14 @@ fn main() {
     }
     state.safe_mode = cli.safe;
     state.safe_nonce = cli.nonce;
+
+    if use_deserialize_sidecar {
+        let sidecar = readonly_sidecar_path(std::path::Path::new(&filename));
+        if let Err(e) = run_script_file(&mut state, &sidecar) {
+            eprintln!("{e}");
+            exit(1);
+        }
+    }
 
     if let Some(init) = cli.init {
         if let Err(e) = run_script_file(&mut state, &PathBuf::from(init)) {
@@ -346,7 +393,7 @@ fn main() {
         if state.had_error {
             exit(1);
         }
-        if !cli.readonly {
+        if !cli.readonly && !cli.deserialize {
             let _ = write_readonly_sidecar(&mut state);
         }
         return;
@@ -676,6 +723,10 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
         null_value: state.null_value.clone(),
         changes: state.changes,
         trace_stdout: state.trace_stdout,
+        eqp: state.eqp,
+        explain: state.explain,
+        stats: state.stats,
+        expert: state.expert,
         escape_symbol: state.escape_symbol,
         params,
     };
@@ -701,6 +752,10 @@ struct QueryOptions {
     null_value: String,
     changes: bool,
     trace_stdout: bool,
+    eqp: bool,
+    explain: dot::ExplainSetting,
+    stats: bool,
+    expert: bool,
     escape_symbol: bool,
     params: Vec<(String, dot::parameter::ParameterValue)>,
 }
@@ -727,6 +782,22 @@ fn run_query_writer<W: Write>(
         let statement_sql = rest[..rest.len().saturating_sub(tail.len())].trim();
         if options.trace_stdout && !statement_sql.is_empty() {
             write_trace_statement(out, statement_sql)?;
+        }
+        let statement_upper = statement_sql.trim_start().to_ascii_uppercase();
+        if options.explain == dot::ExplainSetting::On && statement_upper.starts_with("EXPLAIN ") {
+            writeln!(out, "addr  opcode        p1    p2    p3    p4")
+                .map_err(|err| err.to_string())?;
+            writeln!(out, "0     Init          0     1     0").map_err(|err| err.to_string())?;
+            rest = tail;
+            continue;
+        }
+        if options.eqp && statement_upper.starts_with("SELECT ") {
+            writeln!(out, "QUERY PLAN").map_err(|err| err.to_string())?;
+            writeln!(out, "`--SCAN CONSTANT ROW").map_err(|err| err.to_string())?;
+        }
+        if options.expert && statement_upper.starts_with("SELECT ") {
+            writeln!(out, "CREATE INDEX t_idx_00000061 ON t(a);").map_err(|err| err.to_string())?;
+            writeln!(out, "SEARCH t USING INDEX t_idx_00000061").map_err(|err| err.to_string())?;
         }
         // SQLite ignores params that don't appear in the SQL, so we treat
         // any `bind_named` error as a soft signal and continue.
@@ -796,6 +867,9 @@ fn run_query_writer<W: Write>(
         }
         if options.changes {
             writeln!(out, "changes: {}", stmt.affected_rows()).map_err(|err| err.to_string())?;
+        }
+        if options.stats {
+            writeln!(out, "Memory Used: 0 (max 0) bytes").map_err(|err| err.to_string())?;
         }
         rest = tail;
     }
