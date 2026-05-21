@@ -25,6 +25,8 @@ sqlite_parity_full_select=(
 )
 sqlite_parity_full_compare=("${sqlite_parity_full_select[@]}" --deny-skips)
 sqlite_parity_reference_bin="${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-sqlite3}"
+sqlite_jankurai_comparison_json="benchmark-results/sqlite-parity/latest/jankurai-comparison.json"
+sqlite_jankurai_comparison_csv="benchmark-results/sqlite-parity/latest/jankurai-comparison.csv"
 
 ensure_sqlite_parity_reference() {
   if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
@@ -33,6 +35,70 @@ ensure_sqlite_parity_reference() {
   fi
   sqlite_parity_reference_bin="$(rtk bash scripts/sqlite/build-reference.sh)"
   export REDLINEDB_SQLITE_PARITY_SQLITE_BIN="$sqlite_parity_reference_bin"
+}
+
+default_sqlite_score_ref() {
+  local version
+  version="$(sed -n 's/^version="\([^"]*\)"/\1/p' scripts/sqlite/build-reference.sh | head -n 1)"
+  if [ -z "$version" ]; then
+    printf 'unable to resolve SQLite reference version from scripts/sqlite/build-reference.sh\n' >&2
+    exit 1
+  fi
+  printf 'version-%s\n' "$version"
+}
+
+ensure_sqlite_source_checkout() {
+  local ref="${1:?sqlite ref required}"
+  if [[ "$ref" = /* || "$ref" = *..* || "$ref" = *$'\n'* ]]; then
+    printf 'unsafe SQLite score ref for target checkout path: %s\n' "$ref" >&2
+    exit 1
+  fi
+  local checkout_dir="target/sqlite-source/$ref"
+  mkdir -p "$(dirname "$checkout_dir")"
+  if [ ! -d "$checkout_dir/.git" ]; then
+    rm -rf "$checkout_dir"
+    rtk git clone --filter=blob:none --no-checkout https://github.com/sqlite/sqlite "$checkout_dir" >&2
+  fi
+  rtk git -C "$checkout_dir" fetch --depth 1 origin "$ref" >&2
+  rtk git -C "$checkout_dir" checkout --detach FETCH_HEAD >&2
+  printf '%s\n' "$checkout_dir"
+}
+
+run_sqlite_jankurai_compare() {
+  local updated_date="${1:?updated date required}"
+  local sqlite_ref="${REDLINEDB_SQLITE_SCORE_REF:-$(default_sqlite_score_ref)}"
+  local sqlite_checkout
+  sqlite_checkout="$(ensure_sqlite_source_checkout "$sqlite_ref")"
+  mkdir -p target/sqlite-jankurai benchmark-results/sqlite-parity/latest
+  jankurai audit "$sqlite_checkout" --mode advisory --json target/sqlite-jankurai/repo-score.json --md target/sqlite-jankurai/repo-score.md --no-score-history
+  rtk cargo run -p redlinedb-bench --bin sqlite_parity -- jankurai-compare \
+    --redlinedb-score .jankurai/repo-score.json \
+    --sqlite-score target/sqlite-jankurai/repo-score.json \
+    --sqlite-ref "$sqlite_ref" \
+    --updated-date "$updated_date" \
+    --json "$sqlite_jankurai_comparison_json" \
+    --csv "$sqlite_jankurai_comparison_csv"
+}
+
+sqlite_parity_report_args() {
+  local updated_date="${1:?updated date required}"
+  sqlite_parity_report_args_result=(
+    --input benchmark-results/sqlite-parity/latest/raw.jsonl
+    "${sqlite_parity_full_select[@]}"
+    --out-dir benchmark-results/sqlite-parity/latest
+    --readme README.md
+    --plot assets/sqlite-parity-latency-gap.svg
+    --ksloc-plot assets/sqlite-parity-ksloc.svg
+    --performance-histogram-plot assets/sqlite-parity-performance-histogram.svg
+    --jankurai-score .jankurai/repo-score.json
+    --updated-date "$updated_date"
+  )
+  if [ -f "$sqlite_jankurai_comparison_json" ]; then
+    sqlite_parity_report_args_result+=(
+      --jankurai-comparison "$sqlite_jankurai_comparison_json"
+      --jankurai-comparison-plot assets/sqlite-jankurai-comparison.svg
+    )
+  fi
 }
 
 case "$lane" in
@@ -177,7 +243,8 @@ case "$lane" in
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" --warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}" --jobs auto --out "$raw_tmp"
     mv "$raw_tmp" benchmark-results/sqlite-parity/latest/raw.jsonl
     printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
-    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl "${sqlite_parity_full_select[@]}" --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --jankurai-score .jankurai/repo-score.json --updated-date "$updated_date"
+    sqlite_parity_report_args "$updated_date"
+    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report "${sqlite_parity_report_args_result[@]}"
     ;;
   sqlite-parity-volatile-sentinel)
     rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
@@ -186,13 +253,21 @@ case "$lane" in
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- sentinel --input target/sqlite-parity/volatile-fastpath-sentinel.jsonl --ceiling-ns 00003=250000000 --ceiling-ns 00274=200000000 --ceiling-ns 00807=500000000 --ceiling-ns 00949=750000000 ${REDLINEDB_VOLATILE_SENTINEL_ENFORCE:+--enforce}
     ;;
   sqlite-parity-report-update)
+    updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(date -u +%F)}"
+    export REDLINEDB_SQLITE_PARITY_UPDATED_DATE="$updated_date"
     "$0" score
+    run_sqlite_jankurai_compare "$updated_date"
     REDLINEDB_SQLITE_PARITY_REPETITIONS="${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" \
       REDLINEDB_SQLITE_PARITY_WARMUP="${REDLINEDB_SQLITE_PARITY_WARMUP:-1}" \
       "$0" sqlite-parity-scale-ci
     ;;
   sqlite-parity-report-check)
-    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl "${sqlite_parity_full_select[@]}" --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --jankurai-score .jankurai/repo-score.json --updated-date "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)" --check
+    sqlite_parity_report_args "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)"
+    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report "${sqlite_parity_report_args_result[@]}" --check
+    ;;
+  sqlite-jankurai-compare)
+    updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE 2>/dev/null || date -u +%F)}"
+    run_sqlite_jankurai_compare "$updated_date"
     ;;
   sqlite-parity-report-publish-pr)
     bash ops/ci/sqlite-parity-report.sh publish-pr

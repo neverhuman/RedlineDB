@@ -88,6 +88,9 @@ sqlite-parity-report-update:
 sqlite-parity-report-check:
   ./scripts/just/run.sh sqlite-parity-report-check
 
+sqlite-jankurai-compare:
+  ./scripts/just/run.sh sqlite-jankurai-compare
+
 sqlite-parity-scale-full:
   ./scripts/just/run.sh sqlite-parity-scale-full
 

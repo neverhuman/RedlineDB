@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:f264360e5e1e669cce82de3fb5ab492025395ba049c742b099f4f53c56a23331",
-  "input_fingerprint": "sha256:9cef034621afaa7692cc1fc084c5ff541f970182c9451b214922d3b7a27129c6",
+  "report_fingerprint": "sha256:e4774ad73ff2732516fdfbbcbaa46a960d606e9764f4c1a3437fcdb1beda4a65",
+  "input_fingerprint": "sha256:dc542fda881a0b0804e01d55a1266c2b52d3f39a3330000ddd063083f9f91b90",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779382688",
+  "generated_at": "1779389603",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -82,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779382688",
-  "started_at": "1779382688",
-  "elapsed_ms": 13314,
+  "run_id": "1779389603",
+  "started_at": "1779389603",
+  "elapsed_ms": 13449,
   "scope": {
     "mode": "full",
     "paths": []
@@ -92,26 +92,93 @@
   "score": 64,
   "raw_score": 72,
   "decision": {
-    "status": "advisory",
+    "status": "fail",
     "minimum_score": 85,
-    "passed": true,
+    "passed": false,
     "hard_findings": 63,
     "soft_findings": 4,
     "ratchet": {
-      "baseline_score": 64,
+      "baseline_score": 91,
       "allowed_drop": 0,
       "passed": false,
-      "score_delta": 0,
-      "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "new_caps": [],
-      "new_hard_findings": [],
-      "policy_changed": false
+      "score_delta": -27,
+      "baseline_report_fingerprint": "sha256:297f476c2e3065af27d44aa0adc8f377f0137aff5d9dd13759a700bd2ac792c3",
+      "baseline_input_fingerprint": "sha256:407a9e7adb3e1ac971ef5411e7ef80658546ff416877de41d87b2db3d4631e8f",
+      "baseline_policy_fingerprint": "sha256:eaca17b4f280af0700dd95302a79cf419832e7a78800160ec46e58880678c57e",
+      "new_caps": [
+        "agent-tool-supply-chain-gap",
+        "fallback-soup-in-product-code",
+        "future-hostile-dead-language-in-product-code",
+        "input-boundary-gap",
+        "non-optimal-product-language-found",
+        "python-direct-product-truth-or-db-ownership",
+        "repo-rot-bad-behavior",
+        "rust-bad-behavior",
+        "severe-duplication-in-product-code"
+      ],
+      "new_hard_findings": [
+        "sha256:05c3cc7708281408962277fb3ea7cd4b8fec741ed0c3ad67a06c298778279cd6",
+        "sha256:088f106ae6e0fbf4d32ad46a9575281dc53c9b783cde761cfcbdcfcc7ec7064a",
+        "sha256:0c336bebb472adeb8cd62352f231caf2314357706b37a0c936a91483d23d771a",
+        "sha256:0df87d707956d3e26b654a87e3656a26d8c504ab7838a4de37b7b43bd82ec3f8",
+        "sha256:0e322fa4c99d6e5cec38e42e03ec78203b889be8211671771651b92dfe9a4872",
+        "sha256:1466dded868e20f3bc294b3d937ea541ae7734b61aaffbb86ee010a6700e005e",
+        "sha256:1faeff16c70106c6d9b497d0156e37f0f2036139549ab61d01b9b37607dd1af9",
+        "sha256:26cfc733c9b78bcda8c63ca207f726d948a15321f726324dc82d72eba423091a",
+        "sha256:2ff896240677e030d8467fcbc8ebe50fba8049c57f556c5b19dec87df8b2d918",
+        "sha256:3edececb4f93d801a028e3bc1ebfbfe1147cd307c658574bf65400d955345cfc",
+        "sha256:3fe6c92be1d3e15233bbe0147ded0a573e8f92de381cd5bce03f4c69886ff41c",
+        "sha256:412eb4d329fc0cf05931b6c54313f969bfd285d6eb01bd2f3db862822cc66f28",
+        "sha256:4248a4a2c1888f75645494221c0133afcd18c2b6edcf39b773abe6f11966958d",
+        "sha256:462b3f99bbbac21761c8c525fc6be30d27e12c2da2147c442ed49595730118bc",
+        "sha256:481e2eea4fc08a5a116ac04e8e8b43e52bbb58175d8ff451e8420dfbb8b805e2",
+        "sha256:54170d35e6bd711e829d8e8247b20926d02d9b6c4fc2cbbdfd9fd2b9399aef1f",
+        "sha256:564356f3556baed31a88358985f2fd67addae1b1b5187103e84e6dd92a475356",
+        "sha256:58ded11d14f8db77863cc7266cfcb5332d3a1068faf4bd43a3e1ea1dea7ed27a",
+        "sha256:5adeb42f83175ed7af2cb96732d86031d3f433e0d39b383a6067e49931b157ab",
+        "sha256:6d1748c630527e17f73359642d9e4682f0e192ed45e394383536949e10af34f3",
+        "sha256:6e04cc93e77a387c83a93748c8a3651bdcd9fe78794dd8d741cc40e0a2de034d",
+        "sha256:71efcef919d07234c00c51b24fa22dacdaf63c3ca70644a5029ae9d608f49e3e",
+        "sha256:80aff3112d419b63005d4e73bb8d59bbb0a43d62c8f4ccf6cb0dc53f5589bb00",
+        "sha256:80d7b05f79961607fb46f21588e38a787868590be75485961d0a192bbbfff091",
+        "sha256:84cd48e1540a652aa0f49bff099546223baf77a177694fa3ccdb967175492e5b",
+        "sha256:8af1ba398db74bafc5ba13305b7bc42e408e2b7266216aa5712ac73670d41dc8",
+        "sha256:8af8ac41899c5a656c3db6e93b60ee78430978ddb75207c32e0f195672665cdb",
+        "sha256:8b0de0dabe33b5278a3aa01cf20b5a0f422df7e74f32a84d2e1a476bdf36bd4b",
+        "sha256:8e84d46e0643be9cc351afac25862bc37dcc09a63c4916fc2912505971744960",
+        "sha256:90bdf58bb1ca657de5b89f0dd907bd0cad0c8d6bffcb6196f4e43f8cc15577a3",
+        "sha256:9a3eaecd7759376d5014a4eca68d36493b78fc961202ed4c8f8f7da609ca097b",
+        "sha256:a0b183cccf351e772870fdea98ef049ff39ef4dae945f0e6a4dab65c82f50bd6",
+        "sha256:a42cad470efb357ee45418b23b2168b3951f875d159f45568c820e5cb4d65349",
+        "sha256:a48d8a99038147ce527ec88ff61047d549efc9b2f913f5f9c5ca6c9d2df660f3",
+        "sha256:a9ed62b36b036c9cc50ca8f42844065f4bb44a12c1b6a715d99db7453617b019",
+        "sha256:aa96f629630b057efa0f1786eb528e79e8c6482d4ada20e64ec5019e02ebfcd0",
+        "sha256:ab77b994862e1cba9b451d12303492c275e1cc8767e4a07ad302baf786dfdd00",
+        "sha256:abc9d33162968df3c2f0a73e25bee873f289b0f867d2811f1feb4de200a60990",
+        "sha256:ae62354d52fad1645632f7086c215c430e305ed03a1aa65f9e4a878041cb0167",
+        "sha256:b0adaa6421da25e3db44a502722e6e83af57ce23eb92f46bd0fbff4cdc8ca30a",
+        "sha256:b1986cc5a4176cbd289c01d3aa1770906a7a00bae9cf0fff8ded63493e4f1797",
+        "sha256:b347036fe1a347edd74341c921e2d343b3f975cbae79807321ed1d8b66412c39",
+        "sha256:b4f1a6ca90b064a685ea26de401a4ea01a4018f38fbe80c7f14d209db28ce468",
+        "sha256:bdbc8665d06771630a270b7628b5ce1d4ea68b943861e02146cd65daab567c1f",
+        "sha256:c11dea32b68100d51d71ad5b7cf29f9e4a0cd9cf035c5e7868486eda405b2a04",
+        "sha256:c93da4a982dc672a5605ff73cfe6bcc5cbac5445f7e49deffd735f851846a9a2",
+        "sha256:cab48fe346b9eeb551a5d33e424db975487696667dc2794bb9b209dc78fa27bd",
+        "sha256:d3e5799a68efffc7cb053ac5d0f2cab5293693e7aab20d1135ee415d6707eb7f",
+        "sha256:d6631129361c4efef625fd7a056da7b696a1f889c57eb634cd55eb0231a46d02",
+        "sha256:d931c05f64fba820fd603013535bb6a38c2b8958ba2ab3bc8dce978493cf2162",
+        "sha256:e2f29eefc049edc0933cb989ee29eb0753183b83b6a0aeece6505275afc59882",
+        "sha256:ec8a5493aec13c69af26caf1463956c9a9c1731045a0fdb4fd9ed90a62192384",
+        "sha256:ed2809a423d6faeb9c44e73134ec63c87c2af6068dcf28e83badbd75e9387908",
+        "sha256:ef9286b96db5d4f08a9dd3401529d31a19388aeeea876b8eb1e508454ce8e21e",
+        "sha256:f75a5b10dea2a415ce76d63815362fed2df4ee8573df5b75d89fbe3559bb0601",
+        "sha256:fb68a65ce20650b76a90bc88edfe06a198128b0d750b32b32f7c2a0727384404"
+      ],
+      "policy_changed": true
     }
   },
   "git": {
-    "head": "800fe38",
+    "head": "89115b7",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -128,7 +195,7 @@
       "medium",
       "low"
     ],
-    "mode": "advisory",
+    "mode": "ratchet",
     "standard_version": "0.9.0",
     "auditor_version": "1.5.1",
     "schema_version": "1.9.0",
@@ -398,11 +465,11 @@
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
         "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=54 missing=54 high_or_critical_missing=13 verdict=review"
+        "proofbind artifact found: surfaces=55 missing=55 high_or_critical_missing=20 verdict=review"
       ],
       "notes": [
-        "proofbind reports 54 unresolved obligation(s)",
-        "proofbind reports 13 missing high/critical semantic proof obligation(s)"
+        "proofbind reports 55 unresolved obligation(s)",
+        "proofbind reports 20 missing high/critical semantic proof obligation(s)"
       ]
     },
     {
@@ -433,7 +500,7 @@
       "score": 0,
       "weighted_points": 0.0,
       "evidence": [
-        "largest authored code file: crates/bench/src/sqlite_parity/report_gen.rs (1684 LOC)",
+        "largest authored code file: crates/bench/src/sqlite_parity/report_gen.rs (1803 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
@@ -1098,7 +1165,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-21T16:57:55.388265972+00:00",
+    "generated_at": "2026-05-21T18:53:10.634876798+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1136,20 +1203,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 2201,
-      "files_considered": 1512,
-      "active_files": 1512,
+      "files_scanned": 2207,
+      "files_considered": 1514,
+      "active_files": 1514,
       "exact_file_classes": 0,
       "hard_classes": 1,
-      "warning_classes": 100,
+      "warning_classes": 102,
       "hard_instances": 2,
-      "warning_instances": 263,
-      "duplicate_lines": 282,
-      "duplicate_tokens": 858,
-      "duplicate_bytes": 8402,
-      "total_redundant_lines": 387,
-      "total_redundant_tokens": 1113,
-      "total_redundant_bytes": 10789
+      "warning_instances": 270,
+      "duplicate_lines": 284,
+      "duplicate_tokens": 865,
+      "duplicate_bytes": 8474,
+      "total_redundant_lines": 392,
+      "total_redundant_tokens": 1123,
+      "total_redundant_bytes": 10888
     },
     "classes": [
       {
@@ -1939,6 +2006,76 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-ab80b0029566ed53",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 9,
+        "instance_count": 7,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 54,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "9e6309b792f4e35a",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/bench/src/sqlite_parity/engine.rs",
+            "language": "rust",
+            "start_line": 302,
+            "end_line": 303,
+            "unit_name": "sanitize"
+          },
+          {
+            "path": "crates/bench/src/sqlite_parity/jankurai_compare.rs",
+            "language": "rust",
+            "start_line": 554,
+            "end_line": 555,
+            "unit_name": "xml"
+          },
+          {
+            "path": "crates/bench/src/sqlite_parity/performance_histogram.rs",
+            "language": "rust",
+            "start_line": 226,
+            "end_line": 227,
+            "unit_name": "xml"
+          },
+          {
+            "path": "crates/bench/src/sqlite_parity/report_gen.rs",
+            "language": "rust",
+            "start_line": 1391,
+            "end_line": 1392,
+            "unit_name": "xml"
+          },
+          {
+            "path": "crates/bench/src/sqlite_parity/report_gen.rs",
+            "language": "rust",
+            "start_line": 1446,
+            "end_line": 1447,
+            "unit_name": "normalize_git_sha"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 439,
+            "end_line": 440,
+            "unit_name": "escape"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 637,
+            "end_line": 638,
+            "unit_name": "escape_html"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-e3b0c44298fc1c14",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -2361,62 +2498,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-ab80b0029566ed53",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 1,
-        "duplicate_bytes": 9,
-        "instance_count": 5,
-        "total_redundant_lines": 4,
-        "total_redundant_tokens": 4,
-        "total_redundant_bytes": 36,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "658a1a3c1c209fcf",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/bench/src/sqlite_parity/engine.rs",
-            "language": "rust",
-            "start_line": 302,
-            "end_line": 303,
-            "unit_name": "sanitize"
-          },
-          {
-            "path": "crates/bench/src/sqlite_parity/report_gen.rs",
-            "language": "rust",
-            "start_line": 1321,
-            "end_line": 1322,
-            "unit_name": "xml"
-          },
-          {
-            "path": "crates/bench/src/sqlite_parity/report_gen.rs",
-            "language": "rust",
-            "start_line": 1376,
-            "end_line": 1377,
-            "unit_name": "normalize_git_sha"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 439,
-            "end_line": 440,
-            "unit_name": "escape"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 637,
-            "end_line": 638,
-            "unit_name": "escape_html"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-ecdaf4ebfdec90de",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -2629,29 +2710,29 @@
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1192,
-            "end_line": 1193,
+            "start_line": 1262,
+            "end_line": 1263,
             "unit_name": "abstract_loc_block"
           },
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1199,
-            "end_line": 1200,
+            "start_line": 1269,
+            "end_line": 1270,
             "unit_name": "introduction_loc_block"
           },
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1206,
-            "end_line": 1207,
+            "start_line": 1276,
+            "end_line": 1277,
             "unit_name": "conclusion_loc_block"
           },
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1301,
-            "end_line": 1302,
+            "start_line": 1371,
+            "end_line": 1372,
             "unit_name": "improvement_cell"
           }
         ]
@@ -3289,6 +3370,49 @@
         ]
       },
       {
+        "id": "copy-code-unit-rust-166fd5dd91c11fde",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "xml",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 9,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 2,
+        "total_redundant_bytes": 18,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "ee878a0d62ae802a",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/bench/src/sqlite_parity/jankurai_compare.rs",
+            "language": "rust",
+            "start_line": 554,
+            "end_line": 555,
+            "unit_name": "xml"
+          },
+          {
+            "path": "crates/bench/src/sqlite_parity/performance_histogram.rs",
+            "language": "rust",
+            "start_line": 226,
+            "end_line": 227,
+            "unit_name": "xml"
+          },
+          {
+            "path": "crates/bench/src/sqlite_parity/report_gen.rs",
+            "language": "rust",
+            "start_line": 1391,
+            "end_line": 1392,
+            "unit_name": "xml"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-dc1683e0676e5adb",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -3322,48 +3446,13 @@
             "unit_name": "cfg_skip_then_panic"
           }
         ]
-      },
-      {
-        "id": "copy-code-body-rust-07a9f35c10c8af0c",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 2,
-        "duplicate_tokens": 1,
-        "duplicate_bytes": 11,
-        "instance_count": 2,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 1,
-        "total_redundant_bytes": 11,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "8dfc6ea7da0abb1d",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/bench/src/certify/scheduler/dispatch.rs",
-            "language": "rust",
-            "start_line": 196,
-            "end_line": 198,
-            "unit_name": "which_strace"
-          },
-          {
-            "path": "crates/kernel/src/engine/runtime/commit.rs",
-            "language": "rust",
-            "start_line": 30,
-            "end_line": 32,
-            "unit_name": "commit_failure_armed_for_thread"
-          }
-        ]
       }
     ],
     "notes": [
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 51 lower-ranked classes"
+      "showing the top 50 classes and omitting 53 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3662,7 +3751,7 @@
       "problem": "`Code shape and semantic surface` scored 0 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/bench/src/sqlite_parity/report_gen.rs (1684 LOC)",
+        "largest authored code file: crates/bench/src/sqlite_parity/report_gen.rs (1803 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC"
@@ -3672,7 +3761,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:af29c3833b702efb9f5e9a484cfd7ee1842a9e2a3acb22d2c035d385b3c13d77",
+      "fingerprint": "sha256:ee5e6281bbc57b2a2683a11b2b52f49ed11506ea307c23bd1dfe6817856eed6b",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",

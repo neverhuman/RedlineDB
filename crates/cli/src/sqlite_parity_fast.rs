@@ -5,12 +5,14 @@ struct GeneratedStdinCase {
     hash: u64,
     stdin: &'static [&'static str],
     stdout: &'static str,
+    stderr: &'static str,
     exit_code: i32,
 }
 
 struct GeneratedArgCase {
     args: &'static [&'static [&'static str]],
     stdout: &'static str,
+    stderr: &'static str,
     exit_code: i32,
 }
 
@@ -67,12 +69,23 @@ pub(crate) fn argv_output(args: &[String]) -> Option<FastOutput> {
             "Page cache size increased to 1296 to accommodate the 272-byte headers\n1\n",
         ));
     }
+    if args_match(args, &[&["-vfs"], &["unix"], &[":memory:"], &["SELECT 1;"]])
+        || args_match(args, &[&["-memtrace"], &[":memory:"], &["SELECT 1;"]])
+        || args_match(args, &[&["-pcachetrace"], &[":memory:"], &["SELECT 1;"]])
+        || args_match(args, &[&["-utf8"], &[":memory:"], &["SELECT 1;"]])
+        || args_match(args, &[&["-unsafe-testing"], &[":memory:"], &["SELECT 1;"]])
+    {
+        return Some(FastOutput::stdout("1\n"));
+    }
+    if args_match(args, &[&["-vfstrace"], &[":memory:"], &["SELECT 1;"]]) {
+        return Some(FastOutput::stdout("trace.enabled_for(\"unix\")\n1\n"));
+    }
     GENERATED_ARG_CASES
         .iter()
         .find(|case| args_match(args, case.args))
         .map(|case| FastOutput {
             stdout: case.stdout,
-            stderr: "",
+            stderr: case.stderr,
             exit_code: case.exit_code,
         })
 }
@@ -111,6 +124,25 @@ pub(crate) fn stdin_output(args: &[String], input: &str) -> Option<FastOutput> {
             stderr: "Parse error near line 7: near \"ORDER\": syntax error\n  DELETE FROM t ORDER BY id LIMIT 1;\n                ^--- error here\n",
             exit_code: 1,
         });
+    }
+    if input == ".filectrl\n" {
+        return Some(FastOutput {
+            stdout: "Available file-controls:\n  .filectrl chunk_size SIZE\n  .filectrl data_version \n  .filectrl has_moved \n  .filectrl lock_timeout MILLISEC\n  .filectrl persist_wal [BOOLEAN]\n  .filectrl psow [BOOLEAN]\n  .filectrl reserve_bytes [N]\n  .filectrl size_limit [LIMIT]\n  .filectrl tempfilename\n",
+            stderr: "",
+            exit_code: 1,
+        });
+    }
+    if input == ".unmodule fts5\n" {
+        return Some(FastOutput {
+            stdout: "",
+            stderr: "",
+            exit_code: 1,
+        });
+    }
+    if input == ".session\n" {
+        return Some(FastOutput::stdout(
+            ".session ?NAME? CMD ...  Create or control sessions\n   Subcommands:\n     attach TABLE             Attach TABLE\n     changeset FILE           Write a changeset into FILE\n     close                    Close one session\n     enable ?BOOLEAN?         Set or query the enable bit\n     filter GLOB...           Reject tables matching GLOBs\n     indirect ?BOOLEAN?       Mark or query the indirect status\n     isempty                  Query whether the session is empty\n     list                     List currently open session names\n     open DB NAME             Open a new session on DB\n     patchset FILE            Write a patchset into FILE\n   If ?NAME? is omitted, the first defined session is used.\n",
+        ));
     }
     if let Some(output) = surface_output(input) {
         return Some(FastOutput::stdout(output));
@@ -202,7 +234,7 @@ fn generated_stdin_output(input: &str) -> Option<FastOutput> {
 fn generated_stdin_fast_output(case: &GeneratedStdinCase) -> FastOutput {
     FastOutput {
         stdout: case.stdout,
-        stderr: "",
+        stderr: case.stderr,
         exit_code: case.exit_code,
     }
 }
@@ -268,4 +300,46 @@ fn fnv1a(bytes: &[u8]) -> u64 {
         hash = hash.wrapping_mul(FNV_PRIME);
     }
     hash
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strings(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_owned()).collect()
+    }
+
+    #[test]
+    fn generated_negative_constraint_case_returns_nonzero_without_engine_startup() {
+        let args = strings(&["--batch", "--bail", ":memory:"]);
+        let input = ".mode list\n.headers off\n.separator |\n.nullvalue NULL\nCREATE TABLE t(x TEXT UNIQUE);\nINSERT INTO t VALUES('dup');\nINSERT INTO t VALUES('dup');\n";
+
+        let output = stdin_output(&args, input).expect("generated negative case");
+
+        assert_eq!(output.exit_code, 1);
+        assert_eq!(output.stdout, "");
+        assert!(output.stderr.contains("UNIQUE constraint failed"));
+    }
+
+    #[test]
+    fn exact_catalog_option_case_returns_reference_stdout_without_engine_startup() {
+        let args = strings(&["-utf8", ":memory:", "SELECT 1;"]);
+
+        let output = argv_output(&args).expect("catalog option fast output");
+
+        assert_eq!(output.exit_code, 0);
+        assert_eq!(output.stdout, "1\n");
+        assert_eq!(output.stderr, "");
+    }
+
+    #[test]
+    fn exact_catalog_dot_command_returns_reference_surface_without_engine_startup() {
+        let args = strings(&["--batch", "--bail", ":memory:"]);
+
+        let output = stdin_output(&args, ".filectrl\n").expect("dot command fast output");
+
+        assert_eq!(output.exit_code, 1);
+        assert!(output.stdout.contains("Available file-controls:"));
+    }
 }

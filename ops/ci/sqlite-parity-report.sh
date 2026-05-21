@@ -28,7 +28,9 @@ report_paths=(
   .jankurai/score-history.jsonl
   .jankurai/score-history.csv
   assets/sqlite-parity-latency-gap.svg
+  assets/sqlite-parity-performance-histogram.svg
   assets/sqlite-parity-ksloc.svg
+  assets/sqlite-jankurai-comparison.svg
   benchmark-results/sqlite-parity/latest
   paper/data/loc_comparison.csv
   paper/sections/abstract.tex

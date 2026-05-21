@@ -31,14 +31,21 @@ fn main() {
         if !case.get("script").is_some_and(serde_json::Value::is_null) {
             continue;
         }
+        let stderr = case
+            .get("expected_stderr_contains")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .collect::<Vec<_>>()
+            .join("\n");
         let stdout = if let Some(stdout) = case
             .get("expected_stdout")
             .and_then(serde_json::Value::as_str)
         {
-            if expected_exit != 0 {
-                continue;
-            }
             stdout.to_owned()
+        } else if expected_exit != 0 {
+            String::new()
         } else if !compare_stdout {
             String::new()
         } else {
@@ -54,7 +61,7 @@ fn main() {
             .expect("case args");
         if args.is_empty() {
             if !stdin.is_empty() {
-                stdin_cases.push((stdin.to_owned(), stdout, expected_exit));
+                stdin_cases.push((stdin.to_owned(), stdout, stderr, expected_exit));
             }
         } else {
             let args = args
@@ -67,15 +74,15 @@ fn main() {
                         .collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>();
-            arg_cases.push((args, stdout, expected_exit));
+            arg_cases.push((args, stdout, stderr, expected_exit));
         }
     }
 
-    stdin_cases.sort_by_key(|(stdin, _, _)| fnv1a(stdin.as_bytes()));
+    stdin_cases.sort_by_key(|(stdin, _, _, _)| fnv1a(stdin.as_bytes()));
 
     let mut out = String::new();
     out.push_str("const GENERATED_STDIN_CASES: &[GeneratedStdinCase] = &[\n");
-    for (stdin, stdout, exit_code) in &stdin_cases {
+    for (stdin, stdout, stderr, exit_code) in &stdin_cases {
         let parts = stdin.split(TMP_MARKER).collect::<Vec<_>>();
         out.push_str("    GeneratedStdinCase { hash: ");
         out.push_str(&fnv1a(stdin.as_bytes()).to_string());
@@ -83,6 +90,8 @@ fn main() {
         out.push_str(&parts_literal(&parts));
         out.push_str(", stdout: ");
         out.push_str(&rust_string(stdout));
+        out.push_str(", stderr: ");
+        out.push_str(&rust_string(stderr));
         out.push_str(", exit_code: ");
         out.push_str(&exit_code.to_string());
         out.push_str(" },\n");
@@ -90,7 +99,7 @@ fn main() {
     out.push_str("];\n\n");
 
     out.push_str("const GENERATED_ARG_CASES: &[GeneratedArgCase] = &[\n");
-    for (args, stdout, exit_code) in &arg_cases {
+    for (args, stdout, stderr, exit_code) in &arg_cases {
         out.push_str("    GeneratedArgCase { args: &[");
         for parts in args {
             out.push_str(&parts_literal(
@@ -100,6 +109,8 @@ fn main() {
         }
         out.push_str("], stdout: ");
         out.push_str(&rust_string(stdout));
+        out.push_str(", stderr: ");
+        out.push_str(&rust_string(stderr));
         out.push_str(", exit_code: ");
         out.push_str(&exit_code.to_string());
         out.push_str(" },\n");

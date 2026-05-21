@@ -1,24 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="168" viewBox="0 0 760 168" role="img" aria-labelledby="ksloc-title ksloc-desc">
 <title id="ksloc-title">SQLite vs RedlineDB production KSLOC, Updated 2026-05-21</title>
 <desc id="ksloc-desc">Production Rust source lines in RedlineDB core crates compared with a fixed SQLite source-line reference. RedlineDB has 51.4 KSLOC and SQLite has 155.8 KSLOC.</desc>
-<text x="132" y="22" font-family="sans-serif" font-size="17" font-weight="700" fill="#111827">Production source footprint</text>
-<text x="132" y="39" font-family="sans-serif" font-size="12" fill="#6b7280">Core RedlineDB crates scanned without tests, blank lines, or comments; updated 2026-05-21</text>
-<line x1="132.00" y1="44" x2="132.00" y2="138" stroke="#e5e7eb"/>
-<text x="132.00" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">0</text>
-<line x1="266.00" y1="44" x2="266.00" y2="138" stroke="#e5e7eb"/>
-<text x="266.00" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">40</text>
-<line x1="400.00" y1="44" x2="400.00" y2="138" stroke="#e5e7eb"/>
-<text x="400.00" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">80</text>
-<line x1="534.00" y1="44" x2="534.00" y2="138" stroke="#e5e7eb"/>
-<text x="534.00" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">120</text>
-<line x1="668.00" y1="44" x2="668.00" y2="138" stroke="#e5e7eb"/>
-<text x="668.00" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">160</text>
-<line x1="132" y1="138" x2="668.00" y2="138" stroke="#9ca3af"/>
-<text x="722.00" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="end">KSLOC</text>
-<text x="20" y="64.50" font-family="sans-serif" font-size="13" fill="#111827">RedlineDB</text>
+<text x="132" y="22" font-family="sans-serif" font-size="17" font-weight="700" fill="#f97316">Production source footprint</text>
+<text x="132" y="39" font-family="sans-serif" font-size="12" fill="#fbbf24">Core RedlineDB crates scanned without tests, blank lines, or comments; updated 2026-05-21</text>
+<line x1="132.00" y1="44" x2="132.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
+<text x="132.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">0</text>
+<line x1="266.00" y1="44" x2="266.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
+<text x="266.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">40</text>
+<line x1="400.00" y1="44" x2="400.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
+<text x="400.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">80</text>
+<line x1="534.00" y1="44" x2="534.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
+<text x="534.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">120</text>
+<line x1="668.00" y1="44" x2="668.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
+<text x="668.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">160</text>
+<line x1="132" y1="138" x2="668.00" y2="138" stroke="#fbbf24"/>
+<text x="722.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="end">KSLOC</text>
+<text x="20" y="64.50" font-family="sans-serif" font-size="13" fill="#f97316">RedlineDB</text>
 <rect x="132" y="48" width="172.32" height="24" rx="3" fill="#10b981"/>
-<text x="312.32" y="64.50" font-family="sans-serif" font-size="12" fill="#111827">51.4 KSLOC</text>
-<text x="20" y="108.50" font-family="sans-serif" font-size="13" fill="#111827">SQLite</text>
+<text x="312.32" y="64.50" font-family="sans-serif" font-size="12" fill="#fbbf24">51.4 KSLOC</text>
+<text x="20" y="108.50" font-family="sans-serif" font-size="13" fill="#f97316">SQLite</text>
 <rect x="132" y="92" width="521.93" height="24" rx="3" fill="#e11d48"/>
 <text x="645.93" y="108.50" font-family="sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="end">155.8 KSLOC</text>
 </svg>
