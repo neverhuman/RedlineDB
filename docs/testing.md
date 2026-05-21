@@ -76,7 +76,11 @@ older diagnostics still need it.
 
 Set `REDLINEDB_SQLITE_PARITY_SQLITE_BIN=/path/to/sqlite3` to run the full
 corpus against a pinned SQLite shell with optional shell and extension features
-enabled. If unset, the lane uses `sqlite3` from `PATH`.
+enabled. If unset, full-corpus lanes build the official SQLite `3.53.1`
+autoconf shell through `scripts/sqlite/build-reference.sh` and export
+`target/sqlite-reference/3.53.1/bin/sqlite3` before comparing cases. The
+builder verifies the upstream SHA3-256 digest and smokes percentile, math,
+FTS5, RTREE, DBSTAT, `generate_series`, and `uint` support.
 
 For narrow repair loops, prefer the package-scoped lanes above over `fast` when the touched surface is already known. They stay deterministic without forcing a workspace-wide run.
 

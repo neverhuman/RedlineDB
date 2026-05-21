@@ -24,6 +24,14 @@ if [ -z "${REDLINEDB_BENCH_GIT_SHA:-}" ]; then
     export REDLINEDB_BENCH_GIT_SHA="$(git rev-parse HEAD)"
 fi
 
+ensure_sqlite_parity_reference() {
+    if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
+        return 0
+    fi
+    REDLINEDB_SQLITE_PARITY_SQLITE_BIN="$(bash scripts/sqlite/build-reference.sh)"
+    export REDLINEDB_SQLITE_PARITY_SQLITE_BIN
+}
+
 if [ "${1:-}" = "sqlite-parity-report-publish-pr" ]; then
     bash ops/ci/sqlite-parity-report.sh publish-pr
     exit 0
@@ -67,6 +75,7 @@ run_test_stage() {
             cargo test -p redlinedb-bench --quiet --locked
             ;;
         sqlite-parity-scale)
+            ensure_sqlite_parity_reference
             bash scripts/just/run.sh sqlite-parity-scale-ci
             bash scripts/just/run.sh sqlite-parity-report-check
             ;;

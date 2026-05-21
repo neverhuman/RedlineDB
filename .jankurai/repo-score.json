@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:34adddb4a5437df153a8d9d212afb25bd4472488abd4ab39cc638c6e146b93f1",
-  "input_fingerprint": "sha256:8b6c0605240b980a4012d41cd47667dcfdb55fee863eb37be68f11fe01dc88e4",
+  "report_fingerprint": "sha256:36d94ba8811276681501a0fae9a98b1a35808aa8a0ea211c11e631c7a0c5e9b2",
+  "input_fingerprint": "sha256:be729c2923fc5607c92f861f8646d8700e6aa23ca69d87637562feb0ccb1b0ed",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779372388",
+  "generated_at": "1779372993",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -82,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779372388",
-  "started_at": "1779372388",
-  "elapsed_ms": 14085,
+  "run_id": "1779372993",
+  "started_at": "1779372993",
+  "elapsed_ms": 13629,
   "scope": {
     "mode": "full",
     "paths": []
@@ -111,7 +111,7 @@
     }
   },
   "git": {
-    "head": "5118282",
+    "head": "b374898",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1098,7 +1098,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-21T14:06:15.184410968+00:00",
+    "generated_at": "2026-05-21T14:16:19.916216927+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1136,20 +1136,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 2198,
+      "files_scanned": 2199,
       "files_considered": 1510,
       "active_files": 1510,
       "exact_file_classes": 0,
       "hard_classes": 1,
       "warning_classes": 100,
       "hard_instances": 2,
-      "warning_instances": 268,
+      "warning_instances": 267,
       "duplicate_lines": 282,
-      "duplicate_tokens": 857,
-      "duplicate_bytes": 8396,
-      "total_redundant_lines": 396,
-      "total_redundant_tokens": 1129,
-      "total_redundant_bytes": 10913
+      "duplicate_tokens": 858,
+      "duplicate_bytes": 8402,
+      "total_redundant_lines": 395,
+      "total_redundant_tokens": 1125,
+      "total_redundant_bytes": 10885
     },
     "classes": [
       {
@@ -2769,48 +2769,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-f6b7734f467d77eb",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 34,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 10,
-        "total_redundant_bytes": 68,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "117f2b653d23a4a4",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/bench/src/sqlite_parity/engine.rs",
-            "language": "rust",
-            "start_line": 313,
-            "end_line": 314,
-            "unit_name": "probe_version"
-          },
-          {
-            "path": "crates/bench/src/sqlite_parity/engine.rs",
-            "language": "rust",
-            "start_line": 357,
-            "end_line": 358,
-            "unit_name": "help_contains"
-          },
-          {
-            "path": "crates/bench/src/sqlite_parity/engine.rs",
-            "language": "rust",
-            "start_line": 368,
-            "end_line": 369,
-            "unit_name": "cli_help_contains"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-f63aca9d97d3002c",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -3390,6 +3348,41 @@
             "start_line": 109,
             "end_line": 111,
             "unit_name": "cfg_skip_then_panic"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-07a9f35c10c8af0c",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 11,
+        "instance_count": 2,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 1,
+        "total_redundant_bytes": 11,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "8dfc6ea7da0abb1d",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/bench/src/certify/scheduler/dispatch.rs",
+            "language": "rust",
+            "start_line": 196,
+            "end_line": 198,
+            "unit_name": "which_strace"
+          },
+          {
+            "path": "crates/kernel/src/engine/runtime/commit.rs",
+            "language": "rust",
+            "start_line": 30,
+            "end_line": 32,
+            "unit_name": "commit_failure_armed_for_thread"
           }
         ]
       }

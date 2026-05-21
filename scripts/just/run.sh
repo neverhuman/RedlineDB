@@ -26,6 +26,15 @@ sqlite_parity_full_select=(
 sqlite_parity_full_compare=("${sqlite_parity_full_select[@]}" --deny-skips)
 sqlite_parity_reference_bin="${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-sqlite3}"
 
+ensure_sqlite_parity_reference() {
+  if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
+    sqlite_parity_reference_bin="$REDLINEDB_SQLITE_PARITY_SQLITE_BIN"
+    return 0
+  fi
+  sqlite_parity_reference_bin="$(rtk bash scripts/sqlite/build-reference.sh)"
+  export REDLINEDB_SQLITE_PARITY_SQLITE_BIN="$sqlite_parity_reference_bin"
+}
+
 case "$lane" in
   fast)
     ./scripts/just/cache-warm.sh
@@ -158,6 +167,7 @@ case "$lane" in
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin "$sqlite_parity_reference_bin" --engine-name sqlite3 --profiles memory --priorities P0 --jobs auto --out target/sqlite-parity/sqlite-scale-smoke.jsonl
     ;;
   sqlite-parity-scale-ci)
+    ensure_sqlite_parity_reference
     rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
     mkdir -p benchmark-results/sqlite-parity/latest assets
     mkdir -p target/sqlite-parity
@@ -188,6 +198,7 @@ case "$lane" in
     bash ops/ci/sqlite-parity-report.sh publish-pr
     ;;
   sqlite-parity-scale-full)
+    ensure_sqlite_parity_reference
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin "$sqlite_parity_reference_bin" --engine-name sqlite3 "${sqlite_parity_full_compare[@]}" --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl
     ;;
   ffi-abi)
