@@ -12,6 +12,9 @@ use super::{catalog, source_lines};
 
 const README_BEGIN: &str = "<!-- sqlite-parity-report:begin -->";
 const README_END: &str = "<!-- sqlite-parity-report:end -->";
+const JANKURAI_BADGE_BEGIN: &str = "<!-- jankurai-score-badge:begin -->";
+const JANKURAI_BADGE_END: &str = "<!-- jankurai-score-badge:end -->";
+const LATENCY_TABLE_ANCHOR: &str = "sqlite-parity-ranked-latency-table";
 
 #[derive(Debug)]
 pub struct ReportOptions {
@@ -21,6 +24,7 @@ pub struct ReportOptions {
     pub readme: PathBuf,
     pub plot: PathBuf,
     pub ksloc_plot: PathBuf,
+    pub jankurai_score: Option<PathBuf>,
     pub updated_date: String,
     pub check: bool,
     pub command: Vec<String>,
@@ -85,6 +89,13 @@ struct ManifestJson {
     output_hashes: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct JankuraiScore {
+    score: u64,
+    status: String,
+    color: &'static str,
+}
+
 pub fn generate(options: ReportOptions) -> Result<()> {
     let all_cases = catalog::all_cases()?;
     let approved = parse_case_list(&options.case_list)?;
@@ -108,9 +119,10 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let svg = latency_svg(&report.ranked, &report.summary);
     let ksloc_svg = ksloc_svg(&source_summary, &options.updated_date);
     let paper_writes = paper_loc_writes(&repo_root, &source_summary)?;
-    let readme = replace_readme_block(
-        &fs::read_to_string(&options.readme)
-            .with_context(|| format!("read README {}", options.readme.display()))?,
+    let readme_text = fs::read_to_string(&options.readme)
+        .with_context(|| format!("read README {}", options.readme.display()))?;
+    let mut readme = replace_readme_block(
+        &readme_text,
         &readme_block(
             &report.ranked,
             &report.summary,
@@ -118,6 +130,13 @@ pub fn generate(options: ReportOptions) -> Result<()> {
             &options.ksloc_plot,
         ),
     )?;
+    if let Some(score_path) = &options.jankurai_score {
+        let score_text = fs::read_to_string(score_path)
+            .with_context(|| format!("read jankurai score {}", score_path.display()))?;
+        let score = parse_jankurai_score(&score_text)
+            .with_context(|| format!("parse jankurai score {}", score_path.display()))?;
+        readme = replace_jankurai_badge(&readme, &score)?;
+    }
 
     let mut input_hashes = BTreeMap::new();
     input_hashes.insert(
@@ -428,7 +447,11 @@ fn readme_block(
         "![SQLite vs RedlineDB production KSLOC chart]({})\n\n",
         ksloc_plot.display()
     ));
-    out.push_str("<details>\n<summary>Full ranked latency table</summary>\n\n");
+    out.push_str(&format!(
+        "[Full ranked latency table](#{LATENCY_TABLE_ANCHOR}) is collapsed below for README readability.\n\n"
+    ));
+    out.push_str(&format!("<details id=\"{LATENCY_TABLE_ANCHOR}\">\n"));
+    out.push_str("<summary>Full ranked latency table</summary>\n\n");
     out.push_str("| Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |\n");
     out.push_str("| ---: | --- | --- | --- | --- | ---: | ---: | ---: |\n");
     for (index, row) in ranked.iter().enumerate() {
@@ -454,7 +477,17 @@ fn readme_block(
 
 fn replace_readme_block(readme: &str, block: &str) -> Result<String> {
     if let (Some(begin), Some(end)) = (readme.find(README_BEGIN), readme.find(README_END)) {
-        let end = end + README_END.len();
+        let mut begin = begin;
+        let mut end = end + README_END.len();
+        let wrapper_prefix = "<details>\n<summary>Detailed parity report</summary>\n\n";
+        if readme[..begin].ends_with(wrapper_prefix) {
+            begin -= wrapper_prefix.len();
+            if readme[end..].starts_with("\n\n</details>") {
+                end += "\n\n</details>".len();
+            } else if readme[end..].starts_with("\n</details>") {
+                end += "\n</details>".len();
+            }
+        }
         let mut next = String::new();
         next.push_str(&readme[..begin]);
         next.push_str(block.trim_end());
@@ -473,6 +506,172 @@ fn replace_readme_block(readme: &str, block: &str) -> Result<String> {
     next.push('\n');
     next.push_str(&readme[insert..]);
     Ok(next)
+}
+
+fn parse_jankurai_score(score_json: &str) -> Result<JankuraiScore> {
+    let value: serde_json::Value =
+        serde_json::from_str(score_json).context("parse repo-score JSON")?;
+    let score = value
+        .get("score")
+        .and_then(serde_json::Value::as_u64)
+        .context("repo-score JSON lacks numeric score")?;
+    let status = value
+        .pointer("/decision/status")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| value.get("decision").and_then(serde_json::Value::as_str))
+        .or_else(|| {
+            value
+                .get("conformance_decision")
+                .and_then(serde_json::Value::as_str)
+        })
+        .or_else(|| value.get("status").and_then(serde_json::Value::as_str))
+        .map(str::trim)
+        .filter(|status| !status.is_empty())
+        .context("repo-score JSON lacks decision status")?
+        .to_ascii_lowercase();
+    let color = jankurai_badge_color(score, &status);
+    Ok(JankuraiScore {
+        score,
+        status,
+        color,
+    })
+}
+
+fn jankurai_badge_color(score: u64, status: &str) -> &'static str {
+    match status {
+        "block" | "blocked" | "fail" | "failed" => "red",
+        "pass" | "passed" if score >= 85 => "brightgreen",
+        _ if score >= 85 => "green",
+        _ if score >= 70 => "yellow",
+        _ if score >= 50 => "orange",
+        _ => "red",
+    }
+}
+
+fn replace_jankurai_badge(readme: &str, score: &JankuraiScore) -> Result<String> {
+    let block = jankurai_badge_block(score);
+    if let Some((begin, end)) =
+        marked_block_bounds(readme, JANKURAI_BADGE_BEGIN, JANKURAI_BADGE_END)
+    {
+        if marked_block_is_in_badge_paragraph(readme, begin, end) {
+            return Ok(replace_span(readme, begin, end, &block));
+        }
+        let readme = replace_span(readme, begin, end, "");
+        return insert_jankurai_badge(&readme, &block);
+    }
+
+    insert_jankurai_badge(readme, &block)
+}
+
+fn insert_jankurai_badge(readme: &str, block: &str) -> Result<String> {
+    let paragraph_end = badge_paragraph_end(readme)?;
+    let mut next = String::new();
+    next.push_str(&readme[..paragraph_end]);
+    if !next.ends_with('\n') {
+        next.push('\n');
+    }
+    next.push_str(&block);
+    next.push('\n');
+    next.push_str(&readme[paragraph_end..]);
+    Ok(next)
+}
+
+fn marked_block_bounds(
+    readme: &str,
+    begin_marker: &str,
+    end_marker: &str,
+) -> Option<(usize, usize)> {
+    let marker_begin = readme.find(begin_marker)?;
+    let marker_end = readme.find(end_marker)? + end_marker.len();
+    let begin = readme[..marker_begin]
+        .rfind('\n')
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    let end = readme[marker_end..]
+        .find('\n')
+        .map(|index| marker_end + index + 1)
+        .unwrap_or(marker_end);
+    Some((begin, end))
+}
+
+fn replace_span(readme: &str, begin: usize, end: usize, block: &str) -> String {
+    let removed_trailing_newline = end > begin && readme.as_bytes().get(end - 1) == Some(&b'\n');
+    let mut next = String::new();
+    next.push_str(&readme[..begin]);
+    if !block.is_empty() {
+        next.push_str(block.trim_end());
+        if removed_trailing_newline {
+            next.push('\n');
+        }
+    }
+    next.push_str(&readme[end..]);
+    next
+}
+
+fn marked_block_is_in_badge_paragraph(readme: &str, begin: usize, end: usize) -> bool {
+    let Some(paragraph_start) = readme[..begin].rfind("<p align=\"center\">") else {
+        return false;
+    };
+    let Some(paragraph_end_offset) = readme[end..].find("</p>") else {
+        return false;
+    };
+    let paragraph_end = end + paragraph_end_offset;
+    is_badge_paragraph(&readme[paragraph_start..paragraph_end])
+}
+
+fn badge_paragraph_end(readme: &str) -> Result<usize> {
+    let paragraph_marker = "<p align=\"center\">";
+    let mut search_start = 0;
+    while let Some(start_offset) = readme[search_start..].find(paragraph_marker) {
+        let paragraph_start = search_start + start_offset;
+        let Some(end_offset) = readme[paragraph_start..].find("</p>") else {
+            bail!("README top badge paragraph is missing closing </p>");
+        };
+        let paragraph_end = paragraph_start + end_offset;
+        if is_badge_paragraph(&readme[paragraph_start..paragraph_end]) {
+            return Ok(paragraph_end);
+        }
+        search_start = paragraph_end + "</p>".len();
+    }
+    bail!("README lacks top badge paragraph for jankurai score badge");
+}
+
+fn is_badge_paragraph(paragraph: &str) -> bool {
+    paragraph.contains("img.shields.io/badge/approved%20CI")
+        || paragraph.contains("img.shields.io/badge/version-")
+}
+
+fn jankurai_badge_block(score: &JankuraiScore) -> String {
+    let message = format!("{}/100 {}", score.score, score.status);
+    format!(
+        "  {JANKURAI_BADGE_BEGIN}\n  <a href=\".jankurai/repo-score.md\"><img src=\"https://img.shields.io/badge/jankurai-{}-{}\" alt=\"jankurai score: {}\"></a>\n  {JANKURAI_BADGE_END}",
+        shields_segment(&message),
+        score.color,
+        message
+    )
+}
+
+fn shields_segment(value: &str) -> String {
+    let mut out = String::new();
+    for ch in value.chars() {
+        match ch {
+            '-' => out.push_str("--"),
+            '_' => out.push_str("__"),
+            ' ' => out.push_str("%20"),
+            '/' => out.push_str("%2F"),
+            '%' => out.push_str("%25"),
+            '?' => out.push_str("%3F"),
+            '#' => out.push_str("%23"),
+            '&' => out.push_str("%26"),
+            '<' => out.push_str("%3C"),
+            '>' => out.push_str("%3E"),
+            '"' => out.push_str("%22"),
+            '\'' => out.push_str("%27"),
+            ch if ch.is_ascii_alphanumeric() || ch == '.' => out.push(ch),
+            ch => out.push_str(&format!("%{:02X}", ch as u32)),
+        }
+    }
+    out
 }
 
 fn latency_svg(ranked: &[RankedCase], summary: &SummaryJson) -> String {
@@ -1015,6 +1214,35 @@ mod tests {
         }
     }
 
+    fn fixture_ranked() -> Vec<RankedCase> {
+        vec![RankedCase {
+            case_id: "00001".to_owned(),
+            name: "fixture".to_owned(),
+            case_file: "fixture.rs".to_owned(),
+            priority: "P0".to_owned(),
+            profile: "memory".to_owned(),
+            category: "fixture".to_owned(),
+            sqlite_median_ns: 100,
+            redline_median_ns: 90,
+            improvement_pct: 10.0,
+            samples: 1,
+        }]
+    }
+
+    fn fixture_summary() -> SummaryJson {
+        SummaryJson {
+            updated_date: "2026-05-20".to_owned(),
+            generated_cases: 1127,
+            approved_cases: 612,
+            remaining_cases: 515,
+            coverage_pct: 54.30346,
+            ranked_cases: 1,
+            measured_samples: 1,
+            warmup_samples: 0,
+            sqlite_version: "3.fixture".to_owned(),
+        }
+    }
+
     #[test]
     fn improvement_sign_convention_and_ranking() {
         let mut ranked = vec![
@@ -1080,30 +1308,79 @@ mod tests {
     }
 
     #[test]
-    fn svg_contains_required_labels() {
-        let ranked = vec![RankedCase {
-            case_id: "00001".to_owned(),
-            name: "fixture".to_owned(),
-            case_file: "fixture.rs".to_owned(),
-            priority: "P0".to_owned(),
-            profile: "memory".to_owned(),
-            category: "fixture".to_owned(),
-            sqlite_median_ns: 100,
-            redline_median_ns: 90,
-            improvement_pct: 10.0,
-            samples: 1,
-        }];
-        let summary = SummaryJson {
-            updated_date: "2026-05-20".to_owned(),
-            generated_cases: 1127,
-            approved_cases: 612,
-            remaining_cases: 515,
-            coverage_pct: 54.30346,
-            ranked_cases: 1,
-            measured_samples: 1,
-            warmup_samples: 0,
-            sqlite_version: "3.fixture".to_owned(),
+    fn readme_replacement_removes_outer_details_wrapper() {
+        let current = format!(
+            "before\n<details>\n<summary>Detailed parity report</summary>\n\n{README_BEGIN}\nold\n{README_END}\n\n</details>\nafter\n"
+        );
+        let next = replace_readme_block(&current, "new block\n").expect("replace");
+        assert_eq!(next, "before\nnew block\nafter\n");
+    }
+
+    #[test]
+    fn readme_block_includes_visible_charts_and_latency_anchor() {
+        let block = readme_block(
+            &fixture_ranked(),
+            &fixture_summary(),
+            Path::new("assets/sqlite-parity-latency-gap.svg"),
+            Path::new("assets/sqlite-parity-ksloc.svg"),
+        );
+
+        assert!(block.contains(
+            "![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)"
+        ));
+        assert!(block.contains(
+            "![SQLite vs RedlineDB production KSLOC chart](assets/sqlite-parity-ksloc.svg)"
+        ));
+        assert!(block.contains("[Full ranked latency table](#sqlite-parity-ranked-latency-table)"));
+        assert!(block.contains("<details id=\"sqlite-parity-ranked-latency-table\">"));
+    }
+
+    #[test]
+    fn jankurai_badge_renders_score_status_and_color() {
+        let score =
+            parse_jankurai_score(r#"{ "score": 64, "decision": { "status": "advisory" } }"#)
+                .expect("score");
+        let badge = jankurai_badge_block(&score);
+
+        assert_eq!(
+            score,
+            JankuraiScore {
+                score: 64,
+                status: "advisory".to_owned(),
+                color: "orange",
+            }
+        );
+        assert!(badge.contains("https://img.shields.io/badge/jankurai-64%2F100%20advisory-orange"));
+        assert!(badge.contains("alt=\"jankurai score: 64/100 advisory\""));
+    }
+
+    #[test]
+    fn jankurai_badge_replacement_preserves_static_badges() {
+        let score = JankuraiScore {
+            score: 64,
+            status: "advisory".to_owned(),
+            color: "orange",
         };
+        let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-1.0.24-blue\" alt=\"version\">\n</p>\nafter\n";
+        let next = replace_jankurai_badge(current, &score).expect("replace");
+
+        assert!(next.contains("<a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>"));
+        assert!(next.contains(
+            "<img src=\"https://img.shields.io/badge/version-1.0.24-blue\" alt=\"version\">"
+        ));
+        assert!(next.contains(JANKURAI_BADGE_BEGIN));
+        assert!(next.contains(JANKURAI_BADGE_END));
+        assert!(
+            next.find("assets/redlinedb-banner.png")
+                .expect("banner paragraph")
+                < next.find(JANKURAI_BADGE_BEGIN).expect("badge marker")
+        );
+    }
+
+    #[test]
+    fn svg_contains_required_labels() {
+        let ranked = fixture_ranked();
+        let summary = fixture_summary();
         let svg = latency_svg(&ranked, &summary);
         assert!(svg.contains("Updated 2026-05-20"));
         assert!(svg.contains("Median latency improvement vs SQLite (%)"));

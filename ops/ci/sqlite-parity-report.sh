@@ -13,6 +13,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
+# shellcheck source=ops/ci/lib.sh
+. "$repo_root/ops/ci/lib.sh"
+
 report_branch="${REDLINEDB_SQLITE_PARITY_REPORT_BRANCH:-automation/sqlite-parity-report}"
 base_branch="${REDLINEDB_SQLITE_PARITY_REPORT_BASE:-main}"
 commit_message="${REDLINEDB_SQLITE_PARITY_REPORT_COMMIT_MESSAGE:-Update SQLite parity report}"
@@ -20,6 +23,10 @@ pr_title="${REDLINEDB_SQLITE_PARITY_REPORT_PR_TITLE:-Update SQLite parity report
 
 report_paths=(
   README.md
+  .jankurai/repo-score.json
+  .jankurai/repo-score.md
+  .jankurai/score-history.jsonl
+  .jankurai/score-history.csv
   assets/sqlite-parity-latency-gap.svg
   assets/sqlite-parity-ksloc.svg
   benchmark-results/sqlite-parity/latest
@@ -31,7 +38,16 @@ report_paths=(
   paper/sections/introduction.tex
 )
 
+ensure_jankurai() {
+  if command -v jankurai >/dev/null 2>&1; then
+    return 0
+  fi
+  mkdir -p .jankurai/sqlite-parity-report
+  ci_install_jankurai_logged .jankurai/sqlite-parity-report/install.log
+}
+
 run_update() {
+  ensure_jankurai
   if command -v just >/dev/null 2>&1; then
     just sqlite-parity-report-update
   else
