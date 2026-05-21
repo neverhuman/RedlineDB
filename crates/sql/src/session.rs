@@ -92,6 +92,8 @@ pub struct SessionState {
     /// Mirrors SQLite's `PRAGMA query_only`. When set, the executor
     /// rejects any non-read statement before dispatching it.
     pub query_only: bool,
+    /// Mirrors SQLite's `PRAGMA case_sensitive_like`.
+    pub case_sensitive_like: bool,
     pub last_insert_rowid: Option<i64>,
     pub unique_guards: Vec<UniqueKeyGuard>,
     /// Kernel-level unique-key reservations held until end-of-transaction.
@@ -127,6 +129,7 @@ impl Default for SessionState {
             temp_store: crate::statement::TempStoreMode::Default,
             cache_size: -2000,
             query_only: false,
+            case_sensitive_like: false,
             last_insert_rowid: None,
             unique_guards: Vec::new(),
             kernel_unique_guards: Vec::new(),
@@ -152,6 +155,7 @@ impl SessionState {
         self.temp_store = crate::statement::TempStoreMode::Default;
         self.cache_size = -2000;
         self.query_only = false;
+        self.case_sensitive_like = false;
         self.last_insert_rowid = None;
         self.unique_guards.clear();
         self.kernel_unique_guards.clear();

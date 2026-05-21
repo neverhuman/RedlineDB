@@ -418,7 +418,10 @@ fn known_full_sqlite_parity_gaps_are_explicit_failures() {
     harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA page_size = 4096");
     harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA encoding = 'UTF-8'");
     harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA application_id = 42");
-    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA wal_checkpoint(FULL)");
+    harness.assert_sqlite_result_diff_or_redline_rejects(
+        &["PRAGMA journal_mode=WAL"],
+        "PRAGMA wal_checkpoint(FULL)",
+    );
     harness.assert_sqlite_result_diff_or_redline_rejects(
         &[
             "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)",

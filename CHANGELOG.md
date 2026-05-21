@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## [1.0.22] - 2026-05-21
+
+SQLite parity push 6.
+
+### Changed
+
+- SQLite parity CI coverage now approves 1049 generated cases, including
+  the push-6 shell compatibility work, sqlite `case_sensitive_like`,
+  `wal_checkpoint`, `vacuum`, `reindex`, `VACUUM INTO`, `uint` collation,
+  and CLI shell flag shims.
+- Workspace package metadata and lockfile entries now target `1.0.22`.
+
 ## [1.0.21] - 2026-05-21
 
 SQLite shell parity push 5.

@@ -239,7 +239,15 @@ pub(crate) fn eval_scalar(
             }
             let value = eval_scalar(expr, row, bindings)?;
             let pattern = eval_scalar(pattern, row, bindings)?;
-            like_result(value, pattern, *negated, escape_char.clone(), true)?
+            let case_insensitive =
+                crate::exec::current_connection().is_none_or(|conn| !conn.case_sensitive_like());
+            like_result(
+                value,
+                pattern,
+                *negated,
+                escape_char.clone(),
+                case_insensitive,
+            )?
         }
         Expr::ILike {
             negated,
