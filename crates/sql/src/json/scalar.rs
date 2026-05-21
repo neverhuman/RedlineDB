@@ -37,14 +37,11 @@ pub(crate) fn sql_to_json_value(value: &SqlValue) -> Value {
         SqlValue::Real(f) => serde_json::Number::from_f64(*f)
             .map(Value::Number)
             .unwrap_or(Value::Null),
-        SqlValue::Text(s) => {
-            // Per SQLite: text args to json_array/json_object are stored
-            // as JSON strings unless they were produced by another JSON
-            // function. We don't track provenance, so we always treat
-            // text as a string literal (the safer default; users can call
-            // json(text) to splice raw JSON).
-            Value::String(s.to_string())
-        }
+        SqlValue::Text(s) => match serde_json::from_str::<Value>(s.as_ref()) {
+            Ok(Value::Array(values)) => Value::Array(values),
+            Ok(Value::Object(values)) => Value::Object(values),
+            _ => Value::String(s.to_string()),
+        },
         SqlValue::Blob(b) => Value::String(String::from_utf8_lossy(b).into_owned()),
     }
 }
@@ -463,6 +460,16 @@ mod tests {
     fn json_object_rejects_null_key() {
         let err = json_object(&[SqlValue::Null, SqlValue::Integer(1)]).unwrap_err();
         assert!(matches!(err, Error::ConstraintViolation(_)));
+    }
+
+    #[test]
+    fn json_object_preserves_array_text_as_json_value() {
+        let v = json_object(&[t("items"), t("[1,2,3]")]).unwrap();
+        assert_eq!(v, t(r#"{"items":[1,2,3]}"#));
+        assert_eq!(
+            json_type(&[v, t("$.items")]).unwrap(),
+            SqlValue::Text(Arc::from("array"))
+        );
     }
 
     #[test]

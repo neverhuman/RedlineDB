@@ -14,7 +14,7 @@ use super::spill::{SpillFile, SpillReader};
 use super::topk::SortDirection;
 use crate::error::Result;
 use crate::exec::expr::row_width;
-use crate::value::{SqlValue, compare_values};
+use crate::value::SqlValue;
 
 /// One item in the merge-priority-queue: the head row of a run plus enough
 /// metadata to refill from the right source.
@@ -39,10 +39,7 @@ impl Ord for MergeItem {
             .zip(other.keys.iter())
             .zip(self.directions.iter())
         {
-            let mut ord = compare_values(l, r);
-            if matches!(dir, SortDirection::Desc) {
-                ord = ord.reverse();
-            }
+            let ord = dir.compare_values(l, r);
             if ord != Ordering::Equal {
                 return ord.reverse();
             }
@@ -119,10 +116,7 @@ where
         let directions = std::sync::Arc::clone(&self.directions);
         self.buffer.sort_by(|a, b| {
             for ((l, r), dir) in a.0.iter().zip(b.0.iter()).zip(directions.iter()) {
-                let mut ord = compare_values(l, r);
-                if matches!(dir, SortDirection::Desc) {
-                    ord = ord.reverse();
-                }
+                let ord = dir.compare_values(l, r);
                 if ord != Ordering::Equal {
                     return ord;
                 }

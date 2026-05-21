@@ -359,7 +359,7 @@ fn eval_group_function_or_scalar(
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
     let name = func.name.to_string().to_ascii_lowercase();
-    if is_builtin_aggregate(&name) || crate::udf::is_registered_aggregate(&name) {
+    if is_aggregate_call(func, &name) {
         return eval_group_function(func, group, bindings);
     }
 
@@ -387,32 +387,24 @@ fn eval_group_function_or_scalar(
         }
     }
 
-    match name.as_str() {
-        "coalesce" | "ifnull" => {
-            for value in values {
-                if !matches!(value, SqlValue::Null) {
-                    return Ok(value);
-                }
-            }
-            Ok(SqlValue::Null)
-        }
-        "nullif" => {
-            if values.len() != 2 {
-                return Err(Error::UnsupportedSql("nullif requires 2 args".to_owned()));
-            }
-            if compare_values(&values[0], &values[1]) == Ordering::Equal {
-                Ok(SqlValue::Null)
-            } else {
-                Ok(values.remove(0))
-            }
-        }
-        _ => Err(Error::UnsupportedSql(format!(
-            "unsupported scalar function around aggregate: {name}"
-        ))),
-    }
+    crate::exec::expr::json_dispatch::eval_scalar_function_values(&name, values)
 }
 
-fn is_builtin_aggregate(name: &str) -> bool {
+fn is_aggregate_call(func: &sqlparser::ast::Function, name: &str) -> bool {
+    if matches!(name, "min" | "max") {
+        return function_arg_count(func) == Some(1);
+    }
+    is_builtin_aggregate_name(name) || crate::udf::is_registered_aggregate(name)
+}
+
+fn function_arg_count(func: &sqlparser::ast::Function) -> Option<usize> {
+    let FunctionArguments::List(list) = &func.args else {
+        return None;
+    };
+    Some(list.args.len())
+}
+
+fn is_builtin_aggregate_name(name: &str) -> bool {
     matches!(
         name,
         "count"
@@ -452,11 +444,20 @@ fn rows_in_aggregate_order<'a>(
     bindings: &[Option<SqlValue>],
 ) -> Result<Vec<&'a SqlRow>> {
     let Some(order_by) = aggregate_order_by(func)? else {
-        return Ok(group.iter().collect());
+        let mut rows = Vec::with_capacity(group.len());
+        for row in group {
+            if row_passes_aggregate_filter(func, row, bindings)? {
+                rows.push(row);
+            }
+        }
+        return Ok(rows);
     };
 
     let mut keyed = Vec::with_capacity(group.len());
     for (idx, row) in group.iter().enumerate() {
+        if !row_passes_aggregate_filter(func, row, bindings)? {
+            continue;
+        }
         let ctx = row.context();
         let mut keys = Vec::with_capacity(order_by.len());
         for order in order_by {
@@ -482,6 +483,28 @@ fn rows_in_aggregate_order<'a>(
     Ok(keyed.into_iter().map(|(_, row, _)| row).collect())
 }
 
+fn row_passes_aggregate_filter(
+    func: &sqlparser::ast::Function,
+    row: &SqlRow,
+    bindings: &[Option<SqlValue>],
+) -> Result<bool> {
+    let Some(filter) = &func.filter else {
+        return Ok(true);
+    };
+    let ctx = row.context();
+    Ok(is_truthy(&eval_scalar(filter, &ctx, bindings)?))
+}
+
+fn distinct_values_contain(seen: &[Vec<SqlValue>], values: &[SqlValue]) -> bool {
+    seen.iter().any(|candidate| {
+        candidate.len() == values.len()
+            && candidate
+                .iter()
+                .zip(values)
+                .all(|(left, right)| compare_values(left, right) == Ordering::Equal)
+    })
+}
+
 fn eval_group_function(
     func: &sqlparser::ast::Function,
     group: &[SqlRow],
@@ -497,26 +520,56 @@ fn eval_group_function(
                         FunctionArg::Unnamed(FunctionArgExpr::Wildcard)
                     )
                 {
-                    return Ok(SqlValue::Integer(group.len() as i64));
+                    let mut count = 0i64;
+                    for row in group {
+                        if row_passes_aggregate_filter(func, row, bindings)? {
+                            count += 1;
+                        }
+                    }
+                    return Ok(SqlValue::Integer(count));
                 }
+                let distinct = matches!(
+                    list.duplicate_treatment,
+                    Some(sqlparser::ast::DuplicateTreatment::Distinct)
+                );
+                let mut seen = Vec::new();
                 let mut count = 0i64;
                 for row in group {
+                    if !row_passes_aggregate_filter(func, row, bindings)? {
+                        continue;
+                    }
                     let ctx = row.context();
                     let mut include = true;
+                    let mut values = Vec::new();
                     for arg in &list.args {
-                        if let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg
-                            && matches!(eval_scalar(expr, &ctx, bindings)?, SqlValue::Null)
-                        {
-                            include = false;
+                        if let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg {
+                            let value = eval_scalar(expr, &ctx, bindings)?;
+                            if matches!(value, SqlValue::Null) {
+                                include = false;
+                            } else {
+                                values.push(value);
+                            }
                         }
                     }
                     if include {
+                        if distinct {
+                            if distinct_values_contain(&seen, &values) {
+                                continue;
+                            }
+                            seen.push(values);
+                        }
                         count += 1;
                     }
                 }
                 Ok(SqlValue::Integer(count))
             } else {
-                Ok(SqlValue::Integer(group.len() as i64))
+                let mut count = 0i64;
+                for row in group {
+                    if row_passes_aggregate_filter(func, row, bindings)? {
+                        count += 1;
+                    }
+                }
+                Ok(SqlValue::Integer(count))
             }
         }
         "sum" => {
@@ -525,6 +578,9 @@ fn eval_group_function(
             let mut saw_real = false;
             let mut saw_value = false;
             for row in group {
+                if !row_passes_aggregate_filter(func, row, bindings)? {
+                    continue;
+                }
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
@@ -575,6 +631,9 @@ fn eval_group_function(
             let mut count = 0i64;
             let mut sum = 0.0f64;
             for row in group {
+                if !row_passes_aggregate_filter(func, row, bindings)? {
+                    continue;
+                }
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
@@ -609,6 +668,9 @@ fn eval_group_function(
         "min" | "max" => {
             let mut best: Option<SqlValue> = None;
             for row in group {
+                if !row_passes_aggregate_filter(func, row, bindings)? {
+                    continue;
+                }
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
@@ -640,6 +702,9 @@ fn eval_group_function(
         "total" => {
             let mut acc = 0.0f64;
             for row in group {
+                if !row_passes_aggregate_filter(func, row, bindings)? {
+                    continue;
+                }
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =

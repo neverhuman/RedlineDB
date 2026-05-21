@@ -27,9 +27,7 @@ pub(crate) fn round_function(values: &[SqlValue]) -> Result<SqlValue> {
         0
     };
     let factor = 10f64.powi(digits);
-    Ok(canonicalize(SqlValue::Real(
-        (value * factor).round() / factor,
-    )))
+    Ok(SqlValue::Real((value * factor).round() / factor))
 }
 
 pub(crate) fn numeric_value(value: &SqlValue) -> Result<f64> {

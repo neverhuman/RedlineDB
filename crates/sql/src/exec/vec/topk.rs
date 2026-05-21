@@ -21,6 +21,54 @@ pub const TOPK_LIMIT_THRESHOLD: usize = 64;
 pub enum SortDirection {
     Asc,
     Desc,
+    AscNullsLast,
+    DescNullsFirst,
+}
+
+impl SortDirection {
+    pub fn from_order_options(desc: bool, nulls_first: Option<bool>) -> Self {
+        let default_nulls_first = !desc;
+        match (desc, nulls_first.unwrap_or(default_nulls_first)) {
+            (false, true) => Self::Asc,
+            (false, false) => Self::AscNullsLast,
+            (true, false) => Self::Desc,
+            (true, true) => Self::DescNullsFirst,
+        }
+    }
+
+    pub fn is_desc(self) -> bool {
+        matches!(self, Self::Desc | Self::DescNullsFirst)
+    }
+
+    fn nulls_first(self) -> bool {
+        matches!(self, Self::Asc | Self::DescNullsFirst)
+    }
+
+    pub fn compare_values(self, left: &SqlValue, right: &SqlValue) -> Ordering {
+        match (
+            matches!(left, SqlValue::Null),
+            matches!(right, SqlValue::Null),
+        ) {
+            (true, true) => return Ordering::Equal,
+            (true, false) => {
+                return if self.nulls_first() {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                };
+            }
+            (false, true) => {
+                return if self.nulls_first() {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                };
+            }
+            (false, false) => {}
+        }
+        let ord = crate::value::compare_values(left, right);
+        if self.is_desc() { ord.reverse() } else { ord }
+    }
 }
 
 /// A row + cached sort keys. Cached keys avoid recomputing expression-derived
@@ -44,10 +92,7 @@ impl Ord for HeapEntry {
             .zip(other.keys.iter())
             .zip(self.directions.iter())
         {
-            let mut ord = crate::value::compare_values(l, r);
-            if matches!(dir, SortDirection::Desc) {
-                ord = ord.reverse();
-            }
+            let ord = dir.compare_values(l, r);
             if ord != Ordering::Equal {
                 return ord;
             }
@@ -238,6 +283,26 @@ mod tests {
         let rows = heap.into_sorted_rows();
         // SQLite NULL sorts first under ASC.
         assert_eq!(rows[0][0], SqlValue::Text(Arc::from("nul")));
+    }
+
+    #[test]
+    fn topk_with_nulls_last() {
+        let mut heap = TopKHeap::new(3, vec![SortDirection::AscNullsLast]);
+        heap.push(vec![SqlValue::Null], vec![SqlValue::Text(Arc::from("nul"))])
+            .expect("push");
+        heap.push(
+            vec![SqlValue::Integer(1)],
+            vec![SqlValue::Text(Arc::from("one"))],
+        )
+        .expect("push");
+        heap.push(
+            vec![SqlValue::Integer(2)],
+            vec![SqlValue::Text(Arc::from("two"))],
+        )
+        .expect("push");
+        let rows = heap.into_sorted_rows();
+        assert_eq!(rows[0][0], SqlValue::Text(Arc::from("one")));
+        assert_eq!(rows[2][0], SqlValue::Text(Arc::from("nul")));
     }
 
     #[test]

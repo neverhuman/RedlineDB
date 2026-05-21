@@ -791,6 +791,7 @@ pub(crate) fn pragma_index_list_rows(
     table
         .indexes
         .iter()
+        .rev()
         .enumerate()
         .map(|(seq, index)| {
             let origin = match index.origin {

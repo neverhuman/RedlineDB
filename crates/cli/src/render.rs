@@ -34,7 +34,7 @@ impl Cell {
         match self {
             Self::Null => String::new(),
             Self::Integer(v) => v.to_string(),
-            Self::Real(v) => v.to_string(),
+            Self::Real(v) => format_real(*v),
             Self::Text(v) => v.clone(),
             Self::Blob(v) => format!("<blob:{}>", v.len()),
         }
@@ -44,7 +44,7 @@ impl Cell {
         match self {
             Self::Null => "NULL".to_owned(),
             Self::Integer(v) => v.to_string(),
-            Self::Real(v) => v.to_string(),
+            Self::Real(v) => format_real(*v),
             Self::Text(v) => {
                 let mut out = String::with_capacity(v.len() + 2);
                 out.push('\'');
@@ -464,7 +464,7 @@ fn write_csv_value_ref<W: Write>(
     match value {
         ValueRef::Null => write_csv_cell(out, null_value, separator),
         ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
-        ValueRef::Real(v) => write!(out, "{v}").map_err(|err| err.to_string()),
+        ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
         ValueRef::Text(v) => write_csv_cell(out, v, separator),
         ValueRef::Blob(v) => write_csv_cell(out, &format!("<blob:{}>", v.len()), separator),
     }
@@ -480,9 +480,28 @@ fn write_text_value_ref<W: Write>(
             .write_all(null_value.as_bytes())
             .map_err(|err| err.to_string()),
         ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
-        ValueRef::Real(v) => write!(out, "{v}").map_err(|err| err.to_string()),
+        ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
         ValueRef::Text(v) => out.write_all(v.as_bytes()).map_err(|err| err.to_string()),
         ValueRef::Blob(v) => write!(out, "<blob:{}>", v.len()).map_err(|err| err.to_string()),
+    }
+}
+
+fn format_real(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".to_owned();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 {
+            "-Inf".to_owned()
+        } else {
+            "Inf".to_owned()
+        };
+    }
+    let rendered = format!("{value}");
+    if rendered.contains('.') || rendered.contains('e') || rendered.contains('E') {
+        rendered
+    } else {
+        format!("{rendered}.0")
     }
 }
 

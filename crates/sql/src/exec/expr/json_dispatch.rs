@@ -41,7 +41,14 @@ pub(super) fn eval_function(
         ));
     }
 
-    match name.as_str() {
+    eval_scalar_function_values(&name, values)
+}
+
+pub(crate) fn eval_scalar_function_values(
+    name: &str,
+    mut values: Vec<SqlValue>,
+) -> Result<SqlValue> {
+    match name {
         "last_insert_rowid" => {
             if !values.is_empty() {
                 return Err(Error::UnsupportedSql(
