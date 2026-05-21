@@ -105,7 +105,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let raw_text = fs::read_to_string(&options.input)
         .with_context(|| format!("read sqlite parity raw input {}", options.input.display()))?;
     let raw_records = parse_raw_records(&raw_text)?;
-    let report = build_report(&all_cases, &approved, raw_records, &options.updated_date);
+    let report = build_report(&all_cases, &approved, raw_records, &options.updated_date)?;
 
     let raw_out = options.out_dir.join("raw.jsonl");
     let ranked_out = options.out_dir.join("ranked.csv");
@@ -215,6 +215,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     }
 }
 
+#[derive(Debug)]
 struct BuiltReport {
     ranked: Vec<RankedCase>,
     summary: SummaryJson,
@@ -243,7 +244,7 @@ fn build_report(
     approved: &BTreeSet<String>,
     raw_records: Vec<RawRecord>,
     updated_date: &str,
-) -> BuiltReport {
+) -> Result<BuiltReport> {
     let mut grouped = BTreeMap::<String, Vec<RawRecord>>::new();
     let mut sqlite_version = String::from("<unknown>");
     let mut warmup = 0usize;
@@ -298,7 +299,9 @@ fn build_report(
         );
         let first = passed[0];
         let case_file = if first.case_file.is_empty() {
-            case_files.get(id).cloned().unwrap_or_default()
+            case_files.get(id).cloned().with_context(|| {
+                format!("resolve sqlite parity case file metadata for approved case {id}")
+            })?
         } else {
             first.case_file.clone()
         };
@@ -331,7 +334,7 @@ fn build_report(
         warmup / approved_cases
     };
     let ranked_cases = ranked.len();
-    BuiltReport {
+    Ok(BuiltReport {
         ranked,
         summary: SummaryJson {
             updated_date: updated_date.to_owned(),
@@ -346,7 +349,7 @@ fn build_report(
         },
         repetitions,
         warmup: warmup_per_case,
-    }
+    })
 }
 
 fn is_warmup(record: &RawRecord) -> bool {
@@ -1294,10 +1297,27 @@ mod tests {
         });
         let all_cases = catalog::all_cases().expect("manifest");
         let approved = BTreeSet::from(["00001".to_owned()]);
-        let report = build_report(&all_cases, &approved, records, "2026-05-20");
+        let report = build_report(&all_cases, &approved, records, "2026-05-20").expect("report");
         assert_eq!(report.ranked[0].sqlite_median_ns, 300);
         assert_eq!(report.ranked[0].redline_median_ns, 120);
         assert_eq!(report.summary.warmup_samples, 1);
+    }
+
+    #[test]
+    fn missing_case_file_metadata_fails_closed() {
+        let records = vec![RawRecord {
+            case_file: String::new(),
+            ..raw("99999", 100, 90)
+        }];
+        let all_cases = Vec::new();
+        let approved = BTreeSet::from(["99999".to_owned()]);
+
+        let err = build_report(&all_cases, &approved, records, "2026-05-20").expect_err("metadata");
+
+        assert!(
+            err.to_string()
+                .contains("resolve sqlite parity case file metadata for approved case 99999")
+        );
     }
 
     #[test]
