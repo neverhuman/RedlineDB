@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## [1.0.23] - 2026-05-21
+
+SQLite parity KSLOC chart refresh.
+
+### Changed
+
+- SQLite parity report artifacts now include the scanner-driven KSLOC chart
+  and refreshed LOC-facing paper tables/text from the same deterministic
+  core-crate scan.
+- Workspace package metadata, lockfile entries, and install docs now target
+  `1.0.23`.
+
 ## [1.0.22] - 2026-05-21
 
 SQLite parity push 6.

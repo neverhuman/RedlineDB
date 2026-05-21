@@ -2,9 +2,12 @@
 
 We rebuilt SQLite's API contract in safe Rust, kept the embedded
 single-process deployment story intact, and measured what the swap
-buys. The kernel and SQL layer together fit in roughly 35 KLOC of
-safe Rust active source, against the SQLite amalgamation's roughly
-250 KLOC of C. On a 128-vCPU host the engine reaches 7.9--8.3$\times$
+% sqlite-parity-loc:conclusion:begin
+buys. The core RedlineDB engine crates total 51.4 KSLOC of scanner-counted
+production Rust source, compared with SQLite's fixed 155.8 KSLOC
+source-line reference.
+% sqlite-parity-loc:conclusion:end
+On a 128-vCPU host the engine reaches 7.9--8.3$\times$
 SQLite's throughput on mixed and writers-disjoint OLTP at 64 threads,
 holds parity at the 64-thread point-read peak, and trails on the two
 contention-bound workloads we discussed openly. The deterministic

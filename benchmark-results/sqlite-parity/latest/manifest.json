@@ -12,24 +12,34 @@
     "README.md",
     "--plot",
     "assets/sqlite-parity-latency-gap.svg",
+    "--ksloc-plot",
+    "assets/sqlite-parity-ksloc.svg",
     "--updated-date",
     "2026-05-21"
   ],
-  "git_sha": "aaac26307fd2b31ad9549e507b978718844de3ad",
+  "git_sha": "b32ba8c439cf0c39b7a6a9a42c8ca12258933da3",
   "sqlite_version": "3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)",
   "updated_date": "2026-05-21",
   "repetitions": 3,
   "warmup": 1,
   "input_hashes": {
-    "benchmark-results/sqlite-parity/latest/raw.jsonl": "31d34aa15f1b56b2fa952506d1b615223ac3f555f73165ffae7094a477e2e10b",
+    "benchmark-results/sqlite-parity/latest/raw.jsonl": "3b503c6225509c600d67b7324a757b0599c7d234291af9097c263403b537b54f",
     "crates/bench/sqlite_parity/approved-ci.txt": "e1be0ba659fbb9d77a8faf90968d5706f935c01940973bd32df76c2fd19568d0",
     "crates/bench/sqlite_parity/generated_manifest.json": "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3"
   },
   "output_hashes": {
-    "README.md": "e6d94ef3e2ec3727b978ef457f80a104b47183e7f74a7e3a44f62945117fdd7b",
-    "assets/sqlite-parity-latency-gap.svg": "11b4ae027eaa540c3a85ad1e3717df648a089434939439f87ee74d14abeaaced",
-    "ranked.csv": "ec9b8bdbf826af7ce747404377ed7797740514dd1a8a5d1458af988cf5be1595",
-    "raw.jsonl": "31d34aa15f1b56b2fa952506d1b615223ac3f555f73165ffae7094a477e2e10b",
+    "./paper/data/loc_comparison.csv": "814cc9e3ee51d9c3559373c3a0200cf219f312d36d4b27fafaa1aa24bed91674",
+    "./paper/sections/abstract.tex": "809ebf87a3319b47e6392e5490ca946ed337f2a21d246384ec29c8127c382c41",
+    "./paper/sections/conclusion.tex": "e44583a5d35662111213e85278ec31376983ff1337dee61e66c8aec47026fdda",
+    "./paper/sections/evaluation.tex": "0ec134dec8ab712cd7f3dcecc39a63425f58377927cbed20f885b168d733fe6c",
+    "./paper/sections/implementation.tex": "55130df325ac269240925b7ca624778cedf7c67e228846915536b34077e99fcd",
+    "./paper/sections/introduction.tex": "08df89ca38e7eea8febe08a086c3ce4ef15ee3852c85f5a80e66271ec2d48833",
+    "README.md": "048f7c4897799a18e2a1210617832c301c14655f32bf1f1b33d051b083a8a67c",
+    "assets/sqlite-parity-ksloc.svg": "b9e9601aa84774bc5a88702e9228a661f4ad7f24c29341cb52d3e84eb1bdaa88",
+    "assets/sqlite-parity-latency-gap.svg": "1a861469314141a1d61c3283bc7630d09b891d1b53fbe1941d531991c0308f7c",
+    "ksloc.csv": "814cc9e3ee51d9c3559373c3a0200cf219f312d36d4b27fafaa1aa24bed91674",
+    "ranked.csv": "55c7382042e7584032d7c1cce7cc05021fb7e830c7ac7705a25fba45b1d2ffe4",
+    "raw.jsonl": "3b503c6225509c600d67b7324a757b0599c7d234291af9097c263403b537b54f",
     "summary.json": "4212b7d0511c9584a376cbf2bf77490dc3e194a84ffd87ff4c10a334552381ee"
   }
 }

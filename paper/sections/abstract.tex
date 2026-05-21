@@ -3,10 +3,12 @@ SQLite is the most-deployed database engine on Earth, but its
 single-writer write-ahead log imposes a hard concurrency ceiling that
 the rest of the data tier has long since outgrown. We rebuilt SQLite's
 API contract from scratch in safe Rust and measured what it costs to
-keep the contract while removing the cliff. RedlineDB exposes the
+keep the contract while removing the cliff. % sqlite-parity-loc:abstract:begin
+RedlineDB exposes the
 \texttt{sqlite3.h} C ABI and a native \texttt{rldb\_*} surface from
-roughly 48 KLOC of safe Rust active source---approximately one-fifth
-of the SQLite amalgamation's roughly 250 KLOC of C---and replaces the
+51.4 KSLOC of scanner-counted core Rust source versus SQLite's fixed
+155.8 KSLOC reference, and replaces the
+% sqlite-parity-loc:abstract:end
 single-writer WAL with a multi-version concurrency control kernel,
 B-link-style index lifecycle, and a group-commit WAL coordinator. On a
 128-vCPU host we ran 1{,}280 measured benchmark child runs across

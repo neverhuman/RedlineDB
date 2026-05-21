@@ -7,8 +7,8 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::catalog;
 use super::cli::{parse_case_list, validate_known_case_ids};
+use super::{catalog, source_lines};
 
 const README_BEGIN: &str = "<!-- sqlite-parity-report:begin -->";
 const README_END: &str = "<!-- sqlite-parity-report:end -->";
@@ -20,6 +20,7 @@ pub struct ReportOptions {
     pub out_dir: PathBuf,
     pub readme: PathBuf,
     pub plot: PathBuf,
+    pub ksloc_plot: PathBuf,
     pub updated_date: String,
     pub check: bool,
     pub command: Vec<String>,
@@ -88,6 +89,8 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let all_cases = catalog::all_cases()?;
     let approved = parse_case_list(&options.case_list)?;
     validate_known_case_ids(&approved, &all_cases)?;
+    let repo_root = repo_root_from_readme(&options.readme);
+    let source_summary = source_lines::scan_core_crates(&repo_root)?;
     let raw_text = fs::read_to_string(&options.input)
         .with_context(|| format!("read sqlite parity raw input {}", options.input.display()))?;
     let raw_records = parse_raw_records(&raw_text)?;
@@ -95,16 +98,25 @@ pub fn generate(options: ReportOptions) -> Result<()> {
 
     let raw_out = options.out_dir.join("raw.jsonl");
     let ranked_out = options.out_dir.join("ranked.csv");
+    let ksloc_out = options.out_dir.join("ksloc.csv");
     let summary_out = options.out_dir.join("summary.json");
     let manifest_out = options.out_dir.join("manifest.json");
 
     let ranked_csv = ranked_csv(&report.ranked);
+    let source_csv = source_lines_csv(&source_summary);
     let summary_json = serde_json::to_string_pretty(&report.summary)? + "\n";
     let svg = latency_svg(&report.ranked, &report.summary);
+    let ksloc_svg = ksloc_svg(&source_summary, &options.updated_date);
+    let paper_writes = paper_loc_writes(&repo_root, &source_summary)?;
     let readme = replace_readme_block(
         &fs::read_to_string(&options.readme)
             .with_context(|| format!("read README {}", options.readme.display()))?,
-        &readme_block(&report.ranked, &report.summary, &options.plot),
+        &readme_block(
+            &report.ranked,
+            &report.summary,
+            &options.plot,
+            &options.ksloc_plot,
+        ),
     )?;
 
     let mut input_hashes = BTreeMap::new();
@@ -126,6 +138,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let mut output_hashes = BTreeMap::new();
     output_hashes.insert("raw.jsonl".to_owned(), sha256_hex(raw_text.as_bytes()));
     output_hashes.insert("ranked.csv".to_owned(), sha256_hex(ranked_csv.as_bytes()));
+    output_hashes.insert("ksloc.csv".to_owned(), sha256_hex(source_csv.as_bytes()));
     output_hashes.insert(
         "summary.json".to_owned(),
         sha256_hex(summary_json.as_bytes()),
@@ -135,9 +148,19 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         sha256_hex(svg.as_bytes()),
     );
     output_hashes.insert(
+        options.ksloc_plot.display().to_string(),
+        sha256_hex(ksloc_svg.as_bytes()),
+    );
+    output_hashes.insert(
         options.readme.display().to_string(),
         sha256_hex(readme.as_bytes()),
     );
+    for (path, contents) in &paper_writes {
+        output_hashes.insert(
+            display_path(path).to_string(),
+            sha256_hex(contents.as_bytes()),
+        );
+    }
     let manifest_git_sha = if options.check {
         existing_manifest_git_sha(&manifest_out)?.unwrap_or_else(git_sha)
     } else {
@@ -155,14 +178,17 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     };
     let manifest_json = serde_json::to_string_pretty(&manifest)? + "\n";
 
-    let writes = [
+    let mut writes = vec![
         (raw_out, raw_text),
         (ranked_out, ranked_csv),
+        (ksloc_out, source_csv),
         (summary_out, summary_json),
         (manifest_out, manifest_json),
         (options.plot, svg),
+        (options.ksloc_plot, ksloc_svg),
         (options.readme, readme),
     ];
+    writes.extend(paper_writes);
     if options.check {
         check_files(&writes)
     } else {
@@ -347,7 +373,42 @@ fn ranked_csv(ranked: &[RankedCase]) -> String {
     out
 }
 
-fn readme_block(ranked: &[RankedCase], summary: &SummaryJson, plot: &Path) -> String {
+fn source_lines_csv(summary: &source_lines::SourceLineSummary) -> String {
+    let mut out = String::from("component,loc,ksloc,files,source_path,notes\n");
+    for component in &summary.components {
+        out.push_str(&format!(
+            "{},{},{:.1},{},{},{}\n",
+            component.id,
+            component.lines,
+            source_lines::ksloc(component.lines),
+            component.files,
+            csv(&component.path),
+            csv(&component.notes)
+        ));
+    }
+    out.push_str(&format!(
+        "redlinedb_core_total,{},{:.1},{},{},{}\n",
+        summary.total_lines,
+        summary.redlinedb_ksloc(),
+        summary.total_files,
+        csv("crates/{redlinedb,sql,kernel,ffi}/src"),
+        csv("production Rust source; excludes tests, benches, examples, cfg(test) items, blank lines, and comments")
+    ));
+    out.push_str(&format!(
+        "sqlite_reference,{},{:.1},,fixed,{}\n",
+        summary.sqlite_reference_lines,
+        summary.sqlite_reference_ksloc(),
+        csv("fixed SQLite source-line reference")
+    ));
+    out
+}
+
+fn readme_block(
+    ranked: &[RankedCase],
+    summary: &SummaryJson,
+    plot: &Path,
+    ksloc_plot: &Path,
+) -> String {
     let mut out = String::new();
     out.push_str(README_BEGIN);
     out.push('\n');
@@ -362,6 +423,10 @@ fn readme_block(ranked: &[RankedCase], summary: &SummaryJson, plot: &Path) -> St
     out.push_str(&format!(
         "![SQLite parity latency improvement plot]({})\n\n",
         plot.display()
+    ));
+    out.push_str(&format!(
+        "![SQLite vs RedlineDB production KSLOC chart]({})\n\n",
+        ksloc_plot.display()
     ));
     out.push_str("<details>\n<summary>Full ranked latency table</summary>\n\n");
     out.push_str("| Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |\n");
@@ -505,6 +570,292 @@ fn latency_svg(ranked: &[RankedCase], summary: &SummaryJson) -> String {
     out
 }
 
+fn ksloc_svg(summary: &source_lines::SourceLineSummary, updated_date: &str) -> String {
+    let width = 760.0;
+    let height = 168.0;
+    let left = 132.0;
+    let right = 92.0;
+    let top = 48.0;
+    let bar_h = 24.0;
+    let row_gap = 20.0;
+    let axis_y = 138.0;
+    let plot_w = width - left - right;
+    let sqlite = summary.sqlite_reference_ksloc();
+    let redline = summary.redlinedb_ksloc();
+    let max = (sqlite.max(redline) / 20.0).ceil() * 20.0;
+    let x_for = |value: f64| left + value / max.max(1.0) * plot_w;
+    let bar_w = |value: f64| (x_for(value) - left).max(1.0);
+    let grid_values = [0.0, 40.0, 80.0, 120.0, 160.0]
+        .into_iter()
+        .filter(|value| *value <= max + f64::EPSILON)
+        .collect::<Vec<_>>();
+    let redline_y = top;
+    let sqlite_y = top + bar_h + row_gap;
+    let mut out = String::new();
+    out.push_str(&format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="ksloc-title ksloc-desc">
+<title id="ksloc-title">SQLite vs RedlineDB production KSLOC, Updated {}</title>
+<desc id="ksloc-desc">Production Rust source lines in RedlineDB core crates compared with a fixed SQLite source-line reference. RedlineDB has {:.1} KSLOC and SQLite has {:.1} KSLOC.</desc>
+<text x="{left}" y="22" font-family="sans-serif" font-size="17" font-weight="700" fill="#111827">Production source footprint</text>
+<text x="{left}" y="39" font-family="sans-serif" font-size="12" fill="#6b7280">Core RedlineDB crates scanned without tests, blank lines, or comments; updated {}</text>
+"##,
+        updated_date, redline, sqlite, updated_date
+    ));
+    for value in grid_values {
+        let x = x_for(value);
+        out.push_str(&format!(
+            r##"<line x1="{x:.2}" y1="44" x2="{x:.2}" y2="{axis_y}" stroke="#e5e7eb"/>
+<text x="{x:.2}" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">{value:.0}</text>
+"##
+        ));
+    }
+    out.push_str(&format!(
+        r##"<line x1="{left}" y1="{axis_y}" x2="{:.2}" y2="{axis_y}" stroke="#9ca3af"/>
+<text x="{:.2}" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="end">KSLOC</text>
+"##,
+        left + plot_w,
+        left + plot_w + 54.0
+    ));
+    out.push_str(&format!(
+        r##"<text x="20" y="{:.2}" font-family="sans-serif" font-size="13" fill="#111827">RedlineDB</text>
+<rect x="{left}" y="{redline_y}" width="{:.2}" height="{bar_h}" rx="3" fill="#10b981"/>
+<text x="{:.2}" y="{:.2}" font-family="sans-serif" font-size="12" fill="#111827">{:.1} KSLOC</text>
+<text x="20" y="{:.2}" font-family="sans-serif" font-size="13" fill="#111827">SQLite</text>
+<rect x="{left}" y="{sqlite_y}" width="{:.2}" height="{bar_h}" rx="3" fill="#e11d48"/>
+<text x="{:.2}" y="{:.2}" font-family="sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="end">{:.1} KSLOC</text>
+</svg>
+"##,
+        redline_y + 16.5,
+        bar_w(redline),
+        x_for(redline) + 8.0,
+        redline_y + 16.5,
+        redline,
+        sqlite_y + 16.5,
+        bar_w(sqlite),
+        (x_for(sqlite) - 8.0).max(left + 78.0),
+        sqlite_y + 16.5,
+        sqlite
+    ));
+    out
+}
+
+fn paper_loc_writes(
+    repo_root: &Path,
+    summary: &source_lines::SourceLineSummary,
+) -> Result<Vec<(PathBuf, String)>> {
+    let data_path = repo_root.join("paper/data/loc_comparison.csv");
+    let implementation_path = repo_root.join("paper/sections/implementation.tex");
+    let abstract_path = repo_root.join("paper/sections/abstract.tex");
+    let introduction_path = repo_root.join("paper/sections/introduction.tex");
+    let evaluation_path = repo_root.join("paper/sections/evaluation.tex");
+    let conclusion_path = repo_root.join("paper/sections/conclusion.tex");
+
+    let implementation = replace_loc_block(
+        &read_text(&implementation_path)?,
+        "implementation",
+        r"\subsection{Lines of Code}",
+        r"\subsection{Failpoint Discipline}",
+        &implementation_loc_block(summary),
+    )?;
+    let abstract_text = replace_loc_block(
+        &read_text(&abstract_path)?,
+        "abstract",
+        "RedlineDB exposes the\n",
+        "single-writer WAL with",
+        &abstract_loc_block(summary),
+    )?;
+    let introduction = replace_loc_block(
+        &read_text(&introduction_path)?,
+        "introduction",
+        "The kernel, parser, planner, executor, public Rust facade, and\n",
+        "The kernel achieves",
+        &introduction_loc_block(summary),
+    )?;
+    let evaluation = replace_loc_metric_row(&read_text(&evaluation_path)?, summary)?;
+    let conclusion = replace_loc_block(
+        &read_text(&conclusion_path)?,
+        "conclusion",
+        "buys. The kernel and SQL layer together fit",
+        "On a 128-vCPU host",
+        &conclusion_loc_block(summary),
+    )?;
+
+    Ok(vec![
+        (data_path, source_lines_csv(summary)),
+        (implementation_path, implementation),
+        (abstract_path, abstract_text),
+        (introduction_path, introduction),
+        (evaluation_path, evaluation),
+        (conclusion_path, conclusion),
+    ])
+}
+
+fn read_text(path: &Path) -> Result<String> {
+    fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
+}
+
+fn replace_loc_block(
+    text: &str,
+    id: &str,
+    legacy_start: &str,
+    legacy_end: &str,
+    replacement: &str,
+) -> Result<String> {
+    let begin = format!("% sqlite-parity-loc:{id}:begin");
+    let end = format!("% sqlite-parity-loc:{id}:end");
+    if let (Some(start), Some(end_start)) = (text.find(&begin), text.find(&end)) {
+        let end_index = consume_line_endings(text, end_start + end.len());
+        let mut next = String::new();
+        next.push_str(&text[..start]);
+        next.push_str(replacement);
+        next.push_str(&text[end_index..]);
+        return Ok(next);
+    }
+    let Some(start) = text.find(legacy_start) else {
+        bail!("paper LOC block `{id}` lacks start marker");
+    };
+    let Some(relative_end) = text[start..].find(legacy_end) else {
+        bail!("paper LOC block `{id}` lacks end marker");
+    };
+    let end_index = start + relative_end;
+    let mut next = String::new();
+    next.push_str(&text[..start]);
+    next.push_str(replacement);
+    next.push_str(&text[end_index..]);
+    Ok(next)
+}
+
+fn consume_line_endings(text: &str, index: usize) -> usize {
+    let mut cursor = index;
+    while cursor < text.len() {
+        if text[cursor..].starts_with("\r\n") {
+            cursor += 2;
+        } else if text[cursor..].starts_with('\n') || text[cursor..].starts_with('\r') {
+            cursor += 1;
+        } else {
+            break;
+        }
+    }
+    cursor
+}
+
+fn implementation_loc_block(summary: &source_lines::SourceLineSummary) -> String {
+    let mut out = String::new();
+    out.push_str("% sqlite-parity-loc:implementation:begin\n");
+    out.push_str("\\subsection{Lines of Code}\n");
+    out.push_str("Table~\\ref{tab:loc} reports the current production source\n");
+    out.push_str("breakdown for the core RedlineDB engine crates. The counts are\n");
+    out.push_str("generated by the SQLite parity report scanner over\n");
+    out.push_str("\\texttt{crates/redlinedb/src}, \\texttt{crates/sql/src},\n");
+    out.push_str("\\texttt{crates/kernel/src}, and \\texttt{crates/ffi/src}; the\n");
+    out.push_str("scanner excludes test, bench, and example folders, files named\n");
+    out.push_str("\\texttt{tests.rs}, \\texttt{\\#[cfg(test)]} items, blank lines,\n");
+    out.push_str("and Rust comments. The current\n");
+    out.push_str(&format!(
+        "core total is {} lines ({:.1} KSLOC). SQLite is shown as the\n",
+        tex_int(summary.total_lines),
+        summary.redlinedb_ksloc()
+    ));
+    out.push_str("fixed 155.8 KSLOC source-line reference.\n\n");
+    out.push_str("\\begin{table}[t]\n\\centering\n");
+    out.push_str("\\caption{Scanner-counted production Rust source lines vs SQLite reference}\n");
+    out.push_str("\\label{tab:loc}\n\\renewcommand{\\arraystretch}{1.05}\n");
+    out.push_str("\\begin{tabular}{@{}lrr@{}}\n\\toprule\n");
+    out.push_str("\\textbf{Component} & \\textbf{LOC} & \\textbf{KSLOC} \\\\\n\\midrule\n");
+    for component in &summary.components {
+        out.push_str(&format!(
+            "\\texttt{{{}}} & {} & {:.1} \\\\\n",
+            component.label,
+            tex_int(component.lines),
+            source_lines::ksloc(component.lines)
+        ));
+    }
+    out.push_str("\\midrule\n");
+    out.push_str(&format!(
+        "\\textbf{{RedlineDB core production source}} & \\textbf{{{}}} & \\textbf{{{:.1}}} \\\\\n",
+        tex_int(summary.total_lines),
+        summary.redlinedb_ksloc()
+    ));
+    out.push_str("\\midrule\n");
+    out.push_str(&format!(
+        "SQLite source-line reference & {} & {:.1} \\\\\n",
+        tex_int(summary.sqlite_reference_lines),
+        summary.sqlite_reference_ksloc()
+    ));
+    out.push_str("\\bottomrule\n\\end{tabular}\n\\end{table}\n\n");
+    out.push_str("% sqlite-parity-loc:implementation:end\n\n");
+    out
+}
+
+fn abstract_loc_block(summary: &source_lines::SourceLineSummary) -> String {
+    format!(
+        "% sqlite-parity-loc:abstract:begin\nRedlineDB exposes the\n\\texttt{{sqlite3.h}} C ABI and a native \\texttt{{rldb\\_*}} surface from\n{:.1} KSLOC of scanner-counted core Rust source versus SQLite's fixed\n155.8 KSLOC reference, and replaces the\n% sqlite-parity-loc:abstract:end\n",
+        summary.redlinedb_ksloc()
+    )
+}
+
+fn introduction_loc_block(summary: &source_lines::SourceLineSummary) -> String {
+    format!(
+        "% sqlite-parity-loc:introduction:begin\nThe kernel, parser, planner, executor, public Rust facade, and\nSQLite C ABI shim together total {:.1} KSLOC of scanner-counted\nproduction Rust source across four core crates (Table~\\ref{{tab:loc}});\nonly the FFI shim contains \\texttt{{unsafe}} blocks, and those exist\nbecause the C ABI requires them.\n% sqlite-parity-loc:introduction:end\n",
+        summary.redlinedb_ksloc()
+    )
+}
+
+fn conclusion_loc_block(summary: &source_lines::SourceLineSummary) -> String {
+    format!(
+        "% sqlite-parity-loc:conclusion:begin\nbuys. The core RedlineDB engine crates total {:.1} KSLOC of scanner-counted\nproduction Rust source, compared with SQLite's fixed 155.8 KSLOC\nsource-line reference.\n% sqlite-parity-loc:conclusion:end\n",
+        summary.redlinedb_ksloc()
+    )
+}
+
+fn replace_loc_metric_row(text: &str, summary: &source_lines::SourceLineSummary) -> Result<String> {
+    let new_line = format!(
+        "Core production Rust source LOC & {} \\\\",
+        tex_int(summary.total_lines)
+    );
+    let mut replaced = false;
+    let mut out = String::new();
+    for line in text.lines() {
+        if line.starts_with("Phase-10 active source LOC &")
+            || line.starts_with("Core production Rust source LOC &")
+        {
+            out.push_str(&new_line);
+            replaced = true;
+        } else {
+            out.push_str(line);
+        }
+        out.push('\n');
+    }
+    if !replaced {
+        bail!("paper evaluation LOC metric row not found");
+    }
+    Ok(out)
+}
+
+fn repo_root_from_readme(readme: &Path) -> PathBuf {
+    readme
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()
+}
+
+fn tex_int(value: usize) -> String {
+    comma_int(value).replace(',', "{,}")
+}
+
+fn comma_int(value: usize) -> String {
+    let digits = value.to_string();
+    let mut out = String::new();
+    for (index, ch) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
+}
+
 fn check_files(writes: &[(PathBuf, String)]) -> Result<()> {
     let mut drifted = Vec::new();
     for (path, contents) in writes {
@@ -571,6 +922,10 @@ fn xml(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+fn display_path(path: &Path) -> std::borrow::Cow<'_, str> {
+    path.to_string_lossy()
 }
 
 fn sha256_file(path: &Path) -> Result<String> {

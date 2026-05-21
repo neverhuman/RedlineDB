@@ -21,7 +21,14 @@ pr_title="${REDLINEDB_SQLITE_PARITY_REPORT_PR_TITLE:-Update SQLite parity report
 report_paths=(
   README.md
   assets/sqlite-parity-latency-gap.svg
+  assets/sqlite-parity-ksloc.svg
   benchmark-results/sqlite-parity/latest
+  paper/data/loc_comparison.csv
+  paper/sections/abstract.tex
+  paper/sections/conclusion.tex
+  paper/sections/evaluation.tex
+  paper/sections/implementation.tex
+  paper/sections/introduction.tex
 )
 
 run_update() {
