@@ -261,11 +261,14 @@ pub(crate) fn write_stream_delimited_value<W: Write>(
     mode: OutputMode,
     separator: &str,
     null_value: &str,
+    escape_symbol: bool,
     value: ValueRef<'_>,
 ) -> Result<(), String> {
     match mode {
         OutputMode::Csv => write_csv_value_ref(out, value, separator, null_value),
-        OutputMode::List | OutputMode::Tabs => write_text_value_ref(out, value, null_value),
+        OutputMode::List | OutputMode::Tabs => {
+            write_text_value_ref(out, value, null_value, escape_symbol)
+        }
         _ => Err("streaming renderer only supports delimited modes".to_owned()),
     }
 }
@@ -474,6 +477,7 @@ fn write_text_value_ref<W: Write>(
     out: &mut W,
     value: ValueRef<'_>,
     null_value: &str,
+    escape_symbol: bool,
 ) -> Result<(), String> {
     match value {
         ValueRef::Null => out
@@ -481,9 +485,30 @@ fn write_text_value_ref<W: Write>(
             .map_err(|err| err.to_string()),
         ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
         ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
-        ValueRef::Text(v) => out.write_all(v.as_bytes()).map_err(|err| err.to_string()),
+        ValueRef::Text(v) => {
+            if escape_symbol {
+                out.write_all(escape_symbolic(v).as_bytes())
+                    .map_err(|err| err.to_string())
+            } else {
+                out.write_all(v.as_bytes()).map_err(|err| err.to_string())
+            }
+        }
         ValueRef::Blob(v) => write!(out, "<blob:{}>", v.len()).map_err(|err| err.to_string()),
     }
+}
+
+fn escape_symbolic(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\n' => out.push_str(r"\n"),
+            '\r' => out.push_str(r"\r"),
+            '\t' => out.push_str(r"\t"),
+            '\\' => out.push_str(r"\\"),
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 fn format_real(value: f64) -> String {

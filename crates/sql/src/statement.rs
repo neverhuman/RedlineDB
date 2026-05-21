@@ -90,6 +90,11 @@ pub enum PreparedKind {
     Commit,
     Rollback,
     Pragma(PragmaPlan),
+    Reindex,
+    Vacuum,
+    VacuumInto {
+        path: Arc<str>,
+    },
     CreateTable(CreateTableSpec),
     CreateTableAsSelect(CreateTableAsSelectSpec),
     CreateIndex(CreateIndexSpec),
@@ -161,6 +166,8 @@ pub enum PragmaPlan {
     SetTempStore(TempStoreMode),
     SetCacheSize(i64),
     SetQueryOnly(bool),
+    SetCaseSensitiveLike(bool),
+    WalCheckpoint,
 }
 
 /// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the

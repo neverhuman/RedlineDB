@@ -74,6 +74,16 @@ pub fn explain(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
     Ok(DotOutcome::Ok)
 }
 
+pub fn crlf(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let on = parse_required_bool(".crlf", args)?;
+    state.row_separator = if on {
+        "\r\n".to_owned()
+    } else {
+        "\n".to_owned()
+    };
+    Ok(DotOutcome::Ok)
+}
+
 pub fn version(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
     state
         .output
@@ -109,6 +119,34 @@ pub fn prompt(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, Strin
 }
 
 pub fn connection(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn stats(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn auth(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn vfsname(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn lint(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn expert(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn scanstats(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn archive(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
     Ok(DotOutcome::Ok)
 }
 

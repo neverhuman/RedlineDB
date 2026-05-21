@@ -36,6 +36,19 @@ fn rtrim_collation_strips_trailing_spaces() {
 }
 
 #[test]
+fn uint_collation_orders_embedded_numbers() {
+    let (_dir, conn) = open();
+    let mut stmt = conn
+        .prepare("WITH t(x) AS (VALUES('x10'), ('x2')) SELECT x FROM t ORDER BY x COLLATE uint")
+        .expect("prepare");
+    let mut got = Vec::new();
+    while let Step::Row = stmt.step().expect("step") {
+        got.push(stmt.column_text(0).expect("text").to_owned());
+    }
+    assert_eq!(got, vec!["x2", "x10"]);
+}
+
+#[test]
 fn nocase_collation_in_order_by() {
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(v TEXT)").expect("create");
