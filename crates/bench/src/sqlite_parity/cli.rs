@@ -115,6 +115,8 @@ struct ReportArgs {
     #[arg(long)]
     ksloc_plot: PathBuf,
     #[arg(long)]
+    jankurai_score: Option<PathBuf>,
+    #[arg(long)]
     updated_date: String,
     #[arg(long)]
     check: bool,
@@ -245,6 +247,7 @@ fn report(args: ReportArgs) -> Result<()> {
         readme: args.readme,
         plot: args.plot,
         ksloc_plot: args.ksloc_plot,
+        jankurai_score: args.jankurai_score,
         updated_date: args.updated_date,
         check: args.check,
         command: std::env::args().collect(),
