@@ -143,14 +143,14 @@ pub fn probe_sqlite_shell_capabilities(bin: &Path) -> Result<ShellCapabilities> 
         percentile_functions: run_sql_script(
             bin,
             memory_db,
-            ".mode list\n.headers off\nCREATE TABLE t(x INTEGER); INSERT INTO t VALUES (1), (2), (3);\nSELECT median(x), percentile_cont(0.5) WITHIN GROUP (ORDER BY x) FROM t;\n",
+            ".mode list\n.headers off\nCREATE TABLE t(x INTEGER); INSERT INTO t VALUES (1), (2), (3);\nSELECT median(x), percentile_cont(x,0.5) FROM t;\n",
             &[],
         )?,
-        dot_crlf: help_contains(bin, ".crlf")?,
-        dot_dbinfo: help_contains(bin, ".dbinfo")?,
-        dot_dbtotxt: help_contains(bin, ".dbtotxt")?,
-        dot_recover: help_contains(bin, ".recover")?,
-        escape_symbol_option: cli_help_contains(bin, "-escape symbol")?,
+        dot_crlf: shell_help_contains(bin, ".crlf")?,
+        dot_dbinfo: shell_help_contains(bin, ".dbinfo")?,
+        dot_dbtotxt: shell_help_contains(bin, ".dbtotxt")?,
+        dot_recover: shell_help_contains(bin, ".recover")?,
+        escape_symbol_option: escape_symbol_option_supported(bin)?,
     })
 }
 
@@ -354,27 +354,49 @@ fn run_sql_script(bin: &Path, db_path: &Path, script: &str, extra_args: &[&str])
     Ok(status.success())
 }
 
-fn help_contains(bin: &Path, needle: &str) -> Result<bool> {
-    let output = Command::new(bin)
-        .arg("-help")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .with_context(|| format!("run {} -help", bin.display()))?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout.contains(needle))
+fn shell_help_contains(bin: &Path, needle: &str) -> Result<bool> {
+    let output = run_shell_probe(bin, ".help\n.quit\n", &[])?;
+    Ok(output.status.success() && output.stdout.contains(needle))
 }
 
-fn cli_help_contains(bin: &Path, needle: &str) -> Result<bool> {
-    let output = Command::new(bin)
-        .arg("--help")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .with_context(|| format!("run {} --help", bin.display()))?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    Ok(stdout.contains(needle) || stderr.contains(needle))
+fn escape_symbol_option_supported(bin: &Path) -> Result<bool> {
+    let output = run_shell_probe(bin, "SELECT char(1);\n", &["-escape", "symbol"])?;
+    Ok(output.status.success())
+}
+
+fn run_shell_probe(bin: &Path, script: &str, extra_args: &[&str]) -> Result<ShellProbeOutput> {
+    let mut command = Command::new(bin);
+    command.arg("-batch").arg("-bail");
+    for arg in extra_args {
+        command.arg(arg);
+    }
+    command.arg(":memory:");
+    command.stdin(Stdio::piped());
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("probe sqlite shell with {}", bin.display()))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .context("sqlite shell probe stdin unavailable")?;
+    stdin
+        .write_all(script.as_bytes())
+        .context("write sqlite shell probe script")?;
+    drop(stdin);
+    let output = child
+        .wait_with_output()
+        .context("wait for sqlite shell probe")?;
+    Ok(ShellProbeOutput {
+        status: output.status,
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+    })
+}
+
+struct ShellProbeOutput {
+    status: std::process::ExitStatus,
+    stdout: String,
 }
 
 fn shell_version_prefix(capabilities: &ShellCapabilities) -> String {

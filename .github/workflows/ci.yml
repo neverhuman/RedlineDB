@@ -25,7 +25,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y mold sqlite3
+          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
       - name: Install cargo-nextest
         run: |
           curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
@@ -62,7 +62,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y mold sqlite3
+          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
       - name: Install cargo-nextest
         run: |
           curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin

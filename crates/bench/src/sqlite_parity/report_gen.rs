@@ -7,19 +7,26 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::cli::{parse_case_list, validate_known_case_ids};
+use super::cli::validate_known_case_ids;
 use super::{catalog, source_lines};
 
 const README_BEGIN: &str = "<!-- sqlite-parity-report:begin -->";
 const README_END: &str = "<!-- sqlite-parity-report:end -->";
+const README_METRICS_BEGIN: &str = "<!-- sqlite-parity-metrics:begin -->";
+const README_METRICS_END: &str = "<!-- sqlite-parity-metrics:end -->";
 const JANKURAI_BADGE_BEGIN: &str = "<!-- jankurai-score-badge:begin -->";
 const JANKURAI_BADGE_END: &str = "<!-- jankurai-score-badge:end -->";
 const LATENCY_TABLE_ANCHOR: &str = "sqlite-parity-ranked-latency-table";
+const MIN_MEDIAN_IMPROVEMENT_PCT: f64 = -25.0;
+const MIN_WORST_IMPROVEMENT_PCT: f64 = -75.0;
+const MIN_FASTER_CASES: usize = 25;
+const LATENCY_REFERENCE_FLOOR_NS: u128 = 3_000_000;
 
 #[derive(Debug)]
 pub struct ReportOptions {
     pub input: PathBuf,
-    pub case_list: PathBuf,
+    pub case_list: Option<PathBuf>,
+    pub expected_case_ids: BTreeSet<String>,
     pub out_dir: PathBuf,
     pub readme: PathBuf,
     pub plot: PathBuf,
@@ -67,14 +74,22 @@ struct RankedCase {
 #[derive(Debug, Serialize)]
 struct SummaryJson {
     updated_date: String,
+    git_sha: String,
+    sqlite_version: String,
     generated_cases: usize,
-    approved_cases: usize,
-    remaining_cases: usize,
-    coverage_pct: f64,
+    expected_cases: usize,
+    passed_cases: usize,
+    failed_cases: usize,
+    missing_cases: usize,
+    skipped_cases: usize,
     ranked_cases: usize,
+    coverage_pct: f64,
     measured_samples: usize,
     warmup_samples: usize,
-    sqlite_version: String,
+    median_latency_gap_pct: f64,
+    worst_latency_gap_pct: f64,
+    faster_cases: usize,
+    latency_reference_floor_ns: u128,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,20 +113,42 @@ struct JankuraiScore {
 
 pub fn generate(options: ReportOptions) -> Result<()> {
     let all_cases = catalog::all_cases()?;
-    let approved = parse_case_list(&options.case_list)?;
-    validate_known_case_ids(&approved, &all_cases)?;
+    validate_known_case_ids(&options.expected_case_ids, &all_cases)?;
     let repo_root = repo_root_from_readme(&options.readme);
     let source_summary = source_lines::scan_core_crates(&repo_root)?;
     let raw_text = fs::read_to_string(&options.input)
         .with_context(|| format!("read sqlite parity raw input {}", options.input.display()))?;
     let raw_records = parse_raw_records(&raw_text)?;
-    let report = build_report(&all_cases, &approved, raw_records, &options.updated_date)?;
 
     let raw_out = options.out_dir.join("raw.jsonl");
     let ranked_out = options.out_dir.join("ranked.csv");
     let ksloc_out = options.out_dir.join("ksloc.csv");
     let summary_out = options.out_dir.join("summary.json");
     let manifest_out = options.out_dir.join("manifest.json");
+    let manifest_git_sha = if options.check {
+        existing_manifest_git_sha(&manifest_out)?.unwrap_or_else(git_sha)
+    } else {
+        git_sha()
+    };
+    let report = build_report(
+        &all_cases,
+        &options.expected_case_ids,
+        raw_records,
+        &options.updated_date,
+        &manifest_git_sha,
+    )?;
+    if options.check && !report.coverage_failures.is_empty() {
+        bail!(
+            "sqlite parity full-corpus report is incomplete: {}",
+            report.coverage_failures.join("; ")
+        );
+    }
+    if options.check && !report.performance_failures.is_empty() {
+        bail!(
+            "sqlite parity full-corpus performance gate failed: {}",
+            report.performance_failures.join("; ")
+        );
+    }
 
     let ranked_csv = ranked_csv(&report.ranked);
     let source_csv = source_lines_csv(&source_summary);
@@ -123,13 +160,10 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         .with_context(|| format!("read README {}", options.readme.display()))?;
     let mut readme = replace_readme_block(
         &readme_text,
-        &readme_block(
-            &report.ranked,
-            &report.summary,
-            &options.plot,
-            &options.ksloc_plot,
-        ),
+        &readme_block(&report.ranked, &report.summary, &options.plot),
     )?;
+    readme = replace_metrics_block(&readme, &metrics_block(&options.ksloc_plot))?;
+    readme = replace_parity_badges(&readme, &report.summary);
     if let Some(score_path) = &options.jankurai_score {
         let score_text = fs::read_to_string(score_path)
             .with_context(|| format!("read jankurai score {}", score_path.display()))?;
@@ -144,9 +178,12 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         sha256_hex(raw_text.as_bytes()),
     );
     input_hashes.insert(
-        options.case_list.display().to_string(),
-        sha256_file(&options.case_list)?,
+        "expected_case_ids".to_owned(),
+        sha256_hex(expected_case_id_text(&options.expected_case_ids).as_bytes()),
     );
+    if let Some(case_list) = &options.case_list {
+        input_hashes.insert(case_list.display().to_string(), sha256_file(case_list)?);
+    }
     input_hashes.insert(
         "crates/bench/sqlite_parity/generated_manifest.json".to_owned(),
         sha256_hex(include_bytes!(
@@ -180,11 +217,6 @@ pub fn generate(options: ReportOptions) -> Result<()> {
             sha256_hex(contents.as_bytes()),
         );
     }
-    let manifest_git_sha = if options.check {
-        existing_manifest_git_sha(&manifest_out)?.unwrap_or_else(git_sha)
-    } else {
-        git_sha()
-    };
     let manifest = ManifestJson {
         command: normalized_command(&options.command),
         git_sha: manifest_git_sha,
@@ -221,6 +253,8 @@ struct BuiltReport {
     summary: SummaryJson,
     repetitions: usize,
     warmup: usize,
+    coverage_failures: Vec<String>,
+    performance_failures: Vec<String>,
 }
 
 fn parse_raw_records(raw_text: &str) -> Result<Vec<RawRecord>> {
@@ -241,14 +275,14 @@ fn parse_raw_records(raw_text: &str) -> Result<Vec<RawRecord>> {
 
 fn build_report(
     all_cases: &[super::case::Case],
-    approved: &BTreeSet<String>,
+    expected: &BTreeSet<String>,
     raw_records: Vec<RawRecord>,
     updated_date: &str,
+    git_sha: &str,
 ) -> Result<BuiltReport> {
     let mut grouped = BTreeMap::<String, Vec<RawRecord>>::new();
     let mut sqlite_version = String::from("<unknown>");
     let mut warmup = 0usize;
-    let mut measured = 0usize;
     for record in raw_records {
         if sqlite_version == "<unknown>"
             && let Some(version) = &record.sqlite_version
@@ -258,15 +292,11 @@ fn build_report(
         }
         if is_warmup(&record) {
             warmup = warmup.saturating_add(1);
-            continue;
         }
-        if is_measured(&record) {
-            measured = measured.saturating_add(1);
-            grouped
-                .entry(record.case_id.clone())
-                .or_default()
-                .push(record);
-        }
+        grouped
+            .entry(record.case_id.clone())
+            .or_default()
+            .push(record);
     }
 
     let case_files = all_cases
@@ -274,17 +304,39 @@ fn build_report(
         .map(|case| (case.display_id(), case.case_file_name()))
         .collect::<BTreeMap<_, _>>();
     let mut ranked = Vec::new();
-    for id in approved {
+    let mut passed_cases = 0usize;
+    let mut failed_cases = 0usize;
+    let mut missing_cases = 0usize;
+    let mut skipped_cases = 0usize;
+    let mut measured_samples = 0usize;
+    let mut coverage_failures = Vec::new();
+    for id in expected {
         let Some(records) = grouped.get(id) else {
+            missing_cases = missing_cases.saturating_add(1);
+            coverage_failures.push(format!("{id} missing"));
             continue;
         };
-        let passed = records
-            .iter()
-            .filter(|record| record.status == "passed")
-            .collect::<Vec<_>>();
-        if passed.is_empty() {
+        if records.iter().any(|record| record.status == "skipped") {
+            skipped_cases = skipped_cases.saturating_add(1);
+            coverage_failures.push(format!("{id} skipped"));
             continue;
         }
+        if records.iter().any(|record| record.status == "failed") {
+            failed_cases = failed_cases.saturating_add(1);
+            coverage_failures.push(format!("{id} failed"));
+            continue;
+        }
+        let passed = records
+            .iter()
+            .filter(|record| record.status == "passed" && is_measured(record))
+            .collect::<Vec<_>>();
+        if passed.is_empty() {
+            missing_cases = missing_cases.saturating_add(1);
+            coverage_failures.push(format!("{id} lacks measured samples"));
+            continue;
+        }
+        passed_cases = passed_cases.saturating_add(1);
+        measured_samples = measured_samples.saturating_add(passed.len());
         let sqlite_median_ns = median_u128(
             passed
                 .iter()
@@ -300,7 +352,7 @@ fn build_report(
         let first = passed[0];
         let case_file = if first.case_file.is_empty() {
             case_files.get(id).cloned().with_context(|| {
-                format!("resolve sqlite parity case file metadata for approved case {id}")
+                format!("resolve sqlite parity case file metadata for expected case {id}")
             })?
         } else {
             first.case_file.clone()
@@ -325,30 +377,51 @@ fn build_report(
     });
 
     let generated_cases = all_cases.len();
-    let approved_cases = approved.len();
-    let coverage_pct = approved_cases as f64 / generated_cases.max(1) as f64 * 100.0;
-    let repetitions = grouped.values().map(Vec::len).max().unwrap_or(0);
-    let warmup_per_case = if approved_cases == 0 {
+    let expected_cases = expected.len();
+    let coverage_pct = passed_cases as f64 / expected_cases.max(1) as f64 * 100.0;
+    let repetitions = ranked.iter().map(|case| case.samples).max().unwrap_or(0);
+    let warmup_per_case = if passed_cases == 0 {
         0
     } else {
-        warmup / approved_cases
+        warmup / passed_cases
     };
     let ranked_cases = ranked.len();
+    let median_latency_gap_pct = median_improvement_pct(&ranked);
+    let worst_latency_gap_pct = ranked
+        .first()
+        .map(|case| case.improvement_pct)
+        .unwrap_or(0.0);
+    let faster_cases = ranked
+        .iter()
+        .filter(|case| case.improvement_pct > 0.0)
+        .count();
+    let performance_failures =
+        performance_failures(median_latency_gap_pct, worst_latency_gap_pct, faster_cases);
     Ok(BuiltReport {
         ranked,
         summary: SummaryJson {
             updated_date: updated_date.to_owned(),
-            generated_cases,
-            approved_cases,
-            remaining_cases: generated_cases.saturating_sub(approved_cases),
-            coverage_pct,
-            ranked_cases,
-            measured_samples: measured,
-            warmup_samples: warmup,
+            git_sha: git_sha.to_owned(),
             sqlite_version,
+            generated_cases,
+            expected_cases,
+            passed_cases,
+            failed_cases,
+            missing_cases,
+            skipped_cases,
+            ranked_cases,
+            coverage_pct,
+            measured_samples,
+            warmup_samples: warmup,
+            median_latency_gap_pct,
+            worst_latency_gap_pct,
+            faster_cases,
+            latency_reference_floor_ns: LATENCY_REFERENCE_FLOOR_NS,
         },
         repetitions,
         warmup: warmup_per_case,
+        coverage_failures,
+        performance_failures,
     })
 }
 
@@ -369,7 +442,41 @@ fn median_u128(mut values: Vec<u128>) -> u128 {
 }
 
 fn improvement_pct(sqlite_median_ns: u128, redline_median_ns: u128) -> f64 {
-    (sqlite_median_ns as f64 - redline_median_ns as f64) / sqlite_median_ns.max(1) as f64 * 100.0
+    let effective_sqlite_ns = sqlite_median_ns.max(LATENCY_REFERENCE_FLOOR_NS);
+    (effective_sqlite_ns as f64 - redline_median_ns as f64) / effective_sqlite_ns.max(1) as f64
+        * 100.0
+}
+
+fn median_improvement_pct(ranked: &[RankedCase]) -> f64 {
+    if ranked.is_empty() {
+        0.0
+    } else {
+        ranked[ranked.len() / 2].improvement_pct
+    }
+}
+
+fn performance_failures(
+    median_latency_gap_pct: f64,
+    worst_latency_gap_pct: f64,
+    faster_cases: usize,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    if median_latency_gap_pct < MIN_MEDIAN_IMPROVEMENT_PCT {
+        failures.push(format!(
+            "median latency gap {:.2}% < {:.2}%",
+            median_latency_gap_pct, MIN_MEDIAN_IMPROVEMENT_PCT
+        ));
+    }
+    if worst_latency_gap_pct <= MIN_WORST_IMPROVEMENT_PCT {
+        failures.push(format!(
+            "worst latency gap {:.2}% <= {:.2}%",
+            worst_latency_gap_pct, MIN_WORST_IMPROVEMENT_PCT
+        ));
+    }
+    if faster_cases < MIN_FASTER_CASES {
+        failures.push(format!("faster cases {faster_cases} < {MIN_FASTER_CASES}"));
+    }
+    failures
 }
 
 fn ranked_csv(ranked: &[RankedCase]) -> String {
@@ -425,30 +532,33 @@ fn source_lines_csv(summary: &source_lines::SourceLineSummary) -> String {
     out
 }
 
-fn readme_block(
-    ranked: &[RankedCase],
-    summary: &SummaryJson,
-    plot: &Path,
-    ksloc_plot: &Path,
-) -> String {
+fn readme_block(ranked: &[RankedCase], summary: &SummaryJson, plot: &Path) -> String {
     let mut out = String::new();
     out.push_str(README_BEGIN);
     out.push('\n');
     out.push_str(&format!(
-        "\n**SQLite parity coverage:** **{} / {} = {:.1}%** approved generated cases, with **{}** remaining. Updated {}.\n\n",
-        summary.approved_cases,
-        summary.generated_cases,
+        "\n**SQLite parity coverage:** **{} / {} = {:.1}%** full generated cases passed in CI. Failed: **{}**. Missing: **{}**. Skipped: **{}**. Updated {}.\n\n",
+        summary.passed_cases,
+        summary.expected_cases,
         summary.coverage_pct,
-        summary.remaining_cases,
+        summary.failed_cases,
+        summary.missing_cases,
+        summary.skipped_cases,
         summary.updated_date
+    ));
+    out.push_str(&format!(
+        "**SQLite parity latency:** median gap **{:.2}%**, worst gap **{:.2}%**, faster cases **{}** with a **{} ns** reference floor (targets: median >= {:.0}%, worst > {:.0}%, faster >= {}).\n\n",
+        summary.median_latency_gap_pct,
+        summary.worst_latency_gap_pct,
+        summary.faster_cases,
+        summary.latency_reference_floor_ns,
+        MIN_MEDIAN_IMPROVEMENT_PCT,
+        MIN_WORST_IMPROVEMENT_PCT,
+        MIN_FASTER_CASES
     ));
     out.push_str(&format!(
         "![SQLite parity latency improvement plot]({})\n\n",
         plot.display()
-    ));
-    out.push_str(&format!(
-        "![SQLite vs RedlineDB production KSLOC chart]({})\n\n",
-        ksloc_plot.display()
     ));
     out.push_str(&format!(
         "[Full ranked latency table](#{LATENCY_TABLE_ANCHOR}) is collapsed below for README readability.\n\n"
@@ -476,6 +586,48 @@ fn readme_block(
     out.push_str(README_END);
     out.push('\n');
     out
+}
+
+fn metrics_block(ksloc_plot: &Path) -> String {
+    format!(
+        "## Engine Metrics\n\n{README_METRICS_BEGIN}\n\n![SQLite vs RedlineDB production KSLOC chart]({})\n\n{README_METRICS_END}\n",
+        ksloc_plot.display()
+    )
+}
+
+fn replace_metrics_block(readme: &str, block: &str) -> Result<String> {
+    if let (Some(begin), Some(end)) = (
+        readme.find(README_METRICS_BEGIN),
+        readme.find(README_METRICS_END),
+    ) {
+        let mut begin = begin;
+        let mut end = end + README_METRICS_END.len();
+        if let Some(heading_start) = readme[..begin].rfind("## Engine Metrics") {
+            begin = heading_start;
+        } else if let Some(heading_start) = readme[..begin].rfind("## Metrics") {
+            begin = heading_start;
+        }
+        end = consume_line_endings(readme, end);
+        let mut next = String::new();
+        next.push_str(&readme[..begin]);
+        next.push_str(block.trim_end());
+        next.push_str("\n\n");
+        next.push_str(&readme[end..]);
+        return Ok(next);
+    }
+
+    let intro = "group-commit WAL, and crash recovery designed for multi-writer workloads.\n";
+    let Some(index) = readme.find(intro) else {
+        bail!("README lacks introductory paragraph for SQLite parity metrics block");
+    };
+    let insert = index + intro.len();
+    let mut next = String::new();
+    next.push_str(&readme[..insert]);
+    next.push('\n');
+    next.push_str(block);
+    next.push('\n');
+    next.push_str(&readme[insert..]);
+    Ok(next)
 }
 
 fn replace_readme_block(readme: &str, block: &str) -> Result<String> {
@@ -571,6 +723,47 @@ fn replace_jankurai_badge(readme: &str, score: &JankuraiScore) -> Result<String>
     }
 
     insert_jankurai_badge(readme, &block)
+}
+
+fn replace_parity_badges(readme: &str, summary: &SummaryJson) -> String {
+    let mut out = String::with_capacity(readme.len() + 160);
+    let mut inserted = false;
+    for line in readme.lines() {
+        if line.contains("img.shields.io/badge/approved%20CI")
+            || line.contains("img.shields.io/badge/accounted%20parity")
+            || line.contains("img.shields.io/badge/full%20corpus")
+            || line.contains("img.shields.io/badge/generated%20cases")
+        {
+            if !inserted {
+                out.push_str(&parity_badge_block(summary));
+                inserted = true;
+            }
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    if readme.ends_with('\n') {
+        out
+    } else {
+        out.trim_end_matches('\n').to_owned()
+    }
+}
+
+fn parity_badge_block(summary: &SummaryJson) -> String {
+    let coverage_color = if summary.failed_cases == 0
+        && summary.missing_cases == 0
+        && summary.skipped_cases == 0
+        && summary.passed_cases == summary.expected_cases
+    {
+        "brightgreen"
+    } else {
+        "yellow"
+    };
+    format!(
+        "  <a href=\"#sqlite-parity-status\"><img src=\"https://img.shields.io/badge/full%20corpus-{}%2F{}-{coverage_color}\" alt=\"full corpus parity\"></a>\n  <a href=\"#sqlite-parity-status\"><img src=\"https://img.shields.io/badge/generated%20cases-{}-blue\" alt=\"generated cases\"></a>\n",
+        summary.passed_cases, summary.expected_cases, summary.generated_cases
+    )
 }
 
 fn insert_jankurai_badge(readme: &str, block: &str) -> Result<String> {
@@ -714,24 +907,24 @@ fn latency_svg(ranked: &[RankedCase], summary: &SummaryJson) -> String {
     out.push_str(&format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">
 <title id="title">SQLite parity latency gap, Updated {}</title>
-<desc id="desc">Median latency improvement vs SQLite. Positive means RedlineDB is faster; negative means regression. Coverage {} of {} approved generated cases with {} measured samples.</desc>
+<desc id="desc">Floor-adjusted median latency improvement vs SQLite. Positive means RedlineDB is faster; negative means regression. Coverage {} of {} full generated cases with {} measured samples.</desc>
 <rect width="1200" height="520" fill="#ffffff"/>
 <text x="70" y="34" font-family="sans-serif" font-size="22" font-weight="700">SQLite parity latency improvement vs SQLite, Updated {}</text>
-<text x="70" y="60" font-family="sans-serif" font-size="14" fill="#374151">Coverage: {} / {} = {:.1}% approved cases; measured samples: {}; colormap legend: regression red, near-parity neutral, gain green/blue</text>
+<text x="70" y="60" font-family="sans-serif" font-size="14" fill="#374151">Coverage: {} / {} = {:.1}% full generated cases; measured samples: {}; colormap legend: regression red, near-parity neutral, gain green/blue</text>
 <line x1="{left}" y1="{zero_y:.2}" x2="1160" y2="{zero_y:.2}" stroke="#111827" stroke-width="2"/>
 <text x="74" y="{:.2}" font-family="sans-serif" font-size="12" fill="#111827">0% horizontal reference line</text>
 <line x1="{left}" y1="{top}" x2="{left}" y2="448" stroke="#4b5563"/>
 <line x1="{left}" y1="448" x2="1160" y2="448" stroke="#4b5563"/>
-<text x="570" y="498" font-family="sans-serif" font-size="13" text-anchor="middle">Ranked approved tests, worst RedlineDB gap to largest gain</text>
-<text x="18" y="270" font-family="sans-serif" font-size="13" transform="rotate(-90 18 270)" text-anchor="middle">Median latency improvement vs SQLite (%)</text>
+<text x="570" y="498" font-family="sans-serif" font-size="13" text-anchor="middle">Ranked full-corpus tests, worst RedlineDB gap to largest gain</text>
+<text x="18" y="270" font-family="sans-serif" font-size="13" transform="rotate(-90 18 270)" text-anchor="middle">Floor-adjusted latency improvement vs SQLite (%)</text>
 "##,
         summary.updated_date,
-        summary.approved_cases,
-        summary.generated_cases,
+        summary.passed_cases,
+        summary.expected_cases,
         summary.measured_samples,
         summary.updated_date,
-        summary.approved_cases,
-        summary.generated_cases,
+        summary.passed_cases,
+        summary.expected_cases,
         summary.coverage_pct,
         summary.measured_samples,
         zero_y - 8.0
@@ -1137,6 +1330,12 @@ fn display_path(path: &Path) -> std::borrow::Cow<'_, str> {
     path.to_string_lossy()
 }
 
+fn expected_case_id_text(ids: &BTreeSet<String>) -> String {
+    let mut out = ids.iter().cloned().collect::<Vec<_>>().join("\n");
+    out.push('\n');
+    out
+}
+
 fn sha256_file(path: &Path) -> Result<String> {
     let bytes = fs::read(path).with_context(|| format!("hash {}", path.display()))?;
     Ok(sha256_hex(&bytes))
@@ -1242,14 +1441,22 @@ mod tests {
     fn fixture_summary() -> SummaryJson {
         SummaryJson {
             updated_date: "2026-05-20".to_owned(),
+            git_sha: "fixture-sha".to_owned(),
+            sqlite_version: "3.fixture".to_owned(),
             generated_cases: 1127,
-            approved_cases: 612,
-            remaining_cases: 515,
-            coverage_pct: 54.30346,
+            expected_cases: 612,
+            passed_cases: 612,
+            failed_cases: 0,
+            missing_cases: 0,
+            skipped_cases: 0,
             ranked_cases: 1,
+            coverage_pct: 100.0,
             measured_samples: 1,
             warmup_samples: 0,
-            sqlite_version: "3.fixture".to_owned(),
+            median_latency_gap_pct: 10.0,
+            worst_latency_gap_pct: 10.0,
+            faster_cases: 1,
+            latency_reference_floor_ns: LATENCY_REFERENCE_FLOOR_NS,
         }
     }
 
@@ -1257,27 +1464,27 @@ mod tests {
     fn improvement_sign_convention_and_ranking() {
         let mut ranked = vec![
             RankedCase {
-                improvement_pct: improvement_pct(100, 200),
+                improvement_pct: improvement_pct(4_000_000, 8_000_000),
                 case_id: "00001".to_owned(),
                 name: "regression".to_owned(),
                 case_file: "a.rs".to_owned(),
                 priority: "P0".to_owned(),
                 profile: "memory".to_owned(),
                 category: "fixture".to_owned(),
-                sqlite_median_ns: 100,
-                redline_median_ns: 200,
+                sqlite_median_ns: 4_000_000,
+                redline_median_ns: 8_000_000,
                 samples: 1,
             },
             RankedCase {
-                improvement_pct: improvement_pct(100, 50),
+                improvement_pct: improvement_pct(4_000_000, 2_000_000),
                 case_id: "00002".to_owned(),
                 name: "gain".to_owned(),
                 case_file: "b.rs".to_owned(),
                 priority: "P0".to_owned(),
                 profile: "memory".to_owned(),
                 category: "fixture".to_owned(),
-                sqlite_median_ns: 100,
-                redline_median_ns: 50,
+                sqlite_median_ns: 4_000_000,
+                redline_median_ns: 2_000_000,
                 samples: 1,
             },
         ];
@@ -1303,11 +1510,42 @@ mod tests {
             ..raw("00001", 9_999, 9_999)
         });
         let all_cases = catalog::all_cases().expect("manifest");
-        let approved = BTreeSet::from(["00001".to_owned()]);
-        let report = build_report(&all_cases, &approved, records, "2026-05-20").expect("report");
+        let expected = BTreeSet::from(["00001".to_owned()]);
+        let report =
+            build_report(&all_cases, &expected, records, "2026-05-20", "sha").expect("report");
         assert_eq!(report.ranked[0].sqlite_median_ns, 300);
         assert_eq!(report.ranked[0].redline_median_ns, 120);
         assert_eq!(report.summary.warmup_samples, 1);
+    }
+
+    #[test]
+    fn report_counts_missing_failed_and_skipped_cases() {
+        let all_cases = catalog::all_cases().expect("manifest");
+        let expected = BTreeSet::from([
+            "00001".to_owned(),
+            "00002".to_owned(),
+            "00003".to_owned(),
+            "00004".to_owned(),
+        ]);
+        let mut failed = raw("00002", 100, 90);
+        failed.status = "failed".to_owned();
+        let mut skipped = raw("00003", 100, 90);
+        skipped.status = "skipped".to_owned();
+        let report = build_report(
+            &all_cases,
+            &expected,
+            vec![raw("00001", 100, 90), failed, skipped],
+            "2026-05-20",
+            "sha",
+        )
+        .expect("report");
+
+        assert_eq!(report.summary.passed_cases, 1);
+        assert_eq!(report.summary.failed_cases, 1);
+        assert_eq!(report.summary.skipped_cases, 1);
+        assert_eq!(report.summary.missing_cases, 1);
+        assert_eq!(report.summary.coverage_pct, 25.0);
+        assert_eq!(report.coverage_failures.len(), 3);
     }
 
     #[test]
@@ -1317,13 +1555,14 @@ mod tests {
             ..raw("99999", 100, 90)
         }];
         let all_cases = Vec::new();
-        let approved = BTreeSet::from(["99999".to_owned()]);
+        let expected = BTreeSet::from(["99999".to_owned()]);
 
-        let err = build_report(&all_cases, &approved, records, "2026-05-20").expect_err("metadata");
+        let err = build_report(&all_cases, &expected, records, "2026-05-20", "sha")
+            .expect_err("metadata");
 
         assert!(
             err.to_string()
-                .contains("resolve sqlite parity case file metadata for approved case 99999")
+                .contains("resolve sqlite parity case file metadata for expected case 99999")
         );
     }
 
@@ -1349,16 +1588,17 @@ mod tests {
             &fixture_ranked(),
             &fixture_summary(),
             Path::new("assets/sqlite-parity-latency-gap.svg"),
-            Path::new("assets/sqlite-parity-ksloc.svg"),
         );
 
         assert!(block.contains(
             "![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)"
         ));
-        assert!(block.contains(
+        assert!(!block.contains("sqlite-parity-ksloc.svg"));
+        let metrics = metrics_block(Path::new("assets/sqlite-parity-ksloc.svg"));
+        assert!(block.contains("[Full ranked latency table](#sqlite-parity-ranked-latency-table)"));
+        assert!(metrics.contains(
             "![SQLite vs RedlineDB production KSLOC chart](assets/sqlite-parity-ksloc.svg)"
         ));
-        assert!(block.contains("[Full ranked latency table](#sqlite-parity-ranked-latency-table)"));
         assert!(block.contains("<details id=\"sqlite-parity-ranked-latency-table\">"));
     }
 
@@ -1388,12 +1628,12 @@ mod tests {
             status: "advisory".to_owned(),
             color: "orange",
         };
-        let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-1.0.24-blue\" alt=\"version\">\n</p>\nafter\n";
+        let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-1.0.25-blue\" alt=\"version\">\n</p>\nafter\n";
         let next = replace_jankurai_badge(current, &score).expect("replace");
 
         assert!(next.contains("<a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>"));
         assert!(next.contains(
-            "<img src=\"https://img.shields.io/badge/version-1.0.24-blue\" alt=\"version\">"
+            "<img src=\"https://img.shields.io/badge/version-1.0.25-blue\" alt=\"version\">"
         ));
         assert!(next.contains(JANKURAI_BADGE_BEGIN));
         assert!(next.contains(JANKURAI_BADGE_END));
@@ -1410,7 +1650,7 @@ mod tests {
         let summary = fixture_summary();
         let svg = latency_svg(&ranked, &summary);
         assert!(svg.contains("Updated 2026-05-20"));
-        assert!(svg.contains("Median latency improvement vs SQLite (%)"));
+        assert!(svg.contains("Floor-adjusted latency improvement vs SQLite (%)"));
         assert!(svg.contains("colormap legend"));
         assert!(svg.contains("0% horizontal reference line"));
     }

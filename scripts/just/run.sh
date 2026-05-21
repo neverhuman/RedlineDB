@@ -18,6 +18,22 @@ if [ -z "${REDLINEDB_BENCH_GIT_SHA:-}" ]; then
 fi
 
 lane="${1:?lane name required}"
+sqlite_parity_full_select=(
+  --priorities P0,P1,P2,P3,P4
+  --profiles memory,tempfile,catalog,external_app,side_effect
+  --include-quarantine
+)
+sqlite_parity_full_compare=("${sqlite_parity_full_select[@]}" --deny-skips)
+sqlite_parity_reference_bin="${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-sqlite3}"
+
+ensure_sqlite_parity_reference() {
+  if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
+    sqlite_parity_reference_bin="$REDLINEDB_SQLITE_PARITY_SQLITE_BIN"
+    return 0
+  fi
+  sqlite_parity_reference_bin="$(rtk bash scripts/sqlite/build-reference.sh)"
+  export REDLINEDB_SQLITE_PARITY_SQLITE_BIN="$sqlite_parity_reference_bin"
+}
 
 case "$lane" in
   fast)
@@ -148,11 +164,20 @@ case "$lane" in
     exit "$receipt_status"
     ;;
   sqlite-parity-scale-smoke)
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory --priorities P0 --jobs auto --out target/sqlite-parity/sqlite-scale-smoke.jsonl
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin "$sqlite_parity_reference_bin" --engine-name sqlite3 --profiles memory --priorities P0 --jobs auto --out target/sqlite-parity/sqlite-scale-smoke.jsonl
     ;;
   sqlite-parity-scale-ci)
+    ensure_sqlite_parity_reference
     rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --out target/sqlite-parity/compare-approved-ci.jsonl
+    mkdir -p benchmark-results/sqlite-parity/latest assets
+    mkdir -p target/sqlite-parity
+    raw_tmp="target/sqlite-parity/full-corpus-ci.raw.jsonl"
+    rm -f "$raw_tmp"
+    updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(date -u +%F)}"
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" --warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}" --jobs auto --out "$raw_tmp"
+    mv "$raw_tmp" benchmark-results/sqlite-parity/latest/raw.jsonl
+    printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
+    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl "${sqlite_parity_full_select[@]}" --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --jankurai-score .jankurai/repo-score.json --updated-date "$updated_date"
     ;;
   sqlite-parity-volatile-sentinel)
     rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
@@ -161,23 +186,20 @@ case "$lane" in
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- sentinel --input target/sqlite-parity/volatile-fastpath-sentinel.jsonl --ceiling-ns 00003=250000000 --ceiling-ns 00274=200000000 --ceiling-ns 00807=500000000 --ceiling-ns 00949=750000000 ${REDLINEDB_VOLATILE_SENTINEL_ENFORCE:+--enforce}
     ;;
   sqlite-parity-report-update)
-    rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
-    mkdir -p benchmark-results/sqlite-parity/latest assets
-    rm -f benchmark-results/sqlite-parity/latest/raw.jsonl
-    updated_date="$(date -u +%F)"
     "$0" score
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --repetitions 3 --warmup 1 --jobs auto --out benchmark-results/sqlite-parity/latest/raw.jsonl
-    printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
-    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --jankurai-score .jankurai/repo-score.json --updated-date "$updated_date"
+    REDLINEDB_SQLITE_PARITY_REPETITIONS="${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" \
+      REDLINEDB_SQLITE_PARITY_WARMUP="${REDLINEDB_SQLITE_PARITY_WARMUP:-1}" \
+      "$0" sqlite-parity-scale-ci
     ;;
   sqlite-parity-report-check)
-    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --jankurai-score .jankurai/repo-score.json --updated-date "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)" --check
+    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl "${sqlite_parity_full_select[@]}" --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --jankurai-score .jankurai/repo-score.json --updated-date "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)" --check
     ;;
   sqlite-parity-report-publish-pr)
     bash ops/ci/sqlite-parity-report.sh publish-pr
     ;;
   sqlite-parity-scale-full)
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin sqlite3 --engine-name sqlite3 --profiles memory,tempfile --priorities P0,P1,P2,P3 --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl
+    ensure_sqlite_parity_reference
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin "$sqlite_parity_reference_bin" --engine-name sqlite3 "${sqlite_parity_full_compare[@]}" --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl
     ;;
   ffi-abi)
     rtk cargo test -p redlinedb-ffi --quiet --locked

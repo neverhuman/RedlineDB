@@ -66,7 +66,7 @@ purpose = "bench-owned SQLite shell parity scale smoke over P0 memory cases"
 [[lane]]
 command = "just sqlite-parity-scale-ci"
 name = "sqlite-parity-scale-ci"
-purpose = "bench-owned SQLite parity CI hard gate over approved RedlineDB-vs-SQLite cases"
+purpose = "bench-owned SQLite parity CI hard gate over the full generated RedlineDB-vs-SQLite corpus"
 
 [[lane]]
 command = "just sqlite-parity-volatile-sentinel"
@@ -81,7 +81,7 @@ purpose = "deterministic SQLite parity report artifact drift check"
 [[lane]]
 command = "just sqlite-parity-scale-full"
 name = "sqlite-parity-scale-full"
-purpose = "bench-owned SQLite shell parity scale full non-quarantine sweep"
+purpose = "bench-owned SQLite shell parity scale full generated corpus sweep"
 
 [[lane]]
 command = "rtk cargo test -p redlinedb-sql --test parity_fk_enforce --quiet --locked"

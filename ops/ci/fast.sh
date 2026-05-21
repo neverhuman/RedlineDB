@@ -24,6 +24,14 @@ if [ -z "${REDLINEDB_BENCH_GIT_SHA:-}" ]; then
     export REDLINEDB_BENCH_GIT_SHA="$(git rev-parse HEAD)"
 fi
 
+ensure_sqlite_parity_reference() {
+    if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
+        return 0
+    fi
+    REDLINEDB_SQLITE_PARITY_SQLITE_BIN="$(bash scripts/sqlite/build-reference.sh)"
+    export REDLINEDB_SQLITE_PARITY_SQLITE_BIN
+}
+
 if [ "${1:-}" = "sqlite-parity-report-publish-pr" ]; then
     bash ops/ci/sqlite-parity-report.sh publish-pr
     exit 0
@@ -67,9 +75,9 @@ run_test_stage() {
             cargo test -p redlinedb-bench --quiet --locked
             ;;
         sqlite-parity-scale)
-            cargo build -p redlinedb-cli --release --locked
-            cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --out target/sqlite-parity/compare-approved-ci.jsonl
-            cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --jankurai-score .jankurai/repo-score.json --updated-date "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)" --check
+            ensure_sqlite_parity_reference
+            bash scripts/just/run.sh sqlite-parity-scale-ci
+            bash scripts/just/run.sh sqlite-parity-report-check
             ;;
         *)
             printf 'unknown fast test stage: %s\n' "$1" >&2
