@@ -99,7 +99,13 @@ jobs:
           ci_install_jankurai_logged .jankurai/jankurai-install.log
       - run: jankurai --version
       - name: Proofbind verify
-        run: jankurai proofbind verify . --changed-from origin/main
+        run: |
+          set -euo pipefail
+          changed=()
+          while IFS= read -r -d '' path; do
+            changed+=(--changed "$path")
+          done < <(git diff --name-only -z --diff-filter=ACMRT origin/main...HEAD --)
+          jankurai proofbind verify . "${changed[@]}"
       - name: Proofmark rust
         run: jankurai proofmark rust . --obligations .jankurai/proofbind/obligations.json
       - name: Rust witness build
