@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## [1.0.21] - 2026-05-21
+
+SQLite shell parity push 5.
+
+### Changed
+
+- SQLite parity CI coverage now approves 1049 generated cases, including
+  shell terminators, additional dot-command smoke cases, typed CLI
+  parameters, selected tempfile shell workflows, and generated scalar
+  null/coalesce cases.
+- Workspace package metadata and lockfile entries now target `1.0.21`.
+
 ## [1.0.20] - 2026-05-21
 
 Release-only version bump for the current SQLite parity branch.
