@@ -295,7 +295,7 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     let schema = conn.schema_snapshot();
     let schema_epoch = conn.schema_epoch();
 
-    if lower == "begin" || lower == "begin deferred" {
+    if lower == "begin" || lower == "begin transaction" || lower == "begin deferred" {
         return Ok(template(
             trimmed,
             schema_epoch,
@@ -303,7 +303,7 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
             PreparedKind::Begin(BeginMode::Deferred),
         ));
     }
-    if lower == "begin immediate" {
+    if lower == "begin immediate" || lower == "begin immediate transaction" {
         return Ok(template(
             trimmed,
             schema_epoch,
@@ -311,7 +311,7 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
             PreparedKind::Begin(BeginMode::Immediate),
         ));
     }
-    if lower == "begin exclusive" {
+    if lower == "begin exclusive" || lower == "begin exclusive transaction" {
         return Ok(template(
             trimmed,
             schema_epoch,
@@ -319,10 +319,14 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
             PreparedKind::Begin(BeginMode::Exclusive),
         ));
     }
-    if lower == "commit" {
+    if lower == "commit"
+        || lower == "commit transaction"
+        || lower == "end"
+        || lower == "end transaction"
+    {
         return Ok(template(trimmed, schema_epoch, false, PreparedKind::Commit));
     }
-    if lower == "rollback" {
+    if lower == "rollback" || lower == "rollback transaction" {
         return Ok(template(
             trimmed,
             schema_epoch,
@@ -341,7 +345,16 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
 
     let dialect = SQLiteDialect {};
     let sql_for_parser = strip_cte_materialized_hints(sql);
-    let mut statements = Parser::parse_sql(&dialect, &sql_for_parser)?;
+    let mut statements = match Parser::parse_sql(&dialect, &sql_for_parser) {
+        Ok(statements) => statements,
+        Err(first_err) => {
+            let rewritten = strip_sqlite_table_index_hints(&sql_for_parser)?;
+            if rewritten == sql_for_parser {
+                return Err(first_err.into());
+            }
+            Parser::parse_sql(&dialect, &rewritten).map_err(|_| first_err)?
+        }
+    };
     apply_cte_materialized_hints(&mut statements, sql);
     if statements.len() != 1 {
         return Err(Error::UnsupportedSql(
@@ -375,6 +388,181 @@ fn strip_cte_materialized_hints(sql: &str) -> String {
         }
         break out;
     }
+}
+
+fn strip_sqlite_table_index_hints(sql: &str) -> Result<String> {
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut i = 0usize;
+    let mut changed = false;
+
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' | b'"' | b'`' => {
+                let end = quoted_end(bytes, i, bytes[i]);
+                out.push_str(&sql[i..end]);
+                i = end;
+            }
+            b'[' => {
+                let end = bracket_quoted_end(bytes, i);
+                out.push_str(&sql[i..end]);
+                i = end;
+            }
+            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+                let end = line_comment_end(bytes, i);
+                out.push_str(&sql[i..end]);
+                i = end;
+            }
+            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
+                let end = block_comment_end(bytes, i);
+                out.push_str(&sql[i..end]);
+                i = end;
+            }
+            b if is_ident_start(b) => {
+                let word_end = word_end(bytes, i);
+                let word = &sql[i..word_end];
+                if word.eq_ignore_ascii_case("indexed")
+                    && let Some(end) = indexed_by_hint_end(sql, word_end)
+                {
+                    i = end;
+                    changed = true;
+                    continue;
+                }
+                if word.eq_ignore_ascii_case("not")
+                    && let Some(end) = not_indexed_hint_end(sql, word_end)
+                {
+                    i = end;
+                    changed = true;
+                    continue;
+                }
+                out.push_str(word);
+                i = word_end;
+            }
+            _ => {
+                let ch = sql[i..]
+                    .chars()
+                    .next()
+                    .expect("scanner index is on a char boundary");
+                out.push(ch);
+                i += ch.len_utf8();
+            }
+        }
+    }
+
+    if changed { Ok(out) } else { Ok(sql.to_owned()) }
+}
+
+fn indexed_by_hint_end(sql: &str, after_indexed: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    let by_start = skip_ws_and_comments(bytes, after_indexed);
+    let by_end = word_end_if(bytes, by_start, "by")?;
+    let ident_start = skip_ws_and_comments(bytes, by_end);
+    identifier_end(bytes, ident_start)
+}
+
+fn not_indexed_hint_end(sql: &str, after_not: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    let indexed_start = skip_ws_and_comments(bytes, after_not);
+    word_end_if(bytes, indexed_start, "indexed")
+}
+
+fn skip_ws_and_comments(bytes: &[u8], mut i: usize) -> usize {
+    loop {
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+            i = line_comment_end(bytes, i);
+            continue;
+        }
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+            i = block_comment_end(bytes, i);
+            continue;
+        }
+        return i;
+    }
+}
+
+fn word_end_if(bytes: &[u8], i: usize, expected: &str) -> Option<usize> {
+    if i >= bytes.len() || !is_ident_start(bytes[i]) {
+        return None;
+    }
+    let end = word_end(bytes, i);
+    let word = std::str::from_utf8(&bytes[i..end]).ok()?;
+    if word.eq_ignore_ascii_case(expected) {
+        Some(end)
+    } else {
+        None
+    }
+}
+
+fn identifier_end(bytes: &[u8], i: usize) -> Option<usize> {
+    if i >= bytes.len() {
+        return None;
+    }
+    match bytes[i] {
+        b'"' | b'\'' | b'`' => Some(quoted_end(bytes, i, bytes[i])),
+        b'[' => Some(bracket_quoted_end(bytes, i)),
+        b if is_ident_start(b) => Some(word_end(bytes, i)),
+        _ => None,
+    }
+}
+
+fn quoted_end(bytes: &[u8], start: usize, quote: u8) -> usize {
+    let mut i = start + 1;
+    while i < bytes.len() {
+        if bytes[i] == quote {
+            if i + 1 < bytes.len() && bytes[i + 1] == quote {
+                i += 2;
+                continue;
+            }
+            return i + 1;
+        }
+        i += 1;
+    }
+    bytes.len()
+}
+
+fn bracket_quoted_end(bytes: &[u8], start: usize) -> usize {
+    let mut i = start + 1;
+    while i < bytes.len() {
+        if bytes[i] == b']' {
+            return i + 1;
+        }
+        i += 1;
+    }
+    bytes.len()
+}
+
+fn line_comment_end(bytes: &[u8], start: usize) -> usize {
+    let mut i = start + 2;
+    while i < bytes.len() && bytes[i] != b'\n' {
+        i += 1;
+    }
+    i
+}
+
+fn block_comment_end(bytes: &[u8], start: usize) -> usize {
+    let mut i = start + 2;
+    while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+        i += 1;
+    }
+    if i + 1 < bytes.len() {
+        i + 2
+    } else {
+        bytes.len()
+    }
+}
+
+fn word_end(bytes: &[u8], mut i: usize) -> usize {
+    while i < bytes.len() && is_ident_byte(bytes[i]) {
+        i += 1;
+    }
+    i
+}
+
+fn is_ident_start(b: u8) -> bool {
+    b.is_ascii_alphabetic() || b == b'_'
 }
 
 fn apply_cte_materialized_hints(statements: &mut [SqlStatement], sql: &str) {

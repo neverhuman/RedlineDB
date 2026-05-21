@@ -87,6 +87,9 @@ pub(crate) fn bind_query_with_params(
             limit_clause,
             params,
         ),
+        SetExpr::Values(values) => {
+            bind_values_query(schema_epoch, sql, values, order_by, limit_clause, params)
+        }
         _ => Err(Error::UnsupportedSql(
             "only simple SELECT and UNION ALL queries are supported".to_owned(),
         )),
@@ -485,6 +488,121 @@ pub(crate) fn bind_union_all_query(
             source,
             distinct: false,
             projection,
+            selection: None,
+            group_by: Vec::new(),
+            having: None,
+            order_by,
+            limit,
+            offset,
+        }),
+    })
+}
+
+fn bind_values_query(
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    values: sqlparser::ast::Values,
+    order_by: Option<sqlparser::ast::OrderBy>,
+    limit_clause: Option<LimitClause>,
+    params: &mut ParamLayout,
+) -> Result<PreparedTemplate> {
+    let column_count = values.rows.first().map(Vec::len).unwrap_or(0);
+    if column_count == 0 {
+        return Err(Error::Parse(
+            "VALUES requires at least one column".to_owned(),
+        ));
+    }
+
+    let mut rows = Vec::with_capacity(values.rows.len());
+    for row in values.rows {
+        if row.len() != column_count {
+            return Err(Error::Parse(
+                "all VALUES rows must have the same number of columns".to_owned(),
+            ));
+        }
+        let mut out = Vec::with_capacity(column_count);
+        for expr in row {
+            let expr = normalize_expr(expr, params)?;
+            out.push(crate::exec::expr::eval_scalar(
+                &expr,
+                &crate::exec::expr::RowContext::Empty,
+                &[],
+            )?);
+        }
+        rows.push(out);
+    }
+
+    let columns: Vec<String> = (1..=column_count)
+        .map(|idx| format!("column{idx}"))
+        .collect();
+    let output_columns = Arc::from(columns.clone());
+    let source = SelectSource::Cte {
+        name: Arc::from("__values"),
+        alias: None,
+        columns: Arc::from(columns),
+        rows: Arc::from(rows),
+    };
+
+    let mut order_by = match order_by {
+        Some(order_by) => match order_by.kind {
+            OrderByKind::Expressions(exprs) => exprs
+                .into_iter()
+                .map(|expr| {
+                    let options = expr.options;
+                    let with_fill = expr.with_fill;
+                    let expr = normalize_expr(expr.expr, params)?;
+                    Ok(OrderByExpr {
+                        expr,
+                        options,
+                        with_fill,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?,
+            OrderByKind::All(_) => {
+                return Err(Error::UnsupportedSql(
+                    "ORDER BY ALL is not supported".to_owned(),
+                ));
+            }
+        },
+        None => Vec::new(),
+    };
+    resolve_order_by_positions(&mut order_by, &output_columns);
+
+    let (limit, offset) = match limit_clause {
+        Some(LimitClause::LimitOffset {
+            limit,
+            offset,
+            limit_by: _,
+        }) => {
+            let limit = match limit {
+                Some(expr) => Some(normalize_expr(expr, params)?),
+                None => None,
+            };
+            let offset = match offset {
+                Some(offset) => Some(normalize_expr(offset.value, params)?),
+                None => None,
+            };
+            (limit, offset)
+        }
+        Some(LimitClause::OffsetCommaLimit { offset, limit }) => (
+            Some(normalize_expr(limit, params)?),
+            Some(normalize_expr(offset, params)?),
+        ),
+        None => (None, None),
+    };
+
+    Ok(PreparedTemplate {
+        sql: Arc::from(sql),
+        schema_epoch,
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: params.clone(),
+        output_columns,
+        readonly: true,
+        kind: PreparedKind::Select(SelectPlan {
+            source,
+            distinct: false,
+            projection: Vec::new(),
             selection: None,
             group_by: Vec::new(),
             having: None,

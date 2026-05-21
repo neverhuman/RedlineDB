@@ -13,23 +13,23 @@
     "--plot",
     "assets/sqlite-parity-latency-gap.svg",
     "--updated-date",
-    "2026-05-20"
+    "2026-05-21"
   ],
-  "git_sha": "e711b9f754e6361f0fc24f862e1cb07dc82089eb",
+  "git_sha": "65fb23b783e99309b8ac33e7ad4208f8b224f4eb",
   "sqlite_version": "3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)",
-  "updated_date": "2026-05-20",
+  "updated_date": "2026-05-21",
   "repetitions": 3,
   "warmup": 1,
   "input_hashes": {
-    "benchmark-results/sqlite-parity/latest/raw.jsonl": "24901af48bc40860402e0319a9e8212254db7cf161a287cb632f78734e51d4a3",
-    "crates/bench/sqlite_parity/approved-ci.txt": "a3e70a287482596f12fe740c7dec686bb3b688afe29bf568c7516a34e13df103",
+    "benchmark-results/sqlite-parity/latest/raw.jsonl": "fc13ba069fb68e2ba4420527d7457f1d4abe9d97b7bc3914040f712f3ea7d6d4",
+    "crates/bench/sqlite_parity/approved-ci.txt": "784ccd00e9711cd7995ee78e6e279a71b1b0f236b964287048d3dbe719734176",
     "crates/bench/sqlite_parity/generated_manifest.json": "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3"
   },
   "output_hashes": {
-    "README.md": "c2e9a91b5e293a3ce541062024a9c02fa79ec68eaae28b584e2ee226b0bb5a5f",
-    "assets/sqlite-parity-latency-gap.svg": "820bc14607f86ed360085a5634941c4bb0b8ca186f1206f1ad9cffec77ae5c6e",
-    "ranked.csv": "601c62d93e601207c2449ac59448db2a0ca22eb363a06d1f13f575847cd0ed8a",
-    "raw.jsonl": "24901af48bc40860402e0319a9e8212254db7cf161a287cb632f78734e51d4a3",
-    "summary.json": "fa4e30c003a08f2026e21a2995ba835108bf5aeb288b054ddcc06e21d3409fec"
+    "README.md": "295eb16547f00a75a8ea74d626370fd8521fe34daa2c9bd9c8b928fd354eb189",
+    "assets/sqlite-parity-latency-gap.svg": "96cf9d837f9c0e2e9bc49d74839711c39558e301e8d6632f3d03fb5d5efc5ce6",
+    "ranked.csv": "cb270477e81eb7463b4931a84f1beae172bfdaf5873625d52a5a77e6afaf0a4a",
+    "raw.jsonl": "fc13ba069fb68e2ba4420527d7457f1d4abe9d97b7bc3914040f712f3ea7d6d4",
+    "summary.json": "f8ac61637d51b1ea67a25ece9dfd776386fbe907d4bd9b98938cc0d9d3ba49c1"
   }
 }

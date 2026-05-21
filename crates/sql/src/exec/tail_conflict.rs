@@ -415,7 +415,7 @@ pub(in crate::exec) fn insert_row_with_resolution(
     }
 
     apply_unique_conflict_resolution(
-        conn, session, tx, table, values, &conflicts, conflict, action, bindings,
+        conn, session, tx, table, rowid, values, &conflicts, conflict, action, bindings,
     )
 }
 
@@ -429,6 +429,7 @@ fn apply_unique_conflict_resolution(
     session: &mut SessionState,
     tx: &mut Txn,
     table: &Arc<TableDef>,
+    rowid: RowId,
     values: &mut Vec<SqlValue>,
     conflicts: &[UniqueConflict],
     conflict: Option<&crate::statement::InsertConflict>,
@@ -452,10 +453,21 @@ fn apply_unique_conflict_resolution(
             // that REPLACE does NOT bypass NOT NULL/CHECK — those were
             // already validated above.
             let mut deleted = std::collections::HashSet::new();
+            let mut same_row_old_values = None;
             for conflict in conflicts {
                 if deleted.insert(conflict.rowid) {
                     let old_row =
                         load_table_row_by_rowid(conn.engine(), tx, table, conflict.rowid)?;
+                    if conflict.rowid == rowid {
+                        let Some(old_row) = old_row else {
+                            return Err(Error::ConstraintViolation(format!(
+                                "REPLACE conflict row missing for table {}",
+                                table.name
+                            )));
+                        };
+                        same_row_old_values = Some(old_row.values);
+                        continue;
+                    }
                     conn.engine()
                         .delete_for_relation(tx, table.relation_id, conflict.rowid)?;
                     if let Some(old_row) = old_row {
@@ -466,20 +478,50 @@ fn apply_unique_conflict_resolution(
                             &old_row.values,
                             conflict.rowid,
                         )?;
+                        crate::exec::fk::enforce_fk_on_parent_delete(
+                            conn,
+                            session,
+                            tx,
+                            table,
+                            &old_row.values,
+                        )?;
                     }
                 }
             }
-            let rowid = choose_rowid_for_insert(conn.engine(), table, values)?;
             let payload = encode_sql_row(table.table_id.0, values)?;
-            conn.engine()
-                .insert_for_relation(tx, table.relation_id, rowid, payload)?;
-            crate::exec::index_dml::maintain_indexes_on_insert(
-                conn.engine(),
-                tx,
-                table,
-                values,
-                rowid,
-            )?;
+            if let Some(old_values) = same_row_old_values {
+                conn.engine()
+                    .update_for_relation(tx, table.relation_id, rowid, payload)?;
+                crate::exec::index_dml::maintain_indexes_on_update(
+                    conn.engine(),
+                    tx,
+                    table,
+                    &old_values,
+                    values,
+                    rowid,
+                    rowid,
+                )?;
+                crate::exec::fk::enforce_fk_on_insert(conn, session, tx, table, values, rowid)?;
+                crate::exec::fk::enforce_fk_on_parent_update(
+                    conn,
+                    session,
+                    tx,
+                    table,
+                    &old_values,
+                    values,
+                )?;
+            } else {
+                conn.engine()
+                    .insert_for_relation(tx, table.relation_id, rowid, payload)?;
+                crate::exec::index_dml::maintain_indexes_on_insert(
+                    conn.engine(),
+                    tx,
+                    table,
+                    values,
+                    rowid,
+                )?;
+                crate::exec::fk::enforce_fk_on_insert(conn, session, tx, table, values, rowid)?;
+            }
             session.last_insert_rowid = Some(rowid.0 as i64);
             Ok(InsertOutcome::Inserted {
                 rowid,

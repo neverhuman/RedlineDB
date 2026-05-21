@@ -159,6 +159,63 @@ fn prepare_returns_only_first_statement_for_back_compat() {
     assert_eq!(count.step().unwrap(), Step::Row);
     assert_eq!(count.column_i64(0).unwrap(), 1);
 }
+
+#[test]
+fn transaction_keyword_synonyms_execute() {
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY)")
+        .expect("create");
+    conn.execute("BEGIN TRANSACTION")
+        .expect("begin transaction");
+    conn.execute("INSERT INTO t VALUES (1)")
+        .expect("insert one");
+    conn.execute("COMMIT TRANSACTION")
+        .expect("commit transaction");
+    assert_eq!(count_rows(&conn, "SELECT count(*) FROM t"), 1);
+
+    conn.execute("BEGIN IMMEDIATE TRANSACTION")
+        .expect("begin immediate transaction");
+    conn.execute("INSERT INTO t VALUES (2)")
+        .expect("insert two");
+    conn.execute("END TRANSACTION").expect("end transaction");
+    assert_eq!(count_rows(&conn, "SELECT count(*) FROM t"), 2);
+}
+
+#[test]
+fn rollback_transaction_synonym_rewinds() {
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY)")
+        .expect("create");
+    conn.execute("BEGIN TRANSACTION")
+        .expect("begin transaction");
+    conn.execute("INSERT INTO t VALUES (1)").expect("insert");
+    conn.execute("ROLLBACK TRANSACTION")
+        .expect("rollback transaction");
+    assert_eq!(count_rows(&conn, "SELECT count(*) FROM t"), 0);
+}
+
+#[test]
+fn sqlite_index_table_hints_are_noops() {
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(a INT, b INT)")
+        .expect("create");
+    conn.execute("CREATE INDEX i_t_a ON t(a)").expect("index");
+    conn.execute("INSERT INTO t VALUES(1,10),(2,20)")
+        .expect("insert");
+
+    let mut stmt = conn
+        .prepare("SELECT b FROM t INDEXED BY i_t_a WHERE a=2")
+        .expect("indexed by");
+    assert_eq!(stmt.step().expect("step"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("b"), 20);
+
+    let mut stmt = conn
+        .prepare("SELECT b FROM t NOT INDEXED WHERE a=1")
+        .expect("not indexed");
+    assert_eq!(stmt.step().expect("step"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("b"), 10);
+}
+
 #[test]
 fn savepoint_then_release_keeps_changes() {
     let (_dir, conn) = open_database();
@@ -367,4 +424,43 @@ fn savepoint_rewind_with_updates_and_deletes() {
     );
     conn.execute("RELEASE sp1").expect("release");
     conn.commit().expect("commit");
+}
+
+#[test]
+fn savepoint_rewinds_insert_or_replace() {
+    let (_dir, conn) = open_database();
+    conn.execute("PRAGMA foreign_keys=ON").expect("fk on");
+    conn.execute("CREATE TABLE parent(id INT PRIMARY KEY)")
+        .expect("parent");
+    conn.execute(
+        "CREATE TABLE child( \
+            id INT PRIMARY KEY, \
+            parent_id INT REFERENCES parent(id) ON DELETE CASCADE, \
+            u TEXT UNIQUE \
+        )",
+    )
+    .expect("child");
+    conn.execute("INSERT INTO parent VALUES (1),(2)")
+        .expect("parents");
+    conn.execute("INSERT INTO child VALUES (1,1,'a'),(2,2,'b')")
+        .expect("children");
+
+    conn.execute("SAVEPOINT s1").expect("savepoint");
+    conn.execute("INSERT OR REPLACE INTO child VALUES (2,2,'b2')")
+        .expect("replace");
+    conn.execute("ROLLBACK TO s1").expect("rollback to");
+    conn.execute("RELEASE s1").expect("release");
+
+    let mut stmt = conn
+        .prepare("SELECT u FROM child WHERE id=2")
+        .expect("select child");
+    assert_eq!(stmt.step().expect("step"), Step::Row);
+    assert_eq!(stmt.column_text(0).expect("u"), "b");
+
+    conn.execute("DELETE FROM parent WHERE id=2")
+        .expect("cascade delete");
+    assert_eq!(
+        count_rows(&conn, "SELECT count(*) FROM child WHERE id=2"),
+        0
+    );
 }

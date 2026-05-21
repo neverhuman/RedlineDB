@@ -120,6 +120,33 @@ fn non_recursive_cte_with_aggregate() {
 }
 
 #[test]
+fn values_statement_matches_sqlite() {
+    let lab = Lab::new();
+    lab.assert_match("VALUES(1,'a'),(2,'b')");
+}
+
+#[test]
+fn cte_values_body_uses_declared_column_names() {
+    let lab = Lab::new();
+    lab.assert_match(
+        "WITH t(x, label) AS (VALUES(2, 'b'), (1, 'a')) \
+         SELECT x, label FROM t ORDER BY x",
+    );
+}
+
+#[test]
+fn recursive_cte_values_anchor() {
+    let lab = Lab::new();
+    lab.assert_match(
+        "WITH RECURSIVE seq(x) AS ( \
+             VALUES(1) \
+             UNION ALL \
+             SELECT x + 1 FROM seq WHERE x < 4 \
+         ) SELECT x FROM seq ORDER BY x",
+    );
+}
+
+#[test]
 fn non_recursive_cte_materialized_hint_is_accepted() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(id INTEGER, v INTEGER)");

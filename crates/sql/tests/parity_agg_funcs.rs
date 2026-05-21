@@ -85,6 +85,41 @@ const SETUP_WORDS: &[&str] = &[
     "INSERT INTO words VALUES ('alpha', 1), ('beta', 1), ('gamma', 2), (NULL, 1), ('delta', 2)",
 ];
 
+#[test]
+fn scalar_round_wraps_grouped_avg() {
+    let (_dir, conn) = open();
+    conn.execute("CREATE TABLE t(g TEXT, v INTEGER)")
+        .expect("create");
+    conn.execute("INSERT INTO t VALUES ('a', 1), ('a', 2), ('a', 4), ('b', 10), ('b', 11)")
+        .expect("insert");
+    assert_matches_sqlite(
+        &conn,
+        &[
+            "CREATE TABLE t(g TEXT, v INTEGER)",
+            "INSERT INTO t VALUES ('a', 1), ('a', 2), ('a', 4), ('b', 10), ('b', 11)",
+        ],
+        "SELECT g, round(avg(v), 2) FROM t GROUP BY g ORDER BY g",
+    );
+}
+
+#[test]
+fn aggregate_distinct_and_filter_match_sqlite() {
+    let (_dir, conn) = open();
+    let setup = [
+        "CREATE TABLE t(a INT, g TEXT)",
+        "INSERT INTO t VALUES (1, 'x'), (1, 'x'), (2, 'y'), (3, 'y'), (NULL, 'z')",
+    ];
+    for statement in setup {
+        conn.execute(statement).expect("setup");
+    }
+    assert_matches_sqlite(
+        &conn,
+        &setup,
+        "SELECT count(DISTINCT a), count(DISTINCT g), \
+         sum(a) FILTER (WHERE a % 2 = 1), count(*) FILTER (WHERE a > 1) FROM t",
+    );
+}
+
 // ── group_concat ──────────────────────────────────────────────────────────────
 
 #[test]

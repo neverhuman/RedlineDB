@@ -635,15 +635,18 @@ pub(super) fn order_and_project_rows(
         }
         keyed.sort_by(|a, b| {
             for (idx, dir) in directions.iter().enumerate() {
-                let cmp = match (&order_collations[idx], &a.0[idx], &b.0[idx]) {
-                    (Some(col), SqlValue::Text(la), SqlValue::Text(rb)) => col.compare_text(la, rb),
-                    _ => crate::value::compare_values(&a.0[idx], &b.0[idx]),
-                };
-                let cmp = if matches!(dir, vec::SortDirection::Desc) {
-                    cmp.reverse()
-                } else {
-                    cmp
-                };
+                let cmp =
+                    if matches!(a.0[idx], SqlValue::Null) || matches!(b.0[idx], SqlValue::Null) {
+                        dir.compare_values(&a.0[idx], &b.0[idx])
+                    } else {
+                        match (&order_collations[idx], &a.0[idx], &b.0[idx]) {
+                            (Some(col), SqlValue::Text(la), SqlValue::Text(rb)) => {
+                                let ord = col.compare_text(la, rb);
+                                if dir.is_desc() { ord.reverse() } else { ord }
+                            }
+                            _ => dir.compare_values(&a.0[idx], &b.0[idx]),
+                        }
+                    };
                 if cmp != std::cmp::Ordering::Equal {
                     return cmp;
                 }
@@ -745,9 +748,11 @@ pub(super) fn order_and_project_rows(
 pub(super) fn directions_from_order_by(order_by: &[OrderByExpr]) -> Vec<vec::SortDirection> {
     order_by
         .iter()
-        .map(|order| match order.options.asc {
-            Some(false) => vec::SortDirection::Desc,
-            _ => vec::SortDirection::Asc,
+        .map(|order| {
+            vec::SortDirection::from_order_options(
+                matches!(order.options.asc, Some(false)),
+                order.options.nulls_first,
+            )
         })
         .collect()
 }
