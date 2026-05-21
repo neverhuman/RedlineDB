@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## [1.0.24] - 2026-05-21
+
+Release bump for the README evidence refresh.
+
+### Changed
+
+- Workspace package metadata and install docs now target `1.0.24`.
+- The SQLite parity README block now shows the charts in the main section and
+  carries a generated jankurai score badge sourced from `.jankurai/repo-score.json`.
+
 ## [1.0.23] - 2026-05-21
 
 SQLite parity KSLOC chart refresh.
