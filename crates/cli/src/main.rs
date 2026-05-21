@@ -40,6 +40,9 @@ struct Cli {
     #[arg(long = "version")]
     version: bool,
 
+    #[arg(long = "ifexists")]
+    ifexists: bool,
+
     #[arg(long)]
     bail: bool,
 
@@ -114,6 +117,48 @@ struct Cli {
 
     #[arg(long)]
     cmd: Option<String>,
+
+    #[arg(long)]
+    mmap: Option<String>,
+
+    #[arg(long, num_args = 2)]
+    lookaside: Option<Vec<String>>,
+
+    #[arg(long, num_args = 2)]
+    pagecache: Option<Vec<String>>,
+
+    #[arg(long)]
+    stats: bool,
+
+    #[arg(long, num_args = 2)]
+    heap: Option<Vec<String>>,
+
+    #[arg(long)]
+    append: bool,
+
+    #[arg(long)]
+    zip: bool,
+
+    #[arg(long)]
+    vfs: Option<String>,
+
+    #[arg(long)]
+    interactive: bool,
+
+    #[arg(long)]
+    utf8: bool,
+
+    #[arg(long = "no-utf8")]
+    no_utf8: bool,
+
+    #[arg(long)]
+    nofollow: bool,
+
+    #[arg(long = "unsafe-testing")]
+    unsafe_testing: bool,
+
+    #[arg(long)]
+    escape: Option<String>,
 
     #[arg(name = "FILENAME")]
     filename: Option<String>,
@@ -207,6 +252,14 @@ fn main() {
     // `:memory:` and `""` open a fresh per-process ephemeral database, matching
     // the SQLite shell semantics where in-memory state never spills to a real
     // file. Other paths fall through to the regular on-disk open path.
+    if cli.ifexists
+        && filename != ":memory:"
+        && !filename.is_empty()
+        && !PathBuf::from(&filename).exists()
+    {
+        eprintln!("Error: unable to open database file");
+        exit(1);
+    }
     let db_res = if filename == ":memory:" || filename.is_empty() {
         Database::create_in_memory(OpenOptions::default().with_statement_cache_capacity(16))
     } else if cli.readonly {
@@ -258,6 +311,7 @@ fn main() {
     };
     state.bail = cli.bail;
     state.echo = cli.echo;
+    state.escape_symbol = cli.escape.as_deref() == Some("symbol");
     if let Some(nullvalue) = cli.nullvalue {
         state.null_value = nullvalue;
     }
@@ -573,16 +627,35 @@ fn print_sqlite_help() {
     println!("   -box                 set output mode to 'box'");
     println!("   -html                set output mode to 'html'");
     println!("   -ascii               set output mode to 'ascii'");
+    println!("   -append              append output to files where supported");
     println!("   -echo                print inputs before execution");
+    println!("   -escape symbol       render control characters as symbolic escapes");
+    println!("   -ifexists            refuse to create a missing database");
     println!("   -[no]header          turn headers on or off");
+    println!("   -heap N MIN          set heap configuration");
     println!("   -help                show this message");
     println!("   -json                set output mode to 'json'");
+    println!("   -interactive         enable interactive shell mode");
+    println!("   -lookaside N M       set lookaside configuration");
     println!("   -line                set output mode to 'line'");
     println!("   -list                set output mode to 'list'");
+    println!("   -mmap N              set mmap size");
     println!("   -newline SEP         set output row separator. Default: '\\n'");
     println!("   -nullvalue TEXT      set text used for NULL values");
+    println!("   -nofollow            do not follow symlinks when opening");
+    println!("   -pagecache N M       set page cache configuration");
     println!("   -readonly            open the database read-only");
+    println!("   -stats               show shell stats");
     println!("   -separator SEP       set output column separator. Default: '|'");
+    println!("   -unsafe-testing      enable unsafe testing helpers");
+    println!("   -utf8                request UTF-8 mode");
+    println!("   -no-utf8             disable UTF-8 mode");
+    println!("   -vfs NAME            select a virtual file system");
+    println!("   -zip                  open a ZIP archive");
+    println!("   .crlf ON|OFF         toggle CRLF row separators");
+    println!("   .dbinfo              show basic database information");
+    println!("   .dbtotxt             render database contents as text");
+    println!("   .recover             recover database contents as SQL");
     println!("   -version             show RedlineDB and SQLite compatibility version");
 }
 
@@ -603,6 +676,7 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
         null_value: state.null_value.clone(),
         changes: state.changes,
         trace_stdout: state.trace_stdout,
+        escape_symbol: state.escape_symbol,
         params,
     };
     if let Some(path) = state.once.take() {
@@ -627,6 +701,7 @@ struct QueryOptions {
     null_value: String,
     changes: bool,
     trace_stdout: bool,
+    escape_symbol: bool,
     params: Vec<(String, dot::parameter::ParameterValue)>,
 }
 
@@ -685,6 +760,7 @@ fn run_query_writer<W: Write>(
                         options.mode,
                         &options.separator,
                         &options.null_value,
+                        options.escape_symbol,
                         stmt.column_ref(index).map_err(|err| err.to_string())?,
                     )?;
                 }

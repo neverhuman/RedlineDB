@@ -198,6 +198,52 @@ fn dot_databases_reports_main() {
 }
 
 #[test]
+fn dot_crlf_toggles_row_separator() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode list\n\
+         .crlf on\n\
+         SELECT 1;\n\
+         .crlf off\n\
+         SELECT 2;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("1\r\n"), "stdout={out:?}");
+    assert!(out.contains("2\n"), "stdout={out:?}");
+}
+
+#[test]
+fn dot_dbinfo_prints_page_size() {
+    let (out, err, code) = run_script(None, ".dbinfo\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("database page size"), "stdout={out}");
+}
+
+#[test]
+fn dot_dbtotxt_prints_pipe_separated_catalog_rows() {
+    let (out, err, code) = run_script(
+        None,
+        "CREATE TABLE t(x INTEGER);\n\
+         .dbtotxt\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("|"), "stdout={out}");
+}
+
+#[test]
+fn dot_recover_emits_dump_sql() {
+    let (out, err, code) = run_script(
+        None,
+        "CREATE TABLE t(x INTEGER);\n\
+         INSERT INTO t VALUES (1);\n\
+         .recover\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("CREATE TABLE"), "stdout={out}");
+    assert!(out.contains("INSERT INTO"), "stdout={out}");
+}
+
+#[test]
 fn dot_mode_and_headers_apply_to_following_query() {
     let (out, err, code) = run_script(
         None,
@@ -292,6 +338,31 @@ fn delimited_modes_stream_headers_nulls_and_escaping() {
     );
     assert_eq!(code, 0, "stderr={err}");
     assert_eq!(out, "1\tNULL\n2\tz\n");
+}
+
+#[test]
+fn cli_escape_symbol_renders_control_characters_symbolically() {
+    let (out, err, code) = run_script_with_args(&["-escape", "symbol"], None, "SELECT char(10);\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains(r"\n"), "stdout={out}");
+}
+
+#[test]
+fn cli_ifexists_rejects_missing_database() {
+    let dir = tempdir().expect("tempdir");
+    let missing = dir.path().join("missing.db");
+    let output = Command::new(cargo_bin("redlinedb-cli"))
+        .arg("-ifexists")
+        .arg(&missing)
+        .arg("SELECT 1;")
+        .output()
+        .expect("run redlinedb -ifexists");
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).expect("stderr");
+    assert!(
+        stderr.contains("unable to open database file"),
+        "stderr={stderr}"
+    );
 }
 
 #[test]

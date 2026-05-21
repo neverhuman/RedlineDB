@@ -176,6 +176,56 @@ pub fn clone_db(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, Strin
     Ok(DotOutcome::Ok)
 }
 
+/// `.dbinfo` — print basic database information.
+pub fn dbinfo(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    let mut conn = state.db.connect().map_err(|err| err.to_string())?;
+    let mut stmt = conn
+        .prepare("PRAGMA page_size")
+        .map_err(|err| err.to_string())?;
+    let mut page_size = None;
+    while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
+        page_size = Some(row.get::<i64>(0).map_err(|err| err.to_string())?);
+    }
+    let value = page_size.unwrap_or(0);
+    state
+        .output
+        .write_line(&format!("database page size: {value}"))
+        .map_err(|err| err.to_string())?;
+    Ok(DotOutcome::Ok)
+}
+
+/// `.dbtotxt` — dump a simple text view of sqlite_master rows.
+pub fn dbtotxt(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    let mut conn = state.db.connect().map_err(|err| err.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT type, name, tbl_name, rootpage, sql FROM sqlite_master \
+             WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
+        )
+        .map_err(|err| err.to_string())?;
+    while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
+        let ty: String = row.get(0).map_err(|err| err.to_string())?;
+        let name: String = row.get(1).map_err(|err| err.to_string())?;
+        let tbl_name: String = row.get(2).map_err(|err| err.to_string())?;
+        let rootpage: i64 = row.get(3).unwrap_or(0);
+        let sql = match row.get::<Option<String>>(4) {
+            Ok(Some(sql)) => sql,
+            Ok(None) => String::new(),
+            Err(err) => return Err(err.to_string()),
+        };
+        state
+            .output
+            .write_line(&format!("{ty}|{name}|{tbl_name}|{rootpage}|{sql}"))
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(DotOutcome::Ok)
+}
+
+/// `.recover` — recover by emitting a dump of the database contents.
+pub fn recover(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    dump(state, args)
+}
+
 /// `.cd DIR` — change the process working directory.
 pub fn cd(_state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     let Some(path) = args.first() else {

@@ -1,5 +1,7 @@
 use std::cell::Cell;
 use std::cmp::Ordering;
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -289,6 +291,24 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::Reindex => Ok(ExecutionResult {
+            runtime: RuntimeState::Done,
+            affected_rows: 0,
+        }),
+        PreparedKind::Vacuum => {
+            conn.vacuum()?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::VacuumInto { path } => {
+            vacuum_into_dir(conn, path.as_ref())?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::CreateTable(spec) => {
             with_write_tx(conn, |session, tx| {
                 let table = conn.engine().create_table(tx, spec.clone())?;
@@ -527,6 +547,9 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Commit
         | PreparedKind::Rollback
         | PreparedKind::Pragma(_)
+        | PreparedKind::Reindex
+        | PreparedKind::Vacuum
+        | PreparedKind::VacuumInto { .. }
         | PreparedKind::Analyze(_)
         | PreparedKind::Explain(_)
         | PreparedKind::Select(_)
@@ -621,7 +644,45 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             conn.set_query_only(*value);
             Ok(())
         }
+        PragmaPlan::SetCaseSensitiveLike(value) => {
+            conn.set_case_sensitive_like(*value);
+            Ok(())
+        }
+        PragmaPlan::WalCheckpoint => Ok(()),
     }
+}
+
+fn vacuum_into_dir(conn: &Connection, dst: &str) -> Result<()> {
+    let src = conn.database_path();
+    let dst = Path::new(dst);
+    if dst.exists() {
+        fs::remove_dir_all(dst).map_err(|err| Error::Config(err.to_string()))?;
+    }
+    fs::create_dir_all(dst).map_err(|err| Error::Config(err.to_string()))?;
+    copy_dir(src, dst)?;
+    Ok(())
+}
+
+fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+    for entry in fs::read_dir(src).map_err(|err| Error::Config(err.to_string()))? {
+        let entry = entry.map_err(|err| Error::Config(err.to_string()))?;
+        let name = entry.file_name();
+        if name == "owner.lock" {
+            continue;
+        }
+        let src_path = entry.path();
+        let dst_path = dst.join(&name);
+        let file_type = entry
+            .file_type()
+            .map_err(|err| Error::Config(err.to_string()))?;
+        if file_type.is_dir() {
+            fs::create_dir_all(&dst_path).map_err(|err| Error::Config(err.to_string()))?;
+            copy_dir(&src_path, &dst_path)?;
+        } else if file_type.is_file() {
+            fs::copy(&src_path, &dst_path).map_err(|err| Error::Config(err.to_string()))?;
+        }
+    }
+    Ok(())
 }
 
 fn with_write_tx<T>(

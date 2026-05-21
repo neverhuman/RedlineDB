@@ -370,22 +370,20 @@ fn pragma_auto_vacuum_is_rejected() {
 }
 
 #[test]
-fn pragma_wal_checkpoint_is_rejected() {
+fn pragma_wal_checkpoint_is_accepted() {
     let pair = Pair::new();
+    pair.execute_both("PRAGMA journal_mode=WAL");
+    pair.execute_both("CREATE TABLE t(x INTEGER)");
+    pair.execute_both("INSERT INTO t VALUES (1)");
     for stmt in [
         "PRAGMA wal_checkpoint",
         "PRAGMA wal_checkpoint(PASSIVE)",
         "PRAGMA wal_checkpoint(FULL)",
     ] {
-        let err = pair
-            .redline
-            .execute(stmt)
-            .expect_err("wal_checkpoint should be rejected");
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("WAL") || msg.to_ascii_lowercase().contains("wal_checkpoint"),
-            "rejection should mention WAL: {msg}"
-        );
+        pair.redline.execute(stmt).expect("wal_checkpoint");
+        pair.sqlite
+            .execute_batch(stmt)
+            .expect("sqlite wal_checkpoint");
     }
 }
 
