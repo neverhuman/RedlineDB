@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/approved%20CI-1049%2F1049-brightgreen" alt="approved CI"></a>
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/accounted%20parity-1127%2F1127-blue" alt="accounted parity"></a>
+  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/full%20corpus-1049%2F1127-yellow" alt="full corpus parity"></a>
+  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/generated%20cases-1127-blue" alt="generated cases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
   <img src="https://img.shields.io/badge/version-1.0.24-blue" alt="version">
@@ -22,6 +22,14 @@
 RedlineDB is an embedded SQL engine written in Rust. It keeps the SQLite-facing
 API familiar while replacing the storage core with MVCC, a concurrent B-tree,
 group-commit WAL, and crash recovery designed for multi-writer workloads.
+
+## Engine Metrics
+
+<!-- sqlite-parity-metrics:begin -->
+
+![SQLite vs RedlineDB production KSLOC chart](assets/sqlite-parity-ksloc.svg)
+
+<!-- sqlite-parity-metrics:end -->
 
 ## At a Glance
 
@@ -134,29 +142,26 @@ rtk just sqlite-parity-report-check
 
 ## SQLite Parity Status
 
-The reviewed CI lane contains 1049 approved generated cases and all 1049 pass.
-The extracted corpus contains 1127 generated cases in total, so the remaining 78
-cases are accounted for explicitly instead of being silently treated as green.
-That keeps default CI safe while preserving a complete audit trail.
+The CI parity lane targets the full 1127-case generated corpus. The committed
+raw evidence currently has 1049 measured passing cases and 78 missing cases;
+missing, skipped, failed, or unmeasured cases are hard report-check failures
+rather than excluded from the denominator.
 
 | Bucket | Cases | Meaning |
 |---|---:|---|
-| Approved CI | 1049 | Reviewed allowlist, all passing |
-| Default-lane failures | 30 | Fixes still pending before promotion |
-| Reference-skipped | 24 | P3 optional / diagnostic / tempfile cases |
-| Quarantined | 24 | P4 side-effect, external-app, or catalog-only cases |
-| Total generated corpus | 1127 | 100% accounted |
+| Full-corpus passed | 1049 | Measured passing cases in the current raw report |
+| Missing from current raw | 78 | Cases that must be closed before 100% full-corpus parity |
+| Skipped or failed | 0 | Report-check treats any non-zero value as a hard failure |
+| Total generated corpus | 1127 | Canonical denominator |
 
 The live report is generated from `benchmark-results/sqlite-parity/latest/`
-and the approved comparison list in `crates/bench/sqlite_parity/approved-ci.txt`.
+using the same full-corpus selector as `just sqlite-parity-scale-ci`.
 
 <!-- sqlite-parity-report:begin -->
 
-**SQLite parity coverage:** **1049 / 1127 = 93.1%** approved generated cases, with **78** remaining. Updated 2026-05-21.
+**SQLite parity coverage:** **1049 / 1127 = 93.1%** full generated cases passed in CI. Failed: **0**. Missing: **78**. Skipped: **0**. Updated 2026-05-21.
 
 ![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)
-
-![SQLite vs RedlineDB production KSLOC chart](assets/sqlite-parity-ksloc.svg)
 
 [Full ranked latency table](#sqlite-parity-ranked-latency-table) is collapsed below for README readability.
 
@@ -1265,10 +1270,9 @@ agent routing model used by this repository.
 - `just sqlite-parity-scale-ci` is the reviewed CI parity gate.
 - `scripts/ci-local.sh all` mirrors the broader local CI surface when you need it.
 
-The repository keeps the parity corpus under source control, but only the
-approved CI allowlist is treated as the executable default lane. The rest of the
-corpus is either reference-skipped, quarantined, or left as a known failure to
-make accounting explicit.
+The repository keeps the parity corpus under source control and treats the full
+generated corpus as the executable default parity lane. `approved-ci.txt`
+remains as a local triage subset for older diagnostics only.
 
 ## Contributing
 

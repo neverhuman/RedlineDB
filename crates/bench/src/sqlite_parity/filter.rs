@@ -42,7 +42,8 @@ impl Selection {
         self.priorities.contains(&case.priority)
             && self.profiles.contains(&case.profile)
             && (self.include_quarantine || !case.priority.is_quarantine())
-            && case.status == "active"
+            && (case.status == "active"
+                || (self.include_quarantine && case.status == "catalog_only"))
     }
 }
 
