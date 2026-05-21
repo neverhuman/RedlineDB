@@ -33,11 +33,8 @@ impl Engine {
                 IndexUniqueness::NonUnique
             },
         );
-        let btree = BtreeIndex::create_with_wal(
-            Arc::clone(&self.buffer),
-            descriptor,
-            Some(Arc::clone(&self.wal)),
-        )?;
+        let btree =
+            BtreeIndex::create_with_wal(Arc::clone(&self.buffer), descriptor, self.page_wal())?;
         btree.set_phase11_counters(Arc::clone(&self.phase11_counters));
         // Log PageImage records for meta + root so recovery can reconstruct
         // the B-tree even if no checkpoint runs before engine close.
@@ -128,7 +125,7 @@ impl Engine {
                     Arc::clone(&self.buffer),
                     meta_page_id,
                     descriptor,
-                    Some(Arc::clone(&self.wal)),
+                    self.page_wal(),
                 )?;
                 btree.set_phase11_counters(Arc::clone(&self.phase11_counters));
                 opened.push((index.index_id, Arc::new(btree)));
@@ -157,11 +154,8 @@ impl Engine {
                     IndexUniqueness::NonUnique
                 },
             );
-            let btree = BtreeIndex::create_with_wal(
-                Arc::clone(&self.buffer),
-                descriptor,
-                Some(Arc::clone(&self.wal)),
-            )?;
+            let btree =
+                BtreeIndex::create_with_wal(Arc::clone(&self.buffer), descriptor, self.page_wal())?;
             btree.set_phase11_counters(Arc::clone(&self.phase11_counters));
             let tx = rebuild_tx
                 .as_mut()

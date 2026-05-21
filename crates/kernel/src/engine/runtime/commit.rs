@@ -35,6 +35,15 @@ impl Engine {
     pub fn commit(&self, mut tx: Txn) -> Result<CommitOutcome> {
         tx.ensure_open()?;
         let pending_schema = tx.pending_schema_snapshot();
+        if self.volatile {
+            let csn = self.txs.reserve_commit_csn();
+            return Ok(self.finish_commit(
+                &mut tx,
+                csn,
+                pending_schema,
+                CommitOutcome::Committed(csn),
+            ));
+        }
         if let Some(snapshot) = pending_schema.as_deref() {
             let snapshot_bytes = crate::catalog::encode_snapshot(snapshot)?;
             self.wal.append(
@@ -138,7 +147,9 @@ impl Engine {
     ) -> CommitOutcome {
         self.txs.publish_commit(tx.id(), csn);
         if let Some(snapshot) = pending_schema {
-            let _ = self.catalog_store.save_atomic(&snapshot);
+            if !self.volatile {
+                let _ = self.catalog_store.save_atomic(&snapshot);
+            }
             self.catalog.publish(snapshot);
         }
         if !tx.pending_index_handles().is_empty()

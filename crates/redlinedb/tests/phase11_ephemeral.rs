@@ -63,6 +63,18 @@ fn in_memory_database_shares_state_and_cleans_up() {
         !db_path.join("owner.lock").exists(),
         "volatile in-memory databases should not take an owner lock"
     );
+    assert!(
+        !db_path.join("wal").exists(),
+        "private in-memory databases should not create a WAL directory"
+    );
+    assert!(
+        !db_path.join("schema.redline").exists(),
+        "private in-memory databases should not persist catalog sidecars"
+    );
+    assert!(
+        !db_path.join("user_version.redline").exists(),
+        "private in-memory databases should not persist user_version sidecars"
+    );
 
     let mut conn1 = db.connect().expect("conn1");
     let mut conn2 = db.connect().expect("conn2");
@@ -81,6 +93,12 @@ fn in_memory_database_shares_state_and_cleans_up() {
         0,
         "volatile in-memory DDL/DML should not issue WAL fdatasyncs"
     );
+    let checkpoint = db.checkpoint().expect("volatile checkpoint");
+    assert_eq!(checkpoint.generation, 0);
+    assert_eq!(checkpoint.checkpoint_lsn, 0);
+    assert!(!db_path.join("wal").exists());
+    assert!(!db_path.join("schema.redline").exists());
+    assert!(!db_path.join("user_version.redline").exists());
 
     let mut stmt = conn2
         .prepare("SELECT v FROM t WHERE id = 1")

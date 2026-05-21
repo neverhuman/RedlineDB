@@ -147,6 +147,7 @@ impl Default for EngineConfig {
 #[derive(Debug)]
 pub struct Engine {
     config: EngineConfig,
+    volatile: bool,
     data_path: PathBuf,
     wal_dir: PathBuf,
     rel_id: RelId,
@@ -172,4 +173,14 @@ pub struct Engine {
     /// catalog snapshot at open time. Lane A wires this so SQL exec lanes
     /// (B/C) can borrow handles via `Engine::index_handle`.
     index_handles: Mutex<HashMap<CatalogIndexId, Arc<BtreeIndex>>>,
+}
+
+impl Engine {
+    fn page_wal(&self) -> Option<Arc<WalCoordinator>> {
+        if self.volatile {
+            None
+        } else {
+            Some(Arc::clone(&self.wal))
+        }
+    }
 }

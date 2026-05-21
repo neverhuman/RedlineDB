@@ -59,9 +59,11 @@ impl Engine {
                 ));
             }
         }
-        let mut wal_reader = crate::wal::WalReader::new(&self.wal_dir, self.config.wal.clone());
-        if let Err(err) = wal_reader.scan_report() {
-            errors.push(format!("wal prefix scan: {err}"));
+        if !self.volatile {
+            let mut wal_reader = crate::wal::WalReader::new(&self.wal_dir, self.config.wal.clone());
+            if let Err(err) = wal_reader.scan_report() {
+                errors.push(format!("wal prefix scan: {err}"));
+            }
         }
         let handles = self
             .index_handles
@@ -96,6 +98,9 @@ impl Engine {
     }
 
     pub fn flush_heap_pages(&self) -> Result<()> {
+        if self.volatile {
+            return Ok(());
+        }
         let durable_lsn = self.wal.durable_lsn()?;
         self.heap.flush_all(durable_lsn)
     }
@@ -156,6 +161,13 @@ impl Engine {
     }
 
     pub fn checkpoint_with_stats(&self) -> Result<CheckpointStats> {
+        if self.volatile {
+            return Ok(CheckpointStats {
+                control: ControlFile::default(),
+                flushed_pages: 0,
+                flush_batches: 0,
+            });
+        }
         let durable_lsn = self.wal.flush_all()?;
         let flush = self
             .heap

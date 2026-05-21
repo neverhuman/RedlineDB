@@ -57,7 +57,7 @@ pub use value::{Value, ValueRef};
 
 // `registry::open_database` and friends call `crate::sql_options`; keep the
 // path stable by re-exporting the implementation hosted in `handle`.
-pub(crate) use handle::sql_options;
+pub(crate) use handle::{private_in_memory_sql_options, sql_options};
 
 /// True when the input contains a complete first SQL statement.
 pub fn sql_input_complete(sql: &str) -> bool {

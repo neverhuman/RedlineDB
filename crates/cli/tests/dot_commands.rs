@@ -276,6 +276,25 @@ fn cli_flags_select_the_expected_renderers() {
 }
 
 #[test]
+fn delimited_modes_stream_headers_nulls_and_escaping() {
+    let (out, err, code) = run_script_with_args(
+        &["-csv", "-header"],
+        None,
+        "SELECT 1 AS a, 'x,y' AS b, NULL AS c UNION ALL SELECT 2, 'quote''d', 'z';\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "a,b,c\n1,\"x,y\",\n2,quote'd,z\n");
+
+    let (out, err, code) = run_script_with_args(
+        &["-tabs"],
+        None,
+        ".nullvalue NULL\nSELECT 1 AS a, NULL AS b UNION ALL SELECT 2, 'z';\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "1\tNULL\n2\tz\n");
+}
+
+#[test]
 fn dot_mode_quote_renders_sql_literals() {
     let (out, err, code) = run_script(
         None,

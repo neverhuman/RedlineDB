@@ -44,6 +44,7 @@ pub struct WalCoordinator {
     pub(crate) writer: Mutex<Option<JoinHandle<()>>>,
     pub(crate) config: WalConfig,
     pub(crate) dir: PathBuf,
+    pub(crate) volatile: bool,
     /// Lane BH P1 #7: shared counters bumped by the writer thread.
     pub(crate) sync_counters: Arc<WalSyncCounters>,
 }

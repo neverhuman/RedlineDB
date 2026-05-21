@@ -75,7 +75,7 @@ pub(crate) fn db_options_from_config(config: Option<&rldb_config>) -> DbOptions 
         options.engine.buffer_pool_pages = (config.cache_bytes as usize / page_size).max(16);
         options.query_memory.work_mem_bytes = config.work_mem_bytes as usize;
         options.query_memory.max_spill_bytes = config.max_spill_bytes as usize;
-        options.query_memory.batch_rows = config.statement_cache_capacity.max(1) as usize;
+        options.statement_cache_capacity = config.statement_cache_capacity as usize;
         options.busy_timeout = std::time::Duration::from_millis(config.busy_timeout_ms as u64);
     }
     options

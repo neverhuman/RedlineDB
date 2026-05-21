@@ -308,10 +308,21 @@ pub(crate) fn sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
     db.query_memory.work_mem_bytes = options.query_memory.work_mem_bytes;
     db.query_memory.max_spill_bytes = options.query_memory.max_spill_bytes;
     db.query_memory.batch_rows = options.query_memory.batch_rows;
+    db.statement_cache_capacity = options.statement_cache_capacity;
     db.temp_dir = options.temp_dir.clone();
     db.stats.exact_analyze_row_threshold = options.stats.exact_analyze_row_threshold;
     db.stats.sample_rows = options.stats.sample_rows;
     db.stats.mcv_capacity = options.stats.mcv_capacity;
     db.stats.histogram_buckets = options.stats.histogram_buckets;
+    db
+}
+
+pub(crate) fn private_in_memory_sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
+    let mut db = sql_options(options);
+    db.engine.lock_shards = db.engine.lock_shards.clamp(1, 4);
+    db.engine.heap_lanes = 1;
+    db.engine.buffer_pool_pages = db.engine.buffer_pool_pages.clamp(16, 1024);
+    db.unique_lock_shards = db.unique_lock_shards.clamp(1, 16);
+    db.statement_cache_capacity = db.statement_cache_capacity.min(16);
     db
 }
