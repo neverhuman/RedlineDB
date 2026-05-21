@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:2242b3862d1ebad054bfbab420ff71d1c419fa9b42719abf571ba366b8e83a51",
-  "input_fingerprint": "sha256:d068d8664d640f61d78951f6d88ae3d9edff038bde1a3f75383a3d4d6c865147",
+  "report_fingerprint": "sha256:cc6732eb97c9b96a5fb76695f00e9787b285110739134f229a8997edba0fea7d",
+  "input_fingerprint": "sha256:25efb23798e4f245fa53da38d080ee419bf9bd4c7e10e6efdc139b85b8060550",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779373828",
+  "generated_at": "1779374568",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -82,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779373828",
-  "started_at": "1779373828",
-  "elapsed_ms": 13384,
+  "run_id": "1779374568",
+  "started_at": "1779374568",
+  "elapsed_ms": 13332,
   "scope": {
     "mode": "full",
     "paths": []
@@ -111,7 +111,7 @@
     }
   },
   "git": {
-    "head": "05b4f57",
+    "head": "a9b9986",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1098,7 +1098,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-21T14:30:15.092028448+00:00",
+    "generated_at": "2026-05-21T14:42:35.193825326+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1143,13 +1143,13 @@
       "hard_classes": 1,
       "warning_classes": 100,
       "hard_instances": 2,
-      "warning_instances": 264,
+      "warning_instances": 263,
       "duplicate_lines": 282,
       "duplicate_tokens": 858,
       "duplicate_bytes": 8402,
-      "total_redundant_lines": 389,
-      "total_redundant_tokens": 1116,
-      "total_redundant_bytes": 10813
+      "total_redundant_lines": 387,
+      "total_redundant_tokens": 1113,
+      "total_redundant_bytes": 10789
     },
     "classes": [
       {
@@ -1395,83 +1395,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-ee3fef1ed051e6fd",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 2,
-        "duplicate_tokens": 3,
-        "duplicate_bytes": 24,
-        "instance_count": 8,
-        "total_redundant_lines": 14,
-        "total_redundant_tokens": 21,
-        "total_redundant_bytes": 168,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "02c408f1072bd034",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 111,
-            "end_line": 113,
-            "unit_name": "progress"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 115,
-            "end_line": 117,
-            "unit_name": "log"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 119,
-            "end_line": 121,
-            "unit_name": "prompt"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 123,
-            "end_line": 125,
-            "unit_name": "connection"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 136,
-            "end_line": 138,
-            "unit_name": "auth"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 171,
-            "end_line": 173,
-            "unit_name": "scanstats"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 254,
-            "end_line": 256,
-            "unit_name": "external_app"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 266,
-            "end_line": 268,
-            "unit_name": "catalog_noop"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-288f2d33c4682e4a",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -1587,6 +1510,76 @@
             "start_line": 231,
             "end_line": 232,
             "unit_name": "emit_each"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-ee3fef1ed051e6fd",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 3,
+        "duplicate_bytes": 24,
+        "instance_count": 7,
+        "total_redundant_lines": 12,
+        "total_redundant_tokens": 18,
+        "total_redundant_bytes": 144,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "0226ee1520715f67",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 112,
+            "end_line": 114,
+            "unit_name": "progress"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 116,
+            "end_line": 118,
+            "unit_name": "log"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 120,
+            "end_line": 122,
+            "unit_name": "prompt"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 124,
+            "end_line": 126,
+            "unit_name": "connection"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 137,
+            "end_line": 139,
+            "unit_name": "auth"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 172,
+            "end_line": 174,
+            "unit_name": "scanstats"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 255,
+            "end_line": 257,
+            "unit_name": "external_app"
           }
         ]
       },
@@ -2410,8 +2403,8 @@
           {
             "path": "crates/cli/src/dot/control.rs",
             "language": "rust",
-            "start_line": 370,
-            "end_line": 371,
+            "start_line": 439,
+            "end_line": 440,
             "unit_name": "escape"
           },
           {

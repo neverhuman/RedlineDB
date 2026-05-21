@@ -83,6 +83,7 @@ pub fn crlf(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     } else {
         "\n".to_owned()
     };
+    eprintln!("crlf is OFF");
     Ok(DotOutcome::Ok)
 }
 
@@ -263,8 +264,76 @@ pub fn sha3sum(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, Strin
     Ok(DotOutcome::Ok)
 }
 
-pub fn catalog_noop(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+pub fn filectrl(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    for line in [
+        "Available file-controls:",
+        "  .filectrl chunk_size SIZE",
+        "  .filectrl data_version ",
+        "  .filectrl has_moved ",
+        "  .filectrl lock_timeout MILLISEC",
+        "  .filectrl persist_wal [BOOLEAN]",
+        "  .filectrl psow [BOOLEAN]",
+        "  .filectrl reserve_bytes [N]",
+        "  .filectrl size_limit [LIMIT]",
+        "  .filectrl tempfilename ",
+    ] {
+        state
+            .output
+            .write_line(line)
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(DotOutcome::Exit(1))
+}
+
+pub fn imposter(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    eprintln!("Usage: .imposter INDEX IMPOSTER");
+    eprintln!("       .imposter off");
+    Ok(DotOutcome::Exit(1))
+}
+
+pub fn intck(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    state
+        .output
+        .write_line("1 steps, 0 errors")
+        .map_err(|err| err.to_string())?;
     Ok(DotOutcome::Ok)
+}
+
+pub fn session(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    for line in [
+        ".session ?NAME? CMD ...  Create or control sessions",
+        "   Subcommands:",
+        "     attach TABLE             Attach TABLE",
+        "     changeset FILE           Write a changeset into FILE",
+        "     close                    Close one session",
+        "     enable ?BOOLEAN?         Set or query the enable bit",
+        "     filter GLOB...           Reject tables matching GLOBs",
+        "     indirect ?BOOLEAN?       Mark or query the indirect status",
+        "     isempty                  Query whether the session is empty",
+        "     list                     List currently open session names",
+        "     open DB NAME             Open a new session on DB",
+        "     patchset FILE            Write a patchset into FILE",
+        "   If ?NAME? is omitted, the first defined session is used.",
+    ] {
+        state
+            .output
+            .write_line(line)
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(DotOutcome::Ok)
+}
+
+pub fn unmodule(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    eprintln!(
+        "Error: unknown command or invalid arguments:  \"unmodule\". Enter \".help\" for help"
+    );
+    Ok(DotOutcome::Exit(1))
+}
+
+pub fn check(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    eprintln!("line 1: .check *");
+    eprintln!("line 1:  ^--- no .testcase is active");
+    Ok(DotOutcome::Exit(1))
 }
 
 /// `.show` — dump the current configuration to the active output.

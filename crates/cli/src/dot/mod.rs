@@ -302,9 +302,12 @@ pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> 
         ".scanstats" => control::scanstats(state, &args),
         ".archive" => control::archive(state, &args),
         ".sha3sum" => control::sha3sum(state, &args),
-        ".filectrl" | ".imposter" | ".intck" | ".session" | ".unmodule" | ".check" => {
-            control::catalog_noop(state, &args)
-        }
+        ".filectrl" => control::filectrl(state, &args),
+        ".imposter" => control::imposter(state, &args),
+        ".intck" => control::intck(state, &args),
+        ".session" => control::session(state, &args),
+        ".unmodule" => control::unmodule(state, &args),
+        ".check" => control::check(state, &args),
         ".dbinfo" => io_cmd::dbinfo(state, &args),
         ".dbtotxt" => io_cmd::dbtotxt(state, &args),
         ".recover" => io_cmd::recover(state, &args),

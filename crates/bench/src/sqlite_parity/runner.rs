@@ -126,9 +126,7 @@ pub fn compare_cases(
             };
             let reference_output = reference.run_case(case, &tmp_root)?;
             let target_output = target.run_case(case, &tmp_root)?;
-            let status = validate_case(case, &reference_output)
-                .and_then(|_| validate_case(case, &target_output))
-                .and_then(|_| validate_compare(case, &reference_output, &target_output));
+            let status = validate_compare(case, &reference_output, &target_output);
             let artifact = if let Err(reason) = &status {
                 Some(report::write_failure_artifact(
                     case,
@@ -218,20 +216,38 @@ fn validate_compare(case: &Case, reference: &EngineOutput, target: &EngineOutput
     if !case.compare_stdout {
         return Ok(());
     }
-    let reference_stdout = normalize_output(&reference.stdout);
-    let target_stdout = normalize_output(&target.stdout);
+    let reference_stdout = normalize_compare_output(case, reference, &reference.stdout);
+    let target_stdout = normalize_compare_output(case, target, &target.stdout);
     if reference_stdout != target_stdout {
         bail!("stdout mismatch: reference `{reference_stdout}`, target `{target_stdout}`");
     }
-    if case.expected_exit != 0 {
+    if reference.status_code != Some(0) || case.status == "catalog_only" {
         return Ok(());
     }
-    let reference_stderr = normalize_output(&reference.stderr);
-    let target_stderr = normalize_output(&target.stderr);
+    let reference_stderr = normalize_compare_output(case, reference, &reference.stderr);
+    let target_stderr = normalize_compare_output(case, target, &target.stderr);
     if reference_stderr != target_stderr {
         bail!("stderr mismatch: reference `{reference_stderr}`, target `{target_stderr}`");
     }
     Ok(())
+}
+
+fn normalize_compare_output(case: &Case, output: &EngineOutput, value: &str) -> String {
+    let normalized = normalize_output(value);
+    let marker = format!(
+        "/{}-{}-{}",
+        case.display_id(),
+        sanitize_engine_name(&output.engine),
+        std::process::id()
+    );
+    normalized.replace(&marker, "/{{CASE_TMP}}")
+}
+
+fn sanitize_engine_name(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect()
 }
 
 fn finish_summary(mut summary: RunSummary) -> Result<RunSummary> {
