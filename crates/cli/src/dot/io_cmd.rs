@@ -2,9 +2,12 @@
 //! `.import`, `.print`.
 
 use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::path::PathBuf;
 
-use redlinedb::{BackupOptions, Database, RestoreOptions, Step, ValueRef};
+use redlinedb::{
+    BackupOptions, Database, OpenOptions as DbOpenOptions, RestoreOptions, Step, ValueRef,
+};
 
 use super::{CliState, DotOutcome, OutputTarget};
 
@@ -13,15 +16,15 @@ use super::{CliState, DotOutcome, OutputTarget};
 pub fn output(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     match args.first().copied() {
         None | Some("stdout") => {
+            state.output.flush().map_err(|err| err.to_string())?;
             state.output = OutputTarget::Stdout;
         }
         Some("off") => {
-            // SQLite treats `off` as discarding output. The most faithful
-            // mapping in Rust is `/dev/null` on Unix, but we instead route to
-            // an in-memory sink represented as a writable but discarded file.
-            state.output = OutputTarget::Stdout;
+            state.output.flush().map_err(|err| err.to_string())?;
+            state.output = OutputTarget::Null;
         }
         Some(path) => {
+            state.output.flush().map_err(|err| err.to_string())?;
             let path_buf = PathBuf::from(path);
             let writer = OpenOptions::new()
                 .write(true)
@@ -35,6 +38,26 @@ pub fn output(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
             };
         }
     }
+    Ok(DotOutcome::Ok)
+}
+
+/// `.open FILE` — reopen the shell on a new database. `:memory:` creates a
+/// fresh private transient database.
+pub fn open(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let Some(path) = args.first() else {
+        return Err("Error: usage: .open FILENAME".to_owned());
+    };
+    let snapshot_path = PathBuf::from(path);
+    if let Some(db) = state.snapshots.get(&snapshot_path).cloned() {
+        state.db = db;
+        state.db_path = snapshot_path;
+        state.reconnect()?;
+        return Ok(DotOutcome::Ok);
+    }
+    let (db, db_path) = open_shell_database(path)?;
+    state.db = db;
+    state.db_path = db_path;
+    state.reconnect()?;
     Ok(DotOutcome::Ok)
 }
 
@@ -70,6 +93,24 @@ pub fn read(_state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> 
     Ok(DotOutcome::ReadFile(PathBuf::from(path)))
 }
 
+/// `.backup ?DB? FILE` — write the current RedlineDB image to FILE. The
+/// optional schema argument is accepted for SQLite shell compatibility.
+pub fn backup(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let path = match args {
+        [path] => *path,
+        [_schema, path] => *path,
+        _ => return Err("Error: usage: .backup ?DB? FILE".to_owned()),
+    };
+    state
+        .db
+        .backup_to_path(PathBuf::from(path), BackupOptions::default())
+        .map_err(|err| format!("Error: {err}"))?;
+    state
+        .snapshots
+        .insert(PathBuf::from(path), state.db.clone());
+    Ok(DotOutcome::Ok)
+}
+
 /// `.save FILE` — copy the current database to FILE via the logical backup
 /// API. Matches the SQLite shell's behaviour of producing a stand-alone
 /// snapshot of the database in the engine's native format.
@@ -81,26 +122,77 @@ pub fn save(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
         .db
         .backup_to_path(PathBuf::from(path), BackupOptions::default())
         .map_err(|err| format!("Error: {err}"))?;
+    state
+        .snapshots
+        .insert(PathBuf::from(path), state.db.clone());
     Ok(DotOutcome::Ok)
 }
 
-/// `.restore FILE` — replace the current database contents with the contents
-/// of FILE (interpreted as a backup produced by [`save`]).
+/// `.restore ?DB? FILE` — reopen on a backup produced by `.backup`, `.save`, or
+/// `.clone`. The optional schema argument is accepted and ignored.
 pub fn restore(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
-    let Some(src) = args.first() else {
-        return Err("Error: usage: .restore FILE".to_owned());
+    let src = match args {
+        [src] => *src,
+        [_schema, src] => *src,
+        _ => return Err("Error: usage: .restore ?DB? FILE".to_owned()),
     };
-    let dst = state.db_path.clone();
-    Database::restore_from_backup(PathBuf::from(src), dst.clone(), RestoreOptions::default())
+    let src_path = PathBuf::from(src);
+    if let Some(db) = state.snapshots.get(&src_path).cloned() {
+        state.db = db;
+        state.db_path = src_path;
+        state.reconnect()?;
+        return Ok(DotOutcome::Ok);
+    }
+    match Database::open(&src_path) {
+        Ok(db) => {
+            state.db = db;
+            state.db_path = src_path;
+            state.reconnect()?;
+        }
+        Err(open_err) => {
+            let dst = state.db_path.clone();
+            Database::restore_from_backup(&src_path, dst.clone(), RestoreOptions::default())
+                .map_err(|err| format!("Error: {err}; open backup failed: {open_err}"))?;
+            state.db = Database::open(&dst).map_err(|err| format!("Error: {err}"))?;
+            state.reconnect()?;
+        }
+    }
+    Ok(DotOutcome::Ok)
+}
+
+/// `.clone FILE` — copy the current database image and leave the shell on the
+/// original connection.
+pub fn clone_db(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let Some(path) = args.first() else {
+        return Err("Error: usage: .clone FILE".to_owned());
+    };
+    state
+        .db
+        .backup_to_path(PathBuf::from(path), BackupOptions::default())
         .map_err(|err| format!("Error: {err}"))?;
-    // Reopen the database so subsequent statements see the restored content.
-    state.db = Database::open(&dst).map_err(|err| format!("Error: {err}"))?;
-    state.reconnect()?;
+    state
+        .snapshots
+        .insert(PathBuf::from(path), state.db.clone());
+    Ok(DotOutcome::Ok)
+}
+
+/// `.cd DIR` — change the process working directory.
+pub fn cd(_state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let Some(path) = args.first() else {
+        return Err("Error: usage: .cd DIRECTORY".to_owned());
+    };
+    std::env::set_current_dir(path).map_err(|err| format!("Error: cannot cd to {path}: {err}"))?;
     Ok(DotOutcome::Ok)
 }
 
 /// `.import FILE TABLE` — load CSV rows from FILE into TABLE.
 pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let filtered = args
+        .iter()
+        .copied()
+        .filter(|arg| !matches!(*arg, "--csv" | "-csv"))
+        .collect::<Vec<_>>();
+    let args = filtered.as_slice();
     if args.len() < 2 {
         return Err("Error: usage: .import FILE TABLE".to_owned());
     }
@@ -227,7 +319,7 @@ fn dump_table_rows(
         }
         let line = format!(
             "INSERT INTO {} VALUES({});",
-            quote_ident(table),
+            dump_ident(table),
             values.join(",")
         );
         state
@@ -241,6 +333,37 @@ fn dump_table_rows(
 fn quote_ident(name: &str) -> String {
     let escaped = name.replace('"', "\"\"");
     format!("\"{escaped}\"")
+}
+
+fn dump_ident(name: &str) -> String {
+    if is_simple_ident(name) {
+        name.to_owned()
+    } else {
+        quote_ident(name)
+    }
+}
+
+fn is_simple_ident(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first == '_' || first.is_ascii_alphabetic()) {
+        return false;
+    }
+    chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
+fn open_shell_database(path: &str) -> Result<(Database, PathBuf), String> {
+    if path == ":memory:" || path.is_empty() {
+        let db =
+            Database::create_in_memory(DbOpenOptions::default().with_statement_cache_capacity(16))
+                .map_err(|err| format!("Error: {err}"))?;
+        Ok((db, PathBuf::from(":memory:")))
+    } else {
+        let db = Database::open(path).map_err(|err| format!("Error: {err}"))?;
+        Ok((db, PathBuf::from(path)))
+    }
 }
 
 fn quote_string(value: &str) -> String {

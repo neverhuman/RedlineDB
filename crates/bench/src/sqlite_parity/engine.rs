@@ -170,6 +170,12 @@ impl EngineSpec {
             std::process::id()
         ));
         if case_tmp.exists() {
+            make_removable(&case_tmp).with_context(|| {
+                format!(
+                    "prepare previous sqlite parity tmpdir {} for removal",
+                    case_tmp.display()
+                )
+            })?;
             fs::remove_dir_all(&case_tmp).with_context(|| {
                 format!(
                     "remove previous sqlite parity tmpdir {}",
@@ -400,6 +406,29 @@ fn is_writable_dir(path: &Path) -> bool {
         }
         Err(_) => false,
     }
+}
+
+#[cfg(unix)]
+fn make_removable(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata =
+        fs::symlink_metadata(path).with_context(|| format!("stat {}", path.display()))?;
+    let mode = if metadata.is_dir() { 0o700 } else { 0o600 };
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))
+        .with_context(|| format!("chmod {}", path.display()))?;
+    if metadata.is_dir() {
+        for entry in fs::read_dir(path).with_context(|| format!("read {}", path.display()))? {
+            let entry = entry.with_context(|| format!("read entry in {}", path.display()))?;
+            make_removable(&entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn make_removable(_path: &Path) -> Result<()> {
+    Ok(())
 }
 
 pub fn resolve_engine_bin(

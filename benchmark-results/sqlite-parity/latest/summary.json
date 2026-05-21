@@ -1,11 +1,11 @@
 {
   "updated_date": "2026-05-21",
   "generated_cases": 1127,
-  "approved_cases": 976,
-  "remaining_cases": 151,
-  "coverage_pct": 86.60159716060338,
-  "ranked_cases": 976,
-  "measured_samples": 2928,
-  "warmup_samples": 976,
+  "approved_cases": 1049,
+  "remaining_cases": 78,
+  "coverage_pct": 93.07897071872227,
+  "ranked_cases": 1049,
+  "measured_samples": 3147,
+  "warmup_samples": 1049,
   "sqlite_version": "3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)"
 }

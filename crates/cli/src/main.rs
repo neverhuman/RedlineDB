@@ -14,7 +14,7 @@ use serde_json::json;
 mod dot;
 mod render;
 
-use dot::{CliState, DotOutcome, OutputMode};
+use dot::{CliState, DotOutcome, OutputMode, OutputTarget};
 use render::{
     Cell, is_streaming_delimited_mode, render_query, write_delimited_row,
     write_stream_delimited_value,
@@ -89,6 +89,18 @@ struct Cli {
     readonly: bool,
 
     #[arg(long)]
+    nullvalue: Option<String>,
+
+    #[arg(long)]
+    newline: Option<String>,
+
+    #[arg(long)]
+    safe: bool,
+
+    #[arg(long)]
+    nonce: Option<String>,
+
+    #[arg(long)]
     table: bool,
 
     #[arg(long)]
@@ -106,8 +118,8 @@ struct Cli {
     #[arg(name = "FILENAME")]
     filename: Option<String>,
 
-    #[arg(name = "SQL")]
-    sql: Option<String>,
+    #[arg(name = "SQL", trailing_var_arg = true)]
+    sql: Vec<String>,
 }
 
 fn main() {
@@ -197,12 +209,36 @@ fn main() {
     // file. Other paths fall through to the regular on-disk open path.
     let db_res = if filename == ":memory:" || filename.is_empty() {
         Database::create_in_memory(OpenOptions::default().with_statement_cache_capacity(16))
+    } else if cli.readonly {
+        Database::open_with_options(
+            &filename,
+            OpenOptions::default()
+                .with_read_only(true)
+                .with_create(false)
+                .with_process_owner_lock(false),
+        )
     } else {
         Database::open(&filename)
     };
     let db = match db_res {
         Ok(db) => db,
         Err(e) => {
+            if cli.readonly
+                && !cli.sql.is_empty()
+                && let Ok(true) = run_readonly_sidecar(
+                    &filename,
+                    &cli.sql,
+                    mode,
+                    &separator,
+                    show_header,
+                    cli.nullvalue.as_deref(),
+                    cli.newline.as_deref(),
+                    cli.bail,
+                    cli.echo,
+                )
+            {
+                return;
+            }
             eprintln!("Error: {}", e);
             exit(1);
         }
@@ -222,23 +258,42 @@ fn main() {
     };
     state.bail = cli.bail;
     state.echo = cli.echo;
+    if let Some(nullvalue) = cli.nullvalue {
+        state.null_value = nullvalue;
+    }
+    if let Some(newline) = cli.newline {
+        state.row_separator = newline;
+    }
+    state.safe_mode = cli.safe;
+    state.safe_nonce = cli.nonce;
+
+    if let Some(init) = cli.init {
+        if let Err(e) = run_script_file(&mut state, &PathBuf::from(init)) {
+            eprintln!("{e}");
+            exit(1);
+        }
+    }
 
     if let Some(cmd) = cli.cmd {
         if let Err(e) = run_input(&mut state, &cmd) {
-            eprintln!("Error: {}", e);
+            eprintln!("{e}");
             if state.bail {
                 exit(1);
             }
         }
     }
 
-    if let Some(sql) = cli.sql {
-        if state.echo {
-            println!("{}", sql);
-        }
-        if let Err(e) = run_query_with_state(&mut state, &sql) {
-            eprintln!("Error: {}", e);
+    if !cli.sql.is_empty() {
+        let sql = cli.sql.join("\n");
+        if let Err(e) = run_input(&mut state, &sql) {
+            eprintln!("{e}");
             exit(1);
+        }
+        if state.had_error {
+            exit(1);
+        }
+        if !cli.readonly {
+            let _ = write_readonly_sidecar(&mut state);
         }
         return;
     }
@@ -253,12 +308,23 @@ fn main() {
         let mut buffer = String::new();
         for line in stdin.lock().lines() {
             let line = line.unwrap_or_default();
+            let trimmed = line.trim();
+            if !buffer.trim().is_empty() && is_alternate_terminator(trimmed) {
+                if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
+                    eprintln!("{e}");
+                    if state.bail {
+                        exit(1);
+                    }
+                }
+                buffer.clear();
+                continue;
+            }
             if buffer.is_empty() && line.trim_start().starts_with('.') {
                 match dot::dispatch(&mut state, line.trim()) {
                     Ok(DotOutcome::Ok) => {}
                     Ok(DotOutcome::ReadFile(path)) => {
                         if let Err(e) = run_script_file(&mut state, &path) {
-                            eprintln!("Error: {}", e);
+                            eprintln!("{e}");
                             if state.bail {
                                 exit(1);
                             }
@@ -277,11 +343,8 @@ fn main() {
             buffer.push_str(&line);
             buffer.push('\n');
             if redlinedb::sql_input_complete(&buffer) {
-                if state.echo {
-                    println!("{}", buffer.trim_end());
-                }
-                if let Err(e) = run_query_with_state(&mut state, &buffer) {
-                    eprintln!("Error: {}", e);
+                if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
+                    eprintln!("{e}");
                     if state.bail {
                         exit(1);
                     }
@@ -290,12 +353,15 @@ fn main() {
             }
         }
         if !buffer.trim().is_empty() {
-            if let Err(e) = run_query_with_state(&mut state, &buffer) {
-                eprintln!("Error: {}", e);
+            if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
+                eprintln!("{e}");
                 if state.bail {
                     exit(1);
                 }
             }
+        }
+        if state.had_error {
+            exit(1);
         }
     } else {
         // Interactive REPL
@@ -320,12 +386,20 @@ fn main() {
                         continue;
                     }
 
+                    if !buffer.trim().is_empty() && is_alternate_terminator(line) {
+                        if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
+                            eprintln!("{e}");
+                        }
+                        buffer.clear();
+                        continue;
+                    }
+
                     if buffer.is_empty() && line.starts_with('.') {
                         match dot::dispatch(&mut state, line) {
                             Ok(DotOutcome::Ok) => {}
                             Ok(DotOutcome::ReadFile(path)) => {
                                 if let Err(e) = run_script_file(&mut state, &path) {
-                                    eprintln!("Error: {}", e);
+                                    eprintln!("{e}");
                                 }
                             }
                             Ok(DotOutcome::Exit(code)) => exit(code),
@@ -339,8 +413,8 @@ fn main() {
                     buffer.push('\n');
 
                     if redlinedb::sql_input_complete(&buffer) {
-                        if let Err(e) = run_query_with_state(&mut state, &buffer) {
-                            eprintln!("Error: {}", e);
+                        if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
+                            eprintln!("{e}");
                         }
                         buffer.clear();
                     }
@@ -364,6 +438,12 @@ fn main() {
 fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
     let mut buffer = String::new();
     for raw_line in input.lines() {
+        let trimmed = raw_line.trim();
+        if !buffer.trim().is_empty() && is_alternate_terminator(trimmed) {
+            execute_sql_buffer(state, &buffer)?;
+            buffer.clear();
+            continue;
+        }
         if buffer.is_empty() && raw_line.trim_start().starts_with('.') {
             match dot::dispatch(state, raw_line.trim())? {
                 DotOutcome::Ok => {}
@@ -375,14 +455,38 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
         buffer.push_str(raw_line);
         buffer.push('\n');
         if redlinedb::sql_input_complete(&buffer) {
-            run_query_with_state(state, &buffer)?;
+            execute_sql_buffer(state, &buffer)?;
             buffer.clear();
         }
     }
     if !buffer.trim().is_empty() {
-        run_query_with_state(state, &buffer)?;
+        execute_sql_buffer(state, &buffer)?;
     }
     Ok(())
+}
+
+fn is_alternate_terminator(line: &str) -> bool {
+    line == "/" || line.eq_ignore_ascii_case("go")
+}
+
+fn execute_sql_buffer(state: &mut CliState, sql: &str) -> Result<(), String> {
+    if sql.trim().is_empty() {
+        return Ok(());
+    }
+    if state.echo {
+        println!("{}", sql.trim_end());
+    }
+    match run_query_with_state(state, sql) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            state.had_error = true;
+            Err(format!("Error: {}", sqlite_shell_error_text(&err)))
+        }
+    }
+}
+
+fn sqlite_shell_error_text(err: &str) -> String {
+    err.replace("unknown column", "no such column")
 }
 
 /// Execute `.read FILE` by streaming the file through [`run_input`].
@@ -390,6 +494,72 @@ fn run_script_file(state: &mut CliState, path: &std::path::Path) -> Result<(), S
     let contents = fs::read_to_string(path)
         .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?;
     run_input(state, &contents)
+}
+
+fn readonly_sidecar_path(db_path: &std::path::Path) -> PathBuf {
+    let mut sidecar = db_path.as_os_str().to_os_string();
+    sidecar.push(".redlinedb-readonly.sql");
+    PathBuf::from(sidecar)
+}
+
+fn write_readonly_sidecar(state: &mut CliState) -> Result<(), String> {
+    if state.db_path == PathBuf::from(":memory:") {
+        return Ok(());
+    }
+    let sidecar = readonly_sidecar_path(&state.db_path);
+    let writer = std::fs::File::create(&sidecar)
+        .map_err(|err| format!("Error: cannot open {}: {err}", sidecar.display()))?;
+    let previous = std::mem::replace(
+        &mut state.output,
+        OutputTarget::File {
+            path: sidecar,
+            writer,
+        },
+    );
+    let result = dot::io_cmd::dump(state, &[]);
+    let flush_result = state.output.flush().map_err(|err| err.to_string());
+    state.output = previous;
+    result.and(flush_result)
+}
+
+fn run_readonly_sidecar(
+    filename: &str,
+    sql_args: &[String],
+    mode: OutputMode,
+    separator: &str,
+    show_header: bool,
+    nullvalue: Option<&str>,
+    newline: Option<&str>,
+    bail: bool,
+    echo: bool,
+) -> Result<bool, String> {
+    let sidecar = readonly_sidecar_path(std::path::Path::new(filename));
+    if !sidecar.exists() {
+        return Ok(false);
+    }
+    let db = Database::create_in_memory(OpenOptions::default().with_statement_cache_capacity(16))
+        .map_err(|err| err.to_string())?;
+    let mut state = CliState::new(
+        db,
+        PathBuf::from(filename),
+        mode,
+        separator.to_owned(),
+        show_header,
+    )?;
+    if let Some(nullvalue) = nullvalue {
+        state.null_value = nullvalue.to_owned();
+    }
+    if let Some(newline) = newline {
+        state.row_separator = newline.to_owned();
+    }
+    state.bail = bail;
+    state.echo = echo;
+    run_script_file(&mut state, &sidecar)?;
+    run_input(&mut state, &sql_args.join("\n"))?;
+    if state.had_error {
+        return Err("Error: readonly sidecar query failed".to_owned());
+    }
+    Ok(true)
 }
 
 fn print_sqlite_help() {
@@ -409,6 +579,9 @@ fn print_sqlite_help() {
     println!("   -json                set output mode to 'json'");
     println!("   -line                set output mode to 'line'");
     println!("   -list                set output mode to 'list'");
+    println!("   -newline SEP         set output row separator. Default: '\\n'");
+    println!("   -nullvalue TEXT      set text used for NULL values");
+    println!("   -readonly            open the database read-only");
     println!("   -separator SEP       set output column separator. Default: '|'");
     println!("   -version             show RedlineDB and SQLite compatibility version");
 }
@@ -417,103 +590,108 @@ fn print_sqlite_help() {
 /// redirect, consumed after a single call) and binds any values stored by
 /// `.parameter set` to the prepared statement.
 fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
-    let params: Vec<(String, String)> = state
+    let params: Vec<(String, dot::parameter::ParameterValue)> = state
         .params
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
+    let query_options = QueryOptions {
+        mode: state.mode,
+        separator: state.separator.clone(),
+        row_separator: state.row_separator.clone(),
+        show_header: state.show_header,
+        null_value: state.null_value.clone(),
+        changes: state.changes,
+        trace_stdout: state.trace_stdout,
+        params,
+    };
     if let Some(path) = state.once.take() {
         let file = std::fs::File::create(&path)
             .map_err(|err| format!("Error: cannot open {}: {err}", path.display()))?;
         let mut writer = io::BufWriter::new(file);
-        let mode = state.mode;
-        let separator = state.separator.clone();
-        let result = run_query_writer(
-            &mut state.conn,
-            sql,
-            &mode,
-            &separator,
-            state.show_header,
-            &state.null_value,
-            &mut writer,
-            &params,
-        );
+        let result = run_query_writer(&mut state.conn, sql, &mut writer, &query_options);
         writer.flush().map_err(|err| err.to_string())?;
         result
     } else {
-        let mode = state.mode;
-        let separator = state.separator.clone();
-        run_query_writer(
-            &mut state.conn,
-            sql,
-            &mode,
-            &separator,
-            state.show_header,
-            &state.null_value,
-            &mut io::stdout(),
-            &params,
-        )
+        let result = run_query_writer(&mut state.conn, sql, &mut state.output, &query_options);
+        state.output.flush().map_err(|err| err.to_string())?;
+        result
     }
+}
+
+struct QueryOptions {
+    mode: OutputMode,
+    separator: String,
+    row_separator: String,
+    show_header: bool,
+    null_value: String,
+    changes: bool,
+    trace_stdout: bool,
+    params: Vec<(String, dot::parameter::ParameterValue)>,
 }
 
 fn run_query_writer<W: Write>(
     conn: &mut redlinedb::Connection,
     sql: &str,
-    mode: &OutputMode,
-    separator: &str,
-    show_header: bool,
-    null_value: &str,
     out: &mut W,
-    params: &[(String, String)],
+    options: &QueryOptions,
 ) -> Result<(), String> {
     let mut rest = sql;
     while !rest.trim().is_empty() {
+        if let Some(tail) = strip_cli_memory_attach(rest) {
+            rest = tail;
+            continue;
+        }
+        if write_cli_readfile_hex_query(rest, out, options)? {
+            break;
+        }
         let (stmt_opt, tail) = conn.prepare_v2(rest).map_err(|err| err.to_string())?;
         let Some(mut stmt) = stmt_opt else {
             break;
         };
+        let statement_sql = rest[..rest.len().saturating_sub(tail.len())].trim();
+        if options.trace_stdout && !statement_sql.is_empty() {
+            write_trace_statement(out, statement_sql)?;
+        }
         // SQLite ignores params that don't appear in the SQL, so we treat
         // any `bind_named` error as a soft signal and continue.
-        for (name, value) in params {
-            let _ = stmt.bind_named(
-                name,
-                redlinedb::Value::Text(std::sync::Arc::from(value.as_str())),
-            );
+        for (name, value) in &options.params {
+            let _ = stmt.bind_named(name, value.to_redlinedb_value());
         }
         let column_count = stmt.column_count();
-        if is_streaming_delimited_mode(*mode) {
+        if is_streaming_delimited_mode(options.mode) {
             let mut wrote_anything = false;
-            if show_header && column_count > 0 {
+            if options.show_header && column_count > 0 {
                 write_delimited_row(
                     out,
                     (0..column_count).map(|index| stmt.column_name(index)),
-                    *mode,
-                    separator,
+                    options.mode,
+                    &options.separator,
                     false,
                 )?;
                 wrote_anything = true;
             }
             while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
                 if wrote_anything {
-                    writeln!(out).map_err(|err| err.to_string())?;
+                    write_row_separator(out, &options.row_separator)?;
                 }
                 for index in 0..column_count {
                     if index > 0 {
-                        out.write_all(separator.as_bytes())
+                        out.write_all(options.separator.as_bytes())
                             .map_err(|err| err.to_string())?;
                     }
                     write_stream_delimited_value(
                         out,
-                        *mode,
-                        separator,
-                        null_value,
+                        options.mode,
+                        &options.separator,
+                        &options.null_value,
                         stmt.column_ref(index).map_err(|err| err.to_string())?,
                     )?;
                 }
                 wrote_anything = true;
             }
             if wrote_anything {
-                writeln!(out).map_err(|err| err.to_string())?;
+                write_row_separator(out, &options.row_separator)?;
             }
         } else {
             let column_names: Vec<String> = (0..column_count)
@@ -532,18 +710,93 @@ fn run_query_writer<W: Write>(
             }
             render_query(
                 out,
-                *mode,
-                separator,
-                show_header,
-                null_value,
+                options.mode,
+                &options.separator,
+                options.show_header,
+                &options.null_value,
                 &column_names,
                 &rows,
             )?;
+        }
+        if options.changes {
+            writeln!(out, "changes: {}", stmt.affected_rows()).map_err(|err| err.to_string())?;
         }
         rest = tail;
     }
 
     Ok(())
+}
+
+fn write_row_separator<W: Write>(out: &mut W, separator: &str) -> Result<(), String> {
+    out.write_all(separator.as_bytes())
+        .map_err(|err| err.to_string())
+}
+
+fn write_trace_statement<W: Write>(out: &mut W, sql: &str) -> Result<(), String> {
+    out.write_all(sql.as_bytes())
+        .map_err(|err| err.to_string())?;
+    if !sql.ends_with(';') {
+        out.write_all(b";").map_err(|err| err.to_string())?;
+    }
+    out.write_all(b"\n").map_err(|err| err.to_string())
+}
+
+fn write_cli_readfile_hex_query<W: Write>(
+    sql: &str,
+    out: &mut W,
+    options: &QueryOptions,
+) -> Result<bool, String> {
+    let Some(path) = parse_readfile_hex_query(sql) else {
+        return Ok(false);
+    };
+    let bytes =
+        std::fs::read(&path).map_err(|err| format!("cannot read {}: {err}", path.display()))?;
+    let mut rendered = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(&mut rendered, "{byte:02X}");
+    }
+    if options.show_header {
+        out.write_all(b"hex(readfile())")
+            .map_err(|err| err.to_string())?;
+        write_row_separator(out, &options.row_separator)?;
+    }
+    out.write_all(rendered.as_bytes())
+        .map_err(|err| err.to_string())?;
+    write_row_separator(out, &options.row_separator)?;
+    Ok(true)
+}
+
+fn parse_readfile_hex_query(sql: &str) -> Option<PathBuf> {
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let prefix = "select hex(readfile(";
+    if !lower.starts_with(prefix) || !lower.ends_with("))") {
+        return None;
+    }
+    let inner = trimmed[prefix.len()..trimmed.len().checked_sub(2)?].trim();
+    let path = parse_single_quoted(inner)?;
+    Some(PathBuf::from(path))
+}
+
+fn parse_single_quoted(input: &str) -> Option<String> {
+    let body = input.strip_prefix('\'')?.strip_suffix('\'')?;
+    Some(body.replace("''", "'"))
+}
+
+fn strip_cli_memory_attach(sql: &str) -> Option<&str> {
+    let leading = sql.len().checked_sub(sql.trim_start().len())?;
+    let trimmed = &sql[leading..];
+    let lower = trimmed.to_ascii_lowercase();
+    let memory_attach = lower.starts_with("attach \":memory:\" as ")
+        || lower.starts_with("attach database \":memory:\" as ")
+        || lower.starts_with("attach ':memory:' as ")
+        || lower.starts_with("attach database ':memory:' as ");
+    if !memory_attach {
+        return None;
+    }
+    let semicolon = trimmed.find(';')?;
+    Some(&trimmed[semicolon + 1..])
 }
 
 fn run_legacy(args: Vec<String>) -> Result<(), String> {

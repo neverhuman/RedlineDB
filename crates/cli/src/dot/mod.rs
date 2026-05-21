@@ -91,25 +91,32 @@ pub struct CliState {
     pub db_path: PathBuf,
     pub mode: OutputMode,
     pub separator: String,
+    pub row_separator: String,
     pub show_header: bool,
     pub null_value: String,
     pub bail: bool,
+    pub had_error: bool,
     pub timer: bool,
     pub changes: bool,
     pub echo: bool,
+    pub trace_stdout: bool,
     pub eqp: bool,
     pub explain: ExplainSetting,
+    pub dbconfig_defensive: bool,
     pub widths: Vec<usize>,
     pub limits: Vec<(String, i64)>,
     pub output: OutputTarget,
+    pub snapshots: std::collections::BTreeMap<PathBuf, Database>,
     /// `.parameter set NAME VALUE` populates this map; the REPL binds
     /// these values to matching `:name`/`@name`/`$name` placeholders in
     /// any subsequent statement.
-    pub params: std::collections::BTreeMap<String, String>,
+    pub params: std::collections::BTreeMap<String, parameter::ParameterValue>,
     /// `.once FILE` arms a one-shot output redirect for the next executed
     /// statement. The REPL takes ownership when running the next query and
     /// resets `output` afterwards.
     pub once: Option<PathBuf>,
+    pub safe_mode: bool,
+    pub safe_nonce: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,6 +129,7 @@ pub enum ExplainSetting {
 /// Sink for query output and `.print`.
 pub enum OutputTarget {
     Stdout,
+    Null,
     File { path: PathBuf, writer: File },
 }
 
@@ -129,6 +137,7 @@ impl OutputTarget {
     pub fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
         match self {
             Self::Stdout => io::stdout().write_all(bytes),
+            Self::Null => Ok(()),
             Self::File { writer, .. } => writer.write_all(bytes),
         }
     }
@@ -141,7 +150,26 @@ impl OutputTarget {
     pub fn label(&self) -> String {
         match self {
             Self::Stdout => "stdout".into(),
+            Self::Null => "off".into(),
             Self::File { path, .. } => path.display().to_string(),
+        }
+    }
+}
+
+impl Write for OutputTarget {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Stdout => io::stdout().write(buf),
+            Self::Null => Ok(buf.len()),
+            Self::File { writer, .. } => writer.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Stdout => io::stdout().flush(),
+            Self::Null => Ok(()),
+            Self::File { writer, .. } => writer.flush(),
         }
     }
 }
@@ -161,19 +189,26 @@ impl CliState {
             db_path,
             mode,
             separator,
+            row_separator: "\n".to_owned(),
             show_header: header,
             null_value: String::new(),
             bail: false,
+            had_error: false,
             timer: false,
             changes: false,
             echo: false,
+            trace_stdout: false,
             eqp: false,
             explain: ExplainSetting::Auto,
+            dbconfig_defensive: false,
             widths: Vec::new(),
             limits: Vec::new(),
             output: OutputTarget::Stdout,
+            snapshots: std::collections::BTreeMap::new(),
             params: std::collections::BTreeMap::new(),
             once: None,
+            safe_mode: false,
+            safe_nonce: None,
         })
     }
 
@@ -207,7 +242,7 @@ pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> 
     };
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     match cmd.as_str() {
-        ".exit" | ".quit" => Ok(DotOutcome::Exit(0)),
+        ".exit" | ".quit" => control::exit(&args),
         ".help" => print_help(state),
         ".tables" => schema::tables(state, &args),
         ".schema" => schema::schema(state, &args),
@@ -215,8 +250,12 @@ pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> 
         ".indexes" | ".indices" => schema::indexes(state, &args),
         ".databases" => schema::databases(state, &args),
         ".dump" => io_cmd::dump(state, &args),
+        ".backup" => io_cmd::backup(state, &args),
+        ".clone" => io_cmd::clone_db(state, &args),
         ".save" => io_cmd::save(state, &args),
         ".restore" => io_cmd::restore(state, &args),
+        ".open" => io_cmd::open(state, &args),
+        ".cd" => io_cmd::cd(state, &args),
         ".output" => io_cmd::output(state, &args),
         ".once" => io_cmd::once(state, &args),
         ".parameter" | ".param" => parameter::parameter(state, &args),
@@ -231,6 +270,16 @@ pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> 
         ".bail" => control::bail(state, &args),
         ".timer" => control::timer(state, &args),
         ".changes" => control::changes(state, &args),
+        ".trace" => control::trace(state, &args),
+        ".version" => control::version(state, &args),
+        ".timeout" => control::timeout(state, &args),
+        ".progress" => control::progress(state, &args),
+        ".log" => control::log(state, &args),
+        ".prompt" => control::prompt(state, &args),
+        ".dbconfig" => control::dbconfig(state, &args),
+        ".connection" => control::connection(state, &args),
+        ".nonce" => control::nonce(state, &args),
+        ".shell" | ".system" => control::shell(state, &args),
         ".echo" => control::echo(state, &args),
         ".show" => control::show(state, &args),
         ".limit" => control::limit(state, &args),
