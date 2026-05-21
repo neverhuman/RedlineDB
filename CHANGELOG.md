@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## [1.0.20] - 2026-05-21
+
+Release-only version bump for the current SQLite parity branch.
+
+### Changed
+
+- SQLite parity coverage was expanded on this branch, and the latest parity
+  report artifacts remain aligned with the approved CI allowlist.
+- Workspace package metadata and lockfile entries now target `1.0.20`.
+
 ## [1.0.19] - 2026-05-20
 
 Latency pass 3 for volatile SQLite parity cases.
