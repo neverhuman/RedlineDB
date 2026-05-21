@@ -22,13 +22,13 @@
     "--updated-date",
     "2026-05-21"
   ],
-  "git_sha": "71f44c9389c7674e00d0eea18d7d77c0f7295d7b",
+  "git_sha": "800fe38a0edbcd862de1ba58be0fb6c707095dd0",
   "sqlite_version": "3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)",
   "updated_date": "2026-05-21",
   "repetitions": 3,
   "warmup": 1,
   "input_hashes": {
-    "benchmark-results/sqlite-parity/latest/raw.jsonl": "051ff42baab7f354cc050ab7cc39d45554e5469a7f8b8963cf533b20cad9c95a",
+    "benchmark-results/sqlite-parity/latest/raw.jsonl": "1ca370279bd1dfbc5bcc6bc9217ea821bd54f04e8cde9eb54baa1d77110605dc",
     "crates/bench/sqlite_parity/generated_manifest.json": "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3",
     "expected_case_ids": "fd73157706060c255adce8efbe4705e71bbdba856887ed3a225ec851cb8a832f"
   },
@@ -39,12 +39,12 @@
     "./paper/sections/evaluation.tex": "0ec134dec8ab712cd7f3dcecc39a63425f58377927cbed20f885b168d733fe6c",
     "./paper/sections/implementation.tex": "55130df325ac269240925b7ca624778cedf7c67e228846915536b34077e99fcd",
     "./paper/sections/introduction.tex": "08df89ca38e7eea8febe08a086c3ce4ef15ee3852c85f5a80e66271ec2d48833",
-    "README.md": "ac51e0810145192bf076fda9751af67caef7c091a3f05e2f2a5cf6f4037dc5c2",
+    "README.md": "24818993e331793d3f452a4b7b40b09229304756375ec7261795c7ba7b050d7c",
     "assets/sqlite-parity-ksloc.svg": "b9e9601aa84774bc5a88702e9228a661f4ad7f24c29341cb52d3e84eb1bdaa88",
-    "assets/sqlite-parity-latency-gap.svg": "eecbff7bcef2cbc0d925c1ea4dd72d7e697f7889a5fe00e6f4c5a7478b89202a",
+    "assets/sqlite-parity-latency-gap.svg": "afd4fbd60c3adfc9a26b7c0c4f53c8e8b6fca3c090f0ef9f0e3139bccf3b7f30",
     "ksloc.csv": "814cc9e3ee51d9c3559373c3a0200cf219f312d36d4b27fafaa1aa24bed91674",
-    "ranked.csv": "b8130d5b3881ac34e6303617f64145216245d6ca50441e882bea2ce58fda9f3c",
-    "raw.jsonl": "051ff42baab7f354cc050ab7cc39d45554e5469a7f8b8963cf533b20cad9c95a",
-    "summary.json": "5dd1a478cd9603ac587f9d0ee9742627159525449e69bd2fa0ae164b509684dc"
+    "ranked.csv": "111eefb5fa7cc9385fe7f86eb87208ee2ab925c9bc1fa8c9cfa090ddbfde6d0a",
+    "raw.jsonl": "1ca370279bd1dfbc5bcc6bc9217ea821bd54f04e8cde9eb54baa1d77110605dc",
+    "summary.json": "302f93571c73b4b092119b15cd31d4f3566082f70304e5da5d819633119471ee"
   }
 }
