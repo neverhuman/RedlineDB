@@ -122,7 +122,14 @@ step_doctor() {
 
 # ---- 7) Proofbind verify ---------------------------------------------------
 step_proofbind() {
-    jankurai proofbind verify . --changed-from origin/main
+    local -a changed_paths=()
+    local path
+
+    while IFS= read -r -d '' path; do
+        changed_paths+=(--changed "$path")
+    done < <(git diff --name-only -z --diff-filter=ACMRT origin/main...HEAD --)
+
+    jankurai proofbind verify . "${changed_paths[@]}"
 }
 
 # ---- 8) Proofmark rust -----------------------------------------------------

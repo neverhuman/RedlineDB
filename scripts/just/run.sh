@@ -167,10 +167,10 @@ case "$lane" in
     updated_date="$(date -u +%F)"
     rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/approved-ci.txt --repetitions 3 --warmup 1 --jobs auto --out benchmark-results/sqlite-parity/latest/raw.jsonl
     printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
-    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --updated-date "$updated_date"
+    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --updated-date "$updated_date"
     ;;
   sqlite-parity-report-check)
-    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --updated-date "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)" --check
+    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl --case-list crates/bench/sqlite_parity/approved-ci.txt --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --updated-date "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)" --check
     ;;
   sqlite-parity-report-publish-pr)
     bash ops/ci/sqlite-parity-report.sh publish-pr

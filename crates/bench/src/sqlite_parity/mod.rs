@@ -8,3 +8,4 @@ pub mod normalize;
 pub mod report;
 pub mod report_gen;
 pub mod runner;
+pub mod source_lines;

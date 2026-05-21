@@ -30,11 +30,14 @@ can be removed without giving up the SQLite \emph{contract}---the C
 API, the SQL dialect, the file-per-database mental model, the embedded
 single-process deployment. RedlineDB is a Rust-native, MVCC,
 concurrent-write embedded SQL engine that is API-compatible with
-SQLite. The kernel, parser, planner, executor, public Rust facade, and
-benchmark harness together total approximately 35 KLOC of safe Rust
-active source (Table~\ref{tab:loc}); only the FFI shim contains
-\texttt{unsafe} blocks, and those exist because the C ABI requires
-them. The kernel achieves ARIES-style recovery~\cite{mohan1992aries} on
+SQLite. % sqlite-parity-loc:introduction:begin
+The kernel, parser, planner, executor, public Rust facade, and
+SQLite C ABI shim together total 51.4 KSLOC of scanner-counted
+production Rust source across four core crates (Table~\ref{tab:loc});
+only the FFI shim contains \texttt{unsafe} blocks, and those exist
+because the C ABI requires them.
+% sqlite-parity-loc:introduction:end
+The kernel achieves ARIES-style recovery~\cite{mohan1992aries} on
 top of a slotted-heap MVCC store, and the index layer follows the
 B-link discipline~\cite{lehman1981blink,srinivasan1991bplus} so that
 concurrent writers on disjoint key ranges do not block each other.
