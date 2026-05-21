@@ -13,7 +13,10 @@
   <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/accounted%20parity-1127%2F1127-blue" alt="accounted parity"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
-  <img src="https://img.shields.io/badge/version-1.0.23-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.0.24-blue" alt="version">
+  <!-- jankurai-score-badge:begin -->
+  <a href=".jankurai/repo-score.md"><img src="https://img.shields.io/badge/jankurai-64%2F100%20advisory-orange" alt="jankurai score: 64/100 advisory"></a>
+  <!-- jankurai-score-badge:end -->
 </p>
 
 RedlineDB is an embedded SQL engine written in Rust. It keeps the SQLite-facing
@@ -40,7 +43,7 @@ Pin the release in `Cargo.toml`:
 
 ```toml
 [dependencies]
-redlinedb = "=1.0.23"
+redlinedb = "=1.0.24"
 ```
 
 For libraries, `redlinedb = "1"` is usually fine. For binaries, keep the exact
@@ -57,26 +60,26 @@ curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/i
 Pin a specific release when you need reproducible installs:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v1.0.23 bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v1.0.24 bash
 ```
 
 Lock the exact tarball digest in CI or release automation:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
-  VERSION=v1.0.23 REDLINEDB_SHA256=<sha256> bash
+  VERSION=v1.0.24 REDLINEDB_SHA256=<sha256> bash
 ```
 
 ### Build from source
 
 ```bash
-cargo install redlinedb-cli --version 1.0.23 --locked
+cargo install redlinedb-cli --version 1.0.24 --locked
 ```
 
 Or install from the tagged repository release:
 
 ```bash
-cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v1.0.23 --package redlinedb-cli --locked
+cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v1.0.24 --package redlinedb-cli --locked
 ```
 
 ### Direct download
@@ -85,9 +88,9 @@ Release tarballs are published on the [releases page](https://github.com/neverhu
 
 | Platform | File |
 |---|---|
-| Linux x86_64 | `redlinedb-v1.0.23-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `redlinedb-v1.0.23-macos-arm64.tar.gz` |
-| macOS Intel | `redlinedb-v1.0.23-macos-x86_64.tar.gz` |
+| Linux x86_64 | `redlinedb-v1.0.24-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `redlinedb-v1.0.24-macos-arm64.tar.gz` |
+| macOS Intel | `redlinedb-v1.0.24-macos-x86_64.tar.gz` |
 
 Each tarball ships with a matching `.sha256` checksum and contains the CLI,
 shared libraries, and public headers.
@@ -147,9 +150,6 @@ That keeps default CI safe while preserving a complete audit trail.
 The live report is generated from `benchmark-results/sqlite-parity/latest/`
 and the approved comparison list in `crates/bench/sqlite_parity/approved-ci.txt`.
 
-<details>
-<summary>Detailed parity report</summary>
-
 <!-- sqlite-parity-report:begin -->
 
 **SQLite parity coverage:** **1049 / 1127 = 93.1%** approved generated cases, with **78** remaining. Updated 2026-05-21.
@@ -158,7 +158,9 @@ and the approved comparison list in `crates/bench/sqlite_parity/approved-ci.txt`
 
 ![SQLite vs RedlineDB production KSLOC chart](assets/sqlite-parity-ksloc.svg)
 
-<details>
+[Full ranked latency table](#sqlite-parity-ranked-latency-table) is collapsed below for README readability.
+
+<details id="sqlite-parity-ranked-latency-table">
 <summary>Full ranked latency table</summary>
 
 | Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |
@@ -1216,8 +1218,6 @@ and the approved comparison list in `crates/bench/sqlite_parity/approved-ci.txt`
 </details>
 
 <!-- sqlite-parity-report:end -->
-
-</details>
 
 ## Architecture
 

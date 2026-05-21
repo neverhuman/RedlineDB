@@ -396,9 +396,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
 name = "endian-type"
@@ -1251,7 +1251,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "libc",
  "redlinedb-kernel",
@@ -1264,7 +1264,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-bench"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "anyhow",
  "clap",
@@ -1288,7 +1288,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-cli"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -1302,11 +1302,11 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-domain"
-version = "1.0.23"
+version = "1.0.24"
 
 [[package]]
 name = "redlinedb-ffi"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "redlinedb-kernel",
  "redlinedb-sql",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-kernel"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "arc-swap",
  "crc32fast",
@@ -1332,7 +1332,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-server"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "redlinedb",
  "serde",
@@ -1342,7 +1342,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-sql"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "arc-swap",
  "fail",
@@ -1359,7 +1359,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-sqlx"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -1373,7 +1373,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-tokio"
-version = "1.0.23"
+version = "1.0.24"
 dependencies = [
  "redlinedb",
  "tempfile",
