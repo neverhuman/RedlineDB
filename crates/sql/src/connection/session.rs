@@ -491,6 +491,20 @@ impl Connection {
         self.session.lock().expect("session poisoned").query_only = value;
     }
 
+    pub(crate) fn case_sensitive_like(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .case_sensitive_like
+    }
+
+    pub(crate) fn set_case_sensitive_like(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .case_sensitive_like = value;
+    }
+
     pub(crate) fn user_version(&self) -> i64 {
         self.db.user_version()
     }
@@ -529,6 +543,10 @@ impl Connection {
 
     pub(crate) fn integrity_check(&self) -> Result<Vec<String>> {
         self.db.integrity_check()
+    }
+
+    pub(crate) fn vacuum(&self) -> Result<()> {
+        self.db.vacuum().map(|_| ())
     }
 
     pub(crate) fn query_memory(&self) -> &QueryMemoryConfig {

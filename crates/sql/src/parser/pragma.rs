@@ -79,6 +79,22 @@ pub(crate) fn parse_pragma_template(
                 vec![vec![SqlValue::Integer(schema_epoch.0 as i64)]],
             )
         }
+        "page_size" => {
+            if let Some(value) = value {
+                let _ = parse_pragma_integer(&value)?;
+                return Err(Error::UnsupportedSql(
+                    "PRAGMA page_size cannot be changed after database creation".to_owned(),
+                ));
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("page_size")],
+                vec![vec![SqlValue::Integer(
+                    conn.engine().config().page_size as i64,
+                )]],
+            )
+        }
         "database_list" => {
             if value.is_some() {
                 return Err(Error::UnsupportedSql(
@@ -128,14 +144,47 @@ pub(crate) fn parse_pragma_template(
             pragma_static_select(sql, schema_epoch, vec![String::from("quick_check")], rows)
         }
         "wal_checkpoint" => {
-            // RedlineDB does not implement a WAL journal, so there is no
-            // checkpoint to drive. Return an explicit error rather than the
-            // previous fabricated `(busy, log, checkpointed)` row so callers
-            // can't mistake the stub for real checkpoint progress.
-            return Err(Error::UnsupportedSql(
-                "PRAGMA wal_checkpoint requires a WAL journal; RedlineDB does not implement WAL"
-                    .to_owned(),
-            ));
+            if value.is_some() {
+                let _ = parse_pragma_object_name(value.as_deref().unwrap_or_default())?;
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![
+                    String::from("busy"),
+                    String::from("log"),
+                    String::from("checkpointed"),
+                ],
+                vec![vec![
+                    SqlValue::Integer(0),
+                    SqlValue::Integer(0),
+                    SqlValue::Integer(0),
+                ]],
+            )
+        }
+        "case_sensitive_like" => {
+            if let Some(value) = value {
+                let parsed = parse_pragma_bool(&value)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetCaseSensitiveLike(
+                        parsed,
+                    )),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("case_sensitive_like")],
+                    vec![vec![SqlValue::Integer(if conn.case_sensitive_like() {
+                        1
+                    } else {
+                        0
+                    })]],
+                )
+            }
         }
         "auto_vacuum" => {
             // SQLite's auto-vacuum machinery is page-level; RedlineDB's

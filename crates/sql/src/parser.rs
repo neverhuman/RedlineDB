@@ -342,6 +342,12 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(template) = parse_detach_template(trimmed, schema_epoch) {
         return Ok(template);
     }
+    if let Some(template) = parse_reindex_template(trimmed, schema_epoch)? {
+        return Ok(template);
+    }
+    if let Some(template) = parse_vacuum_into_template(trimmed, schema_epoch)? {
+        return Ok(template);
+    }
 
     let dialect = SQLiteDialect {};
     let sql_for_parser = strip_cte_materialized_hints(sql);
@@ -665,6 +671,7 @@ fn bind_statement(
             database_file_name,
             ..
         } => bind_attach(sql, schema_epoch, schema_name, database_file_name),
+        SqlStatement::Vacuum(vacuum) => bind_vacuum(sql, schema_epoch, vacuum),
         SqlStatement::CreateView(create_view) => bind_create_view(schema_epoch, sql, create_view),
         SqlStatement::CreateTrigger(create_trigger) => {
             bind_create_trigger(schema_epoch, sql, create_trigger)
@@ -685,6 +692,74 @@ fn bind_statement(
             "statement not supported yet: {other:?}"
         ))),
     }
+}
+
+fn parse_reindex_template(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+) -> Result<Option<PreparedTemplate>> {
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    if trimmed.eq_ignore_ascii_case("reindex") {
+        return Ok(Some(template(
+            trimmed,
+            schema_epoch,
+            false,
+            PreparedKind::Reindex,
+        )));
+    }
+    Ok(None)
+}
+
+fn parse_vacuum_into_template(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+) -> Result<Option<PreparedTemplate>> {
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let Some(rest) = lower.strip_prefix("vacuum into ") else {
+        return Ok(None);
+    };
+    let original_rest = &trimmed[trimmed.len() - rest.len()..];
+    let path = match original_rest.trim() {
+        value if value.starts_with('\'') || value.starts_with('"') => {
+            let bytes = value.as_bytes();
+            if bytes.len() < 2 {
+                return Err(Error::UnsupportedSql(
+                    "VACUUM INTO expects a database path".to_owned(),
+                ));
+            }
+            let quote = bytes[0];
+            let mut i = 1usize;
+            let mut out = String::new();
+            while i < bytes.len() {
+                if bytes[i] == quote {
+                    if i + 1 < bytes.len() && bytes[i + 1] == quote {
+                        out.push(quote as char);
+                        i += 2;
+                        continue;
+                    }
+                    break;
+                }
+                out.push(bytes[i] as char);
+                i += 1;
+            }
+            out
+        }
+        other => other.to_owned(),
+    };
+    if path.is_empty() {
+        return Err(Error::UnsupportedSql(
+            "VACUUM INTO expects a database path".to_owned(),
+        ));
+    }
+    Ok(Some(template(
+        trimmed,
+        schema_epoch,
+        false,
+        PreparedKind::VacuumInto {
+            path: Arc::from(path),
+        },
+    )))
 }
 
 fn template(
@@ -740,6 +815,32 @@ fn bind_attach(
             alias: Arc::from(schema_name.value),
         }),
     ))
+}
+
+fn bind_vacuum(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    vacuum: sqlparser::ast::VacuumStatement,
+) -> Result<PreparedTemplate> {
+    if vacuum.full || vacuum.sort_only || vacuum.delete_only || vacuum.recluster || vacuum.boost {
+        return Err(Error::UnsupportedSql(
+            "VACUUM modifiers are not supported".to_owned(),
+        ));
+    }
+    if vacuum.reindex {
+        return Ok(template(sql, schema_epoch, false, PreparedKind::Reindex));
+    }
+    if let Some(table_name) = vacuum.table_name {
+        return Err(Error::UnsupportedSql(format!(
+            "VACUUM table target is not supported: {table_name}"
+        )));
+    }
+    if vacuum.threshold.is_some() {
+        return Err(Error::UnsupportedSql(
+            "VACUUM threshold is not supported".to_owned(),
+        ));
+    }
+    Ok(template(sql, schema_epoch, false, PreparedKind::Vacuum))
 }
 
 /// Detect a `DETACH [DATABASE] alias` statement before handing the SQL to

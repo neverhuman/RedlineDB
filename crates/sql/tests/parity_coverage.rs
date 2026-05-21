@@ -94,6 +94,36 @@ fn create_and_drop_index() {
 }
 
 #[test]
+fn reindex_executes_after_index_creation() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE t(a TEXT COLLATE NOCASE)")
+        .expect("create");
+    c.execute("CREATE INDEX i_t_a ON t(a)")
+        .expect("create index");
+    c.execute("INSERT INTO t VALUES('A'),('b')")
+        .expect("insert");
+    c.execute("REINDEX").expect("reindex");
+    let count = q1(&c, "SELECT count(*) FROM t");
+    assert_eq!(count, SqlValue::Integer(2));
+}
+
+#[test]
+fn vacuum_into_creates_copy_of_database_directory() {
+    let dir = tempdir().expect("temp dir");
+    let src = dir.path().join("src.db");
+    let dst = dir.path().join("dst.db");
+    let db = Database::create(&src, DbOptions::default()).expect("create");
+    let c = db.connect();
+    c.execute("CREATE TABLE t(x INTEGER)").expect("create");
+    c.execute("INSERT INTO t VALUES (12)").expect("insert");
+    c.execute(&format!("VACUUM INTO '{}'", dst.display()))
+        .expect("vacuum into");
+    let copy = Database::open(&dst, DbOptions::default()).expect("open copy");
+    let copy_conn = copy.connect();
+    assert_eq!(q1(&copy_conn, "SELECT x FROM t"), SqlValue::Integer(12));
+}
+
+#[test]
 fn drop_index_if_exists() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");
@@ -249,33 +279,29 @@ fn pragma_integrity_check_ok() {
 }
 
 // ── WAL checkpoint modes ──────────────────────────────────────────────────────
-//
-// RedlineDB has no WAL journal, so `PRAGMA wal_checkpoint` is now rejected
-// at prepare time. Detailed coverage lives in
-// `parity_pragma_tv.rs::pragma_wal_checkpoint_is_rejected`.
 
 #[test]
 fn pragma_wal_checkpoint_passive() {
     let (_d, c) = open();
-    assert!(c.prepare("PRAGMA wal_checkpoint(PASSIVE)").is_err());
+    assert!(c.prepare("PRAGMA wal_checkpoint(PASSIVE)").is_ok());
 }
 
 #[test]
 fn pragma_wal_checkpoint_full() {
     let (_d, c) = open();
-    assert!(c.prepare("PRAGMA wal_checkpoint(FULL)").is_err());
+    assert!(c.prepare("PRAGMA wal_checkpoint(FULL)").is_ok());
 }
 
 #[test]
 fn pragma_wal_checkpoint_restart() {
     let (_d, c) = open();
-    assert!(c.prepare("PRAGMA wal_checkpoint(RESTART)").is_err());
+    assert!(c.prepare("PRAGMA wal_checkpoint(RESTART)").is_ok());
 }
 
 #[test]
 fn pragma_wal_checkpoint_truncate() {
     let (_d, c) = open();
-    assert!(c.prepare("PRAGMA wal_checkpoint(TRUNCATE)").is_err());
+    assert!(c.prepare("PRAGMA wal_checkpoint(TRUNCATE)").is_ok());
 }
 
 // ── Nested SAVEPOINT ──────────────────────────────────────────────────────────
@@ -318,6 +344,24 @@ fn pragma_auto_vacuum() {
     // rejection boundary directly.
     let (_d, c) = open();
     assert!(c.prepare("PRAGMA auto_vacuum").is_err());
+}
+
+#[test]
+fn pragma_case_sensitive_like_toggles_like_semantics() {
+    let (_d, c) = open();
+    c.execute("PRAGMA case_sensitive_like=ON")
+        .expect("enable case_sensitive_like");
+    assert_eq!(q1(&c, "SELECT 'A' LIKE 'a'"), SqlValue::Integer(0));
+    c.execute("PRAGMA case_sensitive_like=OFF")
+        .expect("disable case_sensitive_like");
+    assert_eq!(q1(&c, "SELECT 'A' LIKE 'a'"), SqlValue::Integer(1));
+}
+
+#[test]
+fn pragma_page_size_reports_database_page_size() {
+    let (_d, c) = open();
+    let value = q1(&c, "PRAGMA page_size");
+    assert!(matches!(value, SqlValue::Integer(v) if v > 0));
 }
 
 #[test]
