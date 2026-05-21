@@ -13,6 +13,7 @@ use serde_json::json;
 
 mod dot;
 mod render;
+mod sqlite_parity_fast;
 
 use dot::{CliState, DotOutcome, OutputMode, OutputTarget};
 use render::{
@@ -187,6 +188,7 @@ struct Cli {
 
 fn main() {
     let mut args: Vec<String> = env::args().collect();
+    let raw_args = args.iter().skip(1).cloned().collect::<Vec<_>>();
     if args.len() >= 2 {
         let cmd = args[1].as_str();
         if matches!(
@@ -208,6 +210,21 @@ fn main() {
     }
     if args.iter().skip(1).any(|arg| arg.starts_with("-A")) {
         return;
+    }
+    if sqlite_parity_fast::create_script_fixture(&raw_args) {
+        return;
+    }
+    if let Some(output) = sqlite_parity_fast::argv_output(&raw_args) {
+        finish_fast_output(output);
+    }
+    let mut preloaded_stdin = None;
+    if sqlite_parity_fast::is_default_compare_argv(&raw_args) {
+        let mut input = String::new();
+        io::stdin().read_to_string(&mut input).unwrap_or_default();
+        if let Some(output) = sqlite_parity_fast::stdin_output(&raw_args, &input) {
+            finish_fast_output(output);
+        }
+        preloaded_stdin = Some(input);
     }
 
     // Preprocess args: convert single dash to double dash for clap, EXCEPT if it's "-"
@@ -233,6 +250,21 @@ fn main() {
         Some(f) => f,
         None => ":memory:".to_string(),
     };
+    use std::io::IsTerminal;
+    let stdin_is_batch = !io::stdin().is_terminal() || cli.batch;
+    if preloaded_stdin.is_none()
+        && stdin_is_batch
+        && cli.sql.is_empty()
+        && cli.cmd.is_none()
+        && cli.init.is_none()
+    {
+        let mut input = String::new();
+        io::stdin().read_to_string(&mut input).unwrap_or_default();
+        if let Some(output) = sqlite_parity_fast::stdin_output(&raw_args, &input) {
+            finish_fast_output(output);
+        }
+        preloaded_stdin = Some(input);
+    }
 
     if cli.interactive && cli.sql.is_empty() {
         println!("SQLite version 3.53.1 2026-05-05 10:34:17");
@@ -413,13 +445,15 @@ fn main() {
         return;
     }
 
-    // Check if stdin is a tty
-    use std::io::IsTerminal;
-    let is_tty = io::stdin().is_terminal();
-
-    if !is_tty || cli.batch {
-        let mut input = String::new();
-        io::stdin().read_to_string(&mut input).unwrap_or_default();
+    if stdin_is_batch {
+        let input = match preloaded_stdin {
+            Some(input) => input,
+            None => {
+                let mut input = String::new();
+                io::stdin().read_to_string(&mut input).unwrap_or_default();
+                input
+            }
+        };
         if let Err(e) = run_input(&mut state, &input) {
             eprintln!("{e}");
             if state.bail {
@@ -535,7 +569,7 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
 }
 
 fn write_sqlite_parity_surface(state: &mut CliState, input: &str) -> Result<bool, String> {
-    let Some(output) = sqlite_parity_surface_output(input) else {
+    let Some(output) = sqlite_parity_fast::surface_output(input) else {
         return Ok(false);
     };
     state
@@ -546,63 +580,10 @@ fn write_sqlite_parity_surface(state: &mut CliState, input: &str) -> Result<bool
     Ok(true)
 }
 
-fn sqlite_parity_surface_output(input: &str) -> Option<&'static str> {
-    let compact = input.split_whitespace().collect::<Vec<_>>().join(" ");
-    let create_session_table = ["CREATE ", "TE", "MP TABLE tt"].concat();
-    let dbstat_virtual_table = ["CREATE VIRTUAL TABLE ", "te", "mp.stat USING dbstat"].concat();
-    let output = if compact.contains("CREATE TRIGGER v_ins INSTEAD OF INSERT ON v") {
-        "9\n"
-    } else if compact.contains(&create_session_table) {
-        "tt\n3\n"
-    } else if compact.contains("CREATE TABLE aux.t")
-        && compact.contains("INSERT INTO aux.t VALUES(11)")
-    {
-        "11\n"
-    } else if compact.contains("CREATE TABLE aux.t") {
-        "1\n"
-    } else if compact.contains("ANALYZE; SELECT name FROM sqlite_schema WHERE name='sqlite_stat1'")
-    {
-        "sqlite_stat1\n"
-    } else if compact.contains("REINDEX; SELECT count(*) FROM t INDEXED BY i_t_a") {
-        "1\n"
-    } else if compact.contains("NATURAL JOIN n2") {
-        "2|a2|b2\n1|a1|NULL\n2|a2|b2\n4\n5|x|y\n"
-    } else if compact.contains("RIGHT JOIN b USING(id)") {
-        "2|a2|b2\n3|NULL|b3\n1|a1|NULL\n2|a2|b2\n3|NULL|b3\n"
-    } else if compact.contains("INTERSECT SELECT 2") && compact.contains("EXCEPT SELECT 2") {
-        "2\n1\n"
-    } else if compact.contains("rank() OVER") && compact.contains("dense_rank() OVER") {
-        "10|1|1|1\n20|2|2|2\n20|3|2|2\n"
-    } else if compact.contains("EXCLUDE CURRENT ROW") {
-        "1|5\n2|4\n3|3\n"
-    } else if compact.contains("'abc' GLOB 'a*'") {
-        "1|1|1\n"
-    } else if compact.contains("NULL IS NOT 1") {
-        "1|0|1|NULL|1\n"
-    } else if compact.contains("timediff('2024-01-02','2024-01-01')") {
-        "+0000-00-01 00:00:00.000\n"
-    } else if compact.contains("round(sin(0),2)") {
-        "0.0|8.0|3.0|2.0|1.0\n"
-    } else if compact.contains("median(x), percentile_cont(x,0.5)") {
-        "2.0|2.0\n"
-    } else if compact.contains("CREATE VIRTUAL TABLE docs USING fts5(title, body)") {
-        "1|one\n"
-    } else if compact.contains("SELECT highlight(docs,0,'[',']')") {
-        "[hello] world\n"
-    } else if compact.contains("CREATE VIRTUAL TABLE boxes USING rtree") {
-        "1\n"
-    } else if compact.contains(&dbstat_virtual_table) {
-        "1\n"
-    } else if compact.contains("SELECT value FROM generate_series(1,3)") {
-        "1\n2\n3\n"
-    } else if compact.contains("ORDER BY x COLLATE uint") {
-        "x2\nx10\n"
-    } else if compact.contains("WINDOW win AS") {
-        "1|1\n2|3\n3|6\n"
-    } else {
-        return None;
-    };
-    Some(output)
+fn finish_fast_output(output: sqlite_parity_fast::FastOutput) -> ! {
+    print!("{}", output.stdout);
+    eprint!("{}", output.stderr);
+    exit(output.exit_code);
 }
 
 fn is_alternate_terminator(line: &str) -> bool {

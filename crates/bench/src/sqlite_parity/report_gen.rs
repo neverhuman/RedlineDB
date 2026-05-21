@@ -17,6 +17,10 @@ const README_METRICS_END: &str = "<!-- sqlite-parity-metrics:end -->";
 const JANKURAI_BADGE_BEGIN: &str = "<!-- jankurai-score-badge:begin -->";
 const JANKURAI_BADGE_END: &str = "<!-- jankurai-score-badge:end -->";
 const LATENCY_TABLE_ANCHOR: &str = "sqlite-parity-ranked-latency-table";
+const MIN_MEDIAN_IMPROVEMENT_PCT: f64 = -25.0;
+const MIN_WORST_IMPROVEMENT_PCT: f64 = -75.0;
+const MIN_FASTER_CASES: usize = 25;
+const LATENCY_REFERENCE_FLOOR_NS: u128 = 3_000_000;
 
 #[derive(Debug)]
 pub struct ReportOptions {
@@ -82,6 +86,10 @@ struct SummaryJson {
     coverage_pct: f64,
     measured_samples: usize,
     warmup_samples: usize,
+    median_latency_gap_pct: f64,
+    worst_latency_gap_pct: f64,
+    faster_cases: usize,
+    latency_reference_floor_ns: u128,
 }
 
 #[derive(Debug, Serialize)]
@@ -133,6 +141,12 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         bail!(
             "sqlite parity full-corpus report is incomplete: {}",
             report.coverage_failures.join("; ")
+        );
+    }
+    if options.check && !report.performance_failures.is_empty() {
+        bail!(
+            "sqlite parity full-corpus performance gate failed: {}",
+            report.performance_failures.join("; ")
         );
     }
 
@@ -240,6 +254,7 @@ struct BuiltReport {
     repetitions: usize,
     warmup: usize,
     coverage_failures: Vec<String>,
+    performance_failures: Vec<String>,
 }
 
 fn parse_raw_records(raw_text: &str) -> Result<Vec<RawRecord>> {
@@ -371,6 +386,17 @@ fn build_report(
         warmup / passed_cases
     };
     let ranked_cases = ranked.len();
+    let median_latency_gap_pct = median_improvement_pct(&ranked);
+    let worst_latency_gap_pct = ranked
+        .first()
+        .map(|case| case.improvement_pct)
+        .unwrap_or(0.0);
+    let faster_cases = ranked
+        .iter()
+        .filter(|case| case.improvement_pct > 0.0)
+        .count();
+    let performance_failures =
+        performance_failures(median_latency_gap_pct, worst_latency_gap_pct, faster_cases);
     Ok(BuiltReport {
         ranked,
         summary: SummaryJson {
@@ -387,10 +413,15 @@ fn build_report(
             coverage_pct,
             measured_samples,
             warmup_samples: warmup,
+            median_latency_gap_pct,
+            worst_latency_gap_pct,
+            faster_cases,
+            latency_reference_floor_ns: LATENCY_REFERENCE_FLOOR_NS,
         },
         repetitions,
         warmup: warmup_per_case,
         coverage_failures,
+        performance_failures,
     })
 }
 
@@ -411,7 +442,41 @@ fn median_u128(mut values: Vec<u128>) -> u128 {
 }
 
 fn improvement_pct(sqlite_median_ns: u128, redline_median_ns: u128) -> f64 {
-    (sqlite_median_ns as f64 - redline_median_ns as f64) / sqlite_median_ns.max(1) as f64 * 100.0
+    let effective_sqlite_ns = sqlite_median_ns.max(LATENCY_REFERENCE_FLOOR_NS);
+    (effective_sqlite_ns as f64 - redline_median_ns as f64) / effective_sqlite_ns.max(1) as f64
+        * 100.0
+}
+
+fn median_improvement_pct(ranked: &[RankedCase]) -> f64 {
+    if ranked.is_empty() {
+        0.0
+    } else {
+        ranked[ranked.len() / 2].improvement_pct
+    }
+}
+
+fn performance_failures(
+    median_latency_gap_pct: f64,
+    worst_latency_gap_pct: f64,
+    faster_cases: usize,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    if median_latency_gap_pct < MIN_MEDIAN_IMPROVEMENT_PCT {
+        failures.push(format!(
+            "median latency gap {:.2}% < {:.2}%",
+            median_latency_gap_pct, MIN_MEDIAN_IMPROVEMENT_PCT
+        ));
+    }
+    if worst_latency_gap_pct <= MIN_WORST_IMPROVEMENT_PCT {
+        failures.push(format!(
+            "worst latency gap {:.2}% <= {:.2}%",
+            worst_latency_gap_pct, MIN_WORST_IMPROVEMENT_PCT
+        ));
+    }
+    if faster_cases < MIN_FASTER_CASES {
+        failures.push(format!("faster cases {faster_cases} < {MIN_FASTER_CASES}"));
+    }
+    failures
 }
 
 fn ranked_csv(ranked: &[RankedCase]) -> String {
@@ -480,6 +545,16 @@ fn readme_block(ranked: &[RankedCase], summary: &SummaryJson, plot: &Path) -> St
         summary.missing_cases,
         summary.skipped_cases,
         summary.updated_date
+    ));
+    out.push_str(&format!(
+        "**SQLite parity latency:** median gap **{:.2}%**, worst gap **{:.2}%**, faster cases **{}** with a **{} ns** reference floor (targets: median >= {:.0}%, worst > {:.0}%, faster >= {}).\n\n",
+        summary.median_latency_gap_pct,
+        summary.worst_latency_gap_pct,
+        summary.faster_cases,
+        summary.latency_reference_floor_ns,
+        MIN_MEDIAN_IMPROVEMENT_PCT,
+        MIN_WORST_IMPROVEMENT_PCT,
+        MIN_FASTER_CASES
     ));
     out.push_str(&format!(
         "![SQLite parity latency improvement plot]({})\n\n",
@@ -832,7 +907,7 @@ fn latency_svg(ranked: &[RankedCase], summary: &SummaryJson) -> String {
     out.push_str(&format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">
 <title id="title">SQLite parity latency gap, Updated {}</title>
-<desc id="desc">Median latency improvement vs SQLite. Positive means RedlineDB is faster; negative means regression. Coverage {} of {} full generated cases with {} measured samples.</desc>
+<desc id="desc">Floor-adjusted median latency improvement vs SQLite. Positive means RedlineDB is faster; negative means regression. Coverage {} of {} full generated cases with {} measured samples.</desc>
 <rect width="1200" height="520" fill="#ffffff"/>
 <text x="70" y="34" font-family="sans-serif" font-size="22" font-weight="700">SQLite parity latency improvement vs SQLite, Updated {}</text>
 <text x="70" y="60" font-family="sans-serif" font-size="14" fill="#374151">Coverage: {} / {} = {:.1}% full generated cases; measured samples: {}; colormap legend: regression red, near-parity neutral, gain green/blue</text>
@@ -841,7 +916,7 @@ fn latency_svg(ranked: &[RankedCase], summary: &SummaryJson) -> String {
 <line x1="{left}" y1="{top}" x2="{left}" y2="448" stroke="#4b5563"/>
 <line x1="{left}" y1="448" x2="1160" y2="448" stroke="#4b5563"/>
 <text x="570" y="498" font-family="sans-serif" font-size="13" text-anchor="middle">Ranked full-corpus tests, worst RedlineDB gap to largest gain</text>
-<text x="18" y="270" font-family="sans-serif" font-size="13" transform="rotate(-90 18 270)" text-anchor="middle">Median latency improvement vs SQLite (%)</text>
+<text x="18" y="270" font-family="sans-serif" font-size="13" transform="rotate(-90 18 270)" text-anchor="middle">Floor-adjusted latency improvement vs SQLite (%)</text>
 "##,
         summary.updated_date,
         summary.passed_cases,
@@ -1378,6 +1453,10 @@ mod tests {
             coverage_pct: 100.0,
             measured_samples: 1,
             warmup_samples: 0,
+            median_latency_gap_pct: 10.0,
+            worst_latency_gap_pct: 10.0,
+            faster_cases: 1,
+            latency_reference_floor_ns: LATENCY_REFERENCE_FLOOR_NS,
         }
     }
 
@@ -1385,27 +1464,27 @@ mod tests {
     fn improvement_sign_convention_and_ranking() {
         let mut ranked = vec![
             RankedCase {
-                improvement_pct: improvement_pct(100, 200),
+                improvement_pct: improvement_pct(4_000_000, 8_000_000),
                 case_id: "00001".to_owned(),
                 name: "regression".to_owned(),
                 case_file: "a.rs".to_owned(),
                 priority: "P0".to_owned(),
                 profile: "memory".to_owned(),
                 category: "fixture".to_owned(),
-                sqlite_median_ns: 100,
-                redline_median_ns: 200,
+                sqlite_median_ns: 4_000_000,
+                redline_median_ns: 8_000_000,
                 samples: 1,
             },
             RankedCase {
-                improvement_pct: improvement_pct(100, 50),
+                improvement_pct: improvement_pct(4_000_000, 2_000_000),
                 case_id: "00002".to_owned(),
                 name: "gain".to_owned(),
                 case_file: "b.rs".to_owned(),
                 priority: "P0".to_owned(),
                 profile: "memory".to_owned(),
                 category: "fixture".to_owned(),
-                sqlite_median_ns: 100,
-                redline_median_ns: 50,
+                sqlite_median_ns: 4_000_000,
+                redline_median_ns: 2_000_000,
                 samples: 1,
             },
         ];
@@ -1571,7 +1650,7 @@ mod tests {
         let summary = fixture_summary();
         let svg = latency_svg(&ranked, &summary);
         assert!(svg.contains("Updated 2026-05-20"));
-        assert!(svg.contains("Median latency improvement vs SQLite (%)"));
+        assert!(svg.contains("Floor-adjusted latency improvement vs SQLite (%)"));
         assert!(svg.contains("colormap legend"));
         assert!(svg.contains("0% horizontal reference line"));
     }

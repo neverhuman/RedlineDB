@@ -174,7 +174,7 @@ case "$lane" in
     raw_tmp="target/sqlite-parity/full-corpus-ci.raw.jsonl"
     rm -f "$raw_tmp"
     updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(date -u +%F)}"
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-1}" --warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-0}" --jobs auto --out "$raw_tmp"
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" --warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}" --jobs auto --out "$raw_tmp"
     mv "$raw_tmp" benchmark-results/sqlite-parity/latest/raw.jsonl
     printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
     rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report --input benchmark-results/sqlite-parity/latest/raw.jsonl "${sqlite_parity_full_select[@]}" --out-dir benchmark-results/sqlite-parity/latest --readme README.md --plot assets/sqlite-parity-latency-gap.svg --ksloc-plot assets/sqlite-parity-ksloc.svg --jankurai-score .jankurai/repo-score.json --updated-date "$updated_date"

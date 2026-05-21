@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:cc6732eb97c9b96a5fb76695f00e9787b285110739134f229a8997edba0fea7d",
-  "input_fingerprint": "sha256:25efb23798e4f245fa53da38d080ee419bf9bd4c7e10e6efdc139b85b8060550",
+  "report_fingerprint": "sha256:8b0e12441a76767851641c567777d42fad696adb1e0be6af368b039659a575d2",
+  "input_fingerprint": "sha256:4cf94d7714f0502eb84149374999f0f6eea2f61a15117a373017517202e0f91e",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779374568",
+  "generated_at": "1779376649",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -82,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779374568",
-  "started_at": "1779374568",
-  "elapsed_ms": 13332,
+  "run_id": "1779376649",
+  "started_at": "1779376649",
+  "elapsed_ms": 13433,
   "scope": {
     "mode": "full",
     "paths": []
@@ -111,7 +111,7 @@
     }
   },
   "git": {
-    "head": "a9b9986",
+    "head": "24cb183",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -433,7 +433,7 @@
       "score": 0,
       "weighted_points": 0.0,
       "evidence": [
-        "largest authored code file: crates/bench/src/sqlite_parity/report_gen.rs (1605 LOC)",
+        "largest authored code file: crates/bench/src/sqlite_parity/report_gen.rs (1684 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
@@ -1098,7 +1098,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-21T14:42:35.193825326+00:00",
+    "generated_at": "2026-05-21T15:17:16.874012459+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1136,9 +1136,9 @@
       ]
     },
     "summary": {
-      "files_scanned": 2199,
-      "files_considered": 1510,
-      "active_files": 1510,
+      "files_scanned": 2201,
+      "files_considered": 1512,
+      "active_files": 1512,
       "exact_file_classes": 0,
       "hard_classes": 1,
       "warning_classes": 100,
@@ -2389,15 +2389,15 @@
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1246,
-            "end_line": 1247,
+            "start_line": 1321,
+            "end_line": 1322,
             "unit_name": "xml"
           },
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1301,
-            "end_line": 1302,
+            "start_line": 1376,
+            "end_line": 1377,
             "unit_name": "normalize_git_sha"
           },
           {
@@ -2629,29 +2629,29 @@
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1117,
-            "end_line": 1118,
+            "start_line": 1192,
+            "end_line": 1193,
             "unit_name": "abstract_loc_block"
           },
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1124,
-            "end_line": 1125,
+            "start_line": 1199,
+            "end_line": 1200,
             "unit_name": "introduction_loc_block"
           },
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1131,
-            "end_line": 1132,
+            "start_line": 1206,
+            "end_line": 1207,
             "unit_name": "conclusion_loc_block"
           },
           {
             "path": "crates/bench/src/sqlite_parity/report_gen.rs",
             "language": "rust",
-            "start_line": 1226,
-            "end_line": 1227,
+            "start_line": 1301,
+            "end_line": 1302,
             "unit_name": "improvement_cell"
           }
         ]
@@ -3662,7 +3662,7 @@
       "problem": "`Code shape and semantic surface` scored 0 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/bench/src/sqlite_parity/report_gen.rs (1605 LOC)",
+        "largest authored code file: crates/bench/src/sqlite_parity/report_gen.rs (1684 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC"
@@ -3672,7 +3672,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:e76a4d1a62080c6eb02e6323d88a9a06d6126881b3510e77f502583206343f8c",
+      "fingerprint": "sha256:af29c3833b702efb9f5e9a484cfd7ee1842a9e2a3acb22d2c035d385b3c13d77",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
