@@ -1628,12 +1628,12 @@ mod tests {
             status: "advisory".to_owned(),
             color: "orange",
         };
-        let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-1.0.24-blue\" alt=\"version\">\n</p>\nafter\n";
+        let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-1.0.25-blue\" alt=\"version\">\n</p>\nafter\n";
         let next = replace_jankurai_badge(current, &score).expect("replace");
 
         assert!(next.contains("<a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>"));
         assert!(next.contains(
-            "<img src=\"https://img.shields.io/badge/version-1.0.24-blue\" alt=\"version\">"
+            "<img src=\"https://img.shields.io/badge/version-1.0.25-blue\" alt=\"version\">"
         ));
         assert!(next.contains(JANKURAI_BADGE_BEGIN));
         assert!(next.contains(JANKURAI_BADGE_END));

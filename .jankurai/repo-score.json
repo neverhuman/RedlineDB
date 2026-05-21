@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:8b0e12441a76767851641c567777d42fad696adb1e0be6af368b039659a575d2",
-  "input_fingerprint": "sha256:4cf94d7714f0502eb84149374999f0f6eea2f61a15117a373017517202e0f91e",
+  "report_fingerprint": "sha256:4a186ce7a4323126b5ffbb271053d2510905fbb6be7fd649ce48458f2747c946",
+  "input_fingerprint": "sha256:0f1960530ea8ba368c8c356a8538cc33505f2bc40bca22572e79da31487ed38f",
   "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779376649",
+  "generated_at": "1779379207",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -82,9 +82,9 @@
     "HLT-005-PYTHON-PRODUCT-TRUTH on python/"
   ],
   "repo": ".",
-  "run_id": "1779376649",
-  "started_at": "1779376649",
-  "elapsed_ms": 13433,
+  "run_id": "1779379207",
+  "started_at": "1779379207",
+  "elapsed_ms": 13419,
   "scope": {
     "mode": "full",
     "paths": []
@@ -111,7 +111,7 @@
     }
   },
   "git": {
-    "head": "24cb183",
+    "head": "5c28c40",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1098,7 +1098,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-21T15:17:16.874012459+00:00",
+    "generated_at": "2026-05-21T15:59:54.681337141+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
