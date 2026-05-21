@@ -518,20 +518,27 @@ fn parse_jankurai_score(score_json: &str) -> Result<JankuraiScore> {
         .get("score")
         .and_then(serde_json::Value::as_u64)
         .context("repo-score JSON lacks numeric score")?;
-    let status = value
-        .pointer("/decision/status")
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| value.get("decision").and_then(serde_json::Value::as_str))
-        .or_else(|| {
-            value
-                .get("conformance_decision")
-                .and_then(serde_json::Value::as_str)
-        })
-        .or_else(|| value.get("status").and_then(serde_json::Value::as_str))
-        .map(str::trim)
-        .filter(|status| !status.is_empty())
-        .context("repo-score JSON lacks decision status")?
-        .to_ascii_lowercase();
+    let status = match (
+        value
+            .pointer("/decision/status")
+            .and_then(serde_json::Value::as_str),
+        value.get("decision").and_then(serde_json::Value::as_str),
+        value
+            .get("conformance_decision")
+            .and_then(serde_json::Value::as_str),
+        value.get("status").and_then(serde_json::Value::as_str),
+    ) {
+        (Some(status), _, _, _)
+        | (None, Some(status), _, _)
+        | (None, None, Some(status), _)
+        | (None, None, None, Some(status)) => status,
+        _ => bail!("repo-score JSON lacks decision status"),
+    };
+    let status = status.trim();
+    if status.is_empty() {
+        bail!("repo-score JSON lacks decision status");
+    }
+    let status = status.to_ascii_lowercase();
     let color = jankurai_badge_color(score, &status);
     Ok(JankuraiScore {
         score,
