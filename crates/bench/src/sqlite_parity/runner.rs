@@ -51,11 +51,14 @@ pub fn run_cases(
         let output = engine.run_case(case, &tmp_root)?;
         let status = validate_case(case, &output);
         let artifact = if let Err(reason) = &status {
-            Some(report::write_failure_artifact(
-                case,
-                &[&output],
-                &reason.to_string(),
-            )?)
+            let artifact = report::write_failure_artifact(case, &[&output], &reason.to_string())?;
+            eprintln!(
+                "sqlite_parity failure case={} reason={} artifact={}",
+                case.display_id(),
+                reason,
+                artifact.display()
+            );
+            Some(artifact)
         } else {
             None
         };
@@ -128,11 +131,18 @@ pub fn compare_cases(
             let target_output = target.run_case(case, &tmp_root)?;
             let status = validate_compare(case, &reference_output, &target_output);
             let artifact = if let Err(reason) = &status {
-                Some(report::write_failure_artifact(
+                let artifact = report::write_failure_artifact(
                     case,
                     &[&reference_output, &target_output],
                     &reason.to_string(),
-                )?)
+                )?;
+                eprintln!(
+                    "sqlite_parity failure case={} reason={} artifact={}",
+                    case.display_id(),
+                    reason,
+                    artifact.display()
+                );
+                Some(artifact)
             } else {
                 None
             };
