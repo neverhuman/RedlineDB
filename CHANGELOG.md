@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## [1.0.26] - 2026-05-21
+
+README KPI chart refresh.
+
+### Changed
+
+- SQLite parity report artifacts now include a fixed-bucket performance
+  histogram generated from measured CLI compare samples with warmup samples
+  excluded.
+- The report pipeline now clones the SQLite source checkout, runs Jankurai only
+  on that checkout, and publishes compact RedlineDB-vs-SQLite comparison
+  artifacts and README chart output.
+- Workspace package metadata, lockfile entries, and install docs now target
+  `1.0.26`.
+
 ## [1.0.25] - 2026-05-21
 
 SQLite parity full-corpus closure.

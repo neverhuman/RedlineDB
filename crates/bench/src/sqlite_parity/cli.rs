@@ -25,6 +25,7 @@ enum Command {
     Run(RunArgs),
     Compare(CompareArgs),
     Report(ReportArgs),
+    JankuraiCompare(JankuraiCompareArgs),
     Sentinel(SentinelArgs),
 }
 
@@ -119,9 +120,33 @@ struct ReportArgs {
     #[arg(long)]
     ksloc_plot: PathBuf,
     #[arg(long)]
+    performance_histogram_plot: Option<PathBuf>,
+    #[arg(long)]
     jankurai_score: Option<PathBuf>,
     #[arg(long)]
+    jankurai_comparison: Option<PathBuf>,
+    #[arg(long)]
+    jankurai_comparison_plot: Option<PathBuf>,
+    #[arg(long)]
     updated_date: String,
+    #[arg(long)]
+    check: bool,
+}
+
+#[derive(Debug, Args)]
+struct JankuraiCompareArgs {
+    #[arg(long)]
+    redlinedb_score: PathBuf,
+    #[arg(long)]
+    sqlite_score: PathBuf,
+    #[arg(long)]
+    sqlite_ref: String,
+    #[arg(long)]
+    updated_date: String,
+    #[arg(long)]
+    json: PathBuf,
+    #[arg(long)]
+    csv: PathBuf,
     #[arg(long)]
     check: bool,
 }
@@ -158,6 +183,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Run(args) => run_selected(args),
         Command::Compare(args) => compare_selected(args),
         Command::Report(args) => report(args),
+        Command::JankuraiCompare(args) => jankurai_compare(args),
         Command::Sentinel(args) => sentinel(args),
     }
 }
@@ -259,11 +285,32 @@ fn report(args: ReportArgs) -> Result<()> {
         readme: args.readme,
         plot: args.plot,
         ksloc_plot: args.ksloc_plot,
+        performance_histogram_plot: args.performance_histogram_plot,
         jankurai_score: args.jankurai_score,
+        jankurai_comparison: args.jankurai_comparison,
+        jankurai_comparison_plot: args.jankurai_comparison_plot,
         updated_date: args.updated_date,
         check: args.check,
         command: std::env::args().collect(),
     })
+}
+
+fn jankurai_compare(args: JankuraiCompareArgs) -> Result<()> {
+    let redlinedb_score = fs::read_to_string(&args.redlinedb_score).with_context(|| {
+        format!(
+            "read RedlineDB jankurai score {}",
+            args.redlinedb_score.display()
+        )
+    })?;
+    let sqlite_score = fs::read_to_string(&args.sqlite_score)
+        .with_context(|| format!("read SQLite jankurai score {}", args.sqlite_score.display()))?;
+    let comparison = super::jankurai_compare::build_comparison(
+        &redlinedb_score,
+        &sqlite_score,
+        &args.updated_date,
+        &args.sqlite_ref,
+    )?;
+    super::jankurai_compare::write_or_check(&comparison, &args.json, &args.csv, args.check)
 }
 
 fn deny_skipped_cases(skipped: &[super::engine::SkippedCase]) -> Result<()> {

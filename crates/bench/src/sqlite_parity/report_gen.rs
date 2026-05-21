@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::cli::validate_known_case_ids;
-use super::{catalog, source_lines};
+use super::{catalog, jankurai_compare, performance_histogram, source_lines};
 
 const README_BEGIN: &str = "<!-- sqlite-parity-report:begin -->";
 const README_END: &str = "<!-- sqlite-parity-report:end -->";
@@ -31,7 +31,10 @@ pub struct ReportOptions {
     pub readme: PathBuf,
     pub plot: PathBuf,
     pub ksloc_plot: PathBuf,
+    pub performance_histogram_plot: Option<PathBuf>,
     pub jankurai_score: Option<PathBuf>,
+    pub jankurai_comparison: Option<PathBuf>,
+    pub jankurai_comparison_plot: Option<PathBuf>,
     pub updated_date: String,
     pub check: bool,
     pub command: Vec<String>,
@@ -155,14 +158,34 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let summary_json = serde_json::to_string_pretty(&report.summary)? + "\n";
     let svg = latency_svg(&report.ranked, &report.summary);
     let ksloc_svg = ksloc_svg(&source_summary, &options.updated_date);
+    let histogram =
+        performance_histogram::build(report.ranked.iter().map(|case| case.improvement_pct));
+    let performance_histogram_svg = performance_histogram::svg(&histogram, &options.updated_date);
+    let jankurai_comparison = options
+        .jankurai_comparison
+        .as_deref()
+        .map(jankurai_compare::read_comparison)
+        .transpose()?;
+    let jankurai_comparison_svg = jankurai_comparison.as_ref().map(jankurai_compare::svg);
     let paper_writes = paper_loc_writes(&repo_root, &source_summary)?;
     let readme_text = fs::read_to_string(&options.readme)
         .with_context(|| format!("read README {}", options.readme.display()))?;
     let mut readme = replace_readme_block(
         &readme_text,
-        &readme_block(&report.ranked, &report.summary, &options.plot),
+        &readme_block(
+            &report.ranked,
+            &report.summary,
+            &options.plot,
+            options.performance_histogram_plot.as_deref(),
+        ),
     )?;
-    readme = replace_metrics_block(&readme, &metrics_block(&options.ksloc_plot))?;
+    readme = replace_metrics_block(
+        &readme,
+        &metrics_block(
+            &options.ksloc_plot,
+            options.jankurai_comparison_plot.as_deref(),
+        ),
+    )?;
     readme = replace_parity_badges(&readme, &report.summary);
     if let Some(score_path) = &options.jankurai_score {
         let score_text = fs::read_to_string(score_path)
@@ -183,6 +206,15 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     );
     if let Some(case_list) = &options.case_list {
         input_hashes.insert(case_list.display().to_string(), sha256_file(case_list)?);
+    }
+    if let Some(score_path) = &options.jankurai_score {
+        input_hashes.insert(score_path.display().to_string(), sha256_file(score_path)?);
+    }
+    if let Some(comparison_path) = &options.jankurai_comparison {
+        input_hashes.insert(
+            comparison_path.display().to_string(),
+            sha256_file(comparison_path)?,
+        );
     }
     input_hashes.insert(
         "crates/bench/sqlite_parity/generated_manifest.json".to_owned(),
@@ -207,6 +239,18 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         options.ksloc_plot.display().to_string(),
         sha256_hex(ksloc_svg.as_bytes()),
     );
+    if let Some(path) = &options.performance_histogram_plot {
+        output_hashes.insert(
+            path.display().to_string(),
+            sha256_hex(performance_histogram_svg.as_bytes()),
+        );
+    }
+    if let (Some(path), Some(svg)) = (
+        &options.jankurai_comparison_plot,
+        jankurai_comparison_svg.as_ref(),
+    ) {
+        output_hashes.insert(path.display().to_string(), sha256_hex(svg.as_bytes()));
+    }
     output_hashes.insert(
         options.readme.display().to_string(),
         sha256_hex(readme.as_bytes()),
@@ -239,6 +283,12 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         (options.ksloc_plot, ksloc_svg),
         (options.readme, readme),
     ];
+    if let Some(path) = options.performance_histogram_plot {
+        writes.push((path, performance_histogram_svg));
+    }
+    if let (Some(path), Some(svg)) = (options.jankurai_comparison_plot, jankurai_comparison_svg) {
+        writes.push((path, svg));
+    }
     writes.extend(paper_writes);
     if options.check {
         check_files(&writes)
@@ -532,7 +582,12 @@ fn source_lines_csv(summary: &source_lines::SourceLineSummary) -> String {
     out
 }
 
-fn readme_block(ranked: &[RankedCase], summary: &SummaryJson, plot: &Path) -> String {
+fn readme_block(
+    ranked: &[RankedCase],
+    summary: &SummaryJson,
+    plot: &Path,
+    performance_histogram_plot: Option<&Path>,
+) -> String {
     let mut out = String::new();
     out.push_str(README_BEGIN);
     out.push('\n');
@@ -560,6 +615,12 @@ fn readme_block(ranked: &[RankedCase], summary: &SummaryJson, plot: &Path) -> St
         "![SQLite parity latency improvement plot]({})\n\n",
         plot.display()
     ));
+    if let Some(plot) = performance_histogram_plot {
+        out.push_str(&format!(
+            "![SQLite parity performance distribution]({})\n\n",
+            plot.display()
+        ));
+    }
     out.push_str(&format!(
         "[Full ranked latency table](#{LATENCY_TABLE_ANCHOR}) is collapsed below for README readability.\n\n"
     ));
@@ -588,11 +649,20 @@ fn readme_block(ranked: &[RankedCase], summary: &SummaryJson, plot: &Path) -> St
     out
 }
 
-fn metrics_block(ksloc_plot: &Path) -> String {
-    format!(
-        "## Engine Metrics\n\n{README_METRICS_BEGIN}\n\n![SQLite vs RedlineDB production KSLOC chart]({})\n\n{README_METRICS_END}\n",
+fn metrics_block(ksloc_plot: &Path, jankurai_comparison_plot: Option<&Path>) -> String {
+    let mut out = format!(
+        "## Engine Metrics\n\n{README_METRICS_BEGIN}\n\n![SQLite vs RedlineDB production KSLOC chart]({})\n\n",
         ksloc_plot.display()
-    )
+    );
+    if let Some(plot) = jankurai_comparison_plot {
+        out.push_str(&format!(
+            "![RedlineDB vs SQLite Jankurai comparison chart]({})\n\n",
+            plot.display()
+        ));
+    }
+    out.push_str(README_METRICS_END);
+    out.push('\n');
+    out
 }
 
 fn replace_metrics_block(readme: &str, block: &str) -> Result<String> {
@@ -998,31 +1068,31 @@ fn ksloc_svg(summary: &source_lines::SourceLineSummary, updated_date: &str) -> S
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="ksloc-title ksloc-desc">
 <title id="ksloc-title">SQLite vs RedlineDB production KSLOC, Updated {}</title>
 <desc id="ksloc-desc">Production Rust source lines in RedlineDB core crates compared with a fixed SQLite source-line reference. RedlineDB has {:.1} KSLOC and SQLite has {:.1} KSLOC.</desc>
-<text x="{left}" y="22" font-family="sans-serif" font-size="17" font-weight="700" fill="#111827">Production source footprint</text>
-<text x="{left}" y="39" font-family="sans-serif" font-size="12" fill="#6b7280">Core RedlineDB crates scanned without tests, blank lines, or comments; updated {}</text>
+<text x="{left}" y="22" font-family="sans-serif" font-size="17" font-weight="700" fill="#f97316">Production source footprint</text>
+<text x="{left}" y="39" font-family="sans-serif" font-size="12" fill="#fbbf24">Core RedlineDB crates scanned without tests, blank lines, or comments; updated {}</text>
 "##,
         updated_date, redline, sqlite, updated_date
     ));
     for value in grid_values {
         let x = x_for(value);
         out.push_str(&format!(
-            r##"<line x1="{x:.2}" y1="44" x2="{x:.2}" y2="{axis_y}" stroke="#e5e7eb"/>
-<text x="{x:.2}" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="middle">{value:.0}</text>
+            r##"<line x1="{x:.2}" y1="44" x2="{x:.2}" y2="{axis_y}" stroke="#f59e0b" opacity="0.35"/>
+<text x="{x:.2}" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">{value:.0}</text>
 "##
         ));
     }
     out.push_str(&format!(
-        r##"<line x1="{left}" y1="{axis_y}" x2="{:.2}" y2="{axis_y}" stroke="#9ca3af"/>
-<text x="{:.2}" y="156" font-family="sans-serif" font-size="10" fill="#6b7280" text-anchor="end">KSLOC</text>
+        r##"<line x1="{left}" y1="{axis_y}" x2="{:.2}" y2="{axis_y}" stroke="#fbbf24"/>
+<text x="{:.2}" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="end">KSLOC</text>
 "##,
         left + plot_w,
         left + plot_w + 54.0
     ));
     out.push_str(&format!(
-        r##"<text x="20" y="{:.2}" font-family="sans-serif" font-size="13" fill="#111827">RedlineDB</text>
+        r##"<text x="20" y="{:.2}" font-family="sans-serif" font-size="13" fill="#f97316">RedlineDB</text>
 <rect x="{left}" y="{redline_y}" width="{:.2}" height="{bar_h}" rx="3" fill="#10b981"/>
-<text x="{:.2}" y="{:.2}" font-family="sans-serif" font-size="12" fill="#111827">{:.1} KSLOC</text>
-<text x="20" y="{:.2}" font-family="sans-serif" font-size="13" fill="#111827">SQLite</text>
+<text x="{:.2}" y="{:.2}" font-family="sans-serif" font-size="12" fill="#fbbf24">{:.1} KSLOC</text>
+<text x="20" y="{:.2}" font-family="sans-serif" font-size="13" fill="#f97316">SQLite</text>
 <rect x="{left}" y="{sqlite_y}" width="{:.2}" height="{bar_h}" rx="3" fill="#e11d48"/>
 <text x="{:.2}" y="{:.2}" font-family="sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="end">{:.1} KSLOC</text>
 </svg>
@@ -1519,6 +1589,29 @@ mod tests {
     }
 
     #[test]
+    fn performance_histogram_uses_measured_case_medians() {
+        let mut records = vec![raw("00001", 4_000_000, 2_000_000)];
+        records.push(RawRecord {
+            sample_role: "warmup".to_owned(),
+            repetition_index: None,
+            reference_elapsed_ns: 4_000_000,
+            target_elapsed_ns: 8_000_000,
+            ..raw("00001", 4_000_000, 8_000_000)
+        });
+        let all_cases = catalog::all_cases().expect("manifest");
+        let expected = BTreeSet::from(["00001".to_owned()]);
+        let report =
+            build_report(&all_cases, &expected, records, "2026-05-20", "sha").expect("report");
+        let histogram =
+            performance_histogram::build(report.ranked.iter().map(|case| case.improvement_pct));
+
+        assert_eq!(histogram.case_count, 1);
+        assert_eq!(histogram.min_pct, 50.0);
+        assert_eq!(histogram.median_pct, 50.0);
+        assert_eq!(histogram.max_pct, 50.0);
+    }
+
+    #[test]
     fn report_counts_missing_failed_and_skipped_cases() {
         let all_cases = catalog::all_cases().expect("manifest");
         let expected = BTreeSet::from([
@@ -1588,16 +1681,26 @@ mod tests {
             &fixture_ranked(),
             &fixture_summary(),
             Path::new("assets/sqlite-parity-latency-gap.svg"),
+            Some(Path::new("assets/sqlite-parity-performance-histogram.svg")),
         );
 
         assert!(block.contains(
             "![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)"
         ));
+        assert!(block.contains(
+            "![SQLite parity performance distribution](assets/sqlite-parity-performance-histogram.svg)"
+        ));
         assert!(!block.contains("sqlite-parity-ksloc.svg"));
-        let metrics = metrics_block(Path::new("assets/sqlite-parity-ksloc.svg"));
+        let metrics = metrics_block(
+            Path::new("assets/sqlite-parity-ksloc.svg"),
+            Some(Path::new("assets/sqlite-jankurai-comparison.svg")),
+        );
         assert!(block.contains("[Full ranked latency table](#sqlite-parity-ranked-latency-table)"));
         assert!(metrics.contains(
             "![SQLite vs RedlineDB production KSLOC chart](assets/sqlite-parity-ksloc.svg)"
+        ));
+        assert!(metrics.contains(
+            "![RedlineDB vs SQLite Jankurai comparison chart](assets/sqlite-jankurai-comparison.svg)"
         ));
         assert!(block.contains("<details id=\"sqlite-parity-ranked-latency-table\">"));
     }
@@ -1628,12 +1731,12 @@ mod tests {
             status: "advisory".to_owned(),
             color: "orange",
         };
-        let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-1.0.25-blue\" alt=\"version\">\n</p>\nafter\n";
+        let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-1.0.26-blue\" alt=\"version\">\n</p>\nafter\n";
         let next = replace_jankurai_badge(current, &score).expect("replace");
 
         assert!(next.contains("<a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>"));
         assert!(next.contains(
-            "<img src=\"https://img.shields.io/badge/version-1.0.25-blue\" alt=\"version\">"
+            "<img src=\"https://img.shields.io/badge/version-1.0.26-blue\" alt=\"version\">"
         ));
         assert!(next.contains(JANKURAI_BADGE_BEGIN));
         assert!(next.contains(JANKURAI_BADGE_END));
@@ -1653,6 +1756,22 @@ mod tests {
         assert!(svg.contains("Floor-adjusted latency improvement vs SQLite (%)"));
         assert!(svg.contains("colormap legend"));
         assert!(svg.contains("0% horizontal reference line"));
+    }
+
+    #[test]
+    fn ksloc_svg_uses_dark_background_safe_text_colors() {
+        let summary = source_lines::SourceLineSummary {
+            components: Vec::new(),
+            total_files: 4,
+            total_lines: 51_400,
+            sqlite_reference_lines: 155_800,
+        };
+        let svg = ksloc_svg(&summary, "2026-05-20");
+
+        assert!(svg.contains("fill=\"#f97316\""));
+        assert!(svg.contains("fill=\"#fbbf24\""));
+        assert!(!svg.contains("fill=\"#111827\""));
+        assert!(!svg.contains("fill=\"#6b7280\""));
     }
 
     #[test]
