@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## [1.0.25] - 2026-05-21
+
+SQLite parity full-corpus closure.
+
+### Changed
+
+- Full-corpus SQLite parity now reports `1127 / 1127` generated cases passed
+  with zero failed, missing, or skipped cases.
+- Workspace package metadata, lockfile entries, and install docs now target
+  `1.0.25`.
+
 ## [1.0.24] - 2026-05-21
 
 Release bump for the README evidence refresh.

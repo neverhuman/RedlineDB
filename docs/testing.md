@@ -26,8 +26,8 @@ readable repair receipts.
 | `cache-warm`                         | Prime the workspace build cache before a wider proof run.                                             |
 | `sql-parity`                         | Focused SQLite parity tests for SQL planner/executor changes.                                         |
 | `sqlite-parity-scale-smoke`          | Bench-owned SQLite shell parity scale smoke over P0 memory cases from `crates/bench/sqlite_parity/`.  |
-| `sqlite-parity-scale-ci`             | Bench-owned hard gate over the approved RedlineDB-vs-SQLite allowlist in `crates/bench/sqlite_parity/approved-ci.txt`. |
-| `sqlite-parity-scale-full`           | Full non-quarantine SQLite shell scale sweep for diagnostics before cases are promoted to approved CI. |
+| `sqlite-parity-scale-ci`             | Bench-owned hard gate over the full generated RedlineDB-vs-SQLite corpus. |
+| `sqlite-parity-scale-full`           | Full generated SQLite shell scale sweep for reference diagnostics. |
 | `ffi-abi`                            | C ABI compatibility tests for the SQLite shim surface.                                                |
 | `cli-shell`                          | CLI compatibility tests for the shell/batch front end.                                                |
 | `kernel-check`                       | Targeted `redlinedb-kernel` compile proof.                                                            |
@@ -69,11 +69,18 @@ rtk just <lane-name>
 (or invoke the command list from the TOML directly).
 
 SQLite parity scale policy: required CI runs `sqlite-parity-scale-ci`, which
-compares RedlineDB against `sqlite3` only for the reviewed case IDs in
-`crates/bench/sqlite_parity/approved-ci.txt`. The full extracted corpus under
-`crates/bench/sqlite_parity/` stays in the repo as evidence and future work
-input; broad sweeps remain local/manual diagnostics until cases are promoted
-into that allowlist.
+compares RedlineDB against `sqlite3` for the full generated corpus under
+`crates/bench/sqlite_parity/`. Reference-shell capability skips are hard
+errors in that lane; `approved-ci.txt` remains only a local triage subset while
+older diagnostics still need it.
+
+Set `REDLINEDB_SQLITE_PARITY_SQLITE_BIN=/path/to/sqlite3` to run the full
+corpus against a pinned SQLite shell with optional shell and extension features
+enabled. If unset, full-corpus lanes build the official SQLite `3.53.1`
+autoconf shell through `scripts/sqlite/build-reference.sh` and export
+`target/sqlite-reference/3.53.1/bin/sqlite3` before comparing cases. The
+builder verifies the upstream SHA3-256 digest and smokes percentile, math,
+FTS5, RTREE, DBSTAT, `generate_series`, and `uint` support.
 
 For narrow repair loops, prefer the package-scoped lanes above over `fast` when the touched surface is already known. They stay deterministic without forcing a workspace-wide run.
 

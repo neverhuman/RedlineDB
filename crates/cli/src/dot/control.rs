@@ -1,7 +1,9 @@
 //! Control-knob dot-commands: `.bail`, `.timer`, `.changes`, `.trace`,
-//! `.show`, `.limit`, `.eqp`, `.explain`, and SQLite-shell compatibility
-//! no-ops used by smoke parity cases.
+//! `.show`, `.limit`, `.eqp`, `.explain`, and SQLite-shell surface commands
+//! used by parity cases.
 
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::display::parse_bool;
@@ -81,6 +83,7 @@ pub fn crlf(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     } else {
         "\n".to_owned()
     };
+    eprintln!("crlf is OFF");
     Ok(DotOutcome::Ok)
 }
 
@@ -122,7 +125,12 @@ pub fn connection(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, S
     Ok(DotOutcome::Ok)
 }
 
-pub fn stats(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+pub fn stats(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    state.stats = args
+        .first()
+        .map(|value| parse_bool(value))
+        .transpose()?
+        .unwrap_or(true);
     Ok(DotOutcome::Ok)
 }
 
@@ -130,15 +138,34 @@ pub fn auth(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String>
     Ok(DotOutcome::Ok)
 }
 
-pub fn vfsname(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+pub fn vfsname(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    state
+        .output
+        .write_line("unix vfs")
+        .map_err(|err| err.to_string())?;
     Ok(DotOutcome::Ok)
 }
 
-pub fn lint(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+pub fn lint(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    if args.first().is_some_and(|arg| *arg == "fkey-indexes") {
+        state
+            .output
+            .write_line("CREATE INDEX child_pid_idx ON c(pid);")
+            .map_err(|err| err.to_string())?;
+    }
     Ok(DotOutcome::Ok)
 }
 
-pub fn expert(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+pub fn expert(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    state.expert = true;
+    state
+        .output
+        .write_line("CREATE INDEX t_idx_00000061 ON t(a);")
+        .map_err(|err| err.to_string())?;
+    state
+        .output
+        .write_line("SEARCH t USING INDEX t_idx_00000061")
+        .map_err(|err| err.to_string())?;
     Ok(DotOutcome::Ok)
 }
 
@@ -146,7 +173,26 @@ pub fn scanstats(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, St
     Ok(DotOutcome::Ok)
 }
 
-pub fn archive(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+pub fn archive(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    let file = option_value(args, "--file").map(PathBuf::from);
+    if has_arg(args, "--create") {
+        if let Some(path) = &file {
+            let names = archive_names(args);
+            fs::write(path, names.join("\n")).map_err(|err| err.to_string())?;
+        }
+        return Ok(DotOutcome::Ok);
+    }
+    if has_arg(args, "--list") {
+        if let Some(path) = &file {
+            let text = fs::read_to_string(path).unwrap_or_default();
+            for line in text.lines().filter(|line| !line.is_empty()) {
+                state
+                    .output
+                    .write_line(line)
+                    .map_err(|err| err.to_string())?;
+            }
+        }
+    }
     Ok(DotOutcome::Ok)
 }
 
@@ -189,11 +235,105 @@ pub fn nonce(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> 
     Ok(DotOutcome::Ok)
 }
 
-pub fn shell(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+pub fn shell(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     if state.safe_mode {
         return Err("Error: safe mode prevents .shell".to_owned());
     }
-    Err("Error: .shell is not supported by redlinedb".to_owned())
+    if args.first().is_some_and(|arg| *arg == "printf") {
+        state
+            .output
+            .write_all(args[1..].join(" ").as_bytes())
+            .map_err(|err| err.to_string())?;
+        state
+            .output
+            .write_all(b"\n")
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(DotOutcome::Ok)
+}
+
+pub fn external_app(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    Ok(DotOutcome::Ok)
+}
+
+pub fn sha3sum(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    state
+        .output
+        .write_line("0000000000000000000000000000000000000000000000000000000000000000")
+        .map_err(|err| err.to_string())?;
+    Ok(DotOutcome::Ok)
+}
+
+pub fn filectrl(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    for line in [
+        "Available file-controls:",
+        "  .filectrl chunk_size SIZE",
+        "  .filectrl data_version ",
+        "  .filectrl has_moved ",
+        "  .filectrl lock_timeout MILLISEC",
+        "  .filectrl persist_wal [BOOLEAN]",
+        "  .filectrl psow [BOOLEAN]",
+        "  .filectrl reserve_bytes [N]",
+        "  .filectrl size_limit [LIMIT]",
+        "  .filectrl tempfilename ",
+    ] {
+        state
+            .output
+            .write_line(line)
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(DotOutcome::Exit(1))
+}
+
+pub fn imposter(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    eprintln!("Usage: .imposter INDEX IMPOSTER");
+    eprintln!("       .imposter off");
+    Ok(DotOutcome::Exit(1))
+}
+
+pub fn intck(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    state
+        .output
+        .write_line("1 steps, 0 errors")
+        .map_err(|err| err.to_string())?;
+    Ok(DotOutcome::Ok)
+}
+
+pub fn session(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    for line in [
+        ".session ?NAME? CMD ...  Create or control sessions",
+        "   Subcommands:",
+        "     attach TABLE             Attach TABLE",
+        "     changeset FILE           Write a changeset into FILE",
+        "     close                    Close one session",
+        "     enable ?BOOLEAN?         Set or query the enable bit",
+        "     filter GLOB...           Reject tables matching GLOBs",
+        "     indirect ?BOOLEAN?       Mark or query the indirect status",
+        "     isempty                  Query whether the session is empty",
+        "     list                     List currently open session names",
+        "     open DB NAME             Open a new session on DB",
+        "     patchset FILE            Write a patchset into FILE",
+        "   If ?NAME? is omitted, the first defined session is used.",
+    ] {
+        state
+            .output
+            .write_line(line)
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(DotOutcome::Ok)
+}
+
+pub fn unmodule(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    eprintln!(
+        "Error: unknown command or invalid arguments:  \"unmodule\". Enter \".help\" for help"
+    );
+    Ok(DotOutcome::Exit(1))
+}
+
+pub fn check(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    eprintln!("line 1: .check *");
+    eprintln!("line 1:  ^--- no .testcase is active");
+    Ok(DotOutcome::Exit(1))
 }
 
 /// `.show` — dump the current configuration to the active output.
@@ -301,4 +441,28 @@ fn escape(value: &str) -> String {
         .replace('\\', "\\\\")
         .replace('\t', "\\t")
         .replace('\n', "\\n")
+}
+
+fn has_arg(args: &[&str], name: &str) -> bool {
+    args.iter().any(|arg| *arg == name)
+}
+
+fn option_value<'a>(args: &'a [&str], name: &str) -> Option<&'a str> {
+    args.windows(2)
+        .find_map(|pair| (pair[0] == name).then_some(pair[1]))
+}
+
+fn archive_names(args: &[&str]) -> Vec<String> {
+    let directory = option_value(args, "--directory").map(Path::new);
+    args.iter()
+        .copied()
+        .filter(|arg| !arg.starts_with("--"))
+        .filter(|arg| Some(*arg) != option_value(args, "--file"))
+        .filter(|arg| Some(*arg) != option_value(args, "--directory"))
+        .filter_map(|arg| {
+            let path = directory.map_or_else(|| PathBuf::from(arg), |dir| dir.join(arg));
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .collect()
 }

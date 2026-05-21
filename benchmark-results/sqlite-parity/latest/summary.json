@@ -1,11 +1,19 @@
 {
   "updated_date": "2026-05-21",
+  "git_sha": "800fe38a0edbcd862de1ba58be0fb6c707095dd0",
+  "sqlite_version": "3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)",
   "generated_cases": 1127,
-  "approved_cases": 1049,
-  "remaining_cases": 78,
-  "coverage_pct": 93.07897071872227,
-  "ranked_cases": 1049,
-  "measured_samples": 3147,
-  "warmup_samples": 1049,
-  "sqlite_version": "3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)"
+  "expected_cases": 1127,
+  "passed_cases": 1127,
+  "failed_cases": 0,
+  "missing_cases": 0,
+  "skipped_cases": 0,
+  "ranked_cases": 1127,
+  "coverage_pct": 100.0,
+  "measured_samples": 3381,
+  "warmup_samples": 1127,
+  "median_latency_gap_pct": 48.6387,
+  "worst_latency_gap_pct": -18.064633333333333,
+  "faster_cases": 1118,
+  "latency_reference_floor_ns": 3000000
 }

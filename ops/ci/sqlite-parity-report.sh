@@ -46,8 +46,17 @@ ensure_jankurai() {
   ci_install_jankurai_logged .jankurai/sqlite-parity-report/install.log
 }
 
+ensure_sqlite_parity_reference() {
+  if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
+    return 0
+  fi
+  REDLINEDB_SQLITE_PARITY_SQLITE_BIN="$(bash scripts/sqlite/build-reference.sh)"
+  export REDLINEDB_SQLITE_PARITY_SQLITE_BIN
+}
+
 run_update() {
   ensure_jankurai
+  ensure_sqlite_parity_reference
   if command -v just >/dev/null 2>&1; then
     just sqlite-parity-report-update
   else

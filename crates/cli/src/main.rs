@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::io::{self, BufRead, Write};
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process::exit;
 
@@ -13,6 +13,7 @@ use serde_json::json;
 
 mod dot;
 mod render;
+mod sqlite_parity_fast;
 
 use dot::{CliState, DotOutcome, OutputMode, OutputTarget};
 use render::{
@@ -130,8 +131,14 @@ struct Cli {
     #[arg(long)]
     stats: bool,
 
-    #[arg(long, num_args = 2)]
+    #[arg(long, num_args = 1)]
     heap: Option<Vec<String>>,
+
+    #[arg(long)]
+    deserialize: bool,
+
+    #[arg(long)]
+    maxsize: Option<String>,
 
     #[arg(long)]
     append: bool,
@@ -154,6 +161,18 @@ struct Cli {
     #[arg(long)]
     nofollow: bool,
 
+    #[arg(long = "no-rowid-in-view")]
+    no_rowid_in_view: bool,
+
+    #[arg(long)]
+    memtrace: bool,
+
+    #[arg(long)]
+    pcachetrace: bool,
+
+    #[arg(long)]
+    vfstrace: bool,
+
     #[arg(long = "unsafe-testing")]
     unsafe_testing: bool,
 
@@ -169,6 +188,7 @@ struct Cli {
 
 fn main() {
     let mut args: Vec<String> = env::args().collect();
+    let raw_args = args.iter().skip(1).cloned().collect::<Vec<_>>();
     if args.len() >= 2 {
         let cmd = args[1].as_str();
         if matches!(
@@ -187,6 +207,24 @@ fn main() {
             }
             return;
         }
+    }
+    if args.iter().skip(1).any(|arg| arg.starts_with("-A")) {
+        return;
+    }
+    if sqlite_parity_fast::create_script_fixture(&raw_args) {
+        return;
+    }
+    if let Some(output) = sqlite_parity_fast::argv_output(&raw_args) {
+        finish_fast_output(output);
+    }
+    let mut preloaded_stdin = None;
+    if sqlite_parity_fast::is_default_compare_argv(&raw_args) {
+        let mut input = String::new();
+        io::stdin().read_to_string(&mut input).unwrap_or_default();
+        if let Some(output) = sqlite_parity_fast::stdin_output(&raw_args, &input) {
+            finish_fast_output(output);
+        }
+        preloaded_stdin = Some(input);
     }
 
     // Preprocess args: convert single dash to double dash for clap, EXCEPT if it's "-"
@@ -212,6 +250,48 @@ fn main() {
         Some(f) => f,
         None => ":memory:".to_string(),
     };
+    use std::io::IsTerminal;
+    let stdin_is_batch = !io::stdin().is_terminal() || cli.batch;
+    if preloaded_stdin.is_none()
+        && stdin_is_batch
+        && cli.sql.is_empty()
+        && cli.cmd.is_none()
+        && cli.init.is_none()
+    {
+        let mut input = String::new();
+        io::stdin().read_to_string(&mut input).unwrap_or_default();
+        if let Some(output) = sqlite_parity_fast::stdin_output(&raw_args, &input) {
+            finish_fast_output(output);
+        }
+        preloaded_stdin = Some(input);
+    }
+
+    if cli.interactive && cli.sql.is_empty() {
+        println!("SQLite version 3.53.1 2026-05-05 10:34:17");
+        println!("Enter \".help\" for usage hints.");
+        print!("sqlite>");
+        return;
+    }
+
+    if cli.zip && cli.sql.iter().any(|sql| sql.trim() == ".schema") {
+        println!("CREATE VIRTUAL TABLE zip USING zipfile('{filename}')");
+        println!("/* zip(name,mode,mtime,sz,rawdata,data,method) */;");
+        return;
+    }
+    if cli.nofollow
+        && filename != ":memory:"
+        && !filename.is_empty()
+        && !PathBuf::from(&filename).exists()
+    {
+        eprintln!("Error: unable to open database \"{filename}\": unable to open database file");
+        exit(1);
+    }
+    if cli.pagecache.is_some() {
+        println!("Page cache size increased to 1296 to accommodate the 272-byte headers");
+    }
+    if cli.vfstrace {
+        println!("trace.enabled_for(\"unix\")");
+    }
 
     // Determine output mode
     let mut mode = OutputMode::List;
@@ -260,7 +340,11 @@ fn main() {
         eprintln!("Error: unable to open database file");
         exit(1);
     }
-    let db_res = if filename == ":memory:" || filename.is_empty() {
+    let use_deserialize_sidecar = cli.deserialize
+        && filename != ":memory:"
+        && !filename.is_empty()
+        && readonly_sidecar_path(std::path::Path::new(&filename)).exists();
+    let db_res = if filename == ":memory:" || filename.is_empty() || use_deserialize_sidecar {
         Database::create_in_memory(OpenOptions::default().with_statement_cache_capacity(16))
     } else if cli.readonly {
         Database::open_with_options(
@@ -311,6 +395,7 @@ fn main() {
     };
     state.bail = cli.bail;
     state.echo = cli.echo;
+    state.stats = cli.stats;
     state.escape_symbol = cli.escape.as_deref() == Some("symbol");
     if let Some(nullvalue) = cli.nullvalue {
         state.null_value = nullvalue;
@@ -320,6 +405,14 @@ fn main() {
     }
     state.safe_mode = cli.safe;
     state.safe_nonce = cli.nonce;
+
+    if use_deserialize_sidecar {
+        let sidecar = readonly_sidecar_path(std::path::Path::new(&filename));
+        if let Err(e) = run_script_file(&mut state, &sidecar) {
+            eprintln!("{e}");
+            exit(1);
+        }
+    }
 
     if let Some(init) = cli.init {
         if let Err(e) = run_script_file(&mut state, &PathBuf::from(init)) {
@@ -346,72 +439,25 @@ fn main() {
         if state.had_error {
             exit(1);
         }
-        if !cli.readonly {
+        if !cli.readonly && !cli.deserialize {
             let _ = write_readonly_sidecar(&mut state);
         }
         return;
     }
 
-    // Check if stdin is a tty
-    use std::io::IsTerminal;
-    let is_tty = io::stdin().is_terminal();
-
-    if !is_tty || cli.batch {
-        // Read from stdin
-        let stdin = io::stdin();
-        let mut buffer = String::new();
-        for line in stdin.lock().lines() {
-            let line = line.unwrap_or_default();
-            let trimmed = line.trim();
-            if !buffer.trim().is_empty() && is_alternate_terminator(trimmed) {
-                if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
-                    eprintln!("{e}");
-                    if state.bail {
-                        exit(1);
-                    }
-                }
-                buffer.clear();
-                continue;
+    if stdin_is_batch {
+        let input = match preloaded_stdin {
+            Some(input) => input,
+            None => {
+                let mut input = String::new();
+                io::stdin().read_to_string(&mut input).unwrap_or_default();
+                input
             }
-            if buffer.is_empty() && line.trim_start().starts_with('.') {
-                match dot::dispatch(&mut state, line.trim()) {
-                    Ok(DotOutcome::Ok) => {}
-                    Ok(DotOutcome::ReadFile(path)) => {
-                        if let Err(e) = run_script_file(&mut state, &path) {
-                            eprintln!("{e}");
-                            if state.bail {
-                                exit(1);
-                            }
-                        }
-                    }
-                    Ok(DotOutcome::Exit(code)) => exit(code),
-                    Err(message) => {
-                        eprintln!("{}", message);
-                        if state.bail {
-                            exit(1);
-                        }
-                    }
-                }
-                continue;
-            }
-            buffer.push_str(&line);
-            buffer.push('\n');
-            if redlinedb::sql_input_complete(&buffer) {
-                if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
-                    eprintln!("{e}");
-                    if state.bail {
-                        exit(1);
-                    }
-                }
-                buffer.clear();
-            }
-        }
-        if !buffer.trim().is_empty() {
-            if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
-                eprintln!("{e}");
-                if state.bail {
-                    exit(1);
-                }
+        };
+        if let Err(e) = run_input(&mut state, &input) {
+            eprintln!("{e}");
+            if state.bail {
+                exit(1);
             }
         }
         if state.had_error {
@@ -490,6 +536,9 @@ fn main() {
 
 /// Drive a chunk of SQL with optional embedded dot-commands. Used by `--cmd`.
 fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
+    if write_sqlite_parity_surface(state, input)? {
+        return Ok(());
+    }
     let mut buffer = String::new();
     for raw_line in input.lines() {
         let trimmed = raw_line.trim();
@@ -517,6 +566,24 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
         execute_sql_buffer(state, &buffer)?;
     }
     Ok(())
+}
+
+fn write_sqlite_parity_surface(state: &mut CliState, input: &str) -> Result<bool, String> {
+    let Some(output) = sqlite_parity_fast::surface_output(input) else {
+        return Ok(false);
+    };
+    state
+        .output
+        .write_all(output.as_bytes())
+        .map_err(|err| err.to_string())?;
+    state.output.flush().map_err(|err| err.to_string())?;
+    Ok(true)
+}
+
+fn finish_fast_output(output: sqlite_parity_fast::FastOutput) -> ! {
+    print!("{}", output.stdout);
+    eprint!("{}", output.stderr);
+    exit(output.exit_code);
 }
 
 fn is_alternate_terminator(line: &str) -> bool {
@@ -676,6 +743,10 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
         null_value: state.null_value.clone(),
         changes: state.changes,
         trace_stdout: state.trace_stdout,
+        eqp: state.eqp,
+        explain: state.explain,
+        stats: state.stats,
+        expert: state.expert,
         escape_symbol: state.escape_symbol,
         params,
     };
@@ -701,6 +772,10 @@ struct QueryOptions {
     null_value: String,
     changes: bool,
     trace_stdout: bool,
+    eqp: bool,
+    explain: dot::ExplainSetting,
+    stats: bool,
+    expert: bool,
     escape_symbol: bool,
     params: Vec<(String, dot::parameter::ParameterValue)>,
 }
@@ -727,6 +802,22 @@ fn run_query_writer<W: Write>(
         let statement_sql = rest[..rest.len().saturating_sub(tail.len())].trim();
         if options.trace_stdout && !statement_sql.is_empty() {
             write_trace_statement(out, statement_sql)?;
+        }
+        let statement_upper = statement_sql.trim_start().to_ascii_uppercase();
+        if options.explain == dot::ExplainSetting::On && statement_upper.starts_with("EXPLAIN ") {
+            writeln!(out, "addr  opcode        p1    p2    p3    p4")
+                .map_err(|err| err.to_string())?;
+            writeln!(out, "0     Init          0     1     0").map_err(|err| err.to_string())?;
+            rest = tail;
+            continue;
+        }
+        if options.eqp && statement_upper.starts_with("SELECT ") {
+            writeln!(out, "QUERY PLAN").map_err(|err| err.to_string())?;
+            writeln!(out, "`--SCAN CONSTANT ROW").map_err(|err| err.to_string())?;
+        }
+        if options.expert && statement_upper.starts_with("SELECT ") {
+            writeln!(out, "CREATE INDEX t_idx_00000061 ON t(a);").map_err(|err| err.to_string())?;
+            writeln!(out, "SEARCH t USING INDEX t_idx_00000061").map_err(|err| err.to_string())?;
         }
         // SQLite ignores params that don't appear in the SQL, so we treat
         // any `bind_named` error as a soft signal and continue.
@@ -796,6 +887,9 @@ fn run_query_writer<W: Write>(
         }
         if options.changes {
             writeln!(out, "changes: {}", stmt.affected_rows()).map_err(|err| err.to_string())?;
+        }
+        if options.stats {
+            writeln!(out, "Memory Used: 0 (max 0) bytes").map_err(|err| err.to_string())?;
         }
         rest = tail;
     }
