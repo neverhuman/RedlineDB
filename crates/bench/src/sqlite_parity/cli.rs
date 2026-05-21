@@ -74,6 +74,8 @@ struct RunArgs {
     tmp_dir: Option<PathBuf>,
     #[arg(long, default_value = "auto")]
     jobs: String,
+    #[arg(long)]
+    deny_skips: bool,
 }
 
 #[derive(Debug, Args)]
@@ -98,14 +100,16 @@ struct CompareArgs {
     repetitions: usize,
     #[arg(long, default_value_t = 0)]
     warmup: usize,
+    #[arg(long)]
+    deny_skips: bool,
 }
 
 #[derive(Debug, Args)]
 struct ReportArgs {
+    #[command(flatten)]
+    select: SelectArgs,
     #[arg(long)]
     input: PathBuf,
-    #[arg(long)]
-    case_list: PathBuf,
     #[arg(long)]
     out_dir: PathBuf,
     #[arg(long)]
@@ -204,6 +208,9 @@ fn run_selected(args: RunArgs) -> Result<()> {
     let engine = EngineSpec::new(args.engine_name, bin);
     let capabilities = engine.sqlite_shell_capabilities()?;
     let partition = partition_cases(cases, capabilities.as_ref());
+    if args.deny_skips {
+        deny_skipped_cases(&partition.skipped)?;
+    }
     runner::run_cases(
         &partition.runnable,
         &partition.skipped,
@@ -225,6 +232,9 @@ fn compare_selected(args: CompareArgs) -> Result<()> {
         .as_ref()
         .map(|capabilities| capabilities.version.clone());
     let partition = partition_cases(cases, capabilities.as_ref());
+    if args.deny_skips {
+        deny_skipped_cases(&partition.skipped)?;
+    }
     runner::compare_cases(
         &partition.runnable,
         &partition.skipped,
@@ -240,9 +250,11 @@ fn compare_selected(args: CompareArgs) -> Result<()> {
 }
 
 fn report(args: ReportArgs) -> Result<()> {
+    let expected_case_ids = report_case_ids(&args.select, args.select.case_list.as_deref())?;
     report_gen::generate(report_gen::ReportOptions {
         input: args.input,
-        case_list: args.case_list,
+        case_list: args.select.case_list,
+        expected_case_ids,
         out_dir: args.out_dir,
         readme: args.readme,
         plot: args.plot,
@@ -252,6 +264,42 @@ fn report(args: ReportArgs) -> Result<()> {
         check: args.check,
         command: std::env::args().collect(),
     })
+}
+
+fn deny_skipped_cases(skipped: &[super::engine::SkippedCase]) -> Result<()> {
+    if skipped.is_empty() {
+        return Ok(());
+    }
+    let details = skipped
+        .iter()
+        .take(20)
+        .map(|skipped| format!("{}: {}", skipped.case.display_id(), skipped.reason))
+        .collect::<Vec<_>>()
+        .join("; ");
+    let suffix = if skipped.len() > 20 {
+        format!("; ... {} more", skipped.len() - 20)
+    } else {
+        String::new()
+    };
+    bail!(
+        "sqlite parity reference capability skips are denied ({}): {}{}",
+        skipped.len(),
+        details,
+        suffix
+    );
+}
+
+fn report_case_ids(select: &SelectArgs, case_list: Option<&Path>) -> Result<BTreeSet<String>> {
+    if let Some(case_list) = case_list {
+        let ids = parse_case_list(case_list)?;
+        let all_cases = catalog::all_cases()?;
+        validate_known_case_ids(&ids, &all_cases)?;
+        return Ok(ids);
+    }
+    Ok(selected_cases(select)?
+        .into_iter()
+        .map(|case| case.display_id())
+        .collect())
 }
 
 fn sentinel(args: SentinelArgs) -> Result<()> {
@@ -443,7 +491,7 @@ mod tests {
     fn parses_case_list_with_blank_lines_and_comments() {
         let ids = parse_case_list_text(
             r#"
-                # approved cases
+                # case list
                 00004
 
                 00005 # inline note
