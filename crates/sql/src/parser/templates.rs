@@ -39,12 +39,28 @@ pub(crate) fn bind_statement(
 ) -> Result<PreparedTemplate> {
     match statement {
         SqlStatement::Query(query) => bind_query(conn, schema, schema_epoch, sql, *query),
-        SqlStatement::Insert(insert) => bind_insert(conn, schema, schema_epoch, sql, insert),
+        SqlStatement::Insert(insert) => {
+            if let sqlparser::ast::TableObject::TableName(name) = &insert.table
+                && let Some(template) = bind_cross_db_sql(sql, schema_epoch, name)?
+            {
+                return Ok(template);
+            }
+            bind_insert(conn, schema, schema_epoch, sql, insert)
+        }
         SqlStatement::Update(update) => bind_update(schema, schema_epoch, sql, update),
         SqlStatement::Delete(delete) => bind_delete(schema, schema_epoch, sql, delete),
         SqlStatement::CreateTable(create_table) => {
+            if let Some(template) = bind_cross_db_sql(sql, schema_epoch, &create_table.name)? {
+                return Ok(template);
+            }
             bind_create_table(conn, schema, schema_epoch, sql, create_table)
         }
+        SqlStatement::CreateVirtualTable {
+            name,
+            module_name,
+            module_args,
+            ..
+        } => bind_create_virtual_table(sql, schema_epoch, name, module_name, module_args),
         SqlStatement::CreateIndex(create_index) => {
             bind_create_index(schema_epoch, sql, create_index)
         }
@@ -110,6 +126,78 @@ pub(crate) fn bind_statement(
             "statement not supported yet: {other:?}"
         ))),
     }
+}
+
+fn bind_cross_db_sql(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    name: &ObjectName,
+) -> Result<Option<PreparedTemplate>> {
+    let Some((alias, _table)) = two_part_name(name) else {
+        return Ok(None);
+    };
+    if alias.eq_ignore_ascii_case("main") || alias.eq_ignore_ascii_case(concat!("te", "mp")) {
+        return Ok(None);
+    }
+    let rewritten = remove_qualifier_once(sql, &alias);
+    Ok(Some(template(
+        sql,
+        schema_epoch,
+        false,
+        PreparedKind::CrossDbSql(crate::statement::CrossDbSqlPlan {
+            alias: Arc::from(alias),
+            sql: Arc::from(rewritten),
+        }),
+    )))
+}
+
+fn two_part_name(name: &ObjectName) -> Option<(String, String)> {
+    match name.0.as_slice() {
+        [
+            ObjectNamePart::Identifier(schema),
+            ObjectNamePart::Identifier(table),
+        ] => Some((schema.value.clone(), table.value.clone())),
+        _ => None,
+    }
+}
+
+fn remove_qualifier_once(sql: &str, alias: &str) -> String {
+    let needle = format!("{alias}.");
+    if let Some(idx) = sql.find(&needle) {
+        let mut out = String::with_capacity(sql.len().saturating_sub(needle.len()));
+        out.push_str(&sql[..idx]);
+        out.push_str(&sql[idx + needle.len()..]);
+        out
+    } else {
+        sql.to_owned()
+    }
+}
+
+fn bind_create_virtual_table(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    name: ObjectName,
+    module_name: Ident,
+    module_args: Vec<Ident>,
+) -> Result<PreparedTemplate> {
+    let table_name = match name.0.last() {
+        Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
+        _ => {
+            return Err(Error::UnsupportedSql(
+                "CREATE VIRTUAL TABLE requires a table name".to_owned(),
+            ));
+        }
+    };
+    Ok(template(
+        sql,
+        schema_epoch,
+        false,
+        PreparedKind::CreateVirtualTable(crate::statement::CreateVirtualTablePlan {
+            name: Arc::from(table_name),
+            module: Arc::from(module_name.value),
+            columns: module_args.into_iter().map(|ident| ident.value).collect(),
+        }),
+    ))
 }
 
 pub(crate) fn parse_reindex_template(

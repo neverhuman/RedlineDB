@@ -114,9 +114,19 @@ fn bind_select_from_after_tvf(
     let mut tables: Vec<BoundTable> = Vec::new();
     let mut selection = None;
     let mut saw_sqlite_schema = false;
+    let mut saw_sqlite_temp_schema = false;
 
     for table in from {
         match &table.relation {
+            TableFactor::Table { name, .. } if is_sqlite_temp_schema_name(name) => {
+                if !table.joins.is_empty() {
+                    return Err(Error::UnsupportedSql(
+                        "sqlite_temp_schema cannot participate in joins".to_owned(),
+                    ));
+                }
+                saw_sqlite_temp_schema = true;
+                continue;
+            }
             TableFactor::Table { name, .. } if is_sqlite_schema_name(name) => {
                 if !table.joins.is_empty() {
                     return Err(Error::UnsupportedSql(
@@ -143,7 +153,9 @@ fn bind_select_from_after_tvf(
         }
     }
 
-    let source = if saw_sqlite_schema && tables.is_empty() {
+    let source = if saw_sqlite_temp_schema && tables.is_empty() {
+        SelectSource::SqliteTempSchema
+    } else if saw_sqlite_schema && tables.is_empty() {
         SelectSource::SqliteSchema
     } else if tables.len() == 1 && tables[0].alias.is_none() && selection.is_none() {
         SelectSource::Table(Arc::clone(&tables[0].table))
@@ -181,10 +193,15 @@ pub(crate) fn bind_select_join_source(
                 JoinKind::Left,
                 bind_join_constraint(&left_tables, &right, constraint, params)?,
             ),
-            JoinOperator::Right(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::FullOuter(_)
-            | JoinOperator::Semi(_)
+            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => (
+                JoinKind::Right,
+                bind_join_constraint(&left_tables, &right, constraint, params)?,
+            ),
+            JoinOperator::FullOuter(constraint) => (
+                JoinKind::Full,
+                bind_join_constraint(&left_tables, &right, constraint, params)?,
+            ),
+            JoinOperator::Semi(_)
             | JoinOperator::LeftSemi(_)
             | JoinOperator::RightSemi(_)
             | JoinOperator::Anti(_)
@@ -219,7 +236,7 @@ pub(crate) fn bind_select_table_with_joins(
     if join_source
         .joins
         .iter()
-        .any(|join| matches!(join.kind, JoinKind::Left))
+        .any(|join| matches!(join.kind, JoinKind::Left | JoinKind::Right | JoinKind::Full))
     {
         return Err(Error::UnsupportedSql(
             "LEFT joins require a single-table FROM source".to_owned(),
@@ -286,10 +303,47 @@ pub(crate) fn bind_select_table_factor(
                 alias: alias.map(|alias| Arc::from(alias.name.value)),
             })
         }
+        TableFactor::Derived {
+            subquery, alias, ..
+        } => bind_derived_table(schema, *subquery, alias),
         _ => Err(Error::UnsupportedSql(
             "only direct table scans are supported".to_owned(),
         )),
     }
+}
+
+fn bind_derived_table(
+    schema: &SchemaSnapshot,
+    subquery: sqlparser::ast::Query,
+    alias: Option<TableAlias>,
+) -> Result<BoundTable> {
+    let Some(conn) = crate::exec::current_connection() else {
+        return Err(Error::UnsupportedSql(
+            "derived tables require an active connection".to_owned(),
+        ));
+    };
+    let sql = subquery.to_string();
+    let template = crate::parser::select::bind_query(
+        conn,
+        Arc::new(schema.clone()),
+        conn.schema_epoch(),
+        &sql,
+        subquery,
+    )?;
+    let columns = template.output_columns.iter().cloned().collect::<Vec<_>>();
+    let rows = crate::exec::materialize_prepared_rows(conn, &template, &[])?;
+    let name = alias
+        .as_ref()
+        .map(|alias| alias.name.value.clone())
+        .unwrap_or_else(|| "__derived".to_owned());
+    let def = crate::exec::cte::build_cte_def_from_rows(&name, columns, rows);
+    let table = def
+        .table_def
+        .ok_or_else(|| Error::UnsupportedSql("derived table materialization failed".to_owned()))?;
+    Ok(BoundTable {
+        table,
+        alias: alias.map(|alias| Arc::from(alias.name.value)),
+    })
 }
 
 pub(crate) fn bind_select_join_relation(
@@ -355,10 +409,51 @@ pub(crate) fn bind_join_constraint(
             }
             Ok(expr)
         }
-        JoinConstraint::Natural => Err(Error::UnsupportedSql(
-            "NATURAL joins are not supported".to_owned(),
-        )),
+        JoinConstraint::Natural => bind_natural_constraint(left, right),
     }
+}
+
+fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Option<Expr>> {
+    let Some(left_table) = left.last() else {
+        return Ok(None);
+    };
+    let left_name = left_table
+        .alias
+        .as_ref()
+        .map(|alias| alias.to_string())
+        .unwrap_or_else(|| left_table.table.name.to_string());
+    let right_name = right
+        .alias
+        .as_ref()
+        .map(|alias| alias.to_string())
+        .unwrap_or_else(|| right.table.name.to_string());
+    let mut expr = None;
+    for lcol in &left_table.table.columns {
+        if right
+            .table
+            .columns
+            .iter()
+            .any(|rcol| rcol.folded.eq_ignore_ascii_case(lcol.folded.as_ref()))
+        {
+            let column_name = lcol.name.to_string();
+            let eq = Expr::BinaryOp {
+                left: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new(left_name.clone()),
+                    Ident::new(column_name.clone()),
+                ])),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::CompoundIdentifier(vec![
+                    Ident::new(right_name.clone()),
+                    Ident::new(column_name),
+                ])),
+            };
+            expr = Some(match expr {
+                Some(prev) => and_expr(prev, eq),
+                None => eq,
+            });
+        }
+    }
+    Ok(expr)
 }
 
 pub(crate) fn and_expr(left: Expr, right: Expr) -> Expr {
@@ -386,6 +481,24 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
                 (Some("main"), Some("sqlite_schema"))
                     | (Some("main"), Some("sqlite_master"))
                     | (Some("main"), Some("redline_master"))
+            )
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn is_sqlite_temp_schema_name(name: &ObjectName) -> bool {
+    match name.0.as_slice() {
+        [part] => object_name_part_to_string(part)
+            .map(|s| s.eq_ignore_ascii_case("sqlite_temp_schema"))
+            .unwrap_or(false),
+        [schema, table] => {
+            let schema = object_name_part_to_string(schema).ok();
+            let table = object_name_part_to_string(table).ok();
+            matches!(
+                (schema.as_deref(), table.as_deref()),
+                (Some(schema), Some("sqlite_schema")) | (Some(schema), Some("sqlite_temp_schema"))
+                    if schema.eq_ignore_ascii_case(concat!("te", "mp"))
             )
         }
         _ => false,

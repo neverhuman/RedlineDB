@@ -56,6 +56,7 @@ use crate::telemetry::Phase11Counters;
 use crate::txn::Snapshot;
 
 use super::cells::{LeafEntry, leaf_entry_visible};
+use super::policy::{ActiveIndexCursorPolicy, IndexCursorPolicy};
 use super::{BtreeIndex, IndexRowRef};
 
 /// Half-open key range expressed via [`std::ops::Bound`]. Callers borrow
@@ -242,7 +243,9 @@ impl<'idx> IndexCursor<'idx> {
         // Warm the second leaf before the cursor crosses its first
         // boundary. Same advisory contract as the per-advance hint —
         // see `prefetch_hint` for details.
-        if let Some(next_next) = cursor.next_leaf {
+        if let Some(next_next) = cursor.next_leaf
+            && ActiveIndexCursorPolicy::prefetch_right_sibling(cursor.entries.len(), true)
+        {
             cursor.prefetch_hint(next_next);
         }
         Ok(cursor)
@@ -458,7 +461,9 @@ impl<'idx> IndexCursor<'idx> {
         // the *next-next* leaf the cursor will visit. Emit an
         // advisory prefetch hint to warm it. The hint is purely
         // best-effort — see `BufferPool::prefetch` for the contract.
-        if let Some(next_next) = self.next_leaf {
+        if let Some(next_next) = self.next_leaf
+            && ActiveIndexCursorPolicy::prefetch_right_sibling(self.entries.len(), true)
+        {
             self.prefetch_hint(next_next);
         }
         Ok(())
@@ -527,19 +532,7 @@ impl<'idx> IndexCursor<'idx> {
     /// bound, no further sibling can contribute. `Bound::Unbounded`
     /// callers always continue.
     fn leaf_chain_past_end(&self) -> bool {
-        let Some(last) = self.last_logical_key.as_deref() else {
-            return false;
-        };
-        match &self.end {
-            // Match the pre-cursor `if last >= end` condition exactly: the
-            // pre-cursor code always uses an exclusive upper bound, so
-            // `last >= end_excluded` <=> "no more matches possible".
-            Bound::Excluded(b) => last >= b.as_slice(),
-            // Inclusive upper bound: keep walking while `last <= b`;
-            // stop only once `last > b`.
-            Bound::Included(b) => last > b.as_slice(),
-            Bound::Unbounded => false,
-        }
+        ActiveIndexCursorPolicy::stop_after_leaf(self.last_logical_key.as_deref(), &self.end)
     }
 
     /// Best-effort prefetch hint for the *next-next* leaf. Bumps the

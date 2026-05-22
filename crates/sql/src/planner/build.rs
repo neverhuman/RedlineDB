@@ -29,7 +29,7 @@ pub(crate) fn build_select_plan(
             tables.extend(join.joins.iter().map(|step| step.right.clone()));
             build_join_plan(conn, &tables, &None, bindings, &optimizer)
         }
-        SelectSource::SqliteSchema => {
+        SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => {
             let mut node =
                 PhysicalPlan::leaf(PhysicalKind::TableScan, Some("sqlite_schema".to_owned()));
             node.estimated_rows = conn.engine().sqlite_schema().len() as f64;

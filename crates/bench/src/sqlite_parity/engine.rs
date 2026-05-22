@@ -2,9 +2,11 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use sha2::{Digest, Sha256};
 
 use super::case::{Case, Profile};
 use super::text::sanitize_identifier;
@@ -13,11 +15,22 @@ use super::text::sanitize_identifier;
 pub struct EngineSpec {
     pub name: String,
     pub bin: PathBuf,
+    identity: Arc<OnceLock<Result<BinaryIdentity, String>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BinaryIdentity {
+    pub executable_path: String,
+    pub executable_sha256: String,
+    pub version: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct EngineOutput {
     pub engine: String,
+    pub executable_path: String,
+    pub executable_sha256: String,
+    pub version: String,
     pub status_code: Option<i32>,
     pub elapsed: Duration,
     pub stdout: String,
@@ -160,10 +173,12 @@ impl EngineSpec {
         Self {
             name: name.into(),
             bin: bin.into(),
+            identity: Arc::new(OnceLock::new()),
         }
     }
 
     pub fn run_case(&self, case: &Case, tmp_root: &Path) -> Result<EngineOutput> {
+        let identity = self.binary_identity()?;
         let case_tmp = tmp_root.join(format!(
             "{}-{}-{}",
             case.display_id(),
@@ -198,7 +213,7 @@ impl EngineSpec {
 
         let start = Instant::now();
         if let Some(script) = &case.script {
-            return self.run_script(case, script, &case_tmp, start);
+            return self.run_script(case, script, &case_tmp, start, identity);
         }
 
         let db_path = db_path_for(&self.name, case, tmp_root, &case_tmp)?;
@@ -235,6 +250,9 @@ impl EngineSpec {
         let elapsed = start.elapsed();
         Ok(EngineOutput {
             engine: self.name.clone(),
+            executable_path: identity.executable_path,
+            executable_sha256: identity.executable_sha256,
+            version: identity.version,
             status_code: output.status.code(),
             elapsed,
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -250,12 +268,23 @@ impl EngineSpec {
         }
     }
 
+    pub fn binary_identity(&self) -> Result<BinaryIdentity> {
+        match self
+            .identity
+            .get_or_init(|| binary_identity(&self.bin).map_err(|err| err.to_string()))
+        {
+            Ok(identity) => Ok(identity.clone()),
+            Err(message) => bail!("{message}"),
+        }
+    }
+
     fn run_script(
         &self,
         case: &Case,
         script: &str,
         case_tmp: &Path,
         start: Instant,
+        identity: BinaryIdentity,
     ) -> Result<EngineOutput> {
         let script_path = case_tmp.join("case.sh");
         fs::write(&script_path, replace_tmp(script, case_tmp))
@@ -270,12 +299,44 @@ impl EngineSpec {
             .with_context(|| format!("run script case {}", case.display_id()))?;
         Ok(EngineOutput {
             engine: self.name.clone(),
+            executable_path: identity.executable_path,
+            executable_sha256: identity.executable_sha256,
+            version: identity.version,
             status_code: output.status.code(),
             elapsed: start.elapsed(),
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         })
     }
+}
+
+pub fn binary_identity(bin: &Path) -> Result<BinaryIdentity> {
+    let path = resolve_executable_path(bin)?;
+    let bytes = fs::read(&path).with_context(|| format!("read executable {}", path.display()))?;
+    let executable_sha256 = format!("{:x}", Sha256::digest(&bytes));
+    Ok(BinaryIdentity {
+        executable_path: path.to_string_lossy().into_owned(),
+        executable_sha256,
+        version: probe_version(&path)?,
+    })
+}
+
+pub fn resolve_executable_path(path: &Path) -> Result<PathBuf> {
+    if path.components().count() > 1 || path.is_absolute() {
+        return fs::canonicalize(path)
+            .with_context(|| format!("canonicalize executable {}", path.display()));
+    }
+    let Some(path_var) = std::env::var_os("PATH") else {
+        bail!("PATH is unset while resolving {}", path.display());
+    };
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(path);
+        if candidate.is_file() {
+            return fs::canonicalize(&candidate)
+                .with_context(|| format!("canonicalize executable {}", candidate.display()));
+        }
+    }
+    bail!("executable not found on PATH: {}", path.display())
 }
 
 fn db_path_for(engine: &str, case: &Case, tmp_root: &Path, case_tmp: &Path) -> Result<String> {

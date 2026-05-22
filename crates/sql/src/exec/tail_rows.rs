@@ -83,19 +83,42 @@ pub(crate) fn collect_join_source_rows(
         let right_rows =
             collect_table_rows_with_alias(engine, tx, &step.right.table, step.right.alias.clone())?;
         let mut next = Vec::new();
+        let mut matched_right = vec![false; right_rows.len()];
         for prefix in &joined {
             let mut matched = false;
-            for row in &right_rows {
+            for (right_idx, row) in right_rows.iter().enumerate() {
                 let mut combined = prefix.clone();
                 combined.push(joined_row_from_table_row(&step.right, Some(row.clone())));
                 if selection_passes(&step.selection, &SqlRow::Joined(combined.clone()), bindings)? {
                     matched = true;
+                    matched_right[right_idx] = true;
                     next.push(combined);
                 }
             }
-            if !matched && matches!(step.kind, crate::statement::JoinKind::Left) {
+            if !matched
+                && matches!(
+                    step.kind,
+                    crate::statement::JoinKind::Left | crate::statement::JoinKind::Full
+                )
+            {
                 let mut combined = prefix.clone();
                 combined.push(joined_row_from_table_row(&step.right, None));
+                next.push(combined);
+            }
+        }
+        if matches!(
+            step.kind,
+            crate::statement::JoinKind::Right | crate::statement::JoinKind::Full
+        ) {
+            for (right_idx, row) in right_rows.iter().enumerate() {
+                if matched_right[right_idx] {
+                    continue;
+                }
+                let mut combined = Vec::new();
+                for left in prefix_shape_for_unmatched_right(&joined) {
+                    combined.push(left);
+                }
+                combined.push(joined_row_from_table_row(&step.right, Some(row.clone())));
                 next.push(combined);
             }
         }
@@ -103,6 +126,22 @@ pub(crate) fn collect_join_source_rows(
     }
 
     Ok(joined.into_iter().map(SqlRow::Joined).collect())
+}
+
+fn prefix_shape_for_unmatched_right(joined: &[Vec<JoinedRow>]) -> Vec<JoinedRow> {
+    joined
+        .first()
+        .map(|prefix| {
+            prefix
+                .iter()
+                .map(|row| JoinedRow {
+                    table: Arc::clone(&row.table),
+                    alias: row.alias.clone(),
+                    row: None,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn joined_row_from_table_row(

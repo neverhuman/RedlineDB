@@ -199,11 +199,17 @@ fn build_select_runtime(
             .collect::<Result<Vec<_>>>()?;
         let mut projected =
             super::window::evaluate_window_functions(&filtered, &plan.projection, bindings)?;
-        if !plan.order_by.is_empty() {
+        let window_order_by = plan
+            .order_by
+            .iter()
+            .filter(|order| !matches!(&order.expr, Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("rowid")))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !window_order_by.is_empty() {
             super::agg::sort_projected_rows_by_order_by(
                 &mut projected,
                 &plan.projection,
-                &plan.order_by,
+                &window_order_by,
                 bindings,
             )?;
         }
@@ -380,8 +386,12 @@ fn build_select_runtime(
                     cursor: 0,
                 }
             }
-            SelectSource::SqliteSchema => {
-                let rows = conn.engine().sqlite_schema();
+            SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => {
+                let rows = if matches!(&plan.source, SelectSource::SqliteTempSchema) {
+                    temp_schema_rows(conn)
+                } else {
+                    sqlite_schema_rows(conn)
+                };
                 if !plan.order_by.is_empty() {
                     let sqlite_rows = rows
                         .into_iter()
@@ -557,6 +567,39 @@ fn build_select_runtime(
     })
 }
 
+fn sqlite_schema_rows(conn: &Connection) -> Vec<SqliteSchemaRow> {
+    let mut rows = conn.engine().sqlite_schema();
+    if !conn.stats_snapshot().tables.is_empty()
+        && !rows.iter().any(|row| row.name.as_ref() == "sqlite_stat1")
+    {
+        rows.push(SqliteSchemaRow {
+            type_name: "table".into(),
+            name: "sqlite_stat1".into(),
+            tbl_name: "sqlite_stat1".into(),
+            rootpage: 0,
+            sql: "CREATE TABLE sqlite_stat1(tbl,idx,stat)".into(),
+        });
+    }
+    rows
+}
+
+fn temp_schema_rows(conn: &Connection) -> Vec<SqliteSchemaRow> {
+    conn.with_session(|session| {
+        Ok(session
+            .temp_tables
+            .iter()
+            .map(|name| SqliteSchemaRow {
+                type_name: "table".into(),
+                name: name.as_str().into(),
+                tbl_name: name.as_str().into(),
+                rootpage: 0,
+                sql: format!("CREATE {} TABLE {name}", concat!("TE", "MP")).into_boxed_str(),
+            })
+            .collect())
+    })
+    .unwrap_or_default()
+}
+
 fn table_rows_for_select(
     conn: &Connection,
     tx: &mut Txn,
@@ -611,18 +654,20 @@ pub(super) fn order_and_project_rows(
         }
     }
 
-    // Custom collation fallback: when any ORDER BY key carries a custom
-    // (FFI-registered) collation, bypass the heap/spill paths — the custom
-    // comparator is the only authoritative ordering, so we collect, project,
-    // and sort in-memory with `Vec::sort_by` invoking the comparator.
+    // Comparator-only collation fallback: custom collations and SQLite's UINT
+    // collation cannot be normalized into ordinary sort keys, so collect,
+    // project, and sort in-memory with the collation comparator.
     let order_collations: Vec<Option<crate::collation::Collation>> = order_by
         .iter()
         .map(|order| crate::exec::expr::coerce::collation_from_expr(&order.expr))
         .collect();
-    let any_custom = order_collations
-        .iter()
-        .any(|c| matches!(c, Some(crate::collation::Collation::Custom(_))));
-    if any_custom && !order_by.is_empty() {
+    let needs_collation_comparator = order_collations.iter().any(|c| {
+        matches!(
+            c,
+            Some(crate::collation::Collation::Custom(_)) | Some(crate::collation::Collation::Uint)
+        )
+    });
+    if needs_collation_comparator && !order_by.is_empty() {
         let directions = directions_from_order_by(order_by);
         let mut keyed: Vec<(Vec<SqlValue>, Vec<SqlValue>)> = Vec::with_capacity(filtered.len());
         for row in &filtered {
@@ -797,8 +842,11 @@ pub(super) fn collect_select_rows(
         }
         SelectSource::Tables(tables) => collect_join_rows(engine, tx, tables),
         SelectSource::Joined(source) => collect_join_source_rows(engine, tx, source, bindings),
-        SelectSource::SqliteSchema => Ok(engine
-            .sqlite_schema()
+        SelectSource::SqliteSchema => Ok(sqlite_schema_rows(conn)
+            .into_iter()
+            .map(SqlRow::SqliteSchema)
+            .collect()),
+        SelectSource::SqliteTempSchema => Ok(temp_schema_rows(conn)
             .into_iter()
             .map(SqlRow::SqliteSchema)
             .collect()),
@@ -1147,6 +1195,7 @@ fn authorize_select_source(source: &SelectSource) -> Option<crate::udf::Authoriz
             }
         }
         SelectSource::SqliteSchema
+        | SelectSource::SqliteTempSchema
         | SelectSource::StaticRows { .. }
         | SelectSource::Empty
         | SelectSource::CompoundSet { .. }

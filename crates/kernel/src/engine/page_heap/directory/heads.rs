@@ -5,6 +5,7 @@ use crate::format::{RelId, RowId, TuplePtr};
 use crate::{Error, Result};
 
 use super::super::PageBackedHeap;
+use super::super::policy::{ActiveHeapPlacementPolicy, HeapPlacementPolicy};
 
 impl PageBackedHeap {
     pub(super) fn all_relation_entries(&self) -> Result<Vec<(RelId, RowId, TuplePtr)>> {
@@ -102,7 +103,7 @@ impl PageBackedHeap {
 
     pub(crate) fn lane_for_row(&self, row_id: RowId) -> usize {
         let lane_count = self.row_dir.len().max(1);
-        (row_id.0 as usize) % lane_count
+        ActiveHeapPlacementPolicy::row_lane(row_id, lane_count)
     }
 
     fn row_dir_shard(&self, row_id: RowId) -> &RwLock<HashMap<RowId, TuplePtr>> {
@@ -113,7 +114,8 @@ impl PageBackedHeap {
         &self,
         rel_id: RelId,
     ) -> &RwLock<HashMap<RelId, HashMap<RowId, TuplePtr>>> {
-        let lane = (rel_id.0 as usize) % self.relation_row_dir.len().max(1);
+        let lane =
+            ActiveHeapPlacementPolicy::relation_lane(rel_id, self.relation_row_dir.len().max(1));
         &self.relation_row_dir[lane]
     }
 }

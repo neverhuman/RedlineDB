@@ -410,6 +410,8 @@ fn is_builtin_aggregate_name(name: &str) -> bool {
         "count"
             | "sum"
             | "avg"
+            | "median"
+            | "percentile_cont"
             | "min"
             | "max"
             | "group_concat"
@@ -665,6 +667,47 @@ fn eval_group_function(
                 Ok(SqlValue::Real(sum / count as f64))
             }
         }
+        "median" | "percentile_cont" => {
+            let percentile = if name == "median" {
+                0.5
+            } else {
+                percentile_argument(func, group, bindings)?
+            };
+            if !(0.0..=1.0).contains(&percentile) {
+                return Err(Error::DatatypeMismatch);
+            }
+
+            let mut values = Vec::new();
+            for row in group {
+                if !row_passes_aggregate_filter(func, row, bindings)? {
+                    continue;
+                }
+                let ctx = row.context();
+                if let FunctionArguments::List(list) = &func.args
+                    && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
+                        list.args.first()
+                {
+                    let value = eval_scalar(expr, &ctx, bindings)?;
+                    if !matches!(value, SqlValue::Null) {
+                        values.push(numeric_aggregate_value(value)?);
+                    }
+                }
+            }
+            if values.is_empty() {
+                return Ok(SqlValue::Null);
+            }
+            values.sort_by(|left, right| left.total_cmp(right));
+            let rank = percentile * (values.len().saturating_sub(1) as f64);
+            let lower = rank.floor() as usize;
+            let upper = rank.ceil() as usize;
+            let fraction = rank - lower as f64;
+            let result = if lower == upper {
+                values[lower]
+            } else {
+                values[lower] + (values[upper] - values[lower]) * fraction
+            };
+            Ok(SqlValue::Real(result))
+        }
         "min" | "max" => {
             let mut best: Option<SqlValue> = None;
             for row in group {
@@ -849,5 +892,44 @@ fn eval_group_function(
                 ))),
             }
         }
+    }
+}
+
+fn percentile_argument(
+    func: &sqlparser::ast::Function,
+    group: &[SqlRow],
+    bindings: &[Option<SqlValue>],
+) -> Result<f64> {
+    let FunctionArguments::List(list) = &func.args else {
+        return Err(Error::UnsupportedSql(
+            "percentile_cont requires two arguments".to_owned(),
+        ));
+    };
+    if list.args.len() != 2 {
+        return Err(Error::UnsupportedSql(
+            "percentile_cont requires two arguments".to_owned(),
+        ));
+    }
+    let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = &list.args[1] else {
+        return Err(Error::UnsupportedSql(
+            "unsupported percentile_cont argument".to_owned(),
+        ));
+    };
+    let ctx = group
+        .first()
+        .map(|row| row.context())
+        .unwrap_or(RowContext::Empty);
+    numeric_aggregate_value(eval_scalar(expr, &ctx, bindings)?)
+}
+
+fn numeric_aggregate_value(value: SqlValue) -> Result<f64> {
+    match value {
+        SqlValue::Null => Ok(f64::NAN),
+        SqlValue::Integer(v) => Ok(v as f64),
+        SqlValue::Real(v) => Ok(v),
+        other => value_to_string(&other)
+            .trim()
+            .parse::<f64>()
+            .map_err(|_| Error::DatatypeMismatch),
     }
 }

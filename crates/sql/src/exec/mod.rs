@@ -41,6 +41,7 @@ pub(crate) mod index_batch;
 pub(crate) mod index_dml;
 pub(crate) mod index_partial;
 pub(crate) mod index_predicate;
+pub(crate) mod policy;
 mod tail;
 use tail::*;
 pub(crate) mod vec;
@@ -322,6 +323,26 @@ pub fn execute_prepared(
                 affected_rows: 1,
             })
         }
+        PreparedKind::CreateTempTable(spec) => {
+            with_write_tx(conn, |session, tx| {
+                let table = conn.engine().create_table(tx, spec.clone())?;
+                if !session
+                    .temp_tables
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(spec.name.original()))
+                {
+                    session.temp_tables.push(spec.name.original().to_owned());
+                }
+                session.changes += 1;
+                session.total_changes += 1;
+                session.last_insert_rowid = Some(table.table_id.0 as i64);
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 1,
+            })
+        }
         PreparedKind::CreateTableAsSelect(spec) => {
             execute_create_table_as_select(conn, spec, bindings)
         }
@@ -332,6 +353,13 @@ pub fn execute_prepared(
                 session.total_changes += 1;
                 Ok(())
             })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 1,
+            })
+        }
+        PreparedKind::CreateVirtualTable(plan) => {
+            execute_create_virtual_table(conn, plan)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 1,
@@ -432,6 +460,31 @@ pub fn execute_prepared(
             }
             Ok(result)
         }
+        PreparedKind::InsertView(plan) => {
+            let mut affected = 0usize;
+            for row in &plan.rows {
+                let values = row
+                    .iter()
+                    .map(|value| match value {
+                        DmlValue::Expr(expr) => eval_scalar(expr, &RowContext::Empty, bindings),
+                        DmlValue::Default => Ok(SqlValue::Null),
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                trigger::fire_instead_of_insert(conn, &plan.view_name, &plan.columns, values)?;
+                affected += 1;
+            }
+            if affected > 0 {
+                with_session_reentrant(conn, |session| {
+                    session.changes += affected;
+                    session.total_changes += affected;
+                    Ok(())
+                })?;
+            }
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: affected,
+            })
+        }
         PreparedKind::Update(plan) => {
             let result = execute_update(conn, plan, bindings)?;
             if result.affected_rows > 0 {
@@ -477,6 +530,20 @@ pub fn execute_prepared(
         }
         PreparedKind::Attach(plan) => {
             attach::apply_attach_plan(conn, plan)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::CrossDbSql(plan) => {
+            let Some(sidecar) = conn.attach_map().database(&plan.alias) else {
+                return Err(Error::UnknownTable(format!(
+                    "no such database: {}",
+                    plan.alias
+                )));
+            };
+            let sidecar_conn = sidecar.connect();
+            sidecar_conn.execute(plan.sql.as_ref())?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 0,
@@ -555,8 +622,10 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Select(_)
         | PreparedKind::Attach(_) => false,
         PreparedKind::CreateTable(_)
+        | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)
         | PreparedKind::CreateIndex(_)
+        | PreparedKind::CreateVirtualTable(_)
         | PreparedKind::CreateView(_)
         | PreparedKind::CreateTrigger(_)
         | PreparedKind::DropTable(_)
@@ -565,9 +634,40 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropTrigger(_)
         | PreparedKind::AlterTable(_)
         | PreparedKind::Insert(_)
+        | PreparedKind::InsertView(_)
         | PreparedKind::Update(_)
-        | PreparedKind::Delete(_) => true,
+        | PreparedKind::Delete(_)
+        | PreparedKind::CrossDbSql(_) => true,
     }
+}
+
+fn execute_create_virtual_table(
+    conn: &Connection,
+    plan: &crate::statement::CreateVirtualTablePlan,
+) -> Result<()> {
+    let cols = plan
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(idx, col)| {
+            let decl_type = if plan.module.eq_ignore_ascii_case("rtree") {
+                if idx == 0 { "INTEGER" } else { "REAL" }
+            } else {
+                "TEXT"
+            };
+            format!("\"{col}\" {decl_type}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!("CREATE TABLE \"{}\" ({cols})", plan.name);
+    let template = crate::parser::parse_prepared_template(conn, &sql)?;
+    let _ = materialize_prepared_rows(conn, &template, &[])?;
+    if plan.module.eq_ignore_ascii_case("dbstat") {
+        let sql = format!("INSERT INTO \"{}\" DEFAULT VALUES", plan.name);
+        let template = crate::parser::parse_prepared_template(conn, &sql)?;
+        let _ = materialize_prepared_rows(conn, &template, &[])?;
+    }
+    Ok(())
 }
 
 fn execute_create_table_as_select(

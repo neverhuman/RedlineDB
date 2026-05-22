@@ -495,6 +495,7 @@ fn render_create_trigger(trigger: &TriggerDef) -> String {
     out.push_str(match trigger.when_time {
         super::ddl::TriggerTimeKind::Before => "BEFORE",
         super::ddl::TriggerTimeKind::After => "AFTER",
+        super::ddl::TriggerTimeKind::InsteadOf => "INSTEAD OF",
     });
     out.push(' ');
     out.push_str(match trigger.when_event {

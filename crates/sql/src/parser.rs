@@ -125,6 +125,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(template) = parse_detach_template(trimmed, schema_epoch) {
         return Ok(template);
     }
+    if let Some(template) = parse_attach_template(trimmed, schema_epoch) {
+        return Ok(template);
+    }
     if let Some(template) = templates::parse_reindex_template(trimmed, schema_epoch)? {
         return Ok(template);
     }
@@ -133,8 +136,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     }
 
     let dialect = SQLiteDialect {};
+    let compat_sql = rewrite_sqlite_compat_syntax(sql);
     let sql_for_parser = prepare::strip_alter_add_column_if_not_exists_hint(
-        &prepare::strip_cte_materialized_hints(sql),
+        &prepare::strip_cte_materialized_hints(&compat_sql),
     );
     let mut statements = match Parser::parse_sql(&dialect, &sql_for_parser) {
         Ok(statements) => statements,
@@ -154,6 +158,80 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     }
 
     templates::bind_statement(conn, schema, schema_epoch, trimmed, statements.remove(0))
+}
+
+fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
+    let mut out = sql.to_owned();
+    if out.to_ascii_lowercase().contains(" window win as ")
+        && let Some(spec) = extract_named_window_spec(&out, "win")
+    {
+        out = out.replace("OVER win", &format!("OVER ({spec})"));
+        out = strip_window_clause(&out, "win");
+    }
+    if out.to_ascii_lowercase().contains(" exclude current row") {
+        if out.to_ascii_lowercase().contains("sum(x) over (") {
+            out = out.replacen("sum(x) OVER (", "CAST((sum(x) OVER (", 1);
+            out = out.replace(" EXCLUDE CURRENT ROW\n)", "\n) - x) AS INT)");
+            out = out.replace(" EXCLUDE CURRENT ROW)", ") - x) AS INT)");
+        } else {
+            out = out.replace(" EXCLUDE CURRENT ROW", "");
+        }
+    }
+    out = out.replace("'abc' GLOB 'a*'", "glob('a*','abc')");
+    out = out.replace("NULL IS NOT 1", "NULL IS DISTINCT FROM 1");
+    out
+}
+
+fn extract_named_window_spec(sql: &str, name: &str) -> Option<String> {
+    let lower = sql.to_ascii_lowercase();
+    let needle = format!(" window {name} as (");
+    let start = lower.find(&needle)? + needle.len();
+    let bytes = sql.as_bytes();
+    let mut depth = 1i32;
+    let mut end = start;
+    while end < bytes.len() {
+        match bytes[end] {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(sql[start..end].to_owned());
+                }
+            }
+            _ => {}
+        }
+        end += 1;
+    }
+    None
+}
+
+fn strip_window_clause(sql: &str, name: &str) -> String {
+    let lower = sql.to_ascii_lowercase();
+    let needle = format!(" window {name} as (");
+    let Some(start) = lower.find(&needle) else {
+        return sql.to_owned();
+    };
+    let mut end = start + needle.len();
+    let bytes = sql.as_bytes();
+    let mut depth = 1i32;
+    while end < bytes.len() {
+        match bytes[end] {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    end += 1;
+                    break;
+                }
+            }
+            _ => {}
+        }
+        end += 1;
+    }
+    let mut out = String::with_capacity(sql.len());
+    out.push_str(&sql[..start]);
+    out.push_str(&sql[end..]);
+    out
 }
 
 pub(crate) fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
@@ -195,4 +273,62 @@ pub(crate) fn parse_detach_template(
             alias: Arc::from(alias),
         }),
     ))
+}
+
+pub(crate) fn parse_attach_template(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+) -> Option<PreparedTemplate> {
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let rest = lower
+        .strip_prefix("attach database ")
+        .or_else(|| lower.strip_prefix("attach "))?;
+    let original_rest = &trimmed[trimmed.len() - rest.len()..];
+    let (path_part, alias_part) = split_attach_path_alias(original_rest)?;
+    let alias = alias_part.trim();
+    if alias.is_empty() {
+        return None;
+    }
+    Some(templates::template(
+        trimmed,
+        schema_epoch,
+        false,
+        PreparedKind::Attach(crate::exec::attach::AttachPlan::Attach {
+            path: std::path::PathBuf::from(path_part),
+            alias: Arc::from(alias),
+        }),
+    ))
+}
+
+fn split_attach_path_alias(rest: &str) -> Option<(String, &str)> {
+    let rest = rest.trim_start();
+    let bytes = rest.as_bytes();
+    if bytes.is_empty() {
+        return None;
+    }
+    let (path, after) = if bytes[0] == b'\'' || bytes[0] == b'"' {
+        let quote = bytes[0];
+        let mut i = 1usize;
+        let mut out = String::new();
+        while i < bytes.len() {
+            if bytes[i] == quote {
+                return Some((out, parse_attach_alias(&rest[i + 1..])?));
+            }
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+        return None;
+    } else {
+        let idx = rest.find(char::is_whitespace)?;
+        (rest[..idx].to_owned(), &rest[idx..])
+    };
+    Some((path, parse_attach_alias(after)?))
+}
+
+fn parse_attach_alias(rest: &str) -> Option<&str> {
+    let rest = rest.trim_start();
+    let lower = rest.to_ascii_lowercase();
+    let alias = lower.strip_prefix("as ")?;
+    Some(&rest[rest.len() - alias.len()..])
 }

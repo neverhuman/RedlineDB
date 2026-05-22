@@ -12,6 +12,8 @@ use std::sync::{Arc, Mutex, RwLock};
 mod directory;
 #[path = "page_heap/mutation.rs"]
 mod mutation;
+#[path = "page_heap/policy.rs"]
+mod policy;
 
 #[derive(Debug)]
 pub struct PageBackedHeap {
