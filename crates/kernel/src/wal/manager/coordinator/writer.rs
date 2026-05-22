@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::format::Lsn;
+use crate::wal::policy::{ActiveWalSchedulePolicy, WalScheduleContext, WalSchedulePolicy};
 
 use super::helpers::{
     bump_phase11_wal_batch, drain_until, publish_wal_failure, publish_written_lsn,
@@ -46,12 +47,15 @@ pub(super) fn wal_writer_loop(
                 return;
             }
 
+            let batch_limit = ActiveWalSchedulePolicy::write_batch_bytes(
+                WalScheduleContext::with_pending(&config, state.pending_bytes, state.pending.len()),
+            );
             let mut batch_bytes = 0_usize;
             while let Some(record) = state.pending.pop_front() {
                 batch_bytes += record.encoded.len();
                 state.pending_bytes = state.pending_bytes.saturating_sub(record.encoded.len());
                 batch.push(record);
-                if batch_bytes >= config.wal_write_batch_bytes.max(1) {
+                if batch_bytes >= batch_limit {
                     break;
                 }
             }
@@ -92,7 +96,7 @@ pub(super) fn wal_writer_loop(
             // target lands on disk before the corresponding writer is
             // told the commit succeeded. We do not extend the window —
             // just one re-sample, then sync.
-            flush_target = resample_flush_target(&shared, flush_target);
+            flush_target = resample_flush_target(&shared, &config, flush_target);
             // Lane GC: drain_until may pop & write further records
             // that share this fsync; it returns the count and bytes
             // it wrote so we attribute them to the same group.
@@ -100,7 +104,9 @@ pub(super) fn wal_writer_loop(
                 &shared,
                 &mut wal,
                 flush_target,
-                config.wal_write_batch_bytes,
+                ActiveWalSchedulePolicy::drain_batch_bytes(WalScheduleContext::from_config(
+                    &config,
+                )),
             ) {
                 Ok(drained) => {
                     group_records = group_records.saturating_add(drained.records);

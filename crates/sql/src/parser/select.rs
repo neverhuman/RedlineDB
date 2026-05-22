@@ -1032,7 +1032,9 @@ fn resolve_order_by_positions(items: &mut [OrderByExpr], output_columns: &[Strin
             && pos <= output_columns.len()
         {
             let name = output_columns[pos - 1].clone();
-            item.expr = Expr::Identifier(Ident::new(name));
+            if name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+                item.expr = Expr::Identifier(Ident::new(name));
+            }
         }
     }
 }

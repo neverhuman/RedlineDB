@@ -1,6 +1,7 @@
 pub mod buffer;
 pub mod control;
 pub mod page_file;
+pub(crate) mod policy;
 pub mod tx_status_checkpoint;
 
 pub use buffer::*;

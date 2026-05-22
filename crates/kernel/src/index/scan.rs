@@ -5,21 +5,17 @@ use crate::{Error, Result};
 
 use super::cells::Entry;
 use super::cursor::{CursorYield, IndexCursor, KeyRange, SnapshotView};
+use super::policy::{ActiveIndexCursorPolicy, IndexCursorPolicy};
 use super::{BtreeIndex, IndexEntry, IndexRowRef, PAGE_INTERNAL_KIND, PAGE_LEAF_KIND};
-
-/// Default batch size for the materialise-into-`Vec` wrappers that
-/// preserve the pre-cursor entry points.
-/// Sized to amortise the per-batch counter bumps without committing to
-/// hold any particular number of pinned pages — the cursor still
-/// releases its leaf guards between batches.
-const VEC_WRAPPER_BATCH: usize = 256;
 
 impl BtreeIndex {
     pub fn range_scan(&self, start: &[u8], end: &[u8]) -> Result<Vec<IndexRowRef>> {
         let range = KeyRange::half_open(start, end);
         let mut out = Vec::new();
         let mut cur = IndexCursor::open(self, range, SnapshotView::all())?;
-        while let CursorYield::Batch(_) = cur.next_batch(&mut out, VEC_WRAPPER_BATCH)? {}
+        while let CursorYield::Batch(_) =
+            cur.next_batch(&mut out, ActiveIndexCursorPolicy::VEC_WRAPPER_BATCH)?
+        {}
         Ok(out)
     }
 
@@ -35,7 +31,9 @@ impl BtreeIndex {
         let view = SnapshotView::visible(tx_status, snapshot, owner);
         let mut out = Vec::new();
         let mut cur = IndexCursor::open(self, range, view)?;
-        while let CursorYield::Batch(_) = cur.next_batch(&mut out, VEC_WRAPPER_BATCH)? {}
+        while let CursorYield::Batch(_) =
+            cur.next_batch(&mut out, ActiveIndexCursorPolicy::VEC_WRAPPER_BATCH)?
+        {}
         Ok(out)
     }
 

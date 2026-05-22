@@ -96,6 +96,7 @@ pub enum PreparedKind {
         path: Arc<str>,
     },
     CreateTable(CreateTableSpec),
+    CreateTempTable(CreateTableSpec),
     CreateTableAsSelect(CreateTableAsSelectSpec),
     CreateIndex(CreateIndexSpec),
     CreateView(CreateViewSpec),
@@ -109,11 +110,14 @@ pub enum PreparedKind {
     Explain(ExplainPlan),
     Select(SelectPlan),
     Insert(InsertPlan),
+    InsertView(InsertViewPlan),
     Update(UpdatePlan),
     Delete(DeletePlan),
     /// ATTACH DATABASE 'path' AS alias / DETACH DATABASE alias — minimal
     /// alias-map maintenance executed by [`crate::exec::attach::AttachPlan`].
     Attach(crate::exec::attach::AttachPlan),
+    CrossDbSql(CrossDbSqlPlan),
+    CreateVirtualTable(CreateVirtualTablePlan),
 }
 
 /// Sentinel SQL prefix used to tag `PreparedTemplate`s built for
@@ -140,6 +144,19 @@ pub struct AnalyzePlan {
 pub struct CreateTableAsSelectSpec {
     pub table: CreateTableSpec,
     pub select: Option<SelectPlan>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CrossDbSqlPlan {
+    pub alias: Arc<str>,
+    pub sql: Arc<str>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateVirtualTablePlan {
+    pub name: Arc<str>,
+    pub module: Arc<str>,
+    pub columns: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -274,6 +291,7 @@ pub enum SelectSource {
         branches: Vec<SelectPlan>,
     },
     SqliteSchema,
+    SqliteTempSchema,
     StaticRows {
         rows: Arc<[Vec<crate::value::SqlValue>]>,
     },
@@ -309,6 +327,8 @@ pub struct BoundTable {
 pub enum JoinKind {
     Inner,
     Left,
+    Right,
+    Full,
 }
 
 #[derive(Debug, Clone)]
@@ -346,6 +366,13 @@ pub struct InsertPlan {
     pub default_values: bool,
     pub returning: Option<Vec<SelectItem>>,
     pub conflict: Option<InsertConflict>,
+}
+
+#[derive(Debug, Clone)]
+pub struct InsertViewPlan {
+    pub view_name: Arc<str>,
+    pub columns: Arc<[String]>,
+    pub rows: Vec<Vec<DmlValue>>,
 }
 
 #[derive(Debug, Clone)]

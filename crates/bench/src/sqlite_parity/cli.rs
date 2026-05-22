@@ -259,6 +259,7 @@ fn compare_selected(args: CompareArgs) -> Result<()> {
     let cases = selected_cases(&args.select)?;
     let reference = EngineSpec::new(args.reference_name, args.reference_bin);
     let target = EngineSpec::new(args.target_name, args.target_bin);
+    validate_compare_engines(&reference, &target)?;
     let capabilities = reference.sqlite_shell_capabilities()?;
     let sqlite_version = capabilities
         .as_ref()
@@ -535,11 +536,41 @@ fn validate_samples(repetitions: usize, warmup: usize) -> Result<()> {
     Ok(())
 }
 
+fn validate_compare_engines(reference: &EngineSpec, target: &EngineSpec) -> Result<()> {
+    let reference_identity = reference.binary_identity()?;
+    let target_identity = target.binary_identity()?;
+    if reference_identity.executable_path == target_identity.executable_path
+        || reference_identity.executable_sha256 == target_identity.executable_sha256
+    {
+        bail!(
+            "sqlite parity compare requires distinct reference and target binaries: reference={} target={}",
+            reference_identity.executable_path,
+            target_identity.executable_path
+        );
+    }
+    if target.name.eq_ignore_ascii_case("redlinedb") {
+        if !target_identity
+            .version
+            .to_ascii_lowercase()
+            .contains("redlinedb")
+        {
+            bail!(
+                "sqlite parity target `{}` must identify as RedlineDB via --version, got `{}` from {}",
+                target.name,
+                target_identity.version,
+                target_identity.executable_path
+            );
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
 
-    use tempfile::NamedTempFile;
+    use tempfile::{NamedTempFile, tempdir};
 
     use super::*;
 
@@ -605,5 +636,56 @@ mod tests {
 
         let err = selected_cases(&args).expect_err("zero-match selection must fail");
         assert!(err.to_string().contains("matched zero cases"));
+    }
+
+    #[test]
+    fn compare_rejects_same_reference_and_target_binary() {
+        let dir = tempdir().expect("tempdir");
+        let bin = write_shell_bin(dir.path(), "fake-sqlite", "sqlite3 3.53.1");
+        let reference = EngineSpec::new("sqlite3", &bin);
+        let target = EngineSpec::new("redlinedb", &bin);
+
+        let err = validate_compare_engines(&reference, &target).expect_err("same bin rejected");
+
+        assert!(err.to_string().contains("distinct reference and target"));
+    }
+
+    #[test]
+    fn redlinedb_target_must_identify_as_redlinedb() {
+        let dir = tempdir().expect("tempdir");
+        let reference_bin = write_shell_bin(dir.path(), "sqlite3", "sqlite3 3.53.1");
+        let target_bin = write_shell_bin(dir.path(), "not-redlinedb", "otherdb 1.0");
+        let reference = EngineSpec::new("sqlite3", &reference_bin);
+        let target = EngineSpec::new("redlinedb", &target_bin);
+
+        let err =
+            validate_compare_engines(&reference, &target).expect_err("target identity rejected");
+
+        assert!(err.to_string().contains("must identify as RedlineDB"));
+    }
+
+    #[test]
+    fn redlinedb_target_accepts_distinct_redlinedb_binary() {
+        let dir = tempdir().expect("tempdir");
+        let reference_bin = write_shell_bin(dir.path(), "sqlite3", "sqlite3 3.53.1");
+        let target_bin = write_shell_bin(dir.path(), "redlinedb", "redlinedb v2.0.0");
+        let reference = EngineSpec::new("sqlite3", &reference_bin);
+        let target = EngineSpec::new("redlinedb", &target_bin);
+
+        validate_compare_engines(&reference, &target).expect("distinct RedlineDB target accepted");
+    }
+
+    #[cfg(unix)]
+    fn write_shell_bin(dir: &Path, name: &str, version: &str) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(
+            &path,
+            format!("#!/usr/bin/env bash\nprintf '%s\\n' {version:?}\n"),
+        )
+        .expect("write fake bin");
+        let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
+        perms.set_mode(0o700);
+        std::fs::set_permissions(&path, perms).expect("chmod fake bin");
+        path
     }
 }

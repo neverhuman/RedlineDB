@@ -31,7 +31,7 @@ use crate::error::{Error, Result};
 use crate::value::SqlValue;
 
 use super::SqlRow;
-use super::eval_scalar;
+use super::{cast_value, eval_scalar};
 
 use accumulator::Accumulator;
 use frame::{ResolvedFrame, frame_bounds, literal_i64, resolve_frame};
@@ -192,8 +192,12 @@ fn eval_with_window_values(
         Expr::Nested(inner) => {
             eval_with_window_values(inner, row, bindings, window_values, row_idx, counter)
         }
-        Expr::Cast { expr, .. } => {
-            eval_with_window_values(expr, row, bindings, window_values, row_idx, counter)
+        Expr::Cast {
+            expr, data_type, ..
+        } => {
+            let value =
+                eval_with_window_values(expr, row, bindings, window_values, row_idx, counter)?;
+            cast_value(value, data_type)
         }
         _ => eval_scalar(expr, &row.context(), bindings),
     }

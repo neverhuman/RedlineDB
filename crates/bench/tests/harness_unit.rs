@@ -36,6 +36,7 @@
 //! is covered by `crates/bench/src/engine/{redline,sqlite}.rs` `#[cfg(
 //! test)]` modules.
 
+use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -361,6 +362,55 @@ cases = []
         msg.contains("at least one case") || msg.contains("cases"),
         "error must mention empty cases, got: {msg}"
     );
+}
+
+/// Benchmark integrity guard: the RedlineDB CLI must not contain a parity
+/// replay layer. SQLite parity cases must be executed by the real CLI/SQL
+/// path, not by code generated from expected corpus output.
+#[test]
+fn cli_source_has_no_sqlite_parity_replay_fastpath() {
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|path| path.parent())
+        .expect("repo root")
+        .to_path_buf();
+    let cli_src = repo.join("crates/cli/src");
+    let forbidden_files = [
+        repo.join("crates/cli/src/sqlite_parity_fast.rs"),
+        repo.join("crates/cli/build.rs"),
+    ];
+    for path in forbidden_files {
+        assert!(
+            !path.exists(),
+            "{} must not exist; parity replay tables are forbidden",
+            path.display()
+        );
+    }
+
+    for entry in fs::read_dir(&cli_src).expect("read cli src") {
+        let entry = entry.expect("cli src entry");
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let text = fs::read_to_string(&path).expect("read cli source");
+        for needle in [
+            "sqlite_parity_fast",
+            "GENERATED_STDIN_CASES",
+            "GENERATED_ARG_CASES",
+            "expected_stdout",
+            "finish_fast_output",
+            "surface_output",
+            "without_engine_startup",
+        ] {
+            assert!(
+                !text.contains(needle),
+                "{} contains forbidden parity replay marker `{}`",
+                path.display(),
+                needle
+            );
+        }
+    }
 }
 
 /// `ProcessMetrics::default` is the fallback for platforms without

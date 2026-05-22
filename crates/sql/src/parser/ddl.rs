@@ -8,7 +8,6 @@ pub(crate) fn bind_create_table(
     create_table: sqlparser::ast::CreateTable,
 ) -> Result<PreparedTemplate> {
     if create_table.or_replace
-        || crate::parser::bind::create_table_is_session_scoped(&create_table)
         || create_table.external
         || create_table.dynamic
         || create_table.global.is_some()
@@ -42,6 +41,7 @@ pub(crate) fn bind_create_table(
         return bind_create_table_as_select(conn, schema, schema_epoch, sql, create_table);
     }
 
+    let session_scoped = crate::parser::bind::create_table_is_session_scoped(&create_table);
     let (schema, name) = split_name(create_table.name)?;
     let mut columns = Vec::with_capacity(create_table.columns.len());
     let mut column_lookup = std::collections::HashMap::new();
@@ -71,16 +71,29 @@ pub(crate) fn bind_create_table(
         param_layout: ParamLayout::default(),
         output_columns: Arc::from([]),
         readonly: false,
-        kind: PreparedKind::CreateTable(CreateTableSpec {
-            schema,
-            name,
-            if_not_exists: create_table.if_not_exists,
-            columns,
-            constraints,
-            strict: create_table.strict,
-            without_rowid: create_table.without_rowid,
-            normalized_sql: Some(sql.to_owned()),
-        }),
+        kind: if session_scoped {
+            PreparedKind::CreateTempTable(CreateTableSpec {
+                schema,
+                name,
+                if_not_exists: create_table.if_not_exists,
+                columns,
+                constraints,
+                strict: create_table.strict,
+                without_rowid: create_table.without_rowid,
+                normalized_sql: Some(sql.to_owned()),
+            })
+        } else {
+            PreparedKind::CreateTable(CreateTableSpec {
+                schema,
+                name,
+                if_not_exists: create_table.if_not_exists,
+                columns,
+                constraints,
+                strict: create_table.strict,
+                without_rowid: create_table.without_rowid,
+                normalized_sql: Some(sql.to_owned()),
+            })
+        },
     })
 }
 
@@ -315,7 +328,7 @@ fn source_output_names(source: &SelectSource) -> Vec<String> {
                 .map(select_plan_output_names)
                 .unwrap_or_default()
         }
-        SelectSource::SqliteSchema => [
+        SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => [
             "type".to_owned(),
             "name".to_owned(),
             "tbl_name".to_owned(),
@@ -365,7 +378,7 @@ fn source_output_affinities(source: &SelectSource) -> Vec<redlinedb_kernel::cata
                 .map(|plan| ctas_projection_affinities(plan))
                 .unwrap_or_default()
         }
-        SelectSource::SqliteSchema => vec![
+        SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => vec![
             redlinedb_kernel::catalog::Affinity::Text,
             redlinedb_kernel::catalog::Affinity::Text,
             redlinedb_kernel::catalog::Affinity::Text,
@@ -773,11 +786,7 @@ pub(crate) fn bind_create_trigger(
     let when_time = match period {
         sqlparser::ast::TriggerPeriod::Before => TriggerTimeKind::Before,
         sqlparser::ast::TriggerPeriod::After => TriggerTimeKind::After,
-        sqlparser::ast::TriggerPeriod::InsteadOf => {
-            return Err(Error::UnsupportedSql(
-                "INSTEAD OF triggers on views are not yet supported (followup)".to_owned(),
-            ));
-        }
+        sqlparser::ast::TriggerPeriod::InsteadOf => TriggerTimeKind::InsteadOf,
         other => {
             return Err(Error::UnsupportedSql(format!(
                 "CREATE TRIGGER period not supported: {other:?}"

@@ -2,6 +2,7 @@ pub mod combiner;
 pub mod lanes;
 pub mod manager;
 pub mod payload;
+pub(crate) mod policy;
 pub mod record;
 pub mod segment;
 
