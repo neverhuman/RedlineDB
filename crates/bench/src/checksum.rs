@@ -16,7 +16,12 @@
 //! `seed_kv`/`checksum` paths consume the full struct to compare engines
 //! byte-for-byte.
 
+use std::collections::BTreeMap;
+
 use sha2::{Digest, Sha256};
+
+use crate::engine::CellValue;
+use crate::report::Checksum;
 
 /// Hash a single row's bytes into a 64-bit fingerprint. Folds the SHA-256
 /// digest into the first 8 bytes so the value is JSON-friendly while still
@@ -93,6 +98,77 @@ impl DatasetChecksum {
             row_count: self.row_count.saturating_add(other.row_count),
             key_xor: self.key_xor ^ other.key_xor,
             payload_hash: folded,
+        }
+    }
+}
+
+pub fn checksum_from_rows(label: &str, rows: &[Vec<CellValue>]) -> Checksum {
+    let mut hasher = Sha256::new();
+    let mut row_payloads = Vec::with_capacity(rows.len());
+    let mut keys = Vec::with_capacity(rows.len());
+    let mut payload_bytes = 0_i64;
+    let mut version_sum = 0_i64;
+    for (idx, row) in rows.iter().enumerate() {
+        let mut row_buf = Vec::new();
+        for cell in row {
+            encode_cell_for_digest(cell, &mut row_buf);
+            match cell {
+                CellValue::Integer(value) => version_sum = version_sum.saturating_add(*value),
+                CellValue::Text(value) => {
+                    payload_bytes = payload_bytes.saturating_add(value.len() as i64)
+                }
+                CellValue::Blob(value) => {
+                    payload_bytes = payload_bytes.saturating_add(value.len() as i64)
+                }
+                CellValue::Null | CellValue::Real(_) => {}
+            }
+        }
+        hasher.update(b"row\0");
+        hasher.update((row_buf.len() as u64).to_le_bytes());
+        hasher.update(&row_buf);
+        row_payloads.push(row_buf);
+        let key = match row.first() {
+            Some(CellValue::Integer(value)) => *value as u64,
+            _ => idx as u64,
+        };
+        keys.push(key);
+    }
+    let mut index_consistency = BTreeMap::new();
+    index_consistency.insert(format!("{label}_digest"), format!("ok rows={}", rows.len()));
+    Checksum {
+        rows: rows.len() as i64,
+        version_sum,
+        payload_bytes,
+        content_hash: format!("{:x}", hasher.finalize()),
+        index_consistency,
+        dataset: Some(DatasetChecksum {
+            row_count: rows.len() as u64,
+            key_xor: key_xor(keys),
+            payload_hash: payload_hash(row_payloads.iter().map(|row| row.as_slice())),
+        }),
+    }
+}
+
+fn encode_cell_for_digest(cell: &CellValue, out: &mut Vec<u8>) {
+    match cell {
+        CellValue::Null => out.push(b'n'),
+        CellValue::Integer(value) => {
+            out.push(b'i');
+            out.extend_from_slice(&value.to_le_bytes());
+        }
+        CellValue::Real(value) => {
+            out.push(b'r');
+            out.extend_from_slice(&value.to_bits().to_le_bytes());
+        }
+        CellValue::Text(value) => {
+            out.push(b't');
+            out.extend_from_slice(&(value.len() as u64).to_le_bytes());
+            out.extend_from_slice(value.as_bytes());
+        }
+        CellValue::Blob(value) => {
+            out.push(b'b');
+            out.extend_from_slice(&(value.len() as u64).to_le_bytes());
+            out.extend_from_slice(value);
         }
     }
 }

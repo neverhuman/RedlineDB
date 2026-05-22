@@ -1,5 +1,5 @@
 fast:
-  ./scripts/just/run.sh fast
+  ./scripts/just/fast.sh
 
 fast-check:
   ./scripts/just/run.sh fast-check

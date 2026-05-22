@@ -86,6 +86,14 @@
       "command": "just score",
       "purpose": "verify agent workspace markers remain routed"
     },
+    "agent/": {
+      "command": "bash scripts/check_audit_policy_mirror.sh",
+      "purpose": "verify jankurai v1.5.1 compatibility policy mirrors the project policy"
+    },
+    "agent/audit-policy.toml": {
+      "command": "bash scripts/check_audit_policy_mirror.sh",
+      "purpose": "verify the compatibility audit policy cannot drift from .jankurai/audit-policy.toml"
+    },
     ".cargo/": {
       "command": "just fast",
       "purpose": "verify cargo configuration builds successfully"
@@ -223,8 +231,12 @@
       "purpose": "verify app surfaces remain routed through the audit"
     },
     "contracts/": {
-      "command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-      "purpose": "advisory contract drift scan until project-specific contract checks exist"
+      "command": "rtk just ffi-symbol-diff",
+      "purpose": "verify exported C ABI symbols stay aligned with the sqlite3-compatible contract surface"
+    },
+    "contracts/c-abi/": {
+      "command": "rtk just ffi-symbol-diff",
+      "purpose": "verify the canonical hand-authored C ABI header stays aligned with exported symbols"
     },
     "crates/": {
       "command": "just fast",
@@ -263,11 +275,11 @@
       "purpose": "verify coverage evidence docs remain routed"
     },
     "docs/architecture/": {
-      "command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+      "command": "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
       "purpose": "verify architecture docs remain visible to the audit"
     },
     "docs/decisions/": {
-      "command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+      "command": "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
       "purpose": "verify decision records remain visible to the audit"
     },
     "examples/perfect-web-api-db/backend/src/background_job.rs": {

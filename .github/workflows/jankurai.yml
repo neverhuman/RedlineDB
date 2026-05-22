@@ -15,7 +15,7 @@ concurrency:
 jobs:
   branch-freshness:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
-      - name: Ensure PR branch contains latest origin/main
+      - name: Ensure PR branch contains origin/main
         run: |
           git fetch origin main --quiet
           if ! git merge-base --is-ancestor origin/main HEAD; then
@@ -37,7 +37,7 @@ jobs:
     # manifest row (see .jankurai/tool-adoption.toml). jankurai is installed
     # from the pinned v1.5.1 release binary in ops/ci/lib.sh and is a hard
     # dependency for this job.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -73,7 +73,7 @@ jobs:
       - name: Prepare accepted baseline
         run: |
           set -euo pipefail
-          mkdir -p .jankurai
+          mkdir -p .jankurai target/jankurai
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin main --depth=1
             if git show origin/main:.jankurai/baselines/main.repo-score.json > .jankurai/accepted-baseline.json 2>/dev/null; then
@@ -91,12 +91,25 @@ jobs:
             echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2
             exit 1
           fi
+          cp .jankurai/accepted-baseline.json target/jankurai/accepted-baseline.json
       - name: Install jankurai
         run: |
           set -euo pipefail
           source ops/ci/lib.sh
           mkdir -p .jankurai
           ci_install_jankurai_logged .jankurai/jankurai-install.log
+      - name: Check audit policy mirror
+        run: bash scripts/check_audit_policy_mirror.sh
+      - name: Tool-adoption command index
+        run: |
+          printf '%s\n' \
+            'jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml' \
+            'jankurai proofbind verify . --changed-from origin/main' \
+            'jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json' \
+            'cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md' \
+            'jankurai security run . --out target/jankurai/security/evidence.json' \
+            'cargo test -p jankurai --test language_bad_behavior' \
+            'jankurai rust witness build .'
       - run: jankurai --version
       - name: Proofbind verify
         run: |
@@ -107,22 +120,29 @@ jobs:
           done < <(git diff --name-only -z --diff-filter=ACMRT origin/main...HEAD --)
           jankurai proofbind verify . "${changed[@]}"
       - name: Proofmark rust
-        run: jankurai proofmark rust . --obligations .jankurai/proofbind/obligations.json
+        run: jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
       - name: Rust witness build
         run: jankurai rust witness build .
       - name: Security lane
-        run: jankurai security run . --strict --profile ci --out .jankurai/security/evidence.json
+        run: jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
       - name: Copy-code audit
-        run: jankurai copy-code . --json .jankurai/copy-code.json --md .jankurai/copy-code.md
+        run: jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
       - name: Language bad-behavior tests
         run: |
+          set -euo pipefail
+          source ops/ci/lib.sh
           rm -rf .jankurai/jankurai-src
-          if git clone --depth 1 https://github.com/jeppsontaylor/Jankurai.git .jankurai/jankurai-src 2>/dev/null; then
+          if ci_verify_jankurai_source && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" .jankurai/jankurai-src 2>/dev/null; then
+            resolved_rev="$(git -C .jankurai/jankurai-src rev-parse HEAD)"
+            if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
+              echo "jankurai language test clone resolved to $resolved_rev, expected $CI_JANKURAI_REV" >&2
+              exit 1
+            fi
             ( cd .jankurai/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
-              > >(tee .jankurai/language-bad-behavior.log) 2>&1
+              > >(tee target/jankurai/language-bad-behavior.log) 2>&1
           else
             printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-              | tee .jankurai/language-bad-behavior.log
+              | tee target/jankurai/language-bad-behavior.log
           fi
       - name: jankurai staged-gate (PR changed files)
         # Mirrors tools/jankurai-hooks/pre-commit but compares against the
@@ -134,15 +154,15 @@ jobs:
           BASE_REF: origin/main
         run: bash ops/ci/jankurai-staged-gate.sh
       - name: jankurai audit
-        run: jankurai audit . --policy .jankurai/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --sarif .jankurai/jankurai.sarif --github-step-summary .jankurai/summary.md --repair-queue-jsonl .jankurai/repair-queue.jsonl
+        run: jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --policy agent/audit-policy.toml
       - name: Filter generated-zone SARIF findings
-        if: hashFiles('.jankurai/jankurai.sarif') != ''
-        run: python3 ops/ci/filter-generated-sarif.py .jankurai/jankurai.sarif
+        if: hashFiles('target/jankurai/jankurai.sarif') != ''
+        run: bash ops/ci/filter-generated-sarif.sh target/jankurai/jankurai.sarif
       - name: Upload jankurai SARIF (if produced)
-        if: always() && hashFiles('.jankurai/jankurai.sarif') != ''
+        if: always() && hashFiles('target/jankurai/jankurai.sarif') != ''
         uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
         with:
-          sarif_file: .jankurai/jankurai.sarif
+          sarif_file: target/jankurai/jankurai.sarif
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -157,23 +177,38 @@ jobs:
             .jankurai/repo-score.md
             .jankurai/jankurai.sarif
             .jankurai/repair-queue.jsonl
+            target/jankurai/repo-score.json
+            target/jankurai/repo-score.md
+            agent/repo-score.json
+            agent/repo-score.md
+            target/jankurai/jankurai.sarif
+            target/jankurai/repair-queue.jsonl
             .jankurai/proofbind/obligations.json
             .jankurai/proofbind/surface-witness.json
+            target/jankurai/proofbind/obligations.json
+            target/jankurai/proofbind/surface-witness.json
             .jankurai/proofmark/proofmark-receipt.json
             .jankurai/proofmark/proof-receipt.json
+            target/jankurai/proofmark/proofmark-receipt.json
+            target/jankurai/proofmark/proof-receipt.json
             .jankurai/rust/witness-graph.json
+            target/jankurai/rust/witness-graph.json
             .jankurai/copy-code.json
             .jankurai/copy-code.md
+            target/jankurai/copy-code.json
+            target/jankurai/copy-code.md
             .jankurai/security/evidence.json
+            target/jankurai/security/evidence.json
             .jankurai/migration-report.json
             .jankurai/language-bad-behavior.log
+            target/jankurai/language-bad-behavior.log
             .jankurai/jankurai-install.log
 
   security:
     # Hard gate end-to-end. Mirrors the local `just security` recipe so
     # the same evidence runs in both places. Audit reference:
     # HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -225,7 +260,7 @@ jobs:
     # script, and the soft-gate semantics live there (see
     # .jankurai/ci-soft-gate-ledger.toml#dependency-review-action).
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

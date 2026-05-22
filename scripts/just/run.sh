@@ -27,6 +27,7 @@ sqlite_parity_full_compare=("${sqlite_parity_full_select[@]}" --deny-skips)
 sqlite_parity_reference_bin="${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-sqlite3}"
 sqlite_jankurai_comparison_json="benchmark-results/sqlite-parity/latest/jankurai-comparison.json"
 sqlite_jankurai_comparison_csv="benchmark-results/sqlite-parity/latest/jankurai-comparison.csv"
+redlinedb_audit_policy="agent/audit-policy.toml"
 
 ensure_sqlite_parity_reference() {
   if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
@@ -70,7 +71,8 @@ run_sqlite_jankurai_compare() {
   local sqlite_checkout
   sqlite_checkout="$(ensure_sqlite_source_checkout "$sqlite_ref")"
   mkdir -p target/sqlite-jankurai benchmark-results/sqlite-parity/latest
-  jankurai audit "$sqlite_checkout" --mode advisory --json target/sqlite-jankurai/repo-score.json --md target/sqlite-jankurai/repo-score.md --no-score-history
+  rtk bash scripts/check_audit_policy_mirror.sh
+  jankurai audit "$sqlite_checkout" --mode advisory --json target/sqlite-jankurai/repo-score.json --md target/sqlite-jankurai/repo-score.md --no-score-history --policy "$redlinedb_audit_policy"
   rtk cargo run -p redlinedb-bench --bin sqlite_parity -- jankurai-compare \
     --redlinedb-score .jankurai/repo-score.json \
     --sqlite-score target/sqlite-jankurai/repo-score.json \
@@ -103,8 +105,7 @@ sqlite_parity_report_args() {
 
 case "$lane" in
   fast)
-    ./scripts/just/cache-warm.sh
-    bash ops/ci/fast.sh
+    ./scripts/just/fast.sh
     ;;
   fast-check)
     ./scripts/just/fast-check.sh
@@ -314,7 +315,9 @@ case "$lane" in
     "$0" fuzz-parity
     ;;
   score)
-    jankurai audit . --policy .jankurai/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --score-history .jankurai/score-history.jsonl --score-history-csv .jankurai/score-history.csv
+    rtk bash scripts/check_audit_policy_mirror.sh
+    rm -f target/jankurai/audit-state.json
+    jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --score-history .jankurai/score-history.jsonl --score-history-csv .jankurai/score-history.csv --policy "$redlinedb_audit_policy"
     ;;
   doctor)
     jankurai doctor --fail-on high

@@ -7,6 +7,7 @@ use super::case::Case;
 use super::engine::{EngineOutput, EngineSpec, SkippedCase, default_tmp_root};
 use super::normalize::normalize_output;
 use super::report;
+use super::text::sanitize_identifier;
 
 #[derive(Debug, Default)]
 pub struct RunSummary {
@@ -96,7 +97,10 @@ pub fn compare_cases(
     repetitions: usize,
     sqlite_version: Option<String>,
 ) -> Result<RunSummary> {
-    let tmp_root = tmp_root.unwrap_or_else(default_tmp_root);
+    let tmp_root = match tmp_root {
+        Some(tmp_root) => tmp_root,
+        None => default_tmp_root(),
+    };
     let started = Instant::now();
     let mut summary = RunSummary::default();
     for skipped_case in skipped {
@@ -254,17 +258,10 @@ fn normalize_compare_output(case: &Case, output: &EngineOutput, value: &str) -> 
     let marker = format!(
         "/{}-{}-{}",
         case.display_id(),
-        sanitize_engine_name(&output.engine),
+        sanitize_identifier(&output.engine),
         std::process::id()
     );
     normalized.replace(&marker, "/{{CASE_TMP}}")
-}
-
-fn sanitize_engine_name(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
-        .collect()
 }
 
 fn finish_summary(mut summary: RunSummary) -> Result<RunSummary> {

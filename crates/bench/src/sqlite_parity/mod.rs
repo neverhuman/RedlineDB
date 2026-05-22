@@ -11,3 +11,4 @@ pub mod report;
 pub mod report_gen;
 pub mod runner;
 pub mod source_lines;
+pub mod text;

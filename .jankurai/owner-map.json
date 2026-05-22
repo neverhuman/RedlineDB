@@ -1,6 +1,8 @@
 {
   "owners": {
     ".agents/": "agent",
+    "agent/": "agent",
+    "agent/audit-policy.toml": "agent",
     ".cargo/": "workspace",
     ".cursor/": "agent",
     ".editorconfig": "agent",

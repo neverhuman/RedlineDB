@@ -71,6 +71,6 @@ the resulting `DomainError`.
 
 - `cargo build --workspace --locked` — catches dependency cycles
   and back-edges.
-- `jankurai audit . --mode advisory` — catches path-based
+- `jankurai audit . --policy agent/audit-policy.toml --mode advisory` — catches path-based
   violations and reports them under the `boundaries` category.
 - `just fast` — runs both as part of the default proof lane.
