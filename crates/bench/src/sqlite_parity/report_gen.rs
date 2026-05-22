@@ -26,15 +26,21 @@ use io::{
 use paper::paper_loc_writes;
 use ranking::{build_report, parse_raw_records, ranked_csv};
 use readme::{
-    metrics_block, parse_jankurai_score, readme_block, replace_jankurai_badge,
-    replace_metrics_block, replace_parity_badges, replace_readme_block,
+    jankurai_breakdown_block, metrics_block, parse_jankurai_score, readme_block,
+    replace_jankurai_badge, replace_jankurai_breakdown_block, replace_metrics_block,
+    replace_parity_badges, replace_readme_block,
 };
-use svg::{ksloc_svg, latency_svg};
+use svg::{
+    beyond_sqlite_feature_progress_svg, code_shape_svg, jankurai_score_svg, ksloc_svg, latency_svg,
+    median_test_performance_svg,
+};
 
 const README_BEGIN: &str = "<!-- sqlite-parity-report:begin -->";
 const README_END: &str = "<!-- sqlite-parity-report:end -->";
 const README_METRICS_BEGIN: &str = "<!-- sqlite-parity-metrics:begin -->";
 const README_METRICS_END: &str = "<!-- sqlite-parity-metrics:end -->";
+const README_JANKURAI_BREAKDOWN_BEGIN: &str = "<!-- sqlite-jankurai-breakdown:begin -->";
+const README_JANKURAI_BREAKDOWN_END: &str = "<!-- sqlite-jankurai-breakdown:end -->";
 const JANKURAI_BADGE_BEGIN: &str = "<!-- jankurai-score-badge:begin -->";
 const JANKURAI_BADGE_END: &str = "<!-- jankurai-score-badge:end -->";
 const LATENCY_TABLE_ANCHOR: &str = "sqlite-parity-ranked-latency-table";
@@ -53,9 +59,12 @@ pub struct ReportOptions {
     pub plot: PathBuf,
     pub ksloc_plot: PathBuf,
     pub performance_histogram_plot: Option<PathBuf>,
+    pub median_test_performance_plot: Option<PathBuf>,
     pub jankurai_score: Option<PathBuf>,
     pub jankurai_comparison: Option<PathBuf>,
     pub jankurai_comparison_plot: Option<PathBuf>,
+    pub jankurai_score_plot: Option<PathBuf>,
+    pub code_shape_plot: Option<PathBuf>,
     pub updated_date: String,
     pub check: bool,
     pub command: Vec<String>,
@@ -69,6 +78,9 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let raw_text = fs::read_to_string(&options.input)
         .with_context(|| format!("read sqlite parity raw input {}", options.input.display()))?;
     let raw_records = parse_raw_records(&raw_text)?;
+    let beyond_sqlite_backlog_text =
+        fs::read_to_string(repo_root.join("docs/beyond-sqlite-gaps.md"))
+            .with_context(|| "read beyond-SQLite backlog docs".to_owned())?;
 
     let raw_out = options.out_dir.join("raw.jsonl");
     let ranked_out = options.out_dir.join("ranked.csv");
@@ -105,6 +117,11 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let summary_json = serde_json::to_string_pretty(&report.summary)? + "\n";
     let svg = latency_svg(&report.ranked, &report.summary);
     let ksloc_svg = ksloc_svg(&source_summary, &options.updated_date);
+    let beyond_sqlite_feature_progress_plot =
+        PathBuf::from("assets/beyond-sqlite-feature-progress.svg");
+    let beyond_sqlite_feature_progress_svg_text =
+        beyond_sqlite_feature_progress_svg(&beyond_sqlite_backlog_text, &options.updated_date)?;
+    let median_test_performance_svg = median_test_performance_svg(&report.summary);
     let histogram =
         performance_histogram::build(report.ranked.iter().map(|case| case.improvement_pct));
     let performance_histogram_svg = performance_histogram::svg(&histogram, &options.updated_date);
@@ -114,6 +131,18 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         .map(jankurai_compare::read_comparison)
         .transpose()?;
     let jankurai_comparison_svg = jankurai_comparison.as_ref().map(jankurai_compare::svg);
+    let jankurai_score_svg = jankurai_comparison
+        .as_ref()
+        .and_then(|comparison| jankurai_score_svg(comparison, &options.updated_date));
+    let code_shape_svg = jankurai_comparison
+        .as_ref()
+        .and_then(|comparison| code_shape_svg(comparison, &options.updated_date));
+    if options.jankurai_score_plot.is_some() && jankurai_score_svg.is_none() {
+        bail!("jankurai score plot requested but comparison data is unavailable");
+    }
+    if options.code_shape_plot.is_some() && code_shape_svg.is_none() {
+        bail!("code shape plot requested but comparison data is unavailable");
+    }
     let paper_writes = paper_loc_writes(&repo_root, &source_summary)?;
     let readme_text = fs::read_to_string(&options.readme)
         .with_context(|| format!("read README {}", options.readme.display()))?;
@@ -129,10 +158,16 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     readme = replace_metrics_block(
         &readme,
         &metrics_block(
+            &beyond_sqlite_feature_progress_plot,
             &options.ksloc_plot,
-            options.jankurai_comparison_plot.as_deref(),
+            options.jankurai_score_plot.as_deref(),
+            options.code_shape_plot.as_deref(),
+            options.median_test_performance_plot.as_deref(),
         ),
     )?;
+    if let Some(plot) = options.jankurai_comparison_plot.as_deref() {
+        readme = replace_jankurai_breakdown_block(&readme, &jankurai_breakdown_block(plot))?;
+    }
     readme = replace_parity_badges(&readme, &report.summary);
     if let Some(score_path) = &options.jankurai_score {
         let score_text = fs::read_to_string(score_path)
@@ -183,9 +218,19 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         sha256_hex(svg.as_bytes()),
     );
     output_hashes.insert(
+        beyond_sqlite_feature_progress_plot.display().to_string(),
+        sha256_hex(beyond_sqlite_feature_progress_svg_text.as_bytes()),
+    );
+    output_hashes.insert(
         options.ksloc_plot.display().to_string(),
         sha256_hex(ksloc_svg.as_bytes()),
     );
+    if let Some(path) = &options.median_test_performance_plot {
+        output_hashes.insert(
+            path.display().to_string(),
+            sha256_hex(median_test_performance_svg.as_bytes()),
+        );
+    }
     if let Some(path) = &options.performance_histogram_plot {
         output_hashes.insert(
             path.display().to_string(),
@@ -196,6 +241,12 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         &options.jankurai_comparison_plot,
         jankurai_comparison_svg.as_ref(),
     ) {
+        output_hashes.insert(path.display().to_string(), sha256_hex(svg.as_bytes()));
+    }
+    if let (Some(path), Some(svg)) = (&options.jankurai_score_plot, jankurai_score_svg.as_ref()) {
+        output_hashes.insert(path.display().to_string(), sha256_hex(svg.as_bytes()));
+    }
+    if let (Some(path), Some(svg)) = (&options.code_shape_plot, code_shape_svg.as_ref()) {
         output_hashes.insert(path.display().to_string(), sha256_hex(svg.as_bytes()));
     }
     output_hashes.insert(
@@ -227,13 +278,26 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         (summary_out, summary_json),
         (manifest_out, manifest_json),
         (options.plot, svg),
+        (
+            beyond_sqlite_feature_progress_plot,
+            beyond_sqlite_feature_progress_svg_text,
+        ),
         (options.ksloc_plot, ksloc_svg),
         (options.readme, readme),
     ];
+    if let Some(path) = options.median_test_performance_plot {
+        writes.push((path, median_test_performance_svg));
+    }
     if let Some(path) = options.performance_histogram_plot {
         writes.push((path, performance_histogram_svg));
     }
     if let (Some(path), Some(svg)) = (options.jankurai_comparison_plot, jankurai_comparison_svg) {
+        writes.push((path, svg));
+    }
+    if let (Some(path), Some(svg)) = (options.jankurai_score_plot, jankurai_score_svg) {
+        writes.push((path, svg));
+    }
+    if let (Some(path), Some(svg)) = (options.code_shape_plot, code_shape_svg) {
         writes.push((path, svg));
     }
     writes.extend(paper_writes);

@@ -129,6 +129,16 @@ name = "sql-test"
 purpose = "targeted redlinedb-sql test proof"
 
 [[lane]]
+command = "just beyond-sqlite-manifest"
+name = "beyond-sqlite-manifest"
+purpose = "verify beyond-SQLite backlog ranking, source tips, ownership, and proof-lane routing"
+
+[[lane]]
+command = "just beyond-postgres-reference"
+name = "beyond-postgres-reference"
+purpose = "Docker-backed Postgres reference oracle for accepted beyond-SQLite SQL surfaces"
+
+[[lane]]
 command = "just ffi-abi"
 name = "ffi-abi"
 purpose = "C ABI compatibility proof"

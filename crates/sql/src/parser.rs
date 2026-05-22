@@ -133,7 +133,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     }
 
     let dialect = SQLiteDialect {};
-    let sql_for_parser = prepare::strip_cte_materialized_hints(sql);
+    let sql_for_parser = prepare::strip_alter_add_column_if_not_exists_hint(
+        &prepare::strip_cte_materialized_hints(sql),
+    );
     let mut statements = match Parser::parse_sql(&dialect, &sql_for_parser) {
         Ok(statements) => statements,
         Err(first_err) => {

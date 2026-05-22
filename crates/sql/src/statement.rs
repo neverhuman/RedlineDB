@@ -231,6 +231,12 @@ pub enum InsertConflict {
 }
 
 #[derive(Debug, Clone)]
+pub enum DmlValue {
+    Expr(Expr),
+    Default,
+}
+
+#[derive(Debug, Clone)]
 pub struct UpsertPlan {
     pub target: Option<UpsertTarget>,
     pub action: UpsertAction,
@@ -250,7 +256,7 @@ pub enum UpsertAction {
 
 #[derive(Debug, Clone)]
 pub struct UpsertUpdatePlan {
-    pub assignments: Vec<(usize, Expr)>,
+    pub assignments: Vec<(usize, DmlValue)>,
     pub selection: Option<Expr>,
 }
 
@@ -335,7 +341,7 @@ pub struct SelectPlan {
 pub struct InsertPlan {
     pub table: Arc<TableDef>,
     pub columns: Vec<usize>,
-    pub rows: Vec<Vec<Expr>>,
+    pub rows: Vec<Vec<DmlValue>>,
     pub source_select: Option<Box<SelectPlan>>,
     pub default_values: bool,
     pub returning: Option<Vec<SelectItem>>,
@@ -345,7 +351,7 @@ pub struct InsertPlan {
 #[derive(Debug, Clone)]
 pub struct UpdatePlan {
     pub table: Arc<TableDef>,
-    pub assignments: Vec<(usize, Expr)>,
+    pub assignments: Vec<(usize, DmlValue)>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
 }

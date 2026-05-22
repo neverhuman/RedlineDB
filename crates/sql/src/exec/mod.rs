@@ -28,8 +28,8 @@ use crate::error::{Error, Result};
 use crate::planner::{self, ExplainMetrics};
 use crate::session::SessionState;
 use crate::statement::{
-    AnalyzePlan, CreateTableAsSelectSpec, ExecutionResult, ExplainPlan, PragmaPlan, PreparedKind,
-    PreparedTemplate, RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource,
+    AnalyzePlan, CreateTableAsSelectSpec, DmlValue, ExecutionResult, ExplainPlan, PragmaPlan,
+    PreparedKind, PreparedTemplate, RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource,
     SelectRuntimeTx, SelectSource,
 };
 use crate::value::{SqlValue, canonicalize, compare_values, is_truthy};

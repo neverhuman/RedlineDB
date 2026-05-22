@@ -98,15 +98,20 @@ impl ReturningRuntimeExt for Vec<Vec<SqlValue>> {
 
 pub(crate) fn build_row(
     table: &Arc<TableDef>,
-    row: &[Expr],
+    row: &[DmlValue],
     columns: &[usize],
     bindings: &[Option<SqlValue>],
 ) -> Result<Vec<SqlValue>> {
     let mut values = vec![SqlValue::Null; table.columns.len()];
     let mut provided = vec![false; table.columns.len()];
-    for (ordinal, expr) in columns.iter().copied().zip(row.iter()) {
-        values[ordinal] = eval_scalar(expr, &RowContext::Empty, bindings)?;
-        provided[ordinal] = true;
+    for (ordinal, value) in columns.iter().copied().zip(row.iter()) {
+        match value {
+            DmlValue::Expr(expr) => {
+                values[ordinal] = eval_scalar(expr, &RowContext::Empty, bindings)?;
+                provided[ordinal] = true;
+            }
+            DmlValue::Default => {}
+        }
     }
     build_default_values_for_omitted(table, values, &provided)
 }
@@ -127,6 +132,26 @@ pub(crate) fn build_row_from_values(
 
 pub(crate) fn build_default_row(table: &Arc<TableDef>) -> Result<Vec<SqlValue>> {
     build_default_values(table, vec![SqlValue::Null; table.columns.len()])
+}
+
+pub(crate) fn evaluate_dml_value(
+    table: &Arc<TableDef>,
+    ordinal: usize,
+    value: &DmlValue,
+    row: &RowContext<'_>,
+    bindings: &[Option<SqlValue>],
+    scratch: &mut EvalScratch,
+) -> Result<SqlValue> {
+    match value {
+        DmlValue::Expr(expr) => eval_scalar(expr, row, bindings),
+        DmlValue::Default => {
+            let column = table
+                .columns
+                .get(ordinal)
+                .ok_or_else(|| Error::UnknownColumn(format!("ordinal {ordinal}")))?;
+            Ok(column_default_value(column, scratch)?.unwrap_or(SqlValue::Null))
+        }
+    }
 }
 
 pub(crate) fn build_default_values(
@@ -226,40 +251,50 @@ pub(crate) fn compute_stored_generated_columns(
 pub(crate) fn apply_row_affinity(table: &TableDef, values: Vec<SqlValue>) -> Result<Vec<SqlValue>> {
     let mut out = values;
     for (idx, column) in table.columns.iter().enumerate() {
-        out[idx] = apply_affinity(out[idx].clone(), column.affinity)
+        let original = out[idx].clone();
+        let coerced = apply_affinity(original.clone(), column.affinity)
             .map_err(|_| Error::DatatypeMismatch)?;
-        validate_strict_storage(table, column, &out[idx])?;
+        out[idx] = apply_strict_storage(table, column, &original, coerced)?;
     }
     Ok(out)
 }
 
-fn validate_strict_storage(
+fn apply_strict_storage(
     table: &TableDef,
     column: &redlinedb_kernel::catalog::ColumnDef,
-    value: &SqlValue,
-) -> Result<()> {
-    if !table.is_strict() || matches!(value, SqlValue::Null) || strict_declared_any(column) {
-        return Ok(());
+    original: &SqlValue,
+    value: SqlValue,
+) -> Result<SqlValue> {
+    if !table.is_strict() || matches!(&value, SqlValue::Null) || strict_declared_any(column) {
+        return Ok(value);
+    }
+    if strict_declared_boolean(column) {
+        return match original {
+            SqlValue::Integer(0 | 1) => Ok(value),
+            _ => Err(strict_storage_error(table, column, original)),
+        };
+    }
+    if strict_declared_uuid(column) {
+        return match original {
+            SqlValue::Text(text) => canonicalize_uuid_text(text.as_ref())
+                .map(|uuid| SqlValue::Text(Arc::from(uuid.as_str())))
+                .ok_or_else(|| strict_storage_error(table, column, original)),
+            _ => Err(strict_storage_error(table, column, original)),
+        };
     }
     let allowed = match column.affinity {
-        redlinedb_kernel::catalog::Affinity::Integer => matches!(value, SqlValue::Integer(_)),
-        redlinedb_kernel::catalog::Affinity::Real => matches!(value, SqlValue::Real(_)),
-        redlinedb_kernel::catalog::Affinity::Text => matches!(value, SqlValue::Text(_)),
-        redlinedb_kernel::catalog::Affinity::Blob => matches!(value, SqlValue::Blob(_)),
+        redlinedb_kernel::catalog::Affinity::Integer => matches!(&value, SqlValue::Integer(_)),
+        redlinedb_kernel::catalog::Affinity::Real => matches!(&value, SqlValue::Real(_)),
+        redlinedb_kernel::catalog::Affinity::Text => matches!(&value, SqlValue::Text(_)),
+        redlinedb_kernel::catalog::Affinity::Blob => matches!(&value, SqlValue::Blob(_)),
         redlinedb_kernel::catalog::Affinity::Numeric => {
-            matches!(value, SqlValue::Integer(_) | SqlValue::Real(_))
+            matches!(&value, SqlValue::Integer(_) | SqlValue::Real(_))
         }
     };
     if allowed {
-        Ok(())
+        Ok(value)
     } else {
-        Err(Error::ConstraintViolation(format!(
-            "cannot store {} value in {} column {}.{}",
-            storage_class_name(value),
-            strict_type_name(column),
-            table.name,
-            column.name
-        )))
+        Err(strict_storage_error(table, column, &value))
     }
 }
 
@@ -268,6 +303,49 @@ fn strict_declared_any(column: &redlinedb_kernel::catalog::ColumnDef) -> bool {
         .declared_type
         .as_deref()
         .is_some_and(|declared| declared.eq_ignore_ascii_case("ANY"))
+}
+
+fn strict_declared_boolean(column: &redlinedb_kernel::catalog::ColumnDef) -> bool {
+    column.declared_type.as_deref().is_some_and(|declared| {
+        declared.eq_ignore_ascii_case("BOOLEAN") || declared.eq_ignore_ascii_case("BOOL")
+    })
+}
+
+fn strict_declared_uuid(column: &redlinedb_kernel::catalog::ColumnDef) -> bool {
+    column
+        .declared_type
+        .as_deref()
+        .is_some_and(|declared| declared.eq_ignore_ascii_case("UUID"))
+}
+
+fn canonicalize_uuid_text(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 36 {
+        return None;
+    }
+    for (idx, byte) in bytes.iter().copied().enumerate() {
+        match idx {
+            8 | 13 | 18 | 23 if byte == b'-' => {}
+            8 | 13 | 18 | 23 => return None,
+            _ if byte.is_ascii_hexdigit() => {}
+            _ => return None,
+        }
+    }
+    Some(text.to_ascii_lowercase())
+}
+
+fn strict_storage_error(
+    table: &TableDef,
+    column: &redlinedb_kernel::catalog::ColumnDef,
+    value: &SqlValue,
+) -> Error {
+    Error::ConstraintViolation(format!(
+        "cannot store {} value in {} column {}.{}",
+        storage_class_name(value),
+        strict_type_name(column),
+        table.name,
+        column.name
+    ))
 }
 
 fn strict_type_name(column: &redlinedb_kernel::catalog::ColumnDef) -> &str {

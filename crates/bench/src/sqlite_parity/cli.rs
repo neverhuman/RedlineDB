@@ -122,11 +122,17 @@ struct ReportArgs {
     #[arg(long)]
     performance_histogram_plot: Option<PathBuf>,
     #[arg(long)]
+    median_test_performance_plot: Option<PathBuf>,
+    #[arg(long)]
     jankurai_score: Option<PathBuf>,
     #[arg(long)]
     jankurai_comparison: Option<PathBuf>,
     #[arg(long)]
     jankurai_comparison_plot: Option<PathBuf>,
+    #[arg(long)]
+    jankurai_score_plot: Option<PathBuf>,
+    #[arg(long)]
+    code_shape_plot: Option<PathBuf>,
     #[arg(long)]
     updated_date: String,
     #[arg(long)]
@@ -286,9 +292,12 @@ fn report(args: ReportArgs) -> Result<()> {
         plot: args.plot,
         ksloc_plot: args.ksloc_plot,
         performance_histogram_plot: args.performance_histogram_plot,
+        median_test_performance_plot: args.median_test_performance_plot,
         jankurai_score: args.jankurai_score,
         jankurai_comparison: args.jankurai_comparison,
         jankurai_comparison_plot: args.jankurai_comparison_plot,
+        jankurai_score_plot: args.jankurai_score_plot,
+        code_shape_plot: args.code_shape_plot,
         updated_date: args.updated_date,
         check: args.check,
         command: std::env::args().collect(),
