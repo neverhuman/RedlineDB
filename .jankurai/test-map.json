@@ -134,6 +134,11 @@
       "command": "just score",
       "purpose": "ensure paper/figure assets stay routed and indexed"
     },
+    "assets/beyond-sqlite-feature-progress.svg": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify the beyond-SQLite feature progress chart stays in sync with the backlog status table",
+      "proof_lane": "sqlite-parity-report-check"
+    },
     "CHANGELOG.md": {
       "command": "just score",
       "purpose": "verify release log discipline (docs/release.md)"
@@ -270,6 +275,11 @@
       "command": "just score",
       "purpose": "verify agent-readable documentation remains routed"
     },
+    "docs/beyond-sqlite-gaps.md": {
+      "command": "rtk cargo test -p redlinedb-sql --test beyond_sqlite_manifest --quiet --locked",
+      "purpose": "verify beyond-SQLite backlog ranking, source tips, ownership, and proof-lane routing",
+      "proof_lane": "beyond-sqlite-manifest"
+    },
     "docs/COVERAGE_*.md": {
       "command": "just score",
       "purpose": "verify coverage evidence docs remain routed"
@@ -289,6 +299,21 @@
     "ops/": {
       "command": "just fast",
       "purpose": "verify ops surfaces remain visible to the audit"
+    },
+    ".github/workflows/ci.yml": {
+      "command": "just beyond-sqlite-manifest",
+      "purpose": "verify the beyond-SQLite CI lane remains routed through the manifest and aggregate test relay",
+      "proof_lane": "beyond-sqlite-manifest"
+    },
+    "ops/ci/beyond-postgres-reference.sh": {
+      "command": "rtk bash ops/ci/beyond-postgres-reference.sh",
+      "purpose": "verify the Docker-backed Postgres reference lane runs locally without a pre-set URL",
+      "proof_lane": "beyond-postgres-reference"
+    },
+    "ops/ci/beyond-postgres.compose.yml": {
+      "command": "rtk just beyond-postgres-reference",
+      "purpose": "verify the local PostgreSQL 16 reference service matches the beyond-SQLite oracle lane",
+      "proof_lane": "beyond-postgres-reference"
     },
     "schemas/coverage-*.schema.json": {
       "command": "just score",
@@ -337,6 +362,26 @@
       "purpose": "prove the Rust sqlite_parity runner parses the canonical manifest and executes the P0 memory scale smoke",
       "proof_lane": "sqlite-parity-scale-smoke"
     },
+    "crates/bench/src/sqlite_parity/report_gen/": {
+      "command": "rtk cargo test -p redlinedb-bench --bin sqlite_parity --locked",
+      "purpose": "prove README metric generation, summary JSON fields, and report SVG generation",
+      "proof_lane": "sqlite-parity-report-check"
+    },
+    "assets/sqlite-jankurai-score.svg": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify generated compact Jankurai score chart has no drift",
+      "proof_lane": "sqlite-parity-report-check"
+    },
+    "assets/sqlite-code-shape.svg": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify generated compact code-shape chart has no drift",
+      "proof_lane": "sqlite-parity-report-check"
+    },
+    "assets/sqlite-median-test-performance.svg": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify generated compact median test performance chart has no drift",
+      "proof_lane": "sqlite-parity-report-check"
+    },
     "crates/bench/src/bin/sqlite_parity.rs": {
       "command": "rtk cargo test -p redlinedb-bench --quiet --locked && rtk just sqlite-parity-scale-smoke",
       "purpose": "prove the sqlite_parity binary entrypoint routes to the bench-owned scale runner",
@@ -350,6 +395,26 @@
       "command": "rtk cargo test -p redlinedb-sql --test parser_proptest --quiet --locked",
       "purpose": "property-based parser regressions for literal categories and edge-case no-panic",
       "proof_lane": "fast"
+    },
+    "tips/beyond/": {
+      "command": "rtk cargo test -p redlinedb-sql --test beyond_sqlite_manifest --quiet --locked",
+      "purpose": "verify every beyond-SQLite source tip is cited by the committed backlog",
+      "proof_lane": "beyond-sqlite-manifest"
+    },
+    "crates/sql/tests/beyond_sqlite_manifest.rs": {
+      "command": "rtk cargo test -p redlinedb-sql --test beyond_sqlite_manifest --quiet --locked",
+      "purpose": "verify the beyond-SQLite manifest parser and routing checks",
+      "proof_lane": "beyond-sqlite-manifest"
+    },
+    "crates/sql/tests/beyond_oracle/": {
+      "command": "rtk just beyond-postgres-reference",
+      "purpose": "verify reusable beyond-SQLite oracle runners against local Docker-backed Postgres",
+      "proof_lane": "beyond-postgres-reference"
+    },
+    "crates/sql/tests/beyond_postgres_reference.rs": {
+      "command": "rtk just beyond-postgres-reference",
+      "purpose": "verify accepted beyond-SQLite behavior against Postgres and SQLite control behavior",
+      "proof_lane": "beyond-postgres-reference"
     },
     "crates/ffi/tests/safety_invariants.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test safety_invariants --quiet --locked",

@@ -30,6 +30,76 @@ pub(crate) fn strip_cte_materialized_hints(sql: &str) -> String {
     }
 }
 
+pub(crate) fn strip_alter_add_column_if_not_exists_hint(sql: &str) -> String {
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut i = 0usize;
+    let mut changed = false;
+
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' | b'"' | b'`' => {
+                let end = quoted_end(bytes, i, bytes[i]);
+                out.push_str(&sql[i..end]);
+                i = end;
+            }
+            b'[' => {
+                let end = bracket_quoted_end(bytes, i);
+                out.push_str(&sql[i..end]);
+                i = end;
+            }
+            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+                let end = line_comment_end(bytes, i);
+                out.push_str(&sql[i..end]);
+                i = end;
+            }
+            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
+                let end = block_comment_end(bytes, i);
+                out.push_str(&sql[i..end]);
+                i = end;
+            }
+            b if is_ident_start(b) => {
+                let word_end = word_end(bytes, i);
+                let word = &sql[i..word_end];
+                if word.eq_ignore_ascii_case("add")
+                    && let Some(end) = alter_add_column_if_not_exists_end(sql, word_end)
+                {
+                    out.push_str(word);
+                    out.push_str(" COLUMN");
+                    i = end;
+                    changed = true;
+                    continue;
+                }
+                out.push_str(word);
+                i = word_end;
+            }
+            _ => {
+                let ch = sql[i..]
+                    .chars()
+                    .next()
+                    .expect("scanner index is on a char boundary");
+                out.push(ch);
+                i += ch.len_utf8();
+            }
+        }
+    }
+
+    if changed { out } else { sql.to_owned() }
+}
+
+fn alter_add_column_if_not_exists_end(sql: &str, after_add: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    let column_start = skip_ws_and_comments(bytes, after_add);
+    let column_end = word_end_if(bytes, column_start, "column")?;
+    let if_start = skip_ws_and_comments(bytes, column_end);
+    let if_end = word_end_if(bytes, if_start, "if")?;
+    let not_start = skip_ws_and_comments(bytes, if_end);
+    let not_end = word_end_if(bytes, not_start, "not")?;
+    let exists_start = skip_ws_and_comments(bytes, not_end);
+    let exists_end = word_end_if(bytes, exists_start, "exists")?;
+    Some(exists_end)
+}
+
 pub(crate) fn strip_sqlite_table_index_hints(sql: &str) -> Result<String> {
     let bytes = sql.as_bytes();
     let mut out = String::with_capacity(sql.len());

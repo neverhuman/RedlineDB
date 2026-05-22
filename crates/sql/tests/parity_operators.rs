@@ -183,6 +183,13 @@ fn redline_ilike_matches_irrespective_of_case() {
 }
 
 #[test]
+fn redline_ilike_handles_unicode_case_folding() {
+    let pair = Pair::new();
+    let rows = pair.redline_rows("SELECT 'Äpfel' ILIKE 'ä%'");
+    assert_eq!(rows, vec![vec![SqlValue::Integer(1)]]);
+}
+
+#[test]
 fn ilike_any_is_explicitly_rejected() {
     // `ILIKE ANY(<array>)` is a Postgres-specific surface. RedlineDB
     // rejects it; the upstream sqlparser also can't parse the trailing

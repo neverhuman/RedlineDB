@@ -145,6 +145,12 @@ sql-check:
 sql-test:
   ./scripts/just/run.sh sql-test
 
+beyond-sqlite-manifest:
+  ./scripts/just/run.sh beyond-sqlite-manifest
+
+beyond-postgres-reference:
+  ./scripts/just/run.sh beyond-postgres-reference
+
 ffi-check:
   ./scripts/just/run.sh ffi-check
 

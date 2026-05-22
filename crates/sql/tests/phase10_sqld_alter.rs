@@ -25,6 +25,23 @@ fn alter_table_add_column_with_default() {
 }
 
 #[test]
+fn alter_table_add_column_if_not_exists_is_idempotent() {
+    let (_dir, conn) = open();
+    conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
+    conn.execute("INSERT INTO t VALUES (1)").expect("insert");
+
+    conn.execute("ALTER TABLE t ADD COLUMN IF NOT EXISTS b TEXT NOT NULL DEFAULT 'x'")
+        .expect("add column first time");
+    conn.execute("ALTER TABLE t ADD COLUMN IF NOT EXISTS b TEXT NOT NULL DEFAULT 'x'")
+        .expect("add column second time");
+
+    let mut stmt = conn.prepare("SELECT a, b FROM t").expect("prepare");
+    assert_eq!(stmt.step().expect("step"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("a"), 1);
+    assert_eq!(stmt.column_text(1).expect("b"), "x");
+}
+
+#[test]
 fn alter_table_rename_column_updates_schema() {
     let (_dir, conn) = open();
     conn.execute("CREATE TABLE t(a INTEGER)").expect("create");

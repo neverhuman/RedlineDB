@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:b9c1ec9588b1261295af14a2104e61ec681a93ef45bf2ca533649fab97ff96aa",
-  "input_fingerprint": "sha256:6a436c25cfda889243167eb6757c3ef7651536eeee2da261912ad99de8f2ea76",
-  "policy_fingerprint": "sha256:9ce83425f57aaad5d2324256d4a8eddec2cf60cfc7d6198fb4bbb2e3d38f5388",
+  "report_fingerprint": "sha256:44c378b37efd875b39e41330c29bb95f6e5c4156584cb82956388e128847b184",
+  "input_fingerprint": "sha256:e8b2ca4c494752ddf1dc4ece439793b5e442163679a3bbf5d43d3c46c764a178",
+  "policy_fingerprint": "sha256:5a2898520d912ff5eccfaf041b5eea0afaddb0c4521b4a36f90dcc5124904729",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779460409",
+  "generated_at": "1779472442",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -18,9 +18,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1779460409",
-  "started_at": "1779460409",
-  "elapsed_ms": 5741,
+  "run_id": "1779472442",
+  "started_at": "1779472442",
+  "elapsed_ms": 5978,
   "scope": {
     "mode": "full",
     "paths": []
@@ -47,7 +47,7 @@
     }
   },
   "git": {
-    "head": "f0b48eb",
+    "head": "d727d53",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -339,7 +339,8 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1702",
+        "rust bad-behavior advisory signals: 1717",
+        "docker bad-behavior advisory signals: 1",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -352,11 +353,12 @@
       "score": 65,
       "weighted_points": 7.8,
       "evidence": [
-        "largest authored code file: crates/bench/src/sqlite_parity/jankurai_compare.rs (721 LOC)",
+        "largest authored code file: crates/cli/src/render.rs (652 LOC)",
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 67 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1702",
+        "copy-code advisory classes found: 68 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 1717",
+        "docker bad-behavior advisory signals: 1",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -1042,7 +1044,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-22T14:33:24.391771046+00:00",
+    "generated_at": "2026-05-22T17:53:56.384761959+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1080,20 +1082,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 998,
-      "files_considered": 316,
-      "active_files": 316,
+      "files_scanned": 1010,
+      "files_considered": 320,
+      "active_files": 320,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 67,
+      "warning_classes": 68,
       "hard_instances": 0,
-      "warning_instances": 175,
-      "duplicate_lines": 147,
-      "duplicate_tokens": 429,
-      "duplicate_bytes": 4026,
-      "total_redundant_lines": 230,
-      "total_redundant_tokens": 640,
-      "total_redundant_bytes": 6111
+      "warning_instances": 177,
+      "duplicate_lines": 148,
+      "duplicate_tokens": 431,
+      "duplicate_bytes": 4042,
+      "total_redundant_lines": 231,
+      "total_redundant_tokens": 642,
+      "total_redundant_bytes": 6127
     },
     "classes": [
       {
@@ -3040,8 +3042,8 @@
           {
             "path": "crates/sql/src/parser/savepoint.rs",
             "language": "rust",
-            "start_line": 83,
-            "end_line": 84,
+            "start_line": 84,
+            "end_line": 85,
             "unit_name": "strip_optional_savepoint_keyword"
           }
         ]
@@ -3156,7 +3158,7 @@
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 17 lower-ranked classes"
+      "showing the top 50 classes and omitting 18 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3442,17 +3444,17 @@
       "problem": "`Code shape and semantic surface` scored 65 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/bench/src/sqlite_parity/jankurai_compare.rs (721 LOC)",
+        "largest authored code file: crates/cli/src/render.rs (652 LOC)",
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 67 (advisory only, no score impact)"
+        "copy-code advisory classes found: 68 (advisory only, no score impact)"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:e67802b6948e5396f2462511eae26ef61627282505429b2f25780f0523d2d25c",
+      "fingerprint": "sha256:64c9bf7e684b20502dfe5748d895572c013858483dd94de9d87b9a4d9b744c8c",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",

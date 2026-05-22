@@ -66,7 +66,7 @@ pub(crate) fn bind_insert(
                 for row in values.rows {
                     let mut exprs = Vec::with_capacity(row.len());
                     for expr in row {
-                        exprs.push(normalize_expr(expr, &mut params)?);
+                        exprs.push(normalize_dml_value(expr, &mut params)?);
                     }
                     rows.push(exprs);
                 }
@@ -190,7 +190,7 @@ pub(crate) fn bind_update(
                 col.name
             )));
         }
-        assignments.push((ordinal, normalize_expr(assignment.value, &mut params)?));
+        assignments.push((ordinal, normalize_dml_value(assignment.value, &mut params)?));
     }
     let selection = match update.selection {
         Some(expr) => Some(normalize_expr(expr, &mut params)?),
@@ -378,7 +378,7 @@ pub(crate) fn bind_insert_conflict(
                                 col.name
                             )));
                         }
-                        Ok((ordinal, normalize_expr(assignment.value, params)?))
+                        Ok((ordinal, normalize_dml_value(assignment.value, params)?))
                     })
                     .collect::<Result<Vec<_>>>()?,
                 selection: match do_update.selection {
@@ -393,4 +393,22 @@ pub(crate) fn bind_insert_conflict(
         target,
         action,
     }))))
+}
+
+fn normalize_dml_value(expr: Expr, params: &mut ParamLayout) -> Result<DmlValue> {
+    if is_default_dml_expr(&expr) {
+        return Ok(DmlValue::Default);
+    }
+    Ok(DmlValue::Expr(normalize_expr(expr, params)?))
+}
+
+fn is_default_dml_expr(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Identifier(ident) if ident.value.eq_ignore_ascii_case("default")
+    ) || matches!(
+        expr,
+        Expr::Value(v) if crate::parser::bind::as_bind_name(&v.value)
+            .is_some_and(|name| name.eq_ignore_ascii_case("default"))
+    )
 }
