@@ -263,7 +263,7 @@ pub(crate) fn eval_scalar(
             }
             let value = eval_scalar(expr, row, bindings)?;
             let pattern = eval_scalar(pattern, row, bindings)?;
-            like_result(value, pattern, *negated, escape_char.clone(), true)?
+            ilike_result(value, pattern, *negated, escape_char.clone())?
         }
         Expr::Between {
             expr,

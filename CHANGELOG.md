@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-## [1.0.28] - 2026-05-22
+## [2.0.0] - 2026-05-22
 
-SQLite parity fast-path release.
+Beyond-SQLite first tranche release.
 
 ### Changed
 
@@ -12,7 +12,7 @@ SQLite parity fast-path release.
   templated tempfile cases, and selected catalog dot-command reference errors.
 - SQLite parity report artifacts were refreshed after the fast-path pass.
 - Workspace package metadata, lockfile entries, and install docs now target
-  `1.0.28`.
+  `2.0.0`.
 
 ## [1.0.27] - 2026-05-22
 

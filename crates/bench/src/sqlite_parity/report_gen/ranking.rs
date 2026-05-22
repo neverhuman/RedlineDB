@@ -174,6 +174,8 @@ pub(super) fn build_report(
         .first()
         .map(|case| case.improvement_pct)
         .unwrap_or(0.0);
+    let sqlite_case_median_ns = median_ranked_value(&ranked, |case| case.sqlite_median_ns);
+    let redline_case_median_ns = median_ranked_value(&ranked, |case| case.redline_median_ns);
     let faster_cases = ranked
         .iter()
         .filter(|case| case.improvement_pct > 0.0)
@@ -196,6 +198,8 @@ pub(super) fn build_report(
             coverage_pct,
             measured_samples,
             warmup_samples: warmup,
+            sqlite_case_median_ns,
+            redline_case_median_ns,
             median_latency_gap_pct,
             worst_latency_gap_pct,
             faster_cases,
@@ -259,6 +263,15 @@ fn median_improvement_pct(ranked: &[RankedCase]) -> f64 {
     } else {
         ranked[ranked.len() / 2].improvement_pct
     }
+}
+
+fn median_ranked_value(ranked: &[RankedCase], value: impl Fn(&RankedCase) -> u128) -> u128 {
+    if ranked.is_empty() {
+        return 0;
+    }
+    let mut values = ranked.iter().map(value).collect::<Vec<_>>();
+    values.sort_unstable();
+    values[values.len() / 2]
 }
 
 fn performance_failures(

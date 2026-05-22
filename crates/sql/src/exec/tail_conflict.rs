@@ -218,11 +218,19 @@ fn apply_upsert_update(
     }
     let old_values = existing.values.clone();
     let mut values = existing.values.clone();
+    let mut scratch = EvalScratch::default();
     for (ordinal, expr) in &update.assignments {
         if *ordinal >= values.len() {
             return Err(Error::UnknownColumn(format!("ordinal {ordinal}")));
         }
-        values[*ordinal] = eval_scalar(expr, &upsert_row, ctx.bindings)?;
+        values[*ordinal] = evaluate_dml_value(
+            ctx.table,
+            *ordinal,
+            expr,
+            &upsert_row,
+            ctx.bindings,
+            &mut scratch,
+        )?;
     }
     values = apply_row_affinity(ctx.table, values)?;
     // Phase-11 SQL-D A6: an UPSERT DO UPDATE may have touched an input

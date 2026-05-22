@@ -31,6 +31,8 @@ pub(crate) struct SummaryJson {
     pub(super) coverage_pct: f64,
     pub(super) measured_samples: usize,
     pub(super) warmup_samples: usize,
+    pub(super) sqlite_case_median_ns: u128,
+    pub(super) redline_case_median_ns: u128,
     pub(super) median_latency_gap_pct: f64,
     pub(super) worst_latency_gap_pct: f64,
     pub(super) faster_cases: usize,

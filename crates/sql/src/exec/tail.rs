@@ -58,11 +58,19 @@ pub(crate) fn execute_update(
             }
             let old_values = fresh.values.clone();
             let mut values = fresh.values.clone();
+            let mut scratch = EvalScratch::default();
             for (ordinal, expr) in &plan.assignments {
                 if *ordinal >= values.len() {
                     return Err(Error::UnknownColumn(format!("ordinal {ordinal}")));
                 }
-                values[*ordinal] = eval_scalar(expr, &RowContext::Table(&fresh), bindings)?;
+                values[*ordinal] = evaluate_dml_value(
+                    &plan.table,
+                    *ordinal,
+                    expr,
+                    &RowContext::Table(&fresh),
+                    bindings,
+                    &mut scratch,
+                )?;
             }
             values = apply_row_affinity(&plan.table, values)?;
             // Phase-11 SQL-D A6: an UPDATE may have touched an input to
@@ -190,7 +198,7 @@ fn fire_update_triggers(
     new_rowid: redlinedb_kernel::format::RowId,
     old_values: &[SqlValue],
     new_values: &[SqlValue],
-    assignments: &[(usize, sqlparser::ast::Expr)],
+    assignments: &[(usize, DmlValue)],
 ) -> Result<()> {
     let schema = conn.engine().schema_snapshot();
     let changed_cols: Vec<String> = assignments

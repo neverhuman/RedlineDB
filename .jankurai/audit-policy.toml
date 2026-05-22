@@ -106,6 +106,12 @@ extra_excluded_paths = [
   "crates/sql/tests/phase10_j1_compat.rs",
   "crates/sql/tests/smoke_select.rs",
   "crates/sql/tests/smoke_dml.rs",
+  # Beyond-SQLite oracle fixtures are intentionally dense with SQL literals.
+  # They are proof inputs validated by beyond-sqlite-manifest and
+  # beyond-postgres-reference lanes, not product-language scan targets.
+  "crates/sql/tests/beyond_sqlite_manifest.rs",
+  "crates/sql/tests/beyond_postgres_reference.rs",
+  "crates/sql/tests/beyond_oracle/",
   "crates/sql/src/connection/session.rs",
   "crates/sql/src/statement.rs",
   "crates/sql/src/planner/helpers.rs",

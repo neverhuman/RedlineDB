@@ -6,7 +6,8 @@ use super::io::{consume_line_endings, escape_md, improvement_cell};
 use super::{
     JANKURAI_BADGE_BEGIN, JANKURAI_BADGE_END, JankuraiScore, LATENCY_TABLE_ANCHOR,
     MIN_FASTER_CASES, MIN_MEDIAN_IMPROVEMENT_PCT, MIN_WORST_IMPROVEMENT_PCT, README_BEGIN,
-    README_END, README_METRICS_BEGIN, README_METRICS_END, RankedCase, SummaryJson,
+    README_END, README_JANKURAI_BREAKDOWN_BEGIN, README_JANKURAI_BREAKDOWN_END,
+    README_METRICS_BEGIN, README_METRICS_END, RankedCase, SummaryJson,
 };
 
 pub(super) fn readme_block(
@@ -76,20 +77,49 @@ pub(super) fn readme_block(
     out
 }
 
-pub(super) fn metrics_block(ksloc_plot: &Path, jankurai_comparison_plot: Option<&Path>) -> String {
+pub(super) fn metrics_block(
+    beyond_sqlite_feature_progress_plot: &Path,
+    ksloc_plot: &Path,
+    jankurai_score_plot: Option<&Path>,
+    code_shape_plot: Option<&Path>,
+    median_test_performance_plot: Option<&Path>,
+) -> String {
     let mut out = format!(
-        "## Engine Metrics\n\n{README_METRICS_BEGIN}\n\n![SQLite vs RedlineDB production KSLOC chart]({})\n\n",
-        ksloc_plot.display()
+        "## Engine Metrics\n\n{README_METRICS_BEGIN}\n\n![Beyond-SQLite feature progress chart]({})\n\n",
+        beyond_sqlite_feature_progress_plot.display()
     );
-    if let Some(plot) = jankurai_comparison_plot {
+    out.push_str(&format!(
+        "![SQLite vs RedlineDB production KSLOC chart]({})\n\n",
+        ksloc_plot.display()
+    ));
+    if let Some(plot) = jankurai_score_plot {
         out.push_str(&format!(
-            "![RedlineDB vs SQLite Jankurai comparison chart]({})\n\n",
+            "![RedlineDB vs SQLite Jankurai score chart]({})\n\n",
+            plot.display()
+        ));
+    }
+    if let Some(plot) = code_shape_plot {
+        out.push_str(&format!(
+            "![RedlineDB vs SQLite code shape score chart]({})\n\n",
+            plot.display()
+        ));
+    }
+    if let Some(plot) = median_test_performance_plot {
+        out.push_str(&format!(
+            "![RedlineDB vs SQLite median test performance chart]({})\n\n",
             plot.display()
         ));
     }
     out.push_str(README_METRICS_END);
     out.push('\n');
     out
+}
+
+pub(super) fn jankurai_breakdown_block(jankurai_comparison_plot: &Path) -> String {
+    format!(
+        "## Jankurai Breakdown\n\n{README_JANKURAI_BREAKDOWN_BEGIN}\n\n![RedlineDB vs SQLite Jankurai audit breakdown]({})\n\n{README_JANKURAI_BREAKDOWN_END}\n",
+        jankurai_comparison_plot.display()
+    )
 }
 
 pub(super) fn replace_metrics_block(readme: &str, block: &str) -> Result<String> {
@@ -124,6 +154,40 @@ pub(super) fn replace_metrics_block(readme: &str, block: &str) -> Result<String>
     next.push_str(block);
     next.push('\n');
     next.push_str(&readme[insert..]);
+    Ok(next)
+}
+
+pub(super) fn replace_jankurai_breakdown_block(readme: &str, block: &str) -> Result<String> {
+    if let (Some(begin), Some(end)) = (
+        readme.find(README_JANKURAI_BREAKDOWN_BEGIN),
+        readme.find(README_JANKURAI_BREAKDOWN_END),
+    ) {
+        let mut begin = begin;
+        let mut end = end + README_JANKURAI_BREAKDOWN_END.len();
+        if let Some(heading_start) = readme[..begin].rfind("## Jankurai Breakdown") {
+            begin = heading_start;
+        }
+        end = consume_line_endings(readme, end);
+        let mut next = String::new();
+        next.push_str(&readme[..begin]);
+        next.push_str(block.trim_end());
+        next.push_str("\n\n");
+        next.push_str(&readme[end..]);
+        return Ok(next);
+    }
+
+    let heading = "## Architecture\n";
+    let Some(index) = readme.find(heading) else {
+        bail!("README lacks Architecture heading for Jankurai breakdown block");
+    };
+    let mut next = String::new();
+    next.push_str(&readme[..index]);
+    if !next.ends_with('\n') {
+        next.push('\n');
+    }
+    next.push_str(block.trim_end());
+    next.push_str("\n\n");
+    next.push_str(&readme[index..]);
     Ok(next)
 }
 
