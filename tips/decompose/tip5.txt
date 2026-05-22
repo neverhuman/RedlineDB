@@ -1,0 +1,360 @@
+## Decision
+
+Yes: **a decomposition strategy is possible**, and it is the best starting point—but only as a **policy-level decomposition**, not as a free-form “swap any kernel component” system.
+
+The winning strategy is a **hybrid autoresearch program**:
+
+1. **Create a small set of stable “gene seams”** where variants can be generated, tested, and recombined.
+2. **Keep page formats, WAL record formats, MVCC visibility semantics, commit publication, and recovery ordering fixed** at first.
+3. Run autonomous search in two lanes:
+
+   * **Recombinable policy genes** for WAL scheduling, B-tree cursor/search behavior, heap placement/read behavior, SQL planning/execution, and buffer flushing.
+   * **Deep focused kernel drills** for the highest-value hot paths where recombination is too risky.
+
+RedlineDB already has the right shape for this. The repo describes itself as a Rust embedded SQL engine with SQLite-shaped compatibility, MVCC, concurrent B-tree, group-commit WAL, and crash recovery, and the workspace is already split into `kernel`, `sql`, `bench`, adapters, FFI, CLI, and server crates. ([GitHub][1]) ([GitHub][2]) The README also gives us an excellent hard gate: `rtk just fast`, `rtk just sqlite-parity-scale-ci`, and `rtk just sqlite-parity-report-check`, with a current live parity report showing 1127 / 1127 generated cases passed as of 2026-05-22. ([GitHub][1])
+
+## Why not evolve the whole kernel freely?
+
+Because the storage kernel has several correctness-critical couplings that are easy for generated code to break silently.
+
+The `Engine` owns transaction state, buffer pool, heap, catalog, row locks, WAL coordinator, checkpoint/control stores, and live B-tree index handles; its config already exposes knobs like WAL config, commit durability, lock shards, heap lanes, page size, and buffer pool pages.  The commit path coordinates WAL append, CSN reservation/publication, durability barriers, catalog publication, index-handle installation/removal, failpoints, and lock release.  The heap writes tuple versions and undo records into pages, sets heads in row directories, appends WAL deltas/page images, and tracks page LSNs.   The B-tree uses page headers, high keys, sibling links, latches, a structure lock, WAL deltas, page images, cursor scans, split behavior, and uniqueness locks.  
+
+So the goal should **not** be “let AI replace the heap/index/WAL implementation.” The safer and more powerful goal is: **freeze the invariants, expose policy interfaces, and let AI generate many competing policies inside those interfaces.**
+
+## Recommended decomposition: 5 gene categories
+
+### 1. WAL scheduling gene — highest priority
+
+This is the best first gene seam. It has clear performance leverage, existing config knobs, and relatively clean correctness boundaries.
+
+Current WAL config already has segment size, buffer size, write-batch size, group-commit delay, group-commit max batch bytes, `lanes`, and a `semantic_combiner` flag.  The writer loop drains pending records, writes batches, waits for the group-commit window, resamples the flush target, drains to the target, fsyncs, records group-commit telemetry, and publishes durable LSN.  There is also a separate opt-in multi-lane WAL coordinator, but the file explicitly says the engine’s `Database` still uses the single-lane `WalCoordinator` directly.  The semantic combiner is similarly designed as a safe, disabled-by-default pure helper. 
+
+**Interface to standardize:**
+
+```rust
+trait WalSchedulePolicy {
+    fn write_batch_limit(&self, pending_bytes: usize, waiters: usize) -> usize;
+    fn group_commit_delay_us(&self, pending_bytes: usize, waiters: usize) -> u64;
+    fn should_resample_flush_target(&self) -> bool;
+    fn extra_drain_limit_bytes(&self, target_gap_bytes: u64) -> usize;
+}
+```
+
+Keep these fixed: LSN reservation, record encoding, commit record semantics, durable-LSN publication, recovery scan behavior.
+
+**Autoresearch variants to generate:**
+
+* Static group-commit schedules: 0, 25, 50, 100, 200, 500 µs.
+* Adaptive delay based on pending bytes and number of blocked committers.
+* Aggressive drain vs bounded drain before fsync.
+* Batch-size policies that optimize for either throughput or tail latency.
+* WAL-buffer backpressure variants.
+* Later: safe integration of semantic combiner and multi-lane WAL, but only after a formal model/test harness proves recovery ordering.
+
+This is the cleanest place for broad autonomous search because many alternatives can share the same public behavior and differ only in timing/batching.
+
+### 2. B-tree cursor/search/split gene — high priority
+
+This is the second-best decomposable kernel seam. The index code already separates lookup, scan, cursor, mutate, maintenance, latches, and cells.  Point lookup descends to a leaf and walks right until the first entry key is past the search key.  Range scan already has a cursor-based implementation, batch materialization, pre-cursor equivalence path, and leaf-visit counters.  Insert builds physical keys as `logical || row_ref_suffix`, finds a leaf, binary-searches entries, rewrites leaves, and calls split logic under a structure lock when needed. 
+
+**Interface to standardize:**
+
+```rust
+trait IndexScanPolicy {
+    const BATCH_SIZE: usize;
+    fn stop_after_leaf(first_key: Option<&[u8]>, last_key: Option<&[u8]>, end: &[u8]) -> bool;
+    fn prefetch_next_leaf(current_entries: usize, right_link_exists: bool) -> bool;
+}
+
+trait LeafSplitPolicy {
+    fn split_point(entries: &[Entry], page_capacity: usize) -> usize;
+    fn duplicate_heavy_strategy(entries: &[Entry]) -> DuplicateSplitMode;
+}
+```
+
+Keep these fixed: page format, key encoding, sibling-link invariants, high-key semantics, WAL record shape, uniqueness correctness.
+
+**Autoresearch variants to generate:**
+
+* Cursor batch sizes: 64, 128, 256, 512, adaptive.
+* Early-stop rules for range scans.
+* Point-lookup fast path for unique indexes to avoid materializing a `Vec`.
+* Duplicate-heavy split strategies.
+* Leaf compaction/prune scheduling variants.
+* Optional prefetch of right sibling or heap pages during scan.
+
+This gene should be heavily tested against index equivalence, duplicate-key cases, uniqueness, split/recovery, and range-scan order.
+
+### 3. Heap placement / row-directory / undo-read gene — medium-high priority
+
+The heap has a natural internal structure: sharded row directories, relation row directories, append lanes, reusable page pools, buffer pool, optional WAL coordinator, and atomic row-id allocation.  Reads resolve the row head, read the current tuple, evaluate MVCC visibility, and follow the undo chain when the current tuple is invisible.  Writes use append lanes, write tuple/undo cells, and update row heads.  The SQL-facing mutation layer already funnels `insert`, `update`, `delete`, and relation-specific variants through heap methods. 
+
+**Interface to standardize:**
+
+```rust
+trait HeapPlacementPolicy {
+    fn lane_for_row(row_id: RowId, lane_count: usize) -> usize;
+    fn prefer_reusable_page(kind: PageKind, payload_len: usize) -> bool;
+}
+
+trait UndoReadPolicy {
+    fn prefetch_next_undo(depth: usize) -> bool;
+    fn abort_after_depth_hint(depth: usize) -> Option<usize>;
+}
+```
+
+Potentially also standardize a `RowDirectory` abstraction, but I would do that later because map replacement can introduce locking and correctness noise.
+
+**Autoresearch variants to generate:**
+
+* Lane mapping strategies.
+* Append-lane count tuning.
+* Reusable-page selection policy.
+* Undo-chain read fast paths.
+* Relation row-directory sharding policies.
+* Heap visibility recheck batching for index scans.
+
+Keep tuple layout, undo record layout, MVCC rules, and write-ahead page-LSN discipline fixed.
+
+### 4. SQL planner/executor gene — very high immediate ROI
+
+This may produce faster wins than kernel mutation. The README’s current worst-ranked latency cases are not purely storage-kernel cases: aggregate/group/having, JSON, scalar casts/string ops, CTEs, join subqueries, UPSERT, triggers/views, and DML with order/limit show up heavily. ([GitHub][1]) The SQL crate already has execution modules for expressions, indexes, aggregation, CTEs, JSON table-valued logic, triggers, views, window functions, set operations, and vectorized execution.  It also has a batch execution model with `RowBatch`, `ExecNode`, `ExecContext`, and `QueryMemoryBroker`.  The planner already exposes cost constants, access paths, join kinds, physical plan kinds, estimated rows/costs, memory budgets, and actual metrics. 
+
+**Interface to standardize:**
+
+```rust
+trait PlannerPolicy {
+    fn choose_join_kind(&self, left_rows: f64, right_rows: f64, has_index: bool, has_eq: bool) -> JoinKind;
+    fn aggregate_strategy(&self, input_rows: f64, group_cols: usize, ordered: bool) -> AggregateKind;
+    fn sort_strategy(&self, rows: f64, limit: Option<usize>) -> SortKind;
+}
+
+trait ExecBatchPolicy {
+    const ROW_BATCH_SIZE: usize;
+    const INDEX_BATCH_SIZE: usize;
+    fn materialize_threshold(rows: usize, width: usize) -> usize;
+}
+```
+
+**Autoresearch variants to generate:**
+
+* Join threshold policies around nested loop, index nested loop, and hash join. The current heuristic chooses nested loop for small inputs, index nested loop for indexable equality under certain row thresholds, hash join for equality, and nested loop otherwise. 
+* Aggregate strategy thresholds.
+* Top-N vs full-sort thresholds.
+* Batch sizes for materialization and index scans.
+* Covering-index and count-range shortcuts.
+* Scalar/JSON expression specialization to reduce allocations.
+* CTE/subquery materialization vs streaming policies.
+
+This is especially attractive because SQL-level variants can be parity-tested against SQLite without touching crash-recovery invariants.
+
+### 5. Buffer-pool / checkpoint / prefetch gene — second phase
+
+The buffer pool uses sharded `HashMap<PageId, FrameEntry>`, a clock-hand eviction policy, usage counts, dirty-page flushing gated by durable LSN, advisory prefetch, and flush batching.   This is decomposable, but I would make it second phase because a bad policy can make benchmark noise worse or expose timing-sensitive bugs.
+
+**Interface to standardize:**
+
+```rust
+trait EvictionPolicy {
+    fn victim_score(pin_count: usize, dirty: bool, usage_count: u8, page_lsn: Lsn, durable_lsn: Lsn) -> VictimScore;
+}
+
+trait DirtyFlushPolicy {
+    fn dirty_batch_size(resident_pages: usize, dirty_pages: usize) -> usize;
+    fn flush_order(frames: &mut [DirtyFrameMeta]);
+}
+
+trait PrefetchPolicy {
+    fn should_prefetch_scan_next_leaf(batch_len: usize, resident_pages: usize) -> bool;
+}
+```
+
+Keep page serialization, checksum validation, page-LSN flush rule, and `durable_lsn` gating fixed.
+
+## The actual autonomous-research architecture
+
+Use a **variant registry**, not ad hoc source rewrites. Each gene seam gets a manifest and a small set of legal mutation targets.
+
+Example manifest:
+
+```toml
+[variant]
+id = "wal_adaptive_delay_v3"
+seam = "wal_schedule"
+touches = ["crates/kernel/src/wal/manager/coordinator/writer.rs"]
+invariants = [
+  "no_lsn_format_change",
+  "no_commit_record_change",
+  "flush_until_returns_only_after_durable_lsn"
+]
+compatible_with = ["index_batch_*", "planner_join_*", "heap_lane_*"]
+```
+
+Each AI-generated candidate should be a small patch that implements one policy or one parameter family. Recombination should happen by selecting a policy vector:
+
+```toml
+[genome]
+wal_schedule = "wal_adaptive_delay_v3"
+index_scan = "cursor_batch_512_prefetch_right"
+heap_placement = "lane_hash_rowid_mix"
+planner = "join_threshold_v7"
+buffer_flush = "dirty_batch_128_lsn_sorted"
+```
+
+That lets you combine independent wins without letting agents rewrite arbitrary coupled storage code.
+
+## Testing strategy to maximize testing time
+
+Use a tiered gate. Full parity is precious; save it for serious candidates.
+
+### Tier 0: compile and local invariant tests
+
+Run only what the touched seam needs:
+
+* WAL candidate: `kernel-check`, WAL unit tests, recovery/failpoint slice.
+* Index candidate: index cursor/equivalence tests, split/duplicate/unique tests.
+* Heap candidate: MVCC visibility, update/delete/rollback tests.
+* SQL candidate: `sql-check`, category-specific parity subset.
+* Buffer candidate: buffer-pool tests, checkpoint/recovery slice.
+
+The repo already exposes just lanes for `kernel-check`, `kernel-test`, `sql-check`, `sql-test`, `sqlite-parity-scale-ci`, `phase9-failpoint-matrix`, `phase11-oltp-gap`, and related lanes. 
+
+### Tier 1: microbench and category parity
+
+Run targeted benchmarks based on touched code:
+
+* WAL: concurrent insert/update/commit workloads, fsync count, pwrite count, group-commit batch histogram.
+* B-tree: point lookup, range scan, duplicate-key insert, split-heavy insert, ordered-limit scan.
+* Heap: insert/update/delete, long undo chains, read-committed vs snapshot reads.
+* SQL: worst README categories—aggregate, JSON, scalar, CTE, join-subquery, DML order/limit, UPSERT, triggers/views. ([GitHub][1])
+* Buffer: scan, random lookup, checkpoint, dirty flush.
+
+### Tier 2: paired baseline race
+
+For every candidate that passes Tier 1:
+
+1. Run baseline and candidate in the same sandbox profile.
+2. Run each benchmark multiple times.
+3. Use median, p95, and worst-case regression.
+4. Reject candidates with large variance or suspicious one-off wins.
+5. Store the full metric vector, not just a single score.
+
+Fitness should be Pareto-style:
+
+```text
+hard constraints:
+  compile passes
+  targeted tests pass
+  no invariant test failure
+  no new parity failure
+
+score:
+  + geomean speedup on target cases
+  + worst-case latency improvement
+  + lower fsync/pwrite counts where relevant
+  - regression penalty on unrelated sentinel cases
+  - code-size/complexity penalty
+  - variance penalty
+```
+
+### Tier 3: full gate for finalists
+
+Only after a candidate or recombined genome wins Tier 2:
+
+```bash
+rtk just fast
+rtk just sqlite-parity-scale-ci
+rtk just sqlite-parity-report-check
+```
+
+Those match the repo’s default verification and parity gates. ([GitHub][1])
+
+### Tier 4: crash/recovery/failpoint matrix
+
+Run this only for storage-affecting candidates:
+
+* WAL scheduling
+* heap writes
+* B-tree mutation
+* buffer flushing/checkpoint
+* multi-lane WAL
+* semantic combiner
+
+Do **not** require this for pure SQL expression/planner variants unless they alter transaction boundaries or DML semantics.
+
+## Best initial focus
+
+I would start with **three parallel autoresearch tracks**.
+
+### Track A: WAL schedule policies
+
+This is the cleanest kernel research lane. It has config knobs, counters, a focused writer loop, and direct performance impact on multi-writer workloads. Start with group-commit/adaptive-drain policies before touching multi-lane WAL or semantic combining.
+
+Best first experiments:
+
+* Adaptive group-commit delay.
+* Adaptive `wal_write_batch_bytes`.
+* Flush-target resampling variants.
+* Drain-until-target vs drain-extra policies.
+* Commit latency vs throughput objective variants.
+
+Do **not** turn on semantic combiner in production search yet. It is promising, but the combiner comments correctly frame it as requiring safety-by-construction before real enablement. 
+
+### Track B: SQL planner/executor improvements against the worst parity cases
+
+This is the likely fastest path to visible benchmark wins. The README’s latency table points to categories where SQL execution dominates: aggregates, JSON, scalar expressions, CTEs, join subqueries, DML order/limit, view/trigger, and UPSERT. ([GitHub][1]) The planner already has policy-like heuristics for joins, aggregates, sorting, Top-N, and index-limit propagation.  The executor already has index access paths, cursor batching, count-range, covering-range, and ordered-limit helpers.  
+
+Best first experiments:
+
+* Join threshold policy search.
+* Aggregate strategy thresholds.
+* Top-N threshold variants.
+* Scalar/JSON expression specialization.
+* CTE materialization vs streaming.
+* Index batch size and early-stop tuning.
+
+This track should generate lots of safe variants because SQLite parity catches semantic divergence well.
+
+### Track C: B-tree cursor/range scan policies
+
+This sits between WAL and SQL. It can improve many SQL cases without changing page format. The current code already supports cursor scans and pre-cursor equivalence testing, making it a good recombination seam. 
+
+Best first experiments:
+
+* `MAX_BATCH` / cursor batch size variants.
+* Unique point-lookup fast path.
+* Heap-page grouped recheck tuning.
+* Ordered-limit early-stop variants.
+* Leaf prefetch variants.
+* Duplicate-key split policy variants.
+
+## What I would postpone
+
+I would delay these until the first three tracks produce stable wins:
+
+* Full multi-lane WAL in the engine.
+* Semantic WAL combiner enabled in normal workloads.
+* Page layout changes.
+* Tuple/undo format changes.
+* Recovery-order changes.
+* Replacing the row directory data structure wholesale.
+* Replacing the buffer pool eviction algorithm without better telemetry.
+
+Those may produce breakthroughs, but they are more likely to create subtle recovery, MVCC, or parity failures. They belong in a later “deep kernel research” program with model tests and crash simulation.
+
+## Final plan
+
+The best plan is:
+
+1. **Build policy seams for WAL schedule, SQL planner/executor, B-tree scan/search, heap placement, and buffer flush/eviction.**
+2. **Start autonomous generation on WAL scheduling, SQL planner/executor, and B-tree cursor policies.**
+3. **Keep storage invariants frozen.**
+4. **Run targeted tests first, full parity only on finalists.**
+5. **Recombine only policy variants that pass independent gates and touch disjoint seams.**
+6. **Promote variants by Pareto fitness: parity preserved, median/worst latency improved, low variance, no crash/recovery regression.**
+
+My strongest recommendation: **start with WAL scheduling + SQL worst-category optimization + B-tree cursor batching.** That gives the highest probability of real autonomous innovation while keeping breakage contained and test time focused.
+
+[1]: https://github.com/neverhuman/RedlineDB "GitHub - neverhuman/RedlineDB: Fastest SQL database period, 100% Rust, Jankurai, database ready for our superhuman future · GitHub"
+[2]: https://github.com/neverhuman/RedlineDB/blob/main/Cargo.toml "RedlineDB/Cargo.toml at main · neverhuman/RedlineDB · GitHub"
+
