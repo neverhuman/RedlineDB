@@ -16,7 +16,7 @@ repair. Pair this with `.jankurai/owner-map.json` (who owns the file) and
 ### 2. Future-hostile language
 - Evidence: source greps for the detector terms enumerated in
   `docs/language-bad-behavior.md`.
-- Proof lane: `just fast`, then `jankurai audit . --mode advisory`.
+- Proof lane: `just fast`, then `jankurai audit . --policy agent/audit-policy.toml --mode advisory`.
 
 ### 3. Repo rot
 - Evidence: bench TOMLs under `crates/bench/bench/`, module headers
@@ -105,7 +105,7 @@ zones and intentional carve-outs are listed in
 ## Rerun the audit
 
 ```
-jankurai audit . --mode advisory \
+jankurai audit . --policy agent/audit-policy.toml --mode advisory \
   --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 ```
 

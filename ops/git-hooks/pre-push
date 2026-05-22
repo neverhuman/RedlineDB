@@ -7,7 +7,8 @@
 set -euo pipefail
 
 echo "Running Jankurai audit..."
-jankurai audit . --policy .jankurai/audit-policy.toml --json .jankurai/repo-score.json --md .jankurai/repo-score.md
+bash "$(git rev-parse --show-toplevel)/scripts/check_audit_policy_mirror.sh"
+jankurai audit . --json .jankurai/repo-score.json --md .jankurai/repo-score.md --policy agent/audit-policy.toml
 
 FINDINGS=$(grep -c 'Rule: `HLT-' .jankurai/repo-score.md || true)
 IGNORED=$(grep -E -c 'Rule: \`(HLT-001-DEAD-MARKER|HLT-018-PERF-CONCURRENCY-DRIFT)\`' .jankurai/repo-score.md || true)

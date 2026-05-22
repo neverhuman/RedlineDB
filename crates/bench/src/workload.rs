@@ -9,7 +9,6 @@ mod queue;
 #[path = "spill.rs"]
 mod spill;
 
-use std::collections::BTreeMap;
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 
@@ -18,9 +17,9 @@ use clap::ValueEnum;
 use crossbeam_utils::thread;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use sha2::{Digest, Sha256};
 
 use crate::chaos;
+use crate::checksum::checksum_from_rows;
 use crate::config::{EngineKind, RunSpec, WorkloadKind};
 use crate::engine::{self, BenchConn, BenchEngine, CellValue};
 use crate::metrics::{FailureKind, Metrics};
@@ -454,79 +453,6 @@ fn checksum_query(engine: &dyn BenchEngine, label: &str, sql: &str) -> Result<Ch
     let mut conn = engine.connect(0)?;
     let rows = conn.query_all(sql, &[])?;
     Ok(checksum_from_rows(label, &rows))
-}
-
-fn checksum_from_rows(label: &str, rows: &[Vec<CellValue>]) -> Checksum {
-    let mut hasher = Sha256::new();
-    let mut row_payloads = Vec::with_capacity(rows.len());
-    let mut keys = Vec::with_capacity(rows.len());
-    let mut payload_bytes = 0_i64;
-    let mut version_sum = 0_i64;
-    for (idx, row) in rows.iter().enumerate() {
-        let mut row_buf = Vec::new();
-        for cell in row {
-            encode_cell_for_digest(cell, &mut row_buf);
-            match cell {
-                CellValue::Integer(value) => version_sum = version_sum.saturating_add(*value),
-                CellValue::Text(value) => {
-                    payload_bytes = payload_bytes.saturating_add(value.len() as i64)
-                }
-                CellValue::Blob(value) => {
-                    payload_bytes = payload_bytes.saturating_add(value.len() as i64)
-                }
-                CellValue::Null | CellValue::Real(_) => {}
-            }
-        }
-        hasher.update(b"row\0");
-        hasher.update((row_buf.len() as u64).to_le_bytes());
-        hasher.update(&row_buf);
-        row_payloads.push(row_buf);
-        let key = match row.first() {
-            Some(CellValue::Integer(value)) => *value as u64,
-            _ => idx as u64,
-        };
-        keys.push(key);
-    }
-    let mut index_consistency = BTreeMap::new();
-    index_consistency.insert(format!("{label}_digest"), format!("ok rows={}", rows.len()));
-    Checksum {
-        rows: rows.len() as i64,
-        version_sum,
-        payload_bytes,
-        content_hash: format!("{:x}", hasher.finalize()),
-        index_consistency,
-        dataset: Some(crate::checksum::DatasetChecksum {
-            row_count: rows.len() as u64,
-            key_xor: crate::checksum::key_xor(keys),
-            payload_hash: crate::checksum::payload_hash(
-                row_payloads.iter().map(|row| row.as_slice()),
-            ),
-        }),
-    }
-}
-
-fn encode_cell_for_digest(cell: &CellValue, out: &mut Vec<u8>) {
-    match cell {
-        CellValue::Null => out.push(b'n'),
-        CellValue::Integer(value) => {
-            out.push(b'i');
-            out.extend_from_slice(&value.to_le_bytes());
-        }
-        CellValue::Real(value) => {
-            out.push(b'r');
-            out.extend_from_slice(&value.to_bits().to_le_bytes());
-        }
-        CellValue::Text(value) => {
-            out.push(b't');
-            out.extend_from_slice(&(value.len() as u64).to_le_bytes());
-            out.extend_from_slice(value.as_bytes());
-        }
-        CellValue::Blob(value) => {
-            out.push(b'b');
-            out.extend_from_slice(&(value.len() as u64).to_le_bytes());
-            out.extend_from_slice(value);
-        }
-    }
 }
 
 /// Lane BH P1 #7: probe the engine for the maximum number of

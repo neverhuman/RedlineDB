@@ -52,13 +52,14 @@ markers). RedlineDB ships no web frontend, so the web detectors fire
 only on documentation; the repo-rot detectors govern bench TOMLs and
 module headers under `crates/{bench,ffi,redlinedb}/`. The full
 detector reference and the local exception schema are tracked in
-`.jankurai/audit-policy.toml`; mitigations land via Section B of the
+`.jankurai/audit-policy.toml` and its `agent/audit-policy.toml`
+compatibility mirror; mitigations land via Section B of the
 repair plan.
 
 ## Rerunning the detector
 
 ```
-jankurai audit . --mode advisory \
+jankurai audit . --policy agent/audit-policy.toml --mode advisory \
   --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 ```
 

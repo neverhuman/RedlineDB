@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use super::case::{Case, Profile};
+use super::text::sanitize_identifier;
 
 #[derive(Debug, Clone)]
 pub struct EngineSpec {
@@ -166,7 +167,7 @@ impl EngineSpec {
         let case_tmp = tmp_root.join(format!(
             "{}-{}-{}",
             case.display_id(),
-            sanitize(&self.name),
+            sanitize_identifier(&self.name),
             std::process::id()
         ));
         if case_tmp.exists() {
@@ -286,7 +287,7 @@ fn db_path_for(engine: &str, case: &Case, tmp_root: &Path, case_tmp: &Path) -> R
         Profile::Tempfile => {
             fs::create_dir_all(tmp_root)
                 .with_context(|| format!("create sqlite parity tmpdir {}", tmp_root.display()))?;
-            let path = case_tmp.join(format!("{}.db", sanitize(engine)));
+            let path = case_tmp.join(format!("{}.db", sanitize_identifier(engine)));
             path.to_str()
                 .map(str::to_owned)
                 .ok_or_else(|| anyhow::anyhow!("non-utf8 sqlite parity db path {}", path.display()))
@@ -297,13 +298,6 @@ fn db_path_for(engine: &str, case: &Case, tmp_root: &Path, case_tmp: &Path) -> R
 
 pub(crate) fn is_sqlite_shell(engine_name: &str) -> bool {
     engine_name.eq_ignore_ascii_case("sqlite3") || engine_name.eq_ignore_ascii_case("sqlite")
-}
-
-fn sanitize(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
-        .collect()
 }
 
 fn replace_tmp(input: &str, tmp: &Path) -> String {

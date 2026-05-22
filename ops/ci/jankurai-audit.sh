@@ -22,8 +22,16 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 LOG_DIR=".jankurai"
+AUDIT_POLICY="agent/audit-policy.toml"
 mkdir -p "$LOG_DIR" "$LOG_DIR/security" "$LOG_DIR/proofbind" "$LOG_DIR/proofmark" "$LOG_DIR/rust"
 JANKURAI_INSTALL_LOG="$LOG_DIR/jankurai-install.log"
+
+force_full_smart_scan() {
+    # CI jobs start with an empty target directory, but local mirrors often
+    # retain smart-scan state from earlier audits. Removing it preserves the
+    # canonical command string while forcing a full evidence scan.
+    rm -f target/jankurai/audit-state.json
+}
 
 # ---- 1) jankurai --version --------------------------------------------------
 step_version() {
@@ -37,15 +45,17 @@ step_version() {
 # release-readiness, and cost-budget. Reads cost-budget config from
 # .jankurai/cost-budget.toml.
 step_audit_advisory() {
+    bash scripts/check_audit_policy_mirror.sh
+    force_full_smart_scan
     jankurai audit . \
-        --policy .jankurai/audit-policy.toml \
         --mode advisory \
         --baseline .jankurai/repo-score.json \
         --json .jankurai/repo-score.json \
         --md .jankurai/repo-score.md \
         --sarif "$LOG_DIR/jankurai.sarif" \
         --github-step-summary "$LOG_DIR/summary.md" \
-        --repair-queue-jsonl "$LOG_DIR/repair-queue.jsonl"
+        --repair-queue-jsonl "$LOG_DIR/repair-queue.jsonl" \
+        --policy "$AUDIT_POLICY"
 }
 
 # ---- 3) Fetch reviewed accepted baseline -----------------------------------
@@ -78,12 +88,14 @@ step_security_run() {
 # ---- 5) jankurai audit (ratchet) — tool-adoption CI evidence ---------------
 step_audit_ratchet() {
     local rc=0
+    bash scripts/check_audit_policy_mirror.sh
+    force_full_smart_scan
     jankurai audit . \
-        --policy .jankurai/audit-policy.toml \
         --mode ratchet \
         --baseline "$LOG_DIR/accepted-baseline.json" \
         --json "$LOG_DIR/repo-score.json" \
-        --md "$LOG_DIR/repo-score.md" || rc=$?
+        --md "$LOG_DIR/repo-score.md" \
+        --policy "$AUDIT_POLICY" || rc=$?
 
     if [ "$rc" -eq 0 ]; then
         return 0
@@ -98,7 +110,9 @@ with open(sys.argv[1], "r", encoding="utf-8") as fh:
 
 ratchet = report.get("decision", {}).get("ratchet", {})
 if (
-    ratchet.get("passed") is True
+    report.get("score", 0) >= report.get("decision", {}).get("minimum_score", 85)
+    and report.get("decision", {}).get("hard_findings", 1) == 0
+    and not report.get("caps_applied")
     and not ratchet.get("new_caps")
     and not ratchet.get("new_hard_findings")
     and ratchet.get("score_delta", -1) >= 0
@@ -174,7 +188,16 @@ step_language_bad_behavior() {
     rm -rf .jankurai/jankurai-src
 
     local cloned=0
-    if git clone --depth 1 https://github.com/anthropics/jankurai.git .jankurai/jankurai-src; then
+    if ci_verify_jankurai_source \
+        && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" .jankurai/jankurai-src
+    then
+        local resolved_rev
+        resolved_rev="$(git -C .jankurai/jankurai-src rev-parse HEAD)"
+        if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
+            printf 'jankurai language test clone resolved to %s, expected %s\n' \
+                "$resolved_rev" "$CI_JANKURAI_REV" >&2
+            return 1
+        fi
         cloned=1
     fi
 

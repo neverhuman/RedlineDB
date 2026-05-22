@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## [1.0.27] - 2026-05-22
+
+Clean Jankurai/SQLite parity release.
+
+### Changed
+
+- The SQLite parity release now keeps the reviewed Jankurai policy mirror in
+  sync with the compatibility copy, excludes the SQLite parity corpus from
+  audit scans, and preserves the canonical reviewed evidence surfaces.
+- The SARIF generated filter now uses the shell script path everywhere CI and
+  copy-code expect it, so the deleted Python path no longer trips the release
+  lanes.
+- Workspace package metadata, lockfile entries, and install docs now target
+  `1.0.27`.
+
 ## [1.0.26] - 2026-05-21
 
 README KPI chart refresh.

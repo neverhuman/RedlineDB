@@ -1,11 +1,11 @@
 [[zone]]
-command = "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
+command = "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
 path = ".jankurai/repo-score.json"
 read_only = false
 source = "installed jankurai binary"
 
 [[zone]]
-command = "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
+command = "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
 path = ".jankurai/repo-score.md"
 read_only = false
 source = "installed jankurai binary"
