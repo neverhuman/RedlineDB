@@ -5,6 +5,7 @@ use crate::format::PageId;
 use crate::telemetry::Phase11Counters;
 
 use super::super::super::cells::LeafEntry;
+use super::super::super::policy::{ActiveIndexCursorPolicy, IndexCursorPolicy};
 use super::super::SnapshotView;
 use super::super::{BtreeIndex, KeyRange, bound_to_owned};
 
@@ -64,7 +65,9 @@ impl<'idx> RawIndexCursor<'idx> {
             prefetch_hints_emitted: 0,
         };
         cursor.load_current_leaf()?;
-        if let Some(next_next) = cursor.next_leaf {
+        if let Some(next_next) = cursor.next_leaf
+            && ActiveIndexCursorPolicy::prefetch_right_sibling(cursor.entries.len(), true)
+        {
             cursor.prefetch_hint(next_next);
         }
         Ok(cursor)
@@ -95,20 +98,15 @@ impl<'idx> RawIndexCursor<'idx> {
     }
 
     fn leaf_chain_past_end(&self) -> bool {
-        let Some(last) = self.last_logical_key.as_deref() else {
-            return false;
-        };
-        match &self.end {
-            Bound::Excluded(b) => last >= b.as_slice(),
-            Bound::Included(b) => last > b.as_slice(),
-            Bound::Unbounded => false,
-        }
+        ActiveIndexCursorPolicy::stop_after_leaf(self.last_logical_key.as_deref(), &self.end)
     }
 
     fn advance_to(&mut self, next_id: PageId) -> Result<()> {
         self.current_leaf = Some(next_id);
         self.load_current_leaf()?;
-        if let Some(next_next) = self.next_leaf {
+        if let Some(next_next) = self.next_leaf
+            && ActiveIndexCursorPolicy::prefetch_right_sibling(self.entries.len(), true)
+        {
             self.prefetch_hint(next_next);
         }
         Ok(())

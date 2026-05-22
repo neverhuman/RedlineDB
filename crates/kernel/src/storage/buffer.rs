@@ -5,6 +5,7 @@ use std::thread;
 
 use crate::format::{Lsn, Page, PageId, PageKind, RelId};
 use crate::storage::PageFile;
+use crate::storage::policy::{ActiveBufferPolicy, BufferPolicy};
 use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
 
@@ -215,6 +216,9 @@ impl BufferPool {
         // can defer this to an existing thread pool. Errors are
         // swallowed by design — prefetch is purely advisory.
         counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
+        if !ActiveBufferPolicy::prefetch_cold_load(self.resident_pages(), self.capacity) {
+            return;
+        }
         if let Ok(_guard) = self.pin(page_id) {
             // Drop the guard immediately; the goal is just to warm
             // the buffer pool, not to keep the page pinned.
@@ -299,8 +303,11 @@ impl BufferPool {
     fn flush_dirty_batch_inner(&self, durable_lsn: Lsn, max_pages: usize) -> Result<FlushStats> {
         let max_pages = max_pages.max(1);
         let frames = self.dirty_frames(durable_lsn)?;
+        let policy_pages =
+            ActiveBufferPolicy::dirty_batch_pages(self.resident_pages(), frames.len()).max(1);
+        let page_limit = max_pages.min(policy_pages);
         let mut flushed_pages = 0_usize;
-        for frame in frames.into_iter().take(max_pages) {
+        for frame in frames.into_iter().take(page_limit) {
             if self.flush_frame_if_durable(&frame, durable_lsn)? {
                 flushed_pages += 1;
                 self.stats

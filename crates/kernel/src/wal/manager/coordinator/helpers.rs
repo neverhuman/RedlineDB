@@ -5,6 +5,7 @@ use std::time::Duration;
 use crate::format::Lsn;
 use crate::format::TxId;
 use crate::telemetry::phase11_bucket_index;
+use crate::wal::policy::{ActiveWalSchedulePolicy, WalScheduleContext, WalSchedulePolicy};
 use crate::wal::{WalRecord, WalRecordKind};
 use crate::{Error, Result};
 
@@ -27,10 +28,23 @@ pub(super) struct DrainCounts {
 /// sufficient — no scan of `pending` needed. Returns the maximum of
 /// the original and the freshly sampled target so the widening is
 /// monotonic.
-pub(super) fn resample_flush_target(shared: &Arc<WalCoordinatorShared>, current: Lsn) -> Lsn {
+pub(super) fn resample_flush_target(
+    shared: &Arc<WalCoordinatorShared>,
+    config: &WalConfig,
+    current: Lsn,
+) -> Lsn {
     if let Ok(state) = shared.state.lock()
         && state.flush_requested_lsn > current
     {
+        let ctx = WalScheduleContext {
+            pending_bytes: state.pending_bytes,
+            pending_records: state.pending.len(),
+            flush_gap_bytes: state.flush_requested_lsn.0.saturating_sub(current.0),
+            ..WalScheduleContext::from_config(config)
+        };
+        if !ActiveWalSchedulePolicy::resample_flush_target(ctx) {
+            return current;
+        }
         return state.flush_requested_lsn;
     }
     current
@@ -57,12 +71,11 @@ pub(super) fn wait_for_group_commit_window(
     wal: &mut WalManager,
     flush_target: Lsn,
 ) {
-    let delay = Duration::from_micros(config.group_commit_delay_us);
-    if delay.is_zero() {
-        return;
-    }
     let durable = wal.durable_lsn();
-    if flush_target.0.saturating_sub(durable.0) >= config.group_commit_max_batch_bytes {
+    let delay = Duration::from_micros(ActiveWalSchedulePolicy::group_commit_delay_us(
+        WalScheduleContext::with_flush_gap(config, flush_target, durable),
+    ));
+    if delay.is_zero() {
         return;
     }
     if let Ok(state) = shared.state.lock() {

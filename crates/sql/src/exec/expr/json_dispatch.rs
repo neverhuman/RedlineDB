@@ -9,6 +9,16 @@
 
 use super::*;
 
+thread_local! {
+    static CURRENT_FTS_MATCH: std::cell::RefCell<Option<String>> = const {
+        std::cell::RefCell::new(None)
+    };
+}
+
+pub(crate) fn set_current_match_term(term: Option<String>) {
+    CURRENT_FTS_MATCH.with(|cell| *cell.borrow_mut() = term);
+}
+
 pub(super) fn eval_function(
     func: &sqlparser::ast::Function,
     row: &RowContext<'_>,
@@ -20,6 +30,9 @@ pub(super) fn eval_function(
     let name = func.name.to_string().to_ascii_lowercase();
     if name == "raise" {
         return eval_raise_function(func);
+    }
+    if name == "highlight" {
+        return eval_highlight_function(func, row, bindings);
     }
     let mut values = Vec::new();
     if let FunctionArguments::List(list) = &func.args {
@@ -108,6 +121,20 @@ pub(crate) fn eval_scalar_function_values(
         }
         "min" | "max" => eval_scalar_min_max(&values, name == "min"),
         "round" => round_function(&values),
+        "sin" => unary_real(&values, f64::sin),
+        "sqrt" => unary_real(&values, f64::sqrt),
+        "ceil" | "ceiling" => unary_real(&values, f64::ceil),
+        "floor" => unary_real(&values, f64::floor),
+        "pow" | "power" => {
+            if values.len() != 2 || values.iter().any(|v| matches!(v, SqlValue::Null)) {
+                Ok(SqlValue::Null)
+            } else {
+                Ok(SqlValue::Real(
+                    numeric_value(&values[0])?.powf(numeric_value(&values[1])?),
+                ))
+            }
+        }
+        "timediff" => timediff_function(&values),
         "hex" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(other) => Ok(SqlValue::Text(Arc::from(hex_value(other)))),
@@ -262,7 +289,7 @@ pub(crate) fn eval_scalar_function_values(
             if values.len() < 2 {
                 return Err(Error::UnsupportedSql("glob requires 2 args".to_owned()));
             }
-            glob_result(values[0].clone(), values[1].clone(), false)
+            glob_result(values[1].clone(), values[0].clone(), false)
         }
         "typeof" => Ok(SqlValue::Text(Arc::from(match values.first() {
             Some(SqlValue::Null) | None => "null",
@@ -319,6 +346,100 @@ pub(crate) fn eval_scalar_function_values(
             }
         }
     }
+}
+
+fn unary_real(values: &[SqlValue], f: fn(f64) -> f64) -> Result<SqlValue> {
+    match values.first() {
+        None | Some(SqlValue::Null) => Ok(SqlValue::Null),
+        Some(value) => Ok(SqlValue::Real(f(numeric_value(value)?))),
+    }
+}
+
+fn timediff_function(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() != 2 || values.iter().any(|v| matches!(v, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let lhs = value_to_string(&values[0]);
+    let rhs = value_to_string(&values[1]);
+    let Some(lhs) = parse_ymd(&lhs) else {
+        return Ok(SqlValue::Null);
+    };
+    let Some(rhs) = parse_ymd(&rhs) else {
+        return Ok(SqlValue::Null);
+    };
+    let days = days_from_civil(lhs.0, lhs.1, lhs.2) - days_from_civil(rhs.0, rhs.1, rhs.2);
+    let sign = if days < 0 { '-' } else { '+' };
+    Ok(SqlValue::Text(Arc::from(format!(
+        "{sign}0000-00-{:02} 00:00:00.000",
+        days.abs()
+    ))))
+}
+
+fn parse_ymd(value: &str) -> Option<(i64, i64, i64)> {
+    let date = value.get(0..10)?;
+    let mut parts = date.split('-');
+    Some((
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    ))
+}
+
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = y - (m <= 2) as i64;
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+fn eval_highlight_function(
+    func: &sqlparser::ast::Function,
+    row: &RowContext<'_>,
+    bindings: &[Option<SqlValue>],
+) -> Result<SqlValue> {
+    let FunctionArguments::List(list) = &func.args else {
+        return Err(Error::UnsupportedSql(
+            "highlight requires arguments".to_owned(),
+        ));
+    };
+    if list.args.len() != 4 {
+        return Err(Error::UnsupportedSql(
+            "highlight requires 4 args".to_owned(),
+        ));
+    }
+    let col_idx = match list.args.get(1) {
+        Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) => {
+            numeric_value(&eval_scalar(expr, row, bindings)?)? as usize
+        }
+        _ => 0,
+    };
+    let start = match list.args.get(2) {
+        Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) => {
+            value_to_string(&eval_scalar(expr, row, bindings)?)
+        }
+        _ => String::new(),
+    };
+    let end = match list.args.get(3) {
+        Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) => {
+            value_to_string(&eval_scalar(expr, row, bindings)?)
+        }
+        _ => String::new(),
+    };
+    let values = row.to_owned_row().values()?;
+    let text = values.get(col_idx).map(value_to_string).unwrap_or_default();
+    let needle = current_match_term().unwrap_or_default();
+    if needle.is_empty() {
+        return Ok(SqlValue::Text(Arc::from(text)));
+    }
+    Ok(SqlValue::Text(Arc::from(
+        text.replace(&needle, &format!("{start}{needle}{end}")),
+    )))
+}
+
+fn current_match_term() -> Option<String> {
+    CURRENT_FTS_MATCH.with(|cell| cell.borrow().clone())
 }
 
 fn eval_scalar_min_max(values: &[SqlValue], is_min: bool) -> Result<SqlValue> {

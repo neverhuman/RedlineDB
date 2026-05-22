@@ -7,21 +7,19 @@ pub(crate) fn choose_join_kind(
     selection: &Option<Expr>,
     bindings: &[Option<SqlValue>],
 ) -> JoinKind {
-    if left_rows <= 16.0 || right_rows <= 16.0 {
-        return JoinKind::NestedLoop;
-    }
-    let Some(expr) = selection else {
-        return JoinKind::Cross;
-    };
-    if join_has_indexable_equality(expr, right_table, bindings)
-        && (left_rows <= 256.0 || right_rows <= 1024.0)
-    {
-        return JoinKind::IndexNestedLoop;
-    }
-    if join_has_equality(expr, right_table, bindings) {
-        return JoinKind::Hash;
-    }
-    JoinKind::NestedLoop
+    let has_indexable_equality = selection
+        .as_ref()
+        .is_some_and(|expr| join_has_indexable_equality(expr, right_table, bindings));
+    let has_equality = selection
+        .as_ref()
+        .is_some_and(|expr| join_has_equality(expr, right_table, bindings));
+    ActivePlannerPolicy::choose_join_kind(JoinChoice {
+        left_rows,
+        right_rows,
+        has_indexable_equality,
+        has_equality,
+        has_selection: selection.is_some(),
+    })
 }
 
 pub(crate) fn join_has_equality(
@@ -100,11 +98,11 @@ pub(crate) fn wrap_aggregate(input: PhysicalPlan, plan: &SelectPlan) -> Physical
     let input_rows = input.cost.rows;
     let input_width = input.cost.width;
     let input_total = input.cost.total;
-    let mut node = PhysicalPlan::new(if has_group_by_ordering(plan) {
-        PhysicalKind::StreamingAggregate
-    } else {
-        PhysicalKind::HashAggregate
-    });
+    let mut node = PhysicalPlan::new(ActivePlannerPolicy::aggregate_kind(AggregateChoice {
+        input_rows,
+        group_cols: plan.group_by.len(),
+        ordered: has_group_by_ordering(plan),
+    }));
     node.children = vec![input];
     node.estimated_rows = estimate_group_rows(input_rows, plan.group_by.len());
     node.cost = Cost {
@@ -147,12 +145,9 @@ pub(crate) fn wrap_ordering(
     // heap instead of a full sort. The threshold matches
     // `vec::TOPK_LIMIT_THRESHOLD` to keep planner-vs-executor decisions in
     // lockstep.
-    let kind = if limit_small != usize::MAX && limit_small <= crate::exec::vec::TOPK_LIMIT_THRESHOLD
-    {
-        PhysicalKind::TopN
-    } else {
-        PhysicalKind::Sort
-    };
+    let kind = ActivePlannerPolicy::ordering_kind(SortChoice {
+        limit: (limit_small != usize::MAX).then_some(limit_small),
+    });
     let mut node = PhysicalPlan::new(kind);
     node.children = vec![input];
     node.output_order = plan

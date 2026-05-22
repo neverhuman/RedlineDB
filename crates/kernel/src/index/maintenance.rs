@@ -2,6 +2,7 @@ use crate::format::{PAGE_HEADER_LEN, PageId};
 use crate::{Error, Result};
 
 use super::cells::Entry;
+use super::policy::{ActiveLeafSplitPolicy, LeafSplitPolicy};
 use super::{
     BtreeIndex, INDEX_SPECIAL_LEN, IndexValidationReport, PAGE_INTERNAL_KIND, PAGE_LEAF_KIND,
 };
@@ -87,28 +88,7 @@ impl BtreeIndex {
     /// page is one duplicate run the midpoint is returned and the caller
     /// adopts a physical-key separator instead (see `split_leaf_and_insert`).
     pub(super) fn choose_leaf_split(entries: &[Entry]) -> usize {
-        let n = entries.len();
-        if n <= 1 {
-            return n;
-        }
-        let mid = n / 2;
-        // Search outward from the midpoint for a position `i` where
-        // entries[i-1].logical_key != entries[i].logical_key.
-        for offset in 0..n {
-            for &candidate in &[mid.saturating_add(offset), mid.saturating_sub(offset)] {
-                if candidate == 0 || candidate >= n {
-                    continue;
-                }
-                let prev = entries[candidate - 1].logical_key();
-                let next = entries[candidate].logical_key();
-                if prev != next {
-                    return candidate;
-                }
-            }
-        }
-        // Whole page is one duplicate run; fall back to the midpoint and rely
-        // on the physical-key separator path in the caller.
-        mid
+        ActiveLeafSplitPolicy::split_point(entries, 0)
     }
 
     pub(super) fn encoded_entries_len(entries: &[Entry]) -> usize {

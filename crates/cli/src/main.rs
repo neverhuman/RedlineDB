@@ -13,7 +13,6 @@ use serde_json::json;
 
 mod dot;
 mod render;
-mod sqlite_parity_fast;
 
 use dot::{CliState, DotOutcome, OutputMode, OutputTarget};
 use render::{
@@ -211,19 +210,10 @@ fn main() {
     if args.iter().skip(1).any(|arg| arg.starts_with("-A")) {
         return;
     }
-    if sqlite_parity_fast::create_script_fixture(&raw_args) {
-        return;
-    }
-    if let Some(output) = sqlite_parity_fast::argv_output(&raw_args) {
-        finish_fast_output(output);
-    }
     let mut preloaded_stdin = None;
-    if sqlite_parity_fast::is_default_compare_argv(&raw_args) {
+    if raw_args.len() == 3 && raw_args[0] == "--batch" && raw_args[1] == "--bail" {
         let mut input = String::new();
         io::stdin().read_to_string(&mut input).unwrap_or_default();
-        if let Some(output) = sqlite_parity_fast::stdin_output(&raw_args, &input) {
-            finish_fast_output(output);
-        }
         preloaded_stdin = Some(input);
     }
 
@@ -260,9 +250,6 @@ fn main() {
     {
         let mut input = String::new();
         io::stdin().read_to_string(&mut input).unwrap_or_default();
-        if let Some(output) = sqlite_parity_fast::stdin_output(&raw_args, &input) {
-            finish_fast_output(output);
-        }
         preloaded_stdin = Some(input);
     }
 
@@ -536,9 +523,6 @@ fn main() {
 
 /// Drive a chunk of SQL with optional embedded dot-commands. Used by `--cmd`.
 fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
-    if write_sqlite_parity_surface(state, input)? {
-        return Ok(());
-    }
     let mut buffer = String::new();
     for raw_line in input.lines() {
         let trimmed = raw_line.trim();
@@ -566,24 +550,6 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
         execute_sql_buffer(state, &buffer)?;
     }
     Ok(())
-}
-
-fn write_sqlite_parity_surface(state: &mut CliState, input: &str) -> Result<bool, String> {
-    let Some(output) = sqlite_parity_fast::surface_output(input) else {
-        return Ok(false);
-    };
-    state
-        .output
-        .write_all(output.as_bytes())
-        .map_err(|err| err.to_string())?;
-    state.output.flush().map_err(|err| err.to_string())?;
-    Ok(true)
-}
-
-fn finish_fast_output(output: sqlite_parity_fast::FastOutput) -> ! {
-    print!("{}", output.stdout);
-    eprint!("{}", output.stderr);
-    exit(output.exit_code);
 }
 
 fn is_alternate_terminator(line: &str) -> bool {
@@ -788,10 +754,6 @@ fn run_query_writer<W: Write>(
 ) -> Result<(), String> {
     let mut rest = sql;
     while !rest.trim().is_empty() {
-        if let Some(tail) = strip_cli_memory_attach(rest) {
-            rest = tail;
-            continue;
-        }
         if write_cli_readfile_hex_query(rest, out, options)? {
             break;
         }
@@ -952,21 +914,6 @@ fn parse_readfile_hex_query(sql: &str) -> Option<PathBuf> {
 fn parse_single_quoted(input: &str) -> Option<String> {
     let body = input.strip_prefix('\'')?.strip_suffix('\'')?;
     Some(body.replace("''", "'"))
-}
-
-fn strip_cli_memory_attach(sql: &str) -> Option<&str> {
-    let leading = sql.len().checked_sub(sql.trim_start().len())?;
-    let trimmed = &sql[leading..];
-    let lower = trimmed.to_ascii_lowercase();
-    let memory_attach = lower.starts_with("attach \":memory:\" as ")
-        || lower.starts_with("attach database \":memory:\" as ")
-        || lower.starts_with("attach ':memory:' as ")
-        || lower.starts_with("attach database ':memory:' as ");
-    if !memory_attach {
-        return None;
-    }
-    let semicolon = trimmed.find(';')?;
-    Some(&trimmed[semicolon + 1..])
 }
 
 fn run_legacy(args: Vec<String>) -> Result<(), String> {

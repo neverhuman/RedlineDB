@@ -99,16 +99,16 @@ pub struct DropViewSpec {
     pub if_exists: bool,
 }
 
-/// Firing period for a trigger — BEFORE or AFTER row mutation.
+/// Firing period for a trigger.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum TriggerTimeKind {
     Before,
     After,
+    InsteadOf,
 }
 
 /// Firing event for a trigger — INSERT, UPDATE, or DELETE on the parent
-/// table. `INSTEAD OF` is intentionally absent at this layer; it is
-/// deferred to a followup task.
+/// table or view.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum TriggerEventKind {
     Insert,

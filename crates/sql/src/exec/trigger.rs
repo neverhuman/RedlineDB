@@ -27,7 +27,8 @@ use crate::error::{Error, Result};
 use crate::exec::expr::scalar::row::{SqlRow, TableRow};
 use crate::value::SqlValue;
 use redlinedb_kernel::catalog::{
-    SchemaSnapshot, TableDef, TriggerDef, TriggerEventKind, TriggerTimeKind, triggers_for,
+    Affinity, ColumnDef, ColumnId, SchemaId, SchemaSnapshot, TableDef, TableId, TriggerDef,
+    TriggerEventKind, TriggerTimeKind, triggers_for,
 };
 use redlinedb_kernel::engine::Txn;
 use redlinedb_kernel::format::RowId;
@@ -172,6 +173,70 @@ fn run_body_with_context(
         crate::exec::pop_outer_row();
     }
     result
+}
+
+pub(crate) fn fire_instead_of_insert(
+    conn: &Connection,
+    view_name: &str,
+    columns: &[String],
+    values: Vec<SqlValue>,
+) -> Result<()> {
+    let schema = conn.schema_snapshot();
+    let schema_id = schema.lookup_namespace("main").unwrap_or(SchemaId(1));
+    let triggers = triggers_for(
+        &schema,
+        schema_id,
+        &view_name.to_ascii_lowercase(),
+        TriggerEventKind::Insert,
+        TriggerTimeKind::InsteadOf,
+    );
+    if triggers.is_empty() {
+        return Err(Error::UnsupportedSql(format!(
+            "cannot modify {view_name} because it is a view"
+        )));
+    }
+    let table = synth_view_trigger_table(view_name, columns);
+    let row = TriggerRowValues {
+        rowid: RowId(1),
+        values,
+    };
+    for trigger in triggers {
+        run_body_with_context(conn, &table, &trigger, None, Some(&row))?;
+    }
+    Ok(())
+}
+
+fn synth_view_trigger_table(view_name: &str, columns: &[String]) -> Arc<TableDef> {
+    Arc::new(TableDef {
+        table_id: TableId(0),
+        schema_id: SchemaId(0),
+        relation_id: redlinedb_kernel::format::RelId(0),
+        name: Box::from(view_name),
+        folded: Box::from(view_name.to_ascii_lowercase()),
+        columns: columns
+            .iter()
+            .enumerate()
+            .map(|(idx, name)| ColumnDef {
+                column_id: ColumnId((idx + 1) as u64),
+                ordinal: idx as u16,
+                name: Box::from(name.as_str()),
+                folded: Box::from(name.to_ascii_lowercase()),
+                declared_type: None,
+                affinity: Affinity::Blob,
+                not_null: false,
+                default_value: None,
+                default_expr: None,
+                generated: None,
+            })
+            .collect(),
+        indexes: Vec::new(),
+        constraints: Vec::new(),
+        checks: Vec::new(),
+        foreign_keys: Vec::new(),
+        rowid_alias_column: None,
+        flags: 0,
+        normalized_sql: None,
+    })
 }
 
 fn make_table_row(table: &Arc<TableDef>, alias: &str, values: &TriggerRowValues) -> TableRow {

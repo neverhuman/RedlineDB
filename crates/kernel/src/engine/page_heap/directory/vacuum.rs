@@ -6,6 +6,7 @@ use crate::format::{
 use crate::txn::TxState;
 use crate::{Error, Result};
 
+use super::super::policy::{ActiveHeapPlacementPolicy, HeapPlacementPolicy, ReuseDecision};
 use super::super::{PageBackedHeap, VacuumStats};
 
 impl PageBackedHeap {
@@ -144,6 +145,12 @@ impl PageBackedHeap {
         let mut reusable = reusable
             .lock()
             .map_err(|_| Error::CorruptPage("reusable page queue poisoned"))?;
+        if matches!(
+            ActiveHeapPlacementPolicy::reusable_page(kind, 0, reusable.len()),
+            ReuseDecision::AllocateFresh
+        ) {
+            return Ok(None);
+        }
         Ok(reusable.pop())
     }
 

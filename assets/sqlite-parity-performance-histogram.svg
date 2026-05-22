@@ -4,37 +4,37 @@
 <!-- DO NOT EDIT BY HAND. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="236" viewBox="0 0 760 236" role="img" aria-labelledby="perf-hist-title perf-hist-desc">
 <title id="perf-hist-title">SQLite parity performance distribution, Updated 2026-05-22</title>
-<desc id="perf-hist-desc">Fixed-bucket distribution of measured case median latency improvement versus SQLite. Cases: 1127; min 2.76%, median 48.40%, max 95.72%.</desc>
+<desc id="perf-hist-desc">Fixed-bucket distribution of measured case median latency improvement versus SQLite. Cases: 1127; min -71.74%, median -10.82%, max 96.23%.</desc>
 <rect width="760" height="236" fill="#ffffff"/>
 <text x="58" y="26" font-family="sans-serif" font-size="17" font-weight="700" fill="#111827">Performance distribution</text>
 <text x="58" y="47" font-family="sans-serif" font-size="12" fill="#374151">Measured case medians only; warmup samples excluded; fixed buckets preserve report-to-report comparability.</text>
-<text x="58" y="64" font-family="sans-serif" font-size="12" fill="#111827">cases 1127 | min 2.76% | median 48.40% | max 95.72%</text>
+<text x="58" y="64" font-family="sans-serif" font-size="12" fill="#111827">cases 1127 | min -71.74% | median -10.82% | max 96.23%</text>
 <line x1="58" y1="190" x2="736.00" y2="190" stroke="#4b5563"/>
 <line x1="58" y1="72" x2="58" y2="190" stroke="#4b5563"/>
 <line x1="58" y1="160.50" x2="736.00" y2="160.50" stroke="#e5e7eb"/>
 <line x1="58" y1="131.00" x2="736.00" y2="131.00" stroke="#e5e7eb"/>
 <line x1="58" y1="101.50" x2="736.00" y2="101.50" stroke="#e5e7eb"/>
 <line x1="58" y1="72.00" x2="736.00" y2="72.00" stroke="#e5e7eb"/>
-<rect x="58.00" y="190.00" width="68.22" height="0.00" rx="2" fill="#dc2626"><title>&lt; -50%: 0 cases</title></rect>
-<text x="92.11" y="185.00" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">0</text>
+<rect x="58.00" y="187.81" width="68.22" height="2.19" rx="2" fill="#dc2626"><title>&lt; -50%: 13 cases</title></rect>
+<text x="92.11" y="182.81" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">13</text>
 <text x="92.11" y="206.00" font-family="sans-serif" font-size="10" fill="#374151" text-anchor="middle">&lt;-50</text>
-<rect x="134.22" y="190.00" width="68.22" height="0.00" rx="2" fill="#dc2626"><title>-50% to -25%: 0 cases</title></rect>
-<text x="168.33" y="185.00" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">0</text>
+<rect x="134.22" y="164.88" width="68.22" height="25.12" rx="2" fill="#dc2626"><title>-50% to -25%: 149 cases</title></rect>
+<text x="168.33" y="159.88" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">149</text>
 <text x="168.33" y="206.00" font-family="sans-serif" font-size="10" fill="#374151" text-anchor="middle">-50..-25</text>
-<rect x="210.44" y="190.00" width="68.22" height="0.00" rx="2" fill="#dc2626"><title>-25% to 0%: 0 cases</title></rect>
-<text x="244.56" y="185.00" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">0</text>
+<rect x="210.44" y="72.00" width="68.22" height="118.00" rx="2" fill="#dc2626"><title>-25% to 0%: 700 cases</title></rect>
+<text x="244.56" y="82.00" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">700</text>
 <text x="244.56" y="206.00" font-family="sans-serif" font-size="10" fill="#374151" text-anchor="middle">-25..0</text>
-<rect x="286.67" y="186.42" width="68.22" height="3.58" rx="2" fill="#16a34a"><title>0% to 25%: 31 cases</title></rect>
-<text x="320.78" y="181.42" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">31</text>
+<rect x="286.67" y="149.88" width="68.22" height="40.12" rx="2" fill="#16a34a"><title>0% to 25%: 238 cases</title></rect>
+<text x="320.78" y="144.88" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">238</text>
 <text x="320.78" y="206.00" font-family="sans-serif" font-size="10" fill="#374151" text-anchor="middle">0..25</text>
-<rect x="362.89" y="72.00" width="68.22" height="118.00" rx="2" fill="#059669"><title>25% to 50%: 1021 cases</title></rect>
-<text x="397.00" y="82.00" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">1021</text>
+<rect x="362.89" y="186.12" width="68.22" height="3.88" rx="2" fill="#059669"><title>25% to 50%: 23 cases</title></rect>
+<text x="397.00" y="181.12" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">23</text>
 <text x="397.00" y="206.00" font-family="sans-serif" font-size="10" fill="#374151" text-anchor="middle">25..50</text>
-<rect x="439.11" y="181.68" width="68.22" height="8.32" rx="2" fill="#2563eb"><title>50% to 75%: 72 cases</title></rect>
-<text x="473.22" y="176.68" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">72</text>
+<rect x="439.11" y="189.83" width="68.22" height="0.17" rx="2" fill="#2563eb"><title>50% to 75%: 1 cases</title></rect>
+<text x="473.22" y="184.83" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">1</text>
 <text x="473.22" y="206.00" font-family="sans-serif" font-size="10" fill="#374151" text-anchor="middle">50..75</text>
-<rect x="515.33" y="189.65" width="68.22" height="0.35" rx="2" fill="#1d4ed8"><title>75% to 100%: 3 cases</title></rect>
-<text x="549.44" y="184.65" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">3</text>
+<rect x="515.33" y="189.49" width="68.22" height="0.51" rx="2" fill="#1d4ed8"><title>75% to 100%: 3 cases</title></rect>
+<text x="549.44" y="184.49" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">3</text>
 <text x="549.44" y="206.00" font-family="sans-serif" font-size="10" fill="#374151" text-anchor="middle">75..100</text>
 <rect x="591.56" y="190.00" width="68.22" height="0.00" rx="2" fill="#1d4ed8"><title>100% to 150%: 0 cases</title></rect>
 <text x="625.67" y="185.00" font-family="sans-serif" font-size="10" fill="#111827" text-anchor="middle">0</text>

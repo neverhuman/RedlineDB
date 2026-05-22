@@ -37,6 +37,7 @@ use super::index_batch::{
     execute_index_range_scan_ordered as batch_range_ordered,
     execute_index_range_scan_streaming as batch_range_streaming,
 };
+use super::policy::{ActiveExecBatchPolicy, ExecBatchPolicy};
 use super::tail::load_table_row_by_rowid;
 
 pub(crate) use super::index_batch::OutputColumnSource;
@@ -44,7 +45,7 @@ pub(crate) use super::index_batch::OutputColumnSource;
 /// Maximum batch size used by the streaming cursor consumer. Matches
 /// the prior `range_scan_visible` wrapper's chunk size so per-batch
 /// telemetry stays comparable.
-pub(crate) const MAX_BATCH: usize = 256;
+pub(crate) const MAX_BATCH: usize = ActiveExecBatchPolicy::INDEX_ROWID_BATCH;
 
 /// What kind of index probe the predicate maps to. The planner names
 /// `IndexPointLookup` and `IndexRangeScan`; a "point lookup" here means
@@ -105,6 +106,13 @@ pub(crate) fn try_match_index_access(
 ) -> Option<IndexAccessMatch> {
     let expr = selection.as_ref()?;
     if table.indexes.is_empty() {
+        return None;
+    }
+    if table
+        .normalized_sql
+        .as_deref()
+        .is_some_and(|sql| sql.to_ascii_lowercase().contains("collate nocase"))
+    {
         return None;
     }
     // Collect candidate {column_ordinal, equalities, range bounds} from

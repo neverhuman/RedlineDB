@@ -1,4 +1,5 @@
 use super::{PageBackedHeap, RelationWriteTarget};
+use crate::engine::page_heap::policy::{ActiveUndoReadPolicy, UndoReadContext, UndoReadPolicy};
 use crate::engine::page_heap::{ConcurrentVisibility, decode_undo_ptr};
 use crate::engine::tx::ConcurrentTxStatus;
 use crate::format::{Lsn, PageId, PageKind, RelId, RowId, TuplePtr, TupleVersion, TxId, UndoPtr};
@@ -58,13 +59,26 @@ impl PageBackedHeap {
         undo_ptr: UndoPtr,
     ) -> Result<Option<Vec<u8>>> {
         let mut cursor = undo_ptr;
+        let mut depth = 0_usize;
         while cursor != UndoPtr::ZERO {
+            if let Some(limit) =
+                ActiveUndoReadPolicy::depth_limit_hint(UndoReadContext { depth, ptr: cursor })
+                && depth >= limit
+            {
+                return Ok(None);
+            }
             let undo = self.read_undo(cursor)?;
             let tuple = TupleVersion::decode(&undo.before_image)?;
             match tuple.visibility_concurrent(tx_status, snapshot, owner) {
                 TupleVisibility::Visible => return Ok(Some(tuple.payload)),
                 TupleVisibility::Deleted => return Ok(None),
-                TupleVisibility::Invisible => cursor = undo.prev_undo,
+                TupleVisibility::Invisible => {
+                    let next = undo.prev_undo;
+                    let _ =
+                        ActiveUndoReadPolicy::prefetch_next(UndoReadContext { depth, ptr: next });
+                    cursor = next;
+                    depth = depth.saturating_add(1);
+                }
             }
         }
         Ok(None)
@@ -108,13 +122,29 @@ impl PageBackedHeap {
         match tx_status.state(current.begin_tx) {
             TxState::Aborted => {
                 let mut cursor = current.undo_head;
+                let mut depth = 0_usize;
                 while cursor != UndoPtr::ZERO {
+                    if let Some(limit) = ActiveUndoReadPolicy::depth_limit_hint(UndoReadContext {
+                        depth,
+                        ptr: cursor,
+                    }) && depth >= limit
+                    {
+                        return Err(Error::NotVisible);
+                    }
                     let undo = self.read_undo(cursor)?;
                     let tuple = TupleVersion::decode(&undo.before_image)?;
                     match tuple.visibility_concurrent(tx_status, snapshot, Some(tx_id)) {
                         TupleVisibility::Visible => return Ok(tuple),
                         TupleVisibility::Deleted => return Err(Error::NotVisible),
-                        TupleVisibility::Invisible => cursor = undo.prev_undo,
+                        TupleVisibility::Invisible => {
+                            let next = undo.prev_undo;
+                            let _ = ActiveUndoReadPolicy::prefetch_next(UndoReadContext {
+                                depth,
+                                ptr: next,
+                            });
+                            cursor = next;
+                            depth = depth.saturating_add(1);
+                        }
                     }
                 }
                 Err(Error::NotVisible)

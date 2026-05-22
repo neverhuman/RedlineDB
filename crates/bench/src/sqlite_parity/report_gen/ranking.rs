@@ -25,6 +25,16 @@ pub(super) struct RawRecord {
     pub(super) repetition_index: Option<usize>,
     #[serde(default)]
     pub(super) sqlite_version: Option<String>,
+    #[serde(default)]
+    pub(super) reference_engine: String,
+    #[serde(default)]
+    pub(super) target_engine: String,
+    #[serde(default)]
+    pub(super) reference_executable_sha256: String,
+    #[serde(default)]
+    pub(super) target_executable_sha256: String,
+    #[serde(default)]
+    pub(super) target_version: String,
     pub(super) status: String,
     pub(super) reference_elapsed_ns: u128,
     pub(super) target_elapsed_ns: u128,
@@ -116,6 +126,14 @@ pub(super) fn build_report(
         if passed.is_empty() {
             missing_cases = missing_cases.saturating_add(1);
             coverage_failures.push(format!("{id} lacks measured samples"));
+            continue;
+        }
+        if passed
+            .iter()
+            .any(|record| !has_execution_provenance(record))
+        {
+            missing_cases = missing_cases.saturating_add(1);
+            coverage_failures.push(format!("{id} lacks target execution provenance"));
             continue;
         }
         passed_cases = passed_cases.saturating_add(1);
@@ -244,6 +262,19 @@ fn is_measured(record: &RawRecord) -> bool {
         && (record.repetition_index.is_some()
             || record.sample_role.starts_with("measured")
             || record.sample_role.is_empty())
+}
+
+fn has_execution_provenance(record: &RawRecord) -> bool {
+    (record.reference_engine.eq_ignore_ascii_case("sqlite3")
+        || record.reference_engine.eq_ignore_ascii_case("sqlite"))
+        && record.target_engine.eq_ignore_ascii_case("redlinedb")
+        && !record.reference_executable_sha256.is_empty()
+        && !record.target_executable_sha256.is_empty()
+        && record.reference_executable_sha256 != record.target_executable_sha256
+        && record
+            .target_version
+            .to_ascii_lowercase()
+            .contains("redlinedb")
 }
 
 fn median_u128(mut values: Vec<u128>) -> u128 {

@@ -25,6 +25,11 @@ fn raw(case_id: &str, sqlite: u128, redline: u128) -> RawRecord {
         sample_role: "measured:1".to_owned(),
         repetition_index: Some(1),
         sqlite_version: Some("3.fixture".to_owned()),
+        reference_engine: "sqlite3".to_owned(),
+        target_engine: "redlinedb".to_owned(),
+        reference_executable_sha256: format!("sqlite-sha-{case_id}"),
+        target_executable_sha256: format!("redlinedb-sha-{case_id}"),
+        target_version: "redlinedb v2.0.0".to_owned(),
         status: "passed".to_owned(),
         reference_elapsed_ns: sqlite,
         target_elapsed_ns: redline,
@@ -179,6 +184,24 @@ fn report_counts_missing_failed_and_skipped_cases() {
     assert_eq!(report.summary.missing_cases, 1);
     assert_eq!(report.summary.coverage_pct, 25.0);
     assert_eq!(report.coverage_failures.len(), 3);
+}
+
+#[test]
+fn report_rejects_passed_records_without_execution_provenance() {
+    let all_cases = catalog::all_cases().expect("manifest");
+    let expected = std::collections::BTreeSet::from(["00001".to_owned()]);
+    let mut record = raw("00001", 100, 90);
+    record.target_executable_sha256.clear();
+
+    let report =
+        build_report(&all_cases, &expected, vec![record], "2026-05-20", "sha").expect("report");
+
+    assert_eq!(report.summary.passed_cases, 0);
+    assert_eq!(report.summary.missing_cases, 1);
+    assert_eq!(
+        report.coverage_failures,
+        vec!["00001 lacks target execution provenance"]
+    );
 }
 
 #[test]
