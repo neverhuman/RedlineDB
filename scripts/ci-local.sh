@@ -23,7 +23,7 @@ usage() {
     cat >&2 <<'USAGE'
 usage: scripts/ci-local.sh {fast|security|audit|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
 
-  fast                run ops/ci/fast.sh                (fmt + size + check + test)
+  fast                run scripts/just/fast.sh          (cache warm + fmt + size + check + test)
   security            run ops/ci/security.sh            (cargo audit + deny + gitleaks)
   audit               run ops/ci/jankurai-audit.sh      (full jankurai audit lane)
   dependency-review   run ops/ci/dependency-review.sh   (cargo deny advisories/bans/licenses/sources)
@@ -41,7 +41,7 @@ fi
 
 case "$1" in
     fast)
-        bash "$ROOT/ops/ci/fast.sh"
+        bash "$ROOT/scripts/just/fast.sh"
         ;;
     security)
         bash "$ROOT/ops/ci/security.sh"

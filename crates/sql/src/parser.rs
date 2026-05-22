@@ -44,10 +44,15 @@ pub(crate) use dml::*;
 pub(crate) mod pragma;
 #[allow(unused_imports)]
 pub(crate) use pragma::*;
+mod prepare;
 pub(crate) mod savepoint;
 mod select;
 #[allow(unused_imports)]
 pub(crate) use select::*;
+mod split;
+mod templates;
+pub use split::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};
+pub(crate) use templates::{bind_statement, template};
 
 pub(crate) fn is_pragma_sql(sql: &str) -> bool {
     sql.trim_start()
@@ -55,228 +60,6 @@ pub(crate) fn is_pragma_sql(sql: &str) -> bool {
         .trim_start()
         .to_ascii_lowercase()
         .starts_with("pragma")
-}
-
-/// Split `sql` into `(head, tail)` where `head` is the first statement
-/// (including its trailing `;` if present) and `tail` is the remainder of the
-/// input. `tail` is a byte slice of the original `sql`, with no leading
-/// whitespace stripped — this matches SQLite's `pzTail` contract where the
-/// tail pointer must reference into the caller's original buffer.
-///
-/// The split is "string-aware": semicolons inside `'...'`, `"..."`, or
-/// `[...]` (SQLite bracket-quoting form) and inside `--` line comments or
-/// `/* ... */` block comments are not considered terminators. Doubled quote
-/// characters inside a string are treated as escapes.
-///
-/// If `sql` contains no terminating semicolon, the entire string is the
-/// `head` and `tail` is empty. If `sql` is purely whitespace/comments, both
-/// `head` and `tail` are returned trimmed appropriately.
-pub fn split_first_statement(sql: &str) -> (&str, &str) {
-    let split = split_first_statement_state(sql);
-    (split.head, split.tail)
-}
-
-/// True when `sql` contains a complete first statement terminated by a
-/// top-level semicolon. Semicolons inside strings, comments, and trigger bodies
-/// do not count as terminators.
-pub fn first_statement_complete(sql: &str) -> bool {
-    split_first_statement_state(sql).terminated
-}
-
-struct StatementSplit<'a> {
-    head: &'a str,
-    tail: &'a str,
-    terminated: bool,
-}
-
-fn split_first_statement_state(sql: &str) -> StatementSplit<'_> {
-    let bytes = sql.as_bytes();
-    let mut i = 0usize;
-    let len = bytes.len();
-    let mut in_string: Option<u8> = None;
-    // Lane A5-triggers: `CREATE TRIGGER ... BEGIN ... END` bodies contain
-    // statement-terminating semicolons that must not split the outer
-    // statement. We track a balanced BEGIN/END nesting depth (matched
-    // case-insensitively on word boundaries) and only honour `;` at
-    // depth 0. We only treat `BEGIN` as a block opener when the current
-    // statement is a `CREATE TRIGGER`; bare `BEGIN [TRANSACTION]` and
-    // `BEGIN IMMEDIATE` outside a trigger context must still split.
-    let mut block_depth = 0usize;
-    let mut in_trigger = false;
-    while i < len {
-        let b = bytes[i];
-        if let Some(quote) = in_string {
-            // Inside a string literal: handle escaped quote (doubled quote).
-            if b == quote {
-                if i + 1 < len && bytes[i + 1] == quote {
-                    i += 2;
-                    continue;
-                }
-                in_string = None;
-                i += 1;
-                continue;
-            }
-            // SQLite-style `[...]` bracket quoting closes on `]`.
-            if quote == b'[' && b == b']' {
-                in_string = None;
-                i += 1;
-                continue;
-            }
-            i += 1;
-            continue;
-        }
-        match b {
-            b'\'' | b'"' => {
-                in_string = Some(b);
-                i += 1;
-            }
-            b'[' => {
-                in_string = Some(b'[');
-                i += 1;
-            }
-            b'-' if i + 1 < len && bytes[i + 1] == b'-' => {
-                // Line comment until \n or EOF.
-                i += 2;
-                while i < len && bytes[i] != b'\n' {
-                    i += 1;
-                }
-            }
-            b'/' if i + 1 < len && bytes[i + 1] == b'*' => {
-                // Block comment until */
-                i += 2;
-                while i + 1 < len && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
-                    i += 1;
-                }
-                if i + 1 < len {
-                    i += 2;
-                }
-            }
-            b';' if block_depth == 0 => {
-                let head_end = i + 1;
-                return StatementSplit {
-                    head: &sql[..head_end],
-                    tail: &sql[head_end..],
-                    terminated: true,
-                };
-            }
-            b';' => {
-                i += 1;
-            }
-            _ if is_word_boundary_keyword(bytes, i, b"TRIGGER") => {
-                in_trigger = true;
-                i += 7;
-            }
-            _ if in_trigger && is_word_boundary_keyword(bytes, i, b"BEGIN") => {
-                block_depth += 1;
-                i += 5;
-            }
-            _ if in_trigger && is_word_boundary_keyword(bytes, i, b"END") => {
-                block_depth = block_depth.saturating_sub(1);
-                if block_depth == 0 {
-                    in_trigger = false;
-                }
-                i += 3;
-            }
-            _ => {
-                i += 1;
-            }
-        }
-    }
-    StatementSplit {
-        head: sql,
-        tail: "",
-        terminated: false,
-    }
-}
-
-/// True if `bytes[i..]` starts with `kw` (case-insensitively) AND the
-/// surrounding characters form a word boundary — i.e. the preceding
-/// byte (if any) and the byte immediately after `kw` are not ASCII
-/// alphanumerics or underscore.
-fn is_word_boundary_keyword(bytes: &[u8], i: usize, kw: &[u8]) -> bool {
-    if i + kw.len() > bytes.len() {
-        return false;
-    }
-    for (offset, expected) in kw.iter().enumerate() {
-        if !bytes[i + offset].eq_ignore_ascii_case(expected) {
-            return false;
-        }
-    }
-    if i > 0 && is_ident_byte(bytes[i - 1]) {
-        return false;
-    }
-    if i + kw.len() < bytes.len() && is_ident_byte(bytes[i + kw.len()]) {
-        return false;
-    }
-    true
-}
-
-fn is_ident_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
-}
-
-/// True if `sql` (after trimming whitespace and stripping comments) is empty.
-/// Used to detect SQL that is entirely a comment block — `sqlite3_prepare_v2`
-/// treats such input as a successful no-op (`out_stmt` becomes NULL).
-pub fn is_blank_sql(sql: &str) -> bool {
-    let bytes = sql.as_bytes();
-    let mut i = 0usize;
-    let len = bytes.len();
-    while i < len {
-        let b = bytes[i];
-        if b.is_ascii_whitespace() || b == b';' {
-            i += 1;
-            continue;
-        }
-        if b == b'-' && i + 1 < len && bytes[i + 1] == b'-' {
-            i += 2;
-            while i < len && bytes[i] != b'\n' {
-                i += 1;
-            }
-            continue;
-        }
-        if b == b'/' && i + 1 < len && bytes[i + 1] == b'*' {
-            i += 2;
-            while i + 1 < len && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
-                i += 1;
-            }
-            if i + 1 < len {
-                i += 2;
-            }
-            continue;
-        }
-        return false;
-    }
-    true
-}
-
-/// Iterate over every top-level statement in `sql`, yielding `(head, tail)`
-/// pairs analogous to repeatedly calling `split_first_statement`. Skips runs
-/// of pure-whitespace/comment chunks. The yielded `head` slice is the SQL of
-/// one statement (including its trailing `;` if any) and `tail` is the
-/// remainder of the input after that statement.
-///
-/// Used by tests and by callers that want the full split up-front; runtime
-/// `Connection::execute` walks the splitter incrementally so it can stop at
-/// the first failing statement.
-#[allow(dead_code)]
-pub fn split_statements(sql: &str) -> Vec<&str> {
-    let mut out = Vec::new();
-    let mut rest = sql;
-    while !rest.is_empty() {
-        if is_blank_sql(rest) {
-            break;
-        }
-        let (head, tail) = split_first_statement(rest);
-        if head.is_empty() {
-            break;
-        }
-        if !is_blank_sql(head) {
-            out.push(head);
-        }
-        rest = tail;
-    }
-    out
 }
 
 pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
@@ -342,33 +125,33 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(template) = parse_detach_template(trimmed, schema_epoch) {
         return Ok(template);
     }
-    if let Some(template) = parse_reindex_template(trimmed, schema_epoch)? {
+    if let Some(template) = templates::parse_reindex_template(trimmed, schema_epoch)? {
         return Ok(template);
     }
-    if let Some(template) = parse_vacuum_into_template(trimmed, schema_epoch)? {
+    if let Some(template) = templates::parse_vacuum_into_template(trimmed, schema_epoch)? {
         return Ok(template);
     }
 
     let dialect = SQLiteDialect {};
-    let sql_for_parser = strip_cte_materialized_hints(sql);
+    let sql_for_parser = prepare::strip_cte_materialized_hints(sql);
     let mut statements = match Parser::parse_sql(&dialect, &sql_for_parser) {
         Ok(statements) => statements,
         Err(first_err) => {
-            let rewritten = strip_sqlite_table_index_hints(&sql_for_parser)?;
+            let rewritten = prepare::strip_sqlite_table_index_hints(&sql_for_parser)?;
             if rewritten == sql_for_parser {
                 return Err(first_err.into());
             }
             Parser::parse_sql(&dialect, &rewritten).map_err(|_| first_err)?
         }
     };
-    apply_cte_materialized_hints(&mut statements, sql);
+    prepare::apply_cte_materialized_hints(&mut statements, sql);
     if statements.len() != 1 {
         return Err(Error::UnsupportedSql(
             "only single-statement prepares are supported".to_owned(),
         ));
     }
 
-    bind_statement(conn, schema, schema_epoch, trimmed, statements.remove(0))
+    templates::bind_statement(conn, schema, schema_epoch, trimmed, statements.remove(0))
 }
 
 pub(crate) fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
@@ -379,468 +162,6 @@ pub(crate) fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) ->
             Err(_) => "non-string panic payload".to_owned(),
         },
     }
-}
-
-fn strip_cte_materialized_hints(sql: &str) -> String {
-    let mut out = sql.to_owned();
-    loop {
-        if let Some(next) = replace_case_insensitive_once(&out, "AS NOT MATERIALIZED", "AS") {
-            out = next;
-            continue;
-        }
-        if let Some(next) = replace_case_insensitive_once(&out, "AS MATERIALIZED", "AS") {
-            out = next;
-            continue;
-        }
-        break out;
-    }
-}
-
-fn strip_sqlite_table_index_hints(sql: &str) -> Result<String> {
-    let bytes = sql.as_bytes();
-    let mut out = String::with_capacity(sql.len());
-    let mut i = 0usize;
-    let mut changed = false;
-
-    while i < bytes.len() {
-        match bytes[i] {
-            b'\'' | b'"' | b'`' => {
-                let end = quoted_end(bytes, i, bytes[i]);
-                out.push_str(&sql[i..end]);
-                i = end;
-            }
-            b'[' => {
-                let end = bracket_quoted_end(bytes, i);
-                out.push_str(&sql[i..end]);
-                i = end;
-            }
-            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
-                let end = line_comment_end(bytes, i);
-                out.push_str(&sql[i..end]);
-                i = end;
-            }
-            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
-                let end = block_comment_end(bytes, i);
-                out.push_str(&sql[i..end]);
-                i = end;
-            }
-            b if is_ident_start(b) => {
-                let word_end = word_end(bytes, i);
-                let word = &sql[i..word_end];
-                if word.eq_ignore_ascii_case("indexed")
-                    && let Some(end) = indexed_by_hint_end(sql, word_end)
-                {
-                    i = end;
-                    changed = true;
-                    continue;
-                }
-                if word.eq_ignore_ascii_case("not")
-                    && let Some(end) = not_indexed_hint_end(sql, word_end)
-                {
-                    i = end;
-                    changed = true;
-                    continue;
-                }
-                out.push_str(word);
-                i = word_end;
-            }
-            _ => {
-                let ch = sql[i..]
-                    .chars()
-                    .next()
-                    .expect("scanner index is on a char boundary");
-                out.push(ch);
-                i += ch.len_utf8();
-            }
-        }
-    }
-
-    if changed { Ok(out) } else { Ok(sql.to_owned()) }
-}
-
-fn indexed_by_hint_end(sql: &str, after_indexed: usize) -> Option<usize> {
-    let bytes = sql.as_bytes();
-    let by_start = skip_ws_and_comments(bytes, after_indexed);
-    let by_end = word_end_if(bytes, by_start, "by")?;
-    let ident_start = skip_ws_and_comments(bytes, by_end);
-    identifier_end(bytes, ident_start)
-}
-
-fn not_indexed_hint_end(sql: &str, after_not: usize) -> Option<usize> {
-    let bytes = sql.as_bytes();
-    let indexed_start = skip_ws_and_comments(bytes, after_not);
-    word_end_if(bytes, indexed_start, "indexed")
-}
-
-fn skip_ws_and_comments(bytes: &[u8], mut i: usize) -> usize {
-    loop {
-        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
-            i += 1;
-        }
-        if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-            i = line_comment_end(bytes, i);
-            continue;
-        }
-        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
-            i = block_comment_end(bytes, i);
-            continue;
-        }
-        return i;
-    }
-}
-
-fn word_end_if(bytes: &[u8], i: usize, expected: &str) -> Option<usize> {
-    if i >= bytes.len() || !is_ident_start(bytes[i]) {
-        return None;
-    }
-    let end = word_end(bytes, i);
-    let word = std::str::from_utf8(&bytes[i..end]).ok()?;
-    if word.eq_ignore_ascii_case(expected) {
-        Some(end)
-    } else {
-        None
-    }
-}
-
-fn identifier_end(bytes: &[u8], i: usize) -> Option<usize> {
-    if i >= bytes.len() {
-        return None;
-    }
-    match bytes[i] {
-        b'"' | b'\'' | b'`' => Some(quoted_end(bytes, i, bytes[i])),
-        b'[' => Some(bracket_quoted_end(bytes, i)),
-        b if is_ident_start(b) => Some(word_end(bytes, i)),
-        _ => None,
-    }
-}
-
-fn quoted_end(bytes: &[u8], start: usize, quote: u8) -> usize {
-    let mut i = start + 1;
-    while i < bytes.len() {
-        if bytes[i] == quote {
-            if i + 1 < bytes.len() && bytes[i + 1] == quote {
-                i += 2;
-                continue;
-            }
-            return i + 1;
-        }
-        i += 1;
-    }
-    bytes.len()
-}
-
-fn bracket_quoted_end(bytes: &[u8], start: usize) -> usize {
-    let mut i = start + 1;
-    while i < bytes.len() {
-        if bytes[i] == b']' {
-            return i + 1;
-        }
-        i += 1;
-    }
-    bytes.len()
-}
-
-fn line_comment_end(bytes: &[u8], start: usize) -> usize {
-    let mut i = start + 2;
-    while i < bytes.len() && bytes[i] != b'\n' {
-        i += 1;
-    }
-    i
-}
-
-fn block_comment_end(bytes: &[u8], start: usize) -> usize {
-    let mut i = start + 2;
-    while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
-        i += 1;
-    }
-    if i + 1 < bytes.len() {
-        i + 2
-    } else {
-        bytes.len()
-    }
-}
-
-fn word_end(bytes: &[u8], mut i: usize) -> usize {
-    while i < bytes.len() && is_ident_byte(bytes[i]) {
-        i += 1;
-    }
-    i
-}
-
-fn is_ident_start(b: u8) -> bool {
-    b.is_ascii_alphabetic() || b == b'_'
-}
-
-fn apply_cte_materialized_hints(statements: &mut [SqlStatement], sql: &str) {
-    let lower = sql.to_ascii_lowercase();
-    let hint = if lower.contains("as not materialized") {
-        Some(sqlparser::ast::CteAsMaterialized::NotMaterialized)
-    } else if lower.contains("as materialized") {
-        Some(sqlparser::ast::CteAsMaterialized::Materialized)
-    } else {
-        None
-    };
-    let Some(hint) = hint else {
-        return;
-    };
-    for statement in statements {
-        if let SqlStatement::Query(query) = statement {
-            apply_cte_materialized_hints_to_query(query.as_mut(), hint);
-        }
-    }
-}
-
-fn apply_cte_materialized_hints_to_query(
-    query: &mut Query,
-    hint: sqlparser::ast::CteAsMaterialized,
-) {
-    if let Some(with) = &mut query.with {
-        for cte in &mut with.cte_tables {
-            cte.materialized = Some(hint);
-        }
-    }
-}
-
-fn replace_case_insensitive_once(input: &str, needle: &str, replacement: &str) -> Option<String> {
-    let lower_input = input.to_ascii_lowercase();
-    let lower_needle = needle.to_ascii_lowercase();
-    let idx = lower_input.find(&lower_needle)?;
-    let mut out = String::with_capacity(input.len() - needle.len() + replacement.len());
-    out.push_str(&input[..idx]);
-    out.push_str(replacement);
-    out.push_str(&input[idx + needle.len()..]);
-    Some(out)
-}
-
-fn bind_statement(
-    conn: &Connection,
-    schema: Arc<SchemaSnapshot>,
-    schema_epoch: SchemaEpoch,
-    sql: &str,
-    statement: SqlStatement,
-) -> Result<PreparedTemplate> {
-    match statement {
-        SqlStatement::Query(query) => bind_query(conn, schema, schema_epoch, sql, *query),
-        SqlStatement::Insert(insert) => bind_insert(conn, schema, schema_epoch, sql, insert),
-        SqlStatement::Update(update) => bind_update(schema, schema_epoch, sql, update),
-        SqlStatement::Delete(delete) => bind_delete(schema, schema_epoch, sql, delete),
-        SqlStatement::CreateTable(create_table) => {
-            bind_create_table(conn, schema, schema_epoch, sql, create_table)
-        }
-        SqlStatement::CreateIndex(create_index) => {
-            bind_create_index(schema_epoch, sql, create_index)
-        }
-        SqlStatement::Drop {
-            object_type,
-            if_exists,
-            names,
-            ..
-        } => bind_drop(sql, schema_epoch, object_type, if_exists, names),
-        SqlStatement::AlterTable(alter_table) => bind_alter_table(
-            schema_epoch,
-            sql,
-            alter_table.name,
-            alter_table.if_exists,
-            alter_table.only,
-            alter_table.operations,
-        ),
-        SqlStatement::Analyze(analyze) => bind_analyze(schema, schema_epoch, sql, analyze),
-        SqlStatement::Explain {
-            analyze,
-            verbose: _,
-            query_plan,
-            estimate: _,
-            statement,
-            format,
-            ..
-        } => bind_explain(
-            conn,
-            schema,
-            schema_epoch,
-            sql,
-            analyze,
-            query_plan,
-            format,
-            *statement,
-        ),
-        SqlStatement::ExplainTable { .. } => Err(Error::UnsupportedSql(
-            "EXPLAIN TABLE is not supported".to_owned(),
-        )),
-        SqlStatement::AttachDatabase {
-            schema_name,
-            database_file_name,
-            ..
-        } => bind_attach(sql, schema_epoch, schema_name, database_file_name),
-        SqlStatement::Vacuum(vacuum) => bind_vacuum(sql, schema_epoch, vacuum),
-        SqlStatement::CreateView(create_view) => bind_create_view(schema_epoch, sql, create_view),
-        SqlStatement::CreateTrigger(create_trigger) => {
-            bind_create_trigger(schema_epoch, sql, create_trigger)
-        }
-        SqlStatement::DropTrigger(drop_trigger) => {
-            let name = parse_qualified_name(drop_trigger.trigger_name)?;
-            Ok(template(
-                sql,
-                schema_epoch,
-                false,
-                PreparedKind::DropTrigger(DropTriggerSpec {
-                    name,
-                    if_exists: drop_trigger.if_exists,
-                }),
-            ))
-        }
-        other => Err(Error::UnsupportedSql(format!(
-            "statement not supported yet: {other:?}"
-        ))),
-    }
-}
-
-fn parse_reindex_template(
-    sql: &str,
-    schema_epoch: SchemaEpoch,
-) -> Result<Option<PreparedTemplate>> {
-    let trimmed = sql.trim().trim_end_matches(';').trim();
-    if trimmed.eq_ignore_ascii_case("reindex") {
-        return Ok(Some(template(
-            trimmed,
-            schema_epoch,
-            false,
-            PreparedKind::Reindex,
-        )));
-    }
-    Ok(None)
-}
-
-fn parse_vacuum_into_template(
-    sql: &str,
-    schema_epoch: SchemaEpoch,
-) -> Result<Option<PreparedTemplate>> {
-    let trimmed = sql.trim().trim_end_matches(';').trim();
-    let lower = trimmed.to_ascii_lowercase();
-    let Some(rest) = lower.strip_prefix("vacuum into ") else {
-        return Ok(None);
-    };
-    let original_rest = &trimmed[trimmed.len() - rest.len()..];
-    let path = match original_rest.trim() {
-        value if value.starts_with('\'') || value.starts_with('"') => {
-            let bytes = value.as_bytes();
-            if bytes.len() < 2 {
-                return Err(Error::UnsupportedSql(
-                    "VACUUM INTO expects a database path".to_owned(),
-                ));
-            }
-            let quote = bytes[0];
-            let mut i = 1usize;
-            let mut out = String::new();
-            while i < bytes.len() {
-                if bytes[i] == quote {
-                    if i + 1 < bytes.len() && bytes[i + 1] == quote {
-                        out.push(quote as char);
-                        i += 2;
-                        continue;
-                    }
-                    break;
-                }
-                out.push(bytes[i] as char);
-                i += 1;
-            }
-            out
-        }
-        other => other.to_owned(),
-    };
-    if path.is_empty() {
-        return Err(Error::UnsupportedSql(
-            "VACUUM INTO expects a database path".to_owned(),
-        ));
-    }
-    Ok(Some(template(
-        trimmed,
-        schema_epoch,
-        false,
-        PreparedKind::VacuumInto {
-            path: Arc::from(path),
-        },
-    )))
-}
-
-fn template(
-    sql: &str,
-    schema_epoch: SchemaEpoch,
-    readonly: bool,
-    kind: PreparedKind,
-) -> PreparedTemplate {
-    PreparedTemplate {
-        sql: Arc::from(sql),
-        schema_epoch,
-        stats_epoch: 0,
-        optimizer_hash: 0,
-        param_layout: crate::statement::ParamLayout::default(),
-        output_columns: Arc::from([]),
-        readonly,
-        kind,
-    }
-}
-
-/// Build a `PreparedTemplate` for `ATTACH DATABASE 'path' AS alias`.
-/// Only literal string paths are supported (no expression evaluation at
-/// prepare time).
-fn bind_attach(
-    sql: &str,
-    schema_epoch: SchemaEpoch,
-    schema_name: Ident,
-    file_name: Expr,
-) -> Result<PreparedTemplate> {
-    let path = match file_name {
-        Expr::Value(ValueWithSpan { value, .. }) => match value {
-            Value::SingleQuotedString(s)
-            | Value::DoubleQuotedString(s)
-            | Value::EscapedStringLiteral(s) => s,
-            other => {
-                return Err(Error::UnsupportedSql(format!(
-                    "ATTACH expects a string literal path, got {other:?}"
-                )));
-            }
-        },
-        other => {
-            return Err(Error::UnsupportedSql(format!(
-                "ATTACH expects a string literal path, got {other:?}"
-            )));
-        }
-    };
-    Ok(template(
-        sql,
-        schema_epoch,
-        false,
-        PreparedKind::Attach(crate::exec::attach::AttachPlan::Attach {
-            path: std::path::PathBuf::from(path),
-            alias: Arc::from(schema_name.value),
-        }),
-    ))
-}
-
-fn bind_vacuum(
-    sql: &str,
-    schema_epoch: SchemaEpoch,
-    vacuum: sqlparser::ast::VacuumStatement,
-) -> Result<PreparedTemplate> {
-    if vacuum.full || vacuum.sort_only || vacuum.delete_only || vacuum.recluster || vacuum.boost {
-        return Err(Error::UnsupportedSql(
-            "VACUUM modifiers are not supported".to_owned(),
-        ));
-    }
-    if vacuum.reindex {
-        return Ok(template(sql, schema_epoch, false, PreparedKind::Reindex));
-    }
-    if let Some(table_name) = vacuum.table_name {
-        return Err(Error::UnsupportedSql(format!(
-            "VACUUM table target is not supported: {table_name}"
-        )));
-    }
-    if vacuum.threshold.is_some() {
-        return Err(Error::UnsupportedSql(
-            "VACUUM threshold is not supported".to_owned(),
-        ));
-    }
-    Ok(template(sql, schema_epoch, false, PreparedKind::Vacuum))
 }
 
 /// Detect a `DETACH [DATABASE] alias` statement before handing the SQL to
@@ -859,18 +180,17 @@ pub(crate) fn parse_detach_template(
     } else {
         return None;
     };
-    let alias = rest.trim();
+    let original_rest = &trimmed[trimmed.len() - rest.len()..];
+    let alias = original_rest.trim();
     if alias.is_empty() {
         return None;
     }
-    // Reach back into the original (non-lowercased) text to preserve case.
-    let alias_orig = trimmed[trimmed.len() - alias.len()..].to_owned();
-    Some(template(
+    Some(templates::template(
         trimmed,
         schema_epoch,
         false,
         PreparedKind::Attach(crate::exec::attach::AttachPlan::Detach {
-            alias: Arc::from(alias_orig),
+            alias: Arc::from(alias),
         }),
     ))
 }

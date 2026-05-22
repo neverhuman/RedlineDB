@@ -105,8 +105,7 @@ sqlite_parity_report_args() {
 
 case "$lane" in
   fast)
-    ./scripts/just/cache-warm.sh
-    bash ops/ci/fast.sh
+    ./scripts/just/fast.sh
     ;;
   fast-check)
     ./scripts/just/fast-check.sh
