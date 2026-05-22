@@ -34,7 +34,7 @@ pub(crate) fn push_projection_columns(source: &SelectSource, out: &mut Vec<Strin
                 }));
             }
         }
-        SelectSource::SqliteSchema => {
+        SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => {
             out.extend(
                 ["type", "name", "tbl_name", "rootpage", "sql"]
                     .into_iter()

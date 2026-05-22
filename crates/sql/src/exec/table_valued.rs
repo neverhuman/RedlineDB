@@ -57,11 +57,78 @@ impl TvArg {
 /// isn't a registered TVF.
 pub(crate) fn lookup(name: &str) -> Option<&'static dyn TvFunc> {
     let lower = name.to_ascii_lowercase();
-    super::pragma_tv::registry()
+    EXTRA_TVFS
         .iter()
+        .chain(super::pragma_tv::registry().iter())
         .chain(super::json_tv::registry().iter())
         .find(|f| f.name() == lower.as_str())
         .map(|f| *f)
+}
+
+static EXTRA_TVFS: &[&dyn TvFunc] = &[&GenerateSeries];
+
+struct GenerateSeries;
+
+impl TvFunc for GenerateSeries {
+    fn name(&self) -> &'static str {
+        "generate_series"
+    }
+
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(Error::UnsupportedSql(
+                "generate_series expects 2 or 3 arguments".to_owned(),
+            ));
+        }
+        let start = tv_int(&args[0])?;
+        let stop = tv_int(&args[1])?;
+        let step = if let Some(step) = args.get(2) {
+            tv_int(step)?
+        } else {
+            1
+        };
+        if step == 0 {
+            return Err(Error::UnsupportedSql(
+                "generate_series step must not be zero".to_owned(),
+            ));
+        }
+        let mut rows = Vec::new();
+        let mut value = start;
+        if step > 0 {
+            while value <= stop {
+                rows.push(vec![SqlValue::Integer(value)]);
+                value = value.saturating_add(step);
+            }
+        } else {
+            while value >= stop {
+                rows.push(vec![SqlValue::Integer(value)]);
+                value = value.saturating_add(step);
+            }
+        }
+        Ok(TvResult {
+            columns: vec!["value".to_owned()],
+            rows,
+        })
+    }
+}
+
+fn tv_int(arg: &TvArg) -> Result<i64> {
+    match arg {
+        TvArg::Integer(value) => Ok(*value),
+        TvArg::Text(value) => value.parse::<i64>().map_err(|_| {
+            Error::UnsupportedSql(format!(
+                "generate_series integer argument expected: {value}"
+            ))
+        }),
+        TvArg::Null => Err(Error::UnsupportedSql(
+            "generate_series integer argument cannot be NULL".to_owned(),
+        )),
+    }
 }
 
 /// Parse `TableFunctionArgs` into the simple `TvArg` vector the trait

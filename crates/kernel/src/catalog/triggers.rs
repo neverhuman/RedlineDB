@@ -34,11 +34,15 @@ pub fn apply_create_trigger(
         }
         return Err(Error::ObjectExists);
     }
-    // Triggers must reference an existing base table (we defer INSTEAD
-    // OF on views to a followup task).
-    let _table = snapshot
-        .lookup_table(schema_id, spec.table.folded())
-        .ok_or(Error::ObjectNotFound)?;
+    if spec.when_time == TriggerTimeKind::InsteadOf {
+        let _view = snapshot
+            .lookup_view(schema_id, spec.table.folded())
+            .ok_or(Error::ObjectNotFound)?;
+    } else {
+        let _table = snapshot
+            .lookup_table(schema_id, spec.table.folded())
+            .ok_or(Error::ObjectNotFound)?;
+    }
 
     let mut next_object_id = snapshot.meta.next_object_id;
     let trigger_id = ObjectId(next_object_id.0);

@@ -15,9 +15,8 @@ pub(crate) fn bind_insert(
     if let sqlparser::ast::TableObject::TableName(ref name) = insert.table
         && crate::exec::view::name_is_view(&schema, name)
     {
-        return Err(crate::exec::view::cannot_modify_view_error(
-            &name.to_string(),
-        ));
+        let view_name = name.clone();
+        return bind_insert_view(conn, schema_epoch, sql, insert, &view_name);
     }
     let table = bind_table_object(&schema, &insert.table)?;
     let mut params = ParamLayout::default();
@@ -133,6 +132,53 @@ pub(crate) fn bind_insert(
             default_values,
             returning,
             conflict,
+        }),
+    })
+}
+
+fn bind_insert_view(
+    conn: &Connection,
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    insert: sqlparser::ast::Insert,
+    name: &sqlparser::ast::ObjectName,
+) -> Result<PreparedTemplate> {
+    let columns = crate::exec::view::view_column_names(conn, name)?;
+    let mut params = ParamLayout::default();
+    let mut rows = Vec::new();
+    let Some(source) = insert.source else {
+        return Err(Error::UnsupportedSql(
+            "INSERT INTO view requires VALUES".to_owned(),
+        ));
+    };
+    match *source.body {
+        SetExpr::Values(values) => {
+            for row in values.rows {
+                let mut exprs = Vec::with_capacity(row.len());
+                for expr in row {
+                    exprs.push(normalize_dml_value(expr, &mut params)?);
+                }
+                rows.push(exprs);
+            }
+        }
+        _ => {
+            return Err(Error::UnsupportedSql(
+                "INSERT INTO view supports VALUES only".to_owned(),
+            ));
+        }
+    }
+    Ok(PreparedTemplate {
+        sql: Arc::from(sql),
+        schema_epoch,
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: params,
+        output_columns: Arc::from([]),
+        readonly: false,
+        kind: PreparedKind::InsertView(crate::statement::InsertViewPlan {
+            view_name: Arc::from(name.to_string()),
+            columns: Arc::from(columns),
+            rows,
         }),
     })
 }

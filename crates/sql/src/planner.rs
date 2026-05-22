@@ -21,10 +21,12 @@ use helpers::*;
 mod access;
 mod build;
 mod optimize;
+mod policy;
 
 use access::*;
 use build::*;
 use optimize::*;
+use policy::*;
 
 const SEQ_PAGE_COST: f64 = 1.0;
 const RANDOM_PAGE_COST: f64 = 4.0;
@@ -269,6 +271,10 @@ pub(crate) fn build_plan(
             PhysicalKind::Constant,
             format!("INSERT INTO {}", plan.table.name),
         ),
+        PreparedKind::InsertView(plan) => simple_node(
+            PhysicalKind::Constant,
+            format!("INSERT INTO {}", plan.view_name),
+        ),
         PreparedKind::Update(plan) => simple_node(
             PhysicalKind::Constant,
             format!("UPDATE {}", plan.table.name),
@@ -287,7 +293,10 @@ pub(crate) fn build_plan(
         PreparedKind::Begin(_) => simple_node(PhysicalKind::Constant, "BEGIN".to_owned()),
         PreparedKind::Commit => simple_node(PhysicalKind::Constant, "COMMIT".to_owned()),
         PreparedKind::Rollback => simple_node(PhysicalKind::Constant, "ROLLBACK".to_owned()),
-        PreparedKind::CreateTable(_) | PreparedKind::CreateTableAsSelect(_) => {
+        PreparedKind::CreateTable(_)
+        | PreparedKind::CreateTempTable(_)
+        | PreparedKind::CreateTableAsSelect(_)
+        | PreparedKind::CreateVirtualTable(_) => {
             simple_node(PhysicalKind::Constant, "CREATE TABLE".to_owned())
         }
         PreparedKind::CreateIndex(_) => {
@@ -299,7 +308,9 @@ pub(crate) fn build_plan(
             simple_node(PhysicalKind::Constant, "ALTER TABLE".to_owned())
         }
         PreparedKind::Pragma(_) => simple_node(PhysicalKind::Constant, "PRAGMA".to_owned()),
-        PreparedKind::Attach(_) => simple_node(PhysicalKind::Constant, "ATTACH/DETACH".to_owned()),
+        PreparedKind::Attach(_) | PreparedKind::CrossDbSql(_) => {
+            simple_node(PhysicalKind::Constant, "ATTACH/DETACH".to_owned())
+        }
         PreparedKind::Reindex => simple_node(PhysicalKind::Constant, "REINDEX".to_owned()),
         PreparedKind::Vacuum => simple_node(PhysicalKind::Constant, "VACUUM".to_owned()),
         PreparedKind::VacuumInto { .. } => {

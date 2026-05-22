@@ -9,11 +9,10 @@ fn lookup_column_local(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
         RowContext::Joined(rows) => {
             let mut found = None;
             for row in rows.iter() {
-                if row.row.is_none() {
-                    continue;
-                }
                 if let Ok(value) = lookup_joined_row_column(row, name) {
-                    if found.is_some() {
+                    if found.as_ref().is_some_and(|existing| {
+                        crate::value::compare_values(existing, &value) != std::cmp::Ordering::Equal
+                    }) {
                         return Err(Error::UnsupportedSql(format!(
                             "ambiguous column name: {name}"
                         )));
