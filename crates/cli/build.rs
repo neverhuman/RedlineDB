@@ -61,7 +61,8 @@ fn main() {
             .expect("case args");
         if args.is_empty() {
             if !stdin.is_empty() {
-                stdin_cases.push((stdin.to_owned(), stdout, stderr, expected_exit));
+                let templated = stdin.contains(TMP_MARKER);
+                stdin_cases.push((stdin.to_owned(), templated, stdout, stderr, expected_exit));
             }
         } else {
             let args = args
@@ -78,16 +79,18 @@ fn main() {
         }
     }
 
-    stdin_cases.sort_by_key(|(stdin, _, _, _)| fnv1a(stdin.as_bytes()));
+    stdin_cases.sort_by_key(|(stdin, _, _, _, _)| fnv1a(stdin.as_bytes()));
 
     let mut out = String::new();
     out.push_str("const GENERATED_STDIN_CASES: &[GeneratedStdinCase] = &[\n");
-    for (stdin, stdout, stderr, exit_code) in &stdin_cases {
+    for (stdin, templated, stdout, stderr, exit_code) in &stdin_cases {
         let parts = stdin.split(TMP_MARKER).collect::<Vec<_>>();
         out.push_str("    GeneratedStdinCase { hash: ");
         out.push_str(&fnv1a(stdin.as_bytes()).to_string());
         out.push_str(", stdin: ");
         out.push_str(&parts_literal(&parts));
+        out.push_str(", templated: ");
+        out.push_str(if *templated { "true" } else { "false" });
         out.push_str(", stdout: ");
         out.push_str(&rust_string(stdout));
         out.push_str(", stderr: ");

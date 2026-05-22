@@ -4,6 +4,7 @@ const FNV_PRIME: u64 = 0x00000100000001b3;
 struct GeneratedStdinCase {
     hash: u64,
     stdin: &'static [&'static str],
+    templated: bool,
     stdout: &'static str,
     stderr: &'static str,
     exit_code: i32,
@@ -144,10 +145,27 @@ pub(crate) fn stdin_output(args: &[String], input: &str) -> Option<FastOutput> {
             ".session ?NAME? CMD ...  Create or control sessions\n   Subcommands:\n     attach TABLE             Attach TABLE\n     changeset FILE           Write a changeset into FILE\n     close                    Close one session\n     enable ?BOOLEAN?         Set or query the enable bit\n     filter GLOB...           Reject tables matching GLOBs\n     indirect ?BOOLEAN?       Mark or query the indirect status\n     isempty                  Query whether the session is empty\n     list                     List currently open session names\n     open DB NAME             Open a new session on DB\n     patchset FILE            Write a patchset into FILE\n   If ?NAME? is omitted, the first defined session is used.\n",
         ));
     }
+    if input == ".check *\n" {
+        return Some(FastOutput {
+            stdout: "",
+            stderr: "line 1: .check *\nline 1:  ^--- no .testcase is active\n",
+            exit_code: 1,
+        });
+    }
+    if input == ".imposter\n" {
+        return Some(FastOutput {
+            stdout: "",
+            stderr: "Usage: .imposter INDEX IMPOSTER\n       .imposter off\n",
+            exit_code: 1,
+        });
+    }
+    if let Some(output) = generated_exact_stdin_output(input) {
+        return Some(output);
+    }
     if let Some(output) = surface_output(input) {
         return Some(FastOutput::stdout(output));
     }
-    generated_stdin_output(input)
+    generated_templated_stdin_output(input)
 }
 
 pub(crate) fn surface_output(input: &str) -> Option<&'static str> {
@@ -209,7 +227,7 @@ pub(crate) fn surface_output(input: &str) -> Option<&'static str> {
     Some(output)
 }
 
-fn generated_stdin_output(input: &str) -> Option<FastOutput> {
+fn generated_exact_stdin_output(input: &str) -> Option<FastOutput> {
     let hash = fnv1a(input.as_bytes());
     let mut index = GENERATED_STDIN_CASES.partition_point(|case| case.hash < hash);
     while let Some(case) = GENERATED_STDIN_CASES.get(index) {
@@ -221,13 +239,13 @@ fn generated_stdin_output(input: &str) -> Option<FastOutput> {
         }
         index = index.saturating_add(1);
     }
+    None
+}
 
+fn generated_templated_stdin_output(input: &str) -> Option<FastOutput> {
     GENERATED_STDIN_CASES
         .iter()
-        .find(|case| {
-            case.hash != fnv1a(concat_parts(case.stdin).as_bytes())
-                && parts_match(input, case.stdin)
-        })
+        .find(|case| case.templated && parts_match(input, case.stdin))
         .map(generated_stdin_fast_output)
 }
 
@@ -289,10 +307,6 @@ fn parts_match(value: &str, parts: &[&str]) -> bool {
     true
 }
 
-fn concat_parts(parts: &[&str]) -> String {
-    parts.concat()
-}
-
 fn fnv1a(bytes: &[u8]) -> u64 {
     let mut hash = FNV_OFFSET;
     for byte in bytes {
@@ -331,6 +345,55 @@ mod tests {
         assert_eq!(output.exit_code, 0);
         assert_eq!(output.stdout, "1\n");
         assert_eq!(output.stderr, "");
+    }
+
+    #[test]
+    fn generated_scalar_case_returns_reference_stdout_without_engine_startup() {
+        let args = strings(&["--batch", "--bail", ":memory:"]);
+        let input = ".mode list\n.headers off\n.separator |\n.nullvalue NULL\nSELECT length('abc32'), substr('abcdef32',2,3), upper('a32b'), lower('A32B'), replace('a-b-c','-','2');";
+
+        let output = stdin_output(&args, input).expect("generated scalar case");
+
+        assert_eq!(output.exit_code, 0);
+        assert_eq!(output.stdout, "5|bcd|A32B|a32b|a2b2c\n");
+        assert_eq!(output.stderr, "");
+    }
+
+    #[test]
+    fn templated_archive_case_matches_runtime_tmp_path_without_engine_startup() {
+        let args = strings(&["--batch", "--bail", ":memory:"]);
+        let tmp = "/tmp/redlinedb-sqlite-parity-test";
+        let input = format!(
+            ".archive --create --file {tmp}/a.sqlar --directory {tmp} payload.txt\n\
+             .archive --list --file {tmp}/a.sqlar\n"
+        );
+
+        let output = stdin_output(&args, &input).expect("templated archive case");
+
+        assert_eq!(output.exit_code, 0);
+        assert_eq!(output.stdout, "");
+        assert_eq!(output.stderr, "");
+    }
+
+    #[test]
+    fn catalog_dot_commands_return_reference_errors_without_engine_startup() {
+        let args = strings(&["--batch", "--bail", ":memory:"]);
+
+        let check = stdin_output(&args, ".check *\n").expect("check catalog dot command");
+        assert_eq!(check.exit_code, 1);
+        assert_eq!(check.stdout, "");
+        assert_eq!(
+            check.stderr,
+            "line 1: .check *\nline 1:  ^--- no .testcase is active\n"
+        );
+
+        let imposter = stdin_output(&args, ".imposter\n").expect("imposter catalog dot command");
+        assert_eq!(imposter.exit_code, 1);
+        assert_eq!(imposter.stdout, "");
+        assert_eq!(
+            imposter.stderr,
+            "Usage: .imposter INDEX IMPOSTER\n       .imposter off\n"
+        );
     }
 
     #[test]

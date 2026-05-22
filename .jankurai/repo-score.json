@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:13d3b2968babbe1975b6406f717ca165c95802db60032b0e64e96846800d8f5b",
-  "input_fingerprint": "sha256:26305c9b638ad1388a81b65f0bb6fabd0428b63d4957fc8c76cb229225a350a1",
-  "policy_fingerprint": "sha256:9d909dbe7af83c2b1bcbc9a414d7e754f9397ad6bc877174843471d562a742ea",
+  "report_fingerprint": "sha256:b9c1ec9588b1261295af14a2104e61ec681a93ef45bf2ca533649fab97ff96aa",
+  "input_fingerprint": "sha256:6a436c25cfda889243167eb6757c3ef7651536eeee2da261912ad99de8f2ea76",
+  "policy_fingerprint": "sha256:9ce83425f57aaad5d2324256d4a8eddec2cf60cfc7d6198fb4bbb2e3d38f5388",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779426956",
+  "generated_at": "1779460409",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -18,9 +18,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1779426956",
-  "started_at": "1779426956",
-  "elapsed_ms": 5895,
+  "run_id": "1779460409",
+  "started_at": "1779460409",
+  "elapsed_ms": 5741,
   "scope": {
     "mode": "full",
     "paths": []
@@ -47,7 +47,7 @@
     }
   },
   "git": {
-    "head": "5bf3c57",
+    "head": "f0b48eb",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -339,7 +339,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1698",
+        "rust bad-behavior advisory signals: 1702",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -356,7 +356,7 @@
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
         "copy-code advisory classes found: 67 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1698",
+        "rust bad-behavior advisory signals: 1702",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -1042,7 +1042,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-22T05:15:50.613302653+00:00",
+    "generated_at": "2026-05-22T14:33:24.391771046+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1087,13 +1087,13 @@
       "hard_classes": 0,
       "warning_classes": 67,
       "hard_instances": 0,
-      "warning_instances": 172,
+      "warning_instances": 175,
       "duplicate_lines": 147,
       "duplicate_tokens": 429,
       "duplicate_bytes": 4026,
-      "total_redundant_lines": 227,
-      "total_redundant_tokens": 622,
-      "total_redundant_bytes": 5922
+      "total_redundant_lines": 230,
+      "total_redundant_tokens": 640,
+      "total_redundant_bytes": 6111
     },
     "classes": [
       {
@@ -1772,6 +1772,62 @@
             "start_line": 127,
             "end_line": 128,
             "unit_name": "shrink_buffers"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-aaa82dc9c0b7e229",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 63,
+        "instance_count": 5,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 24,
+        "total_redundant_bytes": 252,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "61485b76542f83e1",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/sqlite_parity_fast.rs",
+            "language": "rust",
+            "start_line": 328,
+            "end_line": 329,
+            "unit_name": "generated_negative_constraint_case_returns_nonzero_without_engine_startup"
+          },
+          {
+            "path": "crates/cli/src/sqlite_parity_fast.rs",
+            "language": "rust",
+            "start_line": 351,
+            "end_line": 352,
+            "unit_name": "generated_scalar_case_returns_reference_stdout_without_engine_startup"
+          },
+          {
+            "path": "crates/cli/src/sqlite_parity_fast.rs",
+            "language": "rust",
+            "start_line": 363,
+            "end_line": 364,
+            "unit_name": "templated_archive_case_matches_runtime_tmp_path_without_engine_startup"
+          },
+          {
+            "path": "crates/cli/src/sqlite_parity_fast.rs",
+            "language": "rust",
+            "start_line": 379,
+            "end_line": 380,
+            "unit_name": "catalog_dot_commands_return_reference_errors_without_engine_startup"
+          },
+          {
+            "path": "crates/cli/src/sqlite_parity_fast.rs",
+            "language": "rust",
+            "start_line": 400,
+            "end_line": 401,
+            "unit_name": "exact_catalog_dot_command_returns_reference_surface_without_engine_startup"
           }
         ]
       },
@@ -2490,41 +2546,6 @@
             "start_line": 253,
             "end_line": 254,
             "unit_name": "parse_fixed_u32"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-aaa82dc9c0b7e229",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 6,
-        "duplicate_bytes": 63,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 6,
-        "total_redundant_bytes": 63,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "809bfafcba40830e",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/cli/src/sqlite_parity_fast.rs",
-            "language": "rust",
-            "start_line": 314,
-            "end_line": 315,
-            "unit_name": "generated_negative_constraint_case_returns_nonzero_without_engine_startup"
-          },
-          {
-            "path": "crates/cli/src/sqlite_parity_fast.rs",
-            "language": "rust",
-            "start_line": 337,
-            "end_line": 338,
-            "unit_name": "exact_catalog_dot_command_returns_reference_surface_without_engine_startup"
           }
         ]
       },

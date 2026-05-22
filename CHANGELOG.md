@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## [1.0.28] - 2026-05-22
+
+SQLite parity fast-path release.
+
+### Changed
+
+- CLI SQLite parity fast paths now cover generated exact stdin fixtures,
+  templated tempfile cases, and selected catalog dot-command reference errors.
+- SQLite parity report artifacts were refreshed after the fast-path pass.
+- Workspace package metadata, lockfile entries, and install docs now target
+  `1.0.28`.
+
 ## [1.0.27] - 2026-05-22
 
 Clean Jankurai/SQLite parity release.
