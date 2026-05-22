@@ -66,10 +66,11 @@ fn strip_keyword<'a>(s: &'a str, keyword: &str) -> Option<&'a str> {
     if trimmed.len() < keyword.len() {
         return None;
     }
-    let (head, tail) = trimmed.split_at(keyword.len());
+    let head = trimmed.get(..keyword.len())?;
     if !head.eq_ignore_ascii_case(keyword) {
         return None;
     }
+    let tail = &trimmed[keyword.len()..];
     // Must be followed by whitespace, end, or punctuation — not by another
     // identifier character. This prevents accidentally matching "RELEASEME".
     if let Some(next) = tail.chars().next()

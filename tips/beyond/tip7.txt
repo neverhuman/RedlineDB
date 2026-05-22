@@ -1,0 +1,269 @@
+This is a fascinating product-research question because SQLite’s “missing features” are increasingly shaped by people trying to use it as a local-first, edge, or lightweight Postgres substitute.
+
+I could not literally census all of X/Quora/private/blocked pages, so the ranking below is a **representative public-source ranking**, not a mathematically counted vote total. I weighted: official SQLite forum activity, Stack Overflow/Reddit/HN/GitHub-style public discussion, recency, repeated pain across communities, workaround cost, and “Postgres gap” severity. SQLite itself stresses that it is embedded/serverless, not a client/server DBMS, so some popular requests are intentionally outside its core design center. ([SQLite][1])
+
+Also important: SQLite is moving fast. As of **SQLite 3.53.1, released May 5, 2026**, recent 3.53 changes already enhanced `ALTER TABLE` to add/remove `NOT NULL` and `CHECK` constraints, so older “SQLite cannot alter constraints at all” complaints are now partly stale. ([SQLite][2])
+
+## Ranked feature gaps people most often ask for
+
+### 1. Full, ergonomic schema migrations / richer `ALTER TABLE`
+
+**Demand level: extremely high.** This is the clearest “daily developer pain” gap. People want Postgres-like migration ergonomics: add/drop/alter constraints, change column type, add `UNIQUE`/`PRIMARY KEY`, reorder columns, add `IF NOT EXISTS` to more schema operations, and avoid the fragile create-copy-drop-rename dance.
+
+SQLite still documents `ALTER TABLE` as a limited subset: rename table, rename column, add column, drop column. `ADD COLUMN` still has restrictions, and `DROP COLUMN` fails if the column is referenced by indexes, constraints, generated columns, triggers, views, or foreign keys. For many arbitrary schema changes, the docs prescribe a 12-step rebuild procedure. ([SQLite][3]) Forum requests show the practical pain: app developers ask for `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, and tool authors ask for higher-level “replace table with transformed table” operations because the official rebuild procedure is easy to get subtly wrong. ([SQLite][4])
+
+**Postgres gap:** Postgres has much richer `ALTER TABLE` semantics, so ORMs and migration tools feel more natural there.
+**Likely SQLite-core fit:** high, but hard because SQLite stores schema as original SQL text, making safe edits tricky. ([SQLite][3])
+
+---
+
+### 2. Multiple concurrent writers / row-level write concurrency
+
+**Demand level: extremely high, especially for web/backend use.** SQLite users repeatedly ask why it cannot support multiple writers like Postgres. The official WAL docs are explicit: WAL allows readers and a writer to run together, but “there can only be one writer at a time.” SQLite’s isolation docs also state that writes are serialized: multiple connections can write, but they must take turns. ([SQLite][5])
+
+This comes up constantly in “SQLite in production website” discussions: the common community answer is that multiple writes are fine, but multiple **concurrent** writes are the bottleneck. ([Reddit][6]) There are experimental/proposed paths, including WAL3, `BEGIN CONCURRENT`, WAL2, and Hctree-style high-concurrency backends, but these are not ordinary mainline SQLite features today. ([SQLite][7])
+
+**Postgres gap:** MVCC with many concurrent writers, row/page-level locking, background processes, connection pooling.
+**Likely SQLite-core fit:** medium-low for mainline; high for forks/branches/adjacent products.
+
+---
+
+### 3. A “strict modern mode” enabled by default
+
+**Demand level: very high.** This is not just about `STRICT` tables, which SQLite already has. The request is for a one-switch “make SQLite behave like a strict production SQL database” mode: `STRICT` everywhere, foreign keys on by default, double-quoted string literals disabled, stricter `GROUP BY`, no nullable primary-key surprises, better warnings for dubious SQL, and more Postgres-like type behavior.
+
+SQLite’s own quirks page documents many of these pain points: flexible typing, no separate Boolean or DateTime datatype, foreign keys off by default, primary keys sometimes allowing `NULL`, non-grouped columns in aggregate queries, limited Unicode case folding, and permissive double-quoted string literals. ([SQLite][1]) Forum discussion around strict mode specifically raised the idea of a `PRAGMA strict=true` so users could enable strict behavior across tables/databases instead of annotating each table. ([SQLite][8])
+
+**Postgres gap:** stricter typing and stricter SQL semantics by default.
+**Likely SQLite-core fit:** high if opt-in; low if default behavior changes because legacy compatibility is sacred.
+
+---
+
+### 4. Stored procedures / procedural SQL / reusable database-side logic
+
+**Demand level: high and recurring.** People ask for stored procedures to group statements, pass parameters, centralize logic, avoid duplicating business rules across Python/C/PHP/etc., and use SQLite more as a standalone database tool. A long official forum thread shows both sides: requesters want minimal stored procedures with grouped statements, parameters, and rollback/error handling; skeptics argue application code already supplies this in SQLite’s embedded model. ([SQLite][9])
+
+The same thread includes a telling demand signal: a participant says requests like this appear “almost every year,” but the complexity/benefit ratio has kept it out. ([SQLite][9])
+
+**Postgres gap:** PL/pgSQL functions/procedures, procedural languages, database-side business logic.
+**Likely SQLite-core fit:** low-medium; a loadable extension or CLI-level scripting layer fits better than core.
+
+---
+
+### 5. Built-in replication, sync, offline-first, and “remote SQLite”
+
+**Demand level: high and rising fast.** This is the local-first/mobile/edge wave. People want SQLite files to sync across devices, replicate to a server, stream WAL changes, resolve conflicts, or behave like a small distributed database.
+
+The official forum has direct requests for low-overhead transaction replication APIs, with users noting they found no built-in stream replication solution. ([SQLite][10]) Recent ecosystem activity is strong: third-party/local-first projects advertise CRDT sync, SQLite-to-cloud sync, SQLite-to-Postgres/Supabase sync, and offline-first workflows. ([GitHub][11])
+
+**Postgres gap:** physical/logical replication, WAL streaming, logical decoding, standby servers.
+**Likely SQLite-core fit:** medium-low in core; very high for extensions, app frameworks, and hosted “SQLite cloud” products.
+
+---
+
+### 6. Foreign-key and constraint completeness
+
+**Demand level: high-medium.** SQLite supports foreign keys, but the sharp edges keep surfacing. The docs note enforcement is off by default; they also list unsupported FK features: `MATCH` clauses are parsed but not enforced, runtime switching between deferred/immediate constraints is not supported, and foreign keys cannot cross schema boundaries. ([SQLite][1])
+
+This overlaps with migration pain: dropping or altering columns that participate in constraints is still difficult. `DROP COLUMN` fails when a column is used in a foreign key, check constraint, trigger, view, generated expression, index, etc. ([SQLite][3])
+
+**Postgres gap:** richer deferrable constraints, `SET CONSTRAINTS`, cross-schema references, stronger default enforcement.
+**Likely SQLite-core fit:** medium-high for opt-in improvements; default changes are harder.
+
+---
+
+### 7. `LATERAL` joins / `CROSS APPLY`-style query support
+
+**Demand level: medium-high and unusually active recently.** SQLite has a LATERAL branch/prototype, but it has not been merged into trunk. Richard Hipp explicitly asked whether LATERAL solves enough real-world problems to justify adding it, and users responded with use cases: deduplicating repeated calculations, top-N-per-row queries, reusing calculated values, complex accounting queries, and Postgres compatibility. ([SQLite][12])
+
+A 2025 forum use case explains that a query worked naturally with Postgres `JOIN LATERAL` / SQL Server `CROSS APPLY`, while the SQLite workaround required programmatically constructing `UNION ALL` queries or repeating expensive subqueries. Another 2025 example showed repeated aggregate subqueries that LATERAL could combine into one pass. ([SQLite][12])
+
+**Postgres gap:** `LATERAL` subqueries in `FROM`.
+**Likely SQLite-core fit:** fairly high technically, but only if enough real workloads justify it.
+
+---
+
+### 8. `LISTEN`/`NOTIFY`, changefeeds, or pub/sub notifications
+
+**Demand level: medium-high.** People building local apps, event-sourced tools, editors, and reactive UIs want a built-in way for one SQLite connection/process to notify others of changes without polling. A forum request explicitly says the missing feature is a PostgreSQL-style `LISTEN/NOTIFY` mechanism; the user tried triggers and `sqlite3_update_hook`, but those did not solve cross-client notification cleanly. ([SQLite][13])
+
+Postgres `NOTIFY` sends an event and optional payload to clients that previously executed `LISTEN`, which is exactly the pattern people ask SQLite to mimic. ([PostgreSQL][14])
+
+**Postgres gap:** `LISTEN`, `UNLISTEN`, `NOTIFY`, async notifications.
+**Likely SQLite-core fit:** low-medium, because SQLite lacks a central server process; high for controlled app frameworks/extensions.
+
+---
+
+### 9. Materialized views with refresh support
+
+**Demand level: medium-high.** This is a classic Postgres gap. SQLite has ordinary views and can materialize subqueries internally during query execution, but not persistent `CREATE MATERIALIZED VIEW` / `REFRESH MATERIALIZED VIEW` objects. A long-standing Stack Overflow question reflects the confusion: users see “materialization” in SQLite internals and ask whether database-level materialized views exist; the answer is that what other DBMSs call materialized views are not supported. ([Stack Overflow][15])
+
+Postgres materialized views persist query results in table-like form, remember the defining query, and can be refreshed, including `REFRESH MATERIALIZED VIEW CONCURRENTLY` under constraints. ([PostgreSQL][16])
+
+**Postgres gap:** persistent materialized views and refresh semantics.
+**Likely SQLite-core fit:** medium; can be emulated with tables + triggers/jobs, but official syntax would help.
+
+---
+
+### 10. More Postgres-like JSONB: containment operators, JSONPath, and GIN-style indexing
+
+**Demand level: medium-high and rising.** SQLite now has JSONB, but it is not Postgres JSONB. SQLite’s docs say its JSONB format is not binary-compatible with Postgres JSONB, does not claim O(1) lookup, and has O(N) time complexity for most operations; future O(1)-style enhancements are mentioned as possible but not currently available. ([SQLite][17])
+
+The major Postgres gap is not simply “JSON support,” but **indexable schemaless querying**: Postgres JSONB can use GIN indexes for containment and key-existence operators. ([Crunchy Data][18]) SQLite users can use generated columns and expression indexes for known paths, but there is no core GIN-like “index arbitrary JSON document containment” feature.
+
+**Postgres gap:** `jsonb @>`, `?`, `?|`, `?&`, JSONPath, GIN/GiST indexing.
+**Likely SQLite-core fit:** medium; expression/generated-column indexing is SQLite-ish, full GIN-like indexing is a bigger philosophical jump.
+
+---
+
+### 11. Native arrays, `UNNEST`, set-returning functions, and built-in `split`
+
+**Demand level: medium.** This appears less universal than migrations/concurrency, but the pain is concrete. A forum feature request asks for a `split` table-valued function because users often need to turn delimited strings into rows; the thread explicitly compares the desired capability to Postgres `unnest(string_to_array(...))` and says “I wish SQLite had native arrays like PostgreSQL.” ([SQLite][19])
+
+The same discussion shows the workaround: recursive CTEs or JSON tricks, which are verbose and can be slower or fragile with quoting. ([SQLite][19])
+
+**Postgres gap:** arrays, `unnest`, set-returning functions, richer table-valued functions.
+**Likely SQLite-core fit:** medium for `split`/table functions; low-medium for full native arrays.
+
+---
+
+### 12. Updatable views and fuller trigger support
+
+**Demand level: medium.** SQLite’s own unsupported-features page says views are read-only: you cannot directly `INSERT`, `UPDATE`, or `DELETE` a view, though `INSTEAD OF` triggers can emulate it. The same page says SQLite supports row triggers, but not `FOR EACH STATEMENT` triggers. ([SQLite][20])
+
+**Postgres gap:** naturally updatable views in more cases, rules/triggers, statement-level triggers, transition tables.
+**Likely SQLite-core fit:** medium-low; `INSTEAD OF` triggers cover many cases, but ergonomics are worse.
+
+---
+
+### 13. SQL polish for Postgres compatibility: `DEFAULT` in `INSERT`/`UPDATE`, `MERGE`, and related DML features
+
+**Demand level: medium.** The best-documented current request here is using `DEFAULT` inside `INSERT` values or `UPDATE SET`, e.g. `INSERT INTO t(a,b) VALUES (10, DEFAULT)`. Richard Hipp noted that PostgreSQL, MySQL, SQL Server, and Oracle support this, and said SQLite probably should too, but also called it a substantial/risky change. Later 2025 discussion shows branch work, reluctance to merge, and an implementation closer to Postgres syntax. ([SQLite][21])
+
+Postgres also has standard-style `MERGE`, where source rows are joined to target rows and conditional `WHEN MATCHED` / `WHEN NOT MATCHED` actions execute. ([PostgreSQL][22]) SQLite has `UPSERT`, `REPLACE`, `UPDATE FROM`, and `RETURNING`, so this is a compatibility/ergonomics gap more than a “can’t solve the problem” gap.
+
+**Postgres gap:** `DEFAULT` in more expression positions, `MERGE`, broader SQL-standard DML parity.
+**Likely SQLite-core fit:** medium for `DEFAULT`; lower for full `MERGE`.
+
+---
+
+### 14. Full Unicode, collations, case folding, and regex-like text features by default
+
+**Demand level: medium.** SQLite intentionally does not do full Unicode case folding by default; `upper()`/`lower()` are ASCII-oriented unless built with ICU, and the docs say the Unicode tables are larger than the SQLite library itself. ([SQLite][1])
+
+Users coming from Postgres often expect robust collations, case-insensitive text behavior, regex, and locale-aware sorting/comparison without custom builds.
+
+**Postgres gap:** richer collations, ICU support, case-insensitive text patterns/extensions, regex functions.
+**Likely SQLite-core fit:** low-medium in core; high as an official/packaged extension.
+
+---
+
+### 15. Native temporal types, time zones, intervals, and richer date/time functions
+
+**Demand level: medium-low, but constant.** SQLite has no separate `DATETIME` datatype; it stores dates/times as ISO text, Unix-time integer, or Julian-day real, and its functions operate across those representations. ([SQLite][1]) That flexibility is fine for many apps, but Postgres users miss `timestamp`, `timestamptz`, `interval`, date arithmetic, and stronger temporal validation.
+
+**Postgres gap:** `timestamp with time zone`, `interval`, strong date/time typing.
+**Likely SQLite-core fit:** low-medium; strict temporal extensions or generated checks are more likely than native type overhaul.
+
+---
+
+### 16. Roles, privileges, `GRANT`/`REVOKE`, row-level security
+
+**Demand level: low-medium overall, high only among people trying to use SQLite as a multi-user server.** SQLite’s unsupported-features page says `GRANT` and `REVOKE` are not implemented because SQLite reads/writes an ordinary disk file and relies on OS file permissions; those commands would be meaningless for its embedded architecture. ([SQLite][20])
+
+**Postgres gap:** roles, grants, row-level security policies, schema privileges.
+**Likely SQLite-core fit:** very low; better handled by application code or a server wrapper.
+
+---
+
+### 17. Core encryption at rest
+
+**Demand level: low-medium but persistent.** People regularly want “SQLite but encrypted” for mobile, desktop, and local-first apps. The main answer is SQLCipher, a separate SQLite fork that adds 256-bit AES database-file encryption plus related security features. ([GitHub][23]) Public discussions still describe encryption-at-rest as a hot requested feature in SQLite drivers/bindings, especially for app environments. ([Hacker News][24])
+
+**Postgres gap:** server-side encryption options, TLS, managed secrets, role/security ecosystem.
+**Likely SQLite-core fit:** historically low; forks/custom VFS/drivers are the pattern.
+
+---
+
+### 18. Easier extension ecosystem: official package/install story for vector, geo, ICU, crypto, advanced FTS, etc.
+
+**Demand level: low-medium, rising with AI/local-first apps.** SQLite’s extension ecosystem is powerful but fragmented. Vector search is a great example: `sqlite-vss` brought vector search via Faiss, but its README now points users toward `sqlite-vec` as easier to install/use. ([GitHub][25]) Community AI/local-search discussions praise embeddable vector search that runs everywhere, including WASM/mobile/Raspberry Pi, but this is still extension-land rather than core SQLite. ([Reddit][26])
+
+**Postgres gap:** `CREATE EXTENSION`, packaged extensions like PostGIS/pgvector, managed extension catalogs.
+**Likely SQLite-core fit:** high as packaging/tooling; low as “put every extension in core.”
+
+---
+
+### 19. More advanced index types and planner controls
+
+**Demand level: niche-medium.** Requests here include GIN/GiST-like indexes for JSON/search, better indexing of virtual tables and generated expressions, planner hints, expression-index repair, and more predictable optimization. SQLite continues to improve here—3.53 added `REINDEX EXPRESSIONS` and planner enhancements—but Postgres users still miss specialized index families and deeper query-plan knobs. ([SQLite][2])
+
+**Postgres gap:** GIN, GiST, BRIN, SP-GiST, operator classes, planner settings/hints via extensions.
+**Likely SQLite-core fit:** medium for targeted enhancements; low for full Postgres-style index ecosystem.
+
+---
+
+### 20. Server-style observability, administration, and operations
+
+**Demand level: low, but appears when SQLite moves into backend/server roles.** People want live connection visibility, lock diagnostics, slow-query logging, background checkpoint management, query cancellation, replication monitoring, and production dashboards. SQLite has CLI and pragmas, but no central server process, which limits Postgres-style operational features. The docs’ embedded/serverless framing is the key reason this remains outside core expectations. ([SQLite][1])
+
+**Postgres gap:** `pg_stat_activity`, logs, background workers, autovacuum, monitoring extensions, admin SQL.
+**Likely SQLite-core fit:** low in core; high in wrappers, drivers, and hosted SQLite products.
+
+---
+
+## Lower-ranked but real recurring gaps
+
+These show up, but with weaker or more niche demand than the top 20:
+
+| Gap                                                     | Why it comes up                                                                                                                        |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Native `BOOLEAN`, `UUID`, `ENUM`, `DOMAIN`, range types | Postgres schemas port poorly; SQLite has flexible typing and no separate Boolean/DateTime types by default. ([SQLite][1])              |
+| `DISTINCT ON`                                           | SQLite docs explicitly mention using `GROUP BY` as a substitute, but result-row choice can be arbitrary. ([SQLite][1])                 |
+| Stricter aggregate semantics                            | Same root issue: SQLite permits non-aggregate columns not in `GROUP BY`; Postgres generally rejects that. ([SQLite][1])                |
+| Cross-database/schema constraints                       | `ATTACH` is useful, but foreign keys cannot cross schema boundaries. ([SQLite][27])                                                    |
+| Statement-level triggers                                | Officially omitted; only row-level triggers are supported. ([SQLite][20])                                                              |
+| Better `REGEXP`/text-search defaults                    | Often solved by extensions, but users expect batteries-included behavior.                                                              |
+| Partitioning / sharding                                 | Mostly a Postgres/server-scale expectation, not a natural SQLite feature.                                                              |
+| Built-in job scheduler                                  | Usually tied to materialized views, stored procedures, replication, or maintenance tasks.                                              |
+| Better network-filesystem behavior                      | WAL requires shared memory and is not designed for network filesystems. ([SQLite][5])                                                  |
+| Built-in queue semantics                                | People use SQLite as a job queue, but want `SKIP LOCKED`-like or notify semantics; this overlaps with concurrency and `LISTEN/NOTIFY`. |
+
+## The strongest product opportunity summary
+
+The top requests cluster into four big themes:
+
+1. **Make SQLite easier to evolve safely:** richer `ALTER TABLE`, idempotent migrations, and constraint editing.
+2. **Make SQLite safer/stricter by default when desired:** a “modern strict mode” that flips multiple compatibility switches at once.
+3. **Make SQLite more backend-capable:** concurrent writers, replication/sync, notifications, server-style observability.
+4. **Make SQLite more Postgres-compatible for app developers:** LATERAL, materialized views, JSONB indexing, arrays/UNNEST, stored procedures, and SQL-standard DML polish.
+
+My ranked “highest leverage” roadmap would be: **schema migrations first, strict-modern mode second, concurrency/sync third, then LATERAL/materialized views/notifications/JSON indexing as targeted Postgres-parity wins.**
+
+[1]: https://sqlite.org/quirks.html "Quirks, Caveats, and Gotchas In SQLite"
+[2]: https://sqlite.org/releaselog/3_53_1.html "SQLite Release 3.53.1 On 2026-05-05"
+[3]: https://sqlite.org/lang_altertable.html "ALTER TABLE"
+[4]: https://sqlite.org/forum/info/948baa805ffef199 "SQLite User Forum: ALTER TABLE ADD COLUMN problem"
+[5]: https://sqlite.org/wal.html "Write-Ahead Logging"
+[6]: https://www.reddit.com/r/sqlite/comments/modtns/deploying_sqlite_on_a_production_website/ "Deploying SQLite on a Production Website : r/sqlite"
+[7]: https://sqlite.org/forum/info/4dfd311f2ab986c72db2879f5d5d2722fa33bd8fd7a14d8aca5542c50cd69fc7?t=h "SQLite User Forum: WAL3 mode - RFC for Concurrent Writes"
+[8]: https://sqlite.org/forum/info/374cdfe6d1f5b573?utm_source=chatgpt.com "SQLite User Forum: about ”strict” mode"
+[9]: https://sqlite.org/forum/info/78a60bdeec7c1ee9 "SQLite User Forum: Feature request: Stored Procedures"
+[10]: https://sqlite.org/forum/info/4fc617ecaf47d544ea8baae0930553a3a52e63067d3adfff9ce1a217cc470aba "SQLite User Forum: Master-Slave replication for sqlite3?"
+[11]: https://github.com/sqliteai/sqlite-sync "GitHub - sqliteai/sqlite-sync: CRDT-based offline-first sync for SQLite. Syncs automatically with SQLite Cloud, PostgreSQL, and Supabase. No conflicts, no data loss, no backend to build. For offline-first apps and AI agents. · GitHub"
+[12]: https://sqlite.org/forum/forumpost/fc29fa4f14?t=h "SQLite User Forum: Aggregate/Window Functions in Lateral Join Segfault"
+[13]: https://sqlite.org/forum/info/304941521f0014c944e50b88fab6ca58a33d91384e2e58c95d1945c7609a635a "SQLite User Forum: Publish/subscribe queue"
+[14]: https://www.postgresql.org/docs/current/sql-notify.html "PostgreSQL: Documentation: 18: NOTIFY"
+[15]: https://stackoverflow.com/questions/1374363/how-can-a-materialized-view-be-created-in-sqlite "sql - How can a materialized view be created in sqlite? - Stack Overflow"
+[16]: https://www.postgresql.org/docs/current/rules-materializedviews.html "PostgreSQL: Documentation: 18: 39.3. Materialized Views"
+[17]: https://sqlite.org/json1.html?utm_source=chatgpt.com "JSON Functions And Operators"
+[18]: https://www.crunchydata.com/blog/indexing-jsonb-in-postgres "Indexing JSONB in Postgres | Crunchy Data Blog"
+[19]: https://sqlite.org/forum/info/fea93907b364a409?t=h "SQLite User Forum: [Feature Request] split string table-valued function"
+[20]: https://sqlite.org/omitted.html "SQL Features That SQLite Does Not Implement"
+[21]: https://sqlite.org/forum/info/d7384e085b808b05 "SQLite User Forum: FEATURE REQUEST: use of DEFAULT in INSERTs"
+[22]: https://www.postgresql.org/docs/current/sql-merge.html "PostgreSQL: Documentation: 18: MERGE"
+[23]: https://github.com/sqlcipher/sqlcipher "GitHub - sqlcipher/sqlcipher: SQLCipher is a standalone fork of SQLite that adds 256 bit AES encryption of database files and other security features. · GitHub"
+[24]: https://news.ycombinator.com/item?id=40208800&utm_source=chatgpt.com "Show HN: Roast my SQLite encryption at-rest"
+[25]: https://github.com/asg017/sqlite-vss "GitHub - asg017/sqlite-vss: A SQLite extension for efficient vector search, based on Faiss! · GitHub"
+[26]: https://www.reddit.com/r/LocalLLaMA/comments/1ehlazq/introducing_sqlitevec_v010_a_vector_search_sqlite/?utm_source=chatgpt.com "a vector search SQLite extension that runs everywhere"
+[27]: https://sqlite.org/foreignkeys.html "SQLite Foreign Key Support"

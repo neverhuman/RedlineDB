@@ -59,6 +59,56 @@ pub(crate) fn like_result(
     Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
 }
 
+pub(crate) fn ilike_result(
+    value: SqlValue,
+    pattern: SqlValue,
+    negated: bool,
+    escape_char: Option<Value>,
+) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) || matches!(pattern, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let text = value_to_string(&value).to_lowercase();
+    let pattern = value_to_string(&pattern).to_lowercase();
+    let escape = match escape_char {
+        Some(Value::SingleQuotedString(s)) if s.chars().count() == 1 => {
+            Some(s.chars().next().unwrap())
+        }
+        Some(Value::DoubleQuotedString(s)) if s.chars().count() == 1 => {
+            Some(s.chars().next().unwrap())
+        }
+        Some(Value::SingleQuotedRawStringLiteral(s)) if s.chars().count() == 1 => {
+            Some(s.chars().next().unwrap())
+        }
+        Some(Value::DoubleQuotedRawStringLiteral(s)) if s.chars().count() == 1 => {
+            Some(s.chars().next().unwrap())
+        }
+        Some(Value::TripleSingleQuotedString(s)) if s.chars().count() == 1 => {
+            Some(s.chars().next().unwrap())
+        }
+        Some(Value::TripleDoubleQuotedString(s)) if s.chars().count() == 1 => {
+            Some(s.chars().next().unwrap())
+        }
+        Some(Value::EscapedStringLiteral(s)) if s.chars().count() == 1 => {
+            Some(s.chars().next().unwrap())
+        }
+        Some(Value::UnicodeStringLiteral(s)) if s.chars().count() == 1 => {
+            Some(s.chars().next().unwrap())
+        }
+        Some(Value::DollarQuotedString(s)) if s.value.chars().count() == 1 => {
+            Some(s.value.chars().next().unwrap())
+        }
+        None => None,
+        Some(other) => {
+            return Err(Error::UnsupportedSql(format!(
+                "unsupported ILIKE escape literal: {other:?}"
+            )));
+        }
+    };
+    let matched = unicode_like_match(&text, &pattern, escape);
+    Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
+}
+
 fn like_match(text: &str, pattern: &str, escape: Option<char>, case_insensitive: bool) -> bool {
     let text = if case_insensitive {
         text.to_ascii_lowercase()
@@ -75,6 +125,63 @@ fn like_match(text: &str, pattern: &str, escape: Option<char>, case_insensitive:
         pattern.as_bytes(),
         escape.map(|c| c.to_ascii_lowercase()),
     )
+}
+
+fn unicode_like_match(text: &str, pattern: &str, escape: Option<char>) -> bool {
+    let text: Vec<char> = text.chars().collect();
+    let pattern: Vec<char> = pattern.chars().collect();
+    unicode_like_match_inner(&text, &pattern, escape)
+}
+
+fn unicode_like_match_inner(text: &[char], pattern: &[char], escape: Option<char>) -> bool {
+    fn inner(text: &[char], pattern: &[char], escape: Option<char>) -> bool {
+        let mut ti = 0usize;
+        let mut pi = 0usize;
+        while pi < pattern.len() {
+            match pattern[pi] {
+                '%' => {
+                    pi += 1;
+                    if pi == pattern.len() {
+                        return true;
+                    }
+                    while ti <= text.len() {
+                        if inner(&text[ti..], &pattern[pi..], escape) {
+                            return true;
+                        }
+                        if ti == text.len() {
+                            break;
+                        }
+                        ti += 1;
+                    }
+                    return false;
+                }
+                '_' => {
+                    if ti == text.len() {
+                        return false;
+                    }
+                    ti += 1;
+                    pi += 1;
+                }
+                ch if Some(ch) == escape => {
+                    pi += 1;
+                    if pi >= pattern.len() || ti >= text.len() || pattern[pi] != text[ti] {
+                        return false;
+                    }
+                    ti += 1;
+                    pi += 1;
+                }
+                ch => {
+                    if ti >= text.len() || text[ti] != ch {
+                        return false;
+                    }
+                    ti += 1;
+                    pi += 1;
+                }
+            }
+        }
+        ti == text.len()
+    }
+    inner(text, pattern, escape)
 }
 
 fn like_match_inner(text: &[u8], pattern: &[u8], escape: Option<char>) -> bool {

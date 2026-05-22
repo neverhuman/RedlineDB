@@ -74,6 +74,64 @@ fn explicit_null_does_not_receive_column_default() {
 }
 
 #[test]
+fn default_keyword_uses_column_defaults_in_dml() {
+    let (_dir, conn) = open_database();
+    conn.execute(
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT DEFAULT 'fallback', note TEXT DEFAULT 'reset')",
+    )
+    .expect("create table");
+
+    conn.execute("INSERT INTO t(id, v, note) VALUES (1, DEFAULT, DEFAULT)")
+        .expect("insert defaults");
+    conn.execute("UPDATE t SET v = DEFAULT, note = DEFAULT WHERE id = 1")
+        .expect("update defaults");
+    conn.execute(
+        "INSERT INTO t(id, v, note) VALUES (1, 'ignored', 'ignored') \
+         ON CONFLICT(id) DO UPDATE SET v = DEFAULT, note = DEFAULT",
+    )
+    .expect("upsert defaults");
+
+    let mut stmt = conn.prepare("SELECT id, v, note FROM t").expect("select");
+    assert_eq!(stmt.step().expect("row"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("id"), 1);
+    assert_eq!(stmt.column_text(1).expect("v"), "fallback");
+    assert_eq!(stmt.column_text(2).expect("note"), "reset");
+    assert_eq!(stmt.step().expect("done"), Step::Done);
+}
+
+#[test]
+fn strict_boolean_and_uuid_columns_enforce_storage_rules() {
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(flag BOOLEAN, ident UUID) STRICT")
+        .expect("create strict table");
+
+    conn.execute(
+        "INSERT INTO t(flag, ident) VALUES (TRUE, '550E8400-E29B-41D4-A716-446655440000')",
+    )
+    .expect("insert valid strict row");
+
+    let mut stmt = conn
+        .prepare("SELECT flag, ident FROM t")
+        .expect("select strict row");
+    assert_eq!(stmt.step().expect("row"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("bool storage"), 1);
+    assert_eq!(
+        stmt.column_text(1).expect("uuid storage"),
+        "550e8400-e29b-41d4-a716-446655440000"
+    );
+    assert_eq!(stmt.step().expect("done"), Step::Done);
+
+    for sql in [
+        "INSERT INTO t(flag, ident) VALUES (2, '550E8400-E29B-41D4-A716-446655440001')",
+        "INSERT INTO t(flag, ident) VALUES (1.5, '550E8400-E29B-41D4-A716-446655440002')",
+        "INSERT INTO t(flag, ident) VALUES (1, 123)",
+        "INSERT INTO t(flag, ident) VALUES ('true', 'not-a-uuid')",
+    ] {
+        assert!(conn.execute(sql).is_err(), "statement should fail: {sql}");
+    }
+}
+
+#[test]
 fn insert_select_populates_target_rows() {
     let (_dir, conn) = open_database();
     conn.execute("CREATE TABLE src(id INTEGER PRIMARY KEY, v TEXT)")

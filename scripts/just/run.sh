@@ -92,6 +92,7 @@ sqlite_parity_report_args() {
     --plot assets/sqlite-parity-latency-gap.svg
     --ksloc-plot assets/sqlite-parity-ksloc.svg
     --performance-histogram-plot assets/sqlite-parity-performance-histogram.svg
+    --median-test-performance-plot assets/sqlite-median-test-performance.svg
     --jankurai-score .jankurai/repo-score.json
     --updated-date "$updated_date"
   )
@@ -99,6 +100,8 @@ sqlite_parity_report_args() {
     sqlite_parity_report_args_result+=(
       --jankurai-comparison "$sqlite_jankurai_comparison_json"
       --jankurai-comparison-plot assets/sqlite-jankurai-comparison.svg
+      --jankurai-score-plot assets/sqlite-jankurai-score.svg
+      --code-shape-plot assets/sqlite-code-shape.svg
     )
   fi
 }
@@ -202,6 +205,12 @@ case "$lane" in
     ;;
   sql-test)
     rtk cargo test -p redlinedb-sql --quiet --locked
+    ;;
+  beyond-sqlite-manifest)
+    rtk cargo test -p redlinedb-sql --test beyond_sqlite_manifest --quiet --locked
+    ;;
+  beyond-postgres-reference)
+    rtk bash ops/ci/beyond-postgres-reference.sh
     ;;
   ffi-check)
     rtk cargo check -p redlinedb-ffi --locked

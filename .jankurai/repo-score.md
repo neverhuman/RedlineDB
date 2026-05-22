@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779460409`
-- Started at: `1779460409`
-- Elapsed: `5741` ms
+- Run ID: `1779472442`
+- Started at: `1779472442`
+- Elapsed: `5978` ms
 - Scope: `full`
 - Raw score: `87`
 - Final score: `87`
@@ -70,15 +70,15 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`67` files=`316`
+- Status: `review` hard=`0` warning=`68` files=`320`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`147` tokens=`429` bytes=`4026`
+- Duplicate volume: lines=`148` tokens=`431` bytes=`4042`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 17 lower-ranked classes
+  - showing the top 50 classes and omitting 18 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
@@ -128,7 +128,7 @@
 | `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb/src/statement.rs:150-151, crates/redlinedb/src/statement.rs:234-235` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/domain/src/error.rs:73-74, crates/domain/src/error.rs:91-92` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb-sqlx/src/bridge/options.rs:255-256, crates/redlinedb-sqlx/src/bridge/runtime.rs:129-130` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/savepoint.rs:64-65, crates/sql/src/parser/savepoint.rs:83-84` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/savepoint.rs:64-65, crates/sql/src/parser/savepoint.rs:84-85` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:162-163` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb/src/value.rs:534-535, crates/redlinedb/src/value_conv.rs:389-390` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb-sqlx/src/bridge/options.rs:209-210, crates/redlinedb-sqlx/src/bridge/options.rs:216-217` | `same body appears under different names across files` |
@@ -141,7 +141,7 @@
 | Contract and boundary integrity | 13 | 88 | 11.44 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 98 | 11.76 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 65 | 7.80 | largest authored code file: crates/bench/src/sqlite_parity/jankurai_compare.rs (721 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 65 | 7.80 | largest authored code file: crates/cli/src/render.rs (652 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 85 | 6.80 | database surface present; migration directory present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 91 | 6.37 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -227,8 +227,8 @@ No audited runtime boundary reclassifications declared.
    Reason: `Code shape and semantic surface` scored 65 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:e67802b6948e5396f2462511eae26ef61627282505429b2f25780f0523d2d25c`
-   Evidence: largest authored code file: crates/bench/src/sqlite_parity/jankurai_compare.rs (721 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 67 (advisory only, no score impact)
+   Fingerprint: `sha256:64c9bf7e684b20502dfe5748d895572c013858483dd94de9d87b9a4d9b744c8c`
+   Evidence: largest authored code file: crates/cli/src/render.rs (652 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 68 (advisory only, no score impact)
 2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`

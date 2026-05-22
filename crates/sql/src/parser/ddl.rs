@@ -622,6 +622,10 @@ pub(crate) fn bind_alter_table(
                     "ALTER TABLE ADD COLUMN default must be constant".to_owned(),
                 ));
             }
+            let if_not_exists = if_not_exists
+                || sql
+                    .to_ascii_lowercase()
+                    .contains("add column if not exists");
             redlinedb_kernel::catalog::AlterTableOperationSpec::AddColumn {
                 column,
                 if_not_exists,

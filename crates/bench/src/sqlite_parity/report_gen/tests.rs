@@ -7,7 +7,7 @@ use super::readme::{
     jankurai_badge_block, metrics_block, parse_jankurai_score, readme_block,
     replace_jankurai_badge, replace_readme_block,
 };
-use super::svg::{ksloc_svg, latency_svg};
+use super::svg::{beyond_sqlite_feature_progress_svg, ksloc_svg, latency_svg};
 use super::{
     JANKURAI_BADGE_BEGIN, JANKURAI_BADGE_END, JankuraiScore, LATENCY_REFERENCE_FLOOR_NS,
     README_BEGIN, README_END, catalog, performance_histogram, source_lines,
@@ -61,6 +61,8 @@ fn fixture_summary() -> SummaryJson {
         coverage_pct: 100.0,
         measured_samples: 1,
         warmup_samples: 0,
+        sqlite_case_median_ns: 100,
+        redline_case_median_ns: 90,
         median_latency_gap_pct: 10.0,
         worst_latency_gap_pct: 10.0,
         faster_cases: 1,
@@ -122,6 +124,8 @@ fn medians_exclude_warmup() {
     let report = build_report(&all_cases, &expected, records, "2026-05-20", "sha").expect("report");
     assert_eq!(report.ranked[0].sqlite_median_ns, 300);
     assert_eq!(report.ranked[0].redline_median_ns, 120);
+    assert_eq!(report.summary.sqlite_case_median_ns, 300);
+    assert_eq!(report.summary.redline_case_median_ns, 120);
     assert_eq!(report.summary.warmup_samples, 1);
 }
 
@@ -228,19 +232,44 @@ fn readme_block_includes_visible_charts_and_latency_anchor() {
     ));
     assert!(!block.contains("sqlite-parity-ksloc.svg"));
     let metrics = metrics_block(
+        Path::new("assets/beyond-sqlite-feature-progress.svg"),
         Path::new("assets/sqlite-parity-ksloc.svg"),
-        Some(Path::new("assets/sqlite-jankurai-comparison.svg")),
+        Some(Path::new("assets/sqlite-jankurai-score.svg")),
+        Some(Path::new("assets/sqlite-code-shape.svg")),
+        Some(Path::new("assets/sqlite-median-test-performance.svg")),
     );
     assert!(block.contains("[Full ranked latency table](#sqlite-parity-ranked-latency-table)"));
+    assert!(metrics.contains(
+        "![Beyond-SQLite feature progress chart](assets/beyond-sqlite-feature-progress.svg)"
+    ));
     assert!(
         metrics.contains(
             "![SQLite vs RedlineDB production KSLOC chart](assets/sqlite-parity-ksloc.svg)"
         )
     );
+    assert!(
+        metrics.contains(
+            "![RedlineDB vs SQLite Jankurai score chart](assets/sqlite-jankurai-score.svg)"
+        )
+    );
+    assert!(
+        metrics.contains(
+            "![RedlineDB vs SQLite code shape score chart](assets/sqlite-code-shape.svg)"
+        )
+    );
     assert!(metrics.contains(
-        "![RedlineDB vs SQLite Jankurai comparison chart](assets/sqlite-jankurai-comparison.svg)"
+        "![RedlineDB vs SQLite median test performance chart](assets/sqlite-median-test-performance.svg)"
     ));
     assert!(block.contains("<details id=\"sqlite-parity-ranked-latency-table\">"));
+}
+
+#[test]
+fn beyond_sqlite_feature_progress_chart_counts_reference_rows() {
+    let backlog = include_str!("../../../../../docs/beyond-sqlite-gaps.md");
+    let svg = beyond_sqlite_feature_progress_svg(backlog, "2026-05-20").expect("svg");
+    assert!(svg.contains("4 / 12"));
+    assert!(svg.contains("Beyond-SQLite feature progress"));
+    assert!(svg.contains("Passing reference"));
 }
 
 #[test]
@@ -268,13 +297,15 @@ fn jankurai_badge_replacement_preserves_static_badges() {
         status: "advisory".to_owned(),
         color: "orange",
     };
-    let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-1.0.28-blue\" alt=\"version\">\n</p>\nafter\n";
+    let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-2.0.0-blue\" alt=\"version\">\n</p>\nafter\n";
     let next = replace_jankurai_badge(current, &score).expect("replace");
 
     assert!(next.contains("<a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>"));
-    assert!(next.contains(
-        "<img src=\"https://img.shields.io/badge/version-1.0.28-blue\" alt=\"version\">"
-    ));
+    assert!(
+        next.contains(
+            "<img src=\"https://img.shields.io/badge/version-2.0.0-blue\" alt=\"version\">"
+        )
+    );
     assert!(next.contains(JANKURAI_BADGE_BEGIN));
     assert!(next.contains(JANKURAI_BADGE_END));
     assert!(
