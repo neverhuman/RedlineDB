@@ -1,6 +1,6 @@
 {
   "updated_date": "2026-05-23",
-  "git_sha": "67042c6a97451e741e439f5d7edffb8861e20c70",
+  "git_sha": "a30c242eb63abc6c68f2cd6d25cce7dce594cff8",
   "sqlite_version": "3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)",
   "generated_cases": 1127,
   "expected_cases": 1127,
@@ -12,10 +12,10 @@
   "coverage_pct": 100.0,
   "measured_samples": 3381,
   "warmup_samples": 1127,
-  "sqlite_case_median_ns": 1658897,
-  "redline_case_median_ns": 3255223,
-  "median_latency_gap_pct": -8.507433333333333,
-  "worst_latency_gap_pct": -62.14353333333334,
-  "faster_cases": 309,
+  "sqlite_case_median_ns": 1691209,
+  "redline_case_median_ns": 3293730,
+  "median_latency_gap_pct": -9.791,
+  "worst_latency_gap_pct": -64.18893333333332,
+  "faster_cases": 273,
   "latency_reference_floor_ns": 3000000
 }
