@@ -15,7 +15,8 @@ readable repair receipts.
 | `check`                              | Root validation gate: fast, score, security, rust-map, rust-witness, and rust-diagnose.              |
 | `test`                               | Fast workspace test proof.                                                                            |
 | `verify`                             | Alias for the root validation gate.                                                                   |
-| `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Default for edits. |
+| `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Quick iteration lane, not the pre-push gate. |
+| `pr-ci`                              | Exact local mirror of `.github/workflows/ci.yml`: preflight, test shards, parity shards, and `beyond-postgres-reference`. Run with `scripts/ci-local.sh pr-ci`. |
 | `fast-check`                         | Workspace compile proof for the default health lane.                                                  |
 | `fast-test`                          | Workspace test proof for the default health lane.                                                     |
 | `hygiene`                            | Format and file-size only; cheapest pre-commit gate.                                                  |
@@ -114,13 +115,21 @@ with `BASE_REF=origin/main`.
 To reproduce the complete PR CI surface locally, run:
 
 ```
-rtk scripts/ci-local.sh all
+rtk scripts/ci-local.sh pr-ci
 ```
 
-That command runs the same shared dispatchers used by `.github/workflows/ci.yml`,
-`.github/workflows/jankurai.yml`, and `.github/workflows/jankurai-tools.yml`,
-including dependency review, branch freshness, staged jankurai gate, and the
-input-boundary FFI cross-check.
+That command runs the same shared dispatchers used by `.github/workflows/ci.yml`:
+`CI_FAST_STAGE=preflight`, each `tests` matrix shard, each `parity` matrix shard,
+and `ops/ci/beyond-postgres-reference.sh`. It stops at the first failing local
+job and preserves the underlying command output.
+
+To run local mirrors for the broader PR workflow set, including dependency
+review, branch freshness, staged jankurai gate, and the input-boundary FFI
+cross-check, run:
+
+```
+rtk scripts/ci-local.sh all
+```
 
 ## Budgets and kill-switches
 

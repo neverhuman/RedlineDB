@@ -3,11 +3,11 @@
 # Command: just sqlite-jankurai-compare
 # DO NOT EDIT BY HAND.
 section,repo,metric,value,category,lane,hard_findings,soft_findings,total_findings
-summary,RedlineDB,score,76,,,,,
+summary,RedlineDB,score,87,,,,,
 summary,RedlineDB,raw_score,87,,,,,
-summary,RedlineDB,hard_findings,1,,,,,
+summary,RedlineDB,hard_findings,0,,,,,
 summary,RedlineDB,soft_findings,2,,,,,
-summary,RedlineDB,caps_applied,1,,,,,
+summary,RedlineDB,caps_applied,0,,,,,
 summary,SQLite,score,20,,,,,
 summary,SQLite,raw_score,20,,,,,
 summary,SQLite,hard_findings,238,,,,,
@@ -15,7 +15,6 @@ summary,SQLite,soft_findings,15,,,,,
 summary,SQLite,caps_applied,22,,,,,
 breakdown,RedlineDB,findings,,proof,fast,0,1,1
 breakdown,RedlineDB,findings,,shape,fast,0,1,1
-breakdown,RedlineDB,findings,,test,fast,1,0,1
 breakdown,SQLite,findings,,audit,audit,1,0,1
 breakdown,SQLite,findings,,boundary,contract,0,1,1
 breakdown,SQLite,findings,,context,audit,0,3,3

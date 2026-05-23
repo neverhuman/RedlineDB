@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:f212e84693cb9d18753b06dadd27272fce21e2e5e38837eab76f00c69f241a6b",
-  "input_fingerprint": "sha256:5de0e845ae3970631490917609197bc50e2674649f64b798c4f24852c1c50c11",
+  "report_fingerprint": "sha256:ffc4d94682c899125530459d2882cab0f78a044a664474dcbd7b4a69957d8703",
+  "input_fingerprint": "sha256:724302a8ad101b4f61ab6008ae8b5eb84d16bb15a825679118dcf11b1f469176",
   "policy_fingerprint": "sha256:5a2898520d912ff5eccfaf041b5eea0afaddb0c4521b4a36f90dcc5124904729",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779496533",
+  "generated_at": "1779507490",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -14,42 +14,40 @@
   "target_stack_id": "rust-ts-vite-react-postgres-bounded-python",
   "target_stack": "Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service",
   "claimed_conformance_level": "HL3",
-  "observed_conformance_level": "HL2",
-  "conformance_decision": "block",
-  "conformance_blockers": [
-    "HLT-008-FALSE-GREEN-RISK on crates/cli/tests/dot_commands.rs"
-  ],
+  "observed_conformance_level": "HL3",
+  "conformance_decision": "pass",
+  "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1779496533",
-  "started_at": "1779496533",
-  "elapsed_ms": 6029,
+  "run_id": "1779507490",
+  "started_at": "1779507490",
+  "elapsed_ms": 6459,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 76,
+  "score": 87,
   "raw_score": 87,
   "decision": {
-    "status": "advisory",
+    "status": "pass",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 1,
+    "hard_findings": 0,
     "soft_findings": 2,
     "ratchet": {
-      "baseline_score": 76,
+      "baseline_score": 87,
       "allowed_drop": 0,
-      "passed": false,
+      "passed": true,
       "score_delta": 0,
-      "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "baseline_report_fingerprint": "sha256:44c378b37efd875b39e41330c29bb95f6e5c4156584cb82956388e128847b184",
+      "baseline_input_fingerprint": "sha256:e8b2ca4c494752ddf1dc4ece439793b5e442163679a3bbf5d43d3c46c764a178",
+      "baseline_policy_fingerprint": "sha256:5a2898520d912ff5eccfaf041b5eea0afaddb0c4521b4a36f90dcc5124904729",
       "new_caps": [],
       "new_hard_findings": [],
       "policy_changed": false
     }
   },
   "git": {
-    "head": "d304730",
+    "head": "0a12db2",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -66,16 +64,14 @@
       "medium",
       "low"
     ],
-    "mode": "advisory",
+    "mode": "ratchet",
     "standard_version": "0.9.0",
     "auditor_version": "1.5.1",
     "schema_version": "1.9.0",
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
-  "caps_applied": [
-    "false-green-test-risk"
-  ],
+  "caps_applied": [],
   "hard_rules": [
     {
       "id": "no-root-agent-instructions",
@@ -322,9 +318,13 @@
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "Rust property/integration tests present or no Rust surface"
+        "Rust property/integration tests present or no Rust surface",
+        "proofbind artifact found: surfaces=427 missing=427 high_or_critical_missing=54 verdict=review"
       ],
-      "notes": []
+      "notes": [
+        "proofbind reports 427 unresolved obligation(s)",
+        "proofbind reports 54 missing high/critical semantic proof obligation(s)"
+      ]
     },
     {
       "name": "Security and supply-chain posture",
@@ -339,8 +339,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1745",
-        "docker bad-behavior advisory signals: 1",
+        "rust bad-behavior advisory signals: 1756",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -353,12 +352,11 @@
       "score": 65,
       "weighted_points": 7.8,
       "evidence": [
-        "largest authored code file: crates/bench/src/sqlite_parity/cli.rs (697 LOC)",
+        "largest authored code file: crates/cli/src/lib.rs (937 LOC)",
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
         "copy-code advisory classes found: 71 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1745",
-        "docker bad-behavior advisory signals: 1",
+        "rust bad-behavior advisory signals: 1756",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -1044,7 +1042,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-23T00:35:27.964463469+00:00",
+    "generated_at": "2026-05-23T03:38:04.359819495+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1082,9 +1080,9 @@
       ]
     },
     "summary": {
-      "files_scanned": 1016,
-      "files_considered": 324,
-      "active_files": 324,
+      "files_scanned": 1018,
+      "files_considered": 327,
+      "active_files": 327,
       "exact_file_classes": 0,
       "hard_classes": 0,
       "warning_classes": 71,
@@ -3446,7 +3444,7 @@
       "problem": "`Code shape and semantic surface` scored 65 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/bench/src/sqlite_parity/cli.rs (697 LOC)",
+        "largest authored code file: crates/cli/src/lib.rs (937 LOC)",
         "code file exceeds 500 LOC",
         "most code files stay under 300 LOC",
         "copy-code advisory classes found: 71 (advisory only, no score impact)"
@@ -3456,7 +3454,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:a2f9433ff153da9097e45462376a924538cc2c8e2f6442c52631dcfc4870418b",
+      "fingerprint": "sha256:caabf07268e190f9b81f9a5a48eb070ac1dd209ac907a4b1d13b8ef9564322e8",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3486,41 +3484,9 @@
       "lane": "fast",
       "docs_url": "docs/testing.md",
       "owner": "workspace"
-    },
-    {
-      "severity": "high",
-      "category": "test",
-      "path": "crates/cli/tests/dot_commands.rs",
-      "problem": "test code contains disabled, focused, tautological, or snapshot-only proof",
-      "agent_fix": "replace false-green tests with behavior assertions, red/green evidence, and mutation or fault checks for changed behavior",
-      "evidence": [
-        "fn dot_filectrl_flushes_help_before_nonzero_exit() {"
-      ],
-      "check_id": "HLT-008-FALSE-GREEN-RISK:test",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "test",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:44f195dab9f2a5b0e4d654144c5198a7ba3f470265c655d4a5bf94feac627c6e",
-      "rule_id": "HLT-008-FALSE-GREEN-RISK",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/testing.md",
-      "owner": "tools",
-      "line": 223
     }
   ],
   "agent_fix_queue": [
-    {
-      "path": "crates/cli/tests/dot_commands.rs",
-      "priority": "high",
-      "rule_id": "HLT-008-FALSE-GREEN-RISK",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "replace false-green tests with behavior assertions, red/green evidence, and mutation or fault checks for changed behavior",
-      "why": "test code contains disabled, focused, tautological, or snapshot-only proof"
-    },
     {
       "path": "Justfile",
       "priority": "medium",

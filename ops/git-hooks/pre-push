@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Pre-push gate: run the fast lane before letting any push leave the
-# developer machine. Mirrors the canonical CI fast lane so a successful
-# push is byte-for-byte the same evidence CI will produce.
+# Pre-push gate: run the exact PR CI mirror before letting any push leave
+# the developer machine. The fast lane remains available for short repair
+# loops, but this hook uses the same shard dispatchers as ci.yml.
 # Audit reference: HLT-042 ci-local-parity.pre-push-hook-missing.
 
 set -euo pipefail
@@ -26,5 +26,5 @@ if [ "$CAPS" -gt 0 ]; then
 fi
 
 echo "Jankurai check passed (0 caps, 0 issues)."
-echo "Running local CI parity tests..."
-exec bash "$(git rev-parse --show-toplevel)/ops/ci/fast.sh"
+echo "Running local PR CI mirror..."
+exec bash "$(git rev-parse --show-toplevel)/scripts/ci-local.sh" pr-ci

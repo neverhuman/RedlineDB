@@ -7,15 +7,15 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779496533`
-- Started at: `1779496533`
-- Elapsed: `6029` ms
+- Run ID: `1779507490`
+- Started at: `1779507490`
+- Elapsed: `6459` ms
 - Scope: `full`
 - Raw score: `87`
-- Final score: `76`
-- Decision: `advisory`
+- Final score: `87`
+- Decision: `pass`
 - Minimum score: `85`
-- Caps applied: `false-green-test-risk`
+- Caps applied: `none`
 
 ## Hard Rule Caps
 
@@ -44,7 +44,7 @@
 | `prompt-injection-risk` | 78 | no |
 | `overbroad-agent-agency` | 65 | no |
 | `secret-like-content-detected` | 60 | no |
-| `false-green-test-risk` | 76 | yes |
+| `false-green-test-risk` | 76 | no |
 | `destructive-migration-risk` | 70 | no |
 | `authz-or-data-isolation-gap` | 78 | no |
 | `input-boundary-gap` | 78 | no |
@@ -70,7 +70,7 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`71` files=`324`
+- Status: `review` hard=`0` warning=`71` files=`327`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
 - Duplicate volume: lines=`164` tokens=`459` bytes=`4414`
 
@@ -141,7 +141,7 @@
 | Contract and boundary integrity | 13 | 88 | 11.44 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 98 | 11.76 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 65 | 7.80 | largest authored code file: crates/bench/src/sqlite_parity/cli.rs (697 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 65 | 7.80 | largest authored code file: crates/cli/src/lib.rs (937 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 85 | 6.80 | database surface present; migration directory present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 91 | 6.37 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -227,8 +227,8 @@ No audited runtime boundary reclassifications declared.
    Reason: `Code shape and semantic surface` scored 65 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:a2f9433ff153da9097e45462376a924538cc2c8e2f6442c52631dcfc4870418b`
-   Evidence: largest authored code file: crates/bench/src/sqlite_parity/cli.rs (697 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 71 (advisory only, no score impact)
+   Fingerprint: `sha256:caabf07268e190f9b81f9a5a48eb070ac1dd209ac907a4b1d13b8ef9564322e8`
+   Evidence: largest authored code file: crates/cli/src/lib.rs (937 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 71 (advisory only, no score impact)
 2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
@@ -239,16 +239,6 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-3. `high` `test` `crates/cli/tests/dot_commands.rs:223`
-   Rule: `HLT-008-FALSE-GREEN-RISK`
-   Check: `HLT-008-FALSE-GREEN-RISK:test` `hard` confidence `0.88`
-   Route: TLR `Verification`, lane `fast`, owner `tools`
-   Docs: `docs/testing.md`
-   Reason: test code contains disabled, focused, tautological, or snapshot-only proof
-   Fix: replace false-green tests with behavior assertions, red/green evidence, and mutation or fault checks for changed behavior
-   Rerun: `just fast`
-   Fingerprint: `sha256:44f195dab9f2a5b0e4d654144c5198a7ba3f470265c655d4a5bf94feac627c6e`
-   Evidence: fn dot_filectrl_flushes_help_before_nonzero_exit() {
 
 ## Policy
 
@@ -258,9 +248,7 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `high` `HLT-008-FALSE-GREEN-RISK` `crates/cli/tests/dot_commands.rs` - replace false-green tests with behavior assertions, red/green evidence, and mutation or fault checks for changed behavior
+1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-2. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
-   Route: `Verification`/`fast`
-3. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+2. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`

@@ -11,11 +11,11 @@
       "id": "redlinedb",
       "label": "RedlineDB",
       "source_ref": "current",
-      "score": 76,
+      "score": 87,
       "raw_score": 87,
-      "hard_findings": 1,
+      "hard_findings": 0,
       "soft_findings": 2,
-      "caps_applied": 1,
+      "caps_applied": 0,
       "decision": "advisory",
       "dimensions": [
         {
@@ -183,15 +183,6 @@
       "lane": "fast",
       "hard_findings": 0,
       "soft_findings": 1,
-      "total_findings": 1
-    },
-    {
-      "repo_id": "redlinedb",
-      "repo_label": "RedlineDB",
-      "category": "test",
-      "lane": "fast",
-      "hard_findings": 1,
-      "soft_findings": 0,
       "total_findings": 1
     },
     {

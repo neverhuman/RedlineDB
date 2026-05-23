@@ -7,20 +7,19 @@ usage() {
     cat >&2 <<'USAGE'
 usage: scripts/ci-parity.sh [--fast] [--no-audit]
 
-  --fast       run the fast CI lane only
-  --no-audit   skip the jankurai audit/security lanes
+  --fast       run the quick iteration lane only
+  --no-audit   accepted for compatibility; pr-ci does not run extra audit/security workflows
 USAGE
 }
 
 fast=false
-audit=true
 for arg in "$@"; do
     case "$arg" in
         --fast)
             fast=true
             ;;
         --no-audit)
-            audit=false
+            :
             ;;
         -h|--help)
             usage
@@ -36,14 +35,6 @@ done
 
 if [ "$fast" = true ]; then
     bash "${ROOT}/scripts/ci-local.sh" fast
-    if [ "$audit" = true ]; then
-        bash "${ROOT}/scripts/ci-local.sh" security
-        bash "${ROOT}/scripts/ci-local.sh" audit
-    fi
 else
-    if [ "$audit" = true ]; then
-        bash "${ROOT}/scripts/ci-local.sh" all
-    else
-        bash "${ROOT}/scripts/ci-local.sh" fast
-    fi
+    bash "${ROOT}/scripts/ci-local.sh" pr-ci
 fi

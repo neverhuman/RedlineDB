@@ -4,6 +4,11 @@ name = "fast"
 purpose = "deterministic local health proof"
 
 [[lane]]
+command = "just pr-ci"
+name = "pr-ci"
+purpose = "exact local mirror of .github/workflows/ci.yml"
+
+[[lane]]
 command = "just setup"
 name = "setup"
 purpose = "workspace cache warmup proof"

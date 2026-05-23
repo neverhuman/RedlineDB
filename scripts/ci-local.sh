@@ -6,31 +6,34 @@
 # Audit reference: HLT-042 ci-local-parity.lib-missing.
 #
 # Usage:
-#   scripts/ci-local.sh fast               # cargo fmt+check+test, file-size guard
+#   scripts/ci-local.sh pr-ci              # exact local mirror of .github/workflows/ci.yml
+#   scripts/ci-local.sh fast               # quick iteration lane
 #   scripts/ci-local.sh security           # cargo audit + cargo deny + gitleaks
 #   scripts/ci-local.sh audit              # full jankurai audit lane
 #   scripts/ci-local.sh dependency-review  # local dependency-review mirror
 #   scripts/ci-local.sh sqlite-parity-report # local SQLite parity report update
 #   scripts/ci-local.sh pr-gate            # PR freshness + staged jankurai gate
 #   scripts/ci-local.sh jankurai-tools     # local mirror for jankurai-tools.yml matrix
-#   scripts/ci-local.sh all                # full local PR CI mirror
+#   scripts/ci-local.sh all                # local mirror of all PR workflows
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
 usage() {
     cat >&2 <<'USAGE'
-usage: scripts/ci-local.sh {fast|security|audit|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
+usage: scripts/ci-local.sh {pr-ci|fast|security|audit|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
 
-  fast                run scripts/just/fast.sh          (cache warm + fmt + size + check + test)
+  pr-ci              run the exact local mirror of .github/workflows/ci.yml
+  fast                run scripts/just/fast.sh          (quick iteration lane)
   security            run ops/ci/security.sh            (cargo audit + deny + gitleaks)
   audit               run ops/ci/jankurai-audit.sh      (full jankurai audit lane)
   dependency-review   run ops/ci/dependency-review.sh   (cargo deny advisories/bans/licenses/sources)
   sqlite-parity-report run ops/ci/sqlite-parity-report.sh update
   jankurai-tools      run every jankurai-tools matrix lane plus input-boundary cross-check
   pr-gate             run PR freshness + jankurai staged-gate against origin/main
-  all                 run the full local PR CI mirror
+  all                 run local mirrors for all PR workflows
 USAGE
 }
 
@@ -39,7 +42,49 @@ if [ "$#" -ne 1 ]; then
     exit 64
 fi
 
+run_ci_yml_pr_mirror() {
+    local stage
+
+    printf 'ci-local pr-ci: preflight\n' >&2
+    CI_FAST_STAGE=preflight bash "$ROOT/ops/ci/fast.sh"
+
+    for stage in \
+        core \
+        kernel \
+        sql-unit \
+        sql-contracts \
+        sql-parity \
+        bench
+    do
+        printf 'ci-local pr-ci: tests/%s\n' "$stage" >&2
+        CI_FAST_STAGE="$stage" bash "$ROOT/ops/ci/fast.sh"
+    done
+
+    for stage in \
+        sql-parity-all-tests \
+        sql-parity-full \
+        sqlite-parity-scale-ci \
+        sqlite-parity-report-check \
+        sqlite-parity-volatile-sentinel \
+        sqlite-parity-scale-full \
+        ffi-parity-full \
+        cli-parity-full \
+        fuzz-parity \
+        fuzz-parity-nightly \
+        beyond-sqlite-manifest
+    do
+        printf 'ci-local pr-ci: parity/%s\n' "$stage" >&2
+        CI_PARITY_STAGE="$stage" bash "$ROOT/ops/ci/parity.sh"
+    done
+
+    printf 'ci-local pr-ci: beyond-postgres-reference\n' >&2
+    bash "$ROOT/ops/ci/beyond-postgres-reference.sh"
+}
+
 case "$1" in
+    pr-ci)
+        run_ci_yml_pr_mirror
+        ;;
     fast)
         bash "$ROOT/scripts/just/fast.sh"
         ;;
@@ -84,12 +129,12 @@ case "$1" in
             bash "$ROOT/ops/ci/jankurai-staged-gate.sh"
         ;;
     all)
-        bash "$ROOT/ops/ci/fast.sh"
+        bash "$ROOT/scripts/ci-local.sh" pr-ci
         bash "$ROOT/ops/ci/security.sh"
         bash "$ROOT/ops/ci/dependency-review.sh"
         bash "$ROOT/ops/ci/jankurai-audit.sh"
-        "$0" jankurai-tools
-        "$0" pr-gate
+        bash "$ROOT/scripts/ci-local.sh" jankurai-tools
+        bash "$ROOT/scripts/ci-local.sh" pr-gate
         ;;
     -h|--help|help)
         usage
