@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779508539`
-- Started at: `1779508539`
-- Elapsed: `6109` ms
+- Run ID: `1779549732`
+- Started at: `1779549732`
+- Elapsed: `6178` ms
 - Scope: `full`
 - Raw score: `87`
 - Final score: `87`
@@ -208,10 +208,10 @@
 ## Security evidence (ingested)
 
 - Source: `target/jankurai/security/evidence.json`
-- Envelope exit code: `0` · elapsed: `52280` ms · strict: `false`
+- Envelope exit code: `0` · elapsed: `52273` ms · strict: `false`
 - Commands — ran: `1`, skipped: `0`, failed: `0`
-- Generated at: `1779507599`
-- Git HEAD (envelope): `0a12db2ee0566860cf1611b27f9dd1e473e8aca9`
+- Generated at: `1779548689`
+- Git HEAD (envelope): `5542ffdef1928db25d1c48e0a96889cee7ae6379`
 
 ## Boundary Reclassifications
 

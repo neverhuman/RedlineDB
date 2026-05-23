@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:5ee6995dd8735ccff218ac36e8e08c57bc8a40928b4b375e1d840ae812f0ae75",
-  "input_fingerprint": "sha256:724302a8ad101b4f61ab6008ae8b5eb84d16bb15a825679118dcf11b1f469176",
-  "policy_fingerprint": "sha256:5a2898520d912ff5eccfaf041b5eea0afaddb0c4521b4a36f90dcc5124904729",
+  "report_fingerprint": "sha256:92152a918644cac27fdbced1a564b40f7f374ab3df6bba3cdfe6ea3edb3463ac",
+  "input_fingerprint": "sha256:10aac08979972b90f314539ccc564c5faf18928c0452147a915eeecb761d4c3f",
+  "policy_fingerprint": "sha256:6b2e95b4e965e82f509afc44fe631d3b954311aee6761b6ca09c319d3b1d191d",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779508539",
+  "generated_at": "1779549732",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -18,9 +18,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1779508539",
-  "started_at": "1779508539",
-  "elapsed_ms": 6109,
+  "run_id": "1779549732",
+  "started_at": "1779549732",
+  "elapsed_ms": 6178,
   "scope": {
     "mode": "full",
     "paths": []
@@ -47,7 +47,7 @@
     }
   },
   "git": {
-    "head": "67042c6",
+    "head": "5542ffd",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -319,11 +319,11 @@
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
         "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=427 missing=427 high_or_critical_missing=54 verdict=review"
+        "proofbind artifact found: surfaces=433 missing=433 high_or_critical_missing=57 verdict=review"
       ],
       "notes": [
-        "proofbind reports 427 unresolved obligation(s)",
-        "proofbind reports 54 missing high/critical semantic proof obligation(s)"
+        "proofbind reports 433 unresolved obligation(s)",
+        "proofbind reports 57 missing high/critical semantic proof obligation(s)"
       ]
     },
     {
@@ -456,11 +456,11 @@
       "accessibility": [],
       "api_mocks": [],
       "artifact_backed_proof": [
+        ".jankurai/proof-lanes.toml",
+        ".jankurai/test-map.json",
+        ".jankurai/unsafe-ledger.toml",
         "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json",
-        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json",
-        "crates/bench/docker/Dockerfile",
-        "crates/bench/sqlite_parity/generated_manifest.json",
-        "crates/bench/src/certify/scheduler/dispatch.rs"
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json"
       ],
       "design_tokens": [],
       "geometry_runtime": [],
@@ -1023,7 +1023,7 @@
     "artifact": {
       "path": "target/jankurai/security/evidence.json",
       "envelope_exit_code": 0,
-      "elapsed_ms": 52280,
+      "elapsed_ms": 52273,
       "wrapper_strict": false,
       "profile": "local",
       "commands_ran": 1,
@@ -1032,8 +1032,8 @@
       "required_commands_skipped": 0,
       "required_commands_failed": 0,
       "blocking_commands": [],
-      "generated_at": "1779507599",
-      "git_head": "0a12db2ee0566860cf1611b27f9dd1e473e8aca9"
+      "generated_at": "1779548689",
+      "git_head": "5542ffdef1928db25d1c48e0a96889cee7ae6379"
     }
   },
   "boundaries": {
@@ -1042,7 +1042,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-23T03:55:33.651203725+00:00",
+    "generated_at": "2026-05-23T15:22:06.848135815+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1080,7 +1080,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 1018,
+      "files_scanned": 1035,
       "files_considered": 327,
       "active_files": 327,
       "exact_file_classes": 0,

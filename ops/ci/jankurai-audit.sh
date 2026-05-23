@@ -33,6 +33,16 @@ force_full_smart_scan() {
     rm -f target/jankurai/audit-state.json
 }
 
+cleanup_jankurai_upstream_scratch() {
+    rm -rf .jankurai/jankurai-src target/jankurai-src-v*
+    if [ -f .jankurai/security/sbom-syft.json ] \
+        && grep -Eq '/(\.jankurai/jankurai-src|target/jankurai-src-v)' .jankurai/security/sbom-syft.json
+    then
+        rm -f .jankurai/security/sbom-syft.json
+    fi
+}
+trap cleanup_jankurai_upstream_scratch EXIT
+
 # ---- 1) jankurai --version --------------------------------------------------
 step_version() {
     jankurai --version
@@ -46,6 +56,7 @@ step_version() {
 # .jankurai/cost-budget.toml.
 step_audit_advisory() {
     bash scripts/check_audit_policy_mirror.sh
+    cleanup_jankurai_upstream_scratch
     force_full_smart_scan
     jankurai audit . \
         --mode advisory \
@@ -79,6 +90,7 @@ step_fetch_baseline() {
 # with --strict in the ci profile BEFORE the final ratchet audit so
 # security evidence is binding (HLT-034 ci-bad-behavior).
 step_security_run() {
+    cleanup_jankurai_upstream_scratch
     jankurai security run . \
         --strict \
         --profile ci \
@@ -89,6 +101,7 @@ step_security_run() {
 step_audit_ratchet() {
     local rc=0
     bash scripts/check_audit_policy_mirror.sh
+    cleanup_jankurai_upstream_scratch
     force_full_smart_scan
     jankurai audit . \
         --mode ratchet \
@@ -185,39 +198,45 @@ step_ux_qa() {
 # here, and we ALWAYS write a machine-grep-able
 # `status: upstream-{clone-failed|tests-passed|tests-failed}` line.
 step_language_bad_behavior() {
-    rm -rf .jankurai/jankurai-src
+    local upstream_dir=".jankurai/jankurai-src"
+
+    cleanup_jankurai_upstream_scratch
 
     local cloned=0
     if ci_verify_jankurai_source \
-        && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" .jankurai/jankurai-src
+        && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" "$upstream_dir"
     then
         local resolved_rev
-        resolved_rev="$(git -C .jankurai/jankurai-src rev-parse HEAD)"
+        resolved_rev="$(git -C "$upstream_dir" rev-parse HEAD)"
         if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
             printf 'jankurai language test clone resolved to %s, expected %s\n' \
                 "$resolved_rev" "$CI_JANKURAI_REV" >&2
+            cleanup_jankurai_upstream_scratch
             return 1
         fi
         cloned=1
     fi
 
-    if [ "${cloned}" -eq 1 ] && [ -d .jankurai/jankurai-src ]; then
+    if [ "${cloned}" -eq 1 ] && [ -d "$upstream_dir" ]; then
         local rc=0
-        ( cd .jankurai/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
+        ( cd "$upstream_dir" && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
             > >(tee "$LOG_DIR/language-bad-behavior.log") 2>&1 || rc=$?
         printf 'status: %s\n' "$( [ "$rc" -eq 0 ] && echo upstream-tests-passed || echo upstream-tests-failed )" \
             >> "$LOG_DIR/language-bad-behavior.log"
+        cleanup_jankurai_upstream_scratch
         # Hard gate when the clone succeeds: test failure is a real failure.
         return "$rc"
     fi
 
     printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior-local ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
         | tee "$LOG_DIR/language-bad-behavior.log"
+    cleanup_jankurai_upstream_scratch
     return 0
 }
 
 main() {
     ci_install_jankurai_logged "$JANKURAI_INSTALL_LOG"
+    cleanup_jankurai_upstream_scratch
 
     step_version
     step_audit_advisory
