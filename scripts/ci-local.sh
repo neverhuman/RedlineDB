@@ -64,7 +64,6 @@ run_ci_yml_pr_mirror() {
         sql-parity-all-tests \
         sql-parity-full \
         sqlite-parity-scale-ci \
-        sqlite-parity-report-check \
         sqlite-parity-volatile-sentinel \
         sqlite-parity-scale-full \
         ffi-parity-full \

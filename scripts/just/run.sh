@@ -25,6 +25,9 @@ sqlite_parity_full_select=(
 )
 sqlite_parity_full_compare=("${sqlite_parity_full_select[@]}" --deny-skips)
 sqlite_parity_reference_bin="${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-sqlite3}"
+sqlite_parity_jobs="${REDLINEDB_SQLITE_PARITY_JOBS:-1}"
+sqlite_parity_repetitions="${REDLINEDB_SQLITE_PARITY_REPETITIONS:-15}"
+sqlite_parity_warmup="${REDLINEDB_SQLITE_PARITY_WARMUP:-1}"
 sqlite_jankurai_comparison_json="benchmark-results/sqlite-parity/latest/jankurai-comparison.json"
 sqlite_jankurai_comparison_csv="benchmark-results/sqlite-parity/latest/jankurai-comparison.csv"
 redlinedb_audit_policy="agent/audit-policy.toml"
@@ -95,8 +98,8 @@ sqlite_parity_report_args() {
     --median-test-performance-plot assets/sqlite-median-test-performance.svg
     --jankurai-score .jankurai/repo-score.json
     --updated-date "$updated_date"
-    --expected-repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}"
-    --expected-warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}"
+    --expected-repetitions "$sqlite_parity_repetitions"
+    --expected-warmup "$sqlite_parity_warmup"
   )
   if [ -f "$sqlite_jankurai_comparison_json" ]; then
     sqlite_parity_report_args_result+=(
@@ -242,7 +245,7 @@ case "$lane" in
     exit "$receipt_status"
     ;;
   sqlite-parity-scale-smoke)
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin "$sqlite_parity_reference_bin" --engine-name sqlite3 --profiles memory --priorities P0 --jobs auto --out target/sqlite-parity/sqlite-scale-smoke.jsonl
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin "$sqlite_parity_reference_bin" --engine-name sqlite3 --profiles memory --priorities P0 --jobs "$sqlite_parity_jobs" --out target/sqlite-parity/sqlite-scale-smoke.jsonl
     ;;
   sqlite-parity-scale-ci)
     ensure_sqlite_parity_reference
@@ -252,7 +255,7 @@ case "$lane" in
     raw_tmp="target/sqlite-parity/full-corpus-ci.raw.jsonl"
     rm -f "$raw_tmp"
     updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(date -u +%F)}"
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" --warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}" --jobs auto --out "$raw_tmp"
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "$sqlite_parity_repetitions" --warmup "$sqlite_parity_warmup" --jobs "$sqlite_parity_jobs" --out "$raw_tmp"
     mv "$raw_tmp" benchmark-results/sqlite-parity/latest/raw.jsonl
     printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
     sqlite_parity_report_args "$updated_date"
@@ -287,7 +290,7 @@ case "$lane" in
   sqlite-parity-scale-full)
     ensure_sqlite_parity_reference
     rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "$sqlite_parity_repetitions" --warmup "$sqlite_parity_warmup" --jobs "$sqlite_parity_jobs" --out target/sqlite-parity/sqlite-scale-full.jsonl
     ;;
   ffi-abi)
     rtk cargo test -p redlinedb-ffi --quiet --locked
