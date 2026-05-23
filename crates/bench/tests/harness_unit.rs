@@ -37,7 +37,7 @@
 //! test)]` modules.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -387,12 +387,9 @@ fn cli_source_has_no_sqlite_parity_replay_fastpath() {
         );
     }
 
-    for entry in fs::read_dir(&cli_src).expect("read cli src") {
-        let entry = entry.expect("cli src entry");
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-            continue;
-        }
+    let mut files = Vec::new();
+    collect_rust_files(&cli_src, &mut files);
+    for path in files {
         let text = fs::read_to_string(&path).expect("read cli source");
         for needle in [
             "sqlite_parity_fast",
@@ -409,6 +406,17 @@ fn cli_source_has_no_sqlite_parity_replay_fastpath() {
                 path.display(),
                 needle
             );
+        }
+    }
+}
+
+fn collect_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).expect("read source directory") {
+        let path = entry.expect("source entry").path();
+        if path.is_dir() {
+            collect_rust_files(&path, out);
+        } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+            out.push(path);
         }
     }
 }

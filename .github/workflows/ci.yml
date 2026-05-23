@@ -47,7 +47,6 @@ jobs:
           - sql-contracts
           - sql-parity
           - bench
-          - sqlite-parity-scale
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -71,25 +70,47 @@ jobs:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
         run: CI_FAST_STAGE=${{ matrix.stage }} bash ops/ci/fast.sh
 
+  parity:
+    strategy:
+      fail-fast: false
+      matrix:
+        stage:
+          - sql-parity-all-tests
+          - sql-parity-full
+          - sqlite-parity-scale-ci
+          - sqlite-parity-report-check
+          - sqlite-parity-volatile-sentinel
+          - sqlite-parity-scale-full
+          - ffi-parity-full
+          - cli-parity-full
+          - fuzz-parity
+          - fuzz-parity-nightly
+          - beyond-sqlite-manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+      - name: Run parity shard
+        env:
+          REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
+        run: CI_PARITY_STAGE=${{ matrix.stage }} bash ops/ci/parity.sh
+
   beyond-postgres-reference:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: redlinedb_beyond
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: redlinedb
-        ports:
-          - 127.0.0.1:5432:5432
-        options: >-
-          --health-cmd "pg_isready -U redlinedb -d redlinedb_beyond"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
@@ -102,8 +123,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
       - name: Run beyond-SQLite Postgres reference lane
-        env:
-          REDLINEDB_POSTGRES_URL: postgres://redlinedb:postgres@localhost:5432/redlinedb_beyond
         run: bash ops/ci/beyond-postgres-reference.sh
 
   # The branch ruleset requires checks named test/build/lint/typecheck/cli.
@@ -111,12 +130,13 @@ jobs:
   # other relay jobs propagate the aggregate result under their required
   # names without duplicating the build.
   test:
-    needs: [preflight, tests, beyond-postgres-reference]
+    needs: [preflight, tests, parity, beyond-postgres-reference]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: test "${{ needs.preflight.result }}" = "success"
       - run: test "${{ needs.tests.result }}" = "success"
+      - run: test "${{ needs.parity.result }}" = "success"
       - run: test "${{ needs['beyond-postgres-reference'].result }}" = "success"
 
   build:

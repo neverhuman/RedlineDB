@@ -17,7 +17,7 @@ pub fn output(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
     match args.first().copied() {
         None | Some("stdout") => {
             state.output.flush().map_err(|err| err.to_string())?;
-            state.output = OutputTarget::Stdout;
+            state.output = OutputTarget::stdout();
         }
         Some("off") => {
             state.output.flush().map_err(|err| err.to_string())?;
@@ -406,9 +406,8 @@ fn is_simple_ident(name: &str) -> bool {
 
 fn open_shell_database(path: &str) -> Result<(Database, PathBuf), String> {
     if path == ":memory:" || path.is_empty() {
-        let db =
-            Database::create_in_memory(DbOpenOptions::default().with_statement_cache_capacity(16))
-                .map_err(|err| format!("Error: {err}"))?;
+        let db = Database::create_in_memory(DbOpenOptions::default())
+            .map_err(|err| format!("Error: {err}"))?;
         Ok((db, PathBuf::from(":memory:")))
     } else {
         let db = Database::open(path).map_err(|err| format!("Error: {err}"))?;

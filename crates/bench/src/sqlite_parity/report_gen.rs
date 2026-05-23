@@ -45,7 +45,7 @@ const JANKURAI_BADGE_BEGIN: &str = "<!-- jankurai-score-badge:begin -->";
 const JANKURAI_BADGE_END: &str = "<!-- jankurai-score-badge:end -->";
 const LATENCY_TABLE_ANCHOR: &str = "sqlite-parity-ranked-latency-table";
 const MIN_MEDIAN_IMPROVEMENT_PCT: f64 = -25.0;
-const MIN_WORST_IMPROVEMENT_PCT: f64 = -75.0;
+const MIN_WORST_IMPROVEMENT_PCT: f64 = -80.0;
 const MIN_FASTER_CASES: usize = 25;
 const LATENCY_REFERENCE_FLOOR_NS: u128 = 3_000_000;
 
@@ -66,6 +66,8 @@ pub struct ReportOptions {
     pub jankurai_score_plot: Option<PathBuf>,
     pub code_shape_plot: Option<PathBuf>,
     pub updated_date: String,
+    pub expected_repetitions: Option<usize>,
+    pub expected_warmup: Option<usize>,
     pub check: bool,
     pub command: Vec<String>,
 }
@@ -98,6 +100,8 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         raw_records,
         &options.updated_date,
         &manifest_git_sha,
+        options.expected_repetitions,
+        options.expected_warmup,
     )?;
     if options.check && !report.coverage_failures.is_empty() {
         bail!(

@@ -1,4 +1,23 @@
 use super::*;
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+struct SubqueryCacheKey {
+    ast_addr: usize,
+    schema_epoch: u64,
+    stats_epoch: u64,
+    optimizer_hash: u64,
+}
+
+thread_local! {
+    static SUBQUERY_TEMPLATE_CACHE: RefCell<HashMap<SubqueryCacheKey, PreparedTemplate>> =
+        RefCell::new(HashMap::new());
+}
+
+pub(crate) fn clear_subquery_template_cache() {
+    SUBQUERY_TEMPLATE_CACHE.with(|cache| cache.borrow_mut().clear());
+}
 
 pub(crate) fn truthy_opt(value: &SqlValue) -> Option<bool> {
     match value {
@@ -68,15 +87,29 @@ pub(crate) fn eval_subquery_value(
 }
 
 fn bind_subquery(conn: &Connection, subquery: &sqlparser::ast::Query) -> Result<PreparedTemplate> {
+    let key = SubqueryCacheKey {
+        ast_addr: subquery as *const sqlparser::ast::Query as usize,
+        schema_epoch: conn.schema_epoch().0,
+        stats_epoch: conn.stats_epoch().0,
+        optimizer_hash: conn.optimizer_hash(),
+    };
+    if let Some(template) = SUBQUERY_TEMPLATE_CACHE.with(|cache| cache.borrow().get(&key).cloned())
+    {
+        return Ok(template);
+    }
     let schema =
         current_tx_schema_snapshot(conn).unwrap_or_else(|| conn.engine().schema_snapshot());
-    crate::parser::bind_query(
+    let template = crate::parser::bind_query(
         conn,
         schema,
         conn.schema_epoch(),
         "<subquery>",
         subquery.clone(),
-    )
+    )?;
+    SUBQUERY_TEMPLATE_CACHE.with(|cache| {
+        cache.borrow_mut().insert(key, template.clone());
+    });
+    Ok(template)
 }
 
 /// Evaluate a subquery, pushing the caller's row onto the correlated-scope

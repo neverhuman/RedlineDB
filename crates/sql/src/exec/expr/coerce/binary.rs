@@ -11,9 +11,10 @@ pub(crate) fn eval_binary(
         let pattern = eval_scalar(right, row, bindings)?;
         return match_result(left, SqlValue::Null, pattern, row);
     }
-    let collation = match collation_from_expr(left) {
-        Some(c) => Some(c),
-        None => collation_from_expr(right).or_else(|| declared_collation(row, left)),
+    let collation = match (collation_from_expr(left), collation_from_expr(right)) {
+        (Some(c), _) => Some(c),
+        (None, Some(c)) => Some(c),
+        (None, None) => declared_collation(row, left),
     };
     let left_value = eval_scalar(left, row, bindings)?;
     let right_value = eval_scalar(right, row, bindings)?;

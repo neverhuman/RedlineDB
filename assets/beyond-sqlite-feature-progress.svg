@@ -3,12 +3,12 @@
 <!-- Command: just sqlite-parity-report-update -->
 <!-- DO NOT EDIT BY HAND. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="980" height="252" viewBox="0 0 980 252" role="img" aria-labelledby="title desc">
-<title id="title">Beyond-SQLite feature progress, Updated 2026-05-22</title>
+<title id="title">Beyond-SQLite feature progress, Updated 2026-05-23</title>
 <desc id="desc">Passing reference backlog areas out of 12 ranked beyond-SQLite feature areas. Green marks passing reference rows; gray marks manifest backlog rows.</desc>
 <rect width="980" height="252" fill="#0f172a"/>
 <rect x="16" y="16" width="948" height="220" rx="18" fill="#111827" stroke="#334155"/>
 <text x="36" y="52" font-family="sans-serif" font-size="22" font-weight="700" fill="#f8fafc">Beyond-SQLite feature progress</text>
-<text x="36" y="74" font-family="sans-serif" font-size="12" fill="#cbd5e1">Passing reference backlog areas out of 12 ranked feature areas, updated 2026-05-22</text>
+<text x="36" y="74" font-family="sans-serif" font-size="12" fill="#cbd5e1">Passing reference backlog areas out of 12 ranked feature areas, updated 2026-05-23</text>
 <text x="844" y="56" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="end" fill="#f8fafc">4 / 12</text>
 <text x="844" y="74" font-family="sans-serif" font-size="12" text-anchor="end" fill="#cbd5e1">passing reference</text>
 <rect x="110" y="84" width="714" height="28" rx="10" fill="#1e293b"/>

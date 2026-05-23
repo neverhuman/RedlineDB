@@ -429,7 +429,9 @@ fn eval_highlight_function(
     };
     let values = row.to_owned_row().values()?;
     let text = values.get(col_idx).map(value_to_string).unwrap_or_default();
-    let needle = current_match_term().unwrap_or_default();
+    let Some(needle) = current_match_term() else {
+        return Ok(SqlValue::Text(Arc::from(text)));
+    };
     if needle.is_empty() {
         return Ok(SqlValue::Text(Arc::from(text)));
     }

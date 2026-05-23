@@ -175,7 +175,13 @@ pub(crate) fn lookup_correlated<T>(
 pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> T) -> T {
     CURRENT_CONNECTION.with(|cell| {
         let prev = cell.replace(conn as *const Connection);
+        if prev.is_null() {
+            expr::clear_subquery_template_cache();
+        }
         let result = f();
+        if prev.is_null() {
+            expr::clear_subquery_template_cache();
+        }
         cell.set(prev);
         result
     })

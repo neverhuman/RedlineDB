@@ -13,7 +13,7 @@
 //!   * ATTACH errors on the reserved "main" / "temp" aliases
 //!   * `SELECT * FROM aux.t` materializes rows from the sidecar engine
 //!   * Cross-DB JOINs work
-//!   * Cross-DB writes return a clear "not yet supported" error
+//!   * Cross-DB writes route to the attached sidecar database
 
 use std::sync::Arc;
 
@@ -189,29 +189,22 @@ fn select_from_unknown_alias_errors() {
 }
 
 #[test]
-fn cross_db_write_returns_clear_error() {
-    // Document the read-only nature of the current cross-DB binder.
+fn cross_db_write_routes_to_attached_database() {
     let dir = tempfile::tempdir().expect("tempdir");
     let aux_path = dir.path().join("aux.db");
-    {
-        let aux_db = Database::create(&aux_path, DbOptions::default()).expect("create aux");
-        let aux_conn = aux_db.connect();
-        aux_conn
-            .execute("CREATE TABLE t(id INTEGER)")
-            .expect("create aux table");
-    }
     let main_db =
         Database::create(dir.path().join("main.db"), DbOptions::default()).expect("create main");
     let main_conn = main_db.connect();
     let attach_sql = format!("ATTACH DATABASE '{}' AS aux", aux_path.display());
     main_conn.execute(&attach_sql).expect("attach");
 
-    let err = main_conn
+    main_conn
+        .execute("CREATE TABLE aux.t(id INTEGER)")
+        .expect("create aux table");
+    main_conn
         .execute("INSERT INTO aux.t VALUES (1)")
-        .unwrap_err();
-    let msg = format!("{err:?}");
-    assert!(
-        msg.contains("cross-database writes are not yet supported"),
-        "expected cross-DB write rejection, got: {msg}"
-    );
+        .expect("insert aux row");
+
+    let rows = collect_rows(&main_conn, "SELECT id FROM aux.t");
+    assert_eq!(rows, vec![vec![SqlValue::Integer(1)]]);
 }

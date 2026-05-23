@@ -80,6 +80,7 @@ pub(super) fn frame_bounds(
     frame: &ResolvedFrame,
     sorted_pos: usize,
     peer_ids: &[usize],
+    peer_ranges: &[(usize, usize)],
     total: usize,
 ) -> (usize, usize) {
     let s = match &frame.start {
@@ -87,11 +88,10 @@ pub(super) fn frame_bounds(
         ResolvedBound::Preceding(n) => sorted_pos as i64 - *n,
         ResolvedBound::CurrentRow => match frame.units {
             WindowFrameUnits::Range | WindowFrameUnits::Groups => {
-                // First row of the current peer group.
                 let target = peer_ids[sorted_pos];
-                peer_ids
-                    .iter()
-                    .position(|&id| id == target)
+                peer_ranges
+                    .get(target)
+                    .map(|range| range.0)
                     .unwrap_or(sorted_pos) as i64
             }
             WindowFrameUnits::Rows => sorted_pos as i64,
@@ -104,14 +104,10 @@ pub(super) fn frame_bounds(
         ResolvedBound::Preceding(n) => sorted_pos as i64 - *n,
         ResolvedBound::CurrentRow => match frame.units {
             WindowFrameUnits::Range | WindowFrameUnits::Groups => {
-                // Last row of the current peer group.
                 let target = peer_ids[sorted_pos];
-                peer_ids
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .find(|&(_, &id)| id == target)
-                    .map(|(i, _)| i as i64)
+                peer_ranges
+                    .get(target)
+                    .map(|range| range.1 as i64)
                     .unwrap_or(sorted_pos as i64)
             }
             WindowFrameUnits::Rows => sorted_pos as i64,

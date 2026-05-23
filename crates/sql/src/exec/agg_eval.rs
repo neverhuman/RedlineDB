@@ -1,9 +1,9 @@
 use super::*;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 thread_local! {
-    static GROUP_EVAL_CACHE: RefCell<Option<HashMap<String, SqlValue>>> = const {
+    static GROUP_EVAL_CACHE: RefCell<Option<HashMap<usize, SqlValue>>> = const {
         RefCell::new(None)
     };
 }
@@ -68,7 +68,7 @@ pub(super) fn eval_group_scalar_with_ctx(
     first_context: Option<&RowContext<'_>>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    let cache_key = expr.to_string();
+    let cache_key = expr as *const Expr as usize;
     let mut cache_guard = None;
     let cached = GROUP_EVAL_CACHE.with(|cache| {
         let mut slot = cache.borrow_mut();
@@ -497,16 +497,6 @@ fn row_passes_aggregate_filter(
     Ok(is_truthy(&eval_scalar(filter, &ctx, bindings)?))
 }
 
-fn distinct_values_contain(seen: &[Vec<SqlValue>], values: &[SqlValue]) -> bool {
-    seen.iter().any(|candidate| {
-        candidate.len() == values.len()
-            && candidate
-                .iter()
-                .zip(values)
-                .all(|(left, right)| compare_values(left, right) == Ordering::Equal)
-    })
-}
-
 fn eval_group_function(
     func: &sqlparser::ast::Function,
     group: &[SqlRow],
@@ -534,7 +524,7 @@ fn eval_group_function(
                     list.duplicate_treatment,
                     Some(sqlparser::ast::DuplicateTreatment::Distinct)
                 );
-                let mut seen = Vec::new();
+                let mut seen = HashSet::new();
                 let mut count = 0i64;
                 for row in group {
                     if !row_passes_aggregate_filter(func, row, bindings)? {
@@ -555,10 +545,10 @@ fn eval_group_function(
                     }
                     if include {
                         if distinct {
-                            if distinct_values_contain(&seen, &values) {
+                            let key = vec::hash_agg::encode_group_key_bytes(&values)?;
+                            if !seen.insert(key) {
                                 continue;
                             }
-                            seen.push(values);
                         }
                         count += 1;
                     }

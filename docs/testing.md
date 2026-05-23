@@ -35,7 +35,7 @@ readable repair receipts.
 | `sql-check`                          | Targeted `redlinedb-sql` compile proof.                                                               |
 | `sql-test`                           | Targeted `redlinedb-sql` test proof.                                                                   |
 | `beyond-sqlite-manifest`             | Verifies the beyond-SQLite backlog ranking, source tips, owners, and proof-lane routing.               |
-| `beyond-postgres-reference`          | Runs the beyond-SQLite manifest and Postgres oracle tests against PostgreSQL 16. Starts Docker Compose locally when `REDLINEDB_POSTGRES_URL` is unset. |
+| `beyond-postgres-reference`          | Runs the beyond-SQLite manifest and Postgres oracle tests against PostgreSQL 16. Starts a Docker container locally when `REDLINEDB_POSTGRES_URL` is unset. |
 | `ffi-check`                          | Targeted `redlinedb-ffi` compile proof.                                                               |
 | `ffi-test`                           | Targeted `redlinedb-ffi` test proof.                                                                   |
 | `cli-check`                          | Targeted `redlinedb-cli` compile proof.                                                               |
@@ -93,12 +93,12 @@ rtk just beyond-postgres-reference
 ```
 
 If `REDLINEDB_POSTGRES_URL` is set, the lane uses that database. Otherwise it
-starts `ops/ci/beyond-postgres.compose.yml` with PostgreSQL 16, database
+starts `${REDLINEDB_POSTGRES_IMAGE:-postgres:16-alpine}` with database
 `redlinedb_beyond`, user `redlinedb`, password `postgres`, and local port
 `${REDLINEDB_POSTGRES_PORT:-55432}`. The script waits for container health,
 exports `REDLINEDB_POSTGRES_URL`, runs `beyond_sqlite_manifest` and
-`beyond_postgres_reference`, then removes the Compose volume. Set
-`REDLINEDB_POSTGRES_KEEP=1` to keep the local service and volume for debugging.
+`beyond_postgres_reference`, then removes the container. Set
+`REDLINEDB_POSTGRES_KEEP=1` to keep the local container for debugging.
 
 To reproduce the PR-side jankurai failure mode before pushing, commit the
 candidate changes and run:

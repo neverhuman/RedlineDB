@@ -136,6 +136,10 @@ struct ReportArgs {
     #[arg(long)]
     updated_date: String,
     #[arg(long)]
+    expected_repetitions: Option<usize>,
+    #[arg(long)]
+    expected_warmup: Option<usize>,
+    #[arg(long)]
     check: bool,
 }
 
@@ -300,6 +304,8 @@ fn report(args: ReportArgs) -> Result<()> {
         jankurai_score_plot: args.jankurai_score_plot,
         code_shape_plot: args.code_shape_plot,
         updated_date: args.updated_date,
+        expected_repetitions: args.expected_repetitions,
+        expected_warmup: args.expected_warmup,
         check: args.check,
         command: std::env::args().collect(),
     })
@@ -668,7 +674,7 @@ mod tests {
     fn redlinedb_target_accepts_distinct_redlinedb_binary() {
         let dir = tempdir().expect("tempdir");
         let reference_bin = write_shell_bin(dir.path(), "sqlite3", "sqlite3 3.53.1");
-        let target_bin = write_shell_bin(dir.path(), "redlinedb", "redlinedb v2.0.0");
+        let target_bin = write_shell_bin(dir.path(), "redlinedb", "redlinedb v2.0.2");
         let reference = EngineSpec::new("sqlite3", &reference_bin);
         let target = EngineSpec::new("redlinedb", &target_bin);
 

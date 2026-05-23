@@ -3,10 +3,10 @@
 <!-- Command: just sqlite-parity-report-update -->
 <!-- DO NOT EDIT BY HAND. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="168" viewBox="0 0 760 168" role="img" aria-labelledby="ksloc-title ksloc-desc">
-<title id="ksloc-title">SQLite vs RedlineDB Production source footprint, Updated 2026-05-22</title>
-<desc id="ksloc-desc">Production Rust source lines in RedlineDB core crates compared with a fixed SQLite source-line reference. RedlineDB: 53.6 KSLOC; SQLite: 155.8 KSLOC; lower is better.</desc>
+<title id="ksloc-title">SQLite vs RedlineDB Production source footprint, Updated 2026-05-23</title>
+<desc id="ksloc-desc">Production Rust source lines in RedlineDB core crates compared with a fixed SQLite source-line reference. RedlineDB: 53.7 KSLOC; SQLite: 155.8 KSLOC; lower is better.</desc>
 <text x="132" y="22" font-family="sans-serif" font-size="17" font-weight="700" fill="#f97316">Production source footprint</text>
-<text x="132" y="39" font-family="sans-serif" font-size="12" fill="#fbbf24">Core RedlineDB crates scanned without tests, blank lines, or comments; updated 2026-05-22</text>
+<text x="132" y="39" font-family="sans-serif" font-size="12" fill="#fbbf24">Core RedlineDB crates scanned without tests, blank lines, or comments; updated 2026-05-23</text>
 <line x1="132.00" y1="44" x2="132.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
 <text x="132.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">0</text>
 <line x1="299.50" y1="44" x2="299.50" y2="138" stroke="#f59e0b" opacity="0.35"/>
@@ -18,8 +18,8 @@
 <line x1="132" y1="138" x2="668.00" y2="138" stroke="#fbbf24"/>
 <text x="722.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="end">KSLOC</text>
 <text x="20" y="64.50" font-family="sans-serif" font-size="13" fill="#f97316">RedlineDB</text>
-<rect x="132" y="48" width="179.52" height="24" rx="3" fill="#10b981"/>
-<text x="319.52" y="64.50" font-family="sans-serif" font-size="12" font-weight="700" fill="#fbbf24" text-anchor="start">53.6 KSLOC</text>
+<rect x="132" y="48" width="179.76" height="24" rx="3" fill="#10b981"/>
+<text x="319.76" y="64.50" font-family="sans-serif" font-size="12" font-weight="700" fill="#fbbf24" text-anchor="start">53.7 KSLOC</text>
 <text x="20" y="108.50" font-family="sans-serif" font-size="13" fill="#f97316">SQLite</text>
 <rect x="132" y="92" width="521.93" height="24" rx="3" fill="#e11d48"/>
 <text x="645.93" y="108.50" font-family="sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="end">155.8 KSLOC</text>

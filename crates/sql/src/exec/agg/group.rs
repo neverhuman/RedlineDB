@@ -10,7 +10,7 @@ pub(crate) fn execute_grouped_select(
     offset: usize,
     memory: &mut QueryMemoryBroker,
 ) -> Result<Vec<Vec<SqlValue>>> {
-    let mut filtered = Vec::new();
+    let mut filtered = Vec::with_capacity(rows.len());
     for row in rows {
         if selection_passes(&plan.selection, &row, bindings)? {
             filtered.push(row);
@@ -49,8 +49,8 @@ pub(crate) fn execute_grouped_select(
         vec![filtered]
     } else {
         use std::collections::HashMap;
-        let mut index_by_key: HashMap<Vec<u8>, usize> = HashMap::new();
-        let mut groups: Vec<Vec<SqlRow>> = Vec::new();
+        let mut index_by_key: HashMap<Vec<u8>, usize> = HashMap::with_capacity(filtered.len());
+        let mut groups: Vec<Vec<SqlRow>> = Vec::with_capacity(filtered.len());
         for row in filtered {
             let key = eval_group_key(&plan.group_by, &row, bindings)?;
             let key_bytes = vec::hash_agg::encode_group_key_bytes(&key)?;
@@ -73,7 +73,7 @@ pub(crate) fn execute_grouped_select(
     })?;
     memory.request(memory_bytes)?;
 
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(groups.len());
     if plan.distinct {
         for group in groups {
             let first_context = group.first().map(|row| row.context());

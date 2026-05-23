@@ -19,6 +19,9 @@ while IFS= read -r file; do
     docs/archive/*|paper/figs/*.eps|target/*)
       continue
       ;;
+    tips/feedback/*|tips/performance/*)
+      continue
+      ;;
     benchmark-results/*)
       continue
       ;;

@@ -95,6 +95,8 @@ sqlite_parity_report_args() {
     --median-test-performance-plot assets/sqlite-median-test-performance.svg
     --jankurai-score .jankurai/repo-score.json
     --updated-date "$updated_date"
+    --expected-repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}"
+    --expected-warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}"
   )
   if [ -f "$sqlite_jankurai_comparison_json" ]; then
     sqlite_parity_report_args_result+=(
@@ -284,7 +286,8 @@ case "$lane" in
     ;;
   sqlite-parity-scale-full)
     ensure_sqlite_parity_reference
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin "$sqlite_parity_reference_bin" --engine-name sqlite3 "${sqlite_parity_full_compare[@]}" --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl
+    rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
+    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --jobs auto --out target/sqlite-parity/sqlite-scale-full.jsonl
     ;;
   ffi-abi)
     rtk cargo test -p redlinedb-ffi --quiet --locked

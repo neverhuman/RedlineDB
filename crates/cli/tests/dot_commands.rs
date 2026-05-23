@@ -220,6 +220,15 @@ fn dot_dbinfo_prints_page_size() {
 }
 
 #[test]
+fn dot_filectrl_without_argument_reports_usage_error() {
+    let (out, err, code) = run_script(None, ".filectrl\n");
+    assert_eq!(code, 1, "stderr={err}");
+    assert_eq!(err, "");
+    assert!(out.contains("Available file-controls:"), "stdout={out}");
+    assert!(out.contains(".filectrl tempfilename"), "stdout={out}");
+}
+
+#[test]
 fn dot_dbtotxt_prints_pipe_separated_catalog_rows() {
     let (out, err, code) = run_script(
         None,

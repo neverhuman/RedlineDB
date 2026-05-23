@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb"
-version = "2.0.1"
+version = "2.0.2"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -12,9 +12,18 @@ serde_json = "1"
 sha2 = "0.10"
 redlinedb-kernel = { path = "../kernel" }
 redlinedb-sql = { path = "../sql" }
+chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }
+rust_decimal = { version = "1", default-features = false, optional = true }
+tokio = { version = "1", features = ["rt", "sync"], optional = true }
+uuid = { version = "1", optional = true }
 
 [features]
 default = []
+chrono = ["dep:chrono"]
+decimal = ["dep:rust_decimal"]
+json = []
+tokio = ["dep:tokio"]
+uuid = ["dep:uuid"]
 # Internal test-only feature — arms kernel failpoints for crash-injection tests.
 # Not for production use; not covered by semver stability guarantees.
 failpoints = ["redlinedb-kernel/failpoints", "redlinedb-sql/failpoints"]

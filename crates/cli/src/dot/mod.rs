@@ -6,7 +6,7 @@
 //! input buffer.
 
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 
 use redlinedb::{Connection, Database};
@@ -109,6 +109,7 @@ pub struct CliState {
     pub widths: Vec<usize>,
     pub limits: Vec<(String, i64)>,
     pub output: OutputTarget,
+    pub defer_output_flush: bool,
     pub snapshots: std::collections::BTreeMap<PathBuf, Database>,
     /// `.parameter set NAME VALUE` populates this map; the REPL binds
     /// these values to matching `:name`/`@name`/`$name` placeholders in
@@ -131,15 +132,19 @@ pub enum ExplainSetting {
 
 /// Sink for query output and `.print`.
 pub enum OutputTarget {
-    Stdout,
+    Stdout(BufWriter<io::Stdout>),
     Null,
     File { path: PathBuf, writer: File },
 }
 
 impl OutputTarget {
+    pub fn stdout() -> Self {
+        Self::Stdout(BufWriter::new(io::stdout()))
+    }
+
     pub fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
         match self {
-            Self::Stdout => io::stdout().write_all(bytes),
+            Self::Stdout(writer) => writer.write_all(bytes),
             Self::Null => Ok(()),
             Self::File { writer, .. } => writer.write_all(bytes),
         }
@@ -152,7 +157,7 @@ impl OutputTarget {
 
     pub fn label(&self) -> String {
         match self {
-            Self::Stdout => "stdout".into(),
+            Self::Stdout(_) => "stdout".into(),
             Self::Null => "off".into(),
             Self::File { path, .. } => path.display().to_string(),
         }
@@ -162,7 +167,7 @@ impl OutputTarget {
 impl Write for OutputTarget {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self {
-            Self::Stdout => io::stdout().write(buf),
+            Self::Stdout(writer) => writer.write(buf),
             Self::Null => Ok(buf.len()),
             Self::File { writer, .. } => writer.write(buf),
         }
@@ -170,7 +175,7 @@ impl Write for OutputTarget {
 
     fn flush(&mut self) -> io::Result<()> {
         match self {
-            Self::Stdout => io::stdout().flush(),
+            Self::Stdout(writer) => writer.flush(),
             Self::Null => Ok(()),
             Self::File { writer, .. } => writer.flush(),
         }
@@ -209,7 +214,8 @@ impl CliState {
             dbconfig_defensive: false,
             widths: Vec::new(),
             limits: Vec::new(),
-            output: OutputTarget::Stdout,
+            output: OutputTarget::stdout(),
+            defer_output_flush: false,
             snapshots: std::collections::BTreeMap::new(),
             params: std::collections::BTreeMap::new(),
             once: None,

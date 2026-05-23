@@ -72,6 +72,8 @@ pub(super) fn build_report(
     raw_records: Vec<RawRecord>,
     updated_date: &str,
     git_sha: &str,
+    expected_repetitions: Option<usize>,
+    expected_warmup: Option<usize>,
 ) -> Result<BuiltReport> {
     let mut grouped = BTreeMap::<String, Vec<RawRecord>>::new();
     let mut sqlite_version = String::from("<unknown>");
@@ -119,6 +121,16 @@ pub(super) fn build_report(
             coverage_failures.push(format!("{id} failed"));
             continue;
         }
+        let warmups_for_case = records.iter().filter(|record| is_warmup(record)).count();
+        if let Some(expected_warmup) = expected_warmup
+            && warmups_for_case != expected_warmup
+        {
+            missing_cases = missing_cases.saturating_add(1);
+            coverage_failures.push(format!(
+                "{id} warmup samples {warmups_for_case} != expected {expected_warmup}"
+            ));
+            continue;
+        }
         let passed = records
             .iter()
             .filter(|record| record.status == "passed" && is_measured(record))
@@ -126,6 +138,16 @@ pub(super) fn build_report(
         if passed.is_empty() {
             missing_cases = missing_cases.saturating_add(1);
             coverage_failures.push(format!("{id} lacks measured samples"));
+            continue;
+        }
+        if let Some(expected_repetitions) = expected_repetitions
+            && passed.len() != expected_repetitions
+        {
+            missing_cases = missing_cases.saturating_add(1);
+            coverage_failures.push(format!(
+                "{id} measured samples {} != expected {expected_repetitions}",
+                passed.len()
+            ));
             continue;
         }
         if passed

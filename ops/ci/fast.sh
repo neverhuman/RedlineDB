@@ -78,6 +78,7 @@ run_test_stage() {
             ensure_sqlite_parity_reference
             bash scripts/just/run.sh sqlite-parity-scale-ci
             bash scripts/just/run.sh sqlite-parity-report-check
+            bash scripts/just/run.sh sqlite-parity-volatile-sentinel
             ;;
         *)
             printf 'unknown fast test stage: %s\n' "$1" >&2

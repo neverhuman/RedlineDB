@@ -2,11 +2,20 @@ mod beyond_oracle;
 
 use beyond_oracle::{PostgresHarness, RedlineHarness, SqliteHarness, both_engines_reject};
 
+fn postgres_reference() -> Option<PostgresHarness> {
+    if std::env::var("REDLINEDB_POSTGRES_URL").is_err()
+        && std::env::var("REDLINEDB_REQUIRE_POSTGRES_REFERENCE").is_err()
+    {
+        eprintln!("skipping Postgres reference test; REDLINEDB_POSTGRES_URL is not set");
+        return None;
+    }
+    Some(PostgresHarness::connect_from_env())
+}
+
 #[test]
 fn ilike_ascii_reference_matches_postgres() {
     let redline = RedlineHarness::in_memory();
-    let Some(mut postgres) = PostgresHarness::try_connect_from_env() else {
-        eprintln!("skipping Postgres reference test; REDLINEDB_POSTGRES_URL is not set");
+    let Some(mut postgres) = postgres_reference() else {
         return;
     };
     let setup = "
@@ -31,8 +40,7 @@ fn ilike_ascii_reference_matches_postgres() {
 #[test]
 fn ilike_unicode_reference_matches_postgres() {
     let redline = RedlineHarness::in_memory();
-    let Some(mut postgres) = PostgresHarness::try_connect_from_env() else {
-        eprintln!("skipping Postgres reference test; REDLINEDB_POSTGRES_URL is not set");
+    let Some(mut postgres) = postgres_reference() else {
         return;
     };
     let setup = "
@@ -63,7 +71,9 @@ fn sqlite_rejects_ilike_as_control_behavior() {
 #[test]
 fn default_keyword_matches_postgres_across_dml_forms() {
     let redline = RedlineHarness::in_memory();
-    let mut postgres = PostgresHarness::connect_from_env();
+    let Some(mut postgres) = postgres_reference() else {
+        return;
+    };
     let setup = "
         CREATE TABLE things(
             id INTEGER PRIMARY KEY,
@@ -122,7 +132,9 @@ fn default_keyword_matches_postgres_across_dml_forms() {
 #[test]
 fn boolean_and_uuid_strict_storage_matches_postgres() {
     let redline = RedlineHarness::in_memory();
-    let mut postgres = PostgresHarness::connect_from_env();
+    let Some(mut postgres) = postgres_reference() else {
+        return;
+    };
     redline.execute("CREATE TABLE t(flag BOOLEAN, ident UUID) STRICT");
     postgres.execute("CREATE TABLE t(flag BOOLEAN, ident UUID)");
 
@@ -147,7 +159,9 @@ fn boolean_and_uuid_strict_storage_matches_postgres() {
 #[test]
 fn invalid_boolean_and_uuid_strict_writes_match_postgres_rejection() {
     let redline = RedlineHarness::in_memory();
-    let mut postgres = PostgresHarness::connect_from_env();
+    let Some(mut postgres) = postgres_reference() else {
+        return;
+    };
     redline.execute("CREATE TABLE t(flag BOOLEAN, ident UUID) STRICT");
     postgres.execute("CREATE TABLE t(flag BOOLEAN, ident UUID)");
 
@@ -164,7 +178,9 @@ fn invalid_boolean_and_uuid_strict_writes_match_postgres_rejection() {
 #[test]
 fn alter_table_add_column_if_not_exists_matches_postgres() {
     let redline = RedlineHarness::in_memory();
-    let mut postgres = PostgresHarness::connect_from_env();
+    let Some(mut postgres) = postgres_reference() else {
+        return;
+    };
     let setup = "
         CREATE TABLE t(id INTEGER PRIMARY KEY);
         INSERT INTO t VALUES (1);
