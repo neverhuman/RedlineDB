@@ -38,15 +38,15 @@
     "--code-shape-plot",
     "assets/sqlite-code-shape.svg"
   ],
-  "git_sha": "0a12db2ee0566860cf1611b27f9dd1e473e8aca9",
+  "git_sha": "67042c6a97451e741e439f5d7edffb8861e20c70",
   "sqlite_version": "3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)",
   "updated_date": "2026-05-23",
   "repetitions": 3,
   "warmup": 1,
   "input_hashes": {
-    ".jankurai/repo-score.json": "63563b0b496c6c2f47ed3ac50982bf76386b7bf90bf3c112caaf17e882e2e5f6",
+    ".jankurai/repo-score.json": "82d60bbe5f1b3ad40c6e0dc98651672a18291ffbd3d8873120019f2f1f7474c5",
     "benchmark-results/sqlite-parity/latest/jankurai-comparison.json": "454c2e688f942f69b464206981affcb0affd53133ba5f8901f33aa0b7c289ccb",
-    "benchmark-results/sqlite-parity/latest/raw.jsonl": "449b9b74056d48a3a4ef20f35f6a49972c81030896bf453a4d5cd2a47595f334",
+    "benchmark-results/sqlite-parity/latest/raw.jsonl": "6560d1031f7a4205823270c8471e693d173732688fe35d75d085a44bb8ec3ca3",
     "crates/bench/sqlite_parity/generated_manifest.json": "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3",
     "expected_case_ids": "fd73157706060c255adce8efbe4705e71bbdba856887ed3a225ec851cb8a832f"
   },
@@ -57,18 +57,18 @@
     "./paper/sections/evaluation.tex": "e1bfd269cbfe1f04fdcb99e0f88cc7d5757549459e09ab877c58a18fcead1e0d",
     "./paper/sections/implementation.tex": "f2e6b282fd6331af383d3ab6ee59e5b252b29d9d9d2c883841fbd2bee59bb9f2",
     "./paper/sections/introduction.tex": "841d9ff98cfad98cc65f508b7a4f22c891203895f72b3fe9fc8e1005aa54e775",
-    "README.md": "b0a93f2a7edfce5dca2ceadea941eae73884c8846aa4b6dccf6b171a94776e77",
+    "README.md": "4b21325299541a0a66eb8970a4b3643b249c8fb2148e78621724fe9ed92a46bf",
     "assets/beyond-sqlite-feature-progress.svg": "9f516e3c87070e2106f6c50e4f5eee095d416b01a3e6974c1dd3af766301f521",
     "assets/sqlite-code-shape.svg": "90b2664dc26e8c1afb82daa84172614ea158126c26056bfd1c2db531b3111c4e",
     "assets/sqlite-jankurai-comparison.svg": "e78d65af57b7d14629d0e164bf2d1295535bd6a1b45f7d7c75f9b2f684d2781a",
     "assets/sqlite-jankurai-score.svg": "a7e5e75df78ff501224f1604c97b8a52f7f6b74823a014523e95a137bb0f29c8",
-    "assets/sqlite-median-test-performance.svg": "44eb888731198f05b11be23a6ef2ab3a3e58fdb62d45132c491405138bca03ec",
+    "assets/sqlite-median-test-performance.svg": "e0debb1011b5e655ef27e08dcd5a42edb6dc1c71d7a79a37122693376261e95d",
     "assets/sqlite-parity-ksloc.svg": "b6067e1328aaeafdc7d2516e9825b0f95485514db0028006cb834770b48f0081",
-    "assets/sqlite-parity-latency-gap.svg": "dfc5d0f9dee6db40dcef3c4bb0072ab305aa79048f2dd98b19bfa407322a863f",
-    "assets/sqlite-parity-performance-histogram.svg": "701e3a376468ac0716562406221602d9efd9a287b3f3db8fe3abb5b770211d10",
+    "assets/sqlite-parity-latency-gap.svg": "85bd28279509370fc1dd39ed6c4b6a85a804b636af25efe06debef7a36e20377",
+    "assets/sqlite-parity-performance-histogram.svg": "504a9f2e16c67f4cbf40a5394f17d2198c83e98ce5d72cf9de0177ae2cd50481",
     "ksloc.csv": "8eeac1ef6dec80406de65681205fc71243c42789f5d9bd07c5e2f15293434348",
-    "ranked.csv": "9d68ceb469a4c166bc678b0c8e1fe15e4424151cfae9aea3bda1e90013d50c63",
-    "raw.jsonl": "449b9b74056d48a3a4ef20f35f6a49972c81030896bf453a4d5cd2a47595f334",
-    "summary.json": "ab3b5855561ee5675986605de56b466098b3213fcf855f2d89a0d1f3a19e0ee2"
+    "ranked.csv": "550288dd5401499a119cbddfa67c03ddbc868e618eb2845c3f16f2486c502651",
+    "raw.jsonl": "6560d1031f7a4205823270c8471e693d173732688fe35d75d085a44bb8ec3ca3",
+    "summary.json": "5924ce87777e6843d676880bf3bd2df78e442c7a5cc918c0d80687e344db4437"
   }
 }

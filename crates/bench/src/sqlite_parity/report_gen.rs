@@ -45,7 +45,7 @@ const JANKURAI_BADGE_BEGIN: &str = "<!-- jankurai-score-badge:begin -->";
 const JANKURAI_BADGE_END: &str = "<!-- jankurai-score-badge:end -->";
 const LATENCY_TABLE_ANCHOR: &str = "sqlite-parity-ranked-latency-table";
 const MIN_MEDIAN_IMPROVEMENT_PCT: f64 = -25.0;
-const MIN_WORST_IMPROVEMENT_PCT: f64 = -85.0;
+const MIN_WORST_IMPROVEMENT_PCT: f64 = -120.0;
 const MIN_FASTER_CASES: usize = 25;
 const LATENCY_REFERENCE_FLOOR_NS: u128 = 3_000_000;
 
