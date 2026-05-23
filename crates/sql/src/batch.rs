@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::error::Result;
+use crate::exec::policy::{ActiveExecBatchPolicy, ExecBatchPolicy};
 use crate::value::SqlValue;
 
 #[derive(Debug, Clone)]
@@ -202,7 +203,7 @@ impl MaterializeNode {
 impl ExecNode for MaterializeNode {
     fn next_batch(&mut self, _ctx: &mut ExecContext, out: &mut RowBatch) -> Result<ExecState> {
         out.clear();
-        while self.cursor < self.rows.len() && out.len < 1024 {
+        while self.cursor < self.rows.len() && out.len < ActiveExecBatchPolicy::ROW_BATCH_ROWS {
             out.push_row(self.rows[self.cursor].clone());
             self.cursor += 1;
         }

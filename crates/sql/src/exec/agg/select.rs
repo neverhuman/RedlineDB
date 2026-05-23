@@ -26,6 +26,8 @@ pub(crate) fn expr_contains_aggregate(expr: &Expr) -> bool {
                 "count"
                     | "sum"
                     | "avg"
+                    | "median"
+                    | "percentile_cont"
                     | "group_concat"
                     | "string_agg"
                     | "total"

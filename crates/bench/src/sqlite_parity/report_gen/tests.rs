@@ -25,6 +25,11 @@ fn raw(case_id: &str, sqlite: u128, redline: u128) -> RawRecord {
         sample_role: "measured:1".to_owned(),
         repetition_index: Some(1),
         sqlite_version: Some("3.fixture".to_owned()),
+        reference_engine: "sqlite3".to_owned(),
+        target_engine: "redlinedb".to_owned(),
+        reference_executable_sha256: format!("sqlite-sha-{case_id}"),
+        target_executable_sha256: format!("redlinedb-sha-{case_id}"),
+        target_version: "redlinedb v2.0.2".to_owned(),
         status: "passed".to_owned(),
         reference_elapsed_ns: sqlite,
         target_elapsed_ns: redline,
@@ -121,7 +126,16 @@ fn medians_exclude_warmup() {
     });
     let all_cases = catalog::all_cases().expect("manifest");
     let expected = std::collections::BTreeSet::from(["00001".to_owned()]);
-    let report = build_report(&all_cases, &expected, records, "2026-05-20", "sha").expect("report");
+    let report = build_report(
+        &all_cases,
+        &expected,
+        records,
+        "2026-05-20",
+        "sha",
+        None,
+        None,
+    )
+    .expect("report");
     assert_eq!(report.ranked[0].sqlite_median_ns, 300);
     assert_eq!(report.ranked[0].redline_median_ns, 120);
     assert_eq!(report.summary.sqlite_case_median_ns, 300);
@@ -141,7 +155,16 @@ fn performance_histogram_uses_measured_case_medians() {
     });
     let all_cases = catalog::all_cases().expect("manifest");
     let expected = std::collections::BTreeSet::from(["00001".to_owned()]);
-    let report = build_report(&all_cases, &expected, records, "2026-05-20", "sha").expect("report");
+    let report = build_report(
+        &all_cases,
+        &expected,
+        records,
+        "2026-05-20",
+        "sha",
+        None,
+        None,
+    )
+    .expect("report");
     let histogram =
         performance_histogram::build(report.ranked.iter().map(|case| case.improvement_pct));
 
@@ -170,6 +193,8 @@ fn report_counts_missing_failed_and_skipped_cases() {
         vec![raw("00001", 100, 90), failed, skipped],
         "2026-05-20",
         "sha",
+        None,
+        None,
     )
     .expect("report");
 
@@ -182,6 +207,32 @@ fn report_counts_missing_failed_and_skipped_cases() {
 }
 
 #[test]
+fn report_rejects_passed_records_without_execution_provenance() {
+    let all_cases = catalog::all_cases().expect("manifest");
+    let expected = std::collections::BTreeSet::from(["00001".to_owned()]);
+    let mut record = raw("00001", 100, 90);
+    record.target_executable_sha256.clear();
+
+    let report = build_report(
+        &all_cases,
+        &expected,
+        vec![record],
+        "2026-05-20",
+        "sha",
+        None,
+        None,
+    )
+    .expect("report");
+
+    assert_eq!(report.summary.passed_cases, 0);
+    assert_eq!(report.summary.missing_cases, 1);
+    assert_eq!(
+        report.coverage_failures,
+        vec!["00001 lacks target execution provenance"]
+    );
+}
+
+#[test]
 fn missing_case_file_metadata_fails_closed() {
     let records = vec![RawRecord {
         case_file: String::new(),
@@ -190,12 +241,50 @@ fn missing_case_file_metadata_fails_closed() {
     let all_cases = Vec::new();
     let expected = std::collections::BTreeSet::from(["99999".to_owned()]);
 
-    let err =
-        build_report(&all_cases, &expected, records, "2026-05-20", "sha").expect_err("metadata");
+    let err = build_report(
+        &all_cases,
+        &expected,
+        records,
+        "2026-05-20",
+        "sha",
+        None,
+        None,
+    )
+    .expect_err("metadata");
 
     assert!(
         err.to_string()
             .contains("resolve sqlite parity case file metadata for expected case 99999")
+    );
+}
+
+#[test]
+fn report_rejects_wrong_sample_counts_when_expected() {
+    let mut records = vec![raw("00001", 100, 90), raw("00001", 120, 95)];
+    records.push(RawRecord {
+        sample_role: "warmup".to_owned(),
+        repetition_index: None,
+        ..raw("00001", 90, 80)
+    });
+    let all_cases = catalog::all_cases().expect("manifest");
+    let expected = std::collections::BTreeSet::from(["00001".to_owned()]);
+
+    let report = build_report(
+        &all_cases,
+        &expected,
+        records,
+        "2026-05-20",
+        "sha",
+        Some(3),
+        Some(1),
+    )
+    .expect("report");
+
+    assert_eq!(report.summary.passed_cases, 0);
+    assert_eq!(report.summary.missing_cases, 1);
+    assert_eq!(
+        report.coverage_failures,
+        vec!["00001 measured samples 2 != expected 3"]
     );
 }
 
@@ -297,13 +386,13 @@ fn jankurai_badge_replacement_preserves_static_badges() {
         status: "advisory".to_owned(),
         color: "orange",
     };
-    let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-2.0.0-blue\" alt=\"version\">\n</p>\nafter\n";
+    let current = "<p align=\"center\">\n  <img src=\"assets/redlinedb-banner.png\" alt=\"RedlineDB\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>\n  <img src=\"https://img.shields.io/badge/version-2.0.2-blue\" alt=\"version\">\n</p>\nafter\n";
     let next = replace_jankurai_badge(current, &score).expect("replace");
 
     assert!(next.contains("<a href=\"LICENSE\"><img src=\"license.svg\" alt=\"license\"></a>"));
     assert!(
         next.contains(
-            "<img src=\"https://img.shields.io/badge/version-2.0.0-blue\" alt=\"version\">"
+            "<img src=\"https://img.shields.io/badge/version-2.0.2-blue\" alt=\"version\">"
         )
     );
     assert!(next.contains(JANKURAI_BADGE_BEGIN));

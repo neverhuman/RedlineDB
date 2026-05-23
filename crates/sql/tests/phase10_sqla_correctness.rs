@@ -278,39 +278,37 @@ mod phase10_sqla_correctness {
 
     // GLOB is exposed as a builtin function in this parser; the `x GLOB y`
     // infix form is not yet supported. Use the function form for tests.
-    // Argument order in this codebase is `glob(value, pattern)` (NOT the
-    // SQLite-standard `glob(pattern, value)` order — see existing test
-    // `sqlite_core_functions_cover_round_hex_quote_random_and_glob`).
+    // SQLite scalar glob() uses `glob(pattern, value)` order.
 
     #[test]
     fn glob_class_any_of() {
         // 'cat' GLOB 'c[ao]t' → 1 (matches `a`).
-        assert_int(&run_scalar("SELECT glob('cat', 'c[ao]t')"), 1);
+        assert_int(&run_scalar("SELECT glob('c[ao]t', 'cat')"), 1);
         // 'cot' GLOB 'c[ao]t' → 1 (matches `o`).
-        assert_int(&run_scalar("SELECT glob('cot', 'c[ao]t')"), 1);
+        assert_int(&run_scalar("SELECT glob('c[ao]t', 'cot')"), 1);
         // 'cit' GLOB 'c[ao]t' → 0.
-        assert_int(&run_scalar("SELECT glob('cit', 'c[ao]t')"), 0);
+        assert_int(&run_scalar("SELECT glob('c[ao]t', 'cit')"), 0);
     }
 
     #[test]
     fn glob_class_range() {
-        assert_int(&run_scalar("SELECT glob('cot', 'c[a-o]t')"), 1);
-        assert_int(&run_scalar("SELECT glob('cpt', 'c[a-o]t')"), 0);
+        assert_int(&run_scalar("SELECT glob('c[a-o]t', 'cot')"), 1);
+        assert_int(&run_scalar("SELECT glob('c[a-o]t', 'cpt')"), 0);
     }
 
     #[test]
     fn glob_class_negation() {
         // 'c0t' GLOB 'c[!0-9]t' → 0 (negated class excludes digits).
-        assert_int(&run_scalar("SELECT glob('c0t', 'c[!0-9]t')"), 0);
+        assert_int(&run_scalar("SELECT glob('c[!0-9]t', 'c0t')"), 0);
         // 'cat' GLOB 'c[!0-9]t' → 1.
-        assert_int(&run_scalar("SELECT glob('cat', 'c[!0-9]t')"), 1);
+        assert_int(&run_scalar("SELECT glob('c[!0-9]t', 'cat')"), 1);
     }
 
     #[test]
     fn glob_star_and_question_regression() {
-        assert_int(&run_scalar("SELECT glob('hello', 'h*o')"), 1);
-        assert_int(&run_scalar("SELECT glob('hi', 'h?')"), 1);
-        assert_int(&run_scalar("SELECT glob('hi', 'h?i')"), 0);
+        assert_int(&run_scalar("SELECT glob('h*o', 'hello')"), 1);
+        assert_int(&run_scalar("SELECT glob('h?', 'hi')"), 1);
+        assert_int(&run_scalar("SELECT glob('h?i', 'hi')"), 0);
     }
 
     // --- Bug 8: ORDER BY after GROUP BY honors keys / DESC -----------------

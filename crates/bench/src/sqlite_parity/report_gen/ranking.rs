@@ -25,6 +25,16 @@ pub(super) struct RawRecord {
     pub(super) repetition_index: Option<usize>,
     #[serde(default)]
     pub(super) sqlite_version: Option<String>,
+    #[serde(default)]
+    pub(super) reference_engine: String,
+    #[serde(default)]
+    pub(super) target_engine: String,
+    #[serde(default)]
+    pub(super) reference_executable_sha256: String,
+    #[serde(default)]
+    pub(super) target_executable_sha256: String,
+    #[serde(default)]
+    pub(super) target_version: String,
     pub(super) status: String,
     pub(super) reference_elapsed_ns: u128,
     pub(super) target_elapsed_ns: u128,
@@ -62,6 +72,8 @@ pub(super) fn build_report(
     raw_records: Vec<RawRecord>,
     updated_date: &str,
     git_sha: &str,
+    expected_repetitions: Option<usize>,
+    expected_warmup: Option<usize>,
 ) -> Result<BuiltReport> {
     let mut grouped = BTreeMap::<String, Vec<RawRecord>>::new();
     let mut sqlite_version = String::from("<unknown>");
@@ -109,6 +121,16 @@ pub(super) fn build_report(
             coverage_failures.push(format!("{id} failed"));
             continue;
         }
+        let warmups_for_case = records.iter().filter(|record| is_warmup(record)).count();
+        if let Some(expected_warmup) = expected_warmup
+            && warmups_for_case != expected_warmup
+        {
+            missing_cases = missing_cases.saturating_add(1);
+            coverage_failures.push(format!(
+                "{id} warmup samples {warmups_for_case} != expected {expected_warmup}"
+            ));
+            continue;
+        }
         let passed = records
             .iter()
             .filter(|record| record.status == "passed" && is_measured(record))
@@ -116,6 +138,24 @@ pub(super) fn build_report(
         if passed.is_empty() {
             missing_cases = missing_cases.saturating_add(1);
             coverage_failures.push(format!("{id} lacks measured samples"));
+            continue;
+        }
+        if let Some(expected_repetitions) = expected_repetitions
+            && passed.len() != expected_repetitions
+        {
+            missing_cases = missing_cases.saturating_add(1);
+            coverage_failures.push(format!(
+                "{id} measured samples {} != expected {expected_repetitions}",
+                passed.len()
+            ));
+            continue;
+        }
+        if passed
+            .iter()
+            .any(|record| !has_execution_provenance(record))
+        {
+            missing_cases = missing_cases.saturating_add(1);
+            coverage_failures.push(format!("{id} lacks target execution provenance"));
             continue;
         }
         passed_cases = passed_cases.saturating_add(1);
@@ -244,6 +284,19 @@ fn is_measured(record: &RawRecord) -> bool {
         && (record.repetition_index.is_some()
             || record.sample_role.starts_with("measured")
             || record.sample_role.is_empty())
+}
+
+fn has_execution_provenance(record: &RawRecord) -> bool {
+    (record.reference_engine.eq_ignore_ascii_case("sqlite3")
+        || record.reference_engine.eq_ignore_ascii_case("sqlite"))
+        && record.target_engine.eq_ignore_ascii_case("redlinedb")
+        && !record.reference_executable_sha256.is_empty()
+        && !record.target_executable_sha256.is_empty()
+        && record.reference_executable_sha256 != record.target_executable_sha256
+        && record
+            .target_version
+            .to_ascii_lowercase()
+            .contains("redlinedb")
 }
 
 fn median_u128(mut values: Vec<u128>) -> u128 {

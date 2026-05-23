@@ -23,6 +23,29 @@ mirror_max_rows = 5000
 
 [scan]
 excluded_paths = [
+  # Transient upstream checkout used only by the language-bad-behavior lane.
+  # It is not RedlineDB product evidence and must not affect repo scoring.
+  ".jankurai/jankurai-src/",
+  # Reviewed ratchet baselines are explicit comparison inputs, not product
+  # content to rescore as repository evidence.
+  ".jankurai/baselines/",
+  # Audit outputs are generated evidence. They may contain canonical
+  # reference-profile vocabulary and must not become scan input for the next
+  # audit run.
+  ".jankurai/repo-score.json",
+  ".jankurai/repo-score.md",
+  ".jankurai/score-history.csv",
+  ".jankurai/score-history.jsonl",
+  ".jankurai/repair-queue.jsonl",
+  ".jankurai/summary.md",
+  ".jankurai/jankurai.sarif",
+  ".jankurai/security/",
+  ".jankurai/accepted-baseline.json",
+  ".jankurai/boundaries.toml",
+  ".jankurai/standard-version.toml",
+  # UX QA config is control-plane metadata; it is not evidence that this repo
+  # has a rendered web product surface.
+  ".jankurai/ux-qa.toml",
   "tips/",
   "paper/scripts/",
   "scripts/bench/export_benchmark_results.py",
@@ -204,6 +227,9 @@ extra_excluded_paths = [
   "crates/cli/src/dot/io_cmd.rs",
 ]
 extra_excluded_globs = [
+  # Local upstream source cache sometimes left by tool install/debug lanes.
+  # It is upstream jankurai source, not RedlineDB product evidence.
+  "target/jankurai-src-v*/**",
   "contracts/c-abi/**/*.h",
   "crates/ffi/include/**/*.h",
 ]

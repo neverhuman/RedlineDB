@@ -150,33 +150,6 @@ fn distinct_on_is_unsupported() {
 }
 
 #[test]
-fn natural_join_is_unsupported() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE a(id INTEGER)").expect("create");
-    c.execute("CREATE TABLE b(id INTEGER)").expect("create");
-    let res = c.execute("SELECT * FROM a NATURAL JOIN b");
-    assert_unsupported(res, "not supported");
-}
-
-#[test]
-fn right_join_is_unsupported() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE a(id INTEGER)").expect("create");
-    c.execute("CREATE TABLE b(id INTEGER)").expect("create");
-    let res = c.execute("SELECT * FROM a RIGHT JOIN b ON a.id = b.id");
-    assert_unsupported(res, "only inner, cross, and left joins are supported");
-}
-
-#[test]
-fn full_join_is_unsupported() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE a(id INTEGER)").expect("create");
-    c.execute("CREATE TABLE b(id INTEGER)").expect("create");
-    let res = c.execute("SELECT * FROM a FULL JOIN b ON a.id = b.id");
-    assert_unsupported(res, "only inner, cross, and left joins are supported");
-}
-
-#[test]
 fn group_by_all_is_unsupported() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER)").expect("create");

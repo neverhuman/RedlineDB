@@ -31,11 +31,11 @@ use crate::error::{Error, Result};
 use crate::value::SqlValue;
 
 use super::SqlRow;
-use super::eval_scalar;
+use super::{cast_value, eval_scalar};
 
 use accumulator::Accumulator;
 use frame::{ResolvedFrame, frame_bounds, literal_i64, resolve_frame};
-use partition::{assign_peer_ids, order_partition, partition_rows};
+use partition::{assign_peer_ids, order_partition, partition_rows, peer_ranges};
 
 /// Returns `true` if any projection item contains a function call carrying
 /// an `OVER (...)` clause.
@@ -192,8 +192,12 @@ fn eval_with_window_values(
         Expr::Nested(inner) => {
             eval_with_window_values(inner, row, bindings, window_values, row_idx, counter)
         }
-        Expr::Cast { expr, .. } => {
-            eval_with_window_values(expr, row, bindings, window_values, row_idx, counter)
+        Expr::Cast {
+            expr, data_type, ..
+        } => {
+            let value =
+                eval_with_window_values(expr, row, bindings, window_values, row_idx, counter)?;
+            cast_value(value, data_type)
         }
         _ => eval_scalar(expr, &row.context(), bindings),
     }
@@ -272,6 +276,7 @@ fn eval_window_call(
         } else {
             assign_peer_ids(&sorted, &window.order_by)
         };
+        let peer_ranges = peer_ranges(&peer_ids);
 
         for (sorted_pos, (row_idx, _row_ref)) in sorted.iter().enumerate() {
             let value = compute_function_for_row(
@@ -280,6 +285,7 @@ fn eval_window_call(
                 rows,
                 &order_index_map,
                 &peer_ids,
+                &peer_ranges,
                 sorted_pos,
                 &frame,
                 window,
@@ -312,6 +318,7 @@ fn compute_function_for_row(
     rows: &[SqlRow],
     order_index_map: &[usize],
     peer_ids: &[usize],
+    peer_ranges: &[(usize, usize)],
     sorted_pos: usize,
     frame: &ResolvedFrame,
     window: &WindowSpec,
@@ -321,13 +328,19 @@ fn compute_function_for_row(
         "row_number" => Ok(SqlValue::Integer((sorted_pos + 1) as i64)),
         "rank" => {
             let target = peer_ids[sorted_pos];
-            let pre = peer_ids.iter().take_while(|&&id| id < target).count();
-            Ok(SqlValue::Integer((pre + 1) as i64))
+            let first_peer_pos = peer_ranges
+                .get(target)
+                .map(|range| range.0)
+                .unwrap_or(sorted_pos);
+            Ok(SqlValue::Integer((first_peer_pos + 1) as i64))
         }
         "dense_rank" => Ok(SqlValue::Integer((peer_ids[sorted_pos] + 1) as i64)),
         "percent_rank" => {
             let target = peer_ids[sorted_pos];
-            let pre = peer_ids.iter().take_while(|&&id| id < target).count() as f64;
+            let pre = peer_ranges
+                .get(target)
+                .map(|range| range.0)
+                .unwrap_or(sorted_pos) as f64;
             let total = peer_ids.len() as f64;
             let denom = (total - 1.0).max(1.0);
             if total <= 1.0 {
@@ -338,7 +351,10 @@ fn compute_function_for_row(
         }
         "cume_dist" => {
             let target = peer_ids[sorted_pos];
-            let n = peer_ids.iter().filter(|&&id| id <= target).count() as f64;
+            let n = peer_ranges
+                .get(target)
+                .map(|range| range.1 + 1)
+                .unwrap_or(sorted_pos + 1) as f64;
             let total = peer_ids.len() as f64;
             Ok(SqlValue::Real(n / total))
         }
@@ -347,7 +363,13 @@ fn compute_function_for_row(
             lag_lead_value(func_name, args, rows, order_index_map, sorted_pos, bindings)
         }
         "first_value" => {
-            let bounds = frame_bounds(frame, sorted_pos, peer_ids, order_index_map.len());
+            let bounds = frame_bounds(
+                frame,
+                sorted_pos,
+                peer_ids,
+                peer_ranges,
+                order_index_map.len(),
+            );
             if bounds.0 > bounds.1 {
                 return Ok(SqlValue::Null);
             }
@@ -358,7 +380,13 @@ fn compute_function_for_row(
             }
         }
         "last_value" => {
-            let bounds = frame_bounds(frame, sorted_pos, peer_ids, order_index_map.len());
+            let bounds = frame_bounds(
+                frame,
+                sorted_pos,
+                peer_ids,
+                peer_ranges,
+                order_index_map.len(),
+            );
             if bounds.0 > bounds.1 {
                 return Ok(SqlValue::Null);
             }
@@ -373,7 +401,13 @@ fn compute_function_for_row(
                 Some(v) if v > 0 => v as usize,
                 _ => return Ok(SqlValue::Null),
             };
-            let bounds = frame_bounds(frame, sorted_pos, peer_ids, order_index_map.len());
+            let bounds = frame_bounds(
+                frame,
+                sorted_pos,
+                peer_ids,
+                peer_ranges,
+                order_index_map.len(),
+            );
             let target = bounds.0 + n - 1;
             if target > bounds.1 {
                 return Ok(SqlValue::Null);
@@ -385,7 +419,13 @@ fn compute_function_for_row(
             }
         }
         "sum" | "count" | "avg" | "min" | "max" | "total" => {
-            let bounds = frame_bounds(frame, sorted_pos, peer_ids, order_index_map.len());
+            let bounds = frame_bounds(
+                frame,
+                sorted_pos,
+                peer_ids,
+                peer_ranges,
+                order_index_map.len(),
+            );
             let mut accumulator = Accumulator::new(func_name);
             for i in bounds.0..=bounds.1 {
                 if i >= order_index_map.len() {

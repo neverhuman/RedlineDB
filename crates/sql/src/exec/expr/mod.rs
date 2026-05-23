@@ -224,6 +224,14 @@ pub(crate) fn eval_scalar(
         Expr::Cast {
             expr, data_type, ..
         } => cast_value(eval_scalar(expr, row, bindings)?, data_type)?,
+        Expr::Ceil { expr, .. } => match eval_scalar(expr, row, bindings)? {
+            SqlValue::Null => SqlValue::Null,
+            value => SqlValue::Real(numeric_value(&value)?.ceil()),
+        },
+        Expr::Floor { expr, .. } => match eval_scalar(expr, row, bindings)? {
+            SqlValue::Null => SqlValue::Null,
+            value => SqlValue::Real(numeric_value(&value)?.floor()),
+        },
         Expr::Function(func) => eval_function(func, row, bindings)?,
         Expr::Like {
             negated,

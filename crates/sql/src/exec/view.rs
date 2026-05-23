@@ -201,3 +201,18 @@ pub(crate) fn cannot_modify_view_error(name: &str) -> Error {
 pub(crate) fn name_is_view(schema: &SchemaSnapshot, name: &sqlparser::ast::ObjectName) -> bool {
     lookup_in_schema(schema, name).is_some()
 }
+
+pub(crate) fn view_column_names(
+    conn: &Connection,
+    name: &sqlparser::ast::ObjectName,
+) -> Result<Vec<String>> {
+    let schema = conn.schema_snapshot();
+    let Some(view) = lookup_in_schema(&schema, name) else {
+        return Err(Error::UnknownTable(name.to_string()));
+    };
+    if !view.columns.is_empty() {
+        return Ok(view.columns.iter().map(|c| c.as_ref().to_owned()).collect());
+    }
+    let template = crate::parser::parse_prepared_template(conn, view.body_sql.as_ref())?;
+    Ok(template.output_columns.iter().cloned().collect())
+}

@@ -145,6 +145,9 @@ impl AttachMap {
 }
 
 fn open_or_create(path: &Path) -> Result<Arc<Database>> {
+    if path == Path::new(":memory:") {
+        return Database::create_in_memory(DbOptions::default());
+    }
     if path.exists() {
         Database::open(path, DbOptions::default())
     } else {

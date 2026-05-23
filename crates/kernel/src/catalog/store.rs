@@ -750,6 +750,7 @@ fn trigger_time_tag(time: TriggerTimeKind) -> u8 {
     match time {
         TriggerTimeKind::Before => 0,
         TriggerTimeKind::After => 1,
+        TriggerTimeKind::InsteadOf => 2,
     }
 }
 
@@ -757,6 +758,7 @@ fn trigger_time_from_tag(tag: u8) -> Result<TriggerTimeKind> {
     Ok(match tag {
         0 => TriggerTimeKind::Before,
         1 => TriggerTimeKind::After,
+        2 => TriggerTimeKind::InsteadOf,
         _ => return Err(Error::CatalogCorrupt("invalid trigger time tag")),
     })
 }

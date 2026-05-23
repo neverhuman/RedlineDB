@@ -323,6 +323,5 @@ pub(crate) fn private_in_memory_sql_options(options: &OpenOptions) -> redlinedb_
     db.engine.heap_lanes = 1;
     db.engine.buffer_pool_pages = db.engine.buffer_pool_pages.clamp(16, 1024);
     db.unique_lock_shards = db.unique_lock_shards.clamp(1, 16);
-    db.statement_cache_capacity = db.statement_cache_capacity.min(16);
     db
 }

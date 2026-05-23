@@ -147,7 +147,7 @@ fn sqlite_core_functions_cover_round_hex_quote_random_and_glob() {
         .prepare(
             "SELECT round(1.25, 1), hex(x'4142'), quote('O''Reilly'), \
              likely(1), unlikely(0), likelihood(1, 0.25), random(), \
-             glob('alpha', 'a*'), glob('alpha', 'b*') FROM t",
+             glob('a*', 'alpha'), glob('b*', 'alpha') FROM t",
         )
         .expect("prepare select");
 

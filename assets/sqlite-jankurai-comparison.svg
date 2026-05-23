@@ -3,7 +3,7 @@
 <!-- Command: just sqlite-parity-report-update -->
 <!-- DO NOT EDIT BY HAND. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" role="img" aria-labelledby="jankurai-compare-title jankurai-compare-desc">
-<title id="jankurai-compare-title">Jankurai audit comparison, Updated 2026-05-22</title>
+<title id="jankurai-compare-title">Jankurai audit comparison, Updated 2026-05-23</title>
 <desc id="jankurai-compare-desc">Comparison of RedlineDB and SQLite Jankurai audit scores, finding counts, applied caps, issue lanes, and code-shape dimensions where present. SQLite ref: version-3.53.1.</desc>
 <rect width="900" height="520" fill="#ffffff"/>
 <text x="28" y="28" font-family="sans-serif" font-size="18" font-weight="700" fill="#111827">Jankurai audit comparison</text>

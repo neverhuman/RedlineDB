@@ -34,7 +34,8 @@ pub(super) unsafe fn l2_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
         }
         i += lanes;
     }
-    let mut tail = horizontal_sum_avx2(acc);
+    // SAFETY: this function is running with AVX2 enabled by its target_feature.
+    let mut tail = unsafe { horizontal_sum_avx2(acc) };
     while i < len {
         let d = a[i] - b[i];
         tail += d * d;
@@ -72,9 +73,12 @@ pub(super) unsafe fn cosine_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
         }
         i += lanes;
     }
-    let mut dot_s = horizontal_sum_avx2(dot);
-    let mut na_s = horizontal_sum_avx2(na);
-    let mut nb_s = horizontal_sum_avx2(nb);
+    // SAFETY: this function is running with AVX2 enabled by its target_feature.
+    let mut dot_s = unsafe { horizontal_sum_avx2(dot) };
+    // SAFETY: this function is running with AVX2 enabled by its target_feature.
+    let mut na_s = unsafe { horizontal_sum_avx2(na) };
+    // SAFETY: this function is running with AVX2 enabled by its target_feature.
+    let mut nb_s = unsafe { horizontal_sum_avx2(nb) };
     while i < len {
         dot_s += a[i] * b[i];
         na_s += a[i] * a[i];
@@ -113,7 +117,8 @@ pub(super) unsafe fn inner_product_avx2(a: &[f32], b: &[f32]) -> f32 {
         }
         i += lanes;
     }
-    let mut tail = horizontal_sum_avx2(acc);
+    // SAFETY: this function is running with AVX2 enabled by its target_feature.
+    let mut tail = unsafe { horizontal_sum_avx2(acc) };
     while i < len {
         tail += a[i] * b[i];
         i += 1;

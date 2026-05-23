@@ -220,6 +220,28 @@ fn dot_dbinfo_prints_page_size() {
 }
 
 #[test]
+fn dot_filectrl_lists_available_controls_for_empty_command() {
+    let (out, err, code) = run_script(None, ".filectrl\n");
+    assert_eq!(code, 1);
+    assert_eq!(err, "");
+    assert_eq!(
+        out,
+        concat!(
+            "Available file-controls:\n",
+            "  .filectrl chunk_size SIZE\n",
+            "  .filectrl data_version \n",
+            "  .filectrl has_moved \n",
+            "  .filectrl lock_timeout MILLISEC\n",
+            "  .filectrl persist_wal [BOOLEAN]\n",
+            "  .filectrl psow [BOOLEAN]\n",
+            "  .filectrl reserve_bytes [N]\n",
+            "  .filectrl size_limit [LIMIT]\n",
+            "  .filectrl tempfilename \n",
+        )
+    );
+}
+
+#[test]
 fn dot_dbtotxt_prints_pipe_separated_catalog_rows() {
     let (out, err, code) = run_script(
         None,

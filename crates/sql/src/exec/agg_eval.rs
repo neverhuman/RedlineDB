@@ -1,9 +1,9 @@
 use super::*;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 thread_local! {
-    static GROUP_EVAL_CACHE: RefCell<Option<HashMap<String, SqlValue>>> = const {
+    static GROUP_EVAL_CACHE: RefCell<Option<HashMap<usize, SqlValue>>> = const {
         RefCell::new(None)
     };
 }
@@ -68,7 +68,7 @@ pub(super) fn eval_group_scalar_with_ctx(
     first_context: Option<&RowContext<'_>>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    let cache_key = expr.to_string();
+    let cache_key = expr as *const Expr as usize;
     let mut cache_guard = None;
     let cached = GROUP_EVAL_CACHE.with(|cache| {
         let mut slot = cache.borrow_mut();
@@ -410,6 +410,8 @@ fn is_builtin_aggregate_name(name: &str) -> bool {
         "count"
             | "sum"
             | "avg"
+            | "median"
+            | "percentile_cont"
             | "min"
             | "max"
             | "group_concat"
@@ -495,16 +497,6 @@ fn row_passes_aggregate_filter(
     Ok(is_truthy(&eval_scalar(filter, &ctx, bindings)?))
 }
 
-fn distinct_values_contain(seen: &[Vec<SqlValue>], values: &[SqlValue]) -> bool {
-    seen.iter().any(|candidate| {
-        candidate.len() == values.len()
-            && candidate
-                .iter()
-                .zip(values)
-                .all(|(left, right)| compare_values(left, right) == Ordering::Equal)
-    })
-}
-
 fn eval_group_function(
     func: &sqlparser::ast::Function,
     group: &[SqlRow],
@@ -532,7 +524,7 @@ fn eval_group_function(
                     list.duplicate_treatment,
                     Some(sqlparser::ast::DuplicateTreatment::Distinct)
                 );
-                let mut seen = Vec::new();
+                let mut seen = HashSet::new();
                 let mut count = 0i64;
                 for row in group {
                     if !row_passes_aggregate_filter(func, row, bindings)? {
@@ -553,10 +545,10 @@ fn eval_group_function(
                     }
                     if include {
                         if distinct {
-                            if distinct_values_contain(&seen, &values) {
+                            let key = vec::hash_agg::encode_group_key_bytes(&values)?;
+                            if !seen.insert(key) {
                                 continue;
                             }
-                            seen.push(values);
                         }
                         count += 1;
                     }
@@ -664,6 +656,47 @@ fn eval_group_function(
             } else {
                 Ok(SqlValue::Real(sum / count as f64))
             }
+        }
+        "median" | "percentile_cont" => {
+            let percentile = if name == "median" {
+                0.5
+            } else {
+                percentile_argument(func, group, bindings)?
+            };
+            if !(0.0..=1.0).contains(&percentile) {
+                return Err(Error::DatatypeMismatch);
+            }
+
+            let mut values = Vec::new();
+            for row in group {
+                if !row_passes_aggregate_filter(func, row, bindings)? {
+                    continue;
+                }
+                let ctx = row.context();
+                if let FunctionArguments::List(list) = &func.args
+                    && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
+                        list.args.first()
+                {
+                    let value = eval_scalar(expr, &ctx, bindings)?;
+                    if !matches!(value, SqlValue::Null) {
+                        values.push(numeric_aggregate_value(value)?);
+                    }
+                }
+            }
+            if values.is_empty() {
+                return Ok(SqlValue::Null);
+            }
+            values.sort_by(|left, right| left.total_cmp(right));
+            let rank = percentile * (values.len().saturating_sub(1) as f64);
+            let lower = rank.floor() as usize;
+            let upper = rank.ceil() as usize;
+            let fraction = rank - lower as f64;
+            let result = if lower == upper {
+                values[lower]
+            } else {
+                values[lower] + (values[upper] - values[lower]) * fraction
+            };
+            Ok(SqlValue::Real(result))
         }
         "min" | "max" => {
             let mut best: Option<SqlValue> = None;
@@ -849,5 +882,44 @@ fn eval_group_function(
                 ))),
             }
         }
+    }
+}
+
+fn percentile_argument(
+    func: &sqlparser::ast::Function,
+    group: &[SqlRow],
+    bindings: &[Option<SqlValue>],
+) -> Result<f64> {
+    let FunctionArguments::List(list) = &func.args else {
+        return Err(Error::UnsupportedSql(
+            "percentile_cont requires two arguments".to_owned(),
+        ));
+    };
+    if list.args.len() != 2 {
+        return Err(Error::UnsupportedSql(
+            "percentile_cont requires two arguments".to_owned(),
+        ));
+    }
+    let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = &list.args[1] else {
+        return Err(Error::UnsupportedSql(
+            "unsupported percentile_cont argument".to_owned(),
+        ));
+    };
+    let ctx = group
+        .first()
+        .map(|row| row.context())
+        .unwrap_or(RowContext::Empty);
+    numeric_aggregate_value(eval_scalar(expr, &ctx, bindings)?)
+}
+
+fn numeric_aggregate_value(value: SqlValue) -> Result<f64> {
+    match value {
+        SqlValue::Null => Ok(f64::NAN),
+        SqlValue::Integer(v) => Ok(v as f64),
+        SqlValue::Real(v) => Ok(v),
+        other => value_to_string(&other)
+            .trim()
+            .parse::<f64>()
+            .map_err(|_| Error::DatatypeMismatch),
     }
 }

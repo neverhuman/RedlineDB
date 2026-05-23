@@ -3,9 +3,9 @@
 # Command: just sqlite-parity-report-update
 # DO NOT EDIT BY HAND.
 component,loc,ksloc,files,source_path,notes
-kernel,20019,20.0,145,crates/kernel/src,"storage, WAL, MVCC, integrity, JSONB, vector indexes"
-sql,24919,24.9,108,crates/sql/src,"parser, planner, executor, JSON1, vectorized execution"
-redlinedb,3610,3.6,17,crates/redlinedb/src,public Rust facade
+kernel,20594,20.6,149,crates/kernel/src,"storage, WAL, MVCC, integrity, JSONB, vector indexes"
+sql,26196,26.2,110,crates/sql/src,"parser, planner, executor, JSON1, vectorized execution"
+redlinedb,3609,3.6,17,crates/redlinedb/src,public Rust facade
 ffi,3262,3.3,26,crates/ffi/src,SQLite-shaped C ABI bridge
-redlinedb_core_total,51810,51.8,296,"crates/{redlinedb,sql,kernel,ffi}/src","production Rust source; excludes tests, benches, examples, cfg(test) items, blank lines, and comments"
+redlinedb_core_total,53661,53.7,302,"crates/{redlinedb,sql,kernel,ffi}/src","production Rust source; excludes tests, benches, examples, cfg(test) items, blank lines, and comments"
 sqlite_reference,155800,155.8,,fixed,fixed SQLite source-line reference

@@ -1,6 +1,7 @@
 //! Partitioning, ordering, and peer-group assignment for window evaluation.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use sqlparser::ast::{Expr, OrderByExpr};
 
@@ -26,17 +27,19 @@ pub(super) fn partition_rows(
         }
         keys.push(key);
     }
-    let mut groups: Vec<(Vec<SqlValue>, Vec<usize>)> = Vec::new();
-    'outer: for (i, key) in keys.iter().enumerate() {
-        for (existing_key, members) in &mut groups {
-            if rows_equal(existing_key, key) {
-                members.push(i);
-                continue 'outer;
+    let mut group_by_key: HashMap<Vec<u8>, usize> = HashMap::with_capacity(keys.len());
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    for (i, key) in keys.iter().enumerate() {
+        let encoded = crate::exec::vec::hash_agg::encode_group_key_bytes(key)?;
+        match group_by_key.get(&encoded) {
+            Some(&group_idx) => groups[group_idx].push(i),
+            None => {
+                group_by_key.insert(encoded, groups.len());
+                groups.push(vec![i]);
             }
         }
-        groups.push((key.clone(), vec![i]));
     }
-    Ok(groups.into_iter().map(|(_, m)| m).collect())
+    Ok(groups)
 }
 
 pub(super) fn order_partition(
@@ -100,6 +103,21 @@ pub(super) fn assign_peer_ids(
     ids
 }
 
+pub(super) fn peer_ranges(peer_ids: &[usize]) -> Vec<(usize, usize)> {
+    if peer_ids.is_empty() {
+        return Vec::new();
+    }
+    let peer_count = peer_ids[peer_ids.len() - 1].saturating_add(1);
+    let mut ranges = vec![(0usize, 0usize); peer_count];
+    for (index, &peer_id) in peer_ids.iter().enumerate() {
+        if index == 0 || peer_ids[index - 1] != peer_id {
+            ranges[peer_id].0 = index;
+        }
+        ranges[peer_id].1 = index;
+    }
+    ranges
+}
+
 fn compare_with_nulls(a: &SqlValue, b: &SqlValue, nulls_first: bool) -> Ordering {
     match (a, b) {
         (SqlValue::Null, SqlValue::Null) => Ordering::Equal,
@@ -119,13 +137,4 @@ fn compare_with_nulls(a: &SqlValue, b: &SqlValue, nulls_first: bool) -> Ordering
         }
         _ => compare_values(a, b),
     }
-}
-
-fn rows_equal(a: &[SqlValue], b: &[SqlValue]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter()
-        .zip(b.iter())
-        .all(|(l, r)| compare_values(l, r) == Ordering::Equal)
 }

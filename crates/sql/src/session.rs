@@ -94,6 +94,10 @@ pub struct SessionState {
     pub query_only: bool,
     /// Mirrors SQLite's `PRAGMA case_sensitive_like`.
     pub case_sensitive_like: bool,
+    /// Names created through CREATE TEMP TABLE in this connection. The
+    /// current lightweight implementation stores their rows in the same
+    /// engine but exposes them through sqlite_temp_schema.
+    pub temp_tables: Vec<String>,
     pub last_insert_rowid: Option<i64>,
     pub unique_guards: Vec<UniqueKeyGuard>,
     /// Kernel-level unique-key reservations held until end-of-transaction.
@@ -130,6 +134,7 @@ impl Default for SessionState {
             cache_size: -2000,
             query_only: false,
             case_sensitive_like: false,
+            temp_tables: Vec::new(),
             last_insert_rowid: None,
             unique_guards: Vec::new(),
             kernel_unique_guards: Vec::new(),
@@ -156,6 +161,7 @@ impl SessionState {
         self.cache_size = -2000;
         self.query_only = false;
         self.case_sensitive_like = false;
+        self.temp_tables.clear();
         self.last_insert_rowid = None;
         self.unique_guards.clear();
         self.kernel_unique_guards.clear();

@@ -1,6 +1,9 @@
 fast:
   ./scripts/just/fast.sh
 
+pr-ci:
+  ./scripts/ci-local.sh pr-ci
+
 fast-check:
   ./scripts/just/run.sh fast-check
 
