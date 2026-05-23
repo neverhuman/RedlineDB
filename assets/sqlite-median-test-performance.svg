@@ -4,25 +4,23 @@
 <!-- DO NOT EDIT BY HAND. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="168" viewBox="0 0 760 168" role="img" aria-labelledby="median-test-performance-title median-test-performance-desc">
 <title id="median-test-performance-title">SQLite vs RedlineDB Median test performance, Updated 2026-05-23</title>
-<desc id="median-test-performance-desc">Median raw runtime per SQLite parity case, using per-case medians for SQLite and RedlineDB. RedlineDB: 3.29 ms; SQLite: 1.69 ms; lower is better.</desc>
+<desc id="median-test-performance-desc">Median raw runtime per SQLite parity case, using per-case medians for SQLite and RedlineDB. RedlineDB: 2.88 ms; SQLite: 1.64 ms; lower is better.</desc>
 <text x="132" y="22" font-family="sans-serif" font-size="17" font-weight="700" fill="#f97316">Median test performance</text>
 <text x="132" y="39" font-family="sans-serif" font-size="12" fill="#fbbf24">Median of per-case medians from ranked.csv; lower is better; updated 2026-05-23</text>
 <line x1="132.00" y1="44" x2="132.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
 <text x="132.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">0</text>
-<line x1="266.00" y1="44" x2="266.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
-<text x="266.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">1</text>
-<line x1="400.00" y1="44" x2="400.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
-<text x="400.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">2</text>
-<line x1="534.00" y1="44" x2="534.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
-<text x="534.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">3</text>
+<line x1="310.67" y1="44" x2="310.67" y2="138" stroke="#f59e0b" opacity="0.35"/>
+<text x="310.67" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">1</text>
+<line x1="489.33" y1="44" x2="489.33" y2="138" stroke="#f59e0b" opacity="0.35"/>
+<text x="489.33" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">2</text>
 <line x1="668.00" y1="44" x2="668.00" y2="138" stroke="#f59e0b" opacity="0.35"/>
-<text x="668.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">4</text>
+<text x="668.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="middle">3</text>
 <line x1="132" y1="138" x2="668.00" y2="138" stroke="#fbbf24"/>
 <text x="722.00" y="156" font-family="sans-serif" font-size="10" fill="#fbbf24" text-anchor="end">ms</text>
 <text x="20" y="64.50" font-family="sans-serif" font-size="13" fill="#f97316">RedlineDB</text>
-<rect x="132" y="48" width="441.36" height="24" rx="3" fill="#10b981"/>
-<text x="581.36" y="64.50" font-family="sans-serif" font-size="12" font-weight="700" fill="#fbbf24" text-anchor="start">3.29 ms</text>
+<rect x="132" y="48" width="515.23" height="24" rx="3" fill="#10b981"/>
+<text x="639.23" y="64.50" font-family="sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="end">2.88 ms</text>
 <text x="20" y="108.50" font-family="sans-serif" font-size="13" fill="#f97316">SQLite</text>
-<rect x="132" y="92" width="226.62" height="24" rx="3" fill="#e11d48"/>
-<text x="366.62" y="108.50" font-family="sans-serif" font-size="12" font-weight="700" fill="#fbbf24" text-anchor="start">1.69 ms</text>
+<rect x="132" y="92" width="293.59" height="24" rx="3" fill="#e11d48"/>
+<text x="433.59" y="108.50" font-family="sans-serif" font-size="12" font-weight="700" fill="#fbbf24" text-anchor="start">1.64 ms</text>
 </svg>

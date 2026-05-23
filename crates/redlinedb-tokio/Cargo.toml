@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb-tokio"
-version = "2.0.3"
+version = "2.0.4"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ keywords = ["database", "async", "tokio", "redlinedb", "sqlite"]
 categories = ["database", "asynchronous"]
 
 [dependencies]
-redlinedb = { path = "../redlinedb", version = "2.0.3" }
+redlinedb = { path = "../redlinedb", version = "2.0.4" }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros"] }
 thiserror = "2"
 

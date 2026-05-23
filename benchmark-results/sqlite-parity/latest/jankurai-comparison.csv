@@ -3,8 +3,8 @@
 # Command: just sqlite-jankurai-compare
 # DO NOT EDIT BY HAND.
 section,repo,metric,value,category,lane,hard_findings,soft_findings,total_findings
-summary,RedlineDB,score,87,,,,,
-summary,RedlineDB,raw_score,87,,,,,
+summary,RedlineDB,score,85,,,,,
+summary,RedlineDB,raw_score,85,,,,,
 summary,RedlineDB,hard_findings,0,,,,,
 summary,RedlineDB,soft_findings,2,,,,,
 summary,RedlineDB,caps_applied,0,,,,,
@@ -32,5 +32,5 @@ breakdown,SQLite,findings,,stack,audit,1,0,1
 breakdown,SQLite,findings,,test,fast,1,0,1
 breakdown,SQLite,findings,,ux-qa,web,1,0,1
 breakdown,SQLite,findings,,vibe,fast,184,0,184
-code_shape,RedlineDB,Code shape and semantic surface,65.00,,,,,
+code_shape,RedlineDB,Code shape and semantic surface,45.00,,,,,
 code_shape,SQLite,Code shape and semantic surface,0.00,,,,,

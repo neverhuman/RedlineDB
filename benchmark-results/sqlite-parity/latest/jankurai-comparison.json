@@ -11,8 +11,8 @@
       "id": "redlinedb",
       "label": "RedlineDB",
       "source_ref": "current",
-      "score": 87,
-      "raw_score": 87,
+      "score": 85,
+      "raw_score": 85,
       "hard_findings": 0,
       "soft_findings": 2,
       "caps_applied": 0,
@@ -44,9 +44,9 @@
         },
         {
           "name": "Code shape and semantic surface",
-          "score": 65.0,
+          "score": 45.0,
           "weight": 12.0,
-          "weighted_points": 7.8
+          "weighted_points": 5.4
         },
         {
           "name": "Data truth and workflow safety",
@@ -344,8 +344,8 @@
       "repo_id": "redlinedb",
       "repo_label": "RedlineDB",
       "dimension": "Code shape and semantic surface",
-      "score": 65.0,
-      "weighted_points": 7.8
+      "score": 45.0,
+      "weighted_points": 5.4
     },
     {
       "repo_id": "sqlite",

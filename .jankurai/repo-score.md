@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779550019`
-- Started at: `1779550019`
-- Elapsed: `6260` ms
+- Run ID: `1779567470`
+- Started at: `1779567470`
+- Elapsed: `6550` ms
 - Scope: `full`
-- Raw score: `87`
-- Final score: `87`
+- Raw score: `85`
+- Final score: `85`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,15 +70,15 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`71` files=`327`
+- Status: `review` hard=`0` warning=`72` files=`328`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`164` tokens=`459` bytes=`4414`
+- Duplicate volume: lines=`165` tokens=`461` bytes=`4430`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 21 lower-ranked classes
+  - showing the top 50 classes and omitting 22 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
@@ -141,7 +141,7 @@
 | Contract and boundary integrity | 13 | 88 | 11.44 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 98 | 11.76 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 65 | 7.80 | largest authored code file: crates/cli/src/lib.rs (937 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 45 | 5.40 | largest authored code file: crates/cli/src/lib.rs (1031 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 85 | 6.80 | database surface present; migration directory present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 91 | 6.37 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -205,14 +205,6 @@
 | `release-readiness` | `release` | `auto` | `artifact_verified` | `manual launch checklist` | `agent/repo-score.json, agent/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `artifact_verified` | `manual spend review` | `agent/repo-score.json, agent/repo-score.md` |
 
-## Security evidence (ingested)
-
-- Source: `target/jankurai/security/evidence.json`
-- Envelope exit code: `0` · elapsed: `52273` ms · strict: `false`
-- Commands — ran: `1`, skipped: `0`, failed: `0`
-- Generated at: `1779548689`
-- Git HEAD (envelope): `5542ffdef1928db25d1c48e0a96889cee7ae6379`
-
 ## Boundary Reclassifications
 
 No audited runtime boundary reclassifications declared.
@@ -224,11 +216,11 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
    Route: TLR `Entropy`, lane `fast`, owner `tools`
    Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 65 below the standard floor of 85
+   Reason: `Code shape and semantic surface` scored 45 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:caabf07268e190f9b81f9a5a48eb070ac1dd209ac907a4b1d13b8ef9564322e8`
-   Evidence: largest authored code file: crates/cli/src/lib.rs (937 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 71 (advisory only, no score impact)
+   Fingerprint: `sha256:acd0510cba5515169b40658e6c4bf54167a05d0d9481d55fd1001f45f1291fa4`
+   Evidence: largest authored code file: crates/cli/src/lib.rs (1031 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
 2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`

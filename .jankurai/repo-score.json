@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:660ec2666ad50671ea3e82af248637fede5202790ba0bc9e2642b8c3591c1e14",
-  "input_fingerprint": "sha256:10aac08979972b90f314539ccc564c5faf18928c0452147a915eeecb761d4c3f",
+  "report_fingerprint": "sha256:ceecf474ee3da9836e0e64388e771b600a2703485d72b91838d083b66e94bafa",
+  "input_fingerprint": "sha256:205942671acfe5de368ae645d3ce9456bee71d4cb279bf4739b1de553c514285",
   "policy_fingerprint": "sha256:6b2e95b4e965e82f509afc44fe631d3b954311aee6761b6ca09c319d3b1d191d",
   "manifest_fingerprints": {},
-  "dirty_worktree": false,
-  "generated_at": "1779550019",
+  "dirty_worktree": true,
+  "generated_at": "1779567470",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -18,15 +18,15 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1779550019",
-  "started_at": "1779550019",
-  "elapsed_ms": 6260,
+  "run_id": "1779567470",
+  "started_at": "1779567470",
+  "elapsed_ms": 6550,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 87,
-  "raw_score": 87,
+  "score": 85,
+  "raw_score": 85,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
@@ -34,7 +34,7 @@
     "hard_findings": 0,
     "soft_findings": 2,
     "ratchet": {
-      "baseline_score": 87,
+      "baseline_score": 85,
       "allowed_drop": 0,
       "passed": true,
       "score_delta": 0,
@@ -47,11 +47,11 @@
     }
   },
   "git": {
-    "head": "a30c242",
+    "head": "e518e7c",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": false
+    "dirty_worktree": true
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -287,7 +287,8 @@
         "root `README.md` routes to workspace layout",
         "owner map covers audited paths",
         "test map covers audited paths",
-        "authored code file exceeds 500 LOC"
+        "authored code file exceeds 500 LOC",
+        "authored code file exceeds 1000 LOC"
       ],
       "notes": []
     },
@@ -318,13 +319,9 @@
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=433 missing=433 high_or_critical_missing=57 verdict=review"
+        "Rust property/integration tests present or no Rust surface"
       ],
-      "notes": [
-        "proofbind reports 433 unresolved obligation(s)",
-        "proofbind reports 57 missing high/critical semantic proof obligation(s)"
-      ]
+      "notes": []
     },
     {
       "name": "Security and supply-chain posture",
@@ -339,7 +336,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1756",
+        "rust bad-behavior advisory signals: 1778",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -349,14 +346,15 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 65,
-      "weighted_points": 7.8,
+      "score": 45,
+      "weighted_points": 5.4,
       "evidence": [
-        "largest authored code file: crates/cli/src/lib.rs (937 LOC)",
+        "largest authored code file: crates/cli/src/lib.rs (1031 LOC)",
         "code file exceeds 500 LOC",
+        "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 71 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1756",
+        "copy-code advisory classes found: 72 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 1778",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -1019,30 +1017,14 @@
     },
     "missing": []
   },
-  "security_evidence": {
-    "artifact": {
-      "path": "target/jankurai/security/evidence.json",
-      "envelope_exit_code": 0,
-      "elapsed_ms": 52273,
-      "wrapper_strict": false,
-      "profile": "local",
-      "commands_ran": 1,
-      "commands_skipped": 0,
-      "commands_failed": 0,
-      "required_commands_skipped": 0,
-      "required_commands_failed": 0,
-      "blocking_commands": [],
-      "generated_at": "1779548689",
-      "git_head": "5542ffdef1928db25d1c48e0a96889cee7ae6379"
-    }
-  },
+  "security_evidence": {},
   "boundaries": {
     "reclassifications": []
   },
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-23T15:26:52.989057846+00:00",
+    "generated_at": "2026-05-23T20:17:44.345399413+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1080,20 +1062,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 1035,
-      "files_considered": 327,
-      "active_files": 327,
+      "files_scanned": 1036,
+      "files_considered": 328,
+      "active_files": 328,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 71,
+      "warning_classes": 72,
       "hard_instances": 0,
-      "warning_instances": 183,
-      "duplicate_lines": 164,
-      "duplicate_tokens": 459,
-      "duplicate_bytes": 4414,
-      "total_redundant_lines": 251,
-      "total_redundant_tokens": 665,
-      "total_redundant_bytes": 6472
+      "warning_instances": 185,
+      "duplicate_lines": 165,
+      "duplicate_tokens": 461,
+      "duplicate_bytes": 4430,
+      "total_redundant_lines": 252,
+      "total_redundant_tokens": 667,
+      "total_redundant_bytes": 6488
     },
     "classes": [
       {
@@ -3158,7 +3140,7 @@
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 21 lower-ranked classes"
+      "showing the top 50 classes and omitting 22 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3441,20 +3423,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 65 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 45 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/cli/src/lib.rs (937 LOC)",
+        "largest authored code file: crates/cli/src/lib.rs (1031 LOC)",
         "code file exceeds 500 LOC",
-        "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 71 (advisory only, no score impact)"
+        "code file exceeds 1000 LOC",
+        "most code files stay under 300 LOC"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:caabf07268e190f9b81f9a5a48eb070ac1dd209ac907a4b1d13b8ef9564322e8",
+      "fingerprint": "sha256:acd0510cba5515169b40658e6c4bf54167a05d0d9481d55fd1001f45f1291fa4",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3505,7 +3487,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 65 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 45 below the standard floor of 85"
     }
   ]
 }
