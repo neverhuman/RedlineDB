@@ -31,6 +31,7 @@ pub(crate) fn execute_update(
         }
     }
     with_write_tx(conn, |session, tx| {
+        let compiled_selection = compile_table_predicate(&plan.table, &plan.selection, bindings);
         let target_rowids =
             if let Some(rowid) = selection_rowid_eq(&plan.table, &plan.selection, bindings)? {
                 vec![rowid]
@@ -53,7 +54,12 @@ pub(crate) fn execute_update(
             else {
                 continue;
             };
-            if !selection_passes(&plan.selection, &SqlRow::Table(fresh.clone()), bindings)? {
+            if !selection_passes_table(
+                &plan.selection,
+                compiled_selection.as_ref(),
+                &fresh,
+                bindings,
+            )? {
                 continue;
             }
             let old_values = fresh.values.clone();
@@ -296,11 +302,17 @@ pub(crate) fn execute_delete(
         }
     }
     with_write_tx(conn, |session, tx| {
+        let compiled_selection = compile_table_predicate(&plan.table, &plan.selection, bindings);
         let rows = dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?;
         let mut count = 0usize;
         let mut returning_rows = Vec::new();
         for row in rows {
-            if !selection_passes(&plan.selection, &SqlRow::Table(row.clone()), bindings)? {
+            if !selection_passes_table(
+                &plan.selection,
+                compiled_selection.as_ref(),
+                &row,
+                bindings,
+            )? {
                 continue;
             }
             if let Some(returning) = &plan.returning {

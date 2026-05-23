@@ -100,6 +100,106 @@ fn memory_mode_query_leaves_working_directory_clean() {
     assert!(entries.is_empty(), "memory mode created files: {entries:?}");
 }
 
+fn readonly_sidecar_path(db_path: &std::path::Path) -> std::path::PathBuf {
+    let mut sidecar = db_path.as_os_str().to_os_string();
+    sidecar.push(".redlinedb-readonly.sql");
+    std::path::PathBuf::from(sidecar)
+}
+
+#[cfg(unix)]
+#[test]
+fn readonly_fallback_uses_fresh_sidecar_for_unreadable_directory() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempdir().expect("tempdir");
+    let db_path = dir.path().join("ro.db");
+    let output = Command::new(cargo_bin("redlinedb-cli"))
+        .arg(&db_path)
+        .arg("CREATE TABLE t(x); INSERT INTO t VALUES(1);")
+        .output()
+        .expect("create db");
+    assert!(output.status.success(), "stderr={:?}", output.stderr);
+    let sidecar = readonly_sidecar_path(&db_path);
+    assert!(sidecar.exists(), "sidecar was not written");
+
+    let original_permissions = std::fs::metadata(&db_path).expect("metadata").permissions();
+    std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o000))
+        .expect("chmod unreadable");
+    let readonly = Command::new(cargo_bin("redlinedb-cli"))
+        .arg("-readonly")
+        .arg(&db_path)
+        .arg("SELECT x FROM t;")
+        .output()
+        .expect("readonly query");
+    std::fs::set_permissions(&db_path, original_permissions).expect("restore permissions");
+
+    assert!(
+        readonly.status.success(),
+        "stderr={:?}",
+        String::from_utf8_lossy(&readonly.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(readonly.stdout).expect("stdout").trim(),
+        "1"
+    );
+}
+
+#[test]
+fn deserialize_valid_redlinedb_directory_without_sidecar_uses_native_open() {
+    let dir = tempdir().expect("tempdir");
+    let db_path = dir.path().join("deserialize.db");
+    {
+        let db = redlinedb::Database::create(&db_path).expect("create db");
+        let mut conn = db.connect().expect("connect");
+        conn.execute("CREATE TABLE native_only(x)", ())
+            .expect("create table");
+    }
+
+    let select = Command::new(cargo_bin("redlinedb-cli"))
+        .arg("-deserialize")
+        .arg("-maxsize")
+        .arg("1000000")
+        .arg(&db_path)
+        .arg("SELECT count(*) FROM native_only;")
+        .output()
+        .expect("deserialize select");
+    assert!(select.status.success(), "stderr={:?}", select.stderr);
+    assert_eq!(
+        String::from_utf8(select.stdout).expect("stdout").trim(),
+        "0"
+    );
+}
+
+#[test]
+fn deserialize_uses_fresh_sidecar_for_tempfile_compatibility() {
+    let dir = tempdir().expect("tempdir");
+    let db_path = dir.path().join("deserialize.db");
+    let create = Command::new(cargo_bin("redlinedb-cli"))
+        .arg(&db_path)
+        .arg("CREATE TABLE t(x); INSERT INTO t VALUES(1);")
+        .output()
+        .expect("create db");
+    assert!(create.status.success(), "stderr={:?}", create.stderr);
+    assert!(
+        readonly_sidecar_path(&db_path).exists(),
+        "sidecar was not written"
+    );
+
+    let select = Command::new(cargo_bin("redlinedb-cli"))
+        .arg("-deserialize")
+        .arg("-maxsize")
+        .arg("1000000")
+        .arg(&db_path)
+        .arg("SELECT x FROM t;")
+        .output()
+        .expect("deserialize select");
+    assert!(select.status.success(), "stderr={:?}", select.stderr);
+    assert_eq!(
+        String::from_utf8(select.stdout).expect("stdout").trim(),
+        "1"
+    );
+}
+
 #[test]
 fn batch_bail_memory_mode_is_cwd_clean_and_output_exact() {
     let dir = tempdir().expect("tempdir");
@@ -278,6 +378,27 @@ fn dot_mode_and_headers_apply_to_following_query() {
     assert_eq!(code, 0, "stderr={err}");
     assert!(out.contains("1,a"), "stdout={out}");
     assert!(out.contains("2,b"), "stdout={out}");
+}
+
+#[test]
+fn dot_import_reuses_statement_and_commits_rows() {
+    let dir = tempdir().expect("tempdir");
+    let csv_path = dir.path().join("rows.csv");
+    std::fs::write(&csv_path, "id,name\n1,Ada\n2,Lin\n").expect("write csv");
+    let script = format!(
+        ".bail on\n\
+         .headers on\n\
+         CREATE TABLE people(id INTEGER, name TEXT);\n\
+         .import --csv {} people\n\
+         SELECT group_concat(name, ',') FROM people ORDER BY id;\n",
+        csv_path.display()
+    );
+    let (out, err, code) = run_script(None, &script);
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(
+        out.lines().any(|line| line.trim() == "Ada,Lin"),
+        "stdout={out}"
+    );
 }
 
 #[test]

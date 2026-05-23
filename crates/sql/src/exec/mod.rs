@@ -177,10 +177,12 @@ pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> 
         let prev = cell.replace(conn as *const Connection);
         if prev.is_null() {
             expr::clear_subquery_template_cache();
+            crate::json::scalar::clear_json_scalar_caches();
         }
         let result = f();
         if prev.is_null() {
             expr::clear_subquery_template_cache();
+            crate::json::scalar::clear_json_scalar_caches();
         }
         cell.set(prev);
         result
@@ -1034,6 +1036,7 @@ fn step_select_runtime_inner(
         SelectRuntimeSource::Table {
             table,
             rowids,
+            predicate,
             cursor,
         } => {
             let tx = runtime
@@ -1044,10 +1047,15 @@ fn step_select_runtime_inner(
                 let rowid = rowids[*cursor];
                 *cursor += 1;
                 if let Some(row) = load_table_row_by_rowid(conn.engine(), tx, table, rowid)? {
-                    let row = SqlRow::Table(row);
-                    if !selection_passes(&runtime.selection, &row, bindings)? {
+                    if !selection_passes_table(
+                        &runtime.selection,
+                        predicate.as_ref(),
+                        &row,
+                        bindings,
+                    )? {
                         continue;
                     }
+                    let row = SqlRow::Table(row);
                     runtime.seen += 1;
                     if runtime.seen <= runtime.offset {
                         continue;

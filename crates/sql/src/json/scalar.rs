@@ -8,12 +8,26 @@
 //! operation specifically defines another rule (e.g. `json_object` keys
 //! must not be NULL).
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use serde_json::{Map, Value};
 
 use crate::error::{Error, Result};
 use crate::value::SqlValue;
 
 use super::path::{JsonPath, MutationMode, PathError, mutate, remove, resolve};
+
+thread_local! {
+    static JSON_TEXT_CACHE: RefCell<HashMap<Arc<str>, Value>> = RefCell::new(HashMap::new());
+    static JSON_PATH_CACHE: RefCell<HashMap<Arc<str>, JsonPath>> = RefCell::new(HashMap::new());
+}
+
+pub(crate) fn clear_json_scalar_caches() {
+    JSON_TEXT_CACHE.with(|cache| cache.borrow_mut().clear());
+    JSON_PATH_CACHE.with(|cache| cache.borrow_mut().clear());
+}
 
 // ---------------------------------------------------------------------------
 // Type adapters
@@ -56,10 +70,7 @@ pub(crate) fn parse_json_arg(value: &SqlValue) -> Result<Option<Value>> {
                 .map(Value::Number)
                 .unwrap_or(Value::Null),
         )),
-        SqlValue::Text(s) => match serde_json::from_str(s.as_ref()) {
-            Ok(v) => Ok(Some(v)),
-            Err(e) => Err(Error::Parse(format!("malformed JSON: {e}"))),
-        },
+        SqlValue::Text(s) => Ok(Some(parse_json_text_cached(s)?)),
         SqlValue::Blob(b) => {
             let s = std::str::from_utf8(b)
                 .map_err(|e| Error::Parse(format!("invalid UTF-8 in JSON blob: {e}")))?;
@@ -105,11 +116,34 @@ fn parse_path(value: &SqlValue) -> Result<JsonPath> {
     let SqlValue::Text(s) = value else {
         return Err(Error::Parse("JSON path must be TEXT".into()));
     };
-    JsonPath::parse(s.as_ref()).map_err(path_error)
+    parse_json_path_cached(s)
 }
 
 fn path_error(e: PathError) -> Error {
     Error::Parse(format!("JSON path error: {e}"))
+}
+
+fn parse_json_text_cached(text: &Arc<str>) -> Result<Value> {
+    if let Some(value) = JSON_TEXT_CACHE.with(|cache| cache.borrow().get(text).cloned()) {
+        return Ok(value);
+    }
+    let value = serde_json::from_str::<Value>(text.as_ref())
+        .map_err(|err| Error::Parse(format!("malformed JSON: {err}")))?;
+    JSON_TEXT_CACHE.with(|cache| {
+        cache.borrow_mut().insert(Arc::clone(text), value.clone());
+    });
+    Ok(value)
+}
+
+fn parse_json_path_cached(text: &Arc<str>) -> Result<JsonPath> {
+    if let Some(path) = JSON_PATH_CACHE.with(|cache| cache.borrow().get(text).cloned()) {
+        return Ok(path);
+    }
+    let path = JsonPath::parse(text.as_ref()).map_err(path_error)?;
+    JSON_PATH_CACHE.with(|cache| {
+        cache.borrow_mut().insert(Arc::clone(text), path.clone());
+    });
+    Ok(path)
 }
 
 // ---------------------------------------------------------------------------
@@ -346,15 +380,30 @@ pub fn json_valid(values: &[SqlValue]) -> Result<SqlValue> {
     };
     let s = match arg {
         SqlValue::Null => return Ok(SqlValue::Null),
-        SqlValue::Text(s) => s.to_string(),
+        SqlValue::Text(s) => {
+            if JSON_TEXT_CACHE.with(|cache| cache.borrow().contains_key(s)) {
+                return Ok(SqlValue::Integer(1));
+            }
+            s.as_ref()
+        }
         SqlValue::Blob(b) => match std::str::from_utf8(b) {
-            Ok(s) => s.to_owned(),
+            Ok(s) => s,
             Err(_) => return Ok(SqlValue::Integer(0)),
         },
         // Per SQLite: numerics are valid JSON.
         SqlValue::Integer(_) | SqlValue::Real(_) => return Ok(SqlValue::Integer(1)),
     };
-    let ok = serde_json::from_str::<Value>(&s).is_ok();
+    let ok = match serde_json::from_str::<Value>(s) {
+        Ok(value) => {
+            if let SqlValue::Text(text) = arg {
+                JSON_TEXT_CACHE.with(|cache| {
+                    cache.borrow_mut().insert(Arc::clone(text), value);
+                });
+            }
+            true
+        }
+        Err(_) => false,
+    };
     Ok(SqlValue::Integer(if ok { 1 } else { 0 }))
 }
 

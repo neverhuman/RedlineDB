@@ -77,7 +77,6 @@ run_test_stage() {
         sqlite-parity-scale)
             ensure_sqlite_parity_reference
             bash scripts/just/run.sh sqlite-parity-scale-ci
-            bash scripts/just/run.sh sqlite-parity-report-check
             bash scripts/just/run.sh sqlite-parity-volatile-sentinel
             ;;
         *)

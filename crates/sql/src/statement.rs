@@ -12,7 +12,7 @@ use sqlparser::ast::{Expr, OrderByExpr, SelectItem};
 use crate::batch::{ExecContext, MaterializeNode, QueryMemoryBroker, RowBatch};
 use crate::connection::Connection;
 use crate::error::{Error, Result};
-use crate::exec::execute_prepared;
+use crate::exec::{execute_prepared, expr::TablePredicate};
 use crate::session::BeginMode;
 use crate::value::SqlValue;
 
@@ -465,6 +465,7 @@ pub(crate) enum SelectRuntimeSource {
     Table {
         table: Arc<TableDef>,
         rowids: Vec<RowId>,
+        predicate: Option<TablePredicate>,
         cursor: usize,
     },
     SqliteSchema {
@@ -666,7 +667,7 @@ impl Statement {
         }
         let _ = self
             .conn
-            .journal_statement(self.template.sql.as_ref(), self.bindings.clone());
+            .journal_statement(self.template.sql.as_ref(), &self.bindings);
     }
 
     pub fn column_count(&self) -> usize {

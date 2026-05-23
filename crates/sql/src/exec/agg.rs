@@ -1,6 +1,7 @@
 mod group;
 mod order;
 mod select;
+mod simple;
 
 pub(crate) use group::execute_grouped_select;
 pub(crate) use order::sort_projected_rows_by_order_by;

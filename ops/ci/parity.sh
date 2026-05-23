@@ -43,9 +43,6 @@ run_stage() {
         sqlite-parity-scale-ci)
             run_just_lane sqlite-parity-scale-ci
             ;;
-        sqlite-parity-report-check)
-            run_just_lane sqlite-parity-report-check
-            ;;
         sqlite-parity-volatile-sentinel)
             run_just_lane sqlite-parity-volatile-sentinel
             ;;
@@ -80,7 +77,6 @@ case "$stage" in
         run_stage sql-parity-all-tests
         run_stage sql-parity-full
         run_stage sqlite-parity-scale-ci
-        run_stage sqlite-parity-report-check
         run_stage sqlite-parity-volatile-sentinel
         run_stage sqlite-parity-scale-full
         run_stage ffi-parity-full

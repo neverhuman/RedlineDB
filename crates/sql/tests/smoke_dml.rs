@@ -158,6 +158,46 @@ fn insert_select_populates_target_rows() {
 }
 
 #[test]
+fn selective_update_delete_preserve_ordered_limited_readback() {
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, label TEXT, bucket INTEGER)")
+        .expect("create");
+    conn.execute(
+        "INSERT INTO t VALUES \
+         (1, 'v1', 1), (2, 'v2', 7), (3, 'v3', 2), (4, 'v4', 4), \
+         (5, 'v5', 1), (6, 'v6', 1), (7, 'v7', 2), (8, 'v1', 3)",
+    )
+    .expect("insert");
+
+    conn.execute("UPDATE t SET bucket = bucket + 2 WHERE id % 2 = 0")
+        .expect("update");
+    conn.execute("DELETE FROM t WHERE id = 2").expect("delete");
+
+    let mut stmt = conn
+        .prepare("SELECT id, label, bucket FROM t WHERE bucket >= 4 ORDER BY bucket, id LIMIT 5")
+        .expect("select ordered");
+    let mut rows = Vec::new();
+    while let Step::Row = stmt.step().expect("step") {
+        rows.push((
+            stmt.column_i64(0).expect("id"),
+            stmt.column_text(1).expect("label").to_owned(),
+            stmt.column_i64(2).expect("bucket"),
+        ));
+    }
+    assert_eq!(rows, vec![(8, "v1".to_owned(), 5), (4, "v4".to_owned(), 6)]);
+
+    let mut stmt = conn
+        .prepare("SELECT count(*), min(id), max(id), sum(bucket) FROM t")
+        .expect("select aggregate");
+    assert_eq!(stmt.step().expect("aggregate row"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("count"), 7);
+    assert_eq!(stmt.column_i64(1).expect("min id"), 1);
+    assert_eq!(stmt.column_i64(2).expect("max id"), 8);
+    assert_eq!(stmt.column_i64(3).expect("sum bucket"), 20);
+    assert_eq!(stmt.step().expect("done"), Step::Done);
+}
+
+#[test]
 fn implicit_rowids_come_from_the_kernel_allocator() {
     let (_dir, conn) = open_database();
 

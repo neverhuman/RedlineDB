@@ -43,10 +43,10 @@ pub(super) fn execute_select(
     let tx_ptr = select_tx_ptr(&mut tx);
     let result = if let Some(tx_ptr) = tx_ptr {
         with_current_tx(tx_ptr, || {
-            build_select_runtime(conn, plan, bindings, &mut tx, restore_tx, temp_dir, memory)
+            build_select_runtime(conn, plan, bindings, &mut tx, restore_tx, memory)
         })
     } else {
-        build_select_runtime(conn, plan, bindings, &mut tx, restore_tx, temp_dir, memory)
+        build_select_runtime(conn, plan, bindings, &mut tx, restore_tx, memory)
     };
 
     match result {
@@ -73,7 +73,6 @@ fn build_select_runtime(
     bindings: &[Option<SqlValue>],
     tx: &mut SelectRuntimeTx,
     restore_tx: bool,
-    temp_dir: Option<std::path::PathBuf>,
     mut memory: QueryMemoryBroker,
 ) -> Result<SelectRuntime> {
     let limit = match &plan.limit {
@@ -281,6 +280,7 @@ fn build_select_runtime(
                     SelectRuntimeSource::Table {
                         table: Arc::clone(table),
                         rowids,
+                        predicate: compile_table_predicate(table, &plan.selection, bindings),
                         cursor: 0,
                     }
                 } else if let Some(rowids) = try_ordered_index_limit_path(
@@ -301,6 +301,7 @@ fn build_select_runtime(
                     SelectRuntimeSource::Table {
                         table: Arc::clone(table),
                         rowids,
+                        predicate: compile_table_predicate(table, &plan.selection, bindings),
                         cursor: 0,
                     }
                 } else {
@@ -309,34 +310,7 @@ fn build_select_runtime(
                         .into_iter()
                         .map(SqlRow::Table)
                         .collect::<Vec<_>>();
-                    SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
-                            rows,
-                            &plan.selection,
-                            &plan.order_by,
-                            bindings,
-                            &plan.projection,
-                            limit,
-                            offset,
-                            &mut memory,
-                        )?),
-                        ctx: ExecContext::new(
-                            conn.query_memory().work_mem_bytes,
-                            conn.query_memory().max_spill_bytes,
-                            temp_dir.clone(),
-                        ),
-                        batch: RowBatch::new(Arc::new(RowLayout {
-                            columns: Arc::from([]),
-                        })),
-                        cursor: 0,
-                    }
-                }
-            }
-            SelectSource::Tables(tables) => {
-                let rows =
-                    collect_join_rows(conn.engine(), tx.as_mut().expect("tx present"), tables)?;
-                SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    static_rows_source(order_and_project_rows(
                         rows,
                         &plan.selection,
                         &plan.order_by,
@@ -345,17 +319,22 @@ fn build_select_runtime(
                         limit,
                         offset,
                         &mut memory,
-                    )?),
-                    ctx: ExecContext::new(
-                        conn.query_memory().work_mem_bytes,
-                        conn.query_memory().max_spill_bytes,
-                        temp_dir.clone(),
-                    ),
-                    batch: RowBatch::new(Arc::new(RowLayout {
-                        columns: Arc::from([]),
-                    })),
-                    cursor: 0,
+                    )?)
                 }
+            }
+            SelectSource::Tables(tables) => {
+                let rows =
+                    collect_join_rows(conn.engine(), tx.as_mut().expect("tx present"), tables)?;
+                static_rows_source(order_and_project_rows(
+                    rows,
+                    &plan.selection,
+                    &plan.order_by,
+                    bindings,
+                    &plan.projection,
+                    limit,
+                    offset,
+                    &mut memory,
+                )?)
             }
             SelectSource::Joined(source) => {
                 let rows = collect_join_source_rows(
@@ -364,27 +343,16 @@ fn build_select_runtime(
                     source,
                     bindings,
                 )?;
-                SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
-                        rows,
-                        &plan.selection,
-                        &plan.order_by,
-                        bindings,
-                        &plan.projection,
-                        limit,
-                        offset,
-                        &mut memory,
-                    )?),
-                    ctx: ExecContext::new(
-                        conn.query_memory().work_mem_bytes,
-                        conn.query_memory().max_spill_bytes,
-                        temp_dir.clone(),
-                    ),
-                    batch: RowBatch::new(Arc::new(RowLayout {
-                        columns: Arc::from([]),
-                    })),
-                    cursor: 0,
-                }
+                static_rows_source(order_and_project_rows(
+                    rows,
+                    &plan.selection,
+                    &plan.order_by,
+                    bindings,
+                    &plan.projection,
+                    limit,
+                    offset,
+                    &mut memory,
+                )?)
             }
             SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => {
                 let rows = if matches!(&plan.source, SelectSource::SqliteTempSchema) {
@@ -397,27 +365,16 @@ fn build_select_runtime(
                         .into_iter()
                         .map(SqlRow::SqliteSchema)
                         .collect::<Vec<_>>();
-                    SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
-                            sqlite_rows,
-                            &plan.selection,
-                            &plan.order_by,
-                            bindings,
-                            &plan.projection,
-                            limit,
-                            offset,
-                            &mut memory,
-                        )?),
-                        ctx: ExecContext::new(
-                            conn.query_memory().work_mem_bytes,
-                            conn.query_memory().max_spill_bytes,
-                            temp_dir.clone(),
-                        ),
-                        batch: RowBatch::new(Arc::new(RowLayout {
-                            columns: Arc::from([]),
-                        })),
-                        cursor: 0,
-                    }
+                    static_rows_source(order_and_project_rows(
+                        sqlite_rows,
+                        &plan.selection,
+                        &plan.order_by,
+                        bindings,
+                        &plan.projection,
+                        limit,
+                        offset,
+                        &mut memory,
+                    )?)
                 } else {
                     SelectRuntimeSource::SqliteSchema { rows, cursor: 0 }
                 }
@@ -447,27 +404,16 @@ fn build_select_runtime(
                         })
                     })
                     .collect();
-                SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
-                        sql_rows,
-                        &plan.selection,
-                        &plan.order_by,
-                        bindings,
-                        &plan.projection,
-                        limit,
-                        offset,
-                        &mut memory,
-                    )?),
-                    ctx: ExecContext::new(
-                        conn.query_memory().work_mem_bytes,
-                        conn.query_memory().max_spill_bytes,
-                        temp_dir.clone(),
-                    ),
-                    batch: RowBatch::new(Arc::new(RowLayout {
-                        columns: Arc::from([]),
-                    })),
-                    cursor: 0,
-                }
+                static_rows_source(order_and_project_rows(
+                    sql_rows,
+                    &plan.selection,
+                    &plan.order_by,
+                    bindings,
+                    &plan.projection,
+                    limit,
+                    offset,
+                    &mut memory,
+                )?)
             }
             SelectSource::CompoundAll(branches) => {
                 let column_names = compound_output_column_names(branches);
@@ -475,27 +421,16 @@ fn build_select_runtime(
                     .into_iter()
                     .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
                     .collect::<Vec<_>>();
-                SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
-                        rows,
-                        &plan.selection,
-                        &plan.order_by,
-                        bindings,
-                        &plan.projection,
-                        limit,
-                        offset,
-                        &mut memory,
-                    )?),
-                    ctx: ExecContext::new(
-                        conn.query_memory().work_mem_bytes,
-                        conn.query_memory().max_spill_bytes,
-                        temp_dir.clone(),
-                    ),
-                    batch: RowBatch::new(Arc::new(RowLayout {
-                        columns: Arc::from([]),
-                    })),
-                    cursor: 0,
-                }
+                static_rows_source(order_and_project_rows(
+                    rows,
+                    &plan.selection,
+                    &plan.order_by,
+                    bindings,
+                    &plan.projection,
+                    limit,
+                    offset,
+                    &mut memory,
+                )?)
             }
             SelectSource::CompoundSet { op, branches } => {
                 let column_names = compound_output_column_names(branches);
@@ -504,27 +439,16 @@ fn build_select_runtime(
                         .into_iter()
                         .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
                         .collect::<Vec<_>>();
-                SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
-                        rows,
-                        &plan.selection,
-                        &plan.order_by,
-                        bindings,
-                        &plan.projection,
-                        limit,
-                        offset,
-                        &mut memory,
-                    )?),
-                    ctx: ExecContext::new(
-                        conn.query_memory().work_mem_bytes,
-                        conn.query_memory().max_spill_bytes,
-                        temp_dir.clone(),
-                    ),
-                    batch: RowBatch::new(Arc::new(RowLayout {
-                        columns: Arc::from([]),
-                    })),
-                    cursor: 0,
-                }
+                static_rows_source(order_and_project_rows(
+                    rows,
+                    &plan.selection,
+                    &plan.order_by,
+                    bindings,
+                    &plan.projection,
+                    limit,
+                    offset,
+                    &mut memory,
+                )?)
             }
             SelectSource::Empty => SelectRuntimeSource::Empty,
         }
@@ -538,18 +462,7 @@ fn build_select_runtime(
             bindings,
         )?;
         let rows = execute_grouped_select(plan, rows, bindings, limit, offset, &mut memory)?;
-        SelectRuntimeSource::Batched {
-            node: MaterializeNode::new(rows),
-            ctx: ExecContext::new(
-                conn.query_memory().work_mem_bytes,
-                conn.query_memory().max_spill_bytes,
-                temp_dir.clone(),
-            ),
-            batch: RowBatch::new(Arc::new(RowLayout {
-                columns: Arc::from([]),
-            })),
-            cursor: 0,
-        }
+        static_rows_source(rows)
     };
 
     let runtime_tx = std::mem::replace(tx, SelectRuntimeTx::Empty);
@@ -565,6 +478,13 @@ fn build_select_runtime(
         yielded: 0,
         memory,
     })
+}
+
+fn static_rows_source(rows: Vec<Vec<SqlValue>>) -> SelectRuntimeSource {
+    SelectRuntimeSource::StaticRows {
+        rows: Arc::from(rows),
+        cursor: 0,
+    }
 }
 
 fn sqlite_schema_rows(conn: &Connection) -> Vec<SqliteSchemaRow> {
@@ -707,7 +627,7 @@ pub(super) fn order_and_project_rows(
     }
 
     // Lane VE top-K fast path: ORDER BY ... LIMIT k where k is small wants
-    // a fixed-size heap, not a full sort. The threshold matches
+    // a tiny sorted buffer, not a full sort. The threshold matches
     // `vec::TOPK_LIMIT_THRESHOLD`.
     let total_take = limit.saturating_add(offset);
     if !order_by.is_empty()
@@ -716,16 +636,20 @@ pub(super) fn order_and_project_rows(
         && limit < usize::MAX
     {
         let directions = directions_from_order_by(order_by);
-        let mut heap = vec::TopKHeap::new(total_take, directions);
+        let mut topk = vec::TopKBuffer::new(total_take, directions);
         for row in &filtered {
             let keys = order_by
                 .iter()
                 .map(|order| eval_order_key(order, &row.context(), bindings))
                 .collect::<Result<Vec<_>>>()?;
+            if !topk.would_admit(&keys) {
+                topk.discard_candidate();
+                continue;
+            }
             let projected = project_row(projection, row, bindings)?;
-            heap.push(keys, projected)?;
+            topk.push(keys, projected)?;
         }
-        let sorted = heap.into_sorted_rows();
+        let sorted = topk.into_sorted_rows();
         return Ok(sorted.into_iter().skip(offset).take(limit).collect());
     }
 

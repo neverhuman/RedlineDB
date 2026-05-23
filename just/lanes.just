@@ -91,6 +91,9 @@ sqlite-parity-report-update:
 sqlite-parity-report-check:
   ./scripts/just/run.sh sqlite-parity-report-check
 
+sqlite-parity-report-publish-pr:
+  ./scripts/just/run.sh sqlite-parity-report-publish-pr
+
 sqlite-jankurai-compare:
   ./scripts/just/run.sh sqlite-jankurai-compare
 

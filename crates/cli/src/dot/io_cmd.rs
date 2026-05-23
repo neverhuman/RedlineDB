@@ -6,7 +6,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use redlinedb::{
-    BackupOptions, Database, OpenOptions as DbOpenOptions, RestoreOptions, Step, ValueRef,
+    BackupOptions, BeginMode, Database, OpenOptions as DbOpenOptions, RestoreOptions, Step,
+    ValueRef,
 };
 
 use super::{CliState, DotOutcome, OutputTarget};
@@ -253,57 +254,93 @@ pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
         .has_headers(false)
         .flexible(true)
         .from_reader(file);
-    let mut header: Option<Vec<String>> = None;
-    let mut insert_sql: Option<String> = None;
-    for record in reader.records() {
-        let record = record.map_err(|err| format!("Error: {err}"))?;
-        if header.is_none() && state.show_header {
-            header = Some(record.iter().map(str::to_owned).collect());
-            continue;
+    let started_tx = !state.conn.in_transaction();
+    if started_tx {
+        state
+            .conn
+            .begin(BeginMode::Deferred)
+            .map_err(|err| err.to_string())?;
+    }
+    let result = (|| -> Result<(), String> {
+        let mut header: Option<Vec<String>> = None;
+        let mut first_record = None;
+        for record in reader.records() {
+            let record = record.map_err(|err| format!("Error: {err}"))?;
+            if header.is_none() && state.show_header {
+                header = Some(record.iter().map(str::to_owned).collect());
+                continue;
+            }
+            first_record = Some(record);
+            break;
         }
+        let Some(first_record) = first_record else {
+            return Ok(());
+        };
         let columns = match header.as_ref() {
             Some(h) => h.len(),
-            None => record.len(),
+            None => first_record.len(),
         };
-        let sql = match &insert_sql {
-            Some(s) => s.clone(),
-            None => {
-                let placeholders = std::iter::repeat_n("?", columns)
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let sql = if let Some(h) = header.as_ref() {
-                    let cols = h
-                        .iter()
-                        .map(|c| quote_ident(c))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    format!("INSERT INTO {table}({cols}) VALUES ({placeholders})")
-                } else {
-                    format!("INSERT INTO {table} VALUES ({placeholders})")
-                };
-                insert_sql = Some(sql.clone());
-                sql
-            }
+        let placeholders = std::iter::repeat_n("?", columns)
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = if let Some(h) = header.as_ref() {
+            let cols = h
+                .iter()
+                .map(|c| quote_ident(c))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("INSERT INTO {table}({cols}) VALUES ({placeholders})")
+        } else {
+            format!("INSERT INTO {table} VALUES ({placeholders})")
         };
         let mut stmt = state.conn.prepare(&sql).map_err(|err| err.to_string())?;
-        for (i, field) in record.iter().enumerate() {
-            stmt.bind_text(i + 1, field)
-                .map_err(|err| err.to_string())?;
+        import_record(&mut stmt, &first_record)?;
+        for record in reader.records() {
+            let record = record.map_err(|err| format!("Error: {err}"))?;
+            import_record(&mut stmt, &record)?;
         }
-        while let Step::Row(_) = stmt.step().map_err(|err| err.to_string())? {}
+        Ok(())
+    })();
+    if started_tx {
+        if result.is_ok() {
+            state.conn.commit().map_err(|err| err.to_string())?;
+        } else {
+            let _ = state.conn.rollback();
+        }
     }
+    result?;
     Ok(DotOutcome::Ok)
+}
+
+fn import_record(
+    stmt: &mut redlinedb::Statement<'_>,
+    record: &csv::StringRecord,
+) -> Result<(), String> {
+    stmt.clear_bindings();
+    for (i, field) in record.iter().enumerate() {
+        stmt.bind_text(i + 1, field)
+            .map_err(|err| err.to_string())?;
+    }
+    while let Step::Row(_) = stmt.step().map_err(|err| err.to_string())? {}
+    stmt.reset().map_err(|err| err.to_string())?;
+    Ok(())
 }
 
 /// `.dump [TABLE]` — serialise the database (or one table) to SQLite-shell
 /// compatible text on the active output sink.
 pub fn dump(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     let table_filter = args.first().copied();
-    state
-        .output
-        .write_line("BEGIN TRANSACTION;")
-        .map_err(|err| err.to_string())?;
-    let mut conn = state.db.connect().map_err(|err| err.to_string())?;
+    dump_database(&state.db, &mut state.output, table_filter)?;
+    Ok(DotOutcome::Ok)
+}
+
+pub(crate) fn dump_database<W: Write>(
+    db: &Database,
+    out: &mut W,
+    table_filter: Option<&str>,
+) -> Result<(), String> {
+    write_line(out, "BEGIN TRANSACTION;")?;
+    let mut conn = db.connect().map_err(|err| err.to_string())?;
     let select_sql = if table_filter.is_some() {
         "SELECT type, name, tbl_name, sql FROM sqlite_master \
          WHERE name = ?1 AND type = 'table'"
@@ -328,27 +365,21 @@ pub fn dump(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
         } else {
             format!("{sql};")
         };
-        state
-            .output
-            .write_line(&trimmed)
-            .map_err(|err| err.to_string())?;
+        write_line(out, &trimmed)?;
         if obj_type == "table" {
             tables.push((name, sql));
         }
     }
     drop(stmt);
     for (name, _create_sql) in &tables {
-        dump_table_rows(state, &mut conn, name)?;
+        dump_table_rows(out, &mut conn, name)?;
     }
-    state
-        .output
-        .write_line("COMMIT;")
-        .map_err(|err| err.to_string())?;
-    Ok(DotOutcome::Ok)
+    write_line(out, "COMMIT;")?;
+    Ok(())
 }
 
-fn dump_table_rows(
-    state: &mut CliState,
+fn dump_table_rows<W: Write>(
+    out: &mut W,
     conn: &mut redlinedb::Connection,
     table: &str,
 ) -> Result<(), String> {
@@ -372,12 +403,15 @@ fn dump_table_rows(
             dump_ident(table),
             values.join(",")
         );
-        state
-            .output
-            .write_line(&line)
-            .map_err(|err| err.to_string())?;
+        write_line(out, &line)?;
     }
     Ok(())
+}
+
+fn write_line<W: Write>(out: &mut W, line: &str) -> Result<(), String> {
+    out.write_all(line.as_bytes())
+        .and_then(|_| out.write_all(b"\n"))
+        .map_err(|err| err.to_string())
 }
 
 fn quote_ident(name: &str) -> String {

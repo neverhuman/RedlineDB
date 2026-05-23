@@ -10,6 +10,12 @@ pub(crate) fn execute_grouped_select(
     offset: usize,
     memory: &mut QueryMemoryBroker,
 ) -> Result<Vec<Vec<SqlValue>>> {
+    if let Some(rows) = super::simple::try_execute_simple_grouped_aggregate(
+        plan, &rows, bindings, limit, offset, memory,
+    )? {
+        return Ok(rows);
+    }
+
     let mut filtered = Vec::with_capacity(rows.len());
     for row in rows {
         if selection_passes(&plan.selection, &row, bindings)? {
