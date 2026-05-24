@@ -10,7 +10,15 @@ pub(crate) enum DateTimeKind {
 }
 
 pub(crate) fn datetime_function(values: &[SqlValue], kind: DateTimeKind) -> Result<SqlValue> {
+    if values.iter().any(|v| matches!(v, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
     let dt = parse_dt_args(values)?;
+    if !dt.is_formattable() {
+        // SQLite-style NULL for out-of-range julian-day input or for
+        // arithmetic that overflowed the [-4713-11-24..9999-12-31] window.
+        return Ok(SqlValue::Null);
+    }
     Ok(match kind {
         DateTimeKind::Date => SqlValue::Text(Arc::from(dt.format_date())),
         DateTimeKind::Time => SqlValue::Text(Arc::from(dt.format_time())),
@@ -24,8 +32,14 @@ pub(crate) fn strftime_function(values: &[SqlValue]) -> Result<SqlValue> {
     if values.is_empty() {
         return Err(Error::UnsupportedSql("strftime requires format".to_owned()));
     }
+    if values.iter().any(|v| matches!(v, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
     let format = value_to_string(&values[0]);
     let dt = parse_dt_args(&values[1..])?;
+    if !dt.is_formattable() {
+        return Ok(SqlValue::Null);
+    }
     Ok(SqlValue::Text(Arc::from(crate::datetime::strftime(
         &format, &dt,
     ))))
