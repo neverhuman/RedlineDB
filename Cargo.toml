@@ -22,3 +22,9 @@ rust-version = "1.95"
 lto = "thin"
 codegen-units = 1
 panic = "abort"
+
+[profile.release-native]
+inherits = "release"
+
+[profile.release-pgo]
+inherits = "release-native"
