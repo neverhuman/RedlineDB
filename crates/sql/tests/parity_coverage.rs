@@ -858,3 +858,265 @@ fn create_index_using_gin_is_parseable() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0][0], SqlValue::Integer(1));
 }
+
+// ── Track G: BEYOND_COLLATIONS_ILIKE ──────────────────────────────────────────
+//
+// Coverage for the closable beyond-Postgres parity cases in this category:
+// ILIKE rendering, multibyte LOWER/UPPER, the four Postgres POSIX regex
+// operators (`~`, `~*`, `!~`, `!~*`), SIMILAR TO, POSITION, and
+// octet_length. Cases that the curator deferred (citext, named ICU
+// collations, nondeterministic collations) are intentionally not exercised.
+
+#[test]
+fn ilike_basic_mixed_case_matches_case_insensitively() {
+    let (_d, c) = open();
+    // Mirrors BEYOND-CASE-20031.
+    assert_eq!(q1(&c, "SELECT 'ABC' ILIKE 'abc'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'ABC' ILIKE 'AbC'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'ABC' ILIKE 'xyz'"), SqlValue::Integer(0));
+}
+
+#[test]
+fn ilike_supports_wildcards_and_escape_clause() {
+    let (_d, c) = open();
+    // Wildcard coverage (BEYOND-CASE-20032, 20033).
+    assert_eq!(
+        q1(&c, "SELECT 'Hello World' ILIKE '%world%'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(q1(&c, "SELECT 'ABC' ILIKE 'a_c'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'ABCDE' ILIKE 'a_c'"), SqlValue::Integer(0));
+    // ESCAPE clause (BEYOND-CASE-20034) — `!` escapes the literal `%`.
+    assert_eq!(
+        q1(&c, "SELECT '50%' ILIKE '50!%' ESCAPE '!'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT '50' ILIKE '50!%' ESCAPE '!'"),
+        SqlValue::Integer(0)
+    );
+}
+
+#[test]
+fn not_ilike_propagates_null() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20035.
+    assert_eq!(
+        q1(&c, "SELECT 'ABC' NOT ILIKE 'abc'"),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'XYZ' NOT ILIKE 'abc'"),
+        SqlValue::Integer(1)
+    );
+    assert!(matches!(
+        q1(&c, "SELECT NULL NOT ILIKE 'x'"),
+        SqlValue::Null
+    ));
+}
+
+#[test]
+fn ilike_unicode_folds_caf_e_to_caf_e_acute() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20058: PG's ILIKE applies Unicode folding via libc
+    // locale, so `'CAFÉ' ILIKE 'café'` is true. The ASCII-only `cafe`
+    // form remains false because É and e are different chars.
+    assert_eq!(
+        q1(&c, "SELECT 'CAFÉ' ILIKE 'café'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'CAFÉ' ILIKE 'cafe'"),
+        SqlValue::Integer(0)
+    );
+}
+
+#[test]
+fn like_is_case_sensitive_with_pragma() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20059: With `case_sensitive_like = ON`, LIKE diverges
+    // from ILIKE on mixed-case input. The beyond-PG oracle enables the
+    // pragma in its preamble so redlinedb's LIKE matches Postgres'
+    // SQL-standard semantics.
+    c.execute("PRAGMA case_sensitive_like = 1").expect("pragma");
+    assert_eq!(
+        q1(&c, "SELECT 'AbCdEf' LIKE '%cd%'"),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'AbCdEf' ILIKE '%cd%'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'AbCdEf' LIKE '%CD%'"),
+        SqlValue::Integer(0)
+    );
+}
+
+#[test]
+fn lower_upper_fold_full_unicode_range() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20047, 20048.
+    assert_eq!(
+        q1(&c, "SELECT lower('ÉCOLE')"),
+        SqlValue::Text(Arc::from("école"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT lower('ÄÖÜ')"),
+        SqlValue::Text(Arc::from("äöü"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT upper('αβγ')"),
+        SqlValue::Text(Arc::from("ΑΒΓ"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT upper('σς')"),
+        SqlValue::Text(Arc::from("ΣΣ"))
+    );
+}
+
+#[test]
+fn upper_preserves_codepoints_without_simple_mapping() {
+    let (_d, c) = open();
+    // Mirrors Postgres' libc-locale `upper()` which uses `wctoupper`'s
+    // 1-to-1 mapping. `ß` has no simple uppercase mapping, so it must
+    // stay as `ß` (not expand to `SS`). Same rule keeps Turkish dotted
+    // `İ` from decomposing under lower().
+    assert_eq!(
+        q1(&c, "SELECT upper('straße')"),
+        SqlValue::Text(Arc::from("STRAßE"))
+    );
+}
+
+#[test]
+fn pg_regex_match_operators_dispatch() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20051: case-sensitive `~`.
+    assert_eq!(q1(&c, "SELECT 'Hello' ~ 'ello'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'Hello' ~ 'ELLO'"), SqlValue::Integer(0));
+    assert_eq!(q1(&c, "SELECT 'Hello' ~ '^H'"), SqlValue::Integer(1));
+    // BEYOND-CASE-20052: case-insensitive `~*`.
+    assert_eq!(q1(&c, "SELECT 'Hello' ~* 'ELLO'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'Hello' !~* 'XYZ'"), SqlValue::Integer(1));
+    // BEYOND-CASE-20053: negated forms.
+    assert_eq!(q1(&c, "SELECT 'Hello' !~ 'XYZ'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'Hello' !~* 'ELLO'"), SqlValue::Integer(0));
+    assert_eq!(q1(&c, "SELECT 'Hello' !~ '^H'"), SqlValue::Integer(0));
+}
+
+#[test]
+fn pg_regex_match_propagates_null() {
+    let (_d, c) = open();
+    assert!(matches!(q1(&c, "SELECT NULL ~ 'abc'"), SqlValue::Null));
+    assert!(matches!(q1(&c, "SELECT 'abc' ~ NULL"), SqlValue::Null));
+}
+
+#[test]
+fn similar_to_basic_anchored_matches() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20054.
+    assert_eq!(
+        q1(&c, "SELECT 'abc' SIMILAR TO 'a%'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'abc' SIMILAR TO '(a|b)bc'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'abc' SIMILAR TO 'a_c'"),
+        SqlValue::Integer(1)
+    );
+}
+
+#[test]
+fn similar_to_character_classes_pass_through() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20055: `[a-z]+` is a POSIX class; SIMILAR TO uses the
+    // same bracket syntax so it passes through to the regex engine.
+    assert_eq!(
+        q1(&c, "SELECT 'abc1' SIMILAR TO '[a-z]+[0-9]+'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'ABC' SIMILAR TO '[a-z]+'"),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'ABC' SIMILAR TO '[A-Z]+'"),
+        SqlValue::Integer(1)
+    );
+}
+
+#[test]
+fn similar_to_null_propagation_and_anchoring() {
+    let (_d, c) = open();
+    assert!(matches!(
+        q1(&c, "SELECT NULL SIMILAR TO 'a%'"),
+        SqlValue::Null
+    ));
+    assert!(matches!(
+        q1(&c, "SELECT 'abc' SIMILAR TO NULL"),
+        SqlValue::Null
+    ));
+    // Anchored at both ends — partial matches must NOT pass.
+    assert_eq!(
+        q1(&c, "SELECT 'abcdef' SIMILAR TO 'abc'"),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'abcdef' SIMILAR TO 'abc%'"),
+        SqlValue::Integer(1)
+    );
+}
+
+#[test]
+fn position_returns_one_indexed_char_offset() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20056: char-indexed POSITION matches Postgres on
+    // multibyte input. `'é'` is one Unicode char (two UTF-8 bytes); the
+    // expected index is 4 in `'café'` (after c, a, f).
+    assert_eq!(
+        q1(&c, "SELECT position('é' IN 'café')"),
+        SqlValue::Integer(4)
+    );
+    assert_eq!(
+        q1(&c, "SELECT position('e' IN 'école')"),
+        SqlValue::Integer(5)
+    );
+    // Empty needle returns 1 (PG / SQLite convention).
+    assert_eq!(
+        q1(&c, "SELECT position('' IN 'abc')"),
+        SqlValue::Integer(1)
+    );
+    // Missing needle returns 0.
+    assert_eq!(
+        q1(&c, "SELECT position('z' IN 'abc')"),
+        SqlValue::Integer(0)
+    );
+    // NULL propagation.
+    assert!(matches!(
+        q1(&c, "SELECT position(NULL IN 'abc')"),
+        SqlValue::Null
+    ));
+    assert!(matches!(
+        q1(&c, "SELECT position('a' IN NULL)"),
+        SqlValue::Null
+    ));
+}
+
+#[test]
+fn length_vs_octet_length_disagree_on_multibyte() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20057.
+    assert_eq!(q1(&c, "SELECT length('café')"), SqlValue::Integer(4));
+    assert_eq!(
+        q1(&c, "SELECT octet_length('café')"),
+        SqlValue::Integer(5)
+    );
+    assert_eq!(q1(&c, "SELECT length('αβγ')"), SqlValue::Integer(3));
+    assert_eq!(
+        q1(&c, "SELECT octet_length('αβγ')"),
+        SqlValue::Integer(6)
+    );
+}
