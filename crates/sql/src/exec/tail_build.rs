@@ -393,13 +393,22 @@ pub(crate) fn apply_constraints(table: &TableDef, values: &[SqlValue]) -> Result
         }
     }
 
-    // `PRAGMA ignore_check_constraints=ON` short-circuits CHECK evaluation
-    // for the active connection. This mirrors SQLite's surface — the
-    // pragma flips a per-session bit that is consulted by every INSERT /
-    // UPDATE write path.
-    let ignore_checks = crate::exec::current_connection()
-        .map(|conn| conn.ignore_check_constraints())
-        .unwrap_or(false);
+    // `PRAGMA ignore_check_constraints=ON` short-circuits CHECK
+    // evaluation for the active connection. This mirrors SQLite's
+    // surface — the pragma flips a per-session bit that is consulted
+    // by every INSERT / UPDATE write path. Read the bit through the
+    // thread-local session pointer rather than re-acquiring the session
+    // mutex: `apply_constraints` runs inside `with_write_tx`, which
+    // already holds the mutex, so going through `conn.with_session`
+    // would deadlock on the non-re-entrant `parking_lot::Mutex`.
+    let ignore_checks = match crate::exec::current_session_ptr() {
+        Some(ptr) => {
+            // SAFETY: ptr installed by enclosing with_write_tx; lives for its scope.
+            let session: &SessionState = unsafe { &*ptr };
+            session.ignore_check_constraints
+        }
+        None => false,
+    };
     if ignore_checks {
         return Ok(());
     }

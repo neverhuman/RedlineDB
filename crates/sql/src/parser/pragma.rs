@@ -1391,7 +1391,9 @@ pub(crate) fn pragma_table_info_rows(
     pragma_column_rows(table, false)
 }
 
-fn pragma_table_xinfo_rows(table: &redlinedb_kernel::catalog::TableDef) -> Vec<Vec<SqlValue>> {
+pub(crate) fn pragma_table_xinfo_rows(
+    table: &redlinedb_kernel::catalog::TableDef,
+) -> Vec<Vec<SqlValue>> {
     pragma_column_rows(table, true)
 }
 
@@ -1568,7 +1570,7 @@ pub(crate) fn pragma_index_info_rows(
     Ok(rows)
 }
 
-fn pragma_index_xinfo_rows(
+pub(crate) fn pragma_index_xinfo_rows(
     schema: &SchemaSnapshot,
     index: &Arc<redlinedb_kernel::catalog::IndexDef>,
 ) -> Result<Vec<Vec<SqlValue>>> {
