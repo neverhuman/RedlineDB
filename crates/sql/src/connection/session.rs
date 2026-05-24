@@ -365,6 +365,11 @@ impl Connection {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                // SQLite parity: `PRAGMA defer_foreign_keys` is a
+                // single-transaction flag — it auto-clears at COMMIT
+                // (and at ROLLBACK below) so the next tx starts with
+                // FK enforcement back to the default.
+                session.defer_foreign_keys = false;
                 Ok(())
             }
             Ok(CommitOutcome::MaybeCommitted) => {
@@ -400,6 +405,9 @@ impl Connection {
         // A6 SQLite parity: ROLLBACK discards every pending deferred FK
         // check; the rolled-back rows never made it to the durable state.
         crate::exec::fk::clear_deferred_fk_checks(&mut session);
+        // SQLite parity: `PRAGMA defer_foreign_keys` is auto-cleared
+        // at the next transaction boundary.
+        session.defer_foreign_keys = false;
         session.failed = false;
         session.clear_savepoints();
         result?;
