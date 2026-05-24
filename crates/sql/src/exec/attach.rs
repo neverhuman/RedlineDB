@@ -170,7 +170,34 @@ fn open_or_create(path: &Path) -> Result<Arc<Database>> {
     if path == Path::new(":memory:") {
         return Database::create_in_memory(DbOptions::default());
     }
-    if path.exists() {
+    // Ensure the parent directory exists so `Database::create` can lay
+    // out the on-disk engine directory underneath it. ATTACH targets
+    // often live under a freshly allocated tmp root where the immediate
+    // parent has been created but `path` itself has not.
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent).map_err(|err| {
+            crate::error::Error::Config(format!(
+                "create attach parent dir {}: {}",
+                parent.display(),
+                err
+            ))
+        })?;
+    }
+    // SQLite-parity quirk: a parallel sqlite3 invocation leaves an empty
+    // file at the same path. RedlineDB's engine format is directory-
+    // shaped, so a zero-byte regular file at the target path must be
+    // removed before `Database::create` lays out the directory tree.
+    if path.is_file()
+        && std::fs::metadata(path)
+            .map(|m| m.len() == 0)
+            .unwrap_or(false)
+    {
+        let _ = std::fs::remove_file(path);
+    }
+    if path.is_dir() {
         Database::open(path, DbOptions::default())
     } else {
         Database::create(path, DbOptions::default())

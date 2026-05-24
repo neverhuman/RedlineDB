@@ -53,6 +53,14 @@ fn next_cross_db_rel_id() -> RelId {
     })
 }
 
+/// Public re-export of the synthetic-rel id allocator. Reused by the
+/// bare-name pragma TVF resolver in `parser::helpers::table::select`
+/// (and any future synthetic-row producer that needs a process-unique
+/// `RelId` disjoint from CTE / view tags).
+pub(crate) fn next_synth_relation_id() -> RelId {
+    next_cross_db_rel_id()
+}
+
 /// Two-part name `alias.table` where `alias` is not a reserved alias
 /// AND maps to an ATTACHed sidecar database. Returns `Ok(Some(bound))`
 /// on resolution, `Ok(None)` when the qualifier is reserved (caller

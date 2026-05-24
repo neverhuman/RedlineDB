@@ -53,7 +53,11 @@ pub(crate) fn enforce_fk_on_insert(
             // exempts the row from FK enforcement.
             continue;
         }
-        if fk.deferred {
+        // `PRAGMA defer_foreign_keys=1` makes ALL FK constraints behave
+        // as DEFERRABLE INITIALLY DEFERRED for the current transaction.
+        // Mirror SQLite by combining the per-constraint `deferred` flag
+        // with the session-wide `defer_foreign_keys` bit.
+        if fk.deferred || session.defer_foreign_keys {
             session.deferred_fk_checks.push(DeferredFkCheck {
                 child_table_id: child.table_id.0,
                 child_rowid: rowid.0,
