@@ -682,6 +682,32 @@ pub fn apply_alter_table(
     Ok(snapshot)
 }
 
+thread_local! {
+    /// `PRAGMA legacy_alter_table` toggle, read by the dependent-object
+    /// rewrite helpers. The SQL layer installs the active connection's
+    /// value in a per-thread cell before invoking the kernel ALTER
+    /// path. When the flag is set, the rewrite helpers leave dependent
+    /// view / trigger bodies untouched.
+    static LEGACY_ALTER_TABLE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// SAFETY: pure per-thread mutation, no aliasing concerns.
+pub fn set_legacy_alter_table(value: bool) {
+    LEGACY_ALTER_TABLE.with(|c| c.set(value));
+}
+
+/// Snapshot the current `legacy_alter_table` flag so callers can save +
+/// restore around an `alter_table` invocation. Suffix avoids collision
+/// with a future production-side accessor that might have a different
+/// signature; for now it is the only read path.
+pub fn legacy_alter_table_active_for_tests() -> bool {
+    legacy_alter_table_active()
+}
+
+fn legacy_alter_table_active() -> bool {
+    LEGACY_ALTER_TABLE.with(|c| c.get())
+}
+
 /// Rewrite occurrences of `old_col` (case-insensitive, identifier
 /// boundary) to `new_col` inside every view body that mentions
 /// `table_folded`. Used by `ALTER TABLE … RENAME COLUMN` to propagate
@@ -696,6 +722,9 @@ fn rewrite_dependent_view_bodies(
     old_col: &str,
     new_col: &str,
 ) {
+    if legacy_alter_table_active() {
+        return;
+    }
     let mut new_views: Vec<std::sync::Arc<super::schema::ViewDef>> = Vec::new();
     for view in &snapshot.views {
         let mentions_table = ascii_word_match(view.body_sql.as_ref(), table_folded);
@@ -726,6 +755,9 @@ fn rewrite_dependent_trigger_bodies(
     old_col: &str,
     new_col: &str,
 ) {
+    if legacy_alter_table_active() {
+        return;
+    }
     let mut new_triggers: Vec<std::sync::Arc<super::schema::TriggerDef>> = Vec::new();
     for trigger in &snapshot.triggers {
         if trigger.table_folded.as_ref() != table_folded {
@@ -754,6 +786,9 @@ fn rewrite_dependent_view_table_refs(
     old_folded: &str,
     new_original: &str,
 ) {
+    if legacy_alter_table_active() {
+        return;
+    }
     let quoted_new = format!("\"{new_original}\"");
     let mut new_views: Vec<std::sync::Arc<super::schema::ViewDef>> = Vec::new();
     for view in &snapshot.views {
@@ -785,20 +820,33 @@ fn rewrite_dependent_trigger_table_refs(
 ) {
     let quoted_new = format!("\"{new_original}\"");
     let new_folded = new_original.to_ascii_lowercase();
+    // The trigger's own `table_name` binding always tracks the rename
+    // — only the body-text rewrite (and quoted-name reflection in
+    // sqlite_master) is gated by legacy_alter_table.
+    let body_rewrite_enabled = !legacy_alter_table_active();
     let mut new_triggers: Vec<std::sync::Arc<super::schema::TriggerDef>> = Vec::new();
     for trigger in &snapshot.triggers {
         if trigger.table_folded.as_ref() != old_folded {
             new_triggers.push(std::sync::Arc::clone(trigger));
             continue;
         }
-        let new_body = rewrite_identifier(trigger.body_sql.as_ref(), old_folded, &quoted_new);
-        let new_normalized = trigger
-            .normalized_sql
-            .as_ref()
-            .map(|sql| rewrite_identifier(sql.as_ref(), old_folded, &quoted_new));
+        let new_body = if body_rewrite_enabled {
+            rewrite_identifier(trigger.body_sql.as_ref(), old_folded, &quoted_new)
+        } else {
+            trigger.body_sql.as_ref().to_owned()
+        };
+        let new_normalized = if body_rewrite_enabled {
+            trigger
+                .normalized_sql
+                .as_ref()
+                .map(|sql| rewrite_identifier(sql.as_ref(), old_folded, &quoted_new))
+        } else {
+            trigger.normalized_sql.as_ref().map(|sql| sql.as_ref().to_owned())
+        };
         let mut rebuilt = (**trigger).clone();
         // The trigger's binding tracks the underlying table identity so
-        // updates / inserts continue firing it.
+        // updates / inserts continue firing it (independent of
+        // legacy_alter_table; only the user-visible text is gated).
         rebuilt.table_name = new_original.to_string().into_boxed_str();
         rebuilt.table_folded = new_folded.clone().into_boxed_str();
         rebuilt.body_sql = new_body.into_boxed_str();

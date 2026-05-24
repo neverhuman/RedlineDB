@@ -464,12 +464,21 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::AlterTable(spec) => {
-            with_write_tx(conn, |session, tx| {
+            // Surface `PRAGMA legacy_alter_table` to the kernel via the
+            // per-thread flag the catalog ops module reads when
+            // rewriting dependent view / trigger bodies after a column
+            // / table rename. Snapshot the bit, install, run, restore.
+            let prev_legacy =
+                redlinedb_kernel::catalog::legacy_alter_table_active_for_tests();
+            redlinedb_kernel::catalog::set_legacy_alter_table(conn.legacy_alter_table());
+            let alter_result = with_write_tx(conn, |session, tx| {
                 conn.engine().alter_table(tx, spec.clone())?;
                 session.changes += 1;
                 session.total_changes += 1;
                 Ok(())
-            })?;
+            });
+            redlinedb_kernel::catalog::set_legacy_alter_table(prev_legacy);
+            alter_result?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 1,
