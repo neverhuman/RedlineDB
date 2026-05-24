@@ -201,6 +201,7 @@ fn apply_query_tail(
     template.kind = PreparedKind::Select(SelectPlan {
         source: plan.source,
         distinct: plan.distinct,
+        distinct_on: plan.distinct_on,
         projection: plan.projection,
         selection: plan.selection,
         group_by: plan.group_by,
@@ -232,13 +233,19 @@ pub(crate) fn bind_simple_select_query(
     limit_clause: Option<LimitClause>,
     params: &mut ParamLayout,
 ) -> Result<PreparedTemplate> {
+    // Track K — DISTINCT ON (exprs) keeps the first row per distinct
+    // combination of `exprs`, where "first" is decided by the outer
+    // ORDER BY. We normalize the ON expressions here and let the
+    // executor's DISTINCT ON pass filter the per-group winner.
+    let mut distinct_on: Vec<Expr> = Vec::new();
     let distinct = match select.distinct {
         Some(Distinct::Distinct) => true,
         Some(Distinct::All) => false,
-        Some(Distinct::On(_)) => {
-            return Err(Error::UnsupportedSql(
-                "DISTINCT ON is not supported".to_owned(),
-            ));
+        Some(Distinct::On(exprs)) => {
+            for expr in exprs {
+                distinct_on.push(normalize_expr(expr, params)?);
+            }
+            false
         }
         None => false,
     };
@@ -358,6 +365,7 @@ pub(crate) fn bind_simple_select_query(
         kind: PreparedKind::Select(SelectPlan {
             source,
             distinct,
+            distinct_on,
             projection,
             selection,
             group_by,
@@ -527,6 +535,7 @@ pub(crate) fn bind_union_all_query(
         kind: PreparedKind::Select(SelectPlan {
             source,
             distinct: false,
+            distinct_on: Vec::new(),
             projection,
             selection: None,
             group_by: Vec::new(),
@@ -643,6 +652,7 @@ fn bind_values_query(
         kind: PreparedKind::Select(SelectPlan {
             source,
             distinct: false,
+            distinct_on: Vec::new(),
             projection: Vec::new(),
             selection: None,
             group_by: Vec::new(),

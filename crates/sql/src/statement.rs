@@ -389,6 +389,11 @@ pub struct JoinSource {
 pub struct SelectPlan {
     pub source: SelectSource,
     pub distinct: bool,
+    /// Track K — Postgres `SELECT DISTINCT ON (exprs) ...` keeps the first
+    /// row per distinct combination of `exprs`, where "first" is decided by
+    /// any outer `ORDER BY`. Empty when no DISTINCT ON is requested. Holds
+    /// at most one entry per logical "ON" expression.
+    pub distinct_on: Vec<Expr>,
     pub projection: Vec<SelectItem>,
     pub selection: Option<Expr>,
     pub group_by: Vec<Expr>,
