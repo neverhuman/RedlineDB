@@ -1660,6 +1660,7 @@ dependencies = [
 name = "redlinedb-kernel"
 version = "2.0.6"
 dependencies = [
+ "ahash",
  "arc-swap",
  "crc32fast",
  "fail",

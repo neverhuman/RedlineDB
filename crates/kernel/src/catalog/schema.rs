@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::format::PageId;
@@ -246,13 +245,13 @@ pub struct SchemaSnapshot {
     pub indexes: Vec<Arc<IndexDef>>,
     pub views: Vec<Arc<ViewDef>>,
     pub triggers: Vec<Arc<TriggerDef>>,
-    by_table_id: HashMap<TableId, Arc<TableDef>>,
-    by_index_id: HashMap<IndexId, Arc<IndexDef>>,
-    by_table_name: HashMap<(SchemaId, Box<str>), Arc<TableDef>>,
-    by_namespace_name: HashMap<Box<str>, SchemaId>,
-    by_index_name: HashMap<(SchemaId, Box<str>), Arc<IndexDef>>,
-    by_view_name: HashMap<(SchemaId, Box<str>), Arc<ViewDef>>,
-    by_trigger_name: HashMap<(SchemaId, Box<str>), Arc<TriggerDef>>,
+    by_table_id: ahash::AHashMap<TableId, Arc<TableDef>>,
+    by_index_id: ahash::AHashMap<IndexId, Arc<IndexDef>>,
+    by_table_name: ahash::AHashMap<(SchemaId, Box<str>), Arc<TableDef>>,
+    by_namespace_name: ahash::AHashMap<Box<str>, SchemaId>,
+    by_index_name: ahash::AHashMap<(SchemaId, Box<str>), Arc<IndexDef>>,
+    by_view_name: ahash::AHashMap<(SchemaId, Box<str>), Arc<ViewDef>>,
+    by_trigger_name: ahash::AHashMap<(SchemaId, Box<str>), Arc<TriggerDef>>,
 }
 
 impl SchemaSnapshot {
@@ -264,13 +263,13 @@ impl SchemaSnapshot {
             indexes: Vec::new(),
             views: Vec::new(),
             triggers: Vec::new(),
-            by_table_id: HashMap::new(),
-            by_index_id: HashMap::new(),
-            by_table_name: HashMap::new(),
-            by_namespace_name: HashMap::new(),
-            by_index_name: HashMap::new(),
-            by_view_name: HashMap::new(),
-            by_trigger_name: HashMap::new(),
+            by_table_id: ahash::AHashMap::new(),
+            by_index_id: ahash::AHashMap::new(),
+            by_table_name: ahash::AHashMap::new(),
+            by_namespace_name: ahash::AHashMap::new(),
+            by_index_name: ahash::AHashMap::new(),
+            by_view_name: ahash::AHashMap::new(),
+            by_trigger_name: ahash::AHashMap::new(),
         }
     }
 
