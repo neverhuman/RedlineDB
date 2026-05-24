@@ -94,6 +94,12 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(rewritten) = rewrite_pg_catalog_query(conn, sql) {
         return parse_prepared_template_impl(conn, &rewritten);
     }
+    // Track J: strip Postgres `::regclass` and similar cast suffixes that
+    // RedlineDB has no need to evaluate; the wrapped string is the natural
+    // identifier the parity probes care about.
+    if let Some(rewritten) = strip_pg_cast_suffixes(sql) {
+        return parse_prepared_template_impl(conn, &rewritten);
+    }
 
     if lower == "begin" || lower == "begin transaction" || lower == "begin deferred" {
         return Ok(template(
@@ -2936,10 +2942,11 @@ fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) -> Option<S
 /// only check existence of a name).
 fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
     let lower = sql.to_ascii_lowercase();
-    if !lower.contains("pg_namespace") && !lower.contains("pg_class") {
+    let names = ["pg_namespace", "pg_class", "pg_constraint"];
+    if !names.iter().any(|n| lower.contains(n)) {
         return None;
     }
-    if !lower.contains(" from pg_namespace") && !lower.contains(" from pg_class") {
+    if !names.iter().any(|n| lower.contains(&format!(" from {n}"))) {
         return None;
     }
     let session_state = conn
@@ -2979,6 +2986,61 @@ fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
         subq.push_str(") AS pg_namespace");
         out = replace_table_ident(&out, "pg_namespace", &subq);
     }
+    if lower.contains("pg_constraint") {
+        // pg_constraint shim — emit (conname, contype, conrelid) rows
+        // derived from the kernel's table-level named constraints. The
+        // `conrelid` column is the parent table name (string) so the
+        // `WHERE conrelid = 'tbl'` probes the parity gates use match.
+        let mut rows: Vec<(String, &str, String)> = Vec::new();
+        for table in snapshot.tables.iter() {
+            let tbl = table.name.as_ref().to_owned();
+            for c in &table.constraints {
+                if let Some(name) = &c.name {
+                    let kind = match c.kind {
+                        redlinedb_kernel::catalog::ConstraintKind::PrimaryKey => "p",
+                        redlinedb_kernel::catalog::ConstraintKind::Unique => "u",
+                        redlinedb_kernel::catalog::ConstraintKind::Check => "c",
+                        redlinedb_kernel::catalog::ConstraintKind::NotNull => "n",
+                        redlinedb_kernel::catalog::ConstraintKind::Default => "d",
+                    };
+                    rows.push((name.as_ref().to_owned(), kind, tbl.clone()));
+                }
+            }
+            for check in &table.checks {
+                if let Some(name) = &check.name {
+                    rows.push((name.as_ref().to_owned(), "c", tbl.clone()));
+                }
+            }
+            for fk in &table.foreign_keys {
+                if let Some(name) = &fk.name {
+                    rows.push((name.as_ref().to_owned(), "f", tbl.clone()));
+                }
+            }
+        }
+        let mut subq = String::from("(SELECT ");
+        if rows.is_empty() {
+            subq.push_str(
+                "NULL AS conname, NULL AS contype, NULL AS conrelid WHERE 0",
+            );
+        } else {
+            subq.push_str(
+                "column1 AS conname, column2 AS contype, column3 AS conrelid FROM (VALUES ",
+            );
+            let mut first = true;
+            for (name, kind, rel) in &rows {
+                if !first {
+                    subq.push_str(", ");
+                }
+                first = false;
+                let esc_name = name.replace('\'', "''");
+                let esc_rel = rel.replace('\'', "''");
+                subq.push_str(&format!("('{esc_name}', '{kind}', '{esc_rel}')"));
+            }
+            subq.push(')');
+        }
+        subq.push_str(") AS pg_constraint");
+        out = replace_table_ident(&out, "pg_constraint", &subq);
+    }
     if lower.contains("pg_class") {
         let mut rows: Vec<(String, &str)> = Vec::new();
         for table in snapshot.tables.iter() {
@@ -3016,6 +3078,29 @@ fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
         return None;
     }
     Some(out)
+}
+
+/// Track J: strip Postgres-style `::regclass`, `::regproc`, `::regtype`
+/// casts. These are bookkeeping casts the parity probes apply to
+/// identifier strings (e.g. `'mig_t'::regclass`); RedlineDB has no need
+/// to evaluate them. Returns None when no cast is present.
+fn strip_pg_cast_suffixes(sql: &str) -> Option<String> {
+    let lower = sql.to_ascii_lowercase();
+    let suffixes = ["::regclass", "::regproc", "::regtype", "::regnamespace"];
+    if !suffixes.iter().any(|s| lower.contains(s)) {
+        return None;
+    }
+    let mut out = sql.to_owned();
+    for suffix in suffixes {
+        loop {
+            let lower = out.to_ascii_lowercase();
+            let Some(pos) = lower.find(suffix) else {
+                break;
+            };
+            out.replace_range(pos..pos + suffix.len(), "");
+        }
+    }
+    if out == sql { None } else { Some(out) }
 }
 
 /// Case-insensitive replacement of a bare table identifier (surrounded by
