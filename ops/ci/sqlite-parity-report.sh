@@ -2,7 +2,7 @@
 # SQLite parity report dispatcher.
 #
 # Keeps the workflow YAML thin while preserving a local entrypoint for
-# regenerating README/report artifacts from pinned redline-testing evidence.
+# regenerating README/report artifacts from verified redline-testing evidence.
 #
 # Usage:
 #   bash ops/ci/sqlite-parity-report.sh update

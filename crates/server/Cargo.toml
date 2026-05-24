@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb-server"
-version = "2.0.4"
+version = "2.0.6"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

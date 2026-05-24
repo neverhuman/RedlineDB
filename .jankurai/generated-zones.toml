@@ -17,7 +17,7 @@ read_only = true
 source = "C ABI surface for the redlinedb sqlite3-compatible API; relocated from crates/ffi/include/ per docs/exceptions/ffi-c-header.md; not product truth"
 
 [[zone]]
-command = "managed by pinned neverhuman/redline-testing release artifact; do not regenerate in RedlineDB"
+command = "managed by verified neverhuman/redline-testing release artifact; do not regenerate in RedlineDB"
 path = "crates/bench/sqlite_parity/cases/"
 read_only = true
 source = "Legacy checked-in SQLite parity case wrappers retained for developer diagnostics only; official corpus ownership moved to neverhuman/redline-testing"
@@ -26,7 +26,7 @@ source = "Legacy checked-in SQLite parity case wrappers retained for developer d
 command = "just sqlite-parity-report-update"
 path = "benchmark-results/sqlite-parity/latest/"
 read_only = false
-source = "SQLite parity report raw data, ranked CSV, summary, manifest, and official-evidence.processed.json staged from the pinned redline-testing official evidence bundle"
+source = "SQLite parity report raw data, ranked CSV, summary, manifest, and official-evidence.processed.json staged from the verified redline-testing official evidence bundle"
 
 [[zone]]
 command = "just sqlite-parity-report-update"
