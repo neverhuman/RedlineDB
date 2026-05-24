@@ -1,0 +1,21 @@
+# Beyond-SQLite parity skip list
+#
+# Entries here name beyond-SQLite (Postgres-oracle) cases that have no
+# SQLite-shape mapping in redlinedb. The skip is honest documentation of
+# scope, NOT a quarantine for failing-but-fixable cases.
+#
+# Schema:
+#   [[skip]]
+#   case_id     = "12345"                      # numeric case id from corpus shard
+#   name        = "POSTGRES_ARRAY_AGG_FILTER"  # case name from corpus shard
+#   category    = "PG_ARRAY"                   # category key
+#   rationale   = "Postgres int[] type has no SQLite-shape mapping; would require new type system surface."
+#   target_release = "deferred"                # "deferred" | "v2.1" | "v3" — when (if) we revisit
+#
+# Cap: keep total entries <= 30 (~1% of 2,710-case corpus). If we're above
+# 30, the gap-closure pass missed something — revisit scope rather than
+# growing the skip list.
+#
+# Policy: see docs/beyond-postgres-skips.md.
+
+# (initial entries populated by the beyond-postgres investigator, then triaged manually)
