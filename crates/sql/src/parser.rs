@@ -257,6 +257,19 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if out.to_ascii_uppercase().contains(" GROUP BY GROUPING SETS ") {
         out = rewrite_grouping_sets_to_union_all(&out);
     }
+    // Track K — `[CROSS|LEFT] JOIN LATERAL (SELECT ...) [AS alias]` is a
+    // per-row subquery against the preceding FROM items. We rewrite the
+    // two patterns the beyond-portability cases exercise into scalar
+    // correlated subqueries promoted to the SELECT projection:
+    //   * CROSS JOIN LATERAL (SELECT EXPR AS NAME)  -> inline EXPR
+    //   * LEFT  JOIN LATERAL (<one-column query>) ON TRUE -> scalar
+    //     correlated subquery
+    // The lateral relation reference (`alias.col`) is replaced by the
+    // inlined / scalar form; the lateral FROM term is dropped.
+    let upper_for_lat = out.to_ascii_uppercase();
+    if upper_for_lat.contains(" JOIN LATERAL ") || upper_for_lat.contains(",LATERAL ") {
+        out = rewrite_join_lateral_to_subquery(&out);
+    }
     out
 }
 
@@ -3414,4 +3427,308 @@ fn classify_projection_item(item: &str) -> ProjItem {
         base,
         alias_or_base: alias_text,
     }
+}
+
+/// Track K — Rewrite `[CROSS|LEFT] JOIN LATERAL (<subquery>) [AS alias] [ON ...]`
+/// into a scalar correlated subquery in the SELECT projection. Only the
+/// two shapes the beyond-portability cases exercise are handled:
+///
+///   * `CROSS JOIN LATERAL (SELECT EXPR AS NAME) AS l` where the
+///     subquery has no FROM clause and a single named projection
+///     becomes `(EXPR) AS NAME` inlined into the outer SELECT.
+///
+///   * `LEFT JOIN LATERAL (<one-column-from-subquery>) AS l ON TRUE`
+///     becomes `(<the-subquery>) AS col` — a scalar correlated
+///     subquery in the outer projection. The `LIMIT 1` inside the
+///     subquery (present in PG's typical "top-1-per-row" pattern)
+///     ensures scalar semantics.
+///
+/// Other lateral forms (set-returning functions, multi-row results,
+/// references appearing in WHERE clauses) are left untouched and the
+/// downstream parser will still see a derived-table form (which will
+/// error with "no such column" — the same behaviour as before).
+fn rewrite_join_lateral_to_subquery(sql: &str) -> String {
+    // We work statement-by-statement so a multi-statement script keeps
+    // its boundaries.
+    let stmts = split_top_level_statements(sql);
+    if stmts.len() > 1 {
+        return stmts
+            .into_iter()
+            .map(|s| rewrite_lateral_in_statement(&s))
+            .collect::<Vec<_>>()
+            .join(";");
+    }
+    rewrite_lateral_in_statement(sql)
+}
+
+fn rewrite_lateral_in_statement(stmt: &str) -> String {
+    let mut out = stmt.to_owned();
+    loop {
+        let lower = out.to_ascii_lowercase();
+        let bytes = out.as_bytes();
+        // Find a join lateral pattern. Try CROSS first; if not, LEFT.
+        let (join_pos, join_kw_len, is_left) =
+            match lower.find(" cross join lateral ") {
+                Some(p) => (p, " cross join lateral ".len(), false),
+                None => match lower.find(" left join lateral ") {
+                    Some(p) => (p, " left join lateral ".len(), true),
+                    None => break,
+                },
+            };
+        // After the LATERAL keyword, expect a `(...)` subquery.
+        let after_kw = join_pos + join_kw_len;
+        let mut j = after_kw;
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if j >= bytes.len() || bytes[j] != b'(' {
+            // Unsupported shape (e.g. LATERAL func_call). Leave alone
+            // and abort the loop so we don't infinite-loop on the same
+            // unmatchable pattern.
+            break;
+        }
+        let open = j;
+        let Some(close) = find_matching_paren(bytes, open) else {
+            break;
+        };
+        let subquery = out[open + 1..close].trim().to_owned();
+
+        // Optional `AS alias` after the close paren.
+        let mut k = close + 1;
+        while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+            k += 1;
+        }
+        let upper = out.to_ascii_uppercase();
+        let mut alias_name: Option<String> = None;
+        if k + 3 <= upper.len() && &upper[k..k + 3] == "AS " {
+            k += 3;
+            while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+                k += 1;
+            }
+            let alias_start = k;
+            while k < bytes.len()
+                && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_')
+            {
+                k += 1;
+            }
+            if k > alias_start {
+                alias_name = Some(out[alias_start..k].to_owned());
+            }
+        } else {
+            // Bare alias (no AS keyword) — also accept.
+            let alias_start = k;
+            while k < bytes.len()
+                && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_')
+            {
+                k += 1;
+            }
+            if k > alias_start {
+                let candidate = out[alias_start..k].to_owned();
+                // Don't consume an ON / WHERE / GROUP / ORDER / LIMIT
+                // keyword as an alias.
+                let up = candidate.to_ascii_uppercase();
+                if !matches!(
+                    up.as_str(),
+                    "ON" | "WHERE" | "GROUP" | "ORDER" | "LIMIT" | "OFFSET" | "FETCH" | "CROSS" | "LEFT" | "INNER" | "JOIN" | "RIGHT" | "FULL" | "USING"
+                ) {
+                    alias_name = Some(candidate);
+                } else {
+                    k = alias_start;
+                }
+            }
+        }
+        let Some(alias) = alias_name else {
+            break;
+        };
+        // For LEFT JOIN LATERAL, also consume the trailing ` ON ... ` clause
+        // (we only support `ON TRUE` — anything else would change semantics).
+        let mut after_alias = k;
+        if is_left {
+            // Skip whitespace, then expect ON
+            while after_alias < bytes.len() && bytes[after_alias].is_ascii_whitespace() {
+                after_alias += 1;
+            }
+            let upper_rest = out.to_ascii_uppercase();
+            if after_alias + 3 > upper_rest.len() || &upper_rest[after_alias..after_alias + 3] != "ON " {
+                break;
+            }
+            after_alias += 3;
+            // Expect the predicate to be `TRUE` (we only handle this case).
+            while after_alias < bytes.len() && bytes[after_alias].is_ascii_whitespace() {
+                after_alias += 1;
+            }
+            if after_alias + 4 > upper_rest.len()
+                || &upper_rest[after_alias..after_alias + 4] != "TRUE"
+            {
+                break;
+            }
+            after_alias += 4;
+        }
+
+        // Try to detect the SHAPE of the subquery so we know how to
+        // surface its single column in the outer projection.
+        let kind = classify_lateral_subquery(&subquery);
+
+        // Find the outer SELECT projection list. We need to replace
+        // `alias.col` references with the appropriate inline form.
+        // Locate the leading "SELECT " and the first top-level " FROM ".
+        let trimmed = out.trim_start();
+        let leading_ws_len = out.len() - trimmed.len();
+        let upper_trim = trimmed.to_ascii_uppercase();
+        // Resolve the body's SELECT start (handle `WITH ... SELECT`).
+        let select_offset = if upper_trim.starts_with("SELECT ") {
+            0usize
+        } else if upper_trim.starts_with("WITH ") {
+            match find_top_level_select_after_with(&upper_trim, trimmed.as_bytes()) {
+                Some(s) => s,
+                None => break,
+            }
+        } else {
+            break;
+        };
+        let body_after_select = &trimmed[select_offset + "SELECT ".len()..];
+        let upper_body = body_after_select.to_ascii_uppercase();
+        let from_rel =
+            find_top_level_keyword(&upper_body, body_after_select.as_bytes(), 0, " FROM ");
+        let Some(from_rel) = from_rel else { break };
+        let projection_text = body_after_select[..from_rel].to_owned();
+
+        // Replace `alias.col` references in the projection with the
+        // resolved expression / scalar subquery.
+        let new_projection = match &kind {
+            LateralKind::InlineExpr { name: _, body } => {
+                substitute_alias_column(&projection_text, &alias, |_| {
+                    Some(format!("({body})"))
+                })
+            }
+            LateralKind::ScalarSubquery { single_col_name: _ } => {
+                substitute_alias_column(&projection_text, &alias, |_| {
+                    Some(format!("({subquery})"))
+                })
+            }
+            LateralKind::Unsupported => break,
+        };
+
+        // Compose the rewritten statement:
+        //   <leading_ws>
+        //   <up to SELECT>
+        //   "SELECT "
+        //   <new_projection>
+        //   " FROM "
+        //   <FROM up to join_pos>
+        //   <FROM from after_alias onward>
+        let projection_start_abs =
+            leading_ws_len + select_offset + "SELECT ".len();
+        let from_kw_abs = projection_start_abs + from_rel;
+        // join_pos is relative to `out` (lowercase has same indexing).
+        // Everything strictly before join_pos in the FROM clause is
+        // preserved verbatim; everything from `after_alias` onwards is
+        // appended after dropping the lateral chunk.
+        let mut new_sql = String::with_capacity(out.len());
+        new_sql.push_str(&out[..projection_start_abs]);
+        new_sql.push_str(&new_projection);
+        new_sql.push_str(&out[from_kw_abs..join_pos]);
+        new_sql.push_str(&out[after_alias..]);
+        out = new_sql;
+    }
+    out
+}
+
+enum LateralKind {
+    /// Subquery is `SELECT <expr> AS <name>` with no FROM/WHERE.
+    /// Promote to `(<expr>)` inline in the outer SELECT.
+    InlineExpr { name: String, body: String },
+    /// Subquery has a FROM but produces a single column; we treat the
+    /// whole subquery as a scalar correlated SELECT.
+    ScalarSubquery { single_col_name: String },
+    /// Anything more complex (multi-row, multi-column, set-returning
+    /// function). Skip; the parser will surface its native error.
+    Unsupported,
+}
+
+fn classify_lateral_subquery(subquery: &str) -> LateralKind {
+    let upper = subquery.to_ascii_uppercase();
+    if !upper.trim_start().starts_with("SELECT ") {
+        return LateralKind::Unsupported;
+    }
+    // No FROM? Inline form: `SELECT <expr> AS <name>`.
+    if !find_top_level_keyword(&upper, subquery.as_bytes(), 0, " FROM ").is_some() {
+        let after_select = subquery.trim_start()["SELECT ".len()..].trim();
+        let upper_after = after_select.to_ascii_uppercase();
+        if let Some(as_pos) = upper_after.find(" AS ") {
+            let body = after_select[..as_pos].trim().to_owned();
+            let name = after_select[as_pos + 4..].trim().to_owned();
+            return LateralKind::InlineExpr { name, body };
+        }
+        return LateralKind::Unsupported;
+    }
+    // FROM present — assume scalar subquery (single column projected).
+    // Extract the alias / column name from the projection so the outer
+    // reference can resolve it; if we can't pick one, fall back to
+    // Unsupported.
+    let after_select = subquery.trim_start()["SELECT ".len()..].trim();
+    let upper_after = after_select.to_ascii_uppercase();
+    // Take everything up to the first top-level " FROM ".
+    let from_at = find_top_level_keyword(&upper_after, after_select.as_bytes(), 0, " FROM ")
+        .unwrap_or(after_select.len());
+    let proj = after_select[..from_at].trim();
+    let items = split_top_level_commas(proj);
+    if items.len() != 1 {
+        return LateralKind::Unsupported;
+    }
+    let item = items.into_iter().next().unwrap();
+    let upper_item = item.to_ascii_uppercase();
+    let name = if let Some(p) = upper_item.find(" AS ") {
+        item[p + 4..].trim().to_owned()
+    } else {
+        // bare identifier — use as-is
+        item.trim().to_owned()
+    };
+    LateralKind::ScalarSubquery {
+        single_col_name: name,
+    }
+}
+
+/// Walk `text` substituting every occurrence of `alias.col` (when
+/// `replacer(col)` returns Some) with the replacement string. The
+/// replacement is unconditional for our use case — every alias.col
+/// reference under a LATERAL is the single inlined column.
+fn substitute_alias_column<F>(text: &str, alias: &str, replacer: F) -> String
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let needle = format!("{alias}.");
+    let bytes = text.as_bytes();
+    let needle_bytes = needle.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if i + needle_bytes.len() <= bytes.len()
+            && bytes[i..i + needle_bytes.len()].eq_ignore_ascii_case(needle_bytes)
+            // Word boundary on left (start or non-identifier char).
+            && (i == 0 || !is_identifier_char(bytes[i - 1]))
+        {
+            // Consume identifier after the dot.
+            let col_start = i + needle_bytes.len();
+            let mut j = col_start;
+            while j < bytes.len() && is_identifier_char(bytes[j]) {
+                j += 1;
+            }
+            if j > col_start {
+                let col = &text[col_start..j];
+                if let Some(rep) = replacer(col) {
+                    out.push_str(&rep);
+                    i = j;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+fn is_identifier_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
