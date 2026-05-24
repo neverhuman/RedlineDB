@@ -171,8 +171,397 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if has_window_exclude(&out) {
         out = rewrite_window_exclude(&out);
     }
+    if out.to_ascii_lowercase().contains(" on conflict") {
+        out = wrap_insert_select_with_upsert(&out);
+        out = rewrite_on_conflict_clauses(&out);
+    }
     out = out.replace("'abc' GLOB 'a*'", "glob('a*','abc')");
     out = out.replace("NULL IS NOT 1", "NULL IS DISTINCT FROM 1");
+    out
+}
+
+/// sqlparser-rs 0.61 chokes on `INSERT INTO t SELECT ... ON CONFLICT ...`
+/// because the unwrapped SELECT body cannot be terminated by an ON
+/// CONFLICT keyword. Wrap the SELECT body in parens so the parser
+/// recognises it as a parenthesised SELECT source followed by the
+/// ON CONFLICT trailer.
+fn wrap_insert_select_with_upsert(sql: &str) -> String {
+    let lower = sql.to_ascii_lowercase();
+    // Find each top-level "insert into" occurrence
+    let mut out = sql.to_owned();
+    let mut search_from = 0usize;
+    while let Some(rel) = lower[search_from..].find("insert into ") {
+        let insert_pos = search_from + rel;
+        // Find the SELECT keyword that follows (not inside subquery)
+        let after_insert = insert_pos + "insert into ".len();
+        // Skip table name and optional columns list.
+        let bytes_full = out.as_bytes();
+        let mut j = after_insert;
+        // Skip table identifier (possibly schema.table)
+        while j < bytes_full.len() && bytes_full[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        while j < bytes_full.len()
+            && (bytes_full[j].is_ascii_alphanumeric()
+                || bytes_full[j] == b'_'
+                || bytes_full[j] == b'.')
+        {
+            j += 1;
+        }
+        while j < bytes_full.len() && bytes_full[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        // Optional column list (col, col, ...)
+        if j < bytes_full.len() && bytes_full[j] == b'(' {
+            if let Some(close) = find_matching_paren(bytes_full, j) {
+                j = close + 1;
+            }
+            while j < bytes_full.len() && bytes_full[j].is_ascii_whitespace() {
+                j += 1;
+            }
+        }
+        // Now expect SELECT (or VALUES / DEFAULT VALUES)
+        let lower_full = out.to_ascii_lowercase();
+        if j + 7 <= lower_full.len() && &lower_full[j..j + 6] == "select" {
+            // Find matching ON CONFLICT after the select body (top-level)
+            if let Some(on_pos) = find_top_level_on_conflict(&lower_full, bytes_full, j + 6) {
+                // Wrap [j..on_pos] in parens
+                // Insert ')' at on_pos
+                out.insert(on_pos, ')');
+                // Insert '(' at j
+                out.insert(j, '(');
+                // Move search_from past this rewrite
+                search_from = on_pos + 2; // +2 for the inserted parens
+                continue;
+            }
+        }
+        search_from = j;
+    }
+    out
+}
+
+fn find_top_level_on_conflict(lower: &str, bytes: &[u8], from: usize) -> Option<usize> {
+    let mut i = from;
+    let mut depth = 0i32;
+    let mut in_str: Option<u8> = None;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = in_str {
+            if b == q {
+                in_str = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => {
+                in_str = Some(b);
+                i += 1;
+                continue;
+            }
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b';' if depth == 0 => return None,
+            _ => {}
+        }
+        if depth == 0
+            && i + 12 <= lower.len()
+            && &lower[i..i + 12] == " on conflict"
+        {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+/// SQLite's `ON CONFLICT(<col> [COLLATE name]) [WHERE <pred>] DO ...`
+/// is not handled by sqlparser-rs 0.61. Rewrite pre-parse:
+///   * Strip `COLLATE <name>` from each column inside the conflict
+///     target list (the index targets are resolved by column name and
+///     by partial-index predicate inside the kernel).
+///   * Strip the optional `WHERE <pred>` that follows the target and
+///     precedes `DO` — this is purely an index-disambiguation hint.
+///   * Collapse multiple `ON CONFLICT(...) DO ...` clauses into a
+///     single clause by keeping the first `DO UPDATE` (or, if all
+///     clauses are `DO NOTHING`, keeping the first).
+fn rewrite_on_conflict_clauses(sql: &str) -> String {
+    let mut buf = sql.to_owned();
+    // Collect all `ON CONFLICT(...) [WHERE ...] DO {NOTHING|UPDATE ...}`
+    // segments. For each segment we record byte range and the action
+    // type so we can choose which one wins under multiple-clauses.
+    let segments = collect_on_conflict_segments(&buf);
+    if segments.is_empty() {
+        return buf;
+    }
+    // For each segment, strip WHERE-between-target-and-DO and strip
+    // COLLATE inside the target column list. Apply in reverse so
+    // earlier offsets remain valid.
+    let mut rewrites: Vec<(usize, usize, String)> = Vec::new();
+    for seg in &segments {
+        let original = &buf[seg.start..seg.end];
+        let cleaned = strip_on_conflict_extras(original);
+        if cleaned != original {
+            rewrites.push((seg.start, seg.end, cleaned));
+        }
+    }
+    for (start, end, new) in rewrites.into_iter().rev() {
+        buf.replace_range(start..end, &new);
+    }
+    // If multiple ON CONFLICT clauses remain back-to-back, collapse them.
+    let mut segs = collect_on_conflict_segments(&buf);
+    if segs.len() <= 1 {
+        return buf;
+    }
+    // Find consecutive runs where multiple segments touch (only whitespace
+    // separates them) — these are SQLite's chained ON CONFLICT clauses.
+    let mut runs: Vec<Vec<usize>> = Vec::new();
+    let mut current: Vec<usize> = vec![0];
+    for i in 1..segs.len() {
+        let prev_end = segs[i - 1].end;
+        let this_start = segs[i].start;
+        let gap = &buf[prev_end..this_start];
+        if gap.trim().is_empty() {
+            current.push(i);
+        } else {
+            runs.push(std::mem::take(&mut current));
+            current.push(i);
+        }
+    }
+    if !current.is_empty() {
+        runs.push(current);
+    }
+    // For each run with >= 2 segments, keep the first DO UPDATE if any,
+    // otherwise the last clause. Strip the rest.
+    let mut deletions: Vec<(usize, usize)> = Vec::new();
+    for run in runs.iter().filter(|r| r.len() >= 2) {
+        let mut keep_idx: Option<usize> = None;
+        for &idx in run {
+            if segs[idx].is_update {
+                keep_idx = Some(idx);
+                break;
+            }
+        }
+        let keep_idx = keep_idx.unwrap_or_else(|| *run.last().unwrap());
+        for &idx in run {
+            if idx != keep_idx {
+                deletions.push((segs[idx].start, segs[idx].end));
+            }
+        }
+    }
+    deletions.sort_by(|a, b| b.0.cmp(&a.0));
+    for (s, e) in deletions {
+        buf.replace_range(s..e, "");
+    }
+    // Recompute segs after deletions (no longer needed; just return).
+    let _ = &mut segs;
+    buf
+}
+
+#[derive(Debug)]
+struct OnConflictSegment {
+    start: usize,
+    end: usize,
+    is_update: bool,
+}
+
+/// Locate every ` ON CONFLICT(...) [WHERE ...] DO {NOTHING|UPDATE ...}`
+/// chunk in `sql`. Whitespace before `ON` is included in `start` so
+/// chained clauses can be merged cleanly.
+fn collect_on_conflict_segments(sql: &str) -> Vec<OnConflictSegment> {
+    let lower = sql.to_ascii_lowercase();
+    let bytes = sql.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let Some(idx) = find_keyword(&lower, " on conflict", i) else {
+            break;
+        };
+        let kw_start = idx + 1; // skip the leading space
+        // Skip "on conflict"
+        let mut j = idx + " on conflict".len();
+        // Optional target: '(' ... ')'
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if j < bytes.len() && bytes[j] == b'(' {
+            j = match find_matching_paren(bytes, j) {
+                Some(end) => end + 1,
+                None => {
+                    i = j + 1;
+                    continue;
+                }
+            };
+        } else if j + 13 <= lower.len() && &lower[j..j + 13] == "on constraint" {
+            // ON CONFLICT ON CONSTRAINT name - skip "on constraint" and a name token.
+            j += 13;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            // skip identifier (or quoted name)
+            if j < bytes.len() && (bytes[j] == b'"' || bytes[j] == b'\'') {
+                let q = bytes[j];
+                j += 1;
+                while j < bytes.len() && bytes[j] != q {
+                    j += 1;
+                }
+                if j < bytes.len() {
+                    j += 1;
+                }
+            } else {
+                while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+                    j += 1;
+                }
+            }
+        }
+        // Optional WHERE <pred> before DO
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if j + 6 <= lower.len() && &lower[j..j + 6] == "where " {
+            j += 6;
+            j = skip_until_keyword(&lower, bytes, j, " do ");
+        }
+        // Required: DO
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if j + 3 > lower.len() || &lower[j..j + 3] != "do " {
+            // Not a valid ON CONFLICT — advance and continue.
+            i = j;
+            continue;
+        }
+        j += 3;
+        let is_update = j + 6 <= lower.len() && &lower[j..j + 6] == "update";
+        // End of segment = end of the action body. For DO NOTHING it's
+        // just past "nothing". For DO UPDATE SET ... [WHERE ...] we need
+        // to scan to the next clause boundary (another ON CONFLICT, RETURNING, ;, or end).
+        let end = if is_update {
+            // Find the next clause boundary.
+            j += 6; // past "update"
+            scan_to_clause_boundary(&lower, bytes, j)
+        } else {
+            // DO NOTHING
+            if j + 7 <= lower.len() && &lower[j..j + 7] == "nothing" {
+                j + 7
+            } else {
+                j
+            }
+        };
+        out.push(OnConflictSegment {
+            start: kw_start,
+            end,
+            is_update,
+        });
+        i = end;
+    }
+    out
+}
+
+fn find_keyword(lower: &str, kw: &str, from: usize) -> Option<usize> {
+    if from >= lower.len() {
+        return None;
+    }
+    lower[from..].find(kw).map(|p| from + p)
+}
+
+fn skip_until_keyword(lower: &str, bytes: &[u8], from: usize, kw: &str) -> usize {
+    let mut j = from;
+    while j < bytes.len() {
+        if j + kw.len() <= lower.len() && &lower[j..j + kw.len()] == kw {
+            return j;
+        }
+        j += 1;
+    }
+    j
+}
+
+fn scan_to_clause_boundary(lower: &str, bytes: &[u8], from: usize) -> usize {
+    let mut j = from;
+    let mut depth = 0i32;
+    let mut in_str: Option<u8> = None;
+    while j < bytes.len() {
+        let b = bytes[j];
+        if let Some(q) = in_str {
+            if b == q {
+                in_str = None;
+            }
+            j += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => {
+                in_str = Some(b);
+                j += 1;
+                continue;
+            }
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b';' if depth == 0 => return j,
+            _ => {}
+        }
+        if depth == 0 {
+            if j + 12 <= lower.len() && &lower[j..j + 12] == " on conflict" {
+                return j;
+            }
+            if j + 11 <= lower.len() && &lower[j..j + 11] == " returning " {
+                return j;
+            }
+        }
+        j += 1;
+    }
+    j
+}
+
+fn strip_on_conflict_extras(segment: &str) -> String {
+    // Strip COLLATE <name> inside the target column list.
+    let mut out = segment.to_owned();
+    let bytes = out.as_bytes();
+    if let Some(open) = bytes.iter().position(|&b| b == b'(')
+        && let Some(close) = find_matching_paren(bytes, open)
+    {
+        let inner = &out[open + 1..close];
+        let cleaned = strip_collate_clauses(inner);
+        if cleaned != inner {
+            out.replace_range(open + 1..close, &cleaned);
+        }
+    }
+    // Strip ' WHERE <pred>' that sits between the target and ' DO '.
+    let lower = out.to_ascii_lowercase();
+    if let Some(target_close) = out.find(')') {
+        let after = &lower[target_close + 1..];
+        if let Some(rel_where) = after.find(" where ") {
+            let abs_where_start = target_close + 1 + rel_where;
+            // Find " do " after that
+            if let Some(rel_do) = lower[abs_where_start..].find(" do ") {
+                let abs_do = abs_where_start + rel_do;
+                out.replace_range(abs_where_start..abs_do, "");
+            }
+        }
+    }
+    out
+}
+
+fn strip_collate_clauses(inner: &str) -> String {
+    // Strip " COLLATE <ident>" matches (case-insensitive).
+    let lower = inner.to_ascii_lowercase();
+    let bytes = inner.as_bytes();
+    let mut out = String::with_capacity(inner.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if i + 9 <= lower.len() && &lower[i..i + 9] == " collate " {
+            // Skip " collate "
+            let mut j = i + 9;
+            // Skip the collation name
+            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+                j += 1;
+            }
+            i = j;
+            continue;
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
     out
 }
 
