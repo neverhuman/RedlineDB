@@ -294,6 +294,32 @@ pub(crate) fn eval_scalar(
             let pattern = eval_scalar(pattern, row, bindings)?;
             ilike_result(value, pattern, *negated, escape_char.clone())?
         }
+        // `SIMILAR TO` (https://www.postgresql.org/docs/16/functions-matching.html
+        // #FUNCTIONS-SIMILARTO-REGEXP) is the SQL-standard regex flavour
+        // — `%` matches any run, `_` matches one char, the pattern is
+        // anchored at both ends, character classes are POSIX-style. We
+        // translate it to a POSIX regex via `similar_to_regex` and then
+        // delegate to the existing regex engine. Escape support mirrors
+        // the LIKE escape (any single-char literal).
+        Expr::SimilarTo {
+            negated,
+            expr,
+            pattern,
+            escape_char,
+        } => {
+            let value = eval_scalar(expr, row, bindings)?;
+            let pattern_value = eval_scalar(pattern, row, bindings)?;
+            similar_to_result(value, pattern_value, *negated, escape_char.clone())?
+        }
+        // `POSITION(sub IN str)` returns a 1-based index of the first
+        // occurrence (0 if not found, NULL on NULL inputs). Same semantic
+        // as SQLite's `instr(str, sub)` with swapped arg order; we re-use
+        // that helper to keep behaviour aligned.
+        Expr::Position { expr, r#in } => {
+            let sub = eval_scalar(expr, row, bindings)?;
+            let haystack = eval_scalar(r#in, row, bindings)?;
+            position_result(sub, haystack)?
+        }
         Expr::Between {
             expr,
             negated,
