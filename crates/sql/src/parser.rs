@@ -175,7 +175,7 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
         out = wrap_insert_select_with_upsert(&out);
         out = rewrite_on_conflict_clauses(&out);
     }
-    out = out.replace("'abc' GLOB 'a*'", "glob('a*','abc')");
+    out = rewrite_glob_to_function(&out);
     out = out.replace("NULL IS NOT 1", "NULL IS DISTINCT FROM 1");
     out
 }
@@ -924,3 +924,354 @@ mod tests {
         );
     }
 }
+/// Rewrite `<expr> GLOB <pattern>` and `<expr> NOT GLOB <pattern>` into
+/// `glob(<pattern>, <expr>)` / `NOT glob(<pattern>, <expr>)` so sqlparser
+/// (which lacks a SQLite-style GLOB operator) parses them as function
+/// calls. The scalar `glob(pattern, value)` dispatcher in
+/// `exec::expr::json_dispatch` then evaluates them with SQLite semantics
+/// (including case-sensitive matching and `case_sensitive_like` PRAGMA).
+///
+/// The rewriter is intentionally conservative — it only matches when the
+/// left and right operands are clearly delimited atoms (string literal,
+/// `NULL`, numeric literal, simple identifier, parenthesized group, or
+/// `x'...'` blob literal). Anything more complex (function calls, joins,
+/// arithmetic) is left untouched and will surface as a parse error, which
+/// matches the previous behaviour and avoids miscompiling unrelated SQL.
+fn rewrite_glob_to_function(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len() + 32);
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let c = bytes[i];
+        // Skip string literals verbatim so we never rewrite "GLOB" inside
+        // user data.
+        if c == b'\'' {
+            let end = scan_quoted(bytes, i, b'\'');
+            out.push_str(&input[i..end]);
+            i = end;
+            continue;
+        }
+        if c == b'"' {
+            let end = scan_quoted(bytes, i, b'"');
+            out.push_str(&input[i..end]);
+            i = end;
+            continue;
+        }
+        if c == b'-' && bytes.get(i + 1) == Some(&b'-') {
+            // Line comment — copy verbatim to newline.
+            let end = bytes[i..]
+                .iter()
+                .position(|&b| b == b'\n')
+                .map(|n| i + n)
+                .unwrap_or(bytes.len());
+            out.push_str(&input[i..end]);
+            i = end;
+            continue;
+        }
+        if c == b'/' && bytes.get(i + 1) == Some(&b'*') {
+            // Block comment.
+            let mut j = i + 2;
+            while j + 1 < bytes.len() && !(bytes[j] == b'*' && bytes[j + 1] == b'/') {
+                j += 1;
+            }
+            let end = (j + 2).min(bytes.len());
+            out.push_str(&input[i..end]);
+            i = end;
+            continue;
+        }
+        // Match `GLOB` only when it is acting as the BINARY OPERATOR — i.e.
+        // surrounded by whitespace and *not* immediately followed by `(`
+        // (which would make it the `glob(pattern, value)` function call).
+        // Function-call form is parsed natively, so don't rewrite it.
+        if matches_keyword_ci(bytes, i, b"GLOB")
+            && (i == 0 || !is_word_char(bytes[i - 1]))
+            && (i + 4 == bytes.len() || !is_word_char(bytes[i + 4]))
+            && bytes.get(i + 4) != Some(&b'(')
+            && (i + 4 < bytes.len() && bytes[i + 4].is_ascii_whitespace())
+            && (i > 0 && bytes[i - 1].is_ascii_whitespace())
+        {
+            // Strip any trailing whitespace from `out` so we can pattern-
+            // match against the immediately-preceding tokens.
+            while let Some(last) = out.chars().last() {
+                if last.is_whitespace() {
+                    out.pop();
+                } else {
+                    break;
+                }
+            }
+            // Detect a trailing `NOT` so we can wrap the rewrite in NOT.
+            let negate = trim_trailing_keyword_ci(&out, "NOT").is_some();
+            if negate {
+                if let Some(prefix) = trim_trailing_keyword_ci(&out, "NOT") {
+                    out.truncate(prefix.len());
+                }
+            }
+            // Strip residual whitespace before the LHS atom.
+            while let Some(last) = out.chars().last() {
+                if last.is_whitespace() {
+                    out.pop();
+                } else {
+                    break;
+                }
+            }
+            // Locate the LHS atom in what we've buffered so far.
+            let out_bytes = out.as_bytes();
+            let lhs_end = out_bytes.len();
+            let lhs_atom_start = match find_atom_start(out_bytes, lhs_end) {
+                Some(s) => s,
+                None => {
+                    if negate {
+                        out.push_str("NOT");
+                    }
+                    out.push(' ');
+                    out.push(c as char);
+                    i += 1;
+                    continue;
+                }
+            };
+            let lhs_atom = out[lhs_atom_start..lhs_end].to_owned();
+            // Now find the RHS atom in the input.
+            let mut j = i + 4;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            let rhs_end = match find_atom_end(bytes, j) {
+                Some(e) => e,
+                None => {
+                    if negate {
+                        out.push_str("NOT");
+                    }
+                    out.push(' ');
+                    out.push(c as char);
+                    i += 1;
+                    continue;
+                }
+            };
+            let rhs_atom = std::str::from_utf8(&bytes[j..rhs_end]).unwrap_or("");
+            // Trim the LHS atom out of `out`, then rebuild as
+            // [prefix] [NOT ]glob(<rhs>, <lhs>)
+            out.truncate(lhs_atom_start);
+            if !out.is_empty() && !out.ends_with(char::is_whitespace) {
+                out.push(' ');
+            }
+            if negate {
+                out.push_str("NOT ");
+            }
+            out.push_str("glob(");
+            out.push_str(rhs_atom);
+            out.push(',');
+            out.push_str(&lhs_atom);
+            out.push(')');
+            i = rhs_end;
+            continue;
+        }
+        out.push(c as char);
+        i += 1;
+    }
+    out
+}
+
+fn scan_quoted(bytes: &[u8], start: usize, quote: u8) -> usize {
+    debug_assert_eq!(bytes[start], quote);
+    let mut i = start + 1;
+    while i < bytes.len() {
+        if bytes[i] == quote {
+            // SQLite uses doubled-quote escaping.
+            if bytes.get(i + 1) == Some(&quote) {
+                i += 2;
+                continue;
+            }
+            return i + 1;
+        }
+        i += 1;
+    }
+    bytes.len()
+}
+
+fn matches_keyword_ci(bytes: &[u8], pos: usize, keyword: &[u8]) -> bool {
+    if pos + keyword.len() > bytes.len() {
+        return false;
+    }
+    for (i, &k) in keyword.iter().enumerate() {
+        if bytes[pos + i].to_ascii_uppercase() != k {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_word_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Working backwards from `end`, find the start of an "atom" suitable as a
+/// GLOB operand: a quoted string, NULL literal, parenthesized group,
+/// numeric literal, or simple identifier. Returns `None` if the preceding
+/// text doesn't look like a clean atom (e.g. mid-expression).
+fn find_atom_start(bytes: &[u8], end: usize) -> Option<usize> {
+    let mut i = end;
+    // Skip trailing whitespace.
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+    if i == 0 {
+        return None;
+    }
+    let last = bytes[i - 1];
+    // Quoted string atom: scan forward from each candidate opener to
+    // confirm it ends exactly at `i`. Doubled-quote escapes (`''` inside
+    // a `'`-quoted string) are handled by `scan_quoted`.
+    if last == b'\'' || last == b'"' {
+        let quote = last;
+        let mut candidate = i - 1;
+        // Walk back to the earliest possible opener and forward-scan to
+        // verify. The earliest opener is the first `quote` byte at the
+        // start of a run.
+        loop {
+            if candidate == 0 {
+                if bytes[0] == quote && scan_quoted(bytes, 0, quote) == i {
+                    return Some(0);
+                }
+                return None;
+            }
+            candidate -= 1;
+            if bytes[candidate] == quote {
+                // Could be either an opener or part of `''` escape.
+                let prev = if candidate > 0 { bytes[candidate - 1] } else { 0 };
+                if prev == quote {
+                    // We're inside a doubled-quote pair; skip both.
+                    if candidate == 0 {
+                        return None;
+                    }
+                    candidate -= 1;
+                    continue;
+                }
+                // Candidate is at an opener if scan_quoted from here
+                // lands exactly on `i`.
+                if scan_quoted(bytes, candidate, quote) == i {
+                    // Also allow leading `x'...'` blob literal: if the
+                    // byte before is `x` or `X`, include it in the atom.
+                    if quote == b'\''
+                        && candidate > 0
+                        && (bytes[candidate - 1] == b'x' || bytes[candidate - 1] == b'X')
+                    {
+                        return Some(candidate - 1);
+                    }
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+    // Parenthesized group: scan back balancing.
+    if last == b')' {
+        let mut depth = 1i32;
+        let mut j = i - 1;
+        while j > 0 {
+            j -= 1;
+            match bytes[j] {
+                b')' => depth += 1,
+                b'(' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(j);
+                    }
+                }
+                _ => {}
+            }
+        }
+        return None;
+    }
+    // Identifier / NULL / numeric: scan back while alphanumeric / `_` /
+    // `.` (for qualified names). Allow leading `x'...'` blob literal.
+    let mut j = i;
+    while j > 0 {
+        let b = bytes[j - 1];
+        if b.is_ascii_alphanumeric() || b == b'_' || b == b'.' {
+            j -= 1;
+        } else {
+            break;
+        }
+    }
+    if j < i {
+        Some(j)
+    } else {
+        None
+    }
+}
+
+/// Forward equivalent of `find_atom_start`: pick out the end of an atom
+/// starting at `start`. Returns `None` if no recognisable atom is present.
+fn find_atom_end(bytes: &[u8], start: usize) -> Option<usize> {
+    if start >= bytes.len() {
+        return None;
+    }
+    let first = bytes[start];
+    if first == b'\'' || first == b'"' {
+        return Some(scan_quoted(bytes, start, first));
+    }
+    // `x'01ab'` style blob literal.
+    if (first == b'x' || first == b'X')
+        && bytes.get(start + 1) == Some(&b'\'')
+    {
+        return Some(scan_quoted(bytes, start + 1, b'\''));
+    }
+    if first == b'(' {
+        // Balance to matching ).
+        let mut depth = 1i32;
+        let mut j = start + 1;
+        while j < bytes.len() {
+            match bytes[j] {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(j + 1);
+                    }
+                }
+                _ => {}
+            }
+            j += 1;
+        }
+        return None;
+    }
+    // Identifier / numeric / NULL: consume alphanumeric / `_` / `.`.
+    let mut j = start;
+    while j < bytes.len() {
+        let b = bytes[j];
+        if b.is_ascii_alphanumeric() || b == b'_' || b == b'.' {
+            j += 1;
+        } else {
+            break;
+        }
+    }
+    if j > start { Some(j) } else { None }
+}
+
+/// If `text` ends with the given uppercase keyword on a word boundary
+/// preceded by whitespace, return the prefix excluding the keyword and
+/// its leading whitespace.
+fn trim_trailing_keyword_ci<'a>(text: &'a str, keyword: &str) -> Option<&'a str> {
+    let bytes = text.as_bytes();
+    if bytes.len() < keyword.len() {
+        return None;
+    }
+    let key_start = bytes.len() - keyword.len();
+    for (i, k) in keyword.bytes().enumerate() {
+        if bytes[key_start + i].to_ascii_uppercase() != k.to_ascii_uppercase() {
+            return None;
+        }
+    }
+    // Must be preceded by whitespace (or be at the very start, though
+    // that'd be a degenerate GLOB).
+    if key_start == 0 || !bytes[key_start - 1].is_ascii_whitespace() {
+        return None;
+    }
+    // Trim back the whitespace too.
+    let mut end = key_start;
+    while end > 0 && bytes[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    Some(&text[..end])
+}
+
+

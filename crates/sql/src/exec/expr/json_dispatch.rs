@@ -71,11 +71,100 @@ pub(crate) fn eval_scalar_function_values(
             Ok(SqlValue::Integer(last_insert_rowid_value()))
         }
         "length" => match values.first() {
-            // SQLite: length(NULL) is NULL, not 0.
+            // SQLite: length(NULL) is NULL, not 0. For TEXT, length returns
+            // the count of Unicode characters (not bytes); for BLOB, byte
+            // count. See https://sqlite.org/lang_corefunc.html#length.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
-            Some(other) => Ok(SqlValue::Integer(value_to_string(other).len() as i64)),
+            Some(SqlValue::Text(value)) => {
+                Ok(SqlValue::Integer(value.chars().count() as i64))
+            }
+            Some(other) => Ok(SqlValue::Integer(value_to_string(other).chars().count() as i64)),
         },
+        // SQLite octet_length(X): byte length regardless of type. TEXT in its
+        // UTF-8 byte form, BLOB in its raw byte form, others coerced to TEXT
+        // then byte-counted. NULL propagates.
+        "octet_length" => match values.first() {
+            Some(SqlValue::Null) | None => Ok(SqlValue::Null),
+            Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
+            Some(SqlValue::Text(value)) => Ok(SqlValue::Integer(value.as_bytes().len() as i64)),
+            Some(other) => Ok(SqlValue::Integer(value_to_string(other).as_bytes().len() as i64)),
+        },
+        // SQLite concat(X, ...) — concatenates non-NULL operands (NULLs treated
+        // as empty strings). Always returns TEXT.
+        "concat" => {
+            let mut out = String::new();
+            for v in &values {
+                if !matches!(v, SqlValue::Null) {
+                    out.push_str(&value_to_string(v));
+                }
+            }
+            Ok(SqlValue::Text(Arc::from(out)))
+        }
+        // SQLite concat_ws(SEP, X, ...) — like concat but inserts SEP between
+        // non-NULL operands. NULL separator → NULL result; NULL operands
+        // skipped.
+        "concat_ws" => {
+            if values.is_empty() || matches!(values[0], SqlValue::Null) {
+                return Ok(SqlValue::Null);
+            }
+            let sep = value_to_string(&values[0]);
+            let mut first = true;
+            let mut out = String::new();
+            for v in &values[1..] {
+                if matches!(v, SqlValue::Null) {
+                    continue;
+                }
+                if !first {
+                    out.push_str(&sep);
+                }
+                first = false;
+                out.push_str(&value_to_string(v));
+            }
+            Ok(SqlValue::Text(Arc::from(out)))
+        }
+        // soundex(X) is gated behind SQLITE_SOUNDEX in the reference build
+        // and *not* compiled into sqlite3 v3.53.1 (`PRAGMA compile_options`
+        // confirms it). Surface the same "no such function" error so parity
+        // tests that expect rejection don't see a phantom success.
+        "soundex" => Err(Error::UnsupportedSql("no such function: soundex".to_owned())),
+        // SQLite unhex(X[, ignore]) — decode a hex string into a blob. If any
+        // non-hex / non-ignore character appears, return NULL. Whitespace is
+        // not implicit; only chars in `ignore` are skipped.
+        "unhex" => {
+            if values.is_empty() || matches!(values[0], SqlValue::Null) {
+                return Ok(SqlValue::Null);
+            }
+            if values.len() > 1 && matches!(values[1], SqlValue::Null) {
+                return Ok(SqlValue::Null);
+            }
+            let s = value_to_string(&values[0]);
+            let ignore = values.get(1).map(value_to_string).unwrap_or_default();
+            match sqlite_unhex(&s, &ignore) {
+                Some(bytes) => Ok(SqlValue::Blob(Arc::from(bytes.as_slice()))),
+                None => Ok(SqlValue::Null),
+            }
+        }
+        // SQLite-style two-arg `like(PATTERN, VALUE)` / `like(PATTERN, VALUE, ESC)`
+        // — function form (note argument order vs. the LIKE operator).
+        "like" => {
+            if values.len() < 2 {
+                return Err(Error::UnsupportedSql(
+                    "like requires at least 2 args".to_owned(),
+                ));
+            }
+            let pattern = values[0].clone();
+            let value = values[1].clone();
+            let escape_char = values.get(2).and_then(|v| match v {
+                SqlValue::Text(s) if s.chars().count() == 1 => {
+                    Some(sqlparser::ast::Value::SingleQuotedString(s.to_string()))
+                }
+                _ => None,
+            });
+            let case_insensitive =
+                crate::exec::current_connection().is_none_or(|conn| !conn.case_sensitive_like());
+            like_result(value, pattern, false, escape_char, case_insensitive)
+        }
         "lower" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(other) => Ok(SqlValue::Text(Arc::from(
@@ -121,22 +210,49 @@ pub(crate) fn eval_scalar_function_values(
         }
         "min" | "max" => eval_scalar_min_max(&values, name == "min"),
         "round" => round_function(&values),
-        "sin" => unary_real(&values, f64::sin),
-        "sqrt" => unary_real(&values, f64::sqrt),
-        "ceil" | "ceiling" => unary_real(&values, f64::ceil),
-        "floor" => unary_real(&values, f64::floor),
-        "pow" | "power" => {
-            if values.len() != 2 || values.iter().any(|v| matches!(v, SqlValue::Null)) {
-                Ok(SqlValue::Null)
-            } else {
-                Ok(SqlValue::Real(
-                    numeric_value(&values[0])?.powf(numeric_value(&values[1])?),
-                ))
+        // SQLite math1 unary functions. Each returns NULL for non-finite
+        // / out-of-domain inputs (sqlite's math1 semantics) via `math1_unary`.
+        "sin" => math1_unary(&values, f64::sin),
+        "cos" => math1_unary(&values, f64::cos),
+        "tan" => math1_unary(&values, f64::tan),
+        "asin" => math1_unary(&values, f64::asin),
+        "acos" => math1_unary(&values, f64::acos),
+        "atan" => math1_unary(&values, f64::atan),
+        "sinh" => math1_unary(&values, f64::sinh),
+        "cosh" => math1_unary(&values, f64::cosh),
+        "tanh" => math1_unary(&values, f64::tanh),
+        "asinh" => math1_unary(&values, f64::asinh),
+        "acosh" => math1_unary(&values, f64::acosh),
+        "atanh" => math1_unary(&values, f64::atanh),
+        "sqrt" => math1_unary(&values, f64::sqrt),
+        "exp" => math1_unary(&values, f64::exp),
+        "ln" => math1_unary(&values, f64::ln),
+        "log10" => math1_unary(&values, f64::log10),
+        "log2" => math1_unary(&values, f64::log2),
+        // SQLite log(): 1-arg = natural log, 2-arg = log_b(x).
+        "log" => math_log(&values),
+        "atan2" => math1_binary(&values, f64::atan2),
+        "degrees" => math_degrees(&values),
+        "radians" => math_radians(&values),
+        "trunc" => math_trunc(&values),
+        "pi" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql("pi takes 0 args".to_owned()));
             }
+            Ok(math_pi())
         }
+        "mod" => math_mod(&values),
+        "ceil" | "ceiling" => math1_unary(&values, f64::ceil),
+        "floor" => math1_unary(&values, f64::floor),
+        "pow" | "power" => math1_binary(&values, f64::powf),
         "timediff" => timediff_function(&values),
+        // SQLite hex(X) returns an *empty TEXT*, not NULL, when X is NULL —
+        // see https://sqlite.org/lang_corefunc.html#hex and `func.c`. We
+        // also default to empty TEXT when called with no args so error
+        // surfaces stay consistent with sqlite.
         "hex" => match values.first() {
-            Some(SqlValue::Null) | None => Ok(SqlValue::Null),
+            None => Ok(SqlValue::Text(Arc::from(""))),
+            Some(SqlValue::Null) => Ok(SqlValue::Text(Arc::from(""))),
             Some(other) => Ok(SqlValue::Text(Arc::from(hex_value(other)))),
         },
         "quote" => Ok(SqlValue::Text(Arc::from(quote_value(
@@ -345,13 +461,6 @@ pub(crate) fn eval_scalar_function_values(
                 ))),
             }
         }
-    }
-}
-
-fn unary_real(values: &[SqlValue], f: fn(f64) -> f64) -> Result<SqlValue> {
-    match values.first() {
-        None | Some(SqlValue::Null) => Ok(SqlValue::Null),
-        Some(value) => Ok(SqlValue::Real(f(numeric_value(value)?))),
     }
 }
 
