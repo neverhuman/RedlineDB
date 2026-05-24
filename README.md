@@ -176,7 +176,7 @@ the GitHub artifact attestation.
 <!-- sqlite-parity-report:begin -->
 **SQLite parity coverage:** **1127 / 1127** cases passed in CI. Failed: **0**. Skipped: **0**. Updated 2026-05-24.
 
-**SQLite parity latency:** median gap **-27.25%**, worst gap **-298.83%**, faster cases **218**.
+**SQLite parity latency:** median gap **-19.69%**, worst gap **-289.42%**, faster cases **306**.
 
 **Benchmark metadata:** RedlineDB target version **redlinedb v2.0.6 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 0.1.3**.
 
@@ -189,31 +189,31 @@ the GitHub artifact attestation.
 
 | Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |
 | ---: | --- | --- | --- | --- | ---: | ---: | ---: |
-| 1 | AGG_GROUP_HAVING_075 | P1 | memory | GEN_SQL_AGGREGATE | 2893743 | 11964819 | -298.83% |
-| 2 | SCALAR_ARITH_034 | P1 | memory | GEN_SQL_SCALAR | 4292058 | 14880964 | -246.71% |
-| 3 | AGG_GROUP_HAVING_100 | P1 | memory | GEN_SQL_AGGREGATE | 4829333 | 16500857 | -241.68% |
-| 4 | JOIN_SUBQUERY_EXISTS_092 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 3097839 | 10559762 | -240.88% |
-| 5 | JOIN_SUBQUERY_EXISTS_036 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 3951393 | 13414040 | -239.48% |
-| 6 | CTE_RECURSIVE_MATRIX_042 | P1 | memory | GEN_SQL_CTE | 5402006 | 16495247 | -205.35% |
-| 7 | AGG_GROUP_HAVING_004 | P1 | memory | GEN_SQL_AGGREGATE | 6085249 | 17993200 | -195.69% |
-| 8 | JSON_EXTRACT_SET_049 | P2 | memory | GEN_SQL_JSON | 4465475 | 13002512 | -191.18% |
-| 9 | WINDOW_PARTITION_SUM_055 | P2 | memory | GEN_SQL_WINDOW | 5264737 | 15296410 | -190.54% |
-| 10 | SCALAR_ARITH_023 | P1 | memory | GEN_SQL_SCALAR | 4940874 | 14290948 | -189.24% |
-| 11 | WINDOW_PARTITION_SUM_062 | P2 | memory | GEN_SQL_WINDOW | 3977993 | 11386105 | -186.23% |
-| 12 | CONSTRAINT_FK_SAVEPOINT_018 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 5475145 | 15548246 | -183.98% |
-| 13 | INDEX_SCHEMA_PRAGMA_041 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 3690400 | 10404799 | -181.94% |
-| 14 | DML_WHERE_ORDER_LIMIT_046 | P1 | memory | GEN_SQL_DML | 4740767 | 13331694 | -181.21% |
-| 15 | AGG_GROUP_HAVING_098 | P1 | memory | GEN_SQL_AGGREGATE | 5168836 | 14415594 | -178.89% |
-| 16 | SCALAR_NULL_COALESCE_009 | P1 | memory | GEN_SQL_SCALAR | 4521842 | 12384363 | -173.88% |
-| 17 | CONSTRAINT_FK_SAVEPOINT_031 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 4667608 | 12559394 | -169.08% |
-| 18 | OPT_BAIL | P1 | memory | CLI_OPTION_NEGATIVE | 4929503 | 13031136 | -164.35% |
-| 19 | JOIN_SUBQUERY_EXISTS_018 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 3790569 | 9961701 | -162.80% |
-| 20 | DML_WHERE_ORDER_LIMIT_076 | P1 | memory | GEN_SQL_DML | 7376070 | 19272280 | -161.28% |
-| 21 | CTE_RECURSIVE_MATRIX_063 | P1 | memory | GEN_SQL_CTE | 6164408 | 15804491 | -156.38% |
-| 22 | VIEW_TRIGGER_GENERATED_001 | P2 | memory | GEN_SQL_VIEW_TRIGGER | 5521382 | 14124714 | -155.82% |
-| 23 | SCALAR_CAST_TYPEOF_001 | P1 | memory | GEN_SQL_SCALAR | 5411114 | 13840657 | -155.78% |
-| 24 | ANALYZE_SQLITE_STAT1 | P0 | memory | SQL_ANALYZE | 4867986 | 12420300 | -155.14% |
-| 25 | WINDOW_PARTITION_SUM_036 | P2 | memory | GEN_SQL_WINDOW | 6237857 | 15901424 | -154.92% |
+| 1 | AGG_GROUP_HAVING_059 | P1 | memory | GEN_SQL_AGGREGATE | 3866083 | 15055127 | -289.42% |
+| 2 | JSON_EXTRACT_SET_051 | P2 | memory | GEN_SQL_JSON | 3070568 | 11762459 | -283.07% |
+| 3 | DML_WHERE_ORDER_LIMIT_106 | P1 | memory | GEN_SQL_DML | 4160450 | 15849029 | -280.95% |
+| 4 | INDEX_SCHEMA_PRAGMA_018 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 3366709 | 12364889 | -267.27% |
+| 5 | INDEX_SCHEMA_PRAGMA_005 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 4157935 | 14334645 | -244.75% |
+| 6 | OPT_NOUNICODE_UTF8_CATALOG | P4 | catalog | CLI_OPTION_CATALOG | 3217786 | 10031936 | -211.77% |
+| 7 | CTE_RECURSIVE_MATRIX_079 | P1 | memory | GEN_SQL_CTE | 5319732 | 16466738 | -209.54% |
+| 8 | WINDOW_PARTITION_SUM_047 | P2 | memory | GEN_SQL_WINDOW | 4547792 | 13640181 | -199.93% |
+| 9 | CONSTRAINT_FK_SAVEPOINT_074 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 4652330 | 13460000 | -189.32% |
+| 10 | SCALAR_ARITH_038 | P1 | memory | GEN_SQL_SCALAR | 4108661 | 11881625 | -189.18% |
+| 11 | CTE_RECURSIVE_MATRIX_006 | P1 | memory | GEN_SQL_CTE | 4272461 | 11969702 | -180.16% |
+| 12 | CONSTRAINT_FK_SAVEPOINT_052 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 5459828 | 14870167 | -172.36% |
+| 13 | OPT_PCACHETRACE_CATALOG | P4 | catalog | CLI_OPTION_CATALOG | 3833511 | 10385124 | -170.90% |
+| 14 | SUBQUERIES_EXISTS_IN | P0 | memory | SQL_SELECT | 3502164 | 9421100 | -169.01% |
+| 15 | COLLATE_NOCASE_RTRIM_BINARY | P0 | memory | SQL_COLLATION | 3421071 | 9168513 | -168.00% |
+| 16 | JSON_EXTRACT_SET_004 | P2 | memory | GEN_SQL_JSON | 4584231 | 12180560 | -165.71% |
+| 17 | AGG_GROUP_HAVING_002 | P1 | memory | GEN_SQL_AGGREGATE | 5150743 | 13309997 | -158.41% |
+| 18 | CONSTRAINT_FK_SAVEPOINT_028 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 5766538 | 14734802 | -155.52% |
+| 19 | CONSTRAINT_FK_SAVEPOINT_044 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 5556811 | 14070745 | -153.22% |
+| 20 | SCALAR_NULL_COALESCE_036 | P1 | memory | GEN_SQL_SCALAR | 5519881 | 13739519 | -148.91% |
+| 21 | OPT_NO_ROWID_IN_VIEW | P4 | memory | CLI_OPTION | 5757591 | 14260645 | -147.68% |
+| 22 | INDEX_SCHEMA_PRAGMA_036 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 3733973 | 9233306 | -147.28% |
+| 23 | WINDOW_PARTITION_SUM_019 | P2 | memory | GEN_SQL_WINDOW | 5987005 | 14758566 | -146.51% |
+| 24 | SCALAR_NULL_COALESCE_035 | P1 | memory | GEN_SQL_SCALAR | 5588631 | 13771811 | -146.43% |
+| 25 | CONSTRAINT_FK_SAVEPOINT_030 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 4600762 | 11297771 | -145.56% |
 
 </details>
 <!-- sqlite-parity-report:end -->
@@ -224,9 +224,9 @@ the GitHub artifact attestation.
 
 {
   "generated_by": "redline-testing jankurai-compare",
-  "redlinedb_score": 64,
+  "redlinedb_score": 87,
   "redlinedb_status": "unknown",
-  "score_delta": 44,
+  "score_delta": 67,
   "sqlite_ref": "version-3.53.1",
   "sqlite_score": 20,
   "sqlite_status": "unknown",

@@ -7,15 +7,15 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779629105`
-- Started at: `1779629105`
-- Elapsed: `6240` ms
+- Run ID: `1779637658`
+- Started at: `1779637658`
+- Elapsed: `6324` ms
 - Scope: `full`
-- Raw score: `84`
-- Final score: `64`
+- Raw score: `87`
+- Final score: `87`
 - Decision: `advisory`
 - Minimum score: `85`
-- Caps applied: `future-hostile-dead-language-in-product-code, agent-tool-supply-chain-gap`
+- Caps applied: `none`
 
 ## Hard Rule Caps
 
@@ -35,7 +35,7 @@
 | `boundary-reclassification-evidence-gap` | 72 | no |
 | `vibe-placeholders-in-product-code` | 68 | no |
 | `fallback-soup-in-product-code` | 70 | no |
-| `future-hostile-dead-language-in-product-code` | 64 | yes |
+| `future-hostile-dead-language-in-product-code` | 64 | no |
 | `severe-duplication-in-product-code` | 70 | no |
 | `generated-zone-mutation-risk` | 76 | no |
 | `direct-db-access-from-wrong-layer` | 66 | no |
@@ -48,7 +48,7 @@
 | `destructive-migration-risk` | 70 | no |
 | `authz-or-data-isolation-gap` | 78 | no |
 | `input-boundary-gap` | 78 | no |
-| `agent-tool-supply-chain-gap` | 78 | yes |
+| `agent-tool-supply-chain-gap` | 78 | no |
 | `release-readiness-gap` | 80 | no |
 | `missing-rust-property-or-integration-tests` | 82 | no |
 | `no-agent-friendly-exception-pattern` | 76 | no |
@@ -141,7 +141,7 @@
 | Contract and boundary integrity | 13 | 88 | 11.44 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 98 | 11.76 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 41 | 4.92 | largest authored code file: crates/cli/src/lib.rs (937 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 65 | 7.80 | largest authored code file: crates/cli/src/lib.rs (995 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 85 | 6.80 | database surface present; migration directory present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 91 | 6.37 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -205,6 +205,14 @@
 | `release-readiness` | `release` | `auto` | `artifact_verified` | `manual launch checklist` | `agent/repo-score.json, agent/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `artifact_verified` | `manual spend review` | `agent/repo-score.json, agent/repo-score.md` |
 
+## Security evidence (ingested)
+
+- Source: `target/jankurai/security/evidence.json`
+- Envelope exit code: `0` · elapsed: `53839` ms · strict: `false`
+- Commands — ran: `1`, skipped: `0`, failed: `0`
+- Generated at: `1779631279`
+- Git HEAD (envelope): `37342ced9d7a1b9dd18891e12f2a28b6963cae53`
+
 ## Boundary Reclassifications
 
 No audited runtime boundary reclassifications declared.
@@ -216,11 +224,11 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
    Route: TLR `Entropy`, lane `fast`, owner `tools`
    Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 41 below the standard floor of 85
+   Reason: `Code shape and semantic surface` scored 65 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:a36cbc5f8f08ee49e625bb42e7a347adfbacb71500e21d1248d0a2bafbb56af9`
-   Evidence: largest authored code file: crates/cli/src/lib.rs (937 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 72 (advisory only, no score impact)
+   Fingerprint: `sha256:ad2db5e7969a64edb76171f7d807c087f6c9b2b96394451a498d38a1a3901851`
+   Evidence: largest authored code file: crates/cli/src/lib.rs (995 LOC), code file exceeds 500 LOC, most code files stay under 300 LOC, copy-code advisory classes found: 72 (advisory only, no score impact)
 2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
@@ -231,37 +239,6 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-3. `high` `vibe` `crates/bench/src/bin/sqlite_parity.rs:5`
-   Rule: `HLT-001-DEAD-MARKER`
-   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
-   Route: TLR `Entropy`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: future-hostile/dead-language term `legacy` appears in product/runtime code
-   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
-   Rerun: `just fast`
-   Fingerprint: `sha256:3735004dc6ea266993a8508aa2d7264d8c69269e1713fa433cbf8e91a24532ed`
-   Evidence: crates/bench/src/bin/sqlite_parity.rs:5, future-hostile/dead-language term `legacy` appears
-4. `high` `vibe` `crates/bench/src/sqlite_parity/cli.rs:218`
-   Rule: `HLT-001-DEAD-MARKER`
-   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
-   Route: TLR `Entropy`, lane `fast`, owner `tools`
-   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: future-hostile/dead-language term `legacy` appears in product/runtime code
-   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
-   Rerun: `just fast`
-   Fingerprint: `sha256:d67127f7f7495e83ed951253fb459cf0ff8e36dac67721a6a8bf9eb5cb0daccc`
-   Evidence: crates/bench/src/sqlite_parity/cli.rs:218, future-hostile/dead-language term `legacy` appears
-5. `high` `security` `docs/testing.md:82`
-   Rule: `HLT-024-AGENT-TOOL-SUPPLY-GAP`
-   Check: `HLT-024-AGENT-TOOL-SUPPLY-GAP:security` `hard` confidence `0.88`
-   Route: TLR `Security, secrets, agency`, lane `security`, owner `standard`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `agent tool supply`
-   Reason: agent tool supply-chain changes alter execution authority
-   Fix: pin and review agent tools, MCP servers, hooks, and rule files; keep untrusted tool output separate from trusted policy
-   Rerun: `just security`
-   Fingerprint: `sha256:4b3e93f391c6463dbcbaaf62016437ffdcf698ca1e6a86c586298c1cd0e6e664`
-   Evidence: `benchmark-results/sqlite-parity/latest/`, and `sqlite-parity-report-check`
 
 ## Policy
 
@@ -273,11 +250,5 @@ No audited runtime boundary reclassifications declared.
 
 1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-2. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/bin/sqlite_parity.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
-   Route: `Entropy`/`fast`
-3. `high` `HLT-001-DEAD-MARKER` `crates/bench/src/sqlite_parity/cli.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
-   Route: `Entropy`/`fast`
-4. `high` `HLT-024-AGENT-TOOL-SUPPLY-GAP` `docs/testing.md` - pin and review agent tools, MCP servers, hooks, and rule files; keep untrusted tool output separate from trusted policy
-   Route: `Security, secrets, agency`/`security`
-5. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+2. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`

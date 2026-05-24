@@ -1,4 +1,6 @@
-use super::super::agg_eval::{eval_group_scalar_with_ctx, project_group_row};
+use super::super::agg_eval::{
+    eval_group_scalar_with_ctx, project_group_row, with_group_eval_cache,
+};
 use super::super::*;
 use super::order::{eval_group_key, sort_groups_by_order_by, sort_projected_rows_by_order_by};
 
@@ -25,17 +27,22 @@ pub(crate) fn execute_grouped_select(
         memory.request(memory_bytes)?;
         for row in filtered {
             let first_context = Some(row.context());
-            if let Some(having) = &plan.having
-                && !is_truthy(&eval_group_scalar_with_ctx(
-                    having,
-                    std::slice::from_ref(&row),
-                    first_context.as_ref(),
-                    bindings,
-                )?)
-            {
-                continue;
+            let projected = with_group_eval_cache(|| -> Result<Option<Vec<SqlValue>>> {
+                if let Some(having) = &plan.having
+                    && !is_truthy(&eval_group_scalar_with_ctx(
+                        having,
+                        std::slice::from_ref(&row),
+                        first_context.as_ref(),
+                        bindings,
+                    )?)
+                {
+                    return Ok(None);
+                }
+                Ok(Some(project_row(&plan.projection, &row, bindings)?))
+            })?;
+            if let Some(projected) = projected {
+                out.push(projected);
             }
-            out.push(project_row(&plan.projection, &row, bindings)?);
         }
         out.sort_by(|left, right| compare_rows(left, right));
         out.dedup_by(|left, right| compare_rows(left, right) == Ordering::Equal);
@@ -85,17 +92,22 @@ pub(crate) fn execute_grouped_select(
             {
                 continue;
             }
-            if let Some(having) = &plan.having
-                && !is_truthy(&eval_group_scalar_with_ctx(
-                    having,
-                    &group,
-                    first_context.as_ref(),
-                    bindings,
-                )?)
-            {
-                continue;
+            let projected = with_group_eval_cache(|| -> Result<Option<Vec<SqlValue>>> {
+                if let Some(having) = &plan.having
+                    && !is_truthy(&eval_group_scalar_with_ctx(
+                        having,
+                        &group,
+                        first_context.as_ref(),
+                        bindings,
+                    )?)
+                {
+                    return Ok(None);
+                }
+                Ok(Some(project_group_row(&plan.projection, &group, bindings)?))
+            })?;
+            if let Some(projected) = projected {
+                out.push(projected);
             }
-            out.push(project_group_row(&plan.projection, &group, bindings)?);
         }
         out.sort_by(|left, right| compare_rows(left, right));
         out.dedup_by(|left, right| compare_rows(left, right) == Ordering::Equal);
@@ -116,17 +128,23 @@ pub(crate) fn execute_grouped_select(
         {
             continue;
         }
-        if let Some(having) = &plan.having
-            && !is_truthy(&eval_group_scalar_with_ctx(
-                having,
-                group,
-                first_context.as_ref(),
-                bindings,
-            )?)
-        {
+        let projected = with_group_eval_cache(|| -> Result<Option<Vec<SqlValue>>> {
+            if let Some(having) = &plan.having
+                && !is_truthy(&eval_group_scalar_with_ctx(
+                    having,
+                    group,
+                    first_context.as_ref(),
+                    bindings,
+                )?)
+            {
+                return Ok(None);
+            }
+            Ok(Some(project_group_row(&plan.projection, group, bindings)?))
+        })?;
+        let Some(projected) = projected else {
             continue;
-        }
-        out.push(project_group_row(&plan.projection, group, bindings)?);
+        };
+        out.push(projected);
         surviving_groups.push(group.as_slice());
     }
 

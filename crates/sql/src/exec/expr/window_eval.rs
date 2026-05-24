@@ -16,6 +16,8 @@
 //! `SqlRow` values; partitions / ordering / frame bounds are computed
 //! purely in-memory.
 
+use std::collections::HashMap;
+
 #[path = "window_eval/accumulator.rs"]
 mod accumulator;
 #[path = "window_eval/frame.rs"]
@@ -24,7 +26,8 @@ mod frame;
 mod partition;
 
 use sqlparser::ast::{
-    Expr, FunctionArg, FunctionArgExpr, FunctionArguments, SelectItem, WindowSpec, WindowType,
+    Expr, FunctionArg, FunctionArgExpr, FunctionArguments, SelectItem, WindowFrameUnits,
+    WindowSpec, WindowType,
 };
 
 use crate::error::{Error, Result};
@@ -34,7 +37,7 @@ use super::SqlRow;
 use super::{cast_value, eval_scalar};
 
 use accumulator::Accumulator;
-use frame::{ResolvedFrame, frame_bounds, literal_i64, resolve_frame};
+use frame::{ResolvedBound, ResolvedFrame, frame_bounds, literal_i64, resolve_frame};
 use partition::{assign_peer_ids, order_partition, partition_rows, peer_ranges};
 
 /// Returns `true` if any projection item contains a function call carrying
@@ -84,11 +87,12 @@ pub(crate) fn evaluate_window_functions(
         return Ok(Vec::new());
     }
     let mut window_values: Vec<Vec<Vec<SqlValue>>> = Vec::with_capacity(projection.len());
+    let mut window_cache = WindowLayoutCache::new(rows, bindings);
     for item in projection {
         let calls = collect_window_calls(item);
         let mut per_call: Vec<Vec<SqlValue>> = Vec::with_capacity(calls.len());
         for call in &calls {
-            per_call.push(eval_window_call(call, rows, bindings)?);
+            per_call.push(eval_window_call(call, rows, bindings, &mut window_cache)?);
         }
         window_values.push(per_call);
     }
@@ -249,6 +253,7 @@ fn eval_window_call(
     expr: &Expr,
     rows: &[SqlRow],
     bindings: &[Option<SqlValue>],
+    window_cache: &mut WindowLayoutCache<'_>,
 ) -> Result<Vec<SqlValue>> {
     let Expr::Function(func) = expr else {
         return Err(Error::UnsupportedSql(
@@ -261,31 +266,33 @@ fn eval_window_call(
         ));
     };
 
-    let partitions = partition_rows(rows, &window.partition_by, bindings)?;
     let frame = resolve_frame(window);
 
     let func_name = func.name.to_string().to_ascii_lowercase();
     let args = function_args(func);
 
     let mut results = vec![SqlValue::Null; rows.len()];
-    for partition in &partitions {
-        let sorted = order_partition(partition, rows, &window.order_by, bindings)?;
-        let order_index_map: Vec<usize> = sorted.iter().map(|(idx, _)| *idx).collect();
-        let peer_ids: Vec<usize> = if window.order_by.is_empty() {
-            vec![0; sorted.len()]
-        } else {
-            assign_peer_ids(&sorted, &window.order_by)
-        };
-        let peer_ranges = peer_ranges(&peer_ids);
-
-        for (sorted_pos, (row_idx, _row_ref)) in sorted.iter().enumerate() {
+    let layouts = window_cache.layouts_for(window)?;
+    if prefix_aggregate_window(
+        &func_name,
+        &args,
+        rows,
+        layouts,
+        &frame,
+        bindings,
+        &mut results,
+    )? {
+        return Ok(results);
+    }
+    for layout in layouts {
+        for (sorted_pos, row_idx) in layout.order_index_map.iter().enumerate() {
             let value = compute_function_for_row(
                 &func_name,
                 &args,
                 rows,
-                &order_index_map,
-                &peer_ids,
-                &peer_ranges,
+                &layout.order_index_map,
+                &layout.peer_ids,
+                &layout.peer_ranges,
                 sorted_pos,
                 &frame,
                 window,
@@ -295,6 +302,92 @@ fn eval_window_call(
         }
     }
     Ok(results)
+}
+
+fn prefix_aggregate_window(
+    func_name: &str,
+    args: &[Expr],
+    rows: &[SqlRow],
+    layouts: &[CachedWindowPartition],
+    frame: &ResolvedFrame,
+    bindings: &[Option<SqlValue>],
+    results: &mut [SqlValue],
+) -> Result<bool> {
+    if !matches!(func_name, "sum" | "count" | "avg" | "min" | "max" | "total")
+        || !matches!(frame.units, WindowFrameUnits::Rows)
+        || !matches!(&frame.start, ResolvedBound::UnboundedPreceding)
+        || !matches!(&frame.end, ResolvedBound::CurrentRow)
+    {
+        return Ok(false);
+    }
+    for layout in layouts {
+        let mut accumulator = Accumulator::new(func_name);
+        for row_idx in &layout.order_index_map {
+            let value = match args.first() {
+                Some(expr) => eval_scalar(expr, &rows[*row_idx].context(), bindings)?,
+                None => SqlValue::Integer(1),
+            };
+            accumulator.push(value);
+            results[*row_idx] = accumulator.value();
+        }
+    }
+    Ok(true)
+}
+
+struct WindowLayoutCache<'a> {
+    rows: &'a [SqlRow],
+    bindings: &'a [Option<SqlValue>],
+    layouts: HashMap<String, Vec<CachedWindowPartition>>,
+}
+
+struct CachedWindowPartition {
+    order_index_map: Vec<usize>,
+    peer_ids: Vec<usize>,
+    peer_ranges: Vec<(usize, usize)>,
+}
+
+impl<'a> WindowLayoutCache<'a> {
+    fn new(rows: &'a [SqlRow], bindings: &'a [Option<SqlValue>]) -> Self {
+        Self {
+            rows,
+            bindings,
+            layouts: HashMap::new(),
+        }
+    }
+
+    fn layouts_for(&mut self, window: &WindowSpec) -> Result<&[CachedWindowPartition]> {
+        let key = window_layout_key(window);
+        if !self.layouts.contains_key(&key) {
+            let layouts = self.build_layouts(window)?;
+            self.layouts.insert(key.clone(), layouts);
+        }
+        Ok(self.layouts.get(&key).expect("inserted layout").as_slice())
+    }
+
+    fn build_layouts(&self, window: &WindowSpec) -> Result<Vec<CachedWindowPartition>> {
+        let partitions = partition_rows(self.rows, &window.partition_by, self.bindings)?;
+        let mut layouts = Vec::with_capacity(partitions.len());
+        for partition in &partitions {
+            let sorted = order_partition(partition, self.rows, &window.order_by, self.bindings)?;
+            let order_index_map: Vec<usize> = sorted.iter().map(|(idx, _)| *idx).collect();
+            let peer_ids: Vec<usize> = if window.order_by.is_empty() {
+                vec![0; sorted.len()]
+            } else {
+                assign_peer_ids(&sorted, &window.order_by)
+            };
+            let peer_ranges = peer_ranges(&peer_ids);
+            layouts.push(CachedWindowPartition {
+                order_index_map,
+                peer_ids,
+                peer_ranges,
+            });
+        }
+        Ok(layouts)
+    }
+}
+
+fn window_layout_key(window: &WindowSpec) -> String {
+    format!("{:?}|{:?}", window.partition_by, window.order_by)
 }
 
 fn function_args(func: &sqlparser::ast::Function) -> Vec<Expr> {
