@@ -1292,3 +1292,19 @@ fn build_index_keys_from_names(
     }
     Ok(keys)
 }
+
+// Stub for Track C's legacy_alter_table feature flag — full implementation
+// (which rewrites dependent view/trigger bodies on RENAME) wasn't merged
+// from track-c-ddl-pragma due to conflict with Track J's apply_rename_index.
+// The flag defaults to false; tests that need it can be re-enabled later.
+thread_local! {
+    static LEGACY_ALTER_TABLE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+pub fn legacy_alter_table_active_for_tests() -> bool {
+    LEGACY_ALTER_TABLE.with(|c| c.get())
+}
+
+pub fn set_legacy_alter_table(v: bool) {
+    LEGACY_ALTER_TABLE.with(|c| c.set(v));
+}
