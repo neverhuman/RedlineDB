@@ -6,6 +6,30 @@ harness. Proof artifacts under `target/proof/sqlite-full-parity/` should record
 `sqlite_version()`, `PRAGMA compile_options`, ignored tests, `UnsupportedSql`
 sites, and the SQLLogicTest inventory for each parity pass.
 
+The official corpus and gate now live in `neverhuman/redline-testing`; that
+runner is the sole official source for parity evidence. The ledger below is the
+RedlineDB-side compatibility snapshot that consumes that external suite.
+Official README metrics and charts are accepted only from the pinned external
+release artifact. The report generator requires
+`benchmark-results/sqlite-parity/latest/provenance.json` before regenerating
+README/chart outputs, and CI verifies the hard-pinned release tarball SHA-256,
+binary SHA-256, release manifest, and GitHub artifact attestation before any
+official suite runs.
+
+The provenance schema accepted by the RedlineDB report gate is deliberately
+small and hash-first:
+
+- `output_file_hashes` or `output_hashes` must include `raw.jsonl` with its
+  SHA-256, either as `"raw.jsonl": "<sha256>"` or
+  `"raw.jsonl": { "sha256": "<sha256>" }`.
+- `redline_testing_binary_sha256` must record the installed
+  `redline-testing` binary SHA-256 used to write `raw.jsonl`.
+- If the provenance records a release artifact/bin hash through
+  `release_artifact.bin_sha256`, `release_artifact.binary_sha256`,
+  `redline_testing.release_artifact.bin_sha256`, `release_file_hashes`, or
+  equivalent `*_binary_sha256` fields, it must equal
+  `redline_testing_binary_sha256`.
+
 Status values are deliberately narrow:
 
 | Status | Meaning |

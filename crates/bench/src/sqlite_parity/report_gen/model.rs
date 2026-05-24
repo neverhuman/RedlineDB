@@ -42,11 +42,19 @@ pub(crate) struct SummaryJson {
 #[derive(Debug, Serialize)]
 pub(crate) struct ManifestJson {
     pub(super) command: Vec<String>,
+    pub(super) official_source: String,
+    pub(super) evidence_gate: String,
     pub(super) git_sha: String,
     pub(super) sqlite_version: String,
     pub(super) updated_date: String,
     pub(super) repetitions: usize,
     pub(super) warmup: usize,
+    pub(super) provenance_path: String,
+    pub(super) provenance_sha256: String,
+    pub(super) raw_jsonl_sha256: String,
+    pub(super) redline_testing_binary_sha256: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) redline_testing_release_binary_sha256: Option<String>,
     pub(super) input_hashes: BTreeMap<String, String>,
     pub(super) output_hashes: BTreeMap<String, String>,
 }

@@ -64,29 +64,24 @@ name = "sql-parity-full"
 purpose = "full SQL differential parity gate against rusqlite oracle (zero-divergence)"
 
 [[lane]]
-command = "just sqlite-parity-scale-smoke"
-name = "sqlite-parity-scale-smoke"
-purpose = "bench-owned SQLite shell parity scale smoke over P0 memory cases"
+command = "just redline-testing-official"
+name = "redline-testing-official"
+purpose = "external official conformance and benchmark gate routed through the pinned redline-testing release artifact"
 
 [[lane]]
-command = "just sqlite-parity-scale-ci"
-name = "sqlite-parity-scale-ci"
-purpose = "bench-owned SQLite parity CI hard gate over the full generated RedlineDB-vs-SQLite corpus"
-
-[[lane]]
-command = "just sqlite-parity-volatile-sentinel"
-name = "sqlite-parity-volatile-sentinel"
-purpose = "bench-owned advisory sentinel over volatile :memory: fast-path cases"
+command = "just official-evidence-guard"
+name = "official-evidence-guard"
+purpose = "fail if RedlineDB reintroduces in-tree official benchmark/report evidence generation"
 
 [[lane]]
 command = "just sqlite-parity-report-check"
 name = "sqlite-parity-report-check"
-purpose = "deterministic SQLite parity report artifact drift check"
+purpose = "deterministic SQLite parity report drift check against committed official evidence"
 
 [[lane]]
-command = "just sqlite-parity-scale-full"
-name = "sqlite-parity-scale-full"
-purpose = "bench-owned SQLite shell parity scale full generated corpus sweep"
+command = "just sqlite-parity-report-update"
+name = "sqlite-parity-report-update"
+purpose = "regenerate official report and README data from the pinned redline-testing evidence chain"
 
 [[lane]]
 command = "rtk cargo test -p redlinedb-sql --test parity_fk_enforce --quiet --locked"
