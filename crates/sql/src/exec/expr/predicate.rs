@@ -79,12 +79,17 @@ pub(crate) fn eval_subquery_value(
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
     let rows = evaluate_subquery_rows(subquery, row, bindings)?;
-    match rows.as_slice() {
-        [] => Ok(SqlValue::Null),
-        [row] if row.len() == 1 => Ok(row[0].clone()),
-        [row] if row.is_empty() => Ok(SqlValue::Null),
-        _ => Err(Error::UnsupportedSql(
-            "scalar subquery must return exactly one row and one column".to_owned(),
+    // SQLite scalar-subquery semantics
+    // (https://sqlite.org/lang_expr.html#subqueries): a multi-row
+    // subquery returns the value of the first row (in projection
+    // order). A multi-column subquery is still rejected since the
+    // expression context demands a single column.
+    match rows.first() {
+        None => Ok(SqlValue::Null),
+        Some(first) if first.is_empty() => Ok(SqlValue::Null),
+        Some(first) if first.len() == 1 => Ok(first[0].clone()),
+        Some(_) => Err(Error::UnsupportedSql(
+            "scalar subquery must return exactly one column".to_owned(),
         )),
     }
 }
@@ -109,6 +114,7 @@ fn bind_subquery(conn: &Connection, subquery: &sqlparser::ast::Query) -> Result<
     });
     Ok(template)
 }
+
 
 fn subquery_cache_key(conn: &Connection, subquery: &sqlparser::ast::Query) -> SubqueryCacheKey {
     SubqueryCacheKey {

@@ -81,6 +81,32 @@ thread_local! {
     /// statement's thread. Reset before every top-level `bind_with_query`
     /// call so ids are stable per query plan.
     static CTE_REL_COUNTER: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Per-thread name → CteDef registry that survives scope teardown.
+    /// `bind_with_query` populates this when it materializes CTEs so
+    /// subqueries that bind at exec time (after the scope stack has
+    /// been popped) can still resolve CTE references by name. Cleared
+    /// at the start of every new top-level `bind_with_query` call.
+    static CTE_PERMANENT: std::cell::RefCell<HashMap<String, CteDef>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+fn register_permanent_cte(name: String, def: CteDef) {
+    CTE_PERMANENT.with(|cell| {
+        cell.borrow_mut().insert(name.to_ascii_lowercase(), def);
+    });
+}
+
+fn clear_permanent_ctes() {
+    CTE_PERMANENT.with(|cell| cell.borrow_mut().clear());
+}
+
+fn lookup_permanent_cte(name: &str) -> Option<CteDef> {
+    CTE_PERMANENT.with(|cell| {
+        let map = cell.borrow();
+        map.iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.clone())
+    })
 }
 
 fn next_cte_rel_id() -> RelId {
@@ -201,7 +227,10 @@ pub(crate) fn scope_active() -> bool {
 
 /// Bind a `WITH ... query` form. Pre-executes each CTE body (handling
 /// recursive references) and pushes a CTE scope before binding the
-/// trailing query. The scope is popped before returning.
+/// trailing query. The scope is popped before returning; we *also*
+/// publish each CTE's name into `CTE_PERMANENT_NAMES` so subqueries
+/// that bind at exec time (after the scope stack has been torn down)
+/// can still resolve the name to its pre-materialized rows.
 pub(crate) fn bind_with_query(
     conn: &Connection,
     schema: Arc<SchemaSnapshot>,
@@ -217,6 +246,9 @@ pub(crate) fn bind_with_query(
     } = with;
 
     CTE_REL_COUNTER.with(|cell| cell.set(0));
+    // Clear stale permanent entries from any previous top-level
+    // statement before binding the new one.
+    clear_permanent_ctes();
     let mut pushed_scopes = 0usize;
     for cte in cte_tables {
         let def = recursive::materialize_cte(
@@ -227,6 +259,7 @@ pub(crate) fn bind_with_query(
             &cte,
             recursive,
         )?;
+        register_permanent_cte(def.name.to_string(), def.clone());
         let mut single = HashMap::new();
         single.insert(def.name.to_string(), def);
         push_scope(single);
@@ -259,21 +292,21 @@ pub(crate) fn run_query_to_rows(
 }
 
 /// Try to interpret a FROM table reference as a CTE. Returns a
-/// `SelectSource::Cte` if the name matches a CTE in the active scope.
+/// `SelectSource::Cte` if the name matches a CTE in the active scope
+/// or, failing that, in the per-thread permanent CTE registry (for
+/// subqueries that bind at exec time after the scope stack has been
+/// torn down).
 pub(crate) fn try_resolve_cte_source(
     name: &sqlparser::ast::ObjectName,
     alias: Option<&Arc<str>>,
     _params: &mut ParamLayout,
 ) -> Option<SelectSource> {
-    if !scope_active() {
-        return None;
-    }
     let last = name.0.last()?;
     let ident_name = match last {
         sqlparser::ast::ObjectNamePart::Identifier(ident) => &ident.value,
         _ => return None,
     };
-    let def = lookup(ident_name)?;
+    let def = resolve_cte_def(ident_name)?;
     Some(SelectSource::Cte {
         name: def.name,
         alias: alias.cloned(),
@@ -289,20 +322,31 @@ pub(crate) fn try_resolve_cte_bound_table(
     name: &sqlparser::ast::ObjectName,
     alias: Option<&Arc<str>>,
 ) -> Option<BoundTable> {
-    if !scope_active() {
-        return None;
-    }
     let last = name.0.last()?;
     let ident_name = match last {
         sqlparser::ast::ObjectNamePart::Identifier(ident) => &ident.value,
         _ => return None,
     };
-    let def = lookup(ident_name)?;
+    let def = resolve_cte_def(ident_name)?;
     let table = def.table_def?;
     Some(BoundTable {
         table,
         alias: alias.cloned(),
     })
+}
+
+/// Single resolution point that consults both scope tiers in a
+/// deterministic order: active scope (the local `WITH` we are
+/// currently binding) wins over the permanent registry (an enclosing
+/// `WITH` whose scope has already been popped — used by subqueries
+/// that bind at exec time).
+fn resolve_cte_def(ident_name: &str) -> Option<CteDef> {
+    if scope_active() {
+        if let Some(def) = lookup(ident_name) {
+            return Some(def);
+        }
+    }
+    lookup_permanent_cte(ident_name)
 }
 
 #[allow(dead_code)]
