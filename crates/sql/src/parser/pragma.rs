@@ -1004,9 +1004,11 @@ pub(crate) fn parse_pragma_template(
         "foreign_key_check" => {
             // SQLite's `PRAGMA foreign_key_check` walks the catalog and
             // emits one row per orphaned child row. RedlineDB enforces
-            // FKs eagerly, so a synchronous walk against the live state
-            // returns no rows; deferred-mode regression cases that
-            // expect "child|N|parent|...|" remain a known follow-up.
+            // FKs eagerly during INSERT so the live state never holds
+            // violations — except for rows guarded by
+            // `PRAGMA defer_foreign_keys=ON`, which postpones the check
+            // until COMMIT. Surface those pending checks here so
+            // mid-transaction probes see the deferred-mode violations.
             pragma_static_select(
                 sql,
                 schema_epoch,
@@ -1016,7 +1018,7 @@ pub(crate) fn parse_pragma_template(
                     String::from("parent"),
                     String::from("fkid"),
                 ],
-                Vec::new(),
+                pragma_foreign_key_check_rows(conn, schema),
             )
         }
         _ => {
@@ -1611,6 +1613,48 @@ pub(crate) fn pragma_index_xinfo_rows(
         ]);
     }
     Ok(rows)
+}
+
+/// Emit one row per pending deferred FK violation visible to the
+/// current session. Uses the SessionState pointer installed by the
+/// surrounding `with_write_tx` / `with_session` call to avoid
+/// re-acquiring the connection mutex (which would deadlock against
+/// the surrounding write transaction).
+fn pragma_foreign_key_check_rows(
+    conn: &Connection,
+    schema: &SchemaSnapshot,
+) -> Vec<Vec<SqlValue>> {
+    let pending = match crate::exec::current_session_ptr() {
+        Some(ptr) => {
+            // SAFETY: ptr installed by enclosing with_write_tx; lives for its scope.
+            let session: &crate::session::SessionState = unsafe { &*ptr };
+            session.deferred_fk_checks.clone()
+        }
+        None => match conn.with_session(|session| Ok(session.deferred_fk_checks.clone())) {
+            Ok(v) => v,
+            Err(_) => Vec::new(),
+        },
+    };
+    let mut rows = Vec::with_capacity(pending.len());
+    for check in pending {
+        let Some(child) = schema
+            .tables
+            .iter()
+            .find(|t| t.table_id.0 == check.child_table_id)
+        else {
+            continue;
+        };
+        let Some(fk) = child.foreign_keys.get(check.fk_index) else {
+            continue;
+        };
+        rows.push(vec![
+            SqlValue::Text(Arc::from(child.name.as_ref())),
+            SqlValue::Integer(check.child_rowid as i64),
+            SqlValue::Text(Arc::from(fk.parent_table.as_ref())),
+            SqlValue::Integer(check.fk_index as i64),
+        ]);
+    }
+    rows
 }
 
 pub(crate) fn pragma_foreign_key_list_rows(
