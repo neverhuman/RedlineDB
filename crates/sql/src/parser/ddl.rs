@@ -43,6 +43,47 @@ pub(crate) fn bind_create_table(
 
     let session_scoped = crate::parser::bind::create_table_is_session_scoped(&create_table);
     let (schema, name) = split_name(create_table.name)?;
+    // SQLite rejects `AUTOINCREMENT` on a `WITHOUT ROWID` table — the
+    // sqlite_sequence machinery is rowid-based by design. Detect the
+    // combination ahead of column conversion so callers see the same
+    // upfront error.
+    if create_table.without_rowid
+        && create_table.columns.iter().any(|column| {
+            column
+                .options
+                .iter()
+                .any(|opt| matches!(&opt.option,
+                    sqlparser::ast::ColumnOption::DialectSpecific(tokens)
+                        if tokens.len() == 1
+                            && tokens[0].to_string().eq_ignore_ascii_case("AUTOINCREMENT")
+                ))
+        })
+    {
+        return Err(Error::UnsupportedSql(
+            "AUTOINCREMENT not allowed on WITHOUT ROWID tables".to_owned(),
+        ));
+    }
+    // STRICT tables accept only the six well-defined affinities: INT,
+    // INTEGER, REAL, TEXT, BLOB, ANY. Reject everything else upfront so
+    // callers see the same surface as sqlite3. SQLite rejects NUMERIC
+    // because its type-affinity rules collide with strict typing.
+    if create_table.strict {
+        for column in &create_table.columns {
+            if column.data_type == sqlparser::ast::DataType::Unspecified {
+                return Err(Error::UnsupportedSql(format!(
+                    "STRICT table column {} requires a declared type",
+                    column.name.value
+                )));
+            }
+            let declared = column.data_type.to_string();
+            if !is_strict_table_allowed_type(&declared) {
+                return Err(Error::UnsupportedSql(format!(
+                    "STRICT table column {} declares unsupported type {declared}",
+                    column.name.value
+                )));
+            }
+        }
+    }
     let mut columns = Vec::with_capacity(create_table.columns.len());
     let mut column_lookup = std::collections::HashMap::new();
     for (ordinal, column) in create_table.columns.iter().enumerate() {
@@ -80,7 +121,7 @@ pub(crate) fn bind_create_table(
                 constraints,
                 strict: create_table.strict,
                 without_rowid: create_table.without_rowid,
-                normalized_sql: Some(sql.to_owned()),
+                normalized_sql: Some(strip_trailing_semicolon(sql)),
             })
         } else {
             PreparedKind::CreateTable(CreateTableSpec {
@@ -91,7 +132,7 @@ pub(crate) fn bind_create_table(
                 constraints,
                 strict: create_table.strict,
                 without_rowid: create_table.without_rowid,
-                normalized_sql: Some(sql.to_owned()),
+                normalized_sql: Some(strip_trailing_semicolon(sql)),
             })
         },
     })
@@ -144,7 +185,7 @@ fn bind_create_table_as_select(
                     constraints: Vec::new(),
                     strict: create_table.strict,
                     without_rowid: create_table.without_rowid,
-                    normalized_sql: Some(sql.to_owned()),
+                    normalized_sql: Some(strip_trailing_semicolon(sql)),
                 },
                 select: None,
             }),
@@ -175,7 +216,7 @@ fn bind_create_table_as_select(
                 constraints: Vec::new(),
                 strict: create_table.strict,
                 without_rowid: create_table.without_rowid,
-                normalized_sql: Some(sql.to_owned()),
+                normalized_sql: Some(strip_trailing_semicolon(sql)),
             },
             select: Some(select_plan),
         });
@@ -875,4 +916,26 @@ pub(crate) fn bind_analyze(
         readonly: false,
         kind: PreparedKind::Analyze(crate::statement::AnalyzePlan { table }),
     })
+}
+
+/// True when `declared` is one of the six declared types SQLite allows
+/// inside a `CREATE TABLE … STRICT` definition: INT, INTEGER, REAL,
+/// TEXT, BLOB, ANY. Everything else (notably VARCHAR / NUMERIC) is
+/// rejected at CREATE-time. Matches SQLite case-insensitively.
+fn is_strict_table_allowed_type(declared: &str) -> bool {
+    const ALLOWED: &[&str] = &["INT", "INTEGER", "REAL", "TEXT", "BLOB", "ANY"];
+    let normalized = declared.trim().to_ascii_uppercase();
+    ALLOWED.iter().any(|t| *t == normalized)
+}
+
+/// Trim a single trailing `;` from a SQL statement before stashing it on
+/// `sqlite_master.sql`. SQLite never includes the terminator in the
+/// reflected text, so our `normalized_sql` field mirrors that surface.
+pub(crate) fn strip_trailing_semicolon(sql: &str) -> String {
+    let trimmed = sql.trim_end();
+    if let Some(stripped) = trimmed.strip_suffix(';') {
+        stripped.trim_end().to_owned()
+    } else {
+        trimmed.to_owned()
+    }
 }

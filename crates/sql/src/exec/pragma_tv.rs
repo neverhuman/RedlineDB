@@ -172,14 +172,36 @@ impl TvFunc for PragmaDatabaseList {
                 "pragma_database_list takes no arguments".to_owned(),
             ));
         }
-        let row = vec![
+        // SQLite reports an empty `file` path for `:memory:` and other
+        // ephemeral databases; the kernel-internal /dev/shm path is an
+        // implementation detail and not user-visible.
+        let main_path = if conn.is_in_memory() {
+            String::new()
+        } else {
+            conn.database_path().to_string_lossy().into_owned()
+        };
+        let mut rows = vec![vec![
             SqlValue::Integer(0),
             SqlValue::Text(Arc::from("main")),
-            SqlValue::Text(Arc::from(conn.database_path().to_string_lossy().as_ref())),
-        ];
+            SqlValue::Text(Arc::from(main_path.as_str())),
+        ]];
+        for (seq, (alias, path)) in conn
+            .attach_map()
+            .attached_aliases_with_paths()
+            .into_iter()
+            .enumerate()
+        {
+            // SQLite numbers attached schemas starting at 2 (seq=1
+            // is reserved for the implicit `temp` schema).
+            rows.push(vec![
+                SqlValue::Integer((seq + 2) as i64),
+                SqlValue::Text(Arc::from(alias.as_str())),
+                SqlValue::Text(Arc::from(path.as_str())),
+            ]);
+        }
         Ok(TvResult {
             columns: vec!["seq".into(), "name".into(), "file".into()],
-            rows: vec![row],
+            rows,
         })
     }
 }

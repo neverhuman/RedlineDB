@@ -252,18 +252,18 @@ pub(crate) fn apply_row_affinity(table: &TableDef, values: Vec<SqlValue>) -> Res
     let mut out = values;
     for (idx, column) in table.columns.iter().enumerate() {
         let original = out[idx].clone();
-        // SQLite formats REAL → TEXT through its `%!.*g` printf path; the
-        // kernel's affinity helper falls back to Rust's default `{}` which
-        // produces verbose digit dumps for large/small reals. Pre-format
-        // when the destination is TEXT affinity so the persisted value
-        // matches sqlite3 (e.g. `INSERT INTO t(c TEXT) VALUES (1.5e100)`
-        // stores `"1.5e+100"` rather than `"15000...000.0"`).
+        // SQLite formats REAL → TEXT through its `%!.*g` printf path.
+        // Pre-format when the destination is TEXT affinity. Also: STRICT
+        // tables declared with the `ANY` pseudo-type preserve the input
+        // storage class as-is (SQLite v3.53 STRICT-ANY behavior).
         let coerced = if matches!(column.affinity, redlinedb_kernel::catalog::Affinity::Text)
             && let SqlValue::Real(v) = original
         {
             SqlValue::Text(std::sync::Arc::from(
                 crate::exec::expr::scalar::format_real_sqlite(v),
             ))
+        } else if table.is_strict() && strict_declared_any(column) {
+            original.clone()
         } else {
             apply_affinity(original.clone(), column.affinity)
                 .map_err(|_| Error::DatatypeMismatch)?
@@ -400,6 +400,16 @@ pub(crate) fn apply_constraints(table: &TableDef, values: &[SqlValue]) -> Result
         }
     }
 
+    // `PRAGMA ignore_check_constraints=ON` short-circuits CHECK evaluation
+    // for the active connection. This mirrors SQLite's surface — the
+    // pragma flips a per-session bit that is consulted by every INSERT /
+    // UPDATE write path.
+    let ignore_checks = crate::exec::current_connection()
+        .map(|conn| conn.ignore_check_constraints())
+        .unwrap_or(false);
+    if ignore_checks {
+        return Ok(());
+    }
     for check in &table.checks {
         let row = TableRowSource { values };
         let result = eval_expr(&check.expr, &row, &mut scratch).map_err(|_| {

@@ -185,6 +185,27 @@ pub enum PragmaPlan {
     SetQueryOnly(bool),
     SetCaseSensitiveLike(bool),
     WalCheckpoint,
+    SetAnalysisLimit(i64),
+    SetApplicationId(i64),
+    SetAutoVacuum(i64),
+    SetAutomaticIndex(bool),
+    SetBusyTimeout(i64),
+    SetCacheSpill(i64),
+    SetCheckpointFullfsync(bool),
+    SetDeferForeignKeys(bool),
+    SetFullfsync(bool),
+    SetHardHeapLimit(i64),
+    SetIgnoreCheckConstraints(bool),
+    SetLegacyAlterTable(bool),
+    SetLockingMode(LockingMode),
+    SetMaxPageCount(i64),
+    SetMmapSize(i64),
+    SetReverseUnorderedSelects(bool),
+    SetSecureDelete(bool),
+    SetSoftHeapLimit(i64),
+    SetThreads(i64),
+    SetTrustedSchema(bool),
+    SetWritableSchema(bool),
 }
 
 /// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the
@@ -230,6 +251,26 @@ pub enum TempStoreMode {
     Default = 0,
     File = 1,
     Memory = 2,
+}
+
+/// SQLite-compatible `PRAGMA locking_mode` values. RedlineDB does not
+/// implement a literal file-locking surface — concurrency is handled by
+/// the kernel transaction layer — but we accept and recall the value so
+/// callers probing it (ORMs, migration tooling) see the SQLite-expected
+/// strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockingMode {
+    Normal,
+    Exclusive,
+}
+
+impl LockingMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LockingMode::Normal => "normal",
+            LockingMode::Exclusive => "exclusive",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -183,6 +183,7 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if out.to_ascii_lowercase().contains("using ") {
         out = strip_create_index_using_clause(&out);
     }
+    out = rewrite_strict_without_rowid_combo(&out);
     out
 }
 
@@ -1771,3 +1772,21 @@ fn collect_jsonb_rhs(bytes: &[u8], start: usize, is_array: bool) -> Option<(Stri
     }
 }
 
+
+
+fn rewrite_strict_without_rowid_combo(sql: &str) -> String {
+    let mut s = sql.to_owned();
+    for pat in [
+        (", STRICT", " STRICT"),
+        (",STRICT", " STRICT"),
+        (", strict", " strict"),
+        (",strict", " strict"),
+        (", WITHOUT ROWID", " WITHOUT ROWID"),
+        (",WITHOUT ROWID", " WITHOUT ROWID"),
+        (", without rowid", " without rowid"),
+        (",without rowid", " without rowid"),
+    ] {
+        s = s.replace(pat.0, pat.1);
+    }
+    s
+}

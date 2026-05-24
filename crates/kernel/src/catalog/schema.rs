@@ -326,6 +326,19 @@ impl SchemaSnapshot {
                 },
             });
             for index in &table.indexes {
+                // SQLite parity: skip the implicit `sqlite_autoindex_*`
+                // row generated for a primary key on a rowid-style table.
+                // When the table has an INTEGER PRIMARY KEY rowid alias
+                // the PK index is encoded by the rowid itself and never
+                // surfaces in `sqlite_master`. The autoindex appears in
+                // sqlite_master only for WITHOUT ROWID PKs and for
+                // implicit UNIQUE constraints.
+                if index.primary
+                    && matches!(index.origin, super::ddl::IndexOrigin::PrimaryKey)
+                    && table.rowid_alias_column.is_some()
+                {
+                    continue;
+                }
                 rows.push(SqliteSchemaRow {
                     type_name: "index".into(),
                     name: index.name.clone(),
@@ -421,7 +434,24 @@ fn render_create_table(table: &TableDef) -> String {
     let mut out = String::new();
     out.push_str("CREATE TABLE ");
     out.push_str(&table.name);
-    out.push_str(" (");
+    out.push('(');
+    // Track which user-visible NOT NULLs originate from an explicit
+    // declaration (vs being implicit from PRIMARY KEY) so the re-render
+    // doesn't add a spurious NOT NULL to a rowid-alias column.
+    use std::collections::HashSet;
+    let explicit_not_null: HashSet<u16> = table
+        .constraints
+        .iter()
+        .filter(|c| matches!(c.kind, super::ConstraintKind::NotNull))
+        .filter_map(|c| {
+            let column_id = c.column_id?;
+            table
+                .columns
+                .iter()
+                .position(|col| col.column_id == column_id)
+                .map(|ord| ord as u16)
+        })
+        .collect();
     for (idx, column) in table.columns.iter().enumerate() {
         if idx > 0 {
             out.push_str(", ");
@@ -431,8 +461,18 @@ fn render_create_table(table: &TableDef) -> String {
             out.push(' ');
             out.push_str(declared);
         }
-        if column.not_null {
+        if table.rowid_alias_column == Some(idx as u16) {
+            out.push_str(" PRIMARY KEY");
+        }
+        if column.not_null
+            && (table.rowid_alias_column != Some(idx as u16)
+                || explicit_not_null.contains(&(idx as u16)))
+        {
             out.push_str(" NOT NULL");
+        }
+        if let Some(default) = column.default_value.as_ref() {
+            out.push_str(" DEFAULT ");
+            out.push_str(&render_default_owned_value(default));
         }
     }
     out.push(')');
@@ -448,6 +488,31 @@ fn render_create_table(table: &TableDef) -> String {
         out.push_str(&table_options.join(", "));
     }
     out
+}
+
+/// Render an `OwnedValue` as a SQL literal for use in a DEFAULT clause —
+/// integers and reals are unadorned, text is single-quoted with
+/// doubled-internal quotes, blob is hex-escaped via `X'..'`.
+fn render_default_owned_value(value: &super::OwnedValue) -> String {
+    use super::OwnedValue;
+    use std::fmt::Write;
+    match value {
+        OwnedValue::Null => "NULL".to_owned(),
+        OwnedValue::Integer(v) => v.to_string(),
+        OwnedValue::Real(v) => v.to_string(),
+        OwnedValue::Text(v) => {
+            let escaped = v.replace('\'', "''");
+            format!("'{escaped}'")
+        }
+        OwnedValue::Blob(v) => {
+            let mut out = String::from("X'");
+            for byte in v.iter() {
+                let _ = write!(&mut out, "{byte:02X}");
+            }
+            out.push('\'');
+            out
+        }
+    }
 }
 
 fn render_create_view(view: &ViewDef) -> String {

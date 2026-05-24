@@ -41,6 +41,10 @@ pub struct Database {
     pub(super) user_version: Mutex<i64>,
     metadata_sync_policy: MetadataSyncPolicy,
     _ephemeral_root: Option<Arc<EphemeralRoot>>,
+    /// True for `:memory:` / private-memory databases. SQLite-parity
+    /// surfaces (PRAGMA journal_mode, database_list path) consult this
+    /// flag rather than the raw on-disk path, which is a tmpfs sidecar.
+    private_memory: bool,
 }
 
 impl Database {
@@ -175,6 +179,7 @@ impl Database {
             }),
             metadata_sync_policy,
             _ephemeral_root: ephemeral_root,
+            private_memory,
         }))
     }
 
@@ -205,6 +210,7 @@ impl Database {
             user_version: Mutex::new(user_version),
             metadata_sync_policy,
             _ephemeral_root: None,
+            private_memory: false,
         }))
     }
 
@@ -239,6 +245,7 @@ impl Database {
             user_version: Mutex::new(user_version),
             metadata_sync_policy,
             _ephemeral_root: None,
+            private_memory: false,
         }))
     }
 
@@ -326,6 +333,16 @@ impl Database {
 
     pub fn path(&self) -> &Path {
         self.path.as_ref()
+    }
+
+    /// True when this database is backed by a private/in-memory engine.
+    /// The `redlinedb` registry routes `:memory:` to
+    /// `create_private_in_memory_at` (which sets `private_memory = true`
+    /// on construction) — the ephemeral root may live on the registry
+    /// rather than on this struct, so we flag the private-memory mode
+    /// explicitly rather than relying on `_ephemeral_root`.
+    pub(crate) fn is_in_memory(&self) -> bool {
+        self.private_memory
     }
 
     pub(crate) fn user_version(&self) -> i64 {

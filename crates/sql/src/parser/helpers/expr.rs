@@ -304,14 +304,25 @@ pub(crate) fn resolve_column_ordinal_in_table(
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
     name: &str,
 ) -> Result<usize> {
-    match table
+    if let Some(v) = table
         .columns
         .iter()
         .position(|column| column.folded.as_ref().eq_ignore_ascii_case(name))
     {
-        Some(v) => Ok(v),
-        None => Err(Error::UnknownColumn(name.to_owned())),
+        return Ok(v);
     }
+    // SQLite parity: a rowid-style table accepts the implicit `rowid`
+    // / `_rowid_` / `oid` aliases as column names in INSERT / UPDATE
+    // column lists. When the table also has an INTEGER PRIMARY KEY
+    // alias the rowid value is routed to that column ordinal so the
+    // existing dispatch (which honours rowid_alias_column) takes
+    // effect.
+    if table.is_public_rowid_name(name) {
+        if let Some(ord) = table.rowid_alias_column {
+            return Ok(ord as usize);
+        }
+    }
+    Err(Error::UnknownColumn(name.to_owned()))
 }
 
 pub(crate) fn resolve_column_ordinal_in_object_name(
