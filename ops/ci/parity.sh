@@ -34,6 +34,9 @@ run_just_lane() {
 
 run_stage() {
     case "$1" in
+        redline-testing-official)
+            run_just_lane redline-testing-official
+            ;;
         sql-parity-all-tests)
             run_sql_parity_all_tests
             ;;
@@ -42,9 +45,6 @@ run_stage() {
             ;;
         sqlite-parity-scale-ci)
             run_just_lane sqlite-parity-scale-ci
-            ;;
-        sqlite-parity-report-check)
-            run_just_lane sqlite-parity-report-check
             ;;
         sqlite-parity-volatile-sentinel)
             run_just_lane sqlite-parity-volatile-sentinel
@@ -77,17 +77,7 @@ run_stage() {
 stage="${CI_PARITY_STAGE:-all}"
 case "$stage" in
     all)
-        run_stage sql-parity-all-tests
-        run_stage sql-parity-full
-        run_stage sqlite-parity-scale-ci
-        run_stage sqlite-parity-report-check
-        run_stage sqlite-parity-volatile-sentinel
-        run_stage sqlite-parity-scale-full
-        run_stage ffi-parity-full
-        run_stage cli-parity-full
-        run_stage fuzz-parity
-        run_stage fuzz-parity-nightly
-        run_stage beyond-sqlite-manifest
+        run_stage redline-testing-official
         ;;
     *)
         run_stage "$stage"

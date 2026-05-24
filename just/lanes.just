@@ -85,11 +85,20 @@ sqlite-parity-scale-ci:
 sqlite-parity-volatile-sentinel:
   ./scripts/just/run.sh sqlite-parity-volatile-sentinel
 
+redline-testing-official:
+  ./scripts/just/run.sh redline-testing-official
+
+official-evidence-guard:
+  ./scripts/just/run.sh official-evidence-guard
+
 sqlite-parity-report-update:
   ./scripts/just/run.sh sqlite-parity-report-update
 
 sqlite-parity-report-check:
   ./scripts/just/run.sh sqlite-parity-report-check
+
+sqlite-parity-report-publish-pr:
+  ./scripts/just/run.sh sqlite-parity-report-publish-pr
 
 sqlite-jankurai-compare:
   ./scripts/just/run.sh sqlite-jankurai-compare

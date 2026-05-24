@@ -684,11 +684,8 @@ mod tests {
     #[cfg(unix)]
     fn write_shell_bin(dir: &Path, name: &str, version: &str) -> PathBuf {
         let path = dir.join(name);
-        std::fs::write(
-            &path,
-            format!("#!/usr/bin/env bash\nprintf '%s\\n' {version:?}\n"),
-        )
-        .expect("write fake bin");
+        std::fs::write(&path, format!("#!/bin/sh\nprintf '%s\\n' {version:?}\n"))
+            .expect("write fake bin");
         let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
         perms.set_mode(0o700);
         std::fs::set_permissions(&path, perms).expect("chmod fake bin");
