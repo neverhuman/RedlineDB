@@ -20,6 +20,13 @@ pub use format::strftime;
 pub use modifiers::apply_modifiers;
 pub use parse::parse_timestring;
 
+/// Maximum valid Julian Day number (corresponds to 9999-12-31 23:59:59).
+/// SQLite returns NULL for date/time conversions when the represented
+/// julian day exceeds this bound.
+pub const MAX_JULIAN_DAY: f64 = 5_373_484.5;
+/// Minimum valid Julian Day number (Julian epoch = -4713-11-24 12:00).
+pub const MIN_JULIAN_DAY: f64 = 0.0;
+
 /// Broken-down date/time tuple (UTC unless otherwise marked).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DateTime {
@@ -31,6 +38,12 @@ pub struct DateTime {
     pub second: u32,
     pub micro: u32,
     pub is_local: bool,
+    /// When `Some(raw)`, this DateTime was parsed from a numeric input
+    /// `raw` that fell outside the valid julian-day range. The broken-down
+    /// fields are a placeholder (julian day 0). SQLite returns NULL for
+    /// such inputs unless a normalising modifier ('utc', 'localtime',
+    /// 'unixepoch', etc.) clears the flag first.
+    pub out_of_range: Option<f64>,
 }
 
 impl DateTime {
@@ -72,7 +85,27 @@ impl DateTime {
             second,
             micro,
             is_local: false,
+            out_of_range: None,
         }
+    }
+
+    /// `true` if the date is within SQLite's representable range and not
+    /// flagged as parsed from an out-of-range numeric input.
+    ///
+    /// SQLite accepts dates in the proleptic Gregorian window
+    /// `[-4713-11-24 .. 9999-12-31]` (julian day 0 .. 5_373_484.5), with
+    /// `date()` / `datetime()` returning NULL outside that range.
+    pub fn is_formattable(&self) -> bool {
+        if self.out_of_range.is_some() {
+            return false;
+        }
+        if self.year > 9999 || self.year < -4713 {
+            return false;
+        }
+        if self.year == -4713 && (self.month < 11 || (self.month == 11 && self.day < 24)) {
+            return false;
+        }
+        true
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -109,7 +142,12 @@ impl DateTime {
     }
 
     pub fn format_date(&self) -> String {
-        format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
+        format!(
+            "{}-{:02}-{:02}",
+            format_year_4(self.year),
+            self.month,
+            self.day
+        )
     }
 
     pub fn format_time(&self) -> String {
@@ -118,5 +156,16 @@ impl DateTime {
 
     pub fn format_datetime(&self) -> String {
         format!("{} {}", self.format_date(), self.format_time())
+    }
+}
+
+/// Format a year for SQLite's ISO output: four zero-padded digits with the
+/// sign character (when negative) preceding the digits. Matches the
+/// `printf("%04d", ...)` SQLite uses with proleptic dates.
+pub(crate) fn format_year_4(year: i32) -> String {
+    if year < 0 {
+        format!("-{:04}", -year)
+    } else {
+        format!("{:04}", year)
     }
 }
