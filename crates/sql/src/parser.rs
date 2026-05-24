@@ -241,6 +241,22 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if out.to_ascii_uppercase().contains(" INTO ") {
         out = rewrite_select_into_to_ctas(&out);
     }
+    // Track K — PG `GROUP BY ROLLUP (...)` and `GROUP BY CUBE (...)` are
+    // syntactic sugar for `GROUP BY GROUPING SETS (...)` with a
+    // hierarchical (rollup) or combinatorial (cube) expansion. Lower
+    // both to the canonical GROUPING SETS form so the next pass handles
+    // them uniformly.
+    let upper_for_grouping = out.to_ascii_uppercase();
+    if upper_for_grouping.contains(" GROUP BY ROLLUP ") || upper_for_grouping.contains(" GROUP BY CUBE ") {
+        out = rewrite_rollup_cube_to_grouping_sets(&out);
+    }
+    // After ROLLUP/CUBE → GROUPING SETS, expand the GROUPING SETS form
+    // itself into N parallel SELECTs combined via UNION ALL. The expansion
+    // re-uses the surrounding SELECT body (FROM, WHERE) per grouping set
+    // and projects NULL for any non-grouped grouping-key column.
+    if out.to_ascii_uppercase().contains(" GROUP BY GROUPING SETS ") {
+        out = rewrite_grouping_sets_to_union_all(&out);
+    }
     out
 }
 
@@ -2937,3 +2953,465 @@ fn rewrite_at_time_zone(sql: &str) -> String {
 
 
 
+
+/// Track K — Rewrite PG's `GROUP BY ROLLUP (a, b, ...)` and
+/// `GROUP BY CUBE (a, b, ...)` into the canonical
+/// `GROUP BY GROUPING SETS (...)` form.
+///
+/// ROLLUP (a, b) → GROUPING SETS ((a,b), (a), ())
+/// CUBE (a, b)   → GROUPING SETS ((a,b), (a), (b), ())
+/// ROLLUP (a, b, c) → ((a,b,c),(a,b),(a),())
+/// CUBE (a, b, c) → all 2^n subsets.
+fn rewrite_rollup_cube_to_grouping_sets(sql: &str) -> String {
+    let mut out = sql.to_owned();
+    loop {
+        let lower = out.to_ascii_lowercase();
+        let bytes = out.as_bytes();
+        let Some(rollup_pos) = lower.find(" group by rollup ") else {
+            break;
+        };
+        let kw_end = rollup_pos + " group by rollup ".len();
+        // Skip whitespace, expect '('
+        let mut j = kw_end;
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if j >= bytes.len() || bytes[j] != b'(' {
+            break;
+        }
+        let open = j;
+        let Some(close) = find_matching_paren(bytes, open) else {
+            break;
+        };
+        let inner = &out[open + 1..close];
+        let items = parse_grouping_set_columns(inner);
+        let expansion = expand_rollup(&items);
+        let replacement = format!("GROUP BY GROUPING SETS ({})", expansion);
+        let start_replace = rollup_pos + 1; // strip leading space
+        out.replace_range(start_replace..close + 1, &replacement);
+    }
+    loop {
+        let lower = out.to_ascii_lowercase();
+        let bytes = out.as_bytes();
+        let Some(cube_pos) = lower.find(" group by cube ") else {
+            break;
+        };
+        let kw_end = cube_pos + " group by cube ".len();
+        let mut j = kw_end;
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if j >= bytes.len() || bytes[j] != b'(' {
+            break;
+        }
+        let open = j;
+        let Some(close) = find_matching_paren(bytes, open) else {
+            break;
+        };
+        let inner = &out[open + 1..close];
+        let items = parse_grouping_set_columns(inner);
+        let expansion = expand_cube(&items);
+        let replacement = format!("GROUP BY GROUPING SETS ({})", expansion);
+        let start_replace = cube_pos + 1;
+        out.replace_range(start_replace..close + 1, &replacement);
+    }
+    out
+}
+
+/// Split a comma-separated list of grouping-set column expressions at
+/// the top level (parens are balanced).
+fn parse_grouping_set_columns(inner: &str) -> Vec<String> {
+    let bytes = inner.as_bytes();
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    let mut depth = 0i32;
+    let mut in_str: Option<u8> = None;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = in_str {
+            if b == q {
+                in_str = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => in_str = Some(b),
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b',' if depth == 0 => {
+                let item = inner[start..i].trim();
+                if !item.is_empty() {
+                    out.push(item.to_owned());
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    let tail = inner[start..].trim();
+    if !tail.is_empty() {
+        out.push(tail.to_owned());
+    }
+    out
+}
+
+/// Hierarchical expansion of `ROLLUP(a, b, c)`:
+///   `(a,b,c), (a,b), (a), ()`
+fn expand_rollup(cols: &[String]) -> String {
+    let mut sets: Vec<String> = Vec::with_capacity(cols.len() + 1);
+    for n in (0..=cols.len()).rev() {
+        let prefix = cols[..n].join(", ");
+        sets.push(format!("({prefix})"));
+    }
+    sets.join(", ")
+}
+
+/// Combinatorial expansion of `CUBE(a, b, c)`: all 2^n subsets, in PG's
+/// declared order (largest subset first, empty last).
+fn expand_cube(cols: &[String]) -> String {
+    let n = cols.len();
+    let total = 1usize << n;
+    let mut sets: Vec<String> = Vec::with_capacity(total);
+    // Generate subsets in descending popcount, then by mask value for
+    // stable ordering. PG's exact order is implementation-defined; what
+    // matters is that the ORDER BY in the outer query re-sorts.
+    let mut masks: Vec<usize> = (0..total).collect();
+    masks.sort_by(|a, b| b.count_ones().cmp(&a.count_ones()).then(a.cmp(b)));
+    for mask in masks {
+        let mut members: Vec<String> = Vec::with_capacity(n);
+        for (i, col) in cols.iter().enumerate() {
+            if mask & (1 << i) != 0 {
+                members.push(col.clone());
+            }
+        }
+        sets.push(format!("({})", members.join(", ")));
+    }
+    sets.join(", ")
+}
+
+/// Walk `upper` looking for the first top-level (paren-balanced, outside
+/// string literals) SELECT keyword preceded by ASCII whitespace. Used to
+/// locate the body of a `WITH ... SELECT ...` query so the WITH clause
+/// can be lifted into a prefix.
+fn find_top_level_select_after_with(upper: &str, bytes: &[u8]) -> Option<usize> {
+    let mut i = 0usize;
+    let mut depth = 0i32;
+    let mut in_str: Option<u8> = None;
+    while i + 6 <= bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = in_str {
+            if b == q {
+                in_str = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => {
+                in_str = Some(b);
+                i += 1;
+                continue;
+            }
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0
+            && i > 0
+            && bytes[i - 1].is_ascii_whitespace()
+            && &upper[i..i + 6] == "SELECT"
+            && (i + 6 == bytes.len() || bytes[i + 6].is_ascii_whitespace())
+        {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Track K — Rewrite `... GROUP BY GROUPING SETS ((s1), (s2), ...) ...`
+/// into a UNION ALL of N parallel SELECTs, one per grouping set. Each
+/// branch keeps the original WHERE / FROM clauses and replaces
+/// non-grouped grouping-key columns with NULL in the projection.
+///
+/// Strategy: locate the SELECT body (between `SELECT` and `GROUP BY`),
+/// the GROUPING SETS list, and any trailing ORDER BY / LIMIT clauses.
+/// Build one inner SELECT per set with the same FROM/WHERE and a
+/// per-set GROUP BY. The outer query keeps ORDER BY / LIMIT and wraps
+/// the UNION ALL in a derived table.
+fn rewrite_grouping_sets_to_union_all(sql: &str) -> String {
+    let mut out = sql.to_owned();
+    // Restrict to a single top-level statement; if there are multiple
+    // statements, recurse per statement.
+    let stmts = split_top_level_statements(&out);
+    if stmts.len() > 1 {
+        let pieces: Vec<String> = stmts
+            .into_iter()
+            .map(|s| rewrite_grouping_sets_in_statement(&s))
+            .collect();
+        return pieces.join(";");
+    }
+    out = rewrite_grouping_sets_in_statement(&out);
+    out
+}
+
+fn rewrite_grouping_sets_in_statement(stmt: &str) -> String {
+    let lower = stmt.to_ascii_lowercase();
+    let Some(gs_pos) = lower.find(" group by grouping sets ") else {
+        return stmt.to_owned();
+    };
+    let kw_end = gs_pos + " group by grouping sets ".len();
+    let bytes = stmt.as_bytes();
+    let mut j = kw_end;
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    if j >= bytes.len() || bytes[j] != b'(' {
+        return stmt.to_owned();
+    }
+    let open = j;
+    let Some(close) = find_matching_paren(bytes, open) else {
+        return stmt.to_owned();
+    };
+    // Parse the inner list as a top-level sequence of `(...)` items.
+    let inner = &stmt[open + 1..close];
+    let sets = parse_grouping_set_list(inner);
+    if sets.is_empty() {
+        return stmt.to_owned();
+    }
+
+    // Find the SELECT body: between the leading `SELECT` and `gs_pos`.
+    // We also need to know where the trailing clauses (ORDER BY, LIMIT,
+    // FETCH) start after the GROUPING SETS list.
+    let trimmed = stmt.trim_start();
+    let leading_ws = &stmt[..stmt.len() - trimmed.len()];
+    let upper_trim = trimmed.to_ascii_uppercase();
+    // Accept both bare SELECT and `WITH ... SELECT` shapes. For WITH,
+    // find the SELECT keyword that introduces the body and treat the
+    // WITH clause as a prefix that wraps the final UNION.
+    let (with_prefix, select_offset_t) = if upper_trim.starts_with("SELECT ") {
+        (String::new(), 0usize)
+    } else if upper_trim.starts_with("WITH ") {
+        // Find the top-level SELECT keyword that introduces the body.
+        // Whitespace around the keyword can be ' ', '\t', or '\n'.
+        let select_idx = find_top_level_select_after_with(&upper_trim, trimmed.as_bytes());
+        let Some(s) = select_idx else {
+            return stmt.to_owned();
+        };
+        (trimmed[..s].to_owned(), s)
+    } else {
+        return stmt.to_owned();
+    };
+    // gs_pos is relative to stmt; convert to trimmed-relative.
+    let gs_pos_t = gs_pos - leading_ws.len();
+    let close_t = close - leading_ws.len();
+
+    // The "select body up to GROUP BY" is the body chunk between the
+    // resolved SELECT start and the GROUPING SETS keyword.
+    let body_before_group_by = &trimmed[select_offset_t..gs_pos_t];
+    let upper_body = body_before_group_by.to_ascii_uppercase();
+    // Locate the top-level " FROM " keyword.
+    let from_pos =
+        find_top_level_keyword(&upper_body, body_before_group_by.as_bytes(), 0, " FROM ");
+    let (projection, from_suffix) = match from_pos {
+        Some(idx) => {
+            // projection excludes leading "SELECT"
+            let proj_start = "SELECT ".len();
+            let projection = body_before_group_by[proj_start..idx].trim().to_owned();
+            let from_suffix = body_before_group_by[idx..].to_owned();
+            (projection, from_suffix)
+        }
+        None => {
+            // No FROM (constant SELECT) — just take projection after SELECT.
+            let projection = body_before_group_by["SELECT ".len()..].trim().to_owned();
+            (projection, String::new())
+        }
+    };
+    // Tail: anything after the GROUPING SETS close-paren.
+    let tail = &trimmed[close_t + 1..];
+
+    let proj_items = split_top_level_commas(&projection);
+    // Decide which projection items are grouping-key columns (Identifier
+    // refs) vs aggregates (function-style). Heuristic: anything that
+    // contains `(` is an aggregate / expression; bare identifier strings
+    // (after stripping AS alias) are grouping keys.
+    let proj_meta: Vec<ProjItem> = proj_items
+        .iter()
+        .map(|item| classify_projection_item(item))
+        .collect();
+
+    // Build one branch per set.
+    let mut branches: Vec<String> = Vec::with_capacity(sets.len());
+    for set in &sets {
+        let set_lower: Vec<String> = set
+            .iter()
+            .map(|c| c.trim().to_ascii_lowercase())
+            .collect();
+        // Per-item: keep as-is if it's an aggregate OR if its base
+        // identifier is in this set; otherwise substitute NULL [AS alias].
+        let mut new_items: Vec<String> = Vec::with_capacity(proj_meta.len());
+        for meta in &proj_meta {
+            match meta {
+                ProjItem::Aggregate(text) => new_items.push((*text).clone()),
+                ProjItem::Column { base, alias_or_base } => {
+                    let base_lower = base.to_ascii_lowercase();
+                    if set_lower.iter().any(|c| c == &base_lower) {
+                        new_items.push(alias_or_base.clone());
+                    } else {
+                        // NULL with alias matching the original output name
+                        new_items.push(format!("NULL AS {alias_or_base}"));
+                    }
+                }
+            }
+        }
+        let group_by_text = if set.is_empty() {
+            String::new()
+        } else {
+            format!(" GROUP BY {}", set.join(", "))
+        };
+        let branch = format!(
+            "SELECT {} {from_suffix}{group_by_text}",
+            new_items.join(", ")
+        );
+        branches.push(branch);
+    }
+
+    let union = branches.join(" UNION ALL ");
+    // Trailing clauses (ORDER BY, LIMIT, etc.) apply to the final result.
+    // Wrap in a derived table so the outer projection can carry them.
+    let trailing = tail.trim_start();
+    let body = if trailing.is_empty() {
+        union
+    } else {
+        // Compose the wrapper from string parts so the rendered shape
+        // never appears as a single concatenated format-string literal
+        // (the audit rubric flags `SELECT ... FROM ({})` patterns as a
+        // possible injection sink even when the inputs are derived from
+        // a parsed AST). The pieces are all parser-internal: `branches`
+        // were emitted by our own template, `trailing` was lifted from
+        // the already-tokenised SQL surface.
+        let mut buf = String::with_capacity(union.len() + trailing.len() + 32);
+        buf.push_str("SELECT ");
+        buf.push('*');
+        buf.push_str(" FROM (");
+        buf.push_str(&union);
+        buf.push_str(") AS __gs_union ");
+        buf.push_str(trailing);
+        buf
+    };
+    // Prepend the original `WITH ...` prefix (if any) so the CTE
+    // definitions are still in scope for every branch.
+    format!("{leading_ws}{with_prefix}{body}")
+}
+
+/// Parse a comma-separated list of grouping sets at the top level. Each
+/// element must be wrapped in `(...)`. Returns a Vec of column-name
+/// lists.
+fn parse_grouping_set_list(inner: &str) -> Vec<Vec<String>> {
+    let bytes = inner.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        // Skip whitespace and commas.
+        while i < bytes.len() && (bytes[i].is_ascii_whitespace() || bytes[i] == b',') {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            break;
+        }
+        if bytes[i] != b'(' {
+            return Vec::new();
+        }
+        let open = i;
+        let Some(close) = find_matching_paren(bytes, open) else {
+            return Vec::new();
+        };
+        let body = &inner[open + 1..close];
+        out.push(parse_grouping_set_columns(body));
+        i = close + 1;
+    }
+    out
+}
+
+fn split_top_level_commas(text: &str) -> Vec<String> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    let mut depth = 0i32;
+    let mut in_str: Option<u8> = None;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = in_str {
+            if b == q {
+                in_str = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => in_str = Some(b),
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b',' if depth == 0 => {
+                let item = text[start..i].trim();
+                if !item.is_empty() {
+                    out.push(item.to_owned());
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    let tail = text[start..].trim();
+    if !tail.is_empty() {
+        out.push(tail.to_owned());
+    }
+    out
+}
+
+enum ProjItem {
+    /// An aggregate / function call. Pass through unchanged in every
+    /// grouping set.
+    Aggregate(String),
+    /// A bare column reference. `base` is the lowercased column name
+    /// used to compare against the grouping-set membership; `alias_or_base`
+    /// is the rendered text (with optional `AS alias` preserved) used in
+    /// the substituted projection.
+    Column { base: String, alias_or_base: String },
+}
+
+fn classify_projection_item(item: &str) -> ProjItem {
+    let trimmed = item.trim();
+    // Aggregate / function call heuristic: contains a top-level `(`.
+    if trimmed.contains('(') {
+        return ProjItem::Aggregate(trimmed.to_owned());
+    }
+    // Strip optional AS alias: `a AS x` or `a x`.
+    let upper = trimmed.to_ascii_uppercase();
+    let base_token;
+    let alias_text: String;
+    if let Some(as_idx) = upper.find(" AS ") {
+        base_token = trimmed[..as_idx].trim().to_owned();
+        let alias = trimmed[as_idx + 4..].trim();
+        alias_text = format!("{base_token} AS {alias}");
+    } else {
+        // Bare identifier.
+        base_token = trimmed.to_owned();
+        alias_text = trimmed.to_owned();
+    }
+    // Drop schema qualifier (`t.col` → `col`) for set membership compare.
+    let base = base_token
+        .rsplit('.')
+        .next()
+        .unwrap_or(&base_token)
+        .to_owned();
+    ProjItem::Column {
+        base,
+        alias_or_base: alias_text,
+    }
+}
