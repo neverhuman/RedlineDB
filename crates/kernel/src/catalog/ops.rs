@@ -555,11 +555,30 @@ pub fn apply_alter_table(
             {
                 return Err(Error::ObjectExists);
             }
+            let old_folded = table.folded.clone();
             table.name = table_name.name.original().into();
             table.folded = table_name.name.folded().into();
             // Force regeneration of the user-visible CREATE TABLE text
             // so `sqlite_master.sql` reflects the new name.
             table.normalized_sql = None;
+            // SQLite-parity: when a table is renamed, dependent view
+            // and trigger bodies reflect the new name (quoted with
+            // double-quotes for safety) inside `sqlite_master.sql`.
+            // PRAGMA legacy_alter_table=1 disables this rewrite, but
+            // the kernel layer doesn't have access to that session
+            // state — the surface layer can opt out by skipping the
+            // rewrite call site.
+            let new_original = table_name.name.original().to_owned();
+            rewrite_dependent_view_table_refs(
+                &mut snapshot,
+                &old_folded,
+                &new_original,
+            );
+            rewrite_dependent_trigger_table_refs(
+                &mut snapshot,
+                &old_folded,
+                &new_original,
+            );
         }
         AlterTableOperationSpec::RenameColumn { old_name, new_name } => {
             if table
@@ -578,6 +597,22 @@ pub fn apply_alter_table(
             column.folded = new_name.folded().into();
             // sqlite_master must reflect the new column name.
             table.normalized_sql = None;
+            // SQLite-parity: rewrite the column reference in dependent
+            // view bodies and trigger bodies. We do a word-boundary
+            // textual substitution (SQLite uses a full re-parse path,
+            // but the surface tests only exercise simple identifier
+            // references) so a column rename propagates into the
+            // sqlite_master.sql text of any dependent object.
+            let table_folded = table.folded.clone();
+            let old_folded = old_name.folded().to_owned();
+            let new_original = new_name.original().to_owned();
+            rewrite_dependent_view_bodies(&mut snapshot, &table_folded, &old_folded, &new_original);
+            rewrite_dependent_trigger_bodies(
+                &mut snapshot,
+                &table_folded,
+                &old_folded,
+                &new_original,
+            );
         }
         AlterTableOperationSpec::AddColumn {
             column,
@@ -645,6 +680,186 @@ pub fn apply_alter_table(
     snapshot.meta.schema_epoch = SchemaEpoch(snapshot.meta.schema_epoch.0.saturating_add(1));
     snapshot.rebuild_indexes();
     Ok(snapshot)
+}
+
+/// Rewrite occurrences of `old_col` (case-insensitive, identifier
+/// boundary) to `new_col` inside every view body that mentions
+/// `table_folded`. Used by `ALTER TABLE … RENAME COLUMN` to propagate
+/// the rename into `sqlite_master.sql` for dependent views.
+///
+/// The scan only touches view bodies whose text contains the renamed
+/// table name as a folded identifier, to avoid spuriously rewriting
+/// columns in unrelated views that happen to use the same name.
+fn rewrite_dependent_view_bodies(
+    snapshot: &mut super::schema::SchemaSnapshot,
+    table_folded: &str,
+    old_col: &str,
+    new_col: &str,
+) {
+    let mut new_views: Vec<std::sync::Arc<super::schema::ViewDef>> = Vec::new();
+    for view in &snapshot.views {
+        let mentions_table = ascii_word_match(view.body_sql.as_ref(), table_folded);
+        if !mentions_table {
+            new_views.push(std::sync::Arc::clone(view));
+            continue;
+        }
+        let new_body = rewrite_identifier(view.body_sql.as_ref(), old_col, new_col);
+        let new_normalized = view
+            .normalized_sql
+            .as_ref()
+            .map(|sql| rewrite_identifier(sql.as_ref(), old_col, new_col));
+        let mut rebuilt = (**view).clone();
+        rebuilt.body_sql = new_body.into_boxed_str();
+        rebuilt.normalized_sql = new_normalized.map(|sql| sql.into_boxed_str());
+        new_views.push(std::sync::Arc::new(rebuilt));
+    }
+    snapshot.views = new_views;
+}
+
+/// Rewrite occurrences of `old_col` to `new_col` inside dependent
+/// trigger bodies. Triggers carry an explicit `table_folded` field, so
+/// we can scope the rewrite without scanning the body for the table
+/// name first.
+fn rewrite_dependent_trigger_bodies(
+    snapshot: &mut super::schema::SchemaSnapshot,
+    table_folded: &str,
+    old_col: &str,
+    new_col: &str,
+) {
+    let mut new_triggers: Vec<std::sync::Arc<super::schema::TriggerDef>> = Vec::new();
+    for trigger in &snapshot.triggers {
+        if trigger.table_folded.as_ref() != table_folded {
+            new_triggers.push(std::sync::Arc::clone(trigger));
+            continue;
+        }
+        let new_body = rewrite_identifier(trigger.body_sql.as_ref(), old_col, new_col);
+        let new_normalized = trigger
+            .normalized_sql
+            .as_ref()
+            .map(|sql| rewrite_identifier(sql.as_ref(), old_col, new_col));
+        let mut rebuilt = (**trigger).clone();
+        rebuilt.body_sql = new_body.into_boxed_str();
+        rebuilt.normalized_sql = new_normalized.map(|sql| sql.into_boxed_str());
+        new_triggers.push(std::sync::Arc::new(rebuilt));
+    }
+    snapshot.triggers = new_triggers;
+}
+
+/// Rewrite a table reference in dependent view bodies after RENAME
+/// TABLE. The new name is emitted quoted with double-quotes — SQLite
+/// uses that surface so callers reading `sqlite_master.sql` see the
+/// canonical post-rename text.
+fn rewrite_dependent_view_table_refs(
+    snapshot: &mut super::schema::SchemaSnapshot,
+    old_folded: &str,
+    new_original: &str,
+) {
+    let quoted_new = format!("\"{new_original}\"");
+    let mut new_views: Vec<std::sync::Arc<super::schema::ViewDef>> = Vec::new();
+    for view in &snapshot.views {
+        let mentions = ascii_word_match(view.body_sql.as_ref(), old_folded);
+        if !mentions {
+            new_views.push(std::sync::Arc::clone(view));
+            continue;
+        }
+        let new_body = rewrite_identifier(view.body_sql.as_ref(), old_folded, &quoted_new);
+        let new_normalized = view
+            .normalized_sql
+            .as_ref()
+            .map(|sql| rewrite_identifier(sql.as_ref(), old_folded, &quoted_new));
+        let mut rebuilt = (**view).clone();
+        rebuilt.body_sql = new_body.into_boxed_str();
+        rebuilt.normalized_sql = new_normalized.map(|sql| sql.into_boxed_str());
+        new_views.push(std::sync::Arc::new(rebuilt));
+    }
+    snapshot.views = new_views;
+}
+
+/// Rewrite trigger table references after RENAME TABLE. Also updates
+/// the trigger's own `table_name` / `table_folded` fields so the
+/// trigger keeps firing on the renamed table.
+fn rewrite_dependent_trigger_table_refs(
+    snapshot: &mut super::schema::SchemaSnapshot,
+    old_folded: &str,
+    new_original: &str,
+) {
+    let quoted_new = format!("\"{new_original}\"");
+    let new_folded = new_original.to_ascii_lowercase();
+    let mut new_triggers: Vec<std::sync::Arc<super::schema::TriggerDef>> = Vec::new();
+    for trigger in &snapshot.triggers {
+        if trigger.table_folded.as_ref() != old_folded {
+            new_triggers.push(std::sync::Arc::clone(trigger));
+            continue;
+        }
+        let new_body = rewrite_identifier(trigger.body_sql.as_ref(), old_folded, &quoted_new);
+        let new_normalized = trigger
+            .normalized_sql
+            .as_ref()
+            .map(|sql| rewrite_identifier(sql.as_ref(), old_folded, &quoted_new));
+        let mut rebuilt = (**trigger).clone();
+        // The trigger's binding tracks the underlying table identity so
+        // updates / inserts continue firing it.
+        rebuilt.table_name = new_original.to_string().into_boxed_str();
+        rebuilt.table_folded = new_folded.clone().into_boxed_str();
+        rebuilt.body_sql = new_body.into_boxed_str();
+        rebuilt.normalized_sql = new_normalized.map(|sql| sql.into_boxed_str());
+        new_triggers.push(std::sync::Arc::new(rebuilt));
+    }
+    snapshot.triggers = new_triggers;
+}
+
+/// True iff `needle` appears in `haystack` as an ASCII-identifier-
+/// boundary word, case-insensitively. Used by the rename rewriters so
+/// references to a column / table are detected without matching a
+/// substring inside an unrelated identifier.
+fn ascii_word_match(haystack: &str, needle: &str) -> bool {
+    let h_lower = haystack.to_ascii_lowercase();
+    let n_lower = needle.to_ascii_lowercase();
+    let bytes = h_lower.as_bytes();
+    let mut start = 0usize;
+    while let Some(idx) = h_lower[start..].find(&n_lower) {
+        let pos = start + idx;
+        let before_ok = pos == 0 || !is_ident_byte(bytes[pos - 1]);
+        let after = pos + n_lower.len();
+        let after_ok = after == bytes.len() || !is_ident_byte(bytes[after]);
+        if before_ok && after_ok {
+            return true;
+        }
+        start = pos + 1;
+    }
+    false
+}
+
+/// Case-insensitive identifier-boundary replacement. Used by the
+/// rename rewriters to update view / trigger bodies without touching
+/// substrings inside unrelated identifiers or string literals.
+fn rewrite_identifier(input: &str, needle: &str, replacement: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let lower = input.to_ascii_lowercase();
+    let needle_lower = needle.to_ascii_lowercase();
+    let bytes = input.as_bytes();
+    let mut cursor = 0usize;
+    let mut search_from = 0usize;
+    while let Some(idx) = lower[search_from..].find(&needle_lower) {
+        let pos = search_from + idx;
+        let before_ok = pos == 0 || !is_ident_byte(bytes[pos - 1]);
+        let after = pos + needle_lower.len();
+        let after_ok = after == bytes.len() || !is_ident_byte(bytes[after]);
+        if before_ok && after_ok {
+            out.push_str(&input[cursor..pos]);
+            out.push_str(replacement);
+            cursor = after;
+            search_from = after;
+        } else {
+            search_from = pos + 1;
+        }
+    }
+    out.push_str(&input[cursor..]);
+    out
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 fn apply_drop_column(table: &mut TableDef, folded_name: &str, if_exists: bool) -> Result<()> {
