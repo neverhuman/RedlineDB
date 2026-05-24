@@ -118,6 +118,76 @@ pub enum PreparedKind {
     Attach(crate::exec::attach::AttachPlan),
     CrossDbSql(CrossDbSqlPlan),
     CreateVirtualTable(CreateVirtualTablePlan),
+    /// Track J — beyond-postgres parity for `CREATE SCHEMA <name>`. SQLite has
+    /// no schema layer, so we record the namespace name on the session so the
+    /// downstream `<schema>.<table>` references and `pg_namespace` introspection
+    /// can resolve without raising "no such schema". No on-disk catalog change.
+    CreateSchema {
+        name: Arc<str>,
+        if_not_exists: bool,
+    },
+    /// Track J — `DROP SCHEMA <name> [CASCADE]`. Removes a previously
+    /// registered namespace from the session map.
+    DropSchema {
+        name: Arc<str>,
+        if_exists: bool,
+        cascade: bool,
+    },
+    /// Track J — `CREATE SEQUENCE <name> [START WITH n] [INCREMENT BY n]`.
+    /// Stored as a sqlite_sequence-style row keyed by sequence name; the
+    /// `nextval`/`currval`/`setval` scalar functions read/write it.
+    CreateSequence {
+        name: Arc<str>,
+        if_not_exists: bool,
+        start_with: Option<i64>,
+        increment_by: Option<i64>,
+    },
+    /// Track J — `DROP SEQUENCE <name>`. Removes the named sequence.
+    DropSequence {
+        name: Arc<str>,
+        if_exists: bool,
+    },
+    /// Track J — `SET TRANSACTION ISOLATION LEVEL <level>`. RedlineDB does
+    /// not switch isolation levels per-transaction, so this is a recall-only
+    /// store on the session. `SHOW transaction_isolation` reports the value.
+    SetTransactionIsolation {
+        level: TransactionIsolationLevel,
+    },
+    /// Track J — `SHOW <name>` for session-state introspection. Recall-only
+    /// for `transaction_isolation`; other names return their default.
+    ShowVariable {
+        name: Arc<str>,
+    },
+    /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`. Renames an
+    /// existing index in the kernel catalog; no rebuild required because
+    /// the on-disk B-tree is keyed by index_id, not by name.
+    AlterIndex {
+        old_name: Arc<str>,
+        new_name: Arc<str>,
+    },
+}
+
+/// SQL-standard transaction isolation levels accepted via
+/// `SET TRANSACTION ISOLATION LEVEL ...`. RedlineDB tracks the requested
+/// value per-session for recall; the underlying engine continues to use its
+/// fixed snapshot isolation for reads and read-committed for writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionIsolationLevel {
+    ReadUncommitted,
+    ReadCommitted,
+    RepeatableRead,
+    Serializable,
+}
+
+impl TransactionIsolationLevel {
+    pub fn as_pg_str(self) -> &'static str {
+        match self {
+            TransactionIsolationLevel::ReadUncommitted => "read uncommitted",
+            TransactionIsolationLevel::ReadCommitted => "read committed",
+            TransactionIsolationLevel::RepeatableRead => "repeatable read",
+            TransactionIsolationLevel::Serializable => "serializable",
+        }
+    }
 }
 
 /// Sentinel SQL prefix used to tag `PreparedTemplate`s built for
