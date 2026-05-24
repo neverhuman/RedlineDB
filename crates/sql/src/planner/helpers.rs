@@ -545,6 +545,17 @@ where
         return Ok(None);
     };
     let rowid_col = |name: &str| {
+        // SQLite shadowing: if the table has a real column whose name
+        // matches `name`, that column wins over the rowid alias. So
+        // `WHERE oid = 1` on `CREATE TABLE t(oid INTEGER, ...)` reads
+        // the `oid` column, not the synthetic rowid.
+        let shadowed = table
+            .columns
+            .iter()
+            .any(|column| column.folded.as_ref().eq_ignore_ascii_case(name));
+        if shadowed {
+            return table.rowid_alias_column_name_matches(name);
+        }
         table.is_public_rowid_name(name) || table.rowid_alias_column_name_matches(name)
     };
     let Expr::BinaryOp { left, op, right } = expr else {
