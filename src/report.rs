@@ -1323,7 +1323,7 @@ fn build_svg_artifacts(
                         value: format!("{:.2}%", median_gap(ranked)),
                     },
                 ],
-                bars: vec![],
+                bars: median_performance_bars(ranked),
             }),
         });
     }
@@ -1349,7 +1349,7 @@ fn build_svg_artifacts(
                         value: options.updated_date.clone(),
                     },
                 ],
-                bars: vec![],
+                bars: ksloc_bars(&ksloc_csv()),
             }),
         });
     }
@@ -1375,7 +1375,7 @@ fn build_svg_artifacts(
                         value: summary.passed_cases.to_string(),
                     },
                 ],
-                bars: vec![],
+                bars: jankurai_score_bars(options, summary),
             }),
         });
     }
@@ -1401,7 +1401,7 @@ fn build_svg_artifacts(
                         value: options.updated_date.clone(),
                     },
                 ],
-                bars: vec![],
+                bars: code_shape_bars(summary, ranked),
             }),
         });
     }
@@ -1427,13 +1427,122 @@ fn build_svg_artifacts(
                         value: summary.skipped_cases.to_string(),
                     },
                 ],
-                bars: vec![],
+                bars: jankurai_comparison_bars(options, summary),
             }),
         });
     }
 
     let _ = raw_records;
     artifacts
+}
+
+fn median_performance_bars(ranked: &[RankedCase]) -> Vec<SvgBar> {
+    vec![
+        SvgBar {
+            label: "SQLite".to_owned(),
+            value: median_sqlite_ns(ranked) as f64,
+            value_label: human_duration_ns(median_sqlite_ns(ranked)),
+        },
+        SvgBar {
+            label: "RedlineDB".to_owned(),
+            value: median_target_ns(ranked) as f64,
+            value_label: human_duration_ns(median_target_ns(ranked)),
+        },
+    ]
+}
+
+fn ksloc_bars(csv_text: &str) -> Vec<SvgBar> {
+    csv_text
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let (label, value) = line.split_once(',')?;
+            let value = value.parse::<f64>().ok()?;
+            Some(SvgBar {
+                label: label.to_owned(),
+                value,
+                value_label: format!("{value:.0}"),
+            })
+        })
+        .collect::<Vec<_>>()
+}
+
+fn jankurai_score_bars(options: &ReportOptions, summary: &SummaryJson) -> Vec<SvgBar> {
+    if let Some(path) = &options.jankurai_score
+        && let Ok(score) = parse_score(path)
+    {
+        return vec![SvgBar {
+            label: "RedlineDB".to_owned(),
+            value: score.score as f64,
+            value_label: score.score.to_string(),
+        }];
+    }
+    vec![
+        SvgBar {
+            label: "passed".to_owned(),
+            value: summary.passed_cases as f64,
+            value_label: summary.passed_cases.to_string(),
+        },
+        SvgBar {
+            label: "failed".to_owned(),
+            value: summary.failed_cases as f64,
+            value_label: summary.failed_cases.to_string(),
+        },
+    ]
+}
+
+fn code_shape_bars(summary: &SummaryJson, ranked: &[RankedCase]) -> Vec<SvgBar> {
+    vec![
+        SvgBar {
+            label: "total".to_owned(),
+            value: summary.total_cases as f64,
+            value_label: summary.total_cases.to_string(),
+        },
+        SvgBar {
+            label: "ranked".to_owned(),
+            value: ranked.len() as f64,
+            value_label: ranked.len().to_string(),
+        },
+        SvgBar {
+            label: "skipped".to_owned(),
+            value: summary.skipped_cases as f64,
+            value_label: summary.skipped_cases.to_string(),
+        },
+    ]
+}
+
+fn jankurai_comparison_bars(options: &ReportOptions, summary: &SummaryJson) -> Vec<SvgBar> {
+    if let Some(path) = &options.jankurai_comparison
+        && let Ok(text) = fs::read_to_string(path)
+        && let Ok(value) = serde_json::from_str::<serde_json::Value>(&text)
+    {
+        let redlinedb = value["redlinedb_score"].as_f64().unwrap_or(0.0);
+        let sqlite = value["sqlite_score"].as_f64().unwrap_or(0.0);
+        return vec![
+            SvgBar {
+                label: "RedlineDB".to_owned(),
+                value: redlinedb,
+                value_label: format!("{redlinedb:.0}"),
+            },
+            SvgBar {
+                label: "SQLite".to_owned(),
+                value: sqlite,
+                value_label: format!("{sqlite:.0}"),
+            },
+        ];
+    }
+    vec![
+        SvgBar {
+            label: "passed".to_owned(),
+            value: summary.passed_cases as f64,
+            value_label: summary.passed_cases.to_string(),
+        },
+        SvgBar {
+            label: "skipped".to_owned(),
+            value: summary.skipped_cases as f64,
+            value_label: summary.skipped_cases.to_string(),
+        },
+    ]
 }
 
 fn render_styled_svg(spec: &SvgSpec) -> String {
