@@ -469,6 +469,232 @@ fn is_default_dml_expr(expr: &Expr) -> bool {
     )
 }
 
+/// Track K — Bind a SQL:2003 `MERGE INTO target USING source ON ... WHEN ...`
+/// statement into a `MergePlan`. The target and source must be concrete
+/// tables (subqueries on the source side are not supported in this lane —
+/// PG accepts them but our test surface only exercises bare tables).
+pub(crate) fn bind_merge(
+    schema: Arc<SchemaSnapshot>,
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    merge: sqlparser::ast::Merge,
+) -> Result<PreparedTemplate> {
+    let sqlparser::ast::Merge {
+        table,
+        source,
+        on,
+        clauses,
+        output,
+        into: _,
+        merge_token: _,
+        optimizer_hint: _,
+    } = merge;
+    if output.is_some() {
+        return Err(Error::UnsupportedSql(
+            "MERGE ... OUTPUT (MSSQL) is not supported".to_owned(),
+        ));
+    }
+    let (target_def, target_alias) = bind_merge_table_factor(&schema, &table, "MERGE target")?;
+    let (source_def, source_alias) = bind_merge_table_factor(&schema, &source, "MERGE source")?;
+
+    let mut params = ParamLayout::default();
+    let on_expr = normalize_expr(*on, &mut params)?;
+
+    let mut bound_clauses: Vec<crate::statement::MergeClausePlan> = Vec::with_capacity(clauses.len());
+    for clause in clauses {
+        let sqlparser::ast::MergeClause {
+            clause_kind,
+            predicate,
+            action,
+            when_token: _,
+        } = clause;
+        let predicate = match predicate {
+            Some(expr) => Some(normalize_expr(expr, &mut params)?),
+            None => None,
+        };
+        match clause_kind {
+            sqlparser::ast::MergeClauseKind::Matched => match action {
+                sqlparser::ast::MergeAction::Update(update) => {
+                    let assignments = bind_merge_assignments(
+                        &target_def,
+                        update.assignments,
+                        &mut params,
+                    )?;
+                    if update.update_predicate.is_some() || update.delete_predicate.is_some() {
+                        return Err(Error::UnsupportedSql(
+                            "MERGE WHEN MATCHED THEN UPDATE WHERE/DELETE WHERE (Oracle) is not supported".to_owned(),
+                        ));
+                    }
+                    bound_clauses.push(crate::statement::MergeClausePlan::MatchedUpdate {
+                        predicate,
+                        assignments,
+                    });
+                }
+                sqlparser::ast::MergeAction::Delete { .. } => {
+                    bound_clauses.push(crate::statement::MergeClausePlan::MatchedDelete { predicate });
+                }
+                sqlparser::ast::MergeAction::Insert(_) => {
+                    return Err(Error::UnsupportedSql(
+                        "MERGE WHEN MATCHED THEN INSERT is not allowed".to_owned(),
+                    ));
+                }
+            },
+            sqlparser::ast::MergeClauseKind::NotMatched
+            | sqlparser::ast::MergeClauseKind::NotMatchedByTarget => match action {
+                sqlparser::ast::MergeAction::Insert(insert) => {
+                    let columns = if insert.columns.is_empty() {
+                        (0..target_def.columns.len())
+                            .filter(|idx| {
+                                target_def
+                                    .columns
+                                    .get(*idx)
+                                    .map(|c| c.generated.is_none())
+                                    .unwrap_or(true)
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        let mut ordinals = Vec::with_capacity(insert.columns.len());
+                        for col in insert.columns {
+                            let name = match col.0.last() {
+                                Some(p) => super::helpers::object_name_part_to_string(p)?,
+                                None => {
+                                    return Err(Error::UnsupportedSql(
+                                        "MERGE INSERT column name is empty".to_owned(),
+                                    ));
+                                }
+                            };
+                            ordinals.push(resolve_column_ordinal_in_table(&target_def, &name)?);
+                        }
+                        ordinals
+                    };
+                    if insert.insert_predicate.is_some() {
+                        return Err(Error::UnsupportedSql(
+                            "MERGE WHEN NOT MATCHED THEN INSERT WHERE (Oracle) is not supported"
+                                .to_owned(),
+                        ));
+                    }
+                    let values = match insert.kind {
+                        sqlparser::ast::MergeInsertKind::Values(vals) => {
+                            if vals.rows.len() != 1 {
+                                return Err(Error::UnsupportedSql(
+                                    "MERGE INSERT VALUES expects a single row".to_owned(),
+                                ));
+                            }
+                            let row = vals.rows.into_iter().next().expect("checked len");
+                            if row.len() != columns.len() {
+                                return Err(Error::Bind(format!(
+                                    "MERGE INSERT column count ({}) does not match value count ({})",
+                                    columns.len(),
+                                    row.len(),
+                                )));
+                            }
+                            row.into_iter()
+                                .map(|expr| normalize_dml_value(expr, &mut params))
+                                .collect::<Result<Vec<_>>>()?
+                        }
+                        sqlparser::ast::MergeInsertKind::Row => {
+                            return Err(Error::UnsupportedSql(
+                                "MERGE INSERT ROW is not supported".to_owned(),
+                            ));
+                        }
+                    };
+                    bound_clauses.push(crate::statement::MergeClausePlan::NotMatchedInsert {
+                        predicate,
+                        columns,
+                        values,
+                    });
+                }
+                _ => {
+                    return Err(Error::UnsupportedSql(
+                        "MERGE WHEN NOT MATCHED action must be INSERT".to_owned(),
+                    ));
+                }
+            },
+            sqlparser::ast::MergeClauseKind::NotMatchedBySource => {
+                return Err(Error::UnsupportedSql(
+                    "MERGE WHEN NOT MATCHED BY SOURCE (PG17+) is not supported".to_owned(),
+                ));
+            }
+        }
+    }
+
+    if params.count() == 0 {
+        scan_sql_parameters(sql, &mut params);
+    }
+    Ok(PreparedTemplate {
+        sql: Arc::from(sql),
+        schema_epoch,
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: params,
+        output_columns: Arc::from([]),
+        readonly: false,
+        kind: PreparedKind::Merge(crate::statement::MergePlan {
+            target: target_def,
+            target_alias,
+            source: source_def,
+            source_alias,
+            on: on_expr,
+            clauses: bound_clauses,
+        }),
+    })
+}
+
+fn bind_merge_table_factor(
+    schema: &SchemaSnapshot,
+    factor: &sqlparser::ast::TableFactor,
+    label: &str,
+) -> Result<(Arc<redlinedb_kernel::catalog::TableDef>, Option<Arc<str>>)> {
+    match factor {
+        sqlparser::ast::TableFactor::Table {
+            name, alias, args, ..
+        } => {
+            if args.is_some() {
+                return Err(Error::UnsupportedSql(format!(
+                    "{label} cannot be a table-valued function"
+                )));
+            }
+            let def = super::helpers::bind_table_name(schema, name)?;
+            let alias_arc: Option<Arc<str>> =
+                alias.as_ref().map(|a| Arc::from(a.name.value.as_str()));
+            Ok((def, alias_arc))
+        }
+        _ => Err(Error::UnsupportedSql(format!(
+            "{label} must be a direct table reference"
+        ))),
+    }
+}
+
+fn bind_merge_assignments(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    assignments: Vec<sqlparser::ast::Assignment>,
+    params: &mut ParamLayout,
+) -> Result<Vec<(usize, DmlValue)>> {
+    let mut out = Vec::with_capacity(assignments.len());
+    for assignment in assignments {
+        let ordinal = match assignment.target {
+            sqlparser::ast::AssignmentTarget::ColumnName(name) => {
+                resolve_column_ordinal_in_object_name(table, &name)?
+            }
+            sqlparser::ast::AssignmentTarget::Tuple(_) => {
+                return Err(Error::UnsupportedSql(
+                    "MERGE tuple assignment is not supported".to_owned(),
+                ));
+            }
+        };
+        if let Some(col) = table.columns.get(ordinal)
+            && col.generated.is_some()
+        {
+            return Err(Error::UnsupportedSql(format!(
+                "cannot UPDATE generated column \"{}\"",
+                col.name
+            )));
+        }
+        out.push((ordinal, normalize_dml_value(assignment.value, params)?));
+    }
+    Ok(out)
+}
+
 /// True if `target_ordinals` exactly matches the leading column set
 /// of some UNIQUE / PRIMARY KEY constraint on `table` (rowid-alias
 /// INTEGER PRIMARY KEY also counts when the single target column is
