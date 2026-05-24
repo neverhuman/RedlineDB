@@ -37,7 +37,10 @@ use super::SqlRow;
 use super::{cast_value, eval_scalar};
 
 use accumulator::Accumulator;
-use frame::{ResolvedBound, ResolvedFrame, frame_bounds, literal_i64, resolve_frame};
+use frame::{
+    ExcludeMode, ResolvedBound, ResolvedFrame, frame_bounds, is_exclude_marker, literal_i64,
+    resolve_frame,
+};
 use partition::{assign_peer_ids, order_partition, partition_rows, peer_ranges};
 
 /// Returns `true` if any projection item contains a function call carrying
@@ -317,6 +320,7 @@ fn prefix_aggregate_window(
         || !matches!(frame.units, WindowFrameUnits::Rows)
         || !matches!(&frame.start, ResolvedBound::UnboundedPreceding)
         || !matches!(&frame.end, ResolvedBound::CurrentRow)
+        || frame.exclude != ExcludeMode::NoOthers
     {
         return Ok(false);
     }
@@ -332,6 +336,64 @@ fn prefix_aggregate_window(
         }
     }
     Ok(true)
+}
+
+/// Returns `true` if the row at `pos` (a position in
+/// `order_index_map`) should be excluded from the current row's frame
+/// per `frame.exclude`.
+fn position_excluded(
+    frame: &ResolvedFrame,
+    pos: usize,
+    sorted_pos: usize,
+    peer_ids: &[usize],
+) -> bool {
+    match frame.exclude {
+        ExcludeMode::NoOthers => false,
+        ExcludeMode::CurrentRow => pos == sorted_pos,
+        ExcludeMode::Group => {
+            // Exclude the current row and all rows in the same peer
+            // group (rows with equal ORDER BY keys).
+            peer_ids
+                .get(pos)
+                .zip(peer_ids.get(sorted_pos))
+                .is_some_and(|(a, b)| a == b)
+        }
+        ExcludeMode::Ties => {
+            // Exclude peers but keep the current row.
+            if pos == sorted_pos {
+                false
+            } else {
+                peer_ids
+                    .get(pos)
+                    .zip(peer_ids.get(sorted_pos))
+                    .is_some_and(|(a, b)| a == b)
+            }
+        }
+    }
+}
+
+/// Enumerate the indices in `order_index_map` that fall within
+/// `[bounds.0, bounds.1]` AND survive `frame.exclude`. The result
+/// preserves natural order.
+fn enumerate_frame_positions(
+    frame: &ResolvedFrame,
+    bounds: (usize, usize),
+    sorted_pos: usize,
+    peer_ids: &[usize],
+    total: usize,
+) -> Vec<usize> {
+    if bounds.0 > bounds.1 {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(bounds.1 - bounds.0 + 1);
+    let end = bounds.1.min(total.saturating_sub(1));
+    for pos in bounds.0..=end {
+        if position_excluded(frame, pos, sorted_pos, peer_ids) {
+            continue;
+        }
+        out.push(pos);
+    }
+    out
 }
 
 struct WindowLayoutCache<'a> {
@@ -365,7 +427,16 @@ impl<'a> WindowLayoutCache<'a> {
     }
 
     fn build_layouts(&self, window: &WindowSpec) -> Result<Vec<CachedWindowPartition>> {
-        let partitions = partition_rows(self.rows, &window.partition_by, self.bindings)?;
+        // The EXCLUDE-mode marker (a constant string literal injected by
+        // `parser::rewrite_window_exclude`) lives in PARTITION BY but
+        // must not affect partitioning: filter it out before hashing.
+        let real_partition_by: Vec<Expr> = window
+            .partition_by
+            .iter()
+            .filter(|e| !is_exclude_marker(e))
+            .cloned()
+            .collect();
+        let partitions = partition_rows(self.rows, &real_partition_by, self.bindings)?;
         let mut layouts = Vec::with_capacity(partitions.len());
         for partition in &partitions {
             let sorted = order_partition(partition, self.rows, &window.order_by, self.bindings)?;
@@ -463,10 +534,17 @@ fn compute_function_for_row(
                 peer_ranges,
                 order_index_map.len(),
             );
-            if bounds.0 > bounds.1 {
+            let positions = enumerate_frame_positions(
+                frame,
+                bounds,
+                sorted_pos,
+                peer_ids,
+                order_index_map.len(),
+            );
+            let Some(first) = positions.first() else {
                 return Ok(SqlValue::Null);
-            }
-            let row_idx = order_index_map[bounds.0];
+            };
+            let row_idx = order_index_map[*first];
             match args.first() {
                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
                 None => Ok(SqlValue::Null),
@@ -480,10 +558,17 @@ fn compute_function_for_row(
                 peer_ranges,
                 order_index_map.len(),
             );
-            if bounds.0 > bounds.1 {
+            let positions = enumerate_frame_positions(
+                frame,
+                bounds,
+                sorted_pos,
+                peer_ids,
+                order_index_map.len(),
+            );
+            let Some(last) = positions.last() else {
                 return Ok(SqlValue::Null);
-            }
-            let row_idx = order_index_map[bounds.1];
+            };
+            let row_idx = order_index_map[*last];
             match args.first() {
                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
                 None => Ok(SqlValue::Null),
@@ -501,11 +586,17 @@ fn compute_function_for_row(
                 peer_ranges,
                 order_index_map.len(),
             );
-            let target = bounds.0 + n - 1;
-            if target > bounds.1 {
+            let positions = enumerate_frame_positions(
+                frame,
+                bounds,
+                sorted_pos,
+                peer_ids,
+                order_index_map.len(),
+            );
+            let Some(target) = positions.get(n - 1) else {
                 return Ok(SqlValue::Null);
-            }
-            let row_idx = order_index_map[target];
+            };
+            let row_idx = order_index_map[*target];
             match args.first() {
                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
                 None => Ok(SqlValue::Null),
@@ -523,6 +614,9 @@ fn compute_function_for_row(
             for i in bounds.0..=bounds.1 {
                 if i >= order_index_map.len() {
                     break;
+                }
+                if position_excluded(frame, i, sorted_pos, peer_ids) {
+                    continue;
                 }
                 let row_idx = order_index_map[i];
                 let value = match args.first() {
