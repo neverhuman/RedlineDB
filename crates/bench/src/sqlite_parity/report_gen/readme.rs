@@ -10,6 +10,9 @@ use super::{
     README_METRICS_BEGIN, README_METRICS_END, RankedCase, SummaryJson,
 };
 
+const REDLINE_TESTING_CASES_BASE: &str =
+    "https://github.com/neverhuman/redline-testing/blob/main/crates/bench/sqlite_parity/cases";
+
 pub(super) fn readme_block(
     ranked: &[RankedCase],
     summary: &SummaryJson,
@@ -29,6 +32,9 @@ pub(super) fn readme_block(
         summary.skipped_cases,
         summary.updated_date
     ));
+    out.push_str(
+        "Official README metrics and charts are generated only from the verified external `neverhuman/redline-testing` release artifact, which is the sole official source. The report gate requires `benchmark-results/sqlite-parity/latest/provenance.json` to bind `raw.jsonl` and the `redline-testing` binary sha256 before README/chart regeneration.\n\n",
+    );
     out.push_str(&format!(
         "**SQLite parity latency:** median gap **{:.2}%**, worst gap **{:.2}%**, faster cases **{}** with a **{} ns** reference floor (targets: median >= {:.0}%, worst > {:.0}%, faster >= {}).\n\n",
         summary.median_latency_gap_pct,
@@ -58,10 +64,11 @@ pub(super) fn readme_block(
     out.push_str("| ---: | --- | --- | --- | --- | ---: | ---: | ---: |\n");
     for (index, row) in ranked.iter().enumerate() {
         out.push_str(&format!(
-            "| {} | [{} {}](crates/bench/sqlite_parity/cases/{}) | {} | {} | {} | {} | {} | {} |\n",
+            "| {} | [{} {}]({}/{}) | {} | {} | {} | {} | {} | {} |\n",
             index.saturating_add(1),
             row.case_id,
             escape_md(&row.name),
+            REDLINE_TESTING_CASES_BASE,
             row.case_file,
             row.priority,
             row.profile,

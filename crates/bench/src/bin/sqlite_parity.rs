@@ -1,6 +1,7 @@
-use clap::Parser;
-use redlinedb_bench::sqlite_parity::cli::{Cli, run};
+use anyhow::bail;
 
 fn main() -> anyhow::Result<()> {
-    run(Cli::parse())
+    bail!(
+        "in-tree sqlite_parity binary is disabled: SQLite parity coverage, benchmark, report, and sentinel evidence must be produced only through the pinned neverhuman/redline-testing release artifact"
+    )
 }

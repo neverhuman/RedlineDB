@@ -54,74 +54,29 @@ name = "kernel-test"
 purpose = "targeted redlinedb-kernel test proof"
 
 [[lane]]
-command = "just sql-parity"
-name = "sql-parity"
-purpose = "SQL differential parity proof"
+command = "just redline-testing-official"
+name = "redline-testing-official"
+purpose = "external official conformance and benchmark gate routed through the verified redline-testing release artifact"
 
 [[lane]]
-command = "just sql-parity-full"
-name = "sql-parity-full"
-purpose = "full SQL differential parity gate against rusqlite oracle (zero-divergence)"
-
-[[lane]]
-command = "just sqlite-parity-scale-smoke"
-name = "sqlite-parity-scale-smoke"
-purpose = "bench-owned SQLite shell parity scale smoke over P0 memory cases"
-
-[[lane]]
-command = "just sqlite-parity-scale-ci"
-name = "sqlite-parity-scale-ci"
-purpose = "bench-owned SQLite parity CI hard gate over the full generated RedlineDB-vs-SQLite corpus"
-
-[[lane]]
-command = "just sqlite-parity-volatile-sentinel"
-name = "sqlite-parity-volatile-sentinel"
-purpose = "bench-owned advisory sentinel over volatile :memory: fast-path cases"
+command = "just official-evidence-guard"
+name = "official-evidence-guard"
+purpose = "fail if RedlineDB reintroduces in-tree official benchmark/report evidence generation"
 
 [[lane]]
 command = "just sqlite-parity-report-check"
 name = "sqlite-parity-report-check"
-purpose = "deterministic SQLite parity report artifact drift check"
+purpose = "deterministic SQLite parity report drift check against committed official evidence"
 
 [[lane]]
-command = "just sqlite-parity-scale-full"
-name = "sqlite-parity-scale-full"
-purpose = "bench-owned SQLite shell parity scale full generated corpus sweep"
+command = "just sqlite-parity-report-update"
+name = "sqlite-parity-report-update"
+purpose = "regenerate official report and README data from the verified redline-testing evidence chain"
 
 [[lane]]
 command = "rtk cargo test -p redlinedb-sql --test parity_fk_enforce --quiet --locked"
 name = "sql-parity-fk"
 purpose = "A6 SQLite parity — FK enforcement (NO ACTION/RESTRICT/CASCADE/SET NULL/SET DEFAULT + DEFERRABLE + PRAGMA toggle)"
-
-[[lane]]
-command = "just ffi-parity-full"
-name = "ffi-parity-full"
-purpose = "full FFI symbol + behavior parity gate against rusqlite oracle"
-
-[[lane]]
-command = "just ffi-symbol-diff"
-name = "ffi-symbol-diff"
-purpose = "FFI export set must cover libsqlite3 public surface (allowlist for documented exclusions)"
-
-[[lane]]
-command = "just cli-parity-full"
-name = "cli-parity-full"
-purpose = "CLI dot-command behavior parity gate against sqlite3 shell"
-
-[[lane]]
-command = "just fuzz-parity"
-name = "fuzz-parity"
-purpose = "differential fuzzing oracle (CI-bounded iteration budget; zero-divergence required)"
-
-[[lane]]
-command = "just fuzz-parity-nightly"
-name = "fuzz-parity-nightly"
-purpose = "extended differential fuzz (100k iterations, nightly CI only)"
-
-[[lane]]
-command = "just parity-full"
-name = "parity-full"
-purpose = "end-to-end SQLite drop-in parity gate (layer 1 + layer 2)"
 
 [[lane]]
 command = "just sql-check"

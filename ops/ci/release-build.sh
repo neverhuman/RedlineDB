@@ -7,30 +7,33 @@ set -euo pipefail
 : "${TARGET:?TARGET is required}"
 
 SOURCE_DIR="${SOURCE_DIR:-.}"
+OUTPUT_DIR="${OUTPUT_DIR:-.}"
 cd "$SOURCE_DIR"
 
 cargo build --release --locked --target "${TARGET}" -p redlinedb-cli --bin redlinedb-cli
 cargo build --release --locked --target "${TARGET}" -p redlinedb-ffi
 
 PKG="redlinedb-${TAG}-${ARTIFACT}"
-mkdir -p "${PKG}/bin" "${PKG}/lib" "${PKG}/include"
+PKG_DIR="${OUTPUT_DIR}/${PKG}"
+mkdir -p "${PKG_DIR}/bin" "${PKG_DIR}/lib" "${PKG_DIR}/include"
 
-cp "target/${TARGET}/release/redlinedb-cli" "${PKG}/bin/redlinedb"
+cp "target/${TARGET}/release/redlinedb-cli" "${PKG_DIR}/bin/redlinedb"
 if [ -f "target/${TARGET}/release/${LIB_NAME}" ]; then
-  cp "target/${TARGET}/release/${LIB_NAME}" "${PKG}/lib/"
+  cp "target/${TARGET}/release/${LIB_NAME}" "${PKG_DIR}/lib/"
 fi
-cp "target/${TARGET}/release/libredlinedb.a" "${PKG}/lib/"
-cp "crates/ffi/include/sqlite3.h" "${PKG}/include/"
-cp "contracts/c-abi/redlinedb.h" "${PKG}/include/"
-printf '%s\n' "${TAG}" > "${PKG}/VERSION"
+cp "target/${TARGET}/release/libredlinedb.a" "${PKG_DIR}/lib/"
+cp "crates/ffi/include/sqlite3.h" "${PKG_DIR}/include/"
+cp "contracts/c-abi/redlinedb.h" "${PKG_DIR}/include/"
+printf '%s\n' "${TAG}" > "${PKG_DIR}/VERSION"
 
-tar -czf "${PKG}.tar.gz" "${PKG}/"
+mkdir -p "${OUTPUT_DIR}"
+tar -czf "${OUTPUT_DIR}/${PKG}.tar.gz" -C "${OUTPUT_DIR}" "${PKG}"
 
 # sha256 — Linux has sha256sum, macOS has shasum
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum "${PKG}.tar.gz" > "${PKG}.tar.gz.sha256"
+  sha256sum "${OUTPUT_DIR}/${PKG}.tar.gz" > "${OUTPUT_DIR}/${PKG}.tar.gz.sha256"
 else
-  shasum -a 256 "${PKG}.tar.gz" > "${PKG}.tar.gz.sha256"
+  shasum -a 256 "${OUTPUT_DIR}/${PKG}.tar.gz" > "${OUTPUT_DIR}/${PKG}.tar.gz.sha256"
 fi
 
 if [ -n "${GITHUB_ENV:-}" ]; then

@@ -70,20 +70,11 @@ fast-nextest:
 kernel-cursor:
   ./scripts/just/run.sh kernel-cursor
 
-sql-parity:
-  ./scripts/just/run.sh sql-parity
+redline-testing-official:
+  ./scripts/just/run.sh redline-testing-official
 
-sql-parity-full:
-  ./scripts/just/run.sh sql-parity-full
-
-sqlite-parity-scale-smoke:
-  ./scripts/just/run.sh sqlite-parity-scale-smoke
-
-sqlite-parity-scale-ci:
-  ./scripts/just/run.sh sqlite-parity-scale-ci
-
-sqlite-parity-volatile-sentinel:
-  ./scripts/just/run.sh sqlite-parity-volatile-sentinel
+official-evidence-guard:
+  ./scripts/just/run.sh official-evidence-guard
 
 sqlite-parity-report-update:
   ./scripts/just/run.sh sqlite-parity-report-update
@@ -91,35 +82,14 @@ sqlite-parity-report-update:
 sqlite-parity-report-check:
   ./scripts/just/run.sh sqlite-parity-report-check
 
-sqlite-jankurai-compare:
-  ./scripts/just/run.sh sqlite-jankurai-compare
-
-sqlite-parity-scale-full:
-  ./scripts/just/run.sh sqlite-parity-scale-full
+sqlite-parity-report-publish-pr:
+  ./scripts/just/run.sh sqlite-parity-report-publish-pr
 
 ffi-abi:
   ./scripts/just/run.sh ffi-abi
 
-ffi-parity-full:
-  ./scripts/just/run.sh ffi-parity-full
-
-ffi-symbol-diff:
-  ./scripts/just/run.sh ffi-symbol-diff
-
 cli-shell:
   ./scripts/just/run.sh cli-shell
-
-cli-parity-full:
-  ./scripts/just/run.sh cli-parity-full
-
-fuzz-parity:
-  ./scripts/just/run.sh fuzz-parity
-
-fuzz-parity-nightly:
-  ./scripts/just/run.sh fuzz-parity-nightly
-
-parity-full:
-  ./scripts/just/run.sh parity-full
 
 score:
   ./scripts/just/run.sh score

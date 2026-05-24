@@ -2,7 +2,7 @@
 # SQLite parity report dispatcher.
 #
 # Keeps the workflow YAML thin while preserving a local entrypoint for
-# regenerating the README plot and benchmark evidence.
+# regenerating README/report artifacts from verified redline-testing evidence.
 #
 # Usage:
 #   bash ops/ci/sqlite-parity-report.sh update
@@ -31,6 +31,9 @@ report_paths=(
   assets/sqlite-parity-performance-histogram.svg
   assets/sqlite-parity-ksloc.svg
   assets/sqlite-jankurai-comparison.svg
+  assets/sqlite-jankurai-score.svg
+  assets/sqlite-code-shape.svg
+  assets/sqlite-median-test-performance.svg
   benchmark-results/sqlite-parity/latest
   paper/data/loc_comparison.csv
   paper/sections/abstract.tex

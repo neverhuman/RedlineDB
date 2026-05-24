@@ -9,13 +9,10 @@
 //! Knobs:
 //!   * `REDLINEDB_FUZZ_ITERS` (default 1000) — iteration count.
 //!   * `REDLINEDB_FUZZ_SEED` (default 7) — RNG seed for reproducibility.
-//!   * `REDLINEDB_FUZZ_SHRINK=1` — on divergence, halve the offending
-//!     iteration's complexity score and rerun until the smallest failing
-//!     SQL is found, then write it to
-//!     `crates/sql/tests/regressions/fuzz-{seed}-{i}.sql`. Opt-in so CI
-//!     stays fast.
+//!   * `REDLINEDB_FUZZ_BASELINE_RATE` — optional local comparison ceiling for
+//!     the observed divergence rate. If unset, the test requires zero
+//!     divergences.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use rand::SeedableRng;
@@ -38,10 +35,6 @@ fn seed_from_env() -> u64 {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(7)
-}
-
-fn shrink_enabled() -> bool {
-    std::env::var("REDLINEDB_FUZZ_SHRINK").is_ok_and(|v| v == "1")
 }
 
 fn rusqlite_value_to_cell(value: rusqlite::types::Value) -> Cell {
@@ -263,65 +256,12 @@ fn iter_known_skips(sql: &str) -> bool {
     false
 }
 
-fn write_regression(seed: u64, i: usize, sql: &str) -> std::io::Result<PathBuf> {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("sql/tests/regressions");
-    std::fs::create_dir_all(&dir)?;
-    let path = dir.join(format!("fuzz-{seed}-{i}.sql"));
-    std::fs::write(&path, format!("-- seed={seed} iter={i}\n{sql}\n"))?;
-    Ok(path)
-}
-
-/// Read the baseline divergence rate (per-iteration) from disk. Returns
-/// `None` if the file does not exist yet (first run after a workstream
-/// lands). The file is updated in-place by `write_baseline` whenever the
-/// observed rate drops, so the gate stays monotone in the
-/// "make it better" direction across iteration-count changes.
+/// Read an optional local divergence-rate ceiling. This is an assertion input,
+/// not a generated receipt; the test never writes parity evidence artifacts.
 fn read_baseline_rate() -> Option<f64> {
-    let path = baseline_path();
-    let text = std::fs::read_to_string(&path).ok()?;
-    text.lines()
-        .find(|l| l.starts_with("baseline_divergence_rate="))
-        .and_then(|l| l.split_once('=').map(|(_, v)| v.trim().parse().ok()))
-        .flatten()
-}
-
-fn baseline_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("target/proof/sqlite-full-parity/fuzz-divergence.txt")
-}
-
-fn write_baseline(seed: u64, iters: usize, successes: usize, skipped: usize, divs: &[String]) {
-    let path = baseline_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let denom = (successes + divs.len()).max(1);
-    let rate = divs.len() as f64 / denom as f64;
-    let mut body = format!(
-        "# Fuzz parity divergence report\n\
-         # seed={seed} iters={iters} successes={successes} skipped={skipped}\n\
-         baseline_divergence={count}\n\
-         baseline_divergence_rate={rate}\n\n",
-        count = divs.len(),
-    );
-    for div in divs.iter().take(50) {
-        body.push_str(div);
-        body.push_str("\n---\n");
-    }
-    if divs.len() > 50 {
-        body.push_str(&format!(
-            "(omitted {} additional divergences — see test output)\n",
-            divs.len() - 50,
-        ));
-    }
-    let _ = std::fs::write(&path, body);
+    std::env::var("REDLINEDB_FUZZ_BASELINE_RATE")
+        .ok()
+        .and_then(|value| value.parse().ok())
 }
 
 #[test]
@@ -349,9 +289,6 @@ fn fuzz_parity_against_rusqlite() {
 
         if let Err(div) = compare_outcomes(sqlite_outcome, redline_outcome, ordered) {
             let rendered = render_divergence(seed, i, &sql, &div);
-            if shrink_enabled() {
-                let _ = write_regression(seed, i, &sql);
-            }
             divergences.push(rendered);
         } else {
             successes += 1;
@@ -385,26 +322,17 @@ fn fuzz_parity_against_rusqlite() {
         successes + observed,
     );
 
-    // Monotone gate: divergence RATE (per executed iter) must not exceed
-    // the previously recorded baseline rate (with a small +10% safety
-    // margin to absorb fuzzer non-determinism across dep upgrades). The
+    // Optional local gate: divergence RATE (per executed iter) must not exceed
+    // the configured baseline rate (with a small +10% safety margin to absorb
+    // fuzzer non-determinism across dep upgrades). The
     // rate framing makes the gate iteration-count-independent: bumping
     // REDLINEDB_FUZZ_ITERS from 1000 to 100000 (nightly lane) does not
-    // false-fail the gate. A pristine repo without a baseline only passes
-    // when it observes zero divergences, so first-run drift cannot bless
-    // itself as the new baseline.
+    // false-fail the gate. Without a configured baseline this only passes when
+    // it observes zero divergences, so first-run drift cannot bless itself.
     let gate_failed = match prior_baseline_rate {
         Some(baseline) => observed_rate > baseline * 1.10 + 0.01,
         None => observed != 0,
     };
-
-    // Always write the (possibly new) baseline when the gate passes so
-    // future runs measure against the latest "best known" rate. When the
-    // gate fails, we leave the prior baseline in place so a fix can be
-    // verified locally before re-committing.
-    if !gate_failed {
-        write_baseline(seed, iters, successes, skipped, &divergences);
-    }
 
     assert!(
         !gate_failed,

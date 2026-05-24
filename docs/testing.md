@@ -16,7 +16,7 @@ readable repair receipts.
 | `test`                               | Fast workspace test proof.                                                                            |
 | `verify`                             | Alias for the root validation gate.                                                                   |
 | `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Quick iteration lane, not the pre-push gate. |
-| `pr-ci`                              | Exact local mirror of `.github/workflows/ci.yml`: preflight, test shards, parity shards, and `beyond-postgres-reference`. Run with `scripts/ci-local.sh pr-ci`. |
+| `pr-ci`                              | Exact local mirror of `.github/workflows/ci.yml`: preflight, test shards, the verified `redline-testing-official` gate, and `official-evidence-guard`. Run with `scripts/ci-local.sh pr-ci`. |
 | `fast-check`                         | Workspace compile proof for the default health lane.                                                  |
 | `fast-test`                          | Workspace test proof for the default health lane.                                                     |
 | `hygiene`                            | Format and file-size only; cheapest pre-commit gate.                                                  |
@@ -25,10 +25,9 @@ readable repair receipts.
 | `phase8-smoke`                       | Same as `medium`; pinned for phase-8 regression triage.                                               |
 | `kernel-cursor`                      | Cursor-specific kernel regression tests without the full workspace sweep.                             |
 | `cache-warm`                         | Prime the workspace build cache before a wider proof run.                                             |
-| `sql-parity`                         | Focused SQLite parity tests for SQL planner/executor changes.                                         |
-| `sqlite-parity-scale-smoke`          | Bench-owned SQLite shell parity scale smoke over P0 memory cases from `crates/bench/sqlite_parity/`.  |
-| `sqlite-parity-scale-ci`             | Bench-owned hard gate over the full generated RedlineDB-vs-SQLite corpus. |
-| `sqlite-parity-scale-full`           | Full generated SQLite shell scale sweep for reference diagnostics. |
+| `redline-testing-official`           | Verified external official conformance and benchmark gate; `neverhuman/redline-testing` is the sole official source. |
+| `official-evidence-guard`            | Fails if RedlineDB reintroduces official metric/report generation outside the verified external runner or its processed evidence bundle. |
+| `sqlite-parity-report-update`        | Regenerates official SQLite parity report and README data through the verified external `redline-testing` artifact and processed evidence bundle. |
 | `ffi-abi`                            | C ABI compatibility tests for the SQLite shim surface.                                                |
 | `cli-shell`                          | CLI compatibility tests for the shell/batch front end.                                                |
 | `kernel-check`                       | Targeted `redlinedb-kernel` compile proof.                                                            |
@@ -58,7 +57,7 @@ readable repair receipts.
 | `phase11-sql-contracts`              | Phase-11 SQL contract tests (temp roots, queue, xdoug-compat).                                        |
 | `security`                           | `cargo audit` + `cargo deny check` + `gitleaks detect`.                                               |
 | `security-local`                     | Same as `security`; pinned for local-only invocation.                                                 |
-| `release-binary-smoke`               | Downloads the pinned RedlineDB `v1.0.17` Linux release tarball, verifies its `.sha256`, and runs a CLI smoke query. |
+| `release-binary-smoke`               | Builds and verifies the pinned RedlineDB `v2.0.6` Linux release package, then runs a CLI smoke query. |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
 | `jankurai-tools`                     | Local mirror for every `.github/workflows/jankurai-tools.yml` matrix job. Run with `scripts/ci-local.sh jankurai-tools`. |
 | `pr-gate`                            | Local mirror for PR branch freshness plus `jankurai staged-gate` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |
@@ -71,16 +70,27 @@ rtk just <lane-name>
 
 (or invoke the command list from the TOML directly).
 
-SQLite parity scale policy: required CI runs `sqlite-parity-scale-ci`, which
-compares RedlineDB against `sqlite3` for the full generated corpus under
-`crates/bench/sqlite_parity/`. Reference-shell capability skips are hard
-errors in that lane; `approved-ci.txt` remains only a local triage subset while
-older diagnostics still need it.
+SQLite parity boundary: the official evidence flow lives in
+[`docs/sqlite-parity.md`](docs/sqlite-parity.md), and `redline-testing-official`
+is the only lane that produces committed parity evidence. RedlineDB does not
+expose a local SQLite parity coverage/benchmark/report/sentinel producer; the
+in-tree `sqlite_parity` commands and prior parity bundle workflows fail closed.
+The proof-lane definitions and audit policy remain pinned in
+`.jankurai/proof-lanes.toml` and `agent/audit-policy.toml`.
 
-Set `REDLINEDB_SQLITE_PARITY_SQLITE_BIN=/path/to/sqlite3` to run the full
-corpus against a pinned SQLite shell with optional shell and extension features
-enabled. If unset, full-corpus lanes build the official SQLite `3.53.1`
-autoconf shell through `scripts/sqlite/build-reference.sh` and export
+To test a locally built `redline-testing` tarball without editing CI pins, point
+the installer at `file://` URLs:
+
+```
+  CI_REDLINE_TESTING_URL=file:///home/ubuntu/redline-testing/dist/redline-testing-0.1.3-linux-x86_64.tar.gz \
+  CI_REDLINE_TESTING_SHA256_URL=file:///home/ubuntu/redline-testing/dist/redline-testing-0.1.3-linux-x86_64.tar.gz.sha256 \
+  rtk just redline-testing-official
+```
+
+Set `REDLINEDB_SQLITE_PARITY_SQLITE_BIN=/path/to/sqlite3` to run
+`redline-testing-official` against a pinned SQLite shell with optional shell and
+extension features enabled. If unset, the official wrapper builds the SQLite
+`3.53.1` autoconf shell through `scripts/sqlite/build-reference.sh` and exports
 `target/sqlite-reference/3.53.1/bin/sqlite3` before comparing cases. The
 builder verifies the upstream SHA3-256 digest and smokes percentile, math,
 FTS5, RTREE, DBSTAT, `generate_series`, and `uint` support.
@@ -119,8 +129,8 @@ rtk scripts/ci-local.sh pr-ci
 ```
 
 That command runs the same shared dispatchers used by `.github/workflows/ci.yml`:
-`CI_FAST_STAGE=preflight`, each `tests` matrix shard, each `parity` matrix shard,
-and `ops/ci/beyond-postgres-reference.sh`. It stops at the first failing local
+`CI_FAST_STAGE=preflight`, each `tests` matrix shard, `CI_PARITY_STAGE=redline-testing-official`,
+and `scripts/guard-official-evidence.sh`. It stops at the first failing local
 job and preserves the underlying command output.
 
 To run local mirrors for the broader PR workflow set, including dependency

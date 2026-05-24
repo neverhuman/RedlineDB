@@ -190,12 +190,33 @@ enum ListFormat {
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::List(args) => list(args),
-        Command::Run(args) => run_selected(args),
-        Command::Compare(args) => compare_selected(args),
-        Command::Report(args) => report(args),
-        Command::JankuraiCompare(args) => jankurai_compare(args),
-        Command::Sentinel(args) => sentinel(args),
+        Command::Run(args) => {
+            reject_disabled_producer("run")?;
+            run_selected(args)
+        }
+        Command::Compare(args) => {
+            reject_disabled_producer("compare")?;
+            compare_selected(args)
+        }
+        Command::Report(args) => {
+            reject_disabled_producer("report")?;
+            report(args)
+        }
+        Command::JankuraiCompare(args) => {
+            reject_disabled_producer("jankurai-compare")?;
+            jankurai_compare(args)
+        }
+        Command::Sentinel(args) => {
+            reject_disabled_producer("sentinel")?;
+            sentinel(args)
+        }
     }
+}
+
+fn reject_disabled_producer(command: &str) -> Result<()> {
+    bail!(
+        "in-tree sqlite_parity `{command}` is disabled: SQLite parity coverage, benchmark, report, and sentinel evidence must be produced only by the pinned neverhuman/redline-testing release artifact"
+    )
 }
 
 fn list(args: ListArgs) -> Result<()> {
@@ -681,14 +702,19 @@ mod tests {
         validate_compare_engines(&reference, &target).expect("distinct RedlineDB target accepted");
     }
 
+    #[test]
+    fn in_tree_producer_commands_are_disabled() {
+        let err = reject_disabled_producer("compare").expect_err("disabled producer rejected");
+        let message = err.to_string();
+        assert!(message.contains("in-tree sqlite_parity"));
+        assert!(message.contains("redline-testing"));
+    }
+
     #[cfg(unix)]
     fn write_shell_bin(dir: &Path, name: &str, version: &str) -> PathBuf {
         let path = dir.join(name);
-        std::fs::write(
-            &path,
-            format!("#!/usr/bin/env bash\nprintf '%s\\n' {version:?}\n"),
-        )
-        .expect("write fake bin");
+        std::fs::write(&path, format!("#!/bin/sh\nprintf '%s\\n' {version:?}\n"))
+            .expect("write fake bin");
         let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
         perms.set_mode(0o700);
         std::fs::set_permissions(&path, perms).expect("chmod fake bin");

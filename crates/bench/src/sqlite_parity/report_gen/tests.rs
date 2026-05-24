@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use super::io::{existing_manifest_git_sha, normalize_git_sha, resolve_git_sha};
+use super::provenance::validate_provenance;
 use super::ranking::{RawRecord, build_report};
 use super::readme::{
     jankurai_badge_block, metrics_block, parse_jankurai_score, readme_block,
@@ -27,8 +28,11 @@ fn raw(case_id: &str, sqlite: u128, redline: u128) -> RawRecord {
         sqlite_version: Some("3.fixture".to_owned()),
         reference_engine: "sqlite3".to_owned(),
         target_engine: "redlinedb".to_owned(),
+        reference_executable_path: format!("/fixture/sqlite3-{case_id}"),
+        target_executable_path: format!("/fixture/redlinedb-{case_id}"),
         reference_executable_sha256: format!("sqlite-sha-{case_id}"),
         target_executable_sha256: format!("redlinedb-sha-{case_id}"),
+        reference_version: "sqlite3 3.fixture".to_owned(),
         target_version: "redlinedb v2.0.2".to_owned(),
         status: "passed".to_owned(),
         reference_elapsed_ns: sqlite,
@@ -233,6 +237,32 @@ fn report_rejects_passed_records_without_execution_provenance() {
 }
 
 #[test]
+fn report_rejects_same_executable_paths_even_with_distinct_hashes() {
+    let all_cases = catalog::all_cases().expect("manifest");
+    let expected = std::collections::BTreeSet::from(["00001".to_owned()]);
+    let mut record = raw("00001", 100, 90);
+    record.target_executable_path = record.reference_executable_path.clone();
+
+    let report = build_report(
+        &all_cases,
+        &expected,
+        vec![record],
+        "2026-05-20",
+        "sha",
+        None,
+        None,
+    )
+    .expect("report");
+
+    assert_eq!(report.summary.passed_cases, 0);
+    assert_eq!(report.summary.missing_cases, 1);
+    assert_eq!(
+        report.coverage_failures,
+        vec!["00001 lacks target execution provenance"]
+    );
+}
+
+#[test]
 fn missing_case_file_metadata_fails_closed() {
     let records = vec![RawRecord {
         case_file: String::new(),
@@ -328,6 +358,9 @@ fn readme_block_includes_visible_charts_and_latency_anchor() {
         Some(Path::new("assets/sqlite-median-test-performance.svg")),
     );
     assert!(block.contains("[Full ranked latency table](#sqlite-parity-ranked-latency-table)"));
+    assert!(block.contains("sole official source"));
+    assert!(block.contains("verified external `neverhuman/redline-testing` release artifact"));
+    assert!(block.contains("benchmark-results/sqlite-parity/latest/provenance.json"));
     assert!(metrics.contains(
         "![Beyond-SQLite feature progress chart](assets/beyond-sqlite-feature-progress.svg)"
     ));
@@ -456,4 +489,101 @@ fn check_mode_reuses_existing_manifest_git_sha() {
     let sha = existing_manifest_git_sha(&manifest_path).expect("read sha");
 
     assert_eq!(sha.as_deref(), Some("existing-sha"));
+}
+
+#[test]
+fn provenance_accepts_raw_hash_and_release_binary_sha() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let provenance_path = temp.path().join("provenance.json");
+    let raw_path = temp.path().join("raw.jsonl");
+    let raw_sha = "a".repeat(64);
+    let bin_sha = "b".repeat(64);
+    fs::write(
+        &provenance_path,
+        format!(
+            r#"{{
+  "output_file_hashes": {{
+    "{}": {{ "sha256": "{}" }}
+  }},
+  "redline_testing_binary_sha256": "{}",
+  "release_artifact": {{
+    "bin_sha256": "{}"
+  }}
+}}"#,
+            raw_path.display(),
+            raw_sha,
+            bin_sha,
+            bin_sha
+        ),
+    )
+    .expect("write provenance");
+
+    let validated =
+        validate_provenance(&provenance_path, &raw_path, &raw_sha).expect("valid provenance");
+
+    assert_eq!(validated.raw_jsonl_sha256, raw_sha);
+    assert_eq!(validated.redline_testing_binary_sha256, bin_sha);
+    assert_eq!(
+        validated.release_binary_sha256.as_deref(),
+        Some(bin_sha.as_str())
+    );
+}
+
+#[test]
+fn provenance_rejects_raw_hash_mismatch() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let provenance_path = temp.path().join("provenance.json");
+    let raw_path = temp.path().join("raw.jsonl");
+    fs::write(
+        &provenance_path,
+        format!(
+            r#"{{
+  "output_hashes": {{
+    "raw.jsonl": "{}"
+  }},
+  "redline_testing_binary_sha256": "{}"
+}}"#,
+            "a".repeat(64),
+            "b".repeat(64)
+        ),
+    )
+    .expect("write provenance");
+
+    let err =
+        validate_provenance(&provenance_path, &raw_path, &"c".repeat(64)).expect_err("mismatch");
+
+    assert!(err.to_string().contains("raw.jsonl sha256 mismatch"));
+}
+
+#[test]
+fn provenance_rejects_release_binary_mismatch() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let provenance_path = temp.path().join("provenance.json");
+    let raw_path = temp.path().join("raw.jsonl");
+    let raw_sha = "a".repeat(64);
+    fs::write(
+        &provenance_path,
+        format!(
+            r#"{{
+  "output_hashes": {{
+    "raw.jsonl": "{}"
+  }},
+  "redline_testing_binary_sha256": "{}",
+  "release_artifact": {{
+    "binary_sha256": "{}"
+  }}
+}}"#,
+            raw_sha,
+            "b".repeat(64),
+            "c".repeat(64)
+        ),
+    )
+    .expect("write provenance");
+
+    let err = validate_provenance(&provenance_path, &raw_path, &raw_sha).expect_err("mismatch");
+
+    assert!(
+        err.to_string()
+            .contains("redline-testing binary sha mismatch")
+    );
 }

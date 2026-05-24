@@ -2,9 +2,33 @@
 
 This ledger records RedlineDB's current SQLite-facing compatibility status.
 The reference oracle is the SQLite library bundled with `rusqlite` in the test
-harness. Proof artifacts under `target/proof/sqlite-full-parity/` should record
-`sqlite_version()`, `PRAGMA compile_options`, ignored tests, `UnsupportedSql`
-sites, and the SQLLogicTest inventory for each parity pass.
+harness. RedlineDB-side parity tests are local regression checks only; they do
+not produce SQLite parity coverage, benchmark, report, sentinel, or proof
+evidence artifacts.
+
+The official corpus and gate now live in `neverhuman/redline-testing`; that
+runner is the sole official source for parity evidence. The ledger below is the
+RedlineDB-side compatibility snapshot that consumes that external suite.
+Official README metrics and charts are accepted only from the verified external
+release artifact. The report generator requires
+`benchmark-results/sqlite-parity/latest/provenance.json` before regenerating
+README/chart outputs, and CI verifies the release tarball SHA-256 from the
+sidecar, binary SHA-256, release manifest, and GitHub artifact attestation
+before any official suite runs.
+
+The provenance schema accepted by the RedlineDB report gate is deliberately
+small and hash-first:
+
+- `output_file_hashes` or `output_hashes` must include `raw.jsonl` with its
+  SHA-256, either as `"raw.jsonl": "<sha256>"` or
+  `"raw.jsonl": { "sha256": "<sha256>" }`.
+- `redline_testing_binary_sha256` must record the installed
+  `redline-testing` binary SHA-256 used to write `raw.jsonl`.
+- If the provenance records a release artifact/bin hash through
+  `release_artifact.bin_sha256`, `release_artifact.binary_sha256`,
+  `redline_testing.release_artifact.bin_sha256`, `release_file_hashes`, or
+  equivalent `*_binary_sha256` fields, it must equal
+  `redline_testing_binary_sha256`.
 
 Status values are deliberately narrow:
 
@@ -89,14 +113,11 @@ Status values are deliberately narrow:
 | CLI one-shot query/stats/backup commands | partial | `crates/cli` smoke lanes via `.jankurai/test-map.json` | cli-shell | One-shot query/stats/backup paths are covered; SQLite shell scripting compatibility is not complete. |
 | SQLite shell dot-command compatibility | pass | `crates/cli/tests/dot_commands.rs` | cli-shell | 25 dot-commands wired through `crates/cli/src/dot/{mod,control,display,io_cmd,schema,parameter}.rs`; adds `.fullschema` (schema + `sqlite_master`), `.once FILE` (one-shot redirect plumbed through `run_query_with_state`), and `.parameter set|unset|init|clear|list` (bindings applied via `bind_named` on the next statement). |
 
-## Required Receipts
+## Evidence Boundary
 
-For any parity change, keep or regenerate:
-
-- `target/proof/sqlite-full-parity/git-status.txt`
-- `target/proof/sqlite-full-parity/diff-stat.txt`
-- `target/proof/sqlite-full-parity/rusqlite-reference.txt`
-- `target/proof/sqlite-full-parity/unsupported-sql-sites.txt`
-- `target/proof/sqlite-full-parity/ignored-tests.txt`
-- `target/proof/sqlite-full-parity/sqllogictest-inventory.txt`
-- `target/proof/sqlite-full-parity/sql-parity-tests.txt`
+For any official SQLite parity evidence change, use the pinned
+`neverhuman/redline-testing` release artifact through
+`redline-testing-official` or `sqlite-parity-report-update`. Do not create
+local RedlineDB receipts or public lanes for SQLite parity coverage, benchmark,
+report, sentinel, or proof data; legacy receipt scripts, local parity bundle
+lanes, and in-tree `sqlite_parity` producer commands fail closed.

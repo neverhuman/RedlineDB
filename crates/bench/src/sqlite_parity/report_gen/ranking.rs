@@ -30,9 +30,15 @@ pub(super) struct RawRecord {
     #[serde(default)]
     pub(super) target_engine: String,
     #[serde(default)]
+    pub(super) reference_executable_path: String,
+    #[serde(default)]
+    pub(super) target_executable_path: String,
+    #[serde(default)]
     pub(super) reference_executable_sha256: String,
     #[serde(default)]
     pub(super) target_executable_sha256: String,
+    #[serde(default)]
+    pub(super) reference_version: String,
     #[serde(default)]
     pub(super) target_version: String,
     pub(super) status: String,
@@ -290,9 +296,13 @@ fn has_execution_provenance(record: &RawRecord) -> bool {
     (record.reference_engine.eq_ignore_ascii_case("sqlite3")
         || record.reference_engine.eq_ignore_ascii_case("sqlite"))
         && record.target_engine.eq_ignore_ascii_case("redlinedb")
+        && !record.reference_executable_path.is_empty()
+        && !record.target_executable_path.is_empty()
+        && record.reference_executable_path != record.target_executable_path
         && !record.reference_executable_sha256.is_empty()
         && !record.target_executable_sha256.is_empty()
         && record.reference_executable_sha256 != record.target_executable_sha256
+        && !record.reference_version.is_empty()
         && record
             .target_version
             .to_ascii_lowercase()
