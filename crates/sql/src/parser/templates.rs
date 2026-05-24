@@ -385,6 +385,20 @@ fn bind_cross_db_sql(
     if alias.eq_ignore_ascii_case("main") || alias.eq_ignore_ascii_case(concat!("te", "mp")) {
         return Ok(None);
     }
+    // Track J — Postgres-style `<schema>.<table>` references against a
+    // CREATE-SCHEMA-registered namespace are treated as plain table
+    // references in the `main` schema. The cross-db path is reserved for
+    // ATTACH-DATABASE aliases. Skip the rewrite when the alias is one of
+    // the session's registered pg schemas; the binder then resolves the
+    // qualified name normally (by table-folded lookup).
+    if let Some(conn) = crate::exec::current_connection() {
+        let registered = conn
+            .with_session(|session| Ok(session.pg_schemas.contains(&alias.to_ascii_lowercase())))
+            .unwrap_or(false);
+        if registered {
+            return Ok(None);
+        }
+    }
     let rewritten = remove_qualifier_once(sql, &alias);
     Ok(Some(template(
         sql,
