@@ -68,11 +68,13 @@ pub(crate) fn bind_statement(
             object_type,
             if_exists,
             names,
+            cascade,
             ..
-        } => bind_drop(sql, schema_epoch, object_type, if_exists, names),
+        } => bind_drop(sql, schema_epoch, object_type, if_exists, names, cascade),
         SqlStatement::AlterTable(alter_table) => bind_alter_table(
             schema_epoch,
             sql,
+            &schema,
             alter_table.name,
             alter_table.if_exists,
             alter_table.only,
@@ -122,10 +124,264 @@ pub(crate) fn bind_statement(
                 }),
             ))
         }
+        SqlStatement::CreateSchema {
+            schema_name,
+            if_not_exists,
+            ..
+        } => bind_create_schema(sql, schema_epoch, schema_name, if_not_exists),
+        SqlStatement::CreateSequence {
+            temporary: _,
+            if_not_exists,
+            name,
+            data_type: _,
+            sequence_options,
+            owned_by: _,
+        } => bind_create_sequence(sql, schema_epoch, name, if_not_exists, sequence_options),
+        SqlStatement::AlterIndex { name, operation } => {
+            bind_alter_index(sql, schema_epoch, name, operation)
+        }
+        SqlStatement::Set(set) => bind_set_statement(sql, schema_epoch, set),
+        SqlStatement::ShowVariable { variable } => {
+            bind_show_variable(sql, schema_epoch, variable)
+        }
         other => Err(Error::UnsupportedSql(format!(
             "statement not supported yet: {other:?}"
         ))),
     }
+}
+
+/// Track J — `CREATE SCHEMA <name>` / `CREATE SCHEMA IF NOT EXISTS <name>`.
+/// Records the namespace name on the session. SQLite has no schema layer,
+/// so this is a no-op for catalog state — but registering the name keeps
+/// downstream `<schema>.<table>` qualifier checks and `pg_namespace`
+/// introspection from raising "no such schema".
+fn bind_create_schema(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    schema_name: sqlparser::ast::SchemaName,
+    if_not_exists: bool,
+) -> Result<PreparedTemplate> {
+    let name = match schema_name {
+        sqlparser::ast::SchemaName::Simple(name) => match name.0.last() {
+            Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "CREATE SCHEMA requires a name".to_owned(),
+                ));
+            }
+        },
+        sqlparser::ast::SchemaName::NamedAuthorization(name, _) => match name.0.last() {
+            Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "CREATE SCHEMA requires a name".to_owned(),
+                ));
+            }
+        },
+        sqlparser::ast::SchemaName::UnnamedAuthorization(ident) => ident.value.clone(),
+    };
+    Ok(template(
+        sql,
+        schema_epoch,
+        false,
+        PreparedKind::CreateSchema {
+            name: Arc::from(name),
+            if_not_exists,
+        },
+    ))
+}
+
+/// Track J — `CREATE SEQUENCE`. We accept the START WITH / INCREMENT BY
+/// options that are common to Postgres migration scripts; other options
+/// (MINVALUE/MAXVALUE/CYCLE/CACHE) are silently ignored — sequences in
+/// RedlineDB are 64-bit integer counters with no overflow detection.
+fn bind_create_sequence(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    name: ObjectName,
+    if_not_exists: bool,
+    sequence_options: Vec<sqlparser::ast::SequenceOptions>,
+) -> Result<PreparedTemplate> {
+    let folded_name = match name.0.last() {
+        Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
+        _ => {
+            return Err(Error::UnsupportedSql(
+                "CREATE SEQUENCE requires a name".to_owned(),
+            ));
+        }
+    };
+    let mut start_with: Option<i64> = None;
+    let mut increment_by: Option<i64> = None;
+    for opt in sequence_options {
+        match opt {
+            sqlparser::ast::SequenceOptions::StartWith(expr, _has_with) => {
+                if let Some(v) = sequence_integer_literal(&expr) {
+                    start_with = Some(v);
+                }
+            }
+            sqlparser::ast::SequenceOptions::IncrementBy(expr, _has_by) => {
+                if let Some(v) = sequence_integer_literal(&expr) {
+                    increment_by = Some(v);
+                }
+            }
+            // MinValue, MaxValue, NoMinValue, NoMaxValue, Cache, Cycle, NoCycle
+            // are recognised but recorded only as a recall-only no-op.
+            _ => {}
+        }
+    }
+    Ok(template(
+        sql,
+        schema_epoch,
+        false,
+        PreparedKind::CreateSequence {
+            name: Arc::from(folded_name),
+            if_not_exists,
+            start_with,
+            increment_by,
+        },
+    ))
+}
+
+fn sequence_integer_literal(expr: &Expr) -> Option<i64> {
+    match expr {
+        Expr::Value(ValueWithSpan {
+            value: Value::Number(num, _),
+            ..
+        }) => num.parse::<i64>().ok(),
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr,
+        } => match expr.as_ref() {
+            Expr::Value(ValueWithSpan {
+                value: Value::Number(num, _),
+                ..
+            }) => num.parse::<i64>().ok().map(|v| -v),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Track J — `ALTER INDEX <name> RENAME TO <new_name>`. Implemented as an
+/// in-place rename on the kernel index catalog. Other AlterIndex operations
+/// are not supported.
+fn bind_alter_index(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    name: ObjectName,
+    operation: sqlparser::ast::AlterIndexOperation,
+) -> Result<PreparedTemplate> {
+    let old_name = match name.0.last() {
+        Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
+        _ => {
+            return Err(Error::UnsupportedSql(
+                "ALTER INDEX requires a name".to_owned(),
+            ));
+        }
+    };
+    match operation {
+        sqlparser::ast::AlterIndexOperation::RenameIndex { index_name } => {
+            let new_name = match index_name.0.last() {
+                Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
+                _ => {
+                    return Err(Error::UnsupportedSql(
+                        "ALTER INDEX RENAME requires a target name".to_owned(),
+                    ));
+                }
+            };
+            Ok(template(
+                sql,
+                schema_epoch,
+                false,
+                PreparedKind::AlterIndex {
+                    old_name: Arc::from(old_name),
+                    new_name: Arc::from(new_name),
+                },
+            ))
+        }
+    }
+}
+
+/// Track J — `SET TRANSACTION ISOLATION LEVEL <level>` and `SET LOCAL ...`
+/// variants. We accept and record the value on the session for later
+/// `SHOW transaction_isolation` recall. RedlineDB does not change its
+/// internal isolation behaviour today.
+fn bind_set_statement(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    set: sqlparser::ast::Set,
+) -> Result<PreparedTemplate> {
+    if let sqlparser::ast::Set::SetTransaction {
+        modes,
+        snapshot: _,
+        session: _,
+    } = set
+    {
+        for mode in modes {
+            if let sqlparser::ast::TransactionMode::IsolationLevel(level) = mode {
+                let mapped = match level {
+                    sqlparser::ast::TransactionIsolationLevel::ReadUncommitted => {
+                        crate::statement::TransactionIsolationLevel::ReadUncommitted
+                    }
+                    sqlparser::ast::TransactionIsolationLevel::ReadCommitted => {
+                        crate::statement::TransactionIsolationLevel::ReadCommitted
+                    }
+                    sqlparser::ast::TransactionIsolationLevel::RepeatableRead => {
+                        crate::statement::TransactionIsolationLevel::RepeatableRead
+                    }
+                    sqlparser::ast::TransactionIsolationLevel::Serializable => {
+                        crate::statement::TransactionIsolationLevel::Serializable
+                    }
+                    sqlparser::ast::TransactionIsolationLevel::Snapshot => {
+                        crate::statement::TransactionIsolationLevel::Serializable
+                    }
+                };
+                return Ok(template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::SetTransactionIsolation { level: mapped },
+                ));
+            }
+        }
+        // No isolation mode specified — accept silently as a no-op.
+        return Ok(template(
+            sql,
+            schema_epoch,
+            false,
+            PreparedKind::SetTransactionIsolation {
+                level: crate::statement::TransactionIsolationLevel::ReadCommitted,
+            },
+        ));
+    }
+    Err(Error::UnsupportedSql(format!(
+        "SET statement not supported yet: {set:?}"
+    )))
+}
+
+/// Track J — `SHOW <name>`. Recognises `transaction_isolation` and routes it
+/// through a single-value static-row select so callers get a row with the
+/// recalled session value. Unknown names fall through with an empty string.
+fn bind_show_variable(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    variable: Vec<Ident>,
+) -> Result<PreparedTemplate> {
+    let name = variable
+        .iter()
+        .map(|i| i.value.as_str())
+        .collect::<Vec<_>>()
+        .join(".");
+    let mut t = template(
+        sql,
+        schema_epoch,
+        true,
+        PreparedKind::ShowVariable {
+            name: Arc::from(name.clone()),
+        },
+    );
+    t.output_columns = Arc::from([name]);
+    Ok(t)
 }
 
 fn bind_cross_db_sql(
