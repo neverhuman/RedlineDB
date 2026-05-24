@@ -235,7 +235,143 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if out.contains("'+") || out.contains("'-") {
         out = rewrite_date_arith_with_modifier(&out);
     }
+    // Track K — `SELECT ... INTO table_name [FROM ...]` is the PG-standard
+    // form of `CREATE TABLE table_name AS SELECT ... [FROM ...]`. Rewrite
+    // pre-parse so the existing CTAS path handles it.
+    if out.to_ascii_uppercase().contains(" INTO ") {
+        out = rewrite_select_into_to_ctas(&out);
+    }
     out
+}
+
+/// Track K — Rewrite `SELECT projection INTO table_name [FROM ...]` into
+/// `CREATE TABLE table_name AS SELECT projection [FROM ...]`. Conservative:
+/// only triggers when SELECT is the leading token of a statement (top-level
+/// SELECT) and only handles the simple `INTO <unquoted-ident>` form. The
+/// `FROM` clause (if any) is preserved verbatim. Other `INTO` usages
+/// (INSERT INTO, MERGE INTO, plpgsql) are left untouched.
+fn rewrite_select_into_to_ctas(sql: &str) -> String {
+    // Tokenize at statement boundaries (semicolons) to handle multi-statement
+    // input. Each statement is rewritten in isolation.
+    let mut out = String::with_capacity(sql.len() + 16);
+    for (idx, stmt) in split_top_level_statements(sql).into_iter().enumerate() {
+        if idx > 0 {
+            out.push(';');
+        }
+        out.push_str(&rewrite_select_into_in_statement(&stmt));
+    }
+    out
+}
+
+fn split_top_level_statements(sql: &str) -> Vec<String> {
+    let bytes = sql.as_bytes();
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    let mut depth = 0i32;
+    let mut in_str: Option<u8> = None;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = in_str {
+            if b == q {
+                in_str = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => in_str = Some(b),
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b';' if depth == 0 => {
+                out.push(sql[start..i].to_owned());
+                start = i + 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    if start < bytes.len() {
+        out.push(sql[start..].to_owned());
+    }
+    out
+}
+
+fn rewrite_select_into_in_statement(stmt: &str) -> String {
+    let trimmed = stmt.trim_start();
+    if !trimmed.to_ascii_uppercase().starts_with("SELECT ") {
+        return stmt.to_owned();
+    }
+    let leading_ws = &stmt[..stmt.len() - trimmed.len()];
+    let upper = trimmed.to_ascii_uppercase();
+    // Find top-level " INTO " (not inside parens/strings).
+    let into_at = find_top_level_keyword(&upper, trimmed.as_bytes(), 0, " INTO ");
+    let Some(into_pos) = into_at else {
+        return stmt.to_owned();
+    };
+    // SELECT body is `trimmed[7..into_pos]` (after "SELECT "); but it's
+    // simpler to keep the original projection (between "SELECT" and " INTO ").
+    let after_into = into_pos + " INTO ".len();
+    // Find table name: identifier up to next whitespace, ';', or top-level
+    // keyword (FROM/WHERE/...).
+    let rest = &trimmed[after_into..];
+    let upper_rest = &upper[after_into..];
+    let mut name_end = 0usize;
+    for (idx, ch) in rest.char_indices() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '.' {
+            name_end = idx + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if name_end == 0 {
+        return stmt.to_owned();
+    }
+    let name = &rest[..name_end];
+    let after_name = &rest[name_end..];
+    let after_name_upper = &upper_rest[name_end..];
+    // The simple bare form (no TEMP/TABLE qualifiers between the keyword
+    // pair and the name) is all we lower; PG-specific variants are left
+    // for the parser to reject.
+    //
+    // The candidate text up to the keyword boundary becomes the body of
+    // a new CTAS wrapper; the tail (post-name) is appended verbatim.
+    let projection = &trimmed[..into_pos];
+    let _ = after_name_upper;
+    format!(
+        "{leading_ws}CREATE TABLE {name} AS {projection}{after_name}"
+    )
+}
+
+fn find_top_level_keyword(upper: &str, bytes: &[u8], from: usize, kw: &str) -> Option<usize> {
+    let mut i = from;
+    let mut depth = 0i32;
+    let mut in_str: Option<u8> = None;
+    while i + kw.len() <= bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = in_str {
+            if b == q {
+                in_str = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => {
+                in_str = Some(b);
+                i += 1;
+                continue;
+            }
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0 && &upper[i..i + kw.len()] == kw {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
 }
 
 /// sqlparser-rs 0.61 chokes on `INSERT INTO t SELECT ... ON CONFLICT ...`
