@@ -31,6 +31,15 @@ pub(crate) fn bind_query_with_params(
         format_clause,
         pipe_operators,
     } = query;
+    // Track K — FETCH FIRST n ROWS [ONLY|WITH TIES] is the SQL-standard form
+    // of LIMIT. sqlparser surfaces it on `Query::fetch` separately from
+    // `limit_clause`; fold it down into a LimitOffset shape so the rest of
+    // the binding pipeline only has to look at one place. WITH TIES is not
+    // supported yet (would require ORDER BY tie-breaking on top of LIMIT).
+    let limit_clause = match fold_fetch_into_limit_clause(limit_clause, fetch)? {
+        Some(clause) => Some(clause),
+        None => None,
+    };
     if let Some(with) = with {
         // CTEs: materialize each CTE body (handling recursive references)
         // and dispatch to the trailing query under an active CTE scope.
@@ -39,7 +48,7 @@ pub(crate) fn bind_query_with_params(
             body,
             order_by,
             limit_clause,
-            fetch,
+            fetch: None,
             locks,
             for_clause,
             settings,
@@ -1287,6 +1296,71 @@ fn top_level_positive_int(expr: &Expr) -> Option<i64> {
             _ => None,
         },
         _ => None,
+    }
+}
+
+/// Track K — collapse a SQL-standard `FETCH FIRST n ROWS [ONLY|WITH TIES]`
+/// clause into the same `LimitClause::LimitOffset` shape the rest of the
+/// binder uses for plain `LIMIT n`. Preserves an already-present LIMIT
+/// (precedence: explicit LIMIT wins over FETCH, so this is conservative
+/// and only fills in when LIMIT is absent), and preserves OFFSET in both
+/// cases — `OFFSET n ROWS FETCH NEXT m ROWS ONLY` is the standard
+/// pagination form and survives untouched.
+///
+/// `FETCH FIRST [n] ROW[S] ONLY` and `FETCH NEXT [n] ROW[S] ONLY` are
+/// equivalent (the keyword choice is cosmetic in the SQL standard); the
+/// quantity defaults to 1 when omitted (e.g. `FETCH FIRST ROW ONLY`).
+/// `WITH TIES` and `PERCENT` remain unsupported (they require tie-aware
+/// LIMIT semantics).
+fn fold_fetch_into_limit_clause(
+    limit_clause: Option<LimitClause>,
+    fetch: Option<sqlparser::ast::Fetch>,
+) -> Result<Option<LimitClause>> {
+    let Some(fetch) = fetch else {
+        return Ok(limit_clause);
+    };
+    if fetch.with_ties {
+        return Err(Error::UnsupportedSql(
+            "FETCH ... WITH TIES is not supported".to_owned(),
+        ));
+    }
+    if fetch.percent {
+        return Err(Error::UnsupportedSql(
+            "FETCH ... PERCENT is not supported".to_owned(),
+        ));
+    }
+    // Default quantity = 1 (matches `FETCH FIRST ROW ONLY`).
+    let fetch_qty = fetch.quantity.unwrap_or_else(|| {
+        sqlparser::ast::Expr::Value(sqlparser::ast::ValueWithSpan {
+            value: sqlparser::ast::Value::Number("1".to_owned(), false),
+            span: sqlparser::tokenizer::Span::empty(),
+        })
+    });
+    match limit_clause {
+        None => Ok(Some(LimitClause::LimitOffset {
+            limit: Some(fetch_qty),
+            offset: None,
+            limit_by: Vec::new(),
+        })),
+        Some(LimitClause::LimitOffset {
+            limit,
+            offset,
+            limit_by,
+        }) => {
+            // If both LIMIT and FETCH are present (rare), the explicit
+            // LIMIT wins. Otherwise we slot the FETCH quantity in.
+            let limit = limit.or(Some(fetch_qty));
+            Ok(Some(LimitClause::LimitOffset {
+                limit,
+                offset,
+                limit_by,
+            }))
+        }
+        Some(other) => {
+            // OffsetCommaLimit is MySQL-specific; FETCH is the SQL-standard
+            // form and shouldn't appear with it. Pass through unchanged.
+            Ok(Some(other))
+        }
     }
 }
 
