@@ -67,6 +67,19 @@ impl Engine {
         Ok(final_index)
     }
 
+    /// Track J — rename an index in place. The underlying B-tree is keyed by
+    /// `index_id`, so no physical work is required; only the catalog `name`
+    /// / `folded` fields update. Returns an error if `old_folded` does not
+    /// resolve to an index or `new_name` already exists.
+    pub fn rename_index(&self, tx: &mut Txn, old_folded: &str, new_name: &str) -> Result<()> {
+        tx.ensure_open()?;
+        let _ddl = self.catalog.lock_ddl();
+        let snapshot = self.catalog_snapshot_for_tx(tx);
+        let next = crate::catalog::apply_rename_index((*snapshot).clone(), old_folded, new_name)?;
+        tx.set_pending_schema_snapshot(Arc::new(next));
+        Ok(())
+    }
+
     pub fn drop_index(&self, tx: &mut Txn, spec: crate::catalog::DropIndexSpec) -> Result<()> {
         tx.ensure_open()?;
         let _ddl = self.catalog.lock_ddl();
