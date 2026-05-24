@@ -894,6 +894,98 @@ fn ilike_supports_wildcards_and_escape_clause() {
     assert_eq!(
         q1(&c, "SELECT '50' ILIKE '50!%' ESCAPE '!'"),
         SqlValue::Integer(0)
+// ---------------------------------------------------------------------------
+// Track H — beyond-SQLite (Postgres parity) coverage.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pg_date_trunc_month_floors_to_first_of_month() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('month', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_year_floors_to_jan_1() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('year', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-01-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_hour_clears_smaller_units() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('hour', '2025-04-17 13:25:42')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-17 13:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_quarter_floors_to_quarter_start() {
+    let (_d, c) = open();
+    // April → Q2, which starts in April. 2025-04-17 → 2025-04-01.
+    let v = q1(&c, "SELECT date_trunc('quarter', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-01 00:00:00")));
+    // July → Q3, which starts in July. 2025-07-15 → 2025-07-01.
+    let v = q1(&c, "SELECT date_trunc('quarter', '2025-07-15 06:00:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-07-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_unknown_field_returns_null() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('nope', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Null);
+}
+
+#[test]
+fn pg_gen_random_uuid_renders_36_char_canonical() {
+    let (_d, c) = open();
+    // Canonical 8-4-4-4-12 with hyphens is exactly 36 chars.
+    let v = q1(&c, "SELECT length(gen_random_uuid())");
+    assert_eq!(v, SqlValue::Integer(36));
+    // Two calls produce distinct outputs (probabilistically certain at 122 bits).
+    let v = q1(&c, "SELECT gen_random_uuid() = gen_random_uuid()");
+    assert_eq!(v, SqlValue::Integer(0));
+}
+
+#[test]
+fn pg_gen_random_uuid_has_v4_variant_bits() {
+    let (_d, c) = open();
+    // Position 15 (1-based) of the canonical string is the version nibble;
+    // it must be '4' for a v4 UUID.
+    let v = q1(&c, "SELECT substr(gen_random_uuid(), 15, 1)");
+    assert_eq!(v, SqlValue::Text(Arc::from("4")));
+    // Position 20 (1-based) is the variant nibble; for RFC 4122 it must be
+    // one of 8, 9, a, b (binary 10xx). GLOB '[89ab]' returns 1 when so.
+    // Parens around the substr call sidestep a parser limitation where
+    // `func() GLOB ...` is otherwise rejected by the bundled sqlparser.
+    let v = q1(
+        &c,
+        "SELECT (substr(gen_random_uuid(), 20, 1)) GLOB '[89ab]'",
+    );
+    assert_eq!(v, SqlValue::Integer(1));
+}
+
+#[test]
+fn pg_boolean_cast_from_text_aliases() {
+    let (_d, c) = open();
+    // PG-style truthy / falsy text aliases collapse to Integer(0|1) so
+    // SQLite-shape arithmetic and rendering keep working.
+    let r = query_all(
+        &c,
+        "SELECT 'yes'::bool, 'no'::bool, '1'::bool, '0'::bool, 't'::bool, 'f'::bool",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(
+        r[0],
+        vec![
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+        ]
     );
 }
 
@@ -928,6 +1020,23 @@ fn ilike_unicode_folds_caf_e_to_caf_e_acute() {
     assert_eq!(
         q1(&c, "SELECT 'CAFÉ' ILIKE 'cafe'"),
         SqlValue::Integer(0)
+fn pg_uuid_cast_normalises_to_canonical_lowercase() {
+    let (_d, c) = open();
+    let r = q1(
+        &c,
+        "SELECT '00000000000000000000000000000001'::uuid",
+    );
+    assert_eq!(
+        r,
+        SqlValue::Text(Arc::from("00000000-0000-0000-0000-000000000001"))
+    );
+    let r = q1(
+        &c,
+        "SELECT '{ABCDEF01-2345-6789-ABCD-EF0123456789}'::uuid",
+    );
+    assert_eq!(
+        r,
+        SqlValue::Text(Arc::from("abcdef01-2345-6789-abcd-ef0123456789"))
     );
 }
 
@@ -950,6 +1059,33 @@ fn like_is_case_sensitive_with_pragma() {
     assert_eq!(
         q1(&c, "SELECT 'AbCdEf' LIKE '%CD%'"),
         SqlValue::Integer(0)
+fn pg_array_literal_rewrites_to_json_array() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT ARRAY[10,20,30]");
+    assert_eq!(r, SqlValue::Text(Arc::from("[10,20,30]")));
+}
+
+#[test]
+fn pg_array_length_rewrites_to_json_array_length() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT array_length(ARRAY[10,20,30], 1)");
+    assert_eq!(r, SqlValue::Integer(3));
+}
+
+#[test]
+fn pg_array_index_is_one_based() {
+    let (_d, c) = open();
+    let r = query_all(
+        &c,
+        "SELECT (ARRAY['a','b','c'])[1], (ARRAY['a','b','c'])[3]",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(
+        r[0],
+        vec![
+            SqlValue::Text(Arc::from("a")),
+            SqlValue::Text(Arc::from("c")),
+        ]
     );
 }
 
@@ -1119,4 +1255,65 @@ fn length_vs_octet_length_disagree_on_multibyte() {
         q1(&c, "SELECT octet_length('αβγ')"),
         SqlValue::Integer(6)
     );
+fn pg_array_overlap_returns_zero_or_one() {
+    let (_d, c) = open();
+    let r = query_all(
+        &c,
+        "SELECT ARRAY[1,2,3] && ARRAY[3,4,5], ARRAY[1,2] && ARRAY[10,11]",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0], vec![SqlValue::Integer(1), SqlValue::Integer(0)]);
+}
+
+#[test]
+fn pg_decimal_arith_preserves_precision() {
+    let (_d, c) = open();
+    // The classic `0.1 + 0.2 = 0.3` torture test — needs TEXT-shaped
+    // decimal arithmetic to avoid the f64 rounding to 0.30000000000000004.
+    let r = q1(&c, "SELECT 0.1::numeric + 0.2::numeric");
+    assert_eq!(r, SqlValue::Text(Arc::from("0.3")));
+    // Equality between the sum and the literal `0.3::numeric`.
+    let r = q1(&c, "SELECT 0.1::numeric + 0.2::numeric = 0.3::numeric");
+    assert_eq!(r, SqlValue::Integer(1));
+    // Multiplication keeps precision and the explicit (10,2) cast pads
+    // the result to exactly two fractional digits.
+    let r = q1(&c, "SELECT (1.5::numeric * 3)::numeric(10,2)");
+    assert_eq!(r, SqlValue::Text(Arc::from("4.50")));
+}
+
+#[test]
+fn pg_decimal_division_renders_16_fractional_digits() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT 10::numeric / 3::numeric");
+    assert_eq!(r, SqlValue::Text(Arc::from("3.3333333333333333")));
+}
+
+#[test]
+fn pg_interval_add_to_date_via_modifier() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT '2025-01-01'::date + INTERVAL '5 days'");
+    assert_eq!(r, SqlValue::Text(Arc::from("2025-01-06 00:00:00")));
+}
+
+#[test]
+fn pg_timestamptz_at_time_zone_is_tz_naive() {
+    let (_d, c) = open();
+    let r = q1(
+        &c,
+        "SELECT '2025-01-15 12:00:00+00'::timestamptz AT TIME ZONE 'UTC'",
+    );
+    assert_eq!(r, SqlValue::Text(Arc::from("2025-01-15 12:00:00")));
+}
+
+#[test]
+fn pg_array_agg_with_order_by_keeps_ordering() {
+    let (_d, c) = open();
+    // array_agg(x ORDER BY x DESC) over (3,2,1)/(2,1,3) shapes — the
+    // rewriter swaps the function name and preserves the in-aggregate
+    // ORDER BY so the result is `[3,2,1]`.
+    let r = q1(
+        &c,
+        "WITH v(x) AS (VALUES (1),(2),(3)) SELECT array_agg(x ORDER BY x DESC) FROM v",
+    );
+    assert_eq!(r, SqlValue::Text(Arc::from("[3,2,1]")));
 }
