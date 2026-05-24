@@ -90,6 +90,34 @@ pub(crate) fn bind_query_with_params(
         SetExpr::Values(values) => {
             bind_values_query(schema_epoch, sql, values, order_by, limit_clause, params)
         }
+        // `WITH ... INSERT/UPDATE/DELETE ...` parses as
+        // `Statement::Query(Query { with, body: SetExpr::Insert(...) })`.
+        // Dispatch to the corresponding DML binder so the surrounding
+        // CTE scope (already pushed by `bind_with_query`) is visible.
+        SetExpr::Insert(stmt) => match stmt {
+            sqlparser::ast::Statement::Insert(insert) => {
+                super::dml::bind_insert(conn, schema, schema_epoch, sql, insert)
+            }
+            other => Err(Error::UnsupportedSql(format!(
+                "unsupported INSERT-shaped statement in WITH: {other:?}"
+            ))),
+        },
+        SetExpr::Update(stmt) => match stmt {
+            sqlparser::ast::Statement::Update(update) => {
+                super::dml::bind_update(schema, schema_epoch, sql, update)
+            }
+            other => Err(Error::UnsupportedSql(format!(
+                "unsupported UPDATE-shaped statement in WITH: {other:?}"
+            ))),
+        },
+        SetExpr::Delete(stmt) => match stmt {
+            sqlparser::ast::Statement::Delete(delete) => {
+                super::dml::bind_delete(schema, schema_epoch, sql, delete)
+            }
+            other => Err(Error::UnsupportedSql(format!(
+                "unsupported DELETE-shaped statement in WITH: {other:?}"
+            ))),
+        },
         _ => Err(Error::UnsupportedSql(
             "only simple SELECT and UNION ALL queries are supported".to_owned(),
         )),
