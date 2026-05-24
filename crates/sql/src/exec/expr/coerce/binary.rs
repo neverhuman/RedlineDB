@@ -124,6 +124,24 @@ pub(crate) fn eval_binary(
         )?,
         BinaryOperator::Regexp => regexp_result(left_value, right_value, false)?,
         BinaryOperator::Match => match_result(left, left_value, right_value, row)?,
+        // Postgres POSIX-regex match operators
+        // (https://www.postgresql.org/docs/16/functions-matching.html#FUNCTIONS-POSIX-REGEXP).
+        // `~`  matches case-sensitive, `~*` case-insensitive, `!~` / `!~*`
+        // are the negated forms. Internally we delegate to the same `regex`
+        // crate that backs `REGEXP`; the `(?i)` flag prefix yields case
+        // insensitivity without recompiling against a different feature set.
+        BinaryOperator::PGRegexMatch => {
+            pg_regex_result(left_value, right_value, false, false)?
+        }
+        BinaryOperator::PGRegexIMatch => {
+            pg_regex_result(left_value, right_value, false, true)?
+        }
+        BinaryOperator::PGRegexNotMatch => {
+            pg_regex_result(left_value, right_value, true, false)?
+        }
+        BinaryOperator::PGRegexNotIMatch => {
+            pg_regex_result(left_value, right_value, true, true)?
+        }
         other => {
             return Err(Error::UnsupportedSql(format!(
                 "unsupported binary op {other:?}"
@@ -227,6 +245,34 @@ pub(crate) fn regexp_result(value: SqlValue, pattern: SqlValue, negated: bool) -
     let text = value_to_string(&value);
     let pattern_str = value_to_string(&pattern);
     let matched = crate::regexp::regex_match(&text, &pattern_str)?;
+    Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
+}
+
+/// Evaluator for Postgres POSIX-regex match operators (`~`, `~*`, `!~`,
+/// `!~*`). The case-insensitive flag is implemented by lower-casing both
+/// haystack and pattern before delegating to the shared regex engine —
+/// the `regex` crate is built without the `unicode-case` feature here,
+/// so a `(?i)` prefix would refuse Unicode haystacks. Pre-folding via
+/// Rust's `to_lowercase` covers the same ASCII range Postgres' default
+/// C-locale `~*` does (and a wider Unicode range on top). NULL on either
+/// side propagates.
+pub(crate) fn pg_regex_result(
+    value: SqlValue,
+    pattern: SqlValue,
+    negated: bool,
+    case_insensitive: bool,
+) -> Result<SqlValue> {
+    if matches!(value, SqlValue::Null) || matches!(pattern, SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let text = value_to_string(&value);
+    let pattern_str = value_to_string(&pattern);
+    let (effective_text, effective_pattern) = if case_insensitive {
+        (text.to_lowercase(), pattern_str.to_lowercase())
+    } else {
+        (text.to_string(), pattern_str.to_string())
+    };
+    let matched = crate::regexp::regex_match(&effective_text, &effective_pattern)?;
     Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
 }
 
