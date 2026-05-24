@@ -362,10 +362,17 @@ fn nested_savepoint_release() {
 
 #[test]
 fn pragma_auto_vacuum() {
-    // RedlineDB rejects `PRAGMA auto_vacuum`; this test checks the
-    // rejection boundary directly.
+    // SQLite-parity surface: `PRAGMA auto_vacuum` is accepted and
+    // returns the recall-only session bit. Previously we rejected it
+    // because the RedlineDB storage engine doesn't track free-page
+    // lists; that diverged from the SQLite behaviour callers probe for
+    // at connection open time.
     let (_d, c) = open();
-    assert!(c.prepare("PRAGMA auto_vacuum").is_err());
+    assert_eq!(q1(&c, "PRAGMA auto_vacuum"), SqlValue::Integer(0));
+    c.execute("PRAGMA auto_vacuum=NONE").expect("set none");
+    assert_eq!(q1(&c, "PRAGMA auto_vacuum"), SqlValue::Integer(0));
+    c.execute("PRAGMA auto_vacuum=FULL").expect("set full");
+    assert_eq!(q1(&c, "PRAGMA auto_vacuum"), SqlValue::Integer(1));
 }
 
 #[test]
