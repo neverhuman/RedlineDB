@@ -475,6 +475,9 @@ pub(crate) fn eval_scalar_function_values(
         // Track H — beyond-SQLite (Postgres) parity functions.
         "date_trunc" => crate::exec::expr::scalar::value::pg_date_trunc(&values),
         "gen_random_uuid" => crate::exec::expr::scalar::value::pg_gen_random_uuid(&values),
+        "pg_array_contains" => crate::exec::expr::scalar::value::pg_array_contains(&values),
+        "pg_array_contained" => crate::exec::expr::scalar::value::pg_array_contained(&values),
+        "pg_array_overlap" => crate::exec::expr::scalar::value::pg_array_overlap(&values),
         _ => {
             let db = crate::udf::current_db();
             match crate::udf::call_registered_scalar(db, &name, &values) {

@@ -72,7 +72,11 @@ pub fn parse_timestring(input: &str) -> Result<DateTime> {
 }
 
 fn parse_time_of_day(input: &str) -> Result<DateTime> {
-    let (clock, frac) = input.split_once('.').unwrap_or((input, ""));
+    // Track H — strip a trailing UTC-offset suffix (`+HH[:MM]`, `-HH[:MM]`,
+    // `Z`) so PG-style `'12:00:00+00'` strings parse. The numeric offset is
+    // ignored because RedlineDB stores all timestamps as tz-naive UTC.
+    let stripped = strip_tz_suffix(input);
+    let (clock, frac) = stripped.split_once('.').unwrap_or((stripped, ""));
     let mut parts = clock.split(':');
     let hour_str = match parts.next() {
         Some(s) => s,
@@ -138,4 +142,59 @@ fn julian_to_dt_raw(jd: f64) -> DateTime {
     let secs = total_seconds.floor() as i64;
     let micro = ((total_seconds.fract().abs()) * 1_000_000.0) as u32;
     DateTime::from_unix(secs, micro)
+}
+
+/// Drop a trailing `+HH[:MM]`, `-HH[:MM]`, or `Z` UTC-offset marker from a
+/// time-of-day string. Returns the remaining clock portion. The function is
+/// permissive: it only strips a recognisable suffix, never the middle of
+/// the input.
+///
+/// Note: this is only called from `parse_time_of_day`, so the input is
+/// already known to have at least one `:` (i.e., it's a time, not a date).
+/// The walker therefore doesn't need a date-vs-time guard here.
+///
+/// Examples:
+///   `"12:00:00+00"`       → `"12:00:00"`
+///   `"12:00:00-05:30"`    → `"12:00:00"`
+///   `"12:00:00.123Z"`     → `"12:00:00.123"`
+///   `"12:00:00"`          → `"12:00:00"` (unchanged)
+fn strip_tz_suffix(input: &str) -> &str {
+    if let Some(stripped) = input.strip_suffix('Z') {
+        return stripped;
+    }
+    let bytes = input.as_bytes();
+    let mut i = bytes.len();
+    let mut seen_digit_run = 0usize;
+    let mut seen_colon = false;
+    while i > 0 {
+        let b = bytes[i - 1];
+        match b {
+            b'0'..=b'9' => {
+                seen_digit_run += 1;
+                if seen_digit_run > 5 {
+                    break;
+                }
+                i -= 1;
+            }
+            b':' => {
+                if seen_colon {
+                    break;
+                }
+                seen_colon = true;
+                seen_digit_run = 0;
+                i -= 1;
+            }
+            b'+' | b'-' => {
+                // Require at least 2 digits in the offset (PG always emits
+                // 2-digit hours). If the digit count is 0 the `+`/`-` is
+                // part of the time itself, not an offset.
+                if seen_digit_run >= 2 {
+                    return &input[..i - 1];
+                }
+                break;
+            }
+            _ => break,
+        }
+    }
+    input
 }
