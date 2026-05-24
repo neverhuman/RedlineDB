@@ -377,12 +377,22 @@ pub(crate) fn bind_insert_conflict(
     };
 
     let target = match on_conflict.conflict_target {
-        Some(ConflictTarget::Columns(columns)) => Some(UpsertTarget::Columns(
-            columns
+        Some(ConflictTarget::Columns(columns)) => {
+            let ordinals: Vec<usize> = columns
                 .into_iter()
                 .map(|column| resolve_column_ordinal_in_table(table, &column.value))
-                .collect::<Result<Vec<_>>>()?,
-        )),
+                .collect::<Result<Vec<_>>>()?;
+            // SQLite parity: the conflict-target column set must match
+            // some UNIQUE / PRIMARY KEY constraint (including rowid-alias
+            // INTEGER PRIMARY KEY). Reject early with SQLite's wording.
+            if !upsert_target_columns_have_unique(table, &ordinals) {
+                return Err(Error::Bind(
+                    "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint"
+                        .to_owned(),
+                ));
+            }
+            Some(UpsertTarget::Columns(ordinals))
+        }
         Some(ConflictTarget::OnConstraint(name)) => {
             let (schema, constraint) = split_name(name)?;
             if schema.is_some() {
@@ -457,4 +467,51 @@ fn is_default_dml_expr(expr: &Expr) -> bool {
         Expr::Value(v) if crate::parser::bind::as_bind_name(&v.value)
             .is_some_and(|name| name.eq_ignore_ascii_case("default"))
     )
+}
+
+/// True if `target_ordinals` exactly matches the leading column set
+/// of some UNIQUE / PRIMARY KEY constraint on `table` (rowid-alias
+/// INTEGER PRIMARY KEY also counts when the single target column is
+/// the alias). Order of `target_ordinals` is significant — SQLite
+/// requires exact match.
+fn upsert_target_columns_have_unique(
+    table: &redlinedb_kernel::catalog::TableDef,
+    target_ordinals: &[usize],
+) -> bool {
+    if target_ordinals.is_empty() {
+        return false;
+    }
+    // Rowid-alias INTEGER PRIMARY KEY: a single-column target whose
+    // ordinal equals the alias column is a valid PK target.
+    if target_ordinals.len() == 1
+        && table.rowid_alias_column == Some(target_ordinals[0] as u16)
+    {
+        return true;
+    }
+    for index in &table.indexes {
+        if !index.unique {
+            continue;
+        }
+        if index.keys.len() != target_ordinals.len() {
+            continue;
+        }
+        let mut matches = true;
+        for (ord_idx, key) in index.keys.iter().enumerate() {
+            let column_ord = match &key.source {
+                redlinedb_kernel::catalog::IndexKeySource::Column { attnum } => *attnum as usize,
+                _ => {
+                    matches = false;
+                    break;
+                }
+            };
+            if column_ord != target_ordinals[ord_idx] {
+                matches = false;
+                break;
+            }
+        }
+        if matches {
+            return true;
+        }
+    }
+    false
 }
