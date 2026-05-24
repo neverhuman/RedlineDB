@@ -118,6 +118,75 @@ pub enum PreparedKind {
     Attach(crate::exec::attach::AttachPlan),
     CrossDbSql(CrossDbSqlPlan),
     CreateVirtualTable(CreateVirtualTablePlan),
+    /// Track J — `CREATE SCHEMA <name> [IF NOT EXISTS]`. Records the
+    /// namespace name on the session so `<schema>.<table>` qualifier
+    /// checks and `pg_namespace` introspection resolve.
+    CreateSchema {
+        name: Arc<str>,
+        if_not_exists: bool,
+    },
+    /// Track J — `DROP SCHEMA <name> [CASCADE]`. Removes a registered
+    /// namespace.
+    DropSchema {
+        name: Arc<str>,
+        if_exists: bool,
+        cascade: bool,
+    },
+    /// Track J — `CREATE SEQUENCE`. Stored as a sqlite_sequence-style row
+    /// keyed by sequence name; `nextval`/`currval`/`setval` scalar
+    /// functions read/write it.
+    CreateSequence {
+        name: Arc<str>,
+        if_not_exists: bool,
+        start_with: Option<i64>,
+        increment_by: Option<i64>,
+    },
+    /// Track J — `DROP SEQUENCE <name>`.
+    DropSequence {
+        name: Arc<str>,
+        if_exists: bool,
+    },
+    /// Track J — `SET TRANSACTION ISOLATION LEVEL <level>`. Recall-only
+    /// store on the session.
+    SetTransactionIsolation {
+        level: TransactionIsolationLevel,
+    },
+    /// Track J — `SHOW <name>` for session-state introspection. Today
+    /// returns the recalled `transaction_isolation`; other names return
+    /// empty string.
+    ShowVariable {
+        name: Arc<str>,
+    },
+    /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
+    AlterIndex {
+        old_name: Arc<str>,
+        new_name: Arc<str>,
+    },
+}
+
+/// Track J — SQL-standard transaction isolation levels accepted via
+/// `SET TRANSACTION ISOLATION LEVEL ...`. The recorded value survives
+/// `SHOW transaction_isolation`; RedlineDB's engine continues to use its
+/// fixed snapshot isolation for reads and read-committed for writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionIsolationLevel {
+    ReadUncommitted,
+    ReadCommitted,
+    RepeatableRead,
+    Serializable,
+}
+
+impl TransactionIsolationLevel {
+    /// Postgres surface string for the value (`read committed`, `serializable`,
+    /// etc). Used by `SHOW transaction_isolation`.
+    pub fn as_pg_str(self) -> &'static str {
+        match self {
+            TransactionIsolationLevel::ReadUncommitted => "read uncommitted",
+            TransactionIsolationLevel::ReadCommitted => "read committed",
+            TransactionIsolationLevel::RepeatableRead => "repeatable read",
+            TransactionIsolationLevel::Serializable => "serializable",
+        }
+    }
 }
 
 /// Sentinel SQL prefix used to tag `PreparedTemplate`s built for

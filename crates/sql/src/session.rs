@@ -171,6 +171,41 @@ pub struct SessionState {
     /// Drained at COMMIT; if any entry still violates referential integrity
     /// the commit is aborted with a `ConstraintViolation` mirroring SQLite.
     pub deferred_fk_checks: Vec<DeferredFkCheck>,
+    /// Track J — Postgres-style `CREATE SCHEMA <name>` namespaces registered
+    /// on this connection. SQLite has no schema layer; we keep the name set
+    /// so `<schema>.<table>` qualifier checks resolve and so the
+    /// `pg_namespace` shim returns the same names back to introspection
+    /// tools. Stored lowercase-folded for case-insensitive lookup.
+    pub pg_schemas: std::collections::BTreeSet<String>,
+    /// Track J — Postgres-style sequences keyed by folded sequence name.
+    /// Drives nextval/currval/setval.
+    pub pg_sequences: std::collections::BTreeMap<String, SequenceState>,
+    /// Track J — `SET TRANSACTION ISOLATION LEVEL` recall value. Default
+    /// is `ReadCommitted` (Postgres' default).
+    pub transaction_isolation: crate::statement::TransactionIsolationLevel,
+}
+
+/// Track J — runtime state for a PostgreSQL-style sequence.
+///
+/// `last_value` is the most-recently generated value (Postgres' `currval`
+/// semantics); `None` means `nextval` has not yet been called. `start` and
+/// `increment` carry over the `CREATE SEQUENCE` options so a
+/// `setval(..., false)` followed by `nextval` advances by the configured step.
+#[derive(Clone, Debug)]
+pub struct SequenceState {
+    pub start: i64,
+    pub increment: i64,
+    pub last_value: Option<i64>,
+}
+
+impl SequenceState {
+    pub fn new(start: i64, increment: i64) -> Self {
+        Self {
+            start,
+            increment,
+            last_value: None,
+        }
+    }
 }
 
 impl Default for SessionState {
@@ -225,6 +260,15 @@ impl Default for SessionState {
             savepoints: Vec::new(),
             replay_in_progress: false,
             deferred_fk_checks: Vec::new(),
+            pg_schemas: {
+                // Track J — seed the Postgres-shipped namespaces.
+                let mut s = std::collections::BTreeSet::new();
+                s.insert("public".to_owned());
+                s.insert("pg_catalog".to_owned());
+                s
+            },
+            pg_sequences: std::collections::BTreeMap::new(),
+            transaction_isolation: crate::statement::TransactionIsolationLevel::ReadCommitted,
         }
     }
 }
@@ -273,6 +317,11 @@ impl SessionState {
         self.savepoints.clear();
         self.replay_in_progress = false;
         self.deferred_fk_checks.clear();
+        self.pg_schemas.clear();
+        self.pg_schemas.insert("public".to_owned());
+        self.pg_schemas.insert("pg_catalog".to_owned());
+        self.pg_sequences.clear();
+        self.transaction_isolation = crate::statement::TransactionIsolationLevel::ReadCommitted;
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

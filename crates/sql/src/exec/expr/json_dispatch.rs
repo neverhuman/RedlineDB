@@ -489,6 +489,12 @@ pub(crate) fn eval_scalar_function_values(
         "pg_array_contains" => crate::exec::expr::scalar::value::pg_array_contains(&values),
         "pg_array_contained" => crate::exec::expr::scalar::value::pg_array_contained(&values),
         "pg_array_overlap" => crate::exec::expr::scalar::value::pg_array_overlap(&values),
+        // Track J — Postgres sequence helpers operate on session-level
+        // sequence state recorded by CREATE SEQUENCE.
+        "nextval" => pg_sequence_nextval(&values),
+        "currval" => pg_sequence_currval(&values),
+        "setval" => pg_sequence_setval(&values),
+        "current_schema" => Ok(SqlValue::Text(std::sync::Arc::from("public"))),
         _ => {
             let db = crate::udf::current_db();
             match crate::udf::call_registered_scalar(db, &name, &values) {
@@ -499,6 +505,119 @@ pub(crate) fn eval_scalar_function_values(
                 ))),
             }
         }
+    }
+}
+
+/// Track J — Postgres `nextval(seq)`. Reads the named sequence from
+/// session state, advances it by `increment`, and returns the new value.
+/// The first call returns the configured `start`; subsequent calls add
+/// `increment`. Unknown sequences raise an UnsupportedSql error
+/// mirroring `relation "<name>" does not exist`.
+fn pg_sequence_nextval(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() != 1 {
+        return Err(Error::UnsupportedSql(
+            "nextval expects one argument".to_owned(),
+        ));
+    }
+    let name = pg_sequence_name(&values[0])?;
+    let conn = crate::exec::current_connection().ok_or_else(|| {
+        Error::UnsupportedSql("nextval requires an active connection context".to_owned())
+    })?;
+    let result = conn.with_session(|session| {
+        let entry = session.pg_sequences.get_mut(&name).ok_or_else(|| {
+            Error::UnsupportedSql(format!("relation \"{name}\" does not exist"))
+        })?;
+        let next = match entry.last_value {
+            Some(v) => v + entry.increment,
+            None => entry.start,
+        };
+        entry.last_value = Some(next);
+        Ok(next)
+    })?;
+    Ok(SqlValue::Integer(result))
+}
+
+/// Track J — Postgres `currval(seq)`. Returns the most recent value
+/// produced by `nextval`. Errors if `nextval` has never been called on
+/// the sequence in this session, mirroring Postgres' standard surface.
+fn pg_sequence_currval(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() != 1 {
+        return Err(Error::UnsupportedSql(
+            "currval expects one argument".to_owned(),
+        ));
+    }
+    let name = pg_sequence_name(&values[0])?;
+    let conn = crate::exec::current_connection().ok_or_else(|| {
+        Error::UnsupportedSql("currval requires an active connection context".to_owned())
+    })?;
+    let result = conn.with_session(|session| {
+        let entry = session.pg_sequences.get(&name).ok_or_else(|| {
+            Error::UnsupportedSql(format!("relation \"{name}\" does not exist"))
+        })?;
+        match entry.last_value {
+            Some(v) => Ok(v),
+            None => Err(Error::UnsupportedSql(format!(
+                "currval of sequence \"{name}\" is not yet defined in this session"
+            ))),
+        }
+    })?;
+    Ok(SqlValue::Integer(result))
+}
+
+/// Track J — Postgres `setval(seq, value [, is_called])`. Sets the
+/// sequence's last_value to the given integer. If `is_called` is false,
+/// the next `nextval` returns `value` rather than `value + increment`
+/// (Postgres semantics). When omitted, `is_called` defaults to true.
+fn pg_sequence_setval(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() < 2 || values.len() > 3 {
+        return Err(Error::UnsupportedSql(
+            "setval expects 2 or 3 arguments".to_owned(),
+        ));
+    }
+    let name = pg_sequence_name(&values[0])?;
+    let value = match &values[1] {
+        SqlValue::Integer(v) => *v,
+        SqlValue::Real(v) => *v as i64,
+        SqlValue::Text(t) => t.parse::<i64>().map_err(|_| {
+            Error::UnsupportedSql(format!("setval value must be integer: {t}"))
+        })?,
+        _ => {
+            return Err(Error::UnsupportedSql(
+                "setval second argument must be integer".to_owned(),
+            ));
+        }
+    };
+    let is_called = if values.len() == 3 {
+        match &values[2] {
+            SqlValue::Integer(v) => *v != 0,
+            _ => true,
+        }
+    } else {
+        true
+    };
+    let conn = crate::exec::current_connection().ok_or_else(|| {
+        Error::UnsupportedSql("setval requires an active connection context".to_owned())
+    })?;
+    conn.with_session(|session| {
+        let entry = session.pg_sequences.get_mut(&name).ok_or_else(|| {
+            Error::UnsupportedSql(format!("relation \"{name}\" does not exist"))
+        })?;
+        if is_called {
+            entry.last_value = Some(value);
+        } else {
+            entry.last_value = Some(value - entry.increment);
+        }
+        Ok(())
+    })?;
+    Ok(SqlValue::Integer(value))
+}
+
+fn pg_sequence_name(value: &SqlValue) -> Result<String> {
+    match value {
+        SqlValue::Text(s) => Ok(s.to_ascii_lowercase()),
+        _ => Err(Error::UnsupportedSql(
+            "sequence name must be a string".to_owned(),
+        )),
     }
 }
 

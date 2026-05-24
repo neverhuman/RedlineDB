@@ -576,6 +576,155 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        // Track J: register a Postgres-style schema name on the session.
+        // SQLite has no schema layer, so this is purely a name-bookkeeping
+        // operation that lets later `<schema>.<table>` references and
+        // `pg_namespace` introspection see the freshly-registered name.
+        PreparedKind::CreateSchema {
+            name,
+            if_not_exists,
+        } => {
+            let folded = name.to_ascii_lowercase();
+            with_session_reentrant(conn, |session| {
+                if !session.pg_schemas.insert(folded) && !if_not_exists {
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectExists));
+                }
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropSchema {
+            name,
+            if_exists,
+            cascade: _,
+        } => {
+            let folded = name.to_ascii_lowercase();
+            with_session_reentrant(conn, |session| {
+                if !session.pg_schemas.remove(&folded) && !if_exists {
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectNotFound));
+                }
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::CreateSequence {
+            name,
+            if_not_exists,
+            start_with,
+            increment_by,
+        } => {
+            let folded = name.to_ascii_lowercase();
+            let start = start_with.unwrap_or(1);
+            let increment = increment_by.unwrap_or(1);
+            with_session_reentrant(conn, |session| {
+                if session.pg_sequences.contains_key(&folded) {
+                    if *if_not_exists {
+                        return Ok(());
+                    }
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectExists));
+                }
+                session
+                    .pg_sequences
+                    .insert(folded, crate::session::SequenceState::new(start, increment));
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropSequence { name, if_exists } => {
+            let folded = name.to_ascii_lowercase();
+            with_session_reentrant(conn, |session| {
+                if session.pg_sequences.remove(&folded).is_none() && !if_exists {
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectNotFound));
+                }
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        // Track J: SET TRANSACTION ISOLATION LEVEL — recall-only stash.
+        PreparedKind::SetTransactionIsolation { level } => {
+            with_session_reentrant(conn, |session| {
+                session.transaction_isolation = *level;
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        // Track J: SHOW <name>. Returns a single-row result with the recalled
+        // session value for `transaction_isolation`; other names yield "".
+        PreparedKind::ShowVariable { name } => {
+            let value = if name.eq_ignore_ascii_case("transaction_isolation") {
+                let iso = with_session_reentrant(conn, |session| {
+                    Ok(session.transaction_isolation)
+                })?;
+                SqlValue::Text(Arc::from(iso.as_pg_str()))
+            } else {
+                SqlValue::Text(Arc::from(""))
+            };
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Select(SelectRuntime {
+                    tx: SelectRuntimeTx::Empty,
+                    restore_tx: false,
+                    source: SelectRuntimeSource::StaticRows {
+                        rows: Arc::from(vec![vec![value]]),
+                        cursor: 0,
+                    },
+                    selection: None,
+                    projection: Vec::new(),
+                    limit: usize::MAX,
+                    offset: 0,
+                    seen: 0,
+                    yielded: 0,
+                    memory: QueryMemoryBroker::new(0, 0, None),
+                }),
+                affected_rows: 0,
+            })
+        }
+        // Track J: ALTER INDEX <old> RENAME TO <new>.
+        PreparedKind::AlterIndex { old_name, new_name } => {
+            with_write_tx(conn, |session, tx| {
+                let snapshot = conn.engine().schema_snapshot_for_tx(tx);
+                let old_folded = old_name.to_ascii_lowercase();
+                let new_folded = new_name.to_ascii_lowercase();
+                let Some(schema_id) = snapshot.lookup_namespace("main") else {
+                    return Err(Error::Kernel(
+                        redlinedb_kernel::Error::ObjectNotFound,
+                    ));
+                };
+                if snapshot.lookup_index(schema_id, &old_folded).is_none() {
+                    return Err(Error::Kernel(
+                        redlinedb_kernel::Error::ObjectNotFound,
+                    ));
+                }
+                if snapshot.lookup_index(schema_id, &new_folded).is_some() {
+                    return Err(Error::UnsupportedSql(format!(
+                        "an index named {new_name} already exists"
+                    )));
+                }
+                drop(snapshot);
+                conn.engine().rename_index(tx, &old_folded, new_name)?;
+                session.changes += 1;
+                session.total_changes += 1;
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 1,
+            })
+        }
     }
 }
 
@@ -647,7 +796,9 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Analyze(_)
         | PreparedKind::Explain(_)
         | PreparedKind::Select(_)
-        | PreparedKind::Attach(_) => false,
+        | PreparedKind::Attach(_)
+        | PreparedKind::SetTransactionIsolation { .. }
+        | PreparedKind::ShowVariable { .. } => false,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)
@@ -660,11 +811,16 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropView(_)
         | PreparedKind::DropTrigger(_)
         | PreparedKind::AlterTable(_)
+        | PreparedKind::AlterIndex { .. }
         | PreparedKind::Insert(_)
         | PreparedKind::InsertView(_)
         | PreparedKind::Update(_)
         | PreparedKind::Delete(_)
-        | PreparedKind::CrossDbSql(_) => true,
+        | PreparedKind::CrossDbSql(_)
+        | PreparedKind::CreateSchema { .. }
+        | PreparedKind::DropSchema { .. }
+        | PreparedKind::CreateSequence { .. }
+        | PreparedKind::DropSequence { .. } => true,
     }
 }
 

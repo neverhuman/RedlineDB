@@ -143,11 +143,22 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     let mut statements = match Parser::parse_sql(&dialect, &sql_for_parser) {
         Ok(statements) => statements,
         Err(first_err) => {
-            let rewritten = prepare::strip_sqlite_table_index_hints(&sql_for_parser)?;
-            if rewritten == sql_for_parser {
-                return Err(first_err.into());
+            // Track J: try the index-hint stripping rewrite first; if that
+            // still fails, fall back to PostgreSqlDialect (which accepts
+            // `RENAME CONSTRAINT` and a few other shapes the SQLite dialect
+            // rejects). Both fallbacks preserve SELECT/DDL surfaces.
+            let rewritten = match prepare::strip_sqlite_table_index_hints(&sql_for_parser) {
+                Ok(rewritten) if rewritten != sql_for_parser => rewritten,
+                _ => sql_for_parser.clone(),
+            };
+            match Parser::parse_sql(&dialect, &rewritten) {
+                Ok(statements) => statements,
+                Err(_) => {
+                    let pg_dialect = sqlparser::dialect::PostgreSqlDialect {};
+                    Parser::parse_sql(&pg_dialect, &sql_for_parser)
+                        .map_err(|_| first_err)?
+                }
             }
-            Parser::parse_sql(&dialect, &rewritten).map_err(|_| first_err)?
         }
     };
     prepare::apply_cte_materialized_hints(&mut statements, sql);
@@ -184,6 +195,10 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
         out = strip_create_index_using_clause(&out);
     }
     out = rewrite_strict_without_rowid_combo(&out);
+    // Track J — beyond-Postgres parity pre-parse rewrites: sequence option
+    // order + DROP IDENTITY shapes that sqlparser 0.61 rejects.
+    out = rewrite_create_sequence_options_order(&out);
+    out = rewrite_alter_column_drop_identity(&out);
     // Track H — beyond-SQLite (Postgres parity) pre-parse rewrites. Each
     // helper is a no-op unless the surface SQL contains the corresponding
     // PG token; the SELECT/DDL flow is otherwise unaffected for ordinary
@@ -2796,6 +2811,190 @@ fn rewrite_at_time_zone(sql: &str) -> String {
         out.push(bytes[i] as char);
         i += 1;
     }
+    out
+}
+
+// ── Track J: beyond-Postgres pre-parse rewrites ───────────────────────────
+
+/// Track J: sqlparser-rs 0.61 lacks a parse arm for
+/// `ALTER TABLE ... ALTER COLUMN <c> DROP IDENTITY [IF EXISTS]`. Rewrite
+/// the substring to a no-op `DROP NOT NULL` so the parser succeeds and the
+/// executor's `DropColumnNotNull` arm clears the identity marker (Postgres
+/// identity columns are implicitly NOT NULL).
+fn rewrite_alter_column_drop_identity(sql: &str) -> String {
+    let lower = sql.to_ascii_lowercase();
+    if !lower.contains("drop identity") {
+        return sql.to_owned();
+    }
+    let mut out = String::with_capacity(sql.len());
+    let mut last = 0usize;
+    let bytes = sql.as_bytes();
+    let lower_bytes = lower.as_bytes();
+    let mut i = 0usize;
+    while i + 13 <= bytes.len() {
+        if &lower_bytes[i..i + 13] == b"drop identity" {
+            let mut end = i + 13;
+            let if_exists = end + 10 <= bytes.len() && &lower_bytes[end..end + 10] == b" if exists";
+            if if_exists {
+                end += 10;
+            }
+            out.push_str(&sql[last..i]);
+            out.push_str("DROP NOT NULL");
+            last = end;
+            i = end;
+            continue;
+        }
+        i += 1;
+    }
+    out.push_str(&sql[last..]);
+    out
+}
+
+/// Track J: sqlparser-rs 0.61 enforces a strict option order in CREATE
+/// SEQUENCE (INCREMENT → MIN/MAX → START) and bails out on the
+/// Postgres-friendly `CREATE SEQUENCE name START WITH 100 INCREMENT BY 5`
+/// shape. Detect a CREATE SEQUENCE statement and reorder its options into
+/// the parser's expected canonical order before handing the SQL off.
+fn rewrite_create_sequence_options_order(sql: &str) -> String {
+    let lower = sql.to_ascii_lowercase();
+    let kw_plain = "create sequence";
+    if !lower.contains(kw_plain) {
+        return sql.to_owned();
+    }
+    let Some(cs_idx) = lower.find(kw_plain) else {
+        return sql.to_owned();
+    };
+    let bytes = sql.as_bytes();
+    let after_keyword = cs_idx + kw_plain.len();
+    let mut i = after_keyword;
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if i + 14 <= lower.len() && &lower[i..i + 14] == "if not exists " {
+        i += 14;
+    }
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if i < bytes.len() && bytes[i] == b'"' {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'"' {
+            i += 1;
+        }
+        if i < bytes.len() {
+            i += 1;
+        }
+    } else {
+        while i < bytes.len()
+            && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'.')
+        {
+            i += 1;
+        }
+    }
+    let options_start = i;
+    let mut end = options_start;
+    let mut in_str: Option<u8> = None;
+    while end < bytes.len() {
+        let b = bytes[end];
+        if let Some(q) = in_str {
+            if b == q {
+                in_str = None;
+            }
+            end += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => in_str = Some(b),
+            b';' => break,
+            _ => {}
+        }
+        if end + 9 <= lower.len() && &lower[end..end + 9] == " owned by" {
+            break;
+        }
+        end += 1;
+    }
+    let options_str = &sql[options_start..end];
+    let options_lower = options_str.to_ascii_lowercase();
+    let has_start = options_lower.contains("start ");
+    let has_increment = options_lower.contains("increment ");
+    if !has_start && !has_increment {
+        return sql.to_owned();
+    }
+    let mut start_with: Option<String> = None;
+    let mut increment_by: Option<String> = None;
+    let mut min_value: Option<String> = None;
+    let mut max_value: Option<String> = None;
+    let tokens: Vec<&str> = options_str.split_whitespace().collect();
+    let mut idx = 0usize;
+    while idx < tokens.len() {
+        let t = tokens[idx].to_ascii_lowercase();
+        match t.as_str() {
+            "start" => {
+                let mut j = idx + 1;
+                if j < tokens.len() && tokens[j].eq_ignore_ascii_case("with") {
+                    j += 1;
+                }
+                if j < tokens.len() {
+                    start_with = Some(tokens[j].to_owned());
+                    idx = j + 1;
+                    continue;
+                }
+            }
+            "increment" => {
+                let mut j = idx + 1;
+                if j < tokens.len() && tokens[j].eq_ignore_ascii_case("by") {
+                    j += 1;
+                }
+                if j < tokens.len() {
+                    increment_by = Some(tokens[j].to_owned());
+                    idx = j + 1;
+                    continue;
+                }
+            }
+            "minvalue" => {
+                let j = idx + 1;
+                if j < tokens.len() {
+                    min_value = Some(tokens[j].to_owned());
+                    idx = j + 1;
+                    continue;
+                }
+            }
+            "maxvalue" => {
+                let j = idx + 1;
+                if j < tokens.len() {
+                    max_value = Some(tokens[j].to_owned());
+                    idx = j + 1;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if start_with.is_none() && increment_by.is_none() {
+        return sql.to_owned();
+    }
+    let mut rebuilt = String::with_capacity(sql.len());
+    if let Some(v) = increment_by {
+        rebuilt.push_str(" INCREMENT BY ");
+        rebuilt.push_str(&v);
+    }
+    if let Some(v) = min_value {
+        rebuilt.push_str(" MINVALUE ");
+        rebuilt.push_str(&v);
+    }
+    if let Some(v) = max_value {
+        rebuilt.push_str(" MAXVALUE ");
+        rebuilt.push_str(&v);
+    }
+    if let Some(v) = start_with {
+        rebuilt.push_str(" START WITH ");
+        rebuilt.push_str(&v);
+    }
+    let mut out = String::with_capacity(sql.len());
+    out.push_str(&sql[..options_start]);
+    out.push_str(&rebuilt);
+    out.push_str(&sql[end..]);
     out
 }
 
