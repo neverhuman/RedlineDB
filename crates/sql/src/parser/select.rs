@@ -134,6 +134,7 @@ fn apply_query_tail(
         },
         None => Vec::new(),
     };
+    validate_order_by_positions(&order_by, &template.output_columns)?;
     resolve_order_by_positions(&mut order_by, &template.output_columns);
 
     let (limit, offset) = match limit_clause {
@@ -280,6 +281,7 @@ pub(crate) fn bind_simple_select_query(
         },
         None => Vec::new(),
     };
+    validate_order_by_positions(&order_by, &output_columns)?;
     resolve_order_by_positions(&mut order_by, &output_columns);
 
     let (limit, offset) = match limit_clause {
@@ -429,6 +431,7 @@ pub(crate) fn bind_union_all_query(
         },
         None => Vec::new(),
     };
+    validate_order_by_positions(&order_by, &left_columns_for_names)?;
     resolve_order_by_positions(&mut order_by, &left_columns_for_names);
     let (limit, offset) = match ctx.limit_clause {
         Some(LimitClause::LimitOffset {
@@ -566,6 +569,7 @@ fn bind_values_query(
         },
         None => Vec::new(),
     };
+    validate_order_by_positions(&order_by, &output_columns)?;
     resolve_order_by_positions(&mut order_by, &output_columns);
 
     let (limit, offset) = match limit_clause {
@@ -1211,6 +1215,41 @@ fn resolve_order_by_positions(items: &mut [OrderByExpr], output_columns: &[Strin
             }
         }
     }
+}
+
+/// Validate that every bare positional integer in `items` references
+/// a real output column. Returns `Err` with a SQLite-compatible
+/// "Nth ORDER BY term out of range" message for the first offender.
+pub(crate) fn validate_order_by_positions(
+    items: &[OrderByExpr],
+    output_columns: &[String],
+) -> Result<()> {
+    let n_cols = output_columns.len();
+    for (idx, item) in items.iter().enumerate() {
+        if let Some(pos) = top_level_positive_int(&item.expr)
+            && (pos < 1 || pos as usize > n_cols)
+        {
+            let ordinal_word = ordinal_word(idx + 1);
+            return Err(Error::Bind(format!(
+                "{ordinal_word} ORDER BY term out of range - should be between 1 and {n_cols}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn ordinal_word(n: usize) -> String {
+    let mod100 = n % 100;
+    if (11..=13).contains(&mod100) {
+        return format!("{n}th");
+    }
+    let suffix = match n % 10 {
+        1 => "st",
+        2 => "nd",
+        3 => "rd",
+        _ => "th",
+    };
+    format!("{n}{suffix}")
 }
 
 fn top_level_positive_int(expr: &Expr) -> Option<i64> {
