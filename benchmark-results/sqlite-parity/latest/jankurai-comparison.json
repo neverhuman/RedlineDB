@@ -1,8 +1,8 @@
 {
   "generated_by": "redline-testing jankurai-compare",
-  "redlinedb_score": 64,
+  "redlinedb_score": 87,
   "redlinedb_status": "unknown",
-  "score_delta": 44,
+  "score_delta": 67,
   "sqlite_ref": "version-3.53.1",
   "sqlite_score": 20,
   "sqlite_status": "unknown",

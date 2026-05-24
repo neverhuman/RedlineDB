@@ -26,15 +26,13 @@ group-commit WAL, and crash recovery designed for multi-writer workloads.
 ## Engine Metrics
 
 <!-- sqlite-parity-metrics:begin -->
-![SQLite parity score](assets/sqlite-jankurai-score.svg)
+![Jankurai score](assets/sqlite-jankurai-score.svg)
 
-![SQLite parity code shape](assets/sqlite-code-shape.svg)
+![Code shape](assets/sqlite-code-shape.svg)
 
-![SQLite parity median test performance](assets/sqlite-median-test-performance.svg)
+![Median test performance](assets/sqlite-median-test-performance.svg)
 
-![SQLite parity KSLOC](assets/sqlite-parity-ksloc.svg)
-
-![SQLite parity Jankurai comparison](assets/sqlite-jankurai-comparison.svg)
+![KSLOC](assets/sqlite-parity-ksloc.svg)
 
 <!-- sqlite-parity-metrics:end -->
 
@@ -174,46 +172,44 @@ tarball SHA-256, the `redline-testing` binary SHA-256, the release manifest, and
 the GitHub artifact attestation.
 
 <!-- sqlite-parity-report:begin -->
-**SQLite parity coverage:** **1127 / 1127** cases passed in CI. Failed: **0**. Skipped: **0**. Updated 2026-05-24.
+**SQLite parity coverage:** **1127 / 1127** cases passed in CI. Failed: **0**. Missing: **0**. Skipped: **0**. Updated 2026-05-24.
 
-**SQLite parity latency:** median gap **-27.25%**, worst gap **-298.83%**, faster cases **218**.
-
-**Benchmark metadata:** RedlineDB target version **redlinedb v2.0.6 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 0.1.3**.
+**SQLite parity latency:** median gap **-1.28%**, worst gap **-46.75%**, faster cases **543**.
 
 ![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)
 
 ![SQLite parity performance distribution](assets/sqlite-parity-performance-histogram.svg)
 
-<details id="sqlite-parity-ranked-table">
+<details id="sqlite-parity-ranked-latency-table">
 <summary>Full ranked latency table</summary>
 
 | Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |
 | ---: | --- | --- | --- | --- | ---: | ---: | ---: |
-| 1 | AGG_GROUP_HAVING_075 | P1 | memory | GEN_SQL_AGGREGATE | 2893743 | 11964819 | -298.83% |
-| 2 | SCALAR_ARITH_034 | P1 | memory | GEN_SQL_SCALAR | 4292058 | 14880964 | -246.71% |
-| 3 | AGG_GROUP_HAVING_100 | P1 | memory | GEN_SQL_AGGREGATE | 4829333 | 16500857 | -241.68% |
-| 4 | JOIN_SUBQUERY_EXISTS_092 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 3097839 | 10559762 | -240.88% |
-| 5 | JOIN_SUBQUERY_EXISTS_036 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 3951393 | 13414040 | -239.48% |
-| 6 | CTE_RECURSIVE_MATRIX_042 | P1 | memory | GEN_SQL_CTE | 5402006 | 16495247 | -205.35% |
-| 7 | AGG_GROUP_HAVING_004 | P1 | memory | GEN_SQL_AGGREGATE | 6085249 | 17993200 | -195.69% |
-| 8 | JSON_EXTRACT_SET_049 | P2 | memory | GEN_SQL_JSON | 4465475 | 13002512 | -191.18% |
-| 9 | WINDOW_PARTITION_SUM_055 | P2 | memory | GEN_SQL_WINDOW | 5264737 | 15296410 | -190.54% |
-| 10 | SCALAR_ARITH_023 | P1 | memory | GEN_SQL_SCALAR | 4940874 | 14290948 | -189.24% |
-| 11 | WINDOW_PARTITION_SUM_062 | P2 | memory | GEN_SQL_WINDOW | 3977993 | 11386105 | -186.23% |
-| 12 | CONSTRAINT_FK_SAVEPOINT_018 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 5475145 | 15548246 | -183.98% |
-| 13 | INDEX_SCHEMA_PRAGMA_041 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 3690400 | 10404799 | -181.94% |
-| 14 | DML_WHERE_ORDER_LIMIT_046 | P1 | memory | GEN_SQL_DML | 4740767 | 13331694 | -181.21% |
-| 15 | AGG_GROUP_HAVING_098 | P1 | memory | GEN_SQL_AGGREGATE | 5168836 | 14415594 | -178.89% |
-| 16 | SCALAR_NULL_COALESCE_009 | P1 | memory | GEN_SQL_SCALAR | 4521842 | 12384363 | -173.88% |
-| 17 | CONSTRAINT_FK_SAVEPOINT_031 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 4667608 | 12559394 | -169.08% |
-| 18 | OPT_BAIL | P1 | memory | CLI_OPTION_NEGATIVE | 4929503 | 13031136 | -164.35% |
-| 19 | JOIN_SUBQUERY_EXISTS_018 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 3790569 | 9961701 | -162.80% |
-| 20 | DML_WHERE_ORDER_LIMIT_076 | P1 | memory | GEN_SQL_DML | 7376070 | 19272280 | -161.28% |
-| 21 | CTE_RECURSIVE_MATRIX_063 | P1 | memory | GEN_SQL_CTE | 6164408 | 15804491 | -156.38% |
-| 22 | VIEW_TRIGGER_GENERATED_001 | P2 | memory | GEN_SQL_VIEW_TRIGGER | 5521382 | 14124714 | -155.82% |
-| 23 | SCALAR_CAST_TYPEOF_001 | P1 | memory | GEN_SQL_SCALAR | 5411114 | 13840657 | -155.78% |
-| 24 | ANALYZE_SQLITE_STAT1 | P0 | memory | SQL_ANALYZE | 4867986 | 12420300 | -155.14% |
-| 25 | WINDOW_PARTITION_SUM_036 | P2 | memory | GEN_SQL_WINDOW | 6237857 | 15901424 | -154.92% |
+| 1 | DOT_BACKUP_RESTORE_TEMPFILE | P1 | tempfile | CLI_TEMPFILE | 2244087 | 4402543 | -46.75% |
+| 2 | OPT_MAXSIZE_DESERIALIZE_TEMPFILE | P3 | tempfile | CLI_OPTION_TEMPFILE | 5683523 | 8329290 | -46.55% |
+| 3 | DOT_SAVE_RESTORE_TEMPFILE | P1 | tempfile | CLI_TEMPFILE | 2205190 | 4385311 | -46.18% |
+| 4 | OPT_READONLY_TEMPFILE | P2 | tempfile | CLI_OPTION_TEMPFILE | 7170487 | 10117661 | -41.10% |
+| 5 | DOT_CLONE_TEMPFILE | P2 | tempfile | CLI_TEMPFILE | 2484040 | 3965791 | -32.19% |
+| 6 | DOT_IMPORT_CSV_TEMPFILE | P1 | tempfile | CLI_TEMPFILE | 1875674 | 3888733 | -29.62% |
+| 7 | JOIN_SUBQUERY_EXISTS_068 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1787768 | 3837098 | -27.90% |
+| 8 | JOIN_SUBQUERY_EXISTS_073 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1765014 | 3836297 | -27.88% |
+| 9 | JOIN_SUBQUERY_EXISTS_072 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1755187 | 3836247 | -27.87% |
+| 10 | JOIN_SUBQUERY_EXISTS_082 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1757681 | 3804854 | -26.83% |
+| 11 | JOIN_SUBQUERY_EXISTS_067 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1787287 | 3795840 | -26.53% |
+| 12 | JOIN_SUBQUERY_EXISTS_009 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1767459 | 3795490 | -26.52% |
+| 13 | JOIN_SUBQUERY_EXISTS_070 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1715922 | 3775029 | -25.83% |
+| 14 | JOIN_SUBQUERY_EXISTS_085 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1800221 | 3759362 | -25.31% |
+| 15 | JOIN_SUBQUERY_EXISTS_010 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1745648 | 3759282 | -25.31% |
+| 16 | JOIN_SUBQUERY_EXISTS_071 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1796945 | 3755685 | -25.19% |
+| 17 | JOIN_SUBQUERY_EXISTS_069 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1736240 | 3746942 | -24.90% |
+| 18 | JOIN_SUBQUERY_EXISTS_084 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1682349 | 3719827 | -23.99% |
+| 19 | SQL_ATTACH_TEMPFILE_DATABASE | P1 | tempfile | SQL_TEMPFILE | 1786337 | 3712593 | -23.75% |
+| 20 | JOIN_SUBQUERY_EXISTS_074 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1743594 | 3708646 | -23.62% |
+| 21 | JOIN_SUBQUERY_EXISTS_076 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1783159 | 3692926 | -23.10% |
+| 22 | DML_WHERE_ORDER_LIMIT_110 | P1 | memory | GEN_SQL_DML | 1579605 | 3679859 | -22.66% |
+| 23 | JOIN_SUBQUERY_EXISTS_011 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1814068 | 3677548 | -22.58% |
+| 24 | DML_WHERE_ORDER_LIMIT_120 | P1 | memory | GEN_SQL_DML | 1618108 | 3671558 | -22.39% |
+| 25 | JOIN_SUBQUERY_EXISTS_080 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1776637 | 3644235 | -21.47% |
 
 </details>
 <!-- sqlite-parity-report:end -->
@@ -224,9 +220,9 @@ the GitHub artifact attestation.
 
 {
   "generated_by": "redline-testing jankurai-compare",
-  "redlinedb_score": 64,
+  "redlinedb_score": 87,
   "redlinedb_status": "unknown",
-  "score_delta": 44,
+  "score_delta": 67,
   "sqlite_ref": "version-3.53.1",
   "sqlite_score": 20,
   "sqlite_status": "unknown",
