@@ -56,7 +56,7 @@ purpose = "targeted redlinedb-kernel test proof"
 [[lane]]
 command = "just redline-testing-official"
 name = "redline-testing-official"
-purpose = "external official conformance and benchmark gate routed through the pinned redline-testing release artifact"
+purpose = "external official conformance and benchmark gate routed through the verified redline-testing release artifact"
 
 [[lane]]
 command = "just official-evidence-guard"
@@ -71,7 +71,7 @@ purpose = "deterministic SQLite parity report drift check against committed offi
 [[lane]]
 command = "just sqlite-parity-report-update"
 name = "sqlite-parity-report-update"
-purpose = "regenerate official report and README data from the pinned redline-testing evidence chain"
+purpose = "regenerate official report and README data from the verified redline-testing evidence chain"
 
 [[lane]]
 command = "rtk cargo test -p redlinedb-sql --test parity_fk_enforce --quiet --locked"

@@ -359,7 +359,7 @@ fn readme_block_includes_visible_charts_and_latency_anchor() {
     );
     assert!(block.contains("[Full ranked latency table](#sqlite-parity-ranked-latency-table)"));
     assert!(block.contains("sole official source"));
-    assert!(block.contains("pinned external `neverhuman/redline-testing` release artifact"));
+    assert!(block.contains("verified external `neverhuman/redline-testing` release artifact"));
     assert!(block.contains("benchmark-results/sqlite-parity/latest/provenance.json"));
     assert!(metrics.contains(
         "![Beyond-SQLite feature progress chart](assets/beyond-sqlite-feature-progress.svg)"
