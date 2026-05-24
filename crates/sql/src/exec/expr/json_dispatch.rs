@@ -614,7 +614,16 @@ fn pg_sequence_setval(values: &[SqlValue]) -> Result<SqlValue> {
 
 fn pg_sequence_name(value: &SqlValue) -> Result<String> {
     match value {
-        SqlValue::Text(s) => Ok(s.to_ascii_lowercase()),
+        SqlValue::Text(s) => {
+            // Track J — strip schema qualifier (`sch.s` → `s`). SQLite has
+            // no schema layer; sequences live in a flat session map.
+            let folded = s.to_ascii_lowercase();
+            let stripped = folded
+                .rsplit_once('.')
+                .map(|(_schema, name)| name.to_owned())
+                .unwrap_or(folded);
+            Ok(stripped)
+        }
         _ => Err(Error::UnsupportedSql(
             "sequence name must be a string".to_owned(),
         )),

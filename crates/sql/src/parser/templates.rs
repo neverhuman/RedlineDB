@@ -199,6 +199,9 @@ fn bind_create_sequence(
     if_not_exists: bool,
     sequence_options: Vec<sqlparser::ast::SequenceOptions>,
 ) -> Result<PreparedTemplate> {
+    // Track J — pick the rightmost component so schema-qualified
+    // `sch.seq` references store as bare `seq`. Sequences live in a
+    // flat session map; nextval() also strips the schema prefix on lookup.
     let folded_name = match name.0.last() {
         Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
         _ => {
