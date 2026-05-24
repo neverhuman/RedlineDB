@@ -57,7 +57,7 @@ readable repair receipts.
 | `phase11-sql-contracts`              | Phase-11 SQL contract tests (temp roots, queue, xdoug-compat).                                        |
 | `security`                           | `cargo audit` + `cargo deny check` + `gitleaks detect`.                                               |
 | `security-local`                     | Same as `security`; pinned for local-only invocation.                                                 |
-| `release-binary-smoke`               | Downloads the pinned RedlineDB `v2.0.6` Linux release tarball, verifies its `.sha256`, and runs a CLI smoke query. |
+| `release-binary-smoke`               | Builds and verifies the pinned RedlineDB `v2.0.6` Linux release package, then runs a CLI smoke query. |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
 | `jankurai-tools`                     | Local mirror for every `.github/workflows/jankurai-tools.yml` matrix job. Run with `scripts/ci-local.sh jankurai-tools`. |
 | `pr-gate`                            | Local mirror for PR branch freshness plus `jankurai staged-gate` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |
@@ -70,22 +70,13 @@ rtk just <lane-name>
 
 (or invoke the command list from the TOML directly).
 
-SQLite parity scale policy: required CI runs `redline-testing-official`, which
-builds `target/release/redlinedb`, installs the verified external
-`redline-testing` release tarball, verifies the tarball SHA256 from the sidecar,
-binary SHA256, release manifest, SHA256 sidecar, and GitHub artifact attestation,
-then runs the official suite through that binary and emits
-`target/redline-testing/official-evidence.processed.json`. That external runner
-is the sole official source for parity evidence. The parity job uploads the
-full `target/redline-testing/**` bundle. `sqlite-parity-report-update` stages
-`official-evidence.processed.json` into
-`benchmark-results/sqlite-parity/latest/`, and `sqlite-parity-report-check`
-validates committed report artifacts against that processed evidence without
-rerunning the benchmark. RedlineDB intentionally exposes no local SQLite parity
-coverage, benchmark, report, sentinel, or proof-evidence producer; legacy
-scale/sentinel lanes, local parity bundle lanes, legacy receipt scripts, and
-the `redlinedb-bench --bin sqlite_parity` binary fail closed. Reference-shell
-capability skips are hard errors in the official lane.
+SQLite parity boundary: the official evidence flow lives in
+[`docs/sqlite-parity.md`](docs/sqlite-parity.md), and `redline-testing-official`
+is the only lane that produces committed parity evidence. RedlineDB does not
+expose a local SQLite parity coverage/benchmark/report/sentinel producer; the
+in-tree `sqlite_parity` commands and prior parity bundle workflows fail closed.
+The proof-lane definitions and audit policy remain pinned in
+`.jankurai/proof-lanes.toml` and `agent/audit-policy.toml`.
 
 To test a locally built `redline-testing` tarball without editing CI pins, point
 the installer at `file://` URLs:

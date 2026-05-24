@@ -26,7 +26,7 @@ if rg -n --glob '!scripts/guard-official-evidence.sh' \
     rg -n --glob '!scripts/guard-official-evidence.sh' \
       'redlinedb-bench .*--bin sqlite_parity -- (run|compare|report|sentinel|jankurai-compare)' \
       scripts ops just .github .jankurai README.md docs/testing.md docs/sqlite-parity.md crates/bench/src >&2
-    report_error "legacy in-tree sqlite_parity producer command is forbidden; use the verified redline-testing release artifact"
+    report_error "disabled in-tree sqlite_parity producer command is forbidden; use the verified redline-testing release artifact"
 fi
 
 if rg -n --glob '!scripts/guard-official-evidence.sh' -- '--local-diagnostics' \
@@ -102,7 +102,7 @@ if ! grep -n 'reject_legacy_sqlite_parity_lane' scripts/just/run.sh >/dev/null; 
     report_error "legacy SQLite parity script lanes must hard-fail"
 fi
 
-if ! grep -n 'reject_legacy_producer' crates/bench/src/sqlite_parity/cli.rs >/dev/null; then
+if ! grep -n 'reject_disabled_producer' crates/bench/src/sqlite_parity/cli.rs >/dev/null; then
     report_error "redlinedb-bench sqlite_parity producer subcommands must hard-fail"
 fi
 
@@ -114,7 +114,7 @@ if grep -n '^mod sqlite_parity;' crates/bench/src/lib.rs >/dev/null; then
     report_error "redlinedb-bench must not compile the legacy sqlite_parity producer module"
 fi
 
-if ! grep -n 'legacy in-tree sqlite_parity binary is disabled' crates/bench/src/bin/sqlite_parity.rs >/dev/null; then
+if ! grep -n 'in-tree sqlite_parity binary is disabled' crates/bench/src/bin/sqlite_parity.rs >/dev/null; then
     report_error "redlinedb-bench sqlite_parity binary must fail closed"
 fi
 

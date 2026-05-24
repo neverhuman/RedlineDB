@@ -191,31 +191,31 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::List(args) => list(args),
         Command::Run(args) => {
-            reject_legacy_producer("run")?;
+            reject_disabled_producer("run")?;
             run_selected(args)
         }
         Command::Compare(args) => {
-            reject_legacy_producer("compare")?;
+            reject_disabled_producer("compare")?;
             compare_selected(args)
         }
         Command::Report(args) => {
-            reject_legacy_producer("report")?;
+            reject_disabled_producer("report")?;
             report(args)
         }
         Command::JankuraiCompare(args) => {
-            reject_legacy_producer("jankurai-compare")?;
+            reject_disabled_producer("jankurai-compare")?;
             jankurai_compare(args)
         }
         Command::Sentinel(args) => {
-            reject_legacy_producer("sentinel")?;
+            reject_disabled_producer("sentinel")?;
             sentinel(args)
         }
     }
 }
 
-fn reject_legacy_producer(command: &str) -> Result<()> {
+fn reject_disabled_producer(command: &str) -> Result<()> {
     bail!(
-        "legacy in-tree sqlite_parity `{command}` is disabled: SQLite parity coverage, benchmark, report, and sentinel evidence must be produced only by the pinned neverhuman/redline-testing release artifact"
+        "in-tree sqlite_parity `{command}` is disabled: SQLite parity coverage, benchmark, report, and sentinel evidence must be produced only by the pinned neverhuman/redline-testing release artifact"
     )
 }
 
@@ -703,10 +703,10 @@ mod tests {
     }
 
     #[test]
-    fn legacy_producer_commands_are_disabled() {
-        let err = reject_legacy_producer("compare").expect_err("legacy producer rejected");
+    fn in_tree_producer_commands_are_disabled() {
+        let err = reject_disabled_producer("compare").expect_err("disabled producer rejected");
         let message = err.to_string();
-        assert!(message.contains("legacy in-tree sqlite_parity"));
+        assert!(message.contains("in-tree sqlite_parity"));
         assert!(message.contains("redline-testing"));
     }
 

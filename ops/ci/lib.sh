@@ -216,9 +216,11 @@ ci_install_redlinedb_release() {
     local install_root="${CI_REDLINEDB_RELEASE_INSTALL_ROOT:-$PWD/target/ci/redlinedb-release/${CI_REDLINEDB_RELEASE_TAG}-${CI_REDLINEDB_RELEASE_ARTIFACT}}"
     local tmp_dir
     tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/redlinedb-release.XXXXXX")"
+    local release_url="${CI_REDLINEDB_RELEASE_OVERRIDE_URL:-$CI_REDLINEDB_RELEASE_URL}"
+    local release_sha256_url="${CI_REDLINEDB_RELEASE_OVERRIDE_SHA256_URL:-$CI_REDLINEDB_RELEASE_SHA256_URL}"
 
-    curl -fsSL -o "$tmp_dir/$CI_REDLINEDB_RELEASE_ASSET" "$CI_REDLINEDB_RELEASE_URL"
-    curl -fsSL -o "$tmp_dir/$CI_REDLINEDB_RELEASE_ASSET.sha256" "$CI_REDLINEDB_RELEASE_SHA256_URL"
+    curl -fsSL -o "$tmp_dir/$CI_REDLINEDB_RELEASE_ASSET" "$release_url"
+    curl -fsSL -o "$tmp_dir/$CI_REDLINEDB_RELEASE_ASSET.sha256" "$release_sha256_url"
     (
         cd "$tmp_dir"
         sha256sum -c "$CI_REDLINEDB_RELEASE_ASSET.sha256" >&2
@@ -240,7 +242,7 @@ ci_install_redlinedb_release() {
 
     local version_output
     version_output="$("$install_root/bin/redlinedb" --version)"
-    printf 'RedlineDB release asset verified: %s\n' "$CI_REDLINEDB_RELEASE_URL" >&2
+    printf 'RedlineDB release asset verified: %s\n' "$release_url" >&2
     printf 'RedlineDB installed: %s (%s)\n' "$install_root/bin/redlinedb" "$version_output" >&2
     rm -rf "$tmp_dir"
     printf '%s\n' "$install_root/bin/redlinedb"
@@ -452,6 +454,7 @@ ci_verify_redline_testing_attestation() {
 ci_verify_redlinedb_release_smoke() {
     local redlinedb_bin
     local output
+    ci_prepare_redlinedb_release_smoke
     redlinedb_bin="$(ci_install_redlinedb_release)"
     output="$(printf 'SELECT 1;\n' | "$redlinedb_bin" -batch -bail -list -separator '|' :memory:)"
     if [ "$output" != "1" ]; then
@@ -459,6 +462,39 @@ ci_verify_redlinedb_release_smoke() {
         return 1
     fi
     printf 'RedlineDB release smoke passed: %s\n' "$redlinedb_bin" >&2
+}
+
+ci_prepare_redlinedb_release_smoke() {
+    if [ "${CI_REDLINEDB_RELEASE_BUILD_LOCAL:-1}" != "1" ]; then
+        return 0
+    fi
+    case "${CI_REDLINEDB_RELEASE_URL:-}" in
+        file://*)
+            return 0
+            ;;
+    esac
+
+    local source_dir="$PWD"
+    local smoke_root="${CI_REDLINEDB_RELEASE_SMOKE_DIR:-$source_dir/target/ci/redlinedb-release-smoke}"
+    local output_dir
+    output_dir="$(mkdir -p "$smoke_root" && cd "$smoke_root" && pwd)"
+
+    rm -rf "$output_dir/${CI_REDLINEDB_RELEASE_ASSET%.tar.gz}" \
+        "$output_dir/$CI_REDLINEDB_RELEASE_ASSET" \
+        "$output_dir/$CI_REDLINEDB_RELEASE_ASSET.sha256"
+
+    TAG="$CI_REDLINEDB_RELEASE_TAG" \
+    ARTIFACT="$CI_REDLINEDB_RELEASE_ARTIFACT" \
+    LIB_NAME="libredlinedb.so" \
+    TARGET="x86_64-unknown-linux-gnu" \
+    SOURCE_DIR="$source_dir" \
+    OUTPUT_DIR="$output_dir" \
+        rtk bash ops/ci/release-build.sh
+
+    CI_REDLINEDB_RELEASE_OVERRIDE_URL="file://${output_dir}/${CI_REDLINEDB_RELEASE_ASSET}"
+    CI_REDLINEDB_RELEASE_OVERRIDE_SHA256_URL="${CI_REDLINEDB_RELEASE_OVERRIDE_URL}.sha256"
+    export CI_REDLINEDB_RELEASE_OVERRIDE_URL
+    export CI_REDLINEDB_RELEASE_OVERRIDE_SHA256_URL
 }
 
 ci_install_gitleaks() {
