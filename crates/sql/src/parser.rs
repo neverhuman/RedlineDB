@@ -173,7 +173,504 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     }
     out = out.replace("'abc' GLOB 'a*'", "glob('a*','abc')");
     out = out.replace("NULL IS NOT 1", "NULL IS DISTINCT FROM 1");
+    if has_jsonb_question_op(&out) {
+        out = rewrite_jsonb_question_ops(&out);
+    }
+    if out.to_ascii_lowercase().contains("using ") {
+        out = strip_create_index_using_clause(&out);
+    }
     out
+}
+
+/// PostgreSQL `CREATE INDEX … USING <method> (…)` is the spelling for
+/// access-method selection (GIN, GiST, BRIN, HASH, BTREE). RedlineDB
+/// has a single index implementation, so we strip the access-method
+/// hint pre-parse. JSONB opclass markers inside the column list
+/// (`jsonb_path_ops`, `jsonb_ops`) are also dropped — they only affect
+/// physical layout, not query semantics.
+fn strip_create_index_using_clause(sql: &str) -> String {
+    let bytes = sql.as_bytes();
+    let lower: Vec<u8> = bytes.iter().map(|b| b.to_ascii_lowercase()).collect();
+    if !lower.windows(b"create".len()).any(|w| w == b"create") {
+        return sql.to_owned();
+    }
+    let mut out = String::with_capacity(sql.len());
+    let mut i = 0usize;
+    let mut in_string: Option<u8> = None;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(quote) = in_string {
+            out.push(b as char);
+            if b == quote {
+                if i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    out.push(quote as char);
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'`' => {
+                in_string = Some(b);
+                out.push(b as char);
+                i += 1;
+            }
+            _ => {
+                // Match `USING <ident>` outside strings — strip both tokens.
+                if (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
+                    && matches_word_ci(&lower, i, b"using")
+                {
+                    let mut j = i + 5;
+                    // Skip whitespace.
+                    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                        j += 1;
+                    }
+                    // Capture the method-name identifier.
+                    let name_start = j;
+                    while j < bytes.len()
+                        && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_')
+                    {
+                        j += 1;
+                    }
+                    if j > name_start {
+                        // Drop "USING <name>" entirely; eat the trailing
+                        // whitespace too so we don't leave a double space.
+                        while j < bytes.len() && bytes[j] == b' ' {
+                            j += 1;
+                        }
+                        if !out.ends_with(' ') {
+                            out.push(' ');
+                        }
+                        i = j;
+                        continue;
+                    }
+                }
+                // Match `<col> jsonb_path_ops` / `jsonb_ops` opclass marker.
+                let mut stripped_marker = false;
+                for marker in ["jsonb_path_ops", "jsonb_ops"] {
+                    let mlen = marker.len();
+                    if (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
+                        && matches_word_ci(&lower, i, marker.as_bytes())
+                    {
+                        // Trailing must be punctuation/whitespace/end.
+                        let after = i + mlen;
+                        let ok = after >= bytes.len() || !bytes[after].is_ascii_alphanumeric();
+                        if ok {
+                            i += mlen;
+                            // Eat a single leading space we may have just emitted.
+                            if out.ends_with(' ') {
+                                out.pop();
+                            }
+                            stripped_marker = true;
+                            break;
+                        }
+                    }
+                }
+                if stripped_marker {
+                    continue;
+                }
+                out.push(b as char);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+fn matches_word_ci(lower: &[u8], start: usize, needle: &[u8]) -> bool {
+    if start + needle.len() > lower.len() {
+        return false;
+    }
+    if &lower[start..start + needle.len()] != needle {
+        return false;
+    }
+    let after = start + needle.len();
+    after >= lower.len() || !lower[after].is_ascii_alphanumeric()
+}
+
+/// Returns `true` when `sql` contains a `?`, `?|`, or `?&` token that is
+/// outside string/comment context and not directly followed by digits
+/// (a placeholder). Used to gate the expensive JSONB-operator rewriter.
+fn has_jsonb_question_op(sql: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let mut i = 0usize;
+    let mut in_string: Option<u8> = None;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(quote) = in_string {
+            if b == quote {
+                if i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'`' => {
+                in_string = Some(b);
+                i += 1;
+            }
+            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
+                i += 2;
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                i += 2;
+            }
+            b'?' => {
+                // Skip `?<digit>` placeholders (`?1`, `?2`, ...).
+                if i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+                    i += 1;
+                    continue;
+                }
+                return true;
+            }
+            _ => i += 1,
+        }
+    }
+    false
+}
+
+/// Rewrite JSONB question-mark operators (`?`, `?|`, `?&`) into the
+/// equivalent function calls `jsonb_exists`, `jsonb_exists_any`, and
+/// `jsonb_exists_all`. SQLiteDialect tokenises `?` as a positional
+/// placeholder, so we rewrite the surface SQL before the parser runs.
+///
+/// Recognised shapes (left operand is the longest balanced expression
+/// preceding the `?`, right operand is the literal or `ARRAY[...]`
+/// expression that follows):
+///   `JSON ? 'key'`              → `jsonb_exists(JSON, 'key')`
+///   `JSON ?| ARRAY['a','b']`    → `jsonb_exists_any(JSON, 'a', 'b')`
+///   `JSON ?& ARRAY['a','b']`    → `jsonb_exists_all(JSON, 'a', 'b')`
+fn rewrite_jsonb_question_ops(sql: &str) -> String {
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len() + 32);
+    let mut i = 0usize;
+    let mut in_string: Option<u8> = None;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(quote) = in_string {
+            out.push(b as char);
+            if b == quote {
+                if i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    out.push(quote as char);
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'`' => {
+                in_string = Some(b);
+                out.push(b as char);
+                i += 1;
+            }
+            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    out.push(bytes[i] as char);
+                    i += 1;
+                }
+            }
+            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
+                while i < bytes.len() {
+                    out.push(bytes[i] as char);
+                    if bytes[i] == b'/' && i > 0 && bytes[i - 1] == b'*' {
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            b'?' => {
+                // Skip `?<digit>` placeholders.
+                if i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+                    out.push(b as char);
+                    i += 1;
+                    continue;
+                }
+                let next = bytes.get(i + 1).copied();
+                let func = match next {
+                    Some(b'|') => Some(("jsonb_exists_any", 2)),
+                    Some(b'&') => Some(("jsonb_exists_all", 2)),
+                    _ => Some(("jsonb_exists", 1)),
+                };
+                let Some((func_name, op_len)) = func else {
+                    out.push(b as char);
+                    i += 1;
+                    continue;
+                };
+                let lhs_start = match find_jsonb_lhs_start(&out) {
+                    Some(s) => s,
+                    None => {
+                        out.push(b as char);
+                        i += 1;
+                        continue;
+                    }
+                };
+                let lhs = out[lhs_start..].trim_end().to_owned();
+                if lhs.is_empty() {
+                    out.push(b as char);
+                    i += 1;
+                    continue;
+                }
+                out.truncate(lhs_start);
+                // Skip past the operator + any whitespace.
+                let mut j = i + op_len;
+                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                    j += 1;
+                }
+                let (rhs_text, after_rhs) = match collect_jsonb_rhs(bytes, j, op_len > 1) {
+                    Some(parts) => parts,
+                    None => {
+                        out.push_str(&lhs);
+                        out.push(' ');
+                        out.push(b as char);
+                        i += 1;
+                        continue;
+                    }
+                };
+                out.push_str(&format!("{func_name}({lhs}, {rhs_text})"));
+                i = after_rhs;
+            }
+            _ => {
+                out.push(b as char);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Find the byte offset within `prefix` where the JSONB LHS expression
+/// most likely starts. Forward-scans `prefix` to mark string/comment
+/// spans, then walks backward through the remaining "code" bytes,
+/// tracking balanced parens / brackets and stopping at the nearest
+/// outer SQL boundary (top-level comma, semicolon, or paren).
+fn find_jsonb_lhs_start(prefix: &str) -> Option<usize> {
+    let bytes = prefix.as_bytes();
+    let mut is_code = vec![false; bytes.len()];
+    let mut in_string: Option<u8> = None;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(quote) = in_string {
+            if b == quote {
+                if i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+                i += 1;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'`' => {
+                in_string = Some(b);
+                i += 1;
+            }
+            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
+                i += 2;
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                if i + 1 < bytes.len() {
+                    i += 2;
+                }
+            }
+            _ => {
+                is_code[i] = true;
+                i += 1;
+            }
+        }
+    }
+
+    let mut depth = 0i32;
+    let mut idx = bytes.len();
+    let stop_words: &[&[u8]] = &[
+        b"select", b"where", b"from", b"group", b"order", b"having", b"limit",
+        b"on", b"by", b"when", b"then", b"else", b"and", b"or", b"not",
+        b"in", b"is", b"as", b"case", b"join", b"using", b"set", b"values",
+    ];
+    while idx > 0 {
+        idx -= 1;
+        if !is_code[idx] {
+            // Inside a string/comment — skip over it as a unit.
+            // Find the start of this contiguous non-code run.
+            let mut start = idx;
+            while start > 0 && !is_code[start - 1] {
+                start -= 1;
+            }
+            idx = start;
+            // If the non-code span is preceded by code we can keep
+            // walking once we decrement past it.
+            if idx == 0 {
+                break;
+            }
+            continue;
+        }
+        let b = bytes[idx];
+        match b {
+            b')' | b']' | b'}' => depth += 1,
+            b'(' | b'[' | b'{' => {
+                if depth == 0 {
+                    return Some(idx + 1);
+                }
+                depth -= 1;
+            }
+            b',' | b';' if depth == 0 => return Some(idx + 1),
+            // Stop at a keyword boundary (e.g. `SELECT … ? 'k'`).
+            b' ' | b'\t' | b'\n' | b'\r' if depth == 0 => {
+                // Peek backwards over consecutive whitespace.
+                let mut k = idx;
+                while k > 0 && matches!(bytes[k - 1], b' ' | b'\t' | b'\n' | b'\r') {
+                    k -= 1;
+                }
+                // Identify the word ending at `k`.
+                let word_end = k;
+                let mut word_start = k;
+                while word_start > 0
+                    && is_code[word_start - 1]
+                    && (bytes[word_start - 1].is_ascii_alphanumeric()
+                        || bytes[word_start - 1] == b'_')
+                {
+                    word_start -= 1;
+                }
+                if word_end > word_start {
+                    let lower: Vec<u8> = bytes[word_start..word_end]
+                        .iter()
+                        .map(|b| b.to_ascii_lowercase())
+                        .collect();
+                    if stop_words.iter().any(|w| *w == lower.as_slice()) {
+                        return Some(word_end + 1);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(0)
+}
+
+/// Collect the right-hand side of a JSONB question-mark operator.
+/// When `is_array` is true we expect `ARRAY[...]` and unwrap its
+/// contents; otherwise we expect a single scalar expression (literal
+/// or parenthesised). Returns `(rendered_args, idx_after_rhs)`.
+fn collect_jsonb_rhs(bytes: &[u8], start: usize, is_array: bool) -> Option<(String, usize)> {
+    if is_array {
+        // Match `ARRAY[ ... ]`.
+        let prefix = b"ARRAY[";
+        if start + prefix.len() > bytes.len() {
+            return None;
+        }
+        let upper: Vec<u8> = bytes[start..start + prefix.len()]
+            .iter()
+            .map(|b| b.to_ascii_uppercase())
+            .collect();
+        if upper.as_slice() != prefix {
+            return None;
+        }
+        let mut j = start + prefix.len();
+        let body_start = j;
+        let mut depth = 1i32;
+        while j < bytes.len() && depth > 0 {
+            match bytes[j] {
+                b'[' => depth += 1,
+                b']' => depth -= 1,
+                b'\'' => {
+                    j += 1;
+                    while j < bytes.len() {
+                        if bytes[j] == b'\'' {
+                            if j + 1 < bytes.len() && bytes[j + 1] == b'\'' {
+                                j += 2;
+                                continue;
+                            }
+                            break;
+                        }
+                        j += 1;
+                    }
+                }
+                _ => {}
+            }
+            j += 1;
+        }
+        if depth != 0 {
+            return None;
+        }
+        let body = std::str::from_utf8(&bytes[body_start..j - 1]).ok()?.trim();
+        Some((body.to_owned(), j))
+    } else {
+        // Single expression: literal, identifier, or balanced
+        // parenthesised expression.
+        let mut j = start;
+        if j >= bytes.len() {
+            return None;
+        }
+        let first = bytes[j];
+        if first == b'(' {
+            let mut depth = 1i32;
+            j += 1;
+            while j < bytes.len() && depth > 0 {
+                match bytes[j] {
+                    b'(' => depth += 1,
+                    b')' => depth -= 1,
+                    _ => {}
+                }
+                j += 1;
+            }
+            let text = std::str::from_utf8(&bytes[start..j]).ok()?.trim();
+            Some((text.to_owned(), j))
+        } else if first == b'\'' {
+            j += 1;
+            while j < bytes.len() {
+                if bytes[j] == b'\'' {
+                    if j + 1 < bytes.len() && bytes[j + 1] == b'\'' {
+                        j += 2;
+                        continue;
+                    }
+                    j += 1;
+                    break;
+                }
+                j += 1;
+            }
+            let text = std::str::from_utf8(&bytes[start..j]).ok()?;
+            Some((text.to_owned(), j))
+        } else {
+            while j < bytes.len()
+                && (bytes[j].is_ascii_alphanumeric()
+                    || bytes[j] == b'_'
+                    || bytes[j] == b'.')
+            {
+                j += 1;
+            }
+            if j == start {
+                return None;
+            }
+            let text = std::str::from_utf8(&bytes[start..j]).ok()?;
+            Some((text.to_owned(), j))
+        }
+    }
 }
 
 /// Cheap check: does `sql` contain any `EXCLUDE <mode>` token sequence in
