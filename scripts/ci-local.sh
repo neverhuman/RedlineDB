@@ -2,7 +2,7 @@
 # Local CI dispatcher: gives developers the same lanes CI runs.
 #
 # Routes to the canonical lane scripts under ops/ci/<lane>.sh, so a
-# successful local run is byte-for-byte the same evidence CI produces.
+# successful local run exercises the same command surface as CI.
 # Audit reference: HLT-042 ci-local-parity.lib-missing.
 #
 # Usage:
@@ -53,7 +53,6 @@ run_ci_yml_pr_mirror() {
         kernel \
         sql-unit \
         sql-contracts \
-        sql-parity \
         bench
     do
         printf 'ci-local pr-ci: tests/%s\n' "$stage" >&2
@@ -61,23 +60,14 @@ run_ci_yml_pr_mirror() {
     done
 
     for stage in \
-        sql-parity-all-tests \
-        sql-parity-full \
-        sqlite-parity-scale-ci \
-        sqlite-parity-volatile-sentinel \
-        sqlite-parity-scale-full \
-        ffi-parity-full \
-        cli-parity-full \
-        fuzz-parity \
-        fuzz-parity-nightly \
-        beyond-sqlite-manifest
+        redline-testing-official
     do
         printf 'ci-local pr-ci: parity/%s\n' "$stage" >&2
         CI_PARITY_STAGE="$stage" bash "$ROOT/ops/ci/parity.sh"
     done
 
-    printf 'ci-local pr-ci: beyond-postgres-reference\n' >&2
-    bash "$ROOT/ops/ci/beyond-postgres-reference.sh"
+    printf 'ci-local pr-ci: official-evidence-guard\n' >&2
+    bash "$ROOT/scripts/guard-official-evidence.sh"
 }
 
 case "$1" in

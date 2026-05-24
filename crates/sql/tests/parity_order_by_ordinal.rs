@@ -46,7 +46,7 @@ fn single_branch_order_by_two_positions() {
 #[test]
 fn compound_union_all_order_by_position() {
     // Matches the fuzz divergence shape from
-    // target/proof/sqlite-full-parity/fuzz-divergence.txt (seed=7 iter=110).
+    // Local differential fuzz parity regression (seed=7 iter=110).
     harness::assert_parity(&format!(
         "{T1_T2} SELECT id FROM t1 WHERE x > 6 \
          UNION ALL SELECT id FROM t2 WHERE price < 6 ORDER BY 1"

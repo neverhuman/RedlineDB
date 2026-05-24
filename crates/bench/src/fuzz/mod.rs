@@ -13,10 +13,9 @@
 //!     returns a structured `Divergence` (or `Ok`).
 //!
 //! The integration test (`crates/bench/tests/fuzz_parity.rs`) loops over
-//! `REDLINEDB_FUZZ_ITERS` iterations (default 1000) and panics on the
-//! first divergence with the SQL + both outputs pretty-printed for
-//! triage. Shrinking is opt-in via the `REDLINEDB_FUZZ_SHRINK=1` env so
-//! CI runs stay deterministic and fast.
+//! `REDLINEDB_FUZZ_ITERS` iterations (default 1000) and panics on divergence
+//! with the SQL + both outputs pretty-printed for triage. It does not write
+//! local SQLite parity evidence.
 
 pub mod normalize;
 pub mod sqlsmith;

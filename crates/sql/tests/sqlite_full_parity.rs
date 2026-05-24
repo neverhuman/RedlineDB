@@ -1,15 +1,16 @@
 //! High-level SQLite parity traceability tests.
 //!
-//! This suite is intentionally small. It records the bundled `rusqlite`
+//! This suite is intentionally small. It inspects the bundled `rusqlite`
 //! reference build, checks representative passing behavior against that
 //! reference, and keeps major full-SQLite gaps executable until they are
-//! implemented.
+//! implemented. It does not write local parity evidence artifacts; official
+//! SQLite parity evidence comes only from the pinned `neverhuman/redline-testing`
+//! release artifact.
 
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
 use rusqlite::types::Value as RuValue;
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::tempdir;
 
@@ -88,18 +89,6 @@ const EXPLICIT_REJECT_REFERENCE_PRAGMAS: &[&str] = &[
     "writable_schema",
 ];
 
-fn proof_dir() -> PathBuf {
-    let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
-    let workspace_root = Path::new(&manifest)
-        .ancestors()
-        .nth(2)
-        .expect("workspace root");
-    workspace_root
-        .join("target")
-        .join("proof")
-        .join("sqlite-full-parity")
-}
-
 fn sqlite_pragma_list(conn: &rusqlite::Connection) -> Vec<String> {
     let mut stmt = conn
         .prepare("PRAGMA pragma_list")
@@ -112,29 +101,6 @@ fn sqlite_pragma_list(conn: &rusqlite::Connection) -> Vec<String> {
         .expect("pragma_list values");
     out.sort();
     out
-}
-
-fn write_pragma_corpus(version: &str, options: &[String], pragmas: &[String]) {
-    let dir = proof_dir();
-    fs::create_dir_all(&dir)
-        .unwrap_or_else(|err| panic!("could not create proof dir {}: {err}", dir.display()));
-
-    let mut out = String::new();
-    out.push_str("# SQLite parity reference-build pragma corpus\n");
-    out.push_str(&format!("sqlite_version={}\n", version.trim()));
-    out.push_str("compile_options:\n");
-    for option in options {
-        out.push_str(option);
-        out.push('\n');
-    }
-    out.push_str("pragma_list:\n");
-    for pragma in pragmas {
-        out.push_str(pragma);
-        out.push('\n');
-    }
-
-    let path = dir.join("pragma-reference-corpus.txt");
-    fs::write(&path, out).unwrap_or_else(|err| panic!("could not write {}: {err}", path.display()));
 }
 
 fn sqlite_reference_metadata() -> (String, Vec<String>, Vec<String>) {
@@ -308,7 +274,6 @@ fn to_sql_value(value: RuValue) -> SqlValue {
 #[test]
 fn reference_build_metadata_is_available() {
     let (version, compile_options, pragmas) = sqlite_reference_metadata();
-    write_pragma_corpus(&version, &compile_options, &pragmas);
 
     println!("rusqlite_crate_version=0.37.0");
     println!("sqlite_version={version}");
