@@ -710,7 +710,93 @@ pub(crate) fn bind_alter_table(
                 if_exists,
             }
         }
+        AlterTableOperation::AlterColumn { column_name, op } => match op {
+            sqlparser::ast::AlterColumnOperation::SetDefault { value } => {
+                let lookup = std::collections::HashMap::new();
+                let expr_ast =
+                    super::helpers::expr::default_expr_to_kernel_ast(&value, &lookup)?;
+                let default_value = match expr_ast {
+                    ExprAst::Const(v) => Some(v),
+                    _ => {
+                        return Err(Error::UnsupportedSql(
+                            "ALTER COLUMN SET DEFAULT requires a constant value".to_owned(),
+                        ));
+                    }
+                };
+                redlinedb_kernel::catalog::AlterTableOperationSpec::SetColumnDefault {
+                    column_name: DbName::new(column_name.value),
+                    default_value,
+                }
+            }
+            sqlparser::ast::AlterColumnOperation::DropDefault => {
+                redlinedb_kernel::catalog::AlterTableOperationSpec::DropColumnDefault {
+                    column_name: DbName::new(column_name.value),
+                }
+            }
+            sqlparser::ast::AlterColumnOperation::DropNotNull => {
+                redlinedb_kernel::catalog::AlterTableOperationSpec::DropColumnNotNull {
+                    column_name: DbName::new(column_name.value),
+                }
+            }
+            sqlparser::ast::AlterColumnOperation::SetNotNull => {
+                redlinedb_kernel::catalog::AlterTableOperationSpec::SetColumnNotNull {
+                    column_name: DbName::new(column_name.value),
+                }
+            }
+            sqlparser::ast::AlterColumnOperation::SetDataType {
+                data_type,
+                using: _,
+                had_set: _,
+            } => redlinedb_kernel::catalog::AlterTableOperationSpec::SetColumnType {
+                column_name: DbName::new(column_name.value),
+                declared_type: data_type.to_string(),
+            },
+            sqlparser::ast::AlterColumnOperation::AddGenerated {
+                generated_as,
+                sequence_options: _,
+            } => {
+                let always = matches!(
+                    generated_as,
+                    Some(sqlparser::ast::GeneratedAs::Always)
+                );
+                redlinedb_kernel::catalog::AlterTableOperationSpec::AddColumnIdentity {
+                    column_name: DbName::new(column_name.value),
+                    always,
+                }
+            }
+        },
+        AlterTableOperation::AddConstraint {
+            constraint,
+            not_valid: _,
+        } => {
+            let lookup = std::collections::HashMap::new();
+            let constraint_spec = convert_table_constraint(constraint, &lookup)?;
+            redlinedb_kernel::catalog::AlterTableOperationSpec::AddNamedConstraint {
+                constraint: constraint_spec,
+                if_not_exists: false,
+            }
+        }
+        AlterTableOperation::DropConstraint {
+            if_exists,
+            name,
+            drop_behavior: _,
+        } => redlinedb_kernel::catalog::AlterTableOperationSpec::DropConstraint {
+            name: DbName::new(name.value),
+            if_exists,
+        },
+        AlterTableOperation::RenameConstraint { old_name, new_name } => {
+            redlinedb_kernel::catalog::AlterTableOperationSpec::RenameConstraint {
+                old_name: DbName::new(old_name.value),
+                new_name: DbName::new(new_name.value),
+            }
+        }
         other => {
+            // Track J: gracefully accept a few common pg-side
+            // `ALTER COLUMN <c> DROP IDENTITY [IF EXISTS]` shapes. sqlparser
+            // 0.61 does not yet have a dedicated variant; the parser emits
+            // them as `AlterColumn` cases handled above when present, or
+            // bails out and reaches this branch otherwise. Surface the
+            // original error so future enum additions can be spotted.
             return Err(Error::UnsupportedSql(format!(
                 "ALTER TABLE operation not supported yet: {other:?}"
             )));

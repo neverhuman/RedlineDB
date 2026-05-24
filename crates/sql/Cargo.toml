@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ahash = "0.8"
 arc-swap = "1.7"
 parking_lot = "0.12"
 regex = { version = "1.11", default-features = false, features = ["std", "perf"] }

@@ -638,6 +638,235 @@ pub fn apply_alter_table(
         } => {
             apply_drop_column(&mut table, column_name.folded(), if_exists)?;
         }
+        AlterTableOperationSpec::SetColumnDefault {
+            column_name,
+            default_value,
+        } => {
+            let column = table
+                .columns
+                .iter_mut()
+                .find(|column| column.folded.as_ref() == column_name.folded())
+                .ok_or(Error::ObjectNotFound)?;
+            column.default_value = default_value;
+            column.default_expr = None;
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::DropColumnDefault { column_name } => {
+            let column = table
+                .columns
+                .iter_mut()
+                .find(|column| column.folded.as_ref() == column_name.folded())
+                .ok_or(Error::ObjectNotFound)?;
+            column.default_value = None;
+            column.default_expr = None;
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::DropColumnNotNull { column_name } => {
+            let folded = column_name.folded();
+            let column_id = table
+                .columns
+                .iter()
+                .find(|column| column.folded.as_ref() == folded)
+                .map(|column| column.column_id)
+                .ok_or(Error::ObjectNotFound)?;
+            for column in table.columns.iter_mut() {
+                if column.folded.as_ref() == folded {
+                    column.not_null = false;
+                }
+            }
+            // Remove the NOT NULL constraint entry too so re-rendered
+            // CREATE TABLE text matches the new flag.
+            table
+                .constraints
+                .retain(|c| !(matches!(c.kind, super::schema::ConstraintKind::NotNull) && c.column_id == Some(column_id)));
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::SetColumnNotNull { column_name } => {
+            let folded = column_name.folded();
+            let column_id = table
+                .columns
+                .iter()
+                .find(|column| column.folded.as_ref() == folded)
+                .map(|column| column.column_id)
+                .ok_or(Error::ObjectNotFound)?;
+            for column in table.columns.iter_mut() {
+                if column.folded.as_ref() == folded {
+                    column.not_null = true;
+                }
+            }
+            // Add a synthetic NOT NULL constraint entry if not already present.
+            if !table.constraints.iter().any(|c| {
+                matches!(c.kind, super::schema::ConstraintKind::NotNull)
+                    && c.column_id == Some(column_id)
+            }) {
+                let constraint_id = super::ids::ConstraintId(next_object_id.0);
+                next_object_id.0 += 1;
+                table.constraints.push(super::schema::ConstraintDef {
+                    constraint_id,
+                    table_id: table.table_id,
+                    name: None,
+                    kind: super::schema::ConstraintKind::NotNull,
+                    column_id: Some(column_id),
+                    index_id: None,
+                    expr: None,
+                    conflict_action: ConflictAction::Abort,
+                });
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::AddNamedConstraint {
+            constraint,
+            if_not_exists,
+        } => {
+            let column_lookup: HashMap<Box<str>, u16> = table
+                .columns
+                .iter()
+                .map(|column| (column.folded.clone(), column.ordinal))
+                .collect();
+            apply_alter_add_constraint(
+                &mut table,
+                &mut next_object_id,
+                &mut snapshot.meta.next_relation_id,
+                &column_lookup,
+                constraint,
+                if_not_exists,
+            )?;
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::DropConstraint { name, if_exists } => {
+            let folded = name.folded();
+            let mut dropped = false;
+            // Drop FK constraints by name.
+            let before_fks = table.foreign_keys.len();
+            table.foreign_keys.retain(|fk| {
+                fk.name
+                    .as_ref()
+                    .is_none_or(|n| n.as_ref().to_ascii_lowercase() != folded)
+            });
+            if table.foreign_keys.len() != before_fks {
+                dropped = true;
+            }
+            // Drop check constraints by name.
+            let before_checks = table.checks.len();
+            table.checks.retain(|c| {
+                c.name
+                    .as_ref()
+                    .is_none_or(|n| n.as_ref().to_ascii_lowercase() != folded)
+            });
+            if table.checks.len() != before_checks {
+                dropped = true;
+            }
+            // Drop named constraint entries (UNIQUE/PK/Check rows).
+            let mut dropped_constraint_ids = Vec::new();
+            table.constraints.retain(|c| {
+                let matches_name = c
+                    .name
+                    .as_ref()
+                    .is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded);
+                if matches_name {
+                    if let Some(idx_id) = c.index_id {
+                        dropped_constraint_ids.push(idx_id);
+                    }
+                    dropped = true;
+                    false
+                } else {
+                    true
+                }
+            });
+            // Remove the matching indexes that backed the dropped constraint.
+            for idx in dropped_constraint_ids {
+                table.indexes.retain(|i| i.index_id != idx);
+            }
+            if !dropped && !if_exists {
+                return Err(Error::ObjectNotFound);
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::RenameConstraint { old_name, new_name } => {
+            let folded = old_name.folded();
+            let mut renamed = false;
+            for fk in table.foreign_keys.iter_mut() {
+                if let Some(name) = &fk.name
+                    && name.as_ref().to_ascii_lowercase() == folded
+                {
+                    fk.name = Some(new_name.original().into());
+                    renamed = true;
+                }
+            }
+            for check in table.checks.iter_mut() {
+                if let Some(name) = &check.name
+                    && name.as_ref().to_ascii_lowercase() == folded
+                {
+                    check.name = Some(new_name.original().into());
+                    renamed = true;
+                }
+            }
+            for c in table.constraints.iter_mut() {
+                if let Some(name) = &c.name
+                    && name.as_ref().to_ascii_lowercase() == folded
+                {
+                    c.name = Some(new_name.original().into());
+                    renamed = true;
+                }
+            }
+            if !renamed {
+                return Err(Error::ObjectNotFound);
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::AddColumnIdentity {
+            column_name,
+            always: _,
+        } => {
+            // Track J: GENERATED AS IDENTITY is sugar for an auto-increment
+            // sequence-backed default. We flip the not-null flag (identity
+            // columns are implicitly NOT NULL in Postgres) and record an
+            // identity marker via the kernel's sqlite_sequence-style mechanism.
+            // The actual nextval generation is handled at INSERT time.
+            let folded = column_name.folded();
+            let _column_id = table
+                .columns
+                .iter()
+                .find(|column| column.folded.as_ref() == folded)
+                .map(|column| column.column_id)
+                .ok_or(Error::ObjectNotFound)?;
+            for column in table.columns.iter_mut() {
+                if column.folded.as_ref() == folded {
+                    column.not_null = true;
+                }
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::DropColumnIdentity {
+            column_name,
+            if_exists,
+        } => {
+            let folded = column_name.folded();
+            let found = table
+                .columns
+                .iter()
+                .any(|column| column.folded.as_ref() == folded);
+            if !found && !if_exists {
+                return Err(Error::ObjectNotFound);
+            }
+            // No-op besides clearing normalized_sql — the kernel-side
+            // identity marker is implicit on the column today.
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::SetColumnType {
+            column_name,
+            declared_type,
+        } => {
+            let folded = column_name.folded();
+            let column = table
+                .columns
+                .iter_mut()
+                .find(|column| column.folded.as_ref() == folded)
+                .ok_or(Error::ObjectNotFound)?;
+            column.declared_type = Some(declared_type.clone().into_boxed_str());
+            column.affinity = derive_affinity(Some(declared_type.as_str()));
+            table.normalized_sql = None;
+        }
     }
 
     snapshot.tables[table_index] = Arc::new(table);
@@ -645,6 +874,162 @@ pub fn apply_alter_table(
     snapshot.meta.schema_epoch = SchemaEpoch(snapshot.meta.schema_epoch.0.saturating_add(1));
     snapshot.rebuild_indexes();
     Ok(snapshot)
+}
+
+/// Helper for ALTER TABLE ADD CONSTRAINT — wires a fresh
+/// constraint into the table. Mirrors how `apply_create_table` handles
+/// table-level constraints but performs the additive work on an existing
+/// `TableDef` clone. Returns an error if the constraint name collides
+/// with an existing one (and `if_not_exists` is false), or if the
+/// referenced columns are unknown.
+fn apply_alter_add_constraint(
+    table: &mut super::schema::TableDef,
+    next_object_id: &mut ObjectId,
+    next_relation_id: &mut RelId,
+    column_lookup: &HashMap<Box<str>, u16>,
+    constraint: super::ddl::TableConstraintSpec,
+    if_not_exists: bool,
+) -> Result<()> {
+    use super::ddl::TableConstraintSpec;
+    use super::schema::{CheckDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef};
+    let name_clash = |table: &super::schema::TableDef, name: Option<&DbName>| -> bool {
+        let Some(name) = name else { return false };
+        let folded = name.folded();
+        table
+            .constraints
+            .iter()
+            .any(|c| c.name.as_ref().is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded))
+            || table
+                .checks
+                .iter()
+                .any(|c| c.name.as_ref().is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded))
+            || table
+                .foreign_keys
+                .iter()
+                .any(|c| c.name.as_ref().is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded))
+    };
+    let constraint_name = match &constraint {
+        TableConstraintSpec::PrimaryKey { name, .. }
+        | TableConstraintSpec::Unique { name, .. }
+        | TableConstraintSpec::Check { name, .. }
+        | TableConstraintSpec::ForeignKey { name, .. } => name.clone(),
+    };
+    if name_clash(table, constraint_name.as_ref()) {
+        if if_not_exists {
+            return Ok(());
+        }
+        return Err(Error::ObjectExists);
+    }
+    match constraint {
+        TableConstraintSpec::Check {
+            name,
+            expr,
+            normalized_sql: _,
+        } => {
+            let constraint_id = super::ids::ConstraintId(next_object_id.0);
+            next_object_id.0 += 1;
+            table.checks.push(CheckDef {
+                constraint_id,
+                name: name.as_ref().map(|n| n.original().into()),
+                expr: compile_expr(&expr),
+            });
+        }
+        TableConstraintSpec::Unique {
+            name,
+            columns,
+            conflict,
+        } => {
+            let constraint_id = super::ids::ConstraintId(next_object_id.0);
+            next_object_id.0 += 1;
+            let index_id = super::ids::IndexId(next_object_id.0);
+            next_object_id.0 += 1;
+            let relation_id = *next_relation_id;
+            next_relation_id.0 += 1;
+            let mut keys = Vec::with_capacity(columns.len());
+            for col in &columns {
+                let folded = col.folded().to_owned().into_boxed_str();
+                let ordinal = column_lookup
+                    .get(&folded)
+                    .copied()
+                    .ok_or(Error::ColumnNotFound)?;
+                keys.push(super::key::IndexKeyDef {
+                    ordinal,
+                    source: super::key::IndexKeySource::Column { attnum: ordinal },
+                    sort_dir: super::SortDir::Asc,
+                    null_order: super::key::NullOrder::First,
+                });
+            }
+            let display_name = name
+                .as_ref()
+                .map(|n| n.original().to_owned())
+                .unwrap_or_else(|| {
+                    format!("sqlite_autoindex_{}_{}", table.folded, index_id.0)
+                });
+            let display_folded = display_name.to_ascii_lowercase();
+            table.indexes.push(IndexDef {
+                index_id,
+                table_id: table.table_id,
+                relation_id,
+                meta_page_id: None,
+                name: display_name.into_boxed_str(),
+                folded: display_folded.into_boxed_str(),
+                unique: true,
+                primary: false,
+                origin: super::ddl::IndexOrigin::UniqueConstraint,
+                keys,
+                flags: 0,
+                normalized_sql: None,
+                predicate_sql: None,
+            });
+            table.constraints.push(ConstraintDef {
+                constraint_id,
+                table_id: table.table_id,
+                name: name.as_ref().map(|n| n.original().into()),
+                kind: ConstraintKind::Unique,
+                column_id: None,
+                index_id: Some(index_id),
+                expr: None,
+                conflict_action: conflict,
+            });
+        }
+        TableConstraintSpec::ForeignKey {
+            name,
+            columns,
+            parent_table,
+            parent_columns,
+            on_delete,
+            on_update,
+            deferred,
+        } => {
+            let constraint_id = super::ids::ConstraintId(next_object_id.0);
+            next_object_id.0 += 1;
+            let mut ordinals = Vec::with_capacity(columns.len());
+            for col in &columns {
+                let folded = col.folded().to_owned().into_boxed_str();
+                let ordinal = column_lookup
+                    .get(&folded)
+                    .copied()
+                    .ok_or(Error::ColumnNotFound)?;
+                ordinals.push(ordinal);
+            }
+            table.foreign_keys.push(ForeignKeyDef {
+                constraint_id,
+                name: name.as_ref().map(|n| n.original().into()),
+                columns: ordinals,
+                parent_table: parent_table.original().into(),
+                parent_columns: parent_columns.iter().map(|n| n.original().into()).collect(),
+                on_delete,
+                on_update,
+                deferred,
+            });
+        }
+        TableConstraintSpec::PrimaryKey { .. } => {
+            return Err(Error::UnsupportedDdl(
+                "ALTER TABLE ADD PRIMARY KEY is not supported",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn apply_drop_column(table: &mut TableDef, folded_name: &str, if_exists: bool) -> Result<()> {

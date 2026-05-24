@@ -1,6 +1,5 @@
 use super::*;
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct SubqueryCacheKey {
@@ -11,10 +10,10 @@ struct SubqueryCacheKey {
 }
 
 thread_local! {
-    static SUBQUERY_TEMPLATE_CACHE: RefCell<HashMap<SubqueryCacheKey, PreparedTemplate>> =
-        RefCell::new(HashMap::new());
-    static IN_SUBQUERY_ROW_CACHE: RefCell<HashMap<SubqueryCacheKey, Vec<Vec<SqlValue>>>> =
-        RefCell::new(HashMap::new());
+    static SUBQUERY_TEMPLATE_CACHE: RefCell<ahash::AHashMap<SubqueryCacheKey, PreparedTemplate>> =
+        RefCell::new(ahash::AHashMap::new());
+    static IN_SUBQUERY_ROW_CACHE: RefCell<ahash::AHashMap<SubqueryCacheKey, Vec<Vec<SqlValue>>>> =
+        RefCell::new(ahash::AHashMap::new());
 }
 
 pub(crate) fn clear_subquery_template_cache() {

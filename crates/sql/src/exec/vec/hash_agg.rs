@@ -7,7 +7,6 @@
 //! finalises after a second merge pass.
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -208,7 +207,7 @@ pub struct HashAggregator {
     work_mem_bytes: usize,
     max_spill_bytes: usize,
     spill_root: PathBuf,
-    table: HashMap<Vec<u8>, (Vec<SqlValue>, Vec<AccState>)>,
+    table: ahash::AHashMap<Vec<u8>, (Vec<SqlValue>, Vec<AccState>)>,
     table_bytes: usize,
     spill: Option<SpillFile>,
     spill_writer: Option<SpillWriter>,
@@ -227,7 +226,7 @@ impl HashAggregator {
             work_mem_bytes,
             max_spill_bytes,
             spill_root,
-            table: HashMap::new(),
+            table: ahash::AHashMap::new(),
             table_bytes: 0,
             spill: None,
             spill_writer: None,

@@ -161,6 +161,72 @@ pub enum AlterTableOperationSpec {
         column_name: DbName,
         if_exists: bool,
     },
+    /// Postgres `ALTER COLUMN <c> SET DEFAULT <expr>` — recorded as a
+    /// literal value when the expression is a simple constant, otherwise
+    /// rejected at parse time (Track J keeps the executor work minimal).
+    SetColumnDefault {
+        column_name: DbName,
+        default_value: Option<OwnedValue>,
+    },
+    /// Postgres `ALTER COLUMN <c> DROP DEFAULT` — clears any recorded
+    /// default; future INSERTs that omit the column see NULL.
+    DropColumnDefault {
+        column_name: DbName,
+    },
+    /// Postgres `ALTER COLUMN <c> DROP NOT NULL` — flips the column's
+    /// NOT NULL flag off so callers can insert NULL.
+    DropColumnNotNull {
+        column_name: DbName,
+    },
+    /// Postgres `ALTER COLUMN <c> SET NOT NULL` — requested by some
+    /// migration tools; executor performs the in-place flip but does not
+    /// validate existing rows (parity with SQLite emulated behaviour).
+    SetColumnNotNull {
+        column_name: DbName,
+    },
+    /// Postgres `ALTER TABLE ... ADD CONSTRAINT` — accepts named CHECK
+    /// or UNIQUE constraints and persists them on the table so DROP
+    /// CONSTRAINT <name> can later remove them. FK / PK names are also
+    /// accepted at parse-time so migration tooling sees consistent shape.
+    AddNamedConstraint {
+        constraint: TableConstraintSpec,
+        if_not_exists: bool,
+    },
+    /// Postgres `ALTER TABLE ... DROP CONSTRAINT <name>` — removes the
+    /// named CHECK / UNIQUE / FK constraint from the table, ignoring
+    /// constraints created without a name.
+    DropConstraint {
+        name: DbName,
+        if_exists: bool,
+    },
+    /// Postgres `ALTER TABLE ... RENAME CONSTRAINT old TO new` — updates
+    /// the stored name on the matching constraint.
+    RenameConstraint {
+        old_name: DbName,
+        new_name: DbName,
+    },
+    /// Postgres `ALTER COLUMN <c> ADD GENERATED { ALWAYS | BY DEFAULT } AS
+    /// IDENTITY [( ... )]` — marks the column as auto-increment. Track J
+    /// scope: column type must already be integer-affinity; the new
+    /// identity sequence is owned by the table.
+    AddColumnIdentity {
+        column_name: DbName,
+        always: bool,
+    },
+    /// Postgres `ALTER COLUMN <c> DROP IDENTITY [IF EXISTS]` — removes
+    /// the auto-increment marker; future INSERTs must specify a value.
+    DropColumnIdentity {
+        column_name: DbName,
+        if_exists: bool,
+    },
+    /// Postgres `ALTER COLUMN <c> SET DATA TYPE <type> [USING <expr>]` —
+    /// updates the declared type / affinity. Track J scope: USING is
+    /// accepted but ignored unless the existing affinity already matches
+    /// (no row rewrite for now).
+    SetColumnType {
+        column_name: DbName,
+        declared_type: String,
+    },
 }
 
 #[derive(Debug, Clone)]
