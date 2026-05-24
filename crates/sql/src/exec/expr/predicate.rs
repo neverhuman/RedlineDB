@@ -25,7 +25,7 @@ pub(crate) fn clear_subquery_template_cache() {
 pub(crate) fn truthy_opt(value: &SqlValue) -> Option<bool> {
     match value {
         SqlValue::Null => None,
-        _ => Some(is_truthy(value)),
+        _ => Some(super::pg_bool_or_truthy(value)),
     }
 }
 
@@ -62,7 +62,7 @@ where
     } else {
         for when in conditions {
             let condition = evaluator.eval_case_expr(&when.condition)?;
-            if !matches!(condition, SqlValue::Null) && is_truthy(&condition) {
+            if !matches!(condition, SqlValue::Null) && super::pg_bool_or_truthy(&condition) {
                 return evaluator.eval_case_expr(&when.result);
             }
         }
