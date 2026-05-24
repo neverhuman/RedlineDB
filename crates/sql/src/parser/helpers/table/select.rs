@@ -272,6 +272,14 @@ pub(crate) fn bind_select_table_factor(
             }
             let alias_arc: Option<Arc<str>> =
                 alias.as_ref().map(|a| Arc::from(a.name.value.as_str()));
+            // SQLite-parity bare-name pragma TVFs: callers query
+            // `pragma_database_list` (no parens) as if it were a plain
+            // table. We rewrite the bare reference into a synthetic
+            // TVF call against the existing TVF registry so the same
+            // row source backs both surfaces.
+            if let Some(bound) = try_resolve_zero_arg_pragma_tvf(&name, alias_arc.as_ref())? {
+                return Ok(bound);
+            }
             // CTE-name resolution: if the name matches an active CTE
             // in scope, return a synthetic BoundTable whose TableDef is
             // backed by pre-materialized rows.
@@ -603,6 +611,86 @@ fn try_rewrite_tvf_factor(
         });
     }
     Ok(())
+}
+
+/// SQLite-parity bare-name pragma TVF resolution.
+///
+/// SQLite lets callers query `pragma_database_list`, `pragma_function_list`,
+/// `pragma_collation_list`, etc. without parentheses — as if they were
+/// regular tables. We translate the bare reference into a zero-arg TVF
+/// call against the existing registry so both surfaces share one row
+/// source. Returns `Ok(None)` when the name does not resolve to a
+/// zero-arg TVF (caller continues with normal table lookup).
+fn try_resolve_zero_arg_pragma_tvf(
+    name: &ObjectName,
+    alias: Option<&Arc<str>>,
+) -> Result<Option<BoundTable>> {
+    let func_name = match name.0.as_slice() {
+        [part] => match object_name_part_to_string(part) {
+            Ok(s) => s,
+            Err(_) => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    // Restrict to the `pragma_` family — these are the only TVFs SQLite
+    // accepts in bare-name form. The plain identifier form for other
+    // TVFs would shadow user tables in confusing ways.
+    if !func_name.to_ascii_lowercase().starts_with("pragma_") {
+        return Ok(None);
+    }
+    let Some(func) = crate::exec::table_valued::lookup(&func_name) else {
+        return Ok(None);
+    };
+    let Some(conn) = crate::exec::current_connection() else {
+        return Ok(None);
+    };
+    let schema = conn.schema_snapshot();
+    let result = match func.eval(conn, schema.as_ref(), &[]) {
+        Ok(r) => r,
+        Err(_) => {
+            // The TVF requires arguments — leave the name unresolved so
+            // the caller can produce a proper error.
+            return Ok(None);
+        }
+    };
+    let rel = crate::exec::cross_db::next_synth_relation_id();
+    let column_defs: Vec<redlinedb_kernel::catalog::ColumnDef> = result
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(idx, col_name)| redlinedb_kernel::catalog::ColumnDef {
+            column_id: redlinedb_kernel::catalog::ColumnId((idx + 1) as u64),
+            ordinal: idx as u16,
+            name: Box::from(col_name.as_str()),
+            folded: Box::from(col_name.to_ascii_lowercase().as_str()),
+            declared_type: None,
+            affinity: redlinedb_kernel::catalog::Affinity::Blob,
+            not_null: false,
+            default_value: None,
+            default_expr: None,
+            generated: None,
+        })
+        .collect();
+    let table_def = Arc::new(redlinedb_kernel::catalog::TableDef {
+        table_id: redlinedb_kernel::catalog::TableId(rel.0),
+        schema_id: redlinedb_kernel::catalog::SchemaId(0),
+        relation_id: rel,
+        name: Box::from(func_name.as_str()),
+        folded: Box::from(func_name.to_ascii_lowercase().as_str()),
+        columns: column_defs,
+        indexes: Vec::new(),
+        constraints: Vec::new(),
+        checks: Vec::new(),
+        foreign_keys: Vec::new(),
+        rowid_alias_column: None,
+        flags: 0,
+        normalized_sql: None,
+    });
+    crate::exec::cte::register_external_rows(rel, Arc::new(result.rows));
+    Ok(Some(BoundTable {
+        table: table_def,
+        alias: alias.cloned(),
+    }))
 }
 
 /// If `name(args)` resolves to a registered table-valued function, evaluate
