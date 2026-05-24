@@ -165,17 +165,28 @@ pub(crate) fn eval_scalar_function_values(
                 crate::exec::current_connection().is_none_or(|conn| !conn.case_sensitive_like());
             like_result(value, pattern, false, escape_char, case_insensitive)
         }
+        // SQLite's `lower`/`upper` are documented as ASCII-only, but in
+        // practice the reference build links against ICU and folds the
+        // full Unicode range. Postgres with a UTF-8 libc locale (e.g.
+        // en_US.UTF-8) does Unicode-aware case folding too — but its
+        // libc `wctoupper`/`wctolower` only do 1-to-1 mappings, NOT
+        // Unicode's full SpecialCasing table. That means `straße` →
+        // `STRAßE` (not `STRASSE`) and `İ` → `İ` (not `I` + combining
+        // dot above). Mirror that by running `char::to_uppercase`/
+        // `to_lowercase` per character and falling back to the original
+        // when the iterator yields more than one char (a SpecialCasing
+        // expansion). NULL propagates.
         "lower" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(
-                value_to_string(other).to_ascii_lowercase(),
-            ))),
+            Some(other) => Ok(SqlValue::Text(Arc::from(libc_lower(&value_to_string(
+                other,
+            ))))),
         },
         "upper" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(
-                value_to_string(other).to_ascii_uppercase(),
-            ))),
+            Some(other) => Ok(SqlValue::Text(Arc::from(libc_upper(&value_to_string(
+                other,
+            ))))),
         },
         "abs" => match values.first() {
             // SQLite: abs(NULL) is NULL, not an error.
@@ -672,4 +683,38 @@ fn last_insert_rowid_value() -> i64 {
     current_connection()
         .and_then(|conn| conn.last_insert_rowid())
         .unwrap_or(0)
+}
+
+/// libc-style Unicode lowercasing: per-char `to_lowercase`, but if the
+/// canonical mapping yields more than one char (a Unicode SpecialCasing
+/// expansion — e.g. Turkish dotted `İ` → `i`+combining-dot-above) keep
+/// the original char instead. This matches Postgres' `lower()` with a
+/// UTF-8 libc locale, whose underlying `wctolower` only emits 1-to-1
+/// mappings.
+fn libc_lower(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        let mut iter = ch.to_lowercase();
+        match (iter.next(), iter.next()) {
+            (Some(first), None) => out.push(first),
+            (Some(_), Some(_)) | (None, _) => out.push(ch),
+        }
+    }
+    out
+}
+
+/// libc-style Unicode uppercasing: per-char `to_uppercase`, but if the
+/// canonical mapping yields more than one char (e.g. `ß` → `SS`) keep
+/// the original char. Matches Postgres' `upper()` with a UTF-8 libc
+/// locale — `upper('straße')` → `STRAßE`, `upper('σς')` → `ΣΣ`.
+fn libc_upper(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        let mut iter = ch.to_uppercase();
+        match (iter.next(), iter.next()) {
+            (Some(first), None) => out.push(first),
+            (Some(_), Some(_)) | (None, _) => out.push(ch),
+        }
+    }
+    out
 }
