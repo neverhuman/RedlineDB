@@ -3,7 +3,7 @@
 #
 # The official gate writes its raw artifacts under target/redline-testing/.
 # This helper verifies the JSON contract, recomputes hashes for every declared
-# output file, enforces the pinned runner SHA, and emits a processed summary
+# output file, enforces the verified runner SHA, and emits a processed summary
 # at target/redline-testing/official-evidence.processed.json.
 
 set -euo pipefail
@@ -274,10 +274,10 @@ expected_runner_sha = (
     or os.environ.get("CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256")
 )
 if not expected_runner_sha:
-    fail("pinned redline-testing runner SHA-256 is unavailable from provenance")
+    fail("verified redline-testing runner SHA-256 is unavailable from provenance")
 expected_runner_sha = normalize_hash(expected_runner_sha)
 if not expected_runner_sha:
-    fail("pinned redline-testing runner SHA-256 is not a valid SHA-256 digest")
+    fail("verified redline-testing runner SHA-256 is not a valid SHA-256 digest")
 
 observed_runner_sha = runner_sha(official)
 if observed_runner_sha != expected_runner_sha:

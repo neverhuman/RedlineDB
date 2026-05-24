@@ -33,7 +33,7 @@ pub(super) fn readme_block(
         summary.updated_date
     ));
     out.push_str(
-        "Official README metrics and charts are generated only from the pinned external `neverhuman/redline-testing` release artifact, which is the sole official source. The report gate requires `benchmark-results/sqlite-parity/latest/provenance.json` to bind `raw.jsonl` and the `redline-testing` binary sha256 before README/chart regeneration.\n\n",
+        "Official README metrics and charts are generated only from the verified external `neverhuman/redline-testing` release artifact, which is the sole official source. The report gate requires `benchmark-results/sqlite-parity/latest/provenance.json` to bind `raw.jsonl` and the `redline-testing` binary sha256 before README/chart regeneration.\n\n",
     );
     out.push_str(&format!(
         "**SQLite parity latency:** median gap **{:.2}%**, worst gap **{:.2}%**, faster cases **{}** with a **{} ns** reference floor (targets: median >= {:.0}%, worst > {:.0}%, faster >= {}).\n\n",

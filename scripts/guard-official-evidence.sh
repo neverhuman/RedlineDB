@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guard the official evidence boundary: RedlineDB may own wrappers and pinned
+# Guard the official evidence boundary: RedlineDB may own wrappers and verified
 # config, but official report artifacts must come from redline-testing.
 
 set -euo pipefail
@@ -26,7 +26,7 @@ if rg -n --glob '!scripts/guard-official-evidence.sh' \
     rg -n --glob '!scripts/guard-official-evidence.sh' \
       'redlinedb-bench .*--bin sqlite_parity -- (run|compare|report|sentinel|jankurai-compare)' \
       scripts ops just .github .jankurai README.md docs/testing.md docs/sqlite-parity.md crates/bench/src >&2
-    report_error "legacy in-tree sqlite_parity producer command is forbidden; use the pinned redline-testing binary"
+    report_error "legacy in-tree sqlite_parity producer command is forbidden; use the verified redline-testing release artifact"
 fi
 
 if rg -n --glob '!scripts/guard-official-evidence.sh' -- '--local-diagnostics' \
@@ -81,7 +81,7 @@ if rg -n --glob '!scripts/guard-official-evidence.sh' \
       --glob '!docs/archive/**' \
       'target/proof/sqlite-full-parity' \
       crates scripts ops just .github .jankurai README.md docs >&2
-    report_error "local SQLite parity proof/evidence artifacts under target/proof are forbidden; use pinned redline-testing"
+    report_error "local SQLite parity proof/evidence artifacts under target/proof are forbidden; use the verified redline-testing release artifact"
 fi
 
 if rg -n --glob '!scripts/guard-official-evidence.sh' \
@@ -135,7 +135,7 @@ for lane in redline-testing-official sqlite-parity-report-update sqlite-parity-r
 done
 
 if ! grep -n 'redline_testing_bin="$(ci_install_redline_testing)"' scripts/just/run.sh >/dev/null; then
-    report_error "official wrapper script must install pinned redline-testing"
+    report_error "official wrapper script must install the verified redline-testing release artifact"
 fi
 
 if ! grep -n 'ci_assert_redline_testing_official_artifacts' scripts/just/run.sh >/dev/null; then
@@ -175,15 +175,23 @@ if ! grep -nF 'official-evidence-guard' .github/workflows/ci.yml >/dev/null; the
 fi
 
 if ! grep -n 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' .github/workflows/ci.yml >/dev/null; then
-    report_error "CI must upload the pinned redline-testing evidence artifact bundle"
+    report_error "CI must upload the verified redline-testing evidence artifact bundle"
 fi
 
 if ! grep -n 'target/redline-testing/\*\*' .github/workflows/ci.yml >/dev/null; then
     report_error "CI must upload the full redline-testing evidence bundle"
 fi
 
-if ! grep -n 'CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256' ops/ci/lib.sh >/dev/null; then
-    report_error "redline-testing tarball SHA256 must be hard-pinned in ops/ci/lib.sh"
+if ! grep -n 'CI_REDLINE_TESTING_VERSION="${CI_REDLINE_TESTING_VERSION:-latest}"' ops/ci/lib.sh >/dev/null; then
+    report_error "redline-testing resolver must default to latest in ops/ci/lib.sh"
+fi
+
+if ! grep -n 'CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256:-}"' ops/ci/lib.sh >/dev/null; then
+    report_error "redline-testing resolver must keep optional tarball SHA override support in ops/ci/lib.sh"
+fi
+
+if ! grep -n 'CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-}"' ops/ci/lib.sh >/dev/null; then
+    report_error "redline-testing resolver must keep optional binary SHA override support in ops/ci/lib.sh"
 fi
 
 if ! grep -n 'gh attestation verify' ops/ci/lib.sh >/dev/null; then

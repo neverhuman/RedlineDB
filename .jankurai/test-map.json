@@ -226,7 +226,7 @@
     },
     "just/lanes.just": {
       "command": "rtk just --list && rtk just official-evidence-guard && rtk just redline-testing-official",
-      "purpose": "verify split lane definitions expose the official guard and execute the pinned external redline-testing gate",
+      "purpose": "verify split lane definitions expose the official guard and execute the verified external redline-testing gate",
       "proof_lane": "official-evidence-guard"
     },
     "crates/kernel/src/index/cursor/raw.rs": {
@@ -260,7 +260,7 @@
     },
     "scripts/guard-official-evidence.sh": {
       "command": "rtk bash -n scripts/guard-official-evidence.sh && rtk just official-evidence-guard",
-      "purpose": "fail if RedlineDB reintroduces official benchmark/report generation outside pinned redline-testing",
+      "purpose": "fail if RedlineDB reintroduces official benchmark/report generation outside verified redline-testing",
       "proof_lane": "official-evidence-guard"
     },
     "scripts/process-redline-testing-evidence.sh": {
@@ -348,12 +348,12 @@
     },
     ".github/workflows/ci.yml": {
       "command": "rtk bash scripts/ci-local.sh pr-ci",
-      "purpose": "verify GitHub CI remains mirrored by the local PR dispatcher and runs the pinned redline-testing official gate",
+      "purpose": "verify GitHub CI remains mirrored by the local PR dispatcher and runs the verified redline-testing official gate",
       "proof_lane": "pr-ci"
     },
     "ops/ci/lib.sh": {
       "command": "rtk bash -n ops/ci/lib.sh && rtk just redline-testing-official",
-      "purpose": "verify the shared CI library installs and verifies the pinned redline-testing release artifact",
+      "purpose": "verify the shared CI library installs and verifies the verified redline-testing release artifact",
       "proof_lane": "redline-testing-official"
     },
     "ops/ci/parity.sh": {

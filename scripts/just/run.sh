@@ -154,12 +154,34 @@ load_redline_testing_provenance() {
     printf 'redline-testing provenance sidecar missing: %s\n' "$provenance_source" >&2
     return 1
   fi
-  CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256="$(sed -n 's/^CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256=//p' "$provenance_source" | tail -n 1)"
-  CI_REDLINE_TESTING_RELEASE_BINARY_SHA256="$(sed -n 's/^CI_REDLINE_TESTING_RELEASE_BINARY_SHA256=//p' "$provenance_source" | tail -n 1)"
-  CI_REDLINE_TESTING_BIN_SHA256="$(sed -n 's/^CI_REDLINE_TESTING_BIN_SHA256=//p' "$provenance_source" | tail -n 1)"
-  export CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256
-  export CI_REDLINE_TESTING_RELEASE_BINARY_SHA256
-  export CI_REDLINE_TESTING_BIN_SHA256
+  set -a
+  # shellcheck source=/dev/null
+  . "$provenance_source"
+  set +a
+  CI_REDLINE_TESTING_BIN="$redline_testing_bin"
+  CI_REDLINE_TESTING_INSTALL_ROOT="$(dirname "$(dirname "$redline_testing_bin")")"
+  CI_REDLINE_TESTING_RELEASE_MANIFEST="${CI_REDLINE_TESTING_INSTALL_ROOT}/${CI_REDLINE_TESTING_RELEASE_MANIFEST_PATH:-release-manifest.json}"
+  export CI_REDLINE_TESTING_BIN
+  export CI_REDLINE_TESTING_INSTALL_ROOT
+  export CI_REDLINE_TESTING_RELEASE_MANIFEST
+}
+
+load_redline_testing_report_provenance() {
+  local official_evidence="${1:?official evidence path required}"
+  if [ ! -s "$official_evidence" ]; then
+    printf 'redline-testing report provenance missing: %s\n' "$official_evidence" >&2
+    return 1
+  fi
+  CI_REDLINE_TESTING_VERSION="$(jq -r '((.official_evidence.runner.version // .runner.version // "") | sub("^redline-testing "; ""))' "$official_evidence")"
+  CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="$(jq -r '(.official_evidence.runner.release_tarball_sha256 // .runner.release_tarball_sha256 // empty)' "$official_evidence")"
+  CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="$(jq -r '(.official_evidence.runner.release_binary_sha256 // .official_evidence.runner.binary_sha256 // .runner.release_binary_sha256 // .runner.binary_sha256 // .runner.sha256 // empty)' "$official_evidence")"
+  if [ -z "$CI_REDLINE_TESTING_VERSION" ]; then
+    printf 'redline-testing report provenance missing runner version: %s\n' "$official_evidence" >&2
+    return 1
+  fi
+  export CI_REDLINE_TESTING_VERSION
+  export CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256
+  export CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256
 }
 
 prepare_redline_testing_target() {
@@ -211,6 +233,7 @@ run_sqlite_parity_report_check() {
   local status
 
   sqlite_parity_report_args "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)"
+  load_redline_testing_report_provenance benchmark-results/sqlite-parity/latest/official-evidence.processed.json
   redline_testing_bin="$(ci_install_redline_testing)"
   load_redline_testing_provenance "$redline_testing_bin"
 
@@ -219,9 +242,9 @@ run_sqlite_parity_report_check() {
   tmp="$(mktemp)"
   cp "$provenance" "$backup"
 
-  # redline-testing 0.1.2 records the current commit and dirty bit inside the
-  # checked provenance file. Temporarily normalize those volatile fields so the
-  # external runner can still check all stable report/evidence bindings exactly.
+  # Some redline-testing releases record the current commit and dirty bit inside
+  # the checked provenance file. Temporarily normalize those volatile fields so
+  # the external runner can still check all stable report/evidence bindings.
   git_sha="$(git rev-parse HEAD)"
   readme_hash="$(sha256sum README.md | cut -d" " -f1)"
   jq \
@@ -243,7 +266,7 @@ run_sqlite_parity_report_check() {
 
 reject_legacy_sqlite_parity_lane() {
   local lane_name="${1:?legacy lane name required}"
-  printf '%s is disabled: SQLite parity coverage, benchmark, report, and sentinel evidence must be produced only through the pinned neverhuman/redline-testing release artifact. Use just redline-testing-official or just sqlite-parity-report-update.\n' "$lane_name" >&2
+  printf '%s is disabled: SQLite parity coverage, benchmark, report, and sentinel evidence must be produced only through the verified neverhuman/redline-testing release artifact. Use just redline-testing-official or just sqlite-parity-report-update.\n' "$lane_name" >&2
   return 1
 }
 

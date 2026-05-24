@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:3ec2d36d4ab622679a2cc80639290ea64ad119ed5bfce58681377c727e9ebc79",
-  "input_fingerprint": "sha256:6349114acf644bb2881516e40bfaacce08dd9f433a9c1ba17d9e44109aed370e",
-  "policy_fingerprint": "sha256:6b2e95b4e965e82f509afc44fe631d3b954311aee6761b6ca09c319d3b1d191d",
+  "report_fingerprint": "sha256:5ef12fefef3ca713f6eeec881bf4d25376537538c507856c5e488ef30cfa4edb",
+  "input_fingerprint": "sha256:1faf76c07d7c971ac05687accf30ff74749290ccf3e009d2132dfe4298ba19bd",
+  "policy_fingerprint": "sha256:8743a5f274d5bfd094c29baaa652254a37cf0143bc35cdbc3838c1cb5379e7f3",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779598435",
+  "generated_at": "1779629105",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -17,26 +17,28 @@
   "observed_conformance_level": "HL2",
   "conformance_decision": "block",
   "conformance_blockers": [
+    "HLT-001-DEAD-MARKER on crates/bench/src/bin/sqlite_parity.rs",
+    "HLT-001-DEAD-MARKER on crates/bench/src/sqlite_parity/cli.rs",
     "HLT-024-AGENT-TOOL-SUPPLY-GAP on docs/testing.md"
   ],
   "repo": ".",
-  "run_id": "1779598435",
-  "started_at": "1779598435",
-  "elapsed_ms": 6764,
+  "run_id": "1779629105",
+  "started_at": "1779629105",
+  "elapsed_ms": 6240,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 78,
-  "raw_score": 85,
+  "score": 64,
+  "raw_score": 84,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
-    "hard_findings": 1,
+    "hard_findings": 3,
     "soft_findings": 2,
     "ratchet": {
-      "baseline_score": 78,
+      "baseline_score": 64,
       "allowed_drop": 0,
       "passed": false,
       "score_delta": 0,
@@ -49,7 +51,7 @@
     }
   },
   "git": {
-    "head": "c020508",
+    "head": "a2a08c2",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -74,6 +76,7 @@
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
   "caps_applied": [
+    "future-hostile-dead-language-in-product-code",
     "agent-tool-supply-chain-gap"
   ],
   "hard_rules": [
@@ -291,8 +294,7 @@
         "root `README.md` routes to workspace layout",
         "owner map covers audited paths",
         "test map covers audited paths",
-        "authored code file exceeds 500 LOC",
-        "authored code file exceeds 1000 LOC"
+        "authored code file exceeds 500 LOC"
       ],
       "notes": []
     },
@@ -340,8 +342,8 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 1785",
-        "ci bad-behavior advisory signals: 4",
+        "rust bad-behavior advisory signals: 1763",
+        "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
@@ -350,20 +352,22 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 45,
-      "weighted_points": 5.4,
+      "score": 41,
+      "weighted_points": 4.92,
       "evidence": [
-        "largest authored code file: crates/cli/src/lib.rs (1031 LOC)",
+        "largest authored code file: crates/cli/src/lib.rs (937 LOC)",
         "code file exceeds 500 LOC",
-        "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 73 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 1785",
-        "ci bad-behavior advisory signals: 4",
+        "copy-code advisory classes found: 72 (advisory only, no score impact)",
+        "future-hostile/dead-language marker found",
+        "rust bad-behavior advisory signals: 1763",
+        "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
       ],
-      "notes": []
+      "notes": [
+        "product/runtime code contains future-hostile or dead-language terms"
+      ]
     },
     {
       "name": "Data truth and workflow safety",
@@ -1028,7 +1032,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-24T04:53:49.158258323+00:00",
+    "generated_at": "2026-05-24T13:24:59.196827959+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1066,20 +1070,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 1043,
-      "files_considered": 329,
-      "active_files": 329,
+      "files_scanned": 1042,
+      "files_considered": 328,
+      "active_files": 328,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 73,
+      "warning_classes": 72,
       "hard_instances": 0,
-      "warning_instances": 187,
-      "duplicate_lines": 166,
-      "duplicate_tokens": 467,
-      "duplicate_bytes": 4483,
-      "total_redundant_lines": 253,
-      "total_redundant_tokens": 673,
-      "total_redundant_bytes": 6541
+      "warning_instances": 185,
+      "duplicate_lines": 165,
+      "duplicate_tokens": 465,
+      "duplicate_bytes": 4467,
+      "total_redundant_lines": 252,
+      "total_redundant_tokens": 671,
+      "total_redundant_bytes": 6525
     },
     "classes": [
       {
@@ -2700,15 +2704,15 @@
           {
             "path": "crates/bench/src/sqlite_parity/report_gen/tests.rs",
             "language": "rust",
-            "start_line": 532,
-            "end_line": 533,
+            "start_line": 533,
+            "end_line": 534,
             "unit_name": "provenance_rejects_raw_hash_mismatch"
           },
           {
             "path": "crates/bench/src/sqlite_parity/report_gen/tests.rs",
             "language": "rust",
-            "start_line": 558,
-            "end_line": 559,
+            "start_line": 559,
+            "end_line": 560,
             "unit_name": "provenance_rejects_release_binary_mismatch"
           }
         ]
@@ -3144,7 +3148,7 @@
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 23 lower-ranked classes"
+      "showing the top 50 classes and omitting 22 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3427,20 +3431,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 45 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 41 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/cli/src/lib.rs (1031 LOC)",
+        "largest authored code file: crates/cli/src/lib.rs (937 LOC)",
         "code file exceeds 500 LOC",
-        "code file exceeds 1000 LOC",
-        "most code files stay under 300 LOC"
+        "most code files stay under 300 LOC",
+        "copy-code advisory classes found: 72 (advisory only, no score impact)"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:acd0510cba5515169b40658e6c4bf54167a05d0d9481d55fd1001f45f1291fa4",
+      "fingerprint": "sha256:a36cbc5f8f08ee49e625bb42e7a347adfbacb71500e21d1248d0a2bafbb56af9",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3473,6 +3477,52 @@
     },
     {
       "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/src/bin/sqlite_parity.rs",
+      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/src/bin/sqlite_parity.rs:5",
+        "future-hostile/dead-language term `legacy` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:3735004dc6ea266993a8508aa2d7264d8c69269e1713fa433cbf8e91a24532ed",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 5
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/bench/src/sqlite_parity/cli.rs",
+      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/bench/src/sqlite_parity/cli.rs:218",
+        "future-hostile/dead-language term `legacy` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:d67127f7f7495e83ed951253fb459cf0ff8e36dac67721a6a8bf9eb5cb0daccc",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 218
+    },
+    {
+      "severity": "high",
       "category": "security",
       "path": "docs/testing.md",
       "problem": "agent tool or configuration trust surface requires supply-chain evidence",
@@ -3491,7 +3541,7 @@
       "lane": "security",
       "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
       "owner": "standard",
-      "line": 85,
+      "line": 82,
       "matched_term": "agent tool supply",
       "reason": "agent tool supply-chain changes alter execution authority"
     }
@@ -3506,6 +3556,26 @@
       "owner": "workspace",
       "task": "add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration",
       "why": "`Build speed signals` scored 80 below the standard floor of 85"
+    },
+    {
+      "path": "crates/bench/src/bin/sqlite_parity.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `legacy` appears in product/runtime code"
+    },
+    {
+      "path": "crates/bench/src/sqlite_parity/cli.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `legacy` appears in product/runtime code"
     },
     {
       "path": "docs/testing.md",
@@ -3525,7 +3595,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 45 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 41 below the standard floor of 85"
     }
   ]
 }

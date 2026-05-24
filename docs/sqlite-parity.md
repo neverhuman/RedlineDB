@@ -9,12 +9,12 @@ evidence artifacts.
 The official corpus and gate now live in `neverhuman/redline-testing`; that
 runner is the sole official source for parity evidence. The ledger below is the
 RedlineDB-side compatibility snapshot that consumes that external suite.
-Official README metrics and charts are accepted only from the pinned external
+Official README metrics and charts are accepted only from the verified external
 release artifact. The report generator requires
 `benchmark-results/sqlite-parity/latest/provenance.json` before regenerating
-README/chart outputs, and CI verifies the hard-pinned release tarball SHA-256,
-binary SHA-256, release manifest, and GitHub artifact attestation before any
-official suite runs.
+README/chart outputs, and CI verifies the release tarball SHA-256 from the
+sidecar, binary SHA-256, release manifest, and GitHub artifact attestation
+before any official suite runs.
 
 The provenance schema accepted by the RedlineDB report gate is deliberately
 small and hash-first:

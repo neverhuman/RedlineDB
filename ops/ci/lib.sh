@@ -26,19 +26,15 @@ readonly CI_GITLEAKS_ASSET="${CI_GITLEAKS_ASSET:-gitleaks_${CI_GITLEAKS_VERSION}
 readonly CI_GITLEAKS_RELEASE_BASE_URL="${CI_GITLEAKS_RELEASE_BASE_URL:-https://github.com/gitleaks/gitleaks/releases/download/v${CI_GITLEAKS_VERSION}}"
 readonly CI_GITLEAKS_ASSET_URL="${CI_GITLEAKS_ASSET_URL:-${CI_GITLEAKS_RELEASE_BASE_URL}/${CI_GITLEAKS_ASSET}}"
 readonly CI_GITLEAKS_CHECKSUMS_URL="${CI_GITLEAKS_CHECKSUMS_URL:-${CI_GITLEAKS_RELEASE_BASE_URL}/gitleaks_${CI_GITLEAKS_VERSION}_checksums.txt}"
-readonly CI_REDLINEDB_RELEASE_TAG="${CI_REDLINEDB_RELEASE_TAG:-v2.0.5}"
+readonly CI_REDLINEDB_RELEASE_TAG="${CI_REDLINEDB_RELEASE_TAG:-v2.0.6}"
 readonly CI_REDLINEDB_RELEASE_ARTIFACT="${CI_REDLINEDB_RELEASE_ARTIFACT:-linux-x86_64}"
 readonly CI_REDLINEDB_RELEASE_ASSET="${CI_REDLINEDB_RELEASE_ASSET:-redlinedb-${CI_REDLINEDB_RELEASE_TAG}-${CI_REDLINEDB_RELEASE_ARTIFACT}.tar.gz}"
 readonly CI_REDLINEDB_RELEASE_BASE_URL="${CI_REDLINEDB_RELEASE_BASE_URL:-https://github.com/neverhuman/RedlineDB/releases/download/${CI_REDLINEDB_RELEASE_TAG}}"
 readonly CI_REDLINEDB_RELEASE_URL="${CI_REDLINEDB_RELEASE_URL:-${CI_REDLINEDB_RELEASE_BASE_URL}/${CI_REDLINEDB_RELEASE_ASSET}}"
 readonly CI_REDLINEDB_RELEASE_SHA256_URL="${CI_REDLINEDB_RELEASE_SHA256_URL:-${CI_REDLINEDB_RELEASE_URL}.sha256}"
-readonly CI_REDLINE_TESTING_VERSION="${CI_REDLINE_TESTING_VERSION:-0.1.2}"
-readonly CI_REDLINE_TESTING_ARTIFACT="${CI_REDLINE_TESTING_ARTIFACT:-redline-testing-${CI_REDLINE_TESTING_VERSION}-linux-x86_64.tar.gz}"
-readonly CI_REDLINE_TESTING_BASE_URL="${CI_REDLINE_TESTING_BASE_URL:-https://github.com/neverhuman/redline-testing/releases/download/v${CI_REDLINE_TESTING_VERSION}}"
-readonly CI_REDLINE_TESTING_URL="${CI_REDLINE_TESTING_URL:-${CI_REDLINE_TESTING_BASE_URL}/${CI_REDLINE_TESTING_ARTIFACT}}"
-readonly CI_REDLINE_TESTING_SHA256_URL="${CI_REDLINE_TESTING_SHA256_URL:-${CI_REDLINE_TESTING_URL}.sha256}"
-readonly CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256:-e5dbf56d9a4e2a7621fadbfac56b71f5821f7b2aa8225b0abff4ff92db066368}"
-readonly CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-aa51facfadacb1e77a75380bea69f2b904a301365f84c5f867332dbca8fd8984}"
+CI_REDLINE_TESTING_VERSION="${CI_REDLINE_TESTING_VERSION:-latest}"
+CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256:-}"
+CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-}"
 readonly CI_REDLINE_TESTING_ATTESTATION_REPO="${CI_REDLINE_TESTING_ATTESTATION_REPO:-neverhuman/redline-testing}"
 readonly CI_JANKURAI_VERSION="${CI_JANKURAI_VERSION:-1.5.1}"
 readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-https://github.com/neverhuman/jankurai.git}"
@@ -51,6 +47,124 @@ readonly CI_JANKURAI_SHA256_URL="${CI_JANKURAI_SHA256_URL:-${CI_JANKURAI_ASSET_U
 readonly CI_JANKURAI_SOURCE_ARCHIVE_URL="${CI_JANKURAI_SOURCE_ARCHIVE_URL:-https://github.com/neverhuman/jankurai/archive/refs/tags/v${CI_JANKURAI_VERSION}.tar.gz}"
 readonly CI_JANKURAI_COMPILED_REPO_ROOT="${CI_JANKURAI_COMPILED_REPO_ROOT:-/home/runner/work/jankurai/jankurai}"
 readonly CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT="${CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT:-/tmp/jankurai-v1.5.1-runtime-root00}"
+
+ci_redline_testing_version_from_tag() {
+    local tag="${1:?release tag required}"
+    case "$tag" in
+        v*) printf '%s\n' "${tag#v}" ;;
+        *) printf '%s\n' "$tag" ;;
+    esac
+}
+
+ci_redline_testing_version_from_artifact() {
+    local artifact="${1:?release artifact required}"
+    local version
+    version="$(printf '%s\n' "$artifact" | sed -n 's/^redline-testing-\(.*\)-linux-x86_64\.tar\.gz$/\1/p')"
+    if [ -z "$version" ]; then
+        return 1
+    fi
+    printf '%s\n' "$version"
+}
+
+ci_resolve_redline_testing_release() {
+    local requested_version="${CI_REDLINE_TESTING_VERSION:-latest}"
+    if [ -n "${CI_REDLINE_TESTING_REQUESTED_VERSION:-}" ]; then
+        requested_version="$CI_REDLINE_TESTING_REQUESTED_VERSION"
+    else
+        CI_REDLINE_TESTING_REQUESTED_VERSION="$requested_version"
+    fi
+
+    if [ -n "${CI_REDLINE_TESTING_URL:-}" ]; then
+        local override_artifact="${CI_REDLINE_TESTING_ARTIFACT:-${CI_REDLINE_TESTING_URL##*/}}"
+        local override_version
+        override_version="$(ci_redline_testing_version_from_artifact "$override_artifact" 2>/dev/null || true)"
+        if [ -z "$override_version" ]; then
+            override_version="${requested_version:-latest}"
+            override_version="${override_version#v}"
+        fi
+        CI_REDLINE_TESTING_VERSION="$override_version"
+        CI_REDLINE_TESTING_RELEASE_TAG="${CI_REDLINE_TESTING_RELEASE_TAG:-v$override_version}"
+        CI_REDLINE_TESTING_ARTIFACT="$override_artifact"
+        CI_REDLINE_TESTING_BASE_URL="${CI_REDLINE_TESTING_BASE_URL:-${CI_REDLINE_TESTING_URL%/$override_artifact}}"
+        CI_REDLINE_TESTING_SHA256_URL="${CI_REDLINE_TESTING_SHA256_URL:-${CI_REDLINE_TESTING_URL}.sha256}"
+        CI_REDLINE_TESTING_RELEASE_MANIFEST_URL="${CI_REDLINE_TESTING_RELEASE_MANIFEST_URL:-${CI_REDLINE_TESTING_BASE_URL}/release-manifest.json}"
+        return 0
+    fi
+
+    local release_json
+    local artifact_name
+    local release_tag
+    local release_version
+
+    if [ "$requested_version" = "latest" ]; then
+        while IFS= read -r release_json; do
+            release_tag="$(jq -r '.tag_name // empty' <<<"$release_json")"
+            [ -n "$release_tag" ] || continue
+            artifact_name="$(
+                jq -r '
+                    .assets[]
+                    | .name
+                    | select(test("^redline-testing-[0-9A-Za-z.+-]+-linux-x86_64\\.tar\\.gz$"))
+                ' <<<"$release_json" | head -n 1
+            )"
+            [ -n "$artifact_name" ] || continue
+            release_version="$(ci_redline_testing_version_from_artifact "$artifact_name")" || continue
+            if [ "$release_version" != "$(ci_redline_testing_version_from_tag "$release_tag")" ]; then
+                continue
+            fi
+            if ! jq -e --arg artifact "$artifact_name" '
+                .assets | any(.name == $artifact) and any(.name == ($artifact + ".sha256"))
+            ' <<<"$release_json" >/dev/null; then
+                continue
+            fi
+            break
+        done < <(
+            gh api "repos/${CI_REDLINE_TESTING_ATTESTATION_REPO}/releases?per_page=100" --paginate \
+                | jq -s -c 'add | map(select((.draft | not) and (.prerelease | not))) | .[]'
+        )
+        if [ -z "${release_json:-}" ] || [ -z "${artifact_name:-}" ] || [ -z "${release_tag:-}" ]; then
+            printf 'unable to resolve latest redline-testing release with required assets from %s\n' \
+                "$CI_REDLINE_TESTING_ATTESTATION_REPO" >&2
+            return 1
+        fi
+        release_version="$(ci_redline_testing_version_from_artifact "$artifact_name")"
+    else
+        release_version="${requested_version#v}"
+        release_tag="v$release_version"
+        release_json="$(gh api "repos/${CI_REDLINE_TESTING_ATTESTATION_REPO}/releases/tags/${release_tag}")"
+        artifact_name="$(
+            jq -r '
+                .assets[]
+                | .name
+                | select(test("^redline-testing-[0-9A-Za-z.+-]+-linux-x86_64\\.tar\\.gz$"))
+            ' <<<"$release_json" | head -n 1
+        )"
+        if [ -z "$artifact_name" ]; then
+            printf 'redline-testing release %s is missing the Linux tarball asset\n' "$release_tag" >&2
+            return 1
+        fi
+        if ! jq -e --arg artifact "$artifact_name" '
+            .assets | any(.name == $artifact) and any(.name == ($artifact + ".sha256"))
+        ' <<<"$release_json" >/dev/null; then
+            printf 'redline-testing release %s is missing the checksum sidecar for %s\n' \
+                "$release_tag" "$artifact_name" >&2
+            return 1
+        fi
+        if [ "$(ci_redline_testing_version_from_artifact "$artifact_name")" != "$release_version" ]; then
+            printf 'redline-testing release %s asset/version mismatch: %s\n' \
+                "$release_tag" "$artifact_name" >&2
+            return 1
+        fi
+    fi
+
+    CI_REDLINE_TESTING_VERSION="$release_version"
+    CI_REDLINE_TESTING_RELEASE_TAG="$release_tag"
+    CI_REDLINE_TESTING_ARTIFACT="$artifact_name"
+    CI_REDLINE_TESTING_BASE_URL="https://github.com/${CI_REDLINE_TESTING_ATTESTATION_REPO}/releases/download/${CI_REDLINE_TESTING_RELEASE_TAG}"
+    CI_REDLINE_TESTING_URL="${CI_REDLINE_TESTING_BASE_URL}/${CI_REDLINE_TESTING_ARTIFACT}"
+    CI_REDLINE_TESTING_SHA256_URL="${CI_REDLINE_TESTING_URL}.sha256"
+    CI_REDLINE_TESTING_RELEASE_MANIFEST_URL="${CI_REDLINE_TESTING_BASE_URL}/release-manifest.json"
+}
 
 # ---- Artifact assertions ----------------------------------------------------
 # Every CI lane that produces an evidence artifact should call
@@ -133,6 +247,7 @@ ci_install_redlinedb_release() {
 }
 
 ci_install_redline_testing() {
+    ci_resolve_redline_testing_release
     local artifact_name="${CI_REDLINE_TESTING_ARTIFACT##*/}"
     local install_root="${CI_REDLINE_TESTING_INSTALL_ROOT:-$PWD/target/ci/redline-testing/${CI_REDLINE_TESTING_VERSION}-${artifact_name%.tar.gz}}"
     local tmp_dir
@@ -161,7 +276,7 @@ ci_install_redline_testing() {
         rm -rf "$tmp_dir"
         return 1
     fi
-    if [ "$actual_sha256" != "$CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256" ]; then
+    if [ -n "$CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256" ] && [ "$actual_sha256" != "$CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256" ]; then
         printf 'redline-testing pinned SHA256 mismatch for %s: pinned %s, got %s\n' \
             "$CI_REDLINE_TESTING_URL" "$CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256" "$actual_sha256" >&2
         rm -rf "$tmp_dir"
@@ -186,6 +301,47 @@ ci_install_redline_testing() {
         package_dir="${redline_testing_bin%/bin/redline-testing}"
     fi
 
+    local manifest="$package_dir/release-manifest.json"
+    if [ ! -s "$manifest" ]; then
+        printf 'redline-testing release asset missing manifest: %s\n' "$manifest" >&2
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    for path in \
+        corpus/sqlite_parity/generated_manifest.json \
+        metadata/beyond_sqlite/features.json \
+        schemas/raw-record.schema.json \
+        schemas/release-manifest.schema.json \
+        templates/README.sqlite-parity.md
+    do
+        if [ ! -s "$package_dir/$path" ]; then
+            printf 'redline-testing release asset missing packaged file: %s\n' "$package_dir/$path" >&2
+            rm -rf "$tmp_dir"
+            return 1
+        fi
+    done
+    local manifest_version
+    local manifest_tag
+    manifest_version="$(jq -r '.version // empty' "$manifest")"
+    manifest_tag="$(jq -r '.release_tag // empty' "$manifest")"
+    if [ -z "$manifest_version" ] || [ -z "$manifest_tag" ]; then
+        printf 'redline-testing release manifest missing required version/tag fields: %s\n' "$manifest" >&2
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    if [ "$manifest_version" != "$CI_REDLINE_TESTING_VERSION" ]; then
+        printf 'redline-testing manifest version mismatch: expected %s, got %s\n' \
+            "$CI_REDLINE_TESTING_VERSION" "$manifest_version" >&2
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    if [ "$manifest_tag" != "$CI_REDLINE_TESTING_RELEASE_TAG" ]; then
+        printf 'redline-testing manifest tag mismatch: expected %s, got %s\n' \
+            "$CI_REDLINE_TESTING_RELEASE_TAG" "$manifest_tag" >&2
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
     rm -rf "$install_root"
     mkdir -p "$install_root"
     cp -R "$package_dir/." "$install_root/"
@@ -205,12 +361,17 @@ ci_install_redline_testing() {
     fi
     local binary_sha256
     binary_sha256="$(sha256sum "$install_root/bin/redline-testing" | awk '{ print $1 }')"
-    if [ "$binary_sha256" != "$CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256" ]; then
+    if [ -n "$CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256" ] && [ "$binary_sha256" != "$CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256" ]; then
         printf 'redline-testing binary SHA256 mismatch: pinned %s, got %s\n' \
             "$CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256" "$binary_sha256" >&2
         rm -rf "$tmp_dir"
         return 1
     fi
+    local manifest_sha256
+    manifest_sha256="$(sha256sum "$install_root/release-manifest.json" | awk '{ print $1 }')"
+    CI_REDLINE_TESTING_VERSION="$manifest_version"
+    CI_REDLINE_TESTING_RELEASE_TAG="$manifest_tag"
+    CI_REDLINE_TESTING_RELEASE_MANIFEST_URL="${CI_REDLINE_TESTING_RELEASE_MANIFEST_URL:-${CI_REDLINE_TESTING_BASE_URL}/release-manifest.json}"
     ci_verify_redline_testing_manifest "$install_root" "$binary_sha256"
     printf 'redline-testing release asset verified: %s\n' "$CI_REDLINE_TESTING_URL" >&2
     printf 'redline-testing release sha256: %s\n' "$actual_sha256" >&2
@@ -218,12 +379,19 @@ ci_install_redline_testing() {
     printf 'redline-testing installed: %s (%s)\n' \
         "$install_root/bin/redline-testing" "$version_output" >&2
     {
+        printf 'CI_REDLINE_TESTING_REQUESTED_VERSION=%q\n' "${CI_REDLINE_TESTING_REQUESTED_VERSION:-$CI_REDLINE_TESTING_VERSION}"
         printf 'CI_REDLINE_TESTING_VERSION=%q\n' "$CI_REDLINE_TESTING_VERSION"
+        printf 'CI_REDLINE_TESTING_RELEASE_TAG=%q\n' "$CI_REDLINE_TESTING_RELEASE_TAG"
         printf 'CI_REDLINE_TESTING_ARTIFACT=%q\n' "$artifact_name"
+        printf 'CI_REDLINE_TESTING_BASE_URL=%q\n' "$CI_REDLINE_TESTING_BASE_URL"
         printf 'CI_REDLINE_TESTING_URL=%q\n' "$CI_REDLINE_TESTING_URL"
         printf 'CI_REDLINE_TESTING_SHA256_URL=%q\n' "$CI_REDLINE_TESTING_SHA256_URL"
+        printf 'CI_REDLINE_TESTING_RELEASE_MANIFEST_URL=%q\n' "$CI_REDLINE_TESTING_RELEASE_MANIFEST_URL"
         printf 'CI_REDLINE_TESTING_SHA256=%q\n' "$actual_sha256"
         printf 'CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256=%q\n' "$actual_sha256"
+        printf 'CI_REDLINE_TESTING_RELEASE_MANIFEST_PATH=%q\n' "release-manifest.json"
+        printf 'CI_REDLINE_TESTING_RELEASE_MANIFEST_SHA256=%q\n' "$manifest_sha256"
+        printf 'CI_REDLINE_TESTING_BIN_PATH=%q\n' "bin/redline-testing"
         printf 'CI_REDLINE_TESTING_BIN=%q\n' "$install_root/bin/redline-testing"
         printf 'CI_REDLINE_TESTING_BIN_SHA256=%q\n' "$binary_sha256"
         printf 'CI_REDLINE_TESTING_RELEASE_BINARY_SHA256=%q\n' "$binary_sha256"
@@ -249,7 +417,7 @@ ci_verify_redline_testing_manifest() {
         printf 'redline-testing release manifest has wrong version: %s\n' "$manifest" >&2
         return 1
     }
-    grep -q "\"release_tag\": \"v$CI_REDLINE_TESTING_VERSION\"" "$manifest" || {
+    grep -q "\"release_tag\": \"$CI_REDLINE_TESTING_RELEASE_TAG\"" "$manifest" || {
         printf 'redline-testing release manifest has wrong tag: %s\n' "$manifest" >&2
         return 1
     }
@@ -257,18 +425,6 @@ ci_verify_redline_testing_manifest() {
         printf 'redline-testing release manifest binary hash mismatch: %s\n' "$manifest" >&2
         return 1
     }
-    for path in \
-        corpus/sqlite_parity/generated_manifest.json \
-        metadata/beyond_sqlite/features.json \
-        schemas/raw-record.schema.json \
-        schemas/release-manifest.schema.json \
-        templates/README.sqlite-parity.md
-    do
-        if [ ! -s "$install_root/$path" ]; then
-            printf 'redline-testing release manifest asset missing: %s\n' "$install_root/$path" >&2
-            return 1
-        fi
-    done
 }
 
 ci_verify_redline_testing_attestation() {
