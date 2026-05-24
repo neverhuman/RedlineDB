@@ -121,3 +121,30 @@ For any official SQLite parity evidence change, use the pinned
 local RedlineDB receipts or public lanes for SQLite parity coverage, benchmark,
 report, sentinel, or proof data; legacy receipt scripts, local parity bundle
 lanes, and in-tree `sqlite_parity` producer commands fail closed.
+
+### Local-bin escape hatch (unreleased corpora)
+
+The `redline-testing-official` lane normally downloads a tagged GitHub release
+from `neverhuman/redline-testing`. To drive the lane against a locally-built
+`redline-testing` binary plus its source tree (for example, to validate a
+not-yet-tagged corpus before publishing it), set both of the following before
+running the lane:
+
+| Env var | Meaning |
+|---|---|
+| `CI_REDLINE_TESTING_LOCAL_BIN` | Absolute path to the `redline-testing` executable, e.g. `~/redline-testing/target/release/redline-testing`. |
+| `CI_REDLINE_TESTING_LOCAL_SOURCE` | Absolute path to a `redline-testing` source checkout that contains `corpus/`, `metadata/`, `schemas/`, and `templates/`. |
+
+When `CI_REDLINE_TESTING_LOCAL_BIN` is set, `ci_install_redline_testing`
+short-circuits the download, sha256-against-URL, attestation, and
+pinned-version-against-manifest gates and stages the local binary and source
+tree under `target/ci/redline-testing/local-<binary-sha256-prefix>/`. The
+packaged-file checks, manifest schema fields, binary `--version` round-trip,
+and `redline-testing-provenance.env` sidecar still run, so downstream consumers
+(report generator, evidence processor) behave identically. The synthesized
+manifest carries `"source": "local-bin"` so the install is greppable as
+non-release.
+
+This is a developer / pre-release escape hatch only. CI lanes that publish
+parity evidence must leave `CI_REDLINE_TESTING_LOCAL_BIN` unset so they pin to
+a verified tagged release.

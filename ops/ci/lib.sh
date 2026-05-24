@@ -248,7 +248,194 @@ ci_install_redlinedb_release() {
     printf '%s\n' "$install_root/bin/redlinedb"
 }
 
+# Install a locally-built redline-testing source tree + binary, mimicking the
+# layout produced by a tagged release. Activated when `CI_REDLINE_TESTING_LOCAL_BIN`
+# is non-empty (the caller must also point `CI_REDLINE_TESTING_LOCAL_SOURCE` at a
+# checkout that contains corpus/, metadata/, schemas/, templates/).
+#
+# This is an escape hatch for the `just redline-testing-official` lane so it can
+# drive against unreleased redline-testing changes (e.g. a new corpus that has
+# not yet been tagged on GitHub). It skips the URL download, sha256-against-URL,
+# attestation, and manifest-version-against-pinned gates that the official path
+# enforces; everything else (packaged-file checks, manifest schema fields,
+# binary --version round-trip, provenance.env sidecar) still runs.
+#
+# Prints the staged binary path on stdout; status lines go to stderr.
+ci_install_redline_testing_local() {
+    local local_bin="${CI_REDLINE_TESTING_LOCAL_BIN:?CI_REDLINE_TESTING_LOCAL_BIN is required}"
+    local local_source="${CI_REDLINE_TESTING_LOCAL_SOURCE:?CI_REDLINE_TESTING_LOCAL_SOURCE is required}"
+    if [ ! -x "$local_bin" ]; then
+        printf 'redline-testing local-bin escape hatch: CI_REDLINE_TESTING_LOCAL_BIN is not executable: %s\n' \
+            "$local_bin" >&2
+        return 1
+    fi
+    if [ ! -d "$local_source" ]; then
+        printf 'redline-testing local-bin escape hatch: CI_REDLINE_TESTING_LOCAL_SOURCE is not a directory: %s\n' \
+            "$local_source" >&2
+        return 1
+    fi
+    local required_dir
+    for required_dir in corpus metadata schemas templates; do
+        if [ ! -d "$local_source/$required_dir" ]; then
+            printf 'redline-testing local-bin escape hatch: CI_REDLINE_TESTING_LOCAL_SOURCE missing %s/: %s\n' \
+                "$required_dir" "$local_source" >&2
+            return 1
+        fi
+    done
+
+    local local_bin_abs
+    local_bin_abs="$(cd "$(dirname "$local_bin")" && pwd)/$(basename "$local_bin")"
+    local local_source_abs
+    local_source_abs="$(cd "$local_source" && pwd)"
+
+    local version_output
+    if ! version_output="$("$local_bin_abs" --version)"; then
+        printf 'redline-testing local-bin escape hatch: --version failed: %s\n' \
+            "$local_bin_abs" >&2
+        return 1
+    fi
+    local version
+    version="${version_output#redline-testing }"
+    if [ -z "$version" ] || [ "$version" = "$version_output" ]; then
+        printf 'redline-testing local-bin escape hatch: unable to parse version from --version output: %q\n' \
+            "$version_output" >&2
+        return 1
+    fi
+
+    local binary_sha256
+    binary_sha256="$(sha256sum "$local_bin_abs" | awk '{ print $1 }')"
+    local binary_sha256_prefix="${binary_sha256:0:12}"
+
+    local release_tag="v$version"
+    local artifact_name="redline-testing-$version-linux-x86_64"
+    local install_root="${CI_REDLINE_TESTING_INSTALL_ROOT:-$PWD/target/ci/redline-testing/local-${binary_sha256_prefix}}"
+
+    rm -rf "$install_root"
+    mkdir -p "$install_root/bin"
+
+    # Symlink the binary; sha256sum dereferences symlinks so downstream hashing
+    # works against the underlying file.
+    ln -s "$local_bin_abs" "$install_root/bin/redline-testing"
+
+    # Symlink the four required top-level directories from the source tree. The
+    # packaged-file sanity checks below only need to be able to stat() each
+    # required path under install_root; the actual corpus data is `include_str!`d
+    # into the binary at build time.
+    local source_dir
+    for source_dir in corpus metadata schemas templates; do
+        ln -s "$local_source_abs/$source_dir" "$install_root/$source_dir"
+    done
+
+    # Synthesize a release-manifest.json that satisfies the schema at
+    # schemas/release-manifest.schema.json and the field checks performed by
+    # ci_verify_redline_testing_manifest. The `source` field is non-standard
+    # but lets downstream lanes detect a local-bin install at a glance.
+    local manifest="$install_root/release-manifest.json"
+    local release_commit
+    if release_commit="$(git -C "$local_source_abs" rev-parse HEAD 2>/dev/null)"; then
+        :
+    else
+        release_commit="local-bin-unknown"
+    fi
+    cat > "$manifest" <<EOF
+{
+  "name": "redline-testing",
+  "version": "$version",
+  "target": "linux-x86_64",
+  "release_commit": "$release_commit",
+  "release_tag": "$release_tag",
+  "binary": "bin/redline-testing",
+  "binary_sha256": "$binary_sha256",
+  "artifact_hashes": {},
+  "generated_by": "ops/ci/lib.sh:ci_install_redline_testing_local",
+  "source": "local-bin",
+  "local_bin_path": "$local_bin_abs",
+  "local_source_path": "$local_source_abs"
+}
+EOF
+
+    # Mirror the packaged-file sanity checks from the official path.
+    local path
+    for path in \
+        corpus/sqlite_parity/generated_manifest.json \
+        metadata/beyond_sqlite/features.json \
+        schemas/raw-record.schema.json \
+        schemas/release-manifest.schema.json \
+        templates/README.sqlite-parity.md
+    do
+        if [ ! -s "$install_root/$path" ]; then
+            printf 'redline-testing local-bin escape hatch: missing packaged file: %s\n' \
+                "$install_root/$path" >&2
+            return 1
+        fi
+    done
+
+    # Re-run the version round-trip against the staged path so the rest of the
+    # function only depends on install_root.
+    if ! version_output="$("$install_root/bin/redline-testing" --version)"; then
+        printf 'redline-testing local-bin escape hatch: staged --version failed: %s\n' \
+            "$install_root/bin/redline-testing" >&2
+        return 1
+    fi
+    if [ "$version_output" != "redline-testing $version" ]; then
+        printf 'redline-testing local-bin escape hatch: version round-trip mismatch: expected %q, got %q\n' \
+            "redline-testing $version" "$version_output" >&2
+        return 1
+    fi
+
+    local manifest_sha256
+    manifest_sha256="$(sha256sum "$manifest" | awk '{ print $1 }')"
+
+    # Update the same globals the official path updates so downstream helpers
+    # (load_redline_testing_provenance, the report gate, evidence consumers) see
+    # a consistent view of the install.
+    CI_REDLINE_TESTING_VERSION="$version"
+    CI_REDLINE_TESTING_RELEASE_TAG="$release_tag"
+    CI_REDLINE_TESTING_ARTIFACT="$artifact_name.tar.gz"
+    CI_REDLINE_TESTING_BASE_URL="local-bin://${local_source_abs}"
+    CI_REDLINE_TESTING_URL="local-bin://${local_bin_abs}"
+    CI_REDLINE_TESTING_SHA256_URL="local-bin://${local_bin_abs}.sha256"
+    CI_REDLINE_TESTING_RELEASE_MANIFEST_URL="local-bin://${install_root}/release-manifest.json"
+
+    ci_verify_redline_testing_manifest "$install_root" "$binary_sha256"
+
+    printf 'redline-testing local-bin escape hatch active: %s\n' "$local_bin_abs" >&2
+    printf 'redline-testing local-bin source tree: %s\n' "$local_source_abs" >&2
+    printf 'redline-testing local-bin binary sha256: %s\n' "$binary_sha256" >&2
+    printf 'redline-testing installed: %s (%s)\n' \
+        "$install_root/bin/redline-testing" "$version_output" >&2
+
+    {
+        printf 'CI_REDLINE_TESTING_REQUESTED_VERSION=%q\n' "${CI_REDLINE_TESTING_REQUESTED_VERSION:-$version}"
+        printf 'CI_REDLINE_TESTING_VERSION=%q\n' "$CI_REDLINE_TESTING_VERSION"
+        printf 'CI_REDLINE_TESTING_RELEASE_TAG=%q\n' "$CI_REDLINE_TESTING_RELEASE_TAG"
+        printf 'CI_REDLINE_TESTING_ARTIFACT=%q\n' "$CI_REDLINE_TESTING_ARTIFACT"
+        printf 'CI_REDLINE_TESTING_BASE_URL=%q\n' "$CI_REDLINE_TESTING_BASE_URL"
+        printf 'CI_REDLINE_TESTING_URL=%q\n' "$CI_REDLINE_TESTING_URL"
+        printf 'CI_REDLINE_TESTING_SHA256_URL=%q\n' "$CI_REDLINE_TESTING_SHA256_URL"
+        printf 'CI_REDLINE_TESTING_RELEASE_MANIFEST_URL=%q\n' "$CI_REDLINE_TESTING_RELEASE_MANIFEST_URL"
+        printf 'CI_REDLINE_TESTING_SHA256=%q\n' "$binary_sha256"
+        printf 'CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256=%q\n' "$binary_sha256"
+        printf 'CI_REDLINE_TESTING_RELEASE_MANIFEST_PATH=%q\n' "release-manifest.json"
+        printf 'CI_REDLINE_TESTING_RELEASE_MANIFEST_SHA256=%q\n' "$manifest_sha256"
+        printf 'CI_REDLINE_TESTING_BIN_PATH=%q\n' "bin/redline-testing"
+        printf 'CI_REDLINE_TESTING_BIN=%q\n' "$install_root/bin/redline-testing"
+        printf 'CI_REDLINE_TESTING_BIN_SHA256=%q\n' "$binary_sha256"
+        printf 'CI_REDLINE_TESTING_RELEASE_BINARY_SHA256=%q\n' "$binary_sha256"
+        printf 'CI_REDLINE_TESTING_VERSION_OUTPUT=%q\n' "$version_output"
+        printf 'CI_REDLINE_TESTING_SOURCE=%q\n' "local-bin"
+        printf 'CI_REDLINE_TESTING_LOCAL_BIN=%q\n' "$local_bin_abs"
+        printf 'CI_REDLINE_TESTING_LOCAL_SOURCE=%q\n' "$local_source_abs"
+    } > "$install_root/redline-testing-provenance.env"
+
+    printf '%s\n' "$install_root/bin/redline-testing"
+}
+
 ci_install_redline_testing() {
+    if [ -n "${CI_REDLINE_TESTING_LOCAL_BIN:-}" ]; then
+        ci_install_redline_testing_local
+        return $?
+    fi
     ci_resolve_redline_testing_release
     local artifact_name="${CI_REDLINE_TESTING_ARTIFACT##*/}"
     local install_root="${CI_REDLINE_TESTING_INSTALL_ROOT:-$PWD/target/ci/redline-testing/${CI_REDLINE_TESTING_VERSION}-${artifact_name%.tar.gz}}"
