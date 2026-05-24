@@ -11,6 +11,7 @@ pub(super) use model::{JankuraiScore, ManifestJson, RankedCase, SummaryJson};
 mod io;
 mod model;
 mod paper;
+mod provenance;
 mod ranking;
 mod readme;
 mod svg;
@@ -24,6 +25,7 @@ use io::{
     write_files,
 };
 use paper::paper_loc_writes;
+use provenance::validate_provenance;
 use ranking::{build_report, parse_raw_records, ranked_csv};
 use readme::{
     jankurai_breakdown_block, metrics_block, parse_jankurai_score, readme_block,
@@ -89,6 +91,9 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let ksloc_out = options.out_dir.join("ksloc.csv");
     let summary_out = options.out_dir.join("summary.json");
     let manifest_out = options.out_dir.join("manifest.json");
+    let provenance_out = options.out_dir.join("provenance.json");
+    let raw_sha256 = sha256_hex(raw_text.as_bytes());
+    let provenance = validate_provenance(&provenance_out, &raw_out, &raw_sha256)?;
     let manifest_git_sha = if options.check {
         existing_manifest_git_sha(&manifest_out)?.unwrap_or_else(git_sha)
     } else {
@@ -182,9 +187,10 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     }
 
     let mut input_hashes = BTreeMap::new();
+    input_hashes.insert(options.input.display().to_string(), raw_sha256.clone());
     input_hashes.insert(
-        options.input.display().to_string(),
-        sha256_hex(raw_text.as_bytes()),
+        provenance.path.clone(),
+        provenance.provenance_sha256.clone(),
     );
     input_hashes.insert(
         "expected_case_ids".to_owned(),
@@ -210,7 +216,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     );
 
     let mut output_hashes = BTreeMap::new();
-    output_hashes.insert("raw.jsonl".to_owned(), sha256_hex(raw_text.as_bytes()));
+    output_hashes.insert("raw.jsonl".to_owned(), raw_sha256.clone());
     output_hashes.insert("ranked.csv".to_owned(), sha256_hex(ranked_csv.as_bytes()));
     output_hashes.insert("ksloc.csv".to_owned(), sha256_hex(source_csv.as_bytes()));
     output_hashes.insert(
@@ -265,11 +271,18 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     }
     let manifest = ManifestJson {
         command: normalized_command(&options.command),
+        official_source: "sole official source: pinned external neverhuman/redline-testing release artifact".to_owned(),
+        evidence_gate: "raw.jsonl sha256 must match provenance.json output_file_hashes/output_hashes; redline_testing_binary_sha256 must match the release artifact/bin sha when provenance records it".to_owned(),
         git_sha: manifest_git_sha,
         sqlite_version: report.summary.sqlite_version.clone(),
         updated_date: options.updated_date,
         repetitions: report.repetitions,
         warmup: report.warmup,
+        provenance_path: provenance.path,
+        provenance_sha256: provenance.provenance_sha256,
+        raw_jsonl_sha256: provenance.raw_jsonl_sha256,
+        redline_testing_binary_sha256: provenance.redline_testing_binary_sha256,
+        redline_testing_release_binary_sha256: provenance.release_binary_sha256,
         input_hashes,
         output_hashes,
     };

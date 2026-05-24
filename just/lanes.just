@@ -76,14 +76,11 @@ sql-parity:
 sql-parity-full:
   ./scripts/just/run.sh sql-parity-full
 
-sqlite-parity-scale-smoke:
-  ./scripts/just/run.sh sqlite-parity-scale-smoke
+redline-testing-official:
+  ./scripts/just/run.sh redline-testing-official
 
-sqlite-parity-scale-ci:
-  ./scripts/just/run.sh sqlite-parity-scale-ci
-
-sqlite-parity-volatile-sentinel:
-  ./scripts/just/run.sh sqlite-parity-volatile-sentinel
+official-evidence-guard:
+  ./scripts/just/run.sh official-evidence-guard
 
 sqlite-parity-report-update:
   ./scripts/just/run.sh sqlite-parity-report-update
@@ -91,11 +88,11 @@ sqlite-parity-report-update:
 sqlite-parity-report-check:
   ./scripts/just/run.sh sqlite-parity-report-check
 
+sqlite-parity-report-publish-pr:
+  ./scripts/just/run.sh sqlite-parity-report-publish-pr
+
 sqlite-jankurai-compare:
   ./scripts/just/run.sh sqlite-jankurai-compare
-
-sqlite-parity-scale-full:
-  ./scripts/just/run.sh sqlite-parity-scale-full
 
 ffi-abi:
   ./scripts/just/run.sh ffi-abi

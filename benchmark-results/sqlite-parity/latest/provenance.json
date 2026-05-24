@@ -1,6 +1,14 @@
 {
-  "schema_version": "redline-testing-manifest-v1",
+  "schema_version": "redline-testing-provenance-v1",
   "suite": "sqlite_parity",
+  "redline_testing_binary_path": "/home/ubuntu/redlineDB/target/ci/redline-testing/0.1.2-redline-testing-0.1.2-linux-x86_64/bin/redline-testing",
+  "redline_testing_binary_sha256": "aa51facfadacb1e77a75380bea69f2b904a301365f84c5f867332dbca8fd8984",
+  "target_binary_path": "/home/ubuntu/redlineDB/target/release/redlinedb",
+  "target_binary_sha256": "2257285f64552e80ce903a6f639d32a10fdbc062f4057950021a84db0fc571d5",
+  "target_version": "redlinedb v2.0.5 (SQLite 3.45.1 compatibility)",
+  "sqlite_binary_path": "sqlite3",
+  "sqlite_binary_sha256": "<unknown>",
+  "sqlite_version": "3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)",
   "command_line": [
     "/home/ubuntu/redlineDB/target/ci/redline-testing/0.1.2-redline-testing-0.1.2-linux-x86_64/bin/redline-testing",
     "report",
@@ -46,11 +54,14 @@
   ],
   "repetitions": 3,
   "warmup": 1,
-  "output_files": {
-    "ksloc": "benchmark-results/sqlite-parity/latest/ksloc.csv",
-    "provenance": "benchmark-results/sqlite-parity/latest/provenance.json",
-    "ranked": "benchmark-results/sqlite-parity/latest/ranked.csv",
-    "raw": "benchmark-results/sqlite-parity/latest/raw.jsonl",
-    "summary": "benchmark-results/sqlite-parity/latest/summary.json"
+  "updated_date": "2026-05-24",
+  "git_sha": "c020508247e598d412b2b65c9c8e36b0ae63afab",
+  "git_dirty": true,
+  "output_file_hashes": {
+    "README.md": "8ac5a9f42c941f5f04093462d7dfeed47c13b8c0cef139cc4b276d2b1699e3ad",
+    "ksloc.csv": "de68c2b0d6e66372404e68f3a67f008ce0f054144d2c3c41ddd284044eb8d6c4",
+    "ranked.csv": "3a078bb5dd675dc6dda3694d012cea278d1fba7f806901217a6fb1f3deb077ed",
+    "raw.jsonl": "5ae126049c93e461d45764f8cb986bd10ce7281b34b0044ed50647566a7fa76d",
+    "summary.json": "21358fb1bf9a1c1def3c22f4107d90588dc7a3b57cf137c0381cd7d2d90a87cf"
   }
 }

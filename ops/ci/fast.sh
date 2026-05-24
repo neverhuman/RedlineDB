@@ -24,14 +24,6 @@ if [ -z "${REDLINEDB_BENCH_GIT_SHA:-}" ]; then
     export REDLINEDB_BENCH_GIT_SHA="$(git rev-parse HEAD)"
 fi
 
-ensure_sqlite_parity_reference() {
-    if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
-        return 0
-    fi
-    REDLINEDB_SQLITE_PARITY_SQLITE_BIN="$(bash scripts/sqlite/build-reference.sh)"
-    export REDLINEDB_SQLITE_PARITY_SQLITE_BIN
-}
-
 if [ "${1:-}" = "sqlite-parity-report-publish-pr" ]; then
     bash ops/ci/sqlite-parity-report.sh publish-pr
     exit 0
@@ -74,12 +66,6 @@ run_test_stage() {
         bench)
             cargo test -p redlinedb-bench --quiet --locked
             ;;
-        sqlite-parity-scale)
-            ensure_sqlite_parity_reference
-            bash scripts/just/run.sh sqlite-parity-scale-ci
-            bash scripts/just/run.sh sqlite-parity-report-check
-            bash scripts/just/run.sh sqlite-parity-volatile-sentinel
-            ;;
         *)
             printf 'unknown fast test stage: %s\n' "$1" >&2
             return 1
@@ -92,7 +78,7 @@ case "$stage" in
     preflight)
         run_preflight
         ;;
-    core|kernel|sql-unit|sql-contracts|sql-parity|bench|sqlite-parity-scale)
+    core|kernel|sql-unit|sql-contracts|sql-parity|bench)
         run_test_stage "$stage"
         ;;
     tests)
@@ -102,7 +88,6 @@ case "$stage" in
         run_test_stage sql-contracts
         run_test_stage sql-parity
         run_test_stage bench
-        run_test_stage sqlite-parity-scale
         ;;
     all)
         run_preflight
@@ -112,7 +97,6 @@ case "$stage" in
         run_test_stage sql-contracts
         run_test_stage sql-parity
         run_test_stage bench
-        run_test_stage sqlite-parity-scale
         ;;
     *)
         printf 'unknown fast stage: %s\n' "$stage" >&2
