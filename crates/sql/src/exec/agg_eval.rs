@@ -526,6 +526,51 @@ fn row_passes_aggregate_filter(
     Ok(is_truthy(&eval_scalar(filter, &ctx, bindings)?))
 }
 
+/// True if the function call is `<name>(DISTINCT ...)`.
+fn is_distinct_call(func: &sqlparser::ast::Function) -> bool {
+    if let FunctionArguments::List(list) = &func.args {
+        matches!(
+            list.duplicate_treatment,
+            Some(sqlparser::ast::DuplicateTreatment::Distinct)
+        )
+    } else {
+        false
+    }
+}
+
+/// If `expr` is a `COLLATE` wrapper, return the named collation.
+fn expr_collation(expr: &Expr) -> Option<crate::collation::Collation> {
+    if let Expr::Collate { collation, .. } = expr {
+        let name = collation.to_string();
+        crate::collation::Collation::parse(&name)
+    } else {
+        None
+    }
+}
+
+/// Build a deduplication key for a single aggregate value, honoring a
+/// collation (e.g. `count(DISTINCT x COLLATE NOCASE)` should treat
+/// `'a'` and `'A'` as equal). Returns `None` for NULL.
+fn distinct_key(
+    value: &SqlValue,
+    collation: Option<&crate::collation::Collation>,
+) -> Result<Option<Vec<u8>>> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(None);
+    }
+    let normalised = match (value, collation) {
+        (SqlValue::Text(s), Some(crate::collation::Collation::NoCase)) => {
+            SqlValue::Text(Arc::from(s.to_ascii_lowercase()))
+        }
+        (SqlValue::Text(s), Some(crate::collation::Collation::RTrim)) => {
+            SqlValue::Text(Arc::from(s.trim_end_matches(' ').to_owned()))
+        }
+        _ => value.clone(),
+    };
+    let key = vec::hash_agg::encode_group_key_bytes(&[normalised])?;
+    Ok(Some(key))
+}
+
 fn eval_group_function(
     func: &sqlparser::ast::Function,
     group: &[SqlRow],
@@ -564,6 +609,16 @@ fn eval_group_function(
                         list.duplicate_treatment,
                         Some(sqlparser::ast::DuplicateTreatment::Distinct)
                     );
+                    // Per-argument collation: `count(DISTINCT x COLLATE NOCASE)`
+                    // dedupes by case-insensitive text key.
+                    let collations: Vec<Option<crate::collation::Collation>> = list
+                        .args
+                        .iter()
+                        .map(|a| match a {
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                            _ => None,
+                        })
+                        .collect();
                     let mut seen = HashSet::new();
                     let mut count = 0i64;
                     for row in group {
@@ -585,7 +640,22 @@ fn eval_group_function(
                         }
                         if include {
                             if distinct {
-                                let key = vec::hash_agg::encode_group_key_bytes(&values)?;
+                                // Build a per-arg dedup key honoring each
+                                // argument's collation wrapper.
+                                let mut normalised: Vec<SqlValue> =
+                                    Vec::with_capacity(values.len());
+                                for (idx, val) in values.iter().enumerate() {
+                                    normalised.push(match (val, collations.get(idx).and_then(|c| c.as_ref())) {
+                                        (SqlValue::Text(s), Some(crate::collation::Collation::NoCase)) => {
+                                            SqlValue::Text(Arc::from(s.to_ascii_lowercase()))
+                                        }
+                                        (SqlValue::Text(s), Some(crate::collation::Collation::RTrim)) => {
+                                            SqlValue::Text(Arc::from(s.trim_end_matches(' ').to_owned()))
+                                        }
+                                        _ => val.clone(),
+                                    });
+                                }
+                                let key = vec::hash_agg::encode_group_key_bytes(&normalised)?;
                                 if !seen.insert(key) {
                                     continue;
                                 }
@@ -610,6 +680,18 @@ fn eval_group_function(
             let mut total_r: f64 = 0.0;
             let mut saw_real = false;
             let mut saw_value = false;
+            let distinct = is_distinct_call(func);
+            let mut seen: HashSet<Vec<u8>> = HashSet::new();
+            let collation = if let FunctionArguments::List(list) = &func.args {
+                list.args
+                    .first()
+                    .and_then(|a| match a {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                        _ => None,
+                    })
+            } else {
+                None
+            };
             for row in group {
                 if !row_passes_aggregate_filter(func, row, bindings)? {
                     continue;
@@ -619,7 +701,18 @@ fn eval_group_function(
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
                         list.args.first()
                 {
-                    match eval_scalar(expr, &ctx, bindings)? {
+                    let value = eval_scalar(expr, &ctx, bindings)?;
+                    if distinct {
+                        match distinct_key(&value, collation.as_ref())? {
+                            None => continue,
+                            Some(key) => {
+                                if !seen.insert(key) {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    match value {
                         SqlValue::Null => {}
                         SqlValue::Integer(v) if !saw_real => {
                             total_i += v;
@@ -663,6 +756,18 @@ fn eval_group_function(
         "avg" => {
             let mut count = 0i64;
             let mut sum = 0.0f64;
+            let distinct = is_distinct_call(func);
+            let mut seen: HashSet<Vec<u8>> = HashSet::new();
+            let collation = if let FunctionArguments::List(list) = &func.args {
+                list.args
+                    .first()
+                    .and_then(|a| match a {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                        _ => None,
+                    })
+            } else {
+                None
+            };
             for row in group {
                 if !row_passes_aggregate_filter(func, row, bindings)? {
                     continue;
@@ -672,7 +777,18 @@ fn eval_group_function(
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
                         list.args.first()
                 {
-                    match eval_scalar(expr, &ctx, bindings)? {
+                    let value = eval_scalar(expr, &ctx, bindings)?;
+                    if distinct {
+                        match distinct_key(&value, collation.as_ref())? {
+                            None => continue,
+                            Some(key) => {
+                                if !seen.insert(key) {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    match value {
                         SqlValue::Null => {}
                         SqlValue::Integer(v) => {
                             sum += v as f64;
@@ -817,6 +933,18 @@ fn eval_group_function(
                 ",".to_owned()
             };
             let mut parts: Vec<String> = Vec::new();
+            let distinct = is_distinct_call(func);
+            let mut seen: HashSet<Vec<u8>> = HashSet::new();
+            let collation = if let FunctionArguments::List(list) = &func.args {
+                list.args
+                    .first()
+                    .and_then(|a| match a {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                        _ => None,
+                    })
+            } else {
+                None
+            };
             for row in rows_in_aggregate_order(func, group, bindings)? {
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
@@ -824,9 +952,20 @@ fn eval_group_function(
                         list.args.first()
                 {
                     let val = eval_scalar(expr, &ctx, bindings)?;
-                    if !matches!(val, SqlValue::Null) {
-                        parts.push(value_to_string(&val));
+                    if matches!(val, SqlValue::Null) {
+                        continue;
                     }
+                    if distinct {
+                        match distinct_key(&val, collation.as_ref())? {
+                            None => continue,
+                            Some(key) => {
+                                if !seen.insert(key) {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    parts.push(value_to_string(&val));
                 }
             }
             if parts.is_empty() {
