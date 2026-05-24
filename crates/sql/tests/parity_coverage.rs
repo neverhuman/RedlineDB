@@ -618,3 +618,243 @@ fn sqlite_parity_track_a_unhex() {
         lab.assert_parity(sql);
     }
 }
+
+// ── JSONB operator and function surface (Track F) ────────────────────────────
+//
+// These tests cover the Postgres `jsonb` operator and `jsonb_*` function
+// shapes RedlineDB now implements on top of its text-stored JSON. The
+// reference oracle is the redline-testing beyond-SQLite corpus
+// (`BEYOND_JSONB_INDEXING`); each test here pins one of the closed cases
+// so a regression surfaces during local `cargo test`.
+
+fn text(s: &str) -> SqlValue {
+    SqlValue::Text(Arc::from(s))
+}
+
+#[test]
+fn jsonb_at_arrow_object_containment() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' @> '{\"a\":1}'"),
+        text("t")
+    );
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' @> '{\"a\":2}'"),
+        text("f")
+    );
+}
+
+#[test]
+fn jsonb_arrow_at_contained_by() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1}' <@ '{\"a\":1,\"b\":2}'"),
+        text("t")
+    );
+}
+
+#[test]
+fn jsonb_question_key_exists() {
+    let (_d, c) = open();
+    assert_eq!(q1(&c, "SELECT '{\"a\":1,\"b\":2}' ? 'a'"), text("t"));
+    assert_eq!(q1(&c, "SELECT '{\"a\":1,\"b\":2}' ? 'z'"), text("f"));
+}
+
+#[test]
+fn jsonb_question_any_exists() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' ?| ARRAY['z','b']"),
+        text("t")
+    );
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' ?| ARRAY['x','y']"),
+        text("f")
+    );
+}
+
+#[test]
+fn jsonb_question_all_exists() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' ?& ARRAY['a','b']"),
+        text("t")
+    );
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' ?& ARRAY['a','z']"),
+        text("f")
+    );
+}
+
+#[test]
+fn jsonb_hash_arrow_path_extract() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":{\"b\":1}}' #> '{a}'"),
+        text("{\"b\": 1}")
+    );
+    assert_eq!(q1(&c, "SELECT '{\"a\":{\"b\":1}}' #>> '{a,b}'"), text("1"));
+}
+
+#[test]
+fn jsonb_hash_minus_path_delete() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":{\"b\":1,\"c\":2}}' #- '{a,b}'"),
+        text("{\"a\": {\"c\": 2}}")
+    );
+}
+
+#[test]
+fn jsonb_concat_object_and_array() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1}' || '{\"b\":2}'"),
+        text("{\"a\": 1, \"b\": 2}")
+    );
+    assert_eq!(
+        q1(&c, "SELECT '[1,2]' || '[3,4]'"),
+        text("[1, 2, 3, 4]")
+    );
+}
+
+#[test]
+fn jsonb_minus_text_removes_object_key() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' - 'a'"),
+        text("{\"b\": 2}")
+    );
+}
+
+#[test]
+fn jsonb_set_and_insert_pg_semantics() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT jsonb_set('{\"a\":1,\"b\":2}', '{a}', '99')"),
+        text("{\"a\": 99, \"b\": 2}")
+    );
+    assert_eq!(
+        q1(&c, "SELECT jsonb_set('{\"a\":1}', '{b}', '7', true)"),
+        text("{\"a\": 1, \"b\": 7}")
+    );
+    assert_eq!(
+        q1(&c, "SELECT jsonb_insert('[1,2,3]', '{1}', '99')"),
+        text("[1, 99, 2, 3]")
+    );
+    assert_eq!(
+        q1(&c, "SELECT jsonb_insert('[1,2,3]', '{1}', '99', true)"),
+        text("[1, 2, 99, 3]")
+    );
+}
+
+#[test]
+fn jsonb_strip_nulls_drops_nested_nulls() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(
+            &c,
+            "SELECT jsonb_strip_nulls('{\"a\":1,\"b\":null,\"c\":{\"d\":null,\"e\":2}}')"
+        ),
+        text("{\"a\": 1, \"c\": {\"e\": 2}}")
+    );
+}
+
+#[test]
+fn jsonb_pretty_indents_four_spaces() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT jsonb_pretty('{\"a\":1,\"b\":[1,2,3]}')");
+    let SqlValue::Text(s) = v else {
+        panic!("expected text output");
+    };
+    assert!(s.contains("    \"a\": 1"), "expected indented `a` row");
+    assert!(s.contains("        1,"), "expected nested array indent");
+}
+
+#[test]
+fn jsonb_path_exists_and_at_at_predicate() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(
+            &c,
+            "SELECT jsonb_path_exists('{\"a\":{\"b\":1}}', '$.a.b')"
+        ),
+        text("t")
+    );
+    assert_eq!(q1(&c, "SELECT '{\"a\":5}' @@ '$.a > 3'"), text("t"));
+    assert_eq!(q1(&c, "SELECT '{\"a\":5}' @@ '$.a > 9'"), text("f"));
+}
+
+#[test]
+fn jsonb_path_query_table_valued() {
+    let (_d, c) = open();
+    let rows = query_all(
+        &c,
+        "SELECT * FROM jsonb_path_query('[10,20,30]', '$[*]') ORDER BY jsonb_path_query::text",
+    );
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0][0], text("10"));
+    assert_eq!(rows[1][0], text("20"));
+    assert_eq!(rows[2][0], text("30"));
+}
+
+#[test]
+fn jsonb_array_elements_table_valued() {
+    let (_d, c) = open();
+    let rows = query_all(&c, "SELECT * FROM jsonb_array_elements('[10,20,30]')");
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0][0], text("10"));
+    let text_rows = query_all(
+        &c,
+        "SELECT * FROM jsonb_array_elements_text('[\"x\",\"y\"]') ORDER BY 1",
+    );
+    assert_eq!(text_rows.len(), 2);
+    assert_eq!(text_rows[0][0], text("x"));
+    assert_eq!(text_rows[1][0], text("y"));
+}
+
+#[test]
+fn jsonb_to_record_projects_columns() {
+    let (_d, c) = open();
+    let rows = query_all(
+        &c,
+        "SELECT * FROM jsonb_to_record('{\"a\":5,\"b\":\"x\"}') AS t(a int, b text)",
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], text("5"));
+    assert_eq!(rows[0][1], text("x"));
+}
+
+#[test]
+fn jsonb_where_clause_truthy_pg_bool() {
+    // PG boolean tokens (`t`/`f`) emitted by @> must be honoured by
+    // WHERE / CASE truthiness without breaking SQLite text semantics
+    // for unrelated cells.
+    let (_d, c) = open();
+    c.execute("CREATE TABLE bsp_doc(id INTEGER, doc TEXT)")
+        .expect("create");
+    c.execute("INSERT INTO bsp_doc VALUES (1, '{\"name\":\"alice\"}'), (2, '{\"name\":\"bob\"}')")
+        .expect("insert");
+    let rows = query_all(
+        &c,
+        "SELECT id FROM bsp_doc WHERE doc @> '{\"name\":\"bob\"}' ORDER BY id",
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], SqlValue::Integer(2));
+}
+
+#[test]
+fn create_index_using_gin_is_parseable() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE bsp_doc(id INTEGER PRIMARY KEY, doc TEXT)")
+        .expect("create");
+    c.execute("INSERT INTO bsp_doc VALUES (1, '{\"x\":1}')")
+        .expect("insert");
+    // `USING GIN` and the `jsonb_path_ops` opclass marker are stripped
+    // pre-parse; the index itself is created via the regular btree path.
+    c.execute("CREATE INDEX bsp_doc_gin ON bsp_doc USING GIN (doc jsonb_path_ops)")
+        .expect("create index using gin");
+    let rows = query_all(&c, "SELECT id FROM bsp_doc");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], SqlValue::Integer(1));
+}

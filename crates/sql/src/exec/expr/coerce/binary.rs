@@ -38,12 +38,15 @@ pub(crate) fn eval_binary(
             |a, b| Some(a.wrapping_add(b)),
             |a, b| Some(a + b),
         )?,
-        BinaryOperator::Minus => arithmetic(
-            left_value,
-            right_value,
-            |a, b| Some(a.wrapping_sub(b)),
-            |a, b| Some(a - b),
-        )?,
+        BinaryOperator::Minus => match try_json_delete(&left_value, &right_value) {
+            Some(v) => v,
+            None => arithmetic(
+                left_value,
+                right_value,
+                |a, b| Some(a.wrapping_sub(b)),
+                |a, b| Some(a - b),
+            )?,
+        },
         BinaryOperator::Multiply => arithmetic(
             left_value,
             right_value,
@@ -87,6 +90,8 @@ pub(crate) fn eval_binary(
         BinaryOperator::StringConcat => {
             if matches!(left_value, SqlValue::Null) || matches!(right_value, SqlValue::Null) {
                 SqlValue::Null
+            } else if let Some(merged) = try_json_concat(&left_value, &right_value) {
+                merged
             } else {
                 SqlValue::Text(Arc::from(format!(
                     "{}{}",
@@ -97,6 +102,26 @@ pub(crate) fn eval_binary(
         }
         BinaryOperator::Arrow => crate::json::scalar::arrow_json(&left_value, &right_value)?,
         BinaryOperator::LongArrow => crate::json::scalar::arrow_sql(&left_value, &right_value)?,
+        BinaryOperator::AtArrow => crate::json::jsonb::op_at_arrow(&left_value, &right_value)?,
+        BinaryOperator::ArrowAt => crate::json::jsonb::op_arrow_at(&left_value, &right_value)?,
+        BinaryOperator::HashArrow => crate::json::jsonb::op_hash_arrow(&left_value, &right_value)?,
+        BinaryOperator::HashLongArrow => {
+            crate::json::jsonb::op_hash_long_arrow(&left_value, &right_value)?
+        }
+        BinaryOperator::HashMinus => crate::json::jsonb::op_hash_minus(&left_value, &right_value)?,
+        BinaryOperator::AtAt => crate::json::jsonb::op_at_at(&left_value, &right_value)?,
+        BinaryOperator::AtQuestion => {
+            crate::json::jsonb::op_at_question(&left_value, &right_value)?
+        }
+        BinaryOperator::Question => crate::json::jsonb::op_question(&left_value, &right_value)?,
+        BinaryOperator::QuestionPipe => crate::json::jsonb::op_question_any(
+            &left_value,
+            std::slice::from_ref(&right_value),
+        )?,
+        BinaryOperator::QuestionAnd => crate::json::jsonb::op_question_all(
+            &left_value,
+            std::slice::from_ref(&right_value),
+        )?,
         BinaryOperator::Regexp => regexp_result(left_value, right_value, false)?,
         BinaryOperator::Match => match_result(left, left_value, right_value, row)?,
         other => {
@@ -266,4 +291,51 @@ pub(crate) fn is_distinct(left: &SqlValue, right: &SqlValue) -> bool {
         || (!matches!(left, SqlValue::Null)
             && !matches!(right, SqlValue::Null)
             && compare_values(left, right) != Ordering::Equal)
+}
+
+/// If both operands look like JSON containers (object or array), return
+/// their PostgreSQL `jsonb || jsonb` merge. Returns `None` for any other
+/// shape so the caller falls back to text concatenation.
+fn try_json_concat(left: &SqlValue, right: &SqlValue) -> Option<SqlValue> {
+    use serde_json::Value;
+    let left_text = match left {
+        SqlValue::Text(s) => s.as_ref(),
+        _ => return None,
+    };
+    let right_text = match right {
+        SqlValue::Text(s) => s.as_ref(),
+        _ => return None,
+    };
+    let left_doc: Value = serde_json::from_str(left_text.trim()).ok()?;
+    let right_doc: Value = serde_json::from_str(right_text.trim()).ok()?;
+    // Only switch to JSON semantics when at least one side is a container
+    // — otherwise plain `'foo' || 'bar'` would mis-concatenate as an array.
+    if !matches!(left_doc, Value::Object(_) | Value::Array(_))
+        && !matches!(right_doc, Value::Object(_) | Value::Array(_))
+    {
+        return None;
+    }
+    let merged = crate::json::jsonb::op_concat(&left_doc, &right_doc);
+    Some(crate::json::jsonb::jsonb_text(&merged))
+}
+
+/// PostgreSQL `jsonb - text|int` — strip a key (or array index, with
+/// negative-from-end support). Returns `None` when the LHS does not look
+/// like a JSON container, so arithmetic subtraction continues to handle
+/// numeric pairs.
+fn try_json_delete(left: &SqlValue, right: &SqlValue) -> Option<SqlValue> {
+    use serde_json::Value;
+    let SqlValue::Text(text) = left else {
+        return None;
+    };
+    let doc: Value = serde_json::from_str(text.trim()).ok()?;
+    if !matches!(doc, Value::Object(_) | Value::Array(_)) {
+        return None;
+    }
+    let updated = match right {
+        SqlValue::Text(key) => crate::json::jsonb::op_delete_key(&doc, key.as_ref()),
+        SqlValue::Integer(idx) => crate::json::jsonb::op_delete_index(&doc, *idx),
+        _ => return None,
+    };
+    Some(crate::json::jsonb::jsonb_text(&updated))
 }

@@ -76,9 +76,29 @@ pub(crate) fn selection_passes(
     bindings: &[Option<SqlValue>],
 ) -> Result<bool> {
     match selection {
-        Some(expr) => Ok(is_truthy(&eval_scalar(expr, &row.context(), bindings)?)),
+        Some(expr) => {
+            let value = eval_scalar(expr, &row.context(), bindings)?;
+            Ok(pg_bool_or_truthy(&value))
+        }
         None => Ok(true),
     }
+}
+
+/// SQLite truthiness + PostgreSQL `boolean` literal recognition. JSONB
+/// operators in this crate return the textual tokens `"t"`/`"f"` to
+/// match psql's unaligned output; treat those (and the spelled-out
+/// `"true"`/`"false"`) as boolean values inside WHERE / CASE.
+pub(crate) fn pg_bool_or_truthy(value: &SqlValue) -> bool {
+    if let SqlValue::Text(s) = value {
+        let trimmed = s.as_ref().trim();
+        if trimmed.eq_ignore_ascii_case("t") || trimmed.eq_ignore_ascii_case("true") {
+            return true;
+        }
+        if trimmed.eq_ignore_ascii_case("f") || trimmed.eq_ignore_ascii_case("false") {
+            return false;
+        }
+    }
+    is_truthy(value)
 }
 
 pub(crate) fn compare_rows(left: &[SqlValue], right: &[SqlValue]) -> Ordering {
