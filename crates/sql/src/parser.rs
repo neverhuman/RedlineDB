@@ -3265,10 +3265,17 @@ fn rewrite_grouping_sets_in_statement(stmt: &str) -> String {
             .collect();
         // Per-item: keep as-is if it's an aggregate OR if its base
         // identifier is in this set; otherwise substitute NULL [AS alias].
+        // Aggregate items containing `GROUPING(col)` also get rewritten
+        // per-branch — GROUPING returns 1 when `col` is rolled up in
+        // this branch (i.e. not in the current set) and 0 when it is in
+        // the set.
         let mut new_items: Vec<String> = Vec::with_capacity(proj_meta.len());
         for meta in &proj_meta {
             match meta {
-                ProjItem::Aggregate(text) => new_items.push((*text).clone()),
+                ProjItem::Aggregate(text) => {
+                    let rewritten = rewrite_grouping_calls(text, &set_lower);
+                    new_items.push(rewritten);
+                }
                 ProjItem::Column { base, alias_or_base } => {
                     let base_lower = base.to_ascii_lowercase();
                     if set_lower.iter().any(|c| c == &base_lower) {
@@ -3294,8 +3301,12 @@ fn rewrite_grouping_sets_in_statement(stmt: &str) -> String {
 
     let union = branches.join(" UNION ALL ");
     // Trailing clauses (ORDER BY, LIMIT, etc.) apply to the final result.
+    // Rewrite GROUPING(col) references in the trailing clauses to the
+    // per-branch alias emitted by rewrite_grouping_calls.
+    let trailing_raw = tail.trim_start();
+    let trailing_owned = rewrite_grouping_calls_to_alias(trailing_raw);
+    let trailing = trailing_owned.as_str();
     // Wrap in a derived table so the outer projection can carry them.
-    let trailing = tail.trim_start();
     let body = if trailing.is_empty() {
         union
     } else {
@@ -3731,4 +3742,97 @@ where
 
 fn is_identifier_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Track K — Inline `GROUPING(<col>)` calls inside a projection item.
+/// In a per-branch lowering of `GROUP BY GROUPING SETS`, each call
+/// returns 0 when `<col>` is in the branch's grouping set and 1 when
+/// it has been rolled up. We rewrite by string-substitution so the
+/// surrounding aggregate expression (`sum(...)`, etc.) is preserved.
+///
+/// Each substituted occurrence is aliased `... AS __grouping_<col>`
+/// only when the call is the entire item (top-level standalone).
+fn rewrite_grouping_calls(item: &str, set_lower: &[String]) -> String {
+    // Fast path: nothing to do if the item doesn't mention GROUPING(.
+    if !item.to_ascii_uppercase().contains("GROUPING(") {
+        return item.to_owned();
+    }
+    let bytes = item.as_bytes();
+    let upper = item.to_ascii_uppercase();
+    let mut out = String::with_capacity(item.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        // Look for "GROUPING(" at this position, with a left word boundary.
+        if i + 9 <= bytes.len()
+            && &upper[i..i + 9] == "GROUPING("
+            && (i == 0 || !is_identifier_char(bytes[i - 1]))
+        {
+            let open = i + 8; // index of '('
+            if let Some(close) = find_matching_paren(bytes, open) {
+                let arg = item[open + 1..close].trim();
+                // Strip schema qualifier (`t.col` → `col`) for membership.
+                let col = arg.rsplit('.').next().unwrap_or(arg).to_ascii_lowercase();
+                let value = if set_lower.iter().any(|c| c == &col) {
+                    0
+                } else {
+                    1
+                };
+                // Emit the literal in place of the function call. If the
+                // item is exactly `GROUPING(<col>)` (i.e. the whole text
+                // is the call), add an alias so the outer projection /
+                // ORDER BY can name it.
+                let is_whole_item = i == 0 && close + 1 == bytes.len();
+                if is_whole_item {
+                    out.push_str(&format!(
+                        "{value} AS __grouping_{}",
+                        sanitize_ident(arg)
+                    ));
+                } else {
+                    out.push_str(&value.to_string());
+                }
+                i = close + 1;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// Track K — Rewrite `GROUPING(<col>)` references outside the union
+/// branches (typically the outer ORDER BY) to use the alias emitted by
+/// `rewrite_grouping_calls`. This keeps `ORDER BY GROUPING(a)` working
+/// after the per-branch lowering.
+fn rewrite_grouping_calls_to_alias(text: &str) -> String {
+    if !text.to_ascii_uppercase().contains("GROUPING(") {
+        return text.to_owned();
+    }
+    let bytes = text.as_bytes();
+    let upper = text.to_ascii_uppercase();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if i + 9 <= bytes.len()
+            && &upper[i..i + 9] == "GROUPING("
+            && (i == 0 || !is_identifier_char(bytes[i - 1]))
+        {
+            let open = i + 8;
+            if let Some(close) = find_matching_paren(bytes, open) {
+                let arg = text[open + 1..close].trim();
+                out.push_str(&format!("__grouping_{}", sanitize_ident(arg)));
+                i = close + 1;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+fn sanitize_ident(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect()
 }
