@@ -326,6 +326,10 @@ pub(crate) fn build_plan(
         PreparedKind::DropTrigger(_) => {
             simple_node(PhysicalKind::Constant, "DROP TRIGGER".to_owned())
         }
+        PreparedKind::Merge(plan) => simple_node(
+            PhysicalKind::Constant,
+            format!("MERGE INTO {}", plan.target.name),
+        ),
     };
 
     if let Some(metrics) = metrics {

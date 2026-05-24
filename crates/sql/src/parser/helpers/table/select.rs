@@ -330,7 +330,23 @@ fn bind_derived_table(
         &sql,
         subquery,
     )?;
-    let columns = template.output_columns.iter().cloned().collect::<Vec<_>>();
+    // Track K — `(<subquery>) AS u(c1, c2, ...)` overrides the subquery's
+    // emitted column names with the alias-supplied list. Used by
+    // `(VALUES ...) AS t(id, name)` in BEYOND-CASE-20115 and the LATERAL
+    // shapes. The override only applies when the count matches; otherwise
+    // we keep the subquery's column names so downstream qualified
+    // references (`u.name`) still resolve.
+    let mut columns = template.output_columns.iter().cloned().collect::<Vec<_>>();
+    if let Some(alias_ref) = alias.as_ref()
+        && !alias_ref.columns.is_empty()
+        && alias_ref.columns.len() == columns.len()
+    {
+        columns = alias_ref
+            .columns
+            .iter()
+            .map(|c| c.name.value.clone())
+            .collect();
+    }
     let rows = crate::exec::materialize_prepared_rows(conn, &template, &[])?;
     let name = alias
         .as_ref()

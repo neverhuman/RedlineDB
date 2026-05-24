@@ -118,6 +118,10 @@ pub enum PreparedKind {
     Attach(crate::exec::attach::AttachPlan),
     CrossDbSql(CrossDbSqlPlan),
     CreateVirtualTable(CreateVirtualTablePlan),
+    /// Track K — SQL:2003 `MERGE INTO target USING source ON ... WHEN ...`
+    /// dispatches to per-clause UPDATE / DELETE / INSERT actions against
+    /// the target table.
+    Merge(MergePlan),
 }
 
 /// Sentinel SQL prefix used to tag `PreparedTemplate`s built for
@@ -434,6 +438,42 @@ pub struct DeletePlan {
     pub table: Arc<TableDef>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
+}
+
+/// Track K — Lowered plan for SQL:2003 `MERGE INTO target USING source ON ...`.
+/// At execute time the dispatcher iterates source rows, looks for matching
+/// target rows under the ON predicate, and applies the first WHEN-clause
+/// whose AND-predicate holds.
+#[derive(Debug, Clone)]
+pub struct MergePlan {
+    pub target: Arc<TableDef>,
+    pub target_alias: Option<Arc<str>>,
+    pub source: Arc<TableDef>,
+    pub source_alias: Option<Arc<str>>,
+    pub on: Expr,
+    pub clauses: Vec<MergeClausePlan>,
+}
+
+/// Track K — A single `WHEN [NOT] MATCHED [AND pred] THEN <action>` clause
+/// in a [`MergePlan`].
+#[derive(Debug, Clone)]
+pub enum MergeClausePlan {
+    /// `WHEN MATCHED [AND pred] THEN UPDATE SET col = expr, ...`
+    MatchedUpdate {
+        predicate: Option<Expr>,
+        assignments: Vec<(usize, DmlValue)>,
+    },
+    /// `WHEN MATCHED [AND pred] THEN DELETE`
+    MatchedDelete { predicate: Option<Expr> },
+    /// `WHEN NOT MATCHED [AND pred] THEN INSERT (col, ...) VALUES (expr, ...)`
+    /// — `columns` lists target column ordinals; `values` lists exprs in the
+    /// same order. Implicit columns (no list) expand to all non-generated
+    /// columns at bind time.
+    NotMatchedInsert {
+        predicate: Option<Expr>,
+        columns: Vec<usize>,
+        values: Vec<DmlValue>,
+    },
 }
 
 #[allow(clippy::large_enum_variant)]

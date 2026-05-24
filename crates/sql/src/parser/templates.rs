@@ -122,6 +122,8 @@ pub(crate) fn bind_statement(
                 }),
             ))
         }
+        // Track K — SQL:2003 MERGE
+        SqlStatement::Merge(merge) => super::dml::bind_merge(schema, schema_epoch, sql, merge),
         other => Err(Error::UnsupportedSql(format!(
             "statement not supported yet: {other:?}"
         ))),

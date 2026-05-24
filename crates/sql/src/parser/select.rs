@@ -228,7 +228,7 @@ pub(crate) fn bind_simple_select_query(
     schema: Arc<SchemaSnapshot>,
     schema_epoch: SchemaEpoch,
     sql: &str,
-    select: Box<sqlparser::ast::Select>,
+    mut select: Box<sqlparser::ast::Select>,
     order_by: Option<sqlparser::ast::OrderBy>,
     limit_clause: Option<LimitClause>,
     params: &mut ParamLayout,
@@ -254,6 +254,18 @@ pub(crate) fn bind_simple_select_query(
     let mut output_columns = Vec::new();
 
     let (source, mut selection) = bind_select_from(conn, &schema, select.from, params)?;
+
+    // Track K — `WINDOW name AS (...)` named-window resolution. Build a
+    // map of name → fully-resolved WindowSpec (chasing `name AS other`
+    // and `name AS (other ORDER BY ...)` inheritance), then inline every
+    // `OVER name` reference in the projection so the downstream window
+    // evaluator only ever sees inline WindowSpec values.
+    let named_windows = build_named_window_map(&select.named_window)?;
+    if !named_windows.is_empty() {
+        for item in &mut select.projection {
+            resolve_named_windows_in_select_item(item, &named_windows)?;
+        }
+    }
 
     for item in select.projection {
         let item = normalize_select_item(item, params)?;
@@ -1306,6 +1318,180 @@ fn top_level_positive_int(expr: &Expr) -> Option<i64> {
             _ => None,
         },
         _ => None,
+    }
+}
+
+/// Track K — Resolve a list of `WINDOW name AS (...)` definitions into a
+/// `name -> WindowSpec` map. Inherited references like
+/// `WINDOW w2 AS w` or `WINDOW w2 AS (w ORDER BY ...)` are flattened so
+/// every entry in the returned map is a fully self-contained spec.
+///
+/// The map keys are lowercased identifier values; lookups are
+/// case-insensitive to match PG/SQLite.
+fn build_named_window_map(
+    definitions: &[sqlparser::ast::NamedWindowDefinition],
+) -> Result<std::collections::HashMap<String, sqlparser::ast::WindowSpec>> {
+    use sqlparser::ast::NamedWindowExpr;
+    let mut map: std::collections::HashMap<String, sqlparser::ast::WindowSpec> =
+        std::collections::HashMap::new();
+    // Resolve in declared order. PG accepts forward refs only in some
+    // dialects; we resolve strictly in order, which matches the
+    // beyond-SQLite test surface (`WINDOW w AS (...), w2 AS (w ...)`).
+    for def in definitions {
+        let key = def.0.value.to_ascii_lowercase();
+        let resolved = match &def.1 {
+            NamedWindowExpr::WindowSpec(spec) => merge_window_with_base(spec, &map)?,
+            NamedWindowExpr::NamedWindow(name) => {
+                let base = map
+                    .get(&name.value.to_ascii_lowercase())
+                    .cloned()
+                    .ok_or_else(|| {
+                        Error::UnsupportedSql(format!(
+                            "named window references unknown window: {}",
+                            name.value
+                        ))
+                    })?;
+                base
+            }
+        };
+        map.insert(key, resolved);
+    }
+    Ok(map)
+}
+
+/// If `spec.window_name` is set, look up the base in `map` and merge
+/// PARTITION BY / ORDER BY / FRAME from `spec` on top.
+///
+/// SQL standard: the inherited base supplies PARTITION BY; the inheriting
+/// spec may extend ORDER BY (or add a frame). RedlineDB follows the
+/// PG-compatible "additive on top" rule.
+fn merge_window_with_base(
+    spec: &sqlparser::ast::WindowSpec,
+    map: &std::collections::HashMap<String, sqlparser::ast::WindowSpec>,
+) -> Result<sqlparser::ast::WindowSpec> {
+    let Some(base_name) = spec.window_name.as_ref() else {
+        return Ok(sqlparser::ast::WindowSpec {
+            window_name: None,
+            partition_by: spec.partition_by.clone(),
+            order_by: spec.order_by.clone(),
+            window_frame: spec.window_frame.clone(),
+        });
+    };
+    let base = map.get(&base_name.value.to_ascii_lowercase()).ok_or_else(|| {
+        Error::UnsupportedSql(format!(
+            "named window references unknown window: {}",
+            base_name.value
+        ))
+    })?;
+    let mut partition_by = base.partition_by.clone();
+    partition_by.extend(spec.partition_by.iter().cloned());
+    let mut order_by = base.order_by.clone();
+    order_by.extend(spec.order_by.iter().cloned());
+    let window_frame = spec.window_frame.clone().or_else(|| base.window_frame.clone());
+    Ok(sqlparser::ast::WindowSpec {
+        window_name: None,
+        partition_by,
+        order_by,
+        window_frame,
+    })
+}
+
+/// Walk a [`SelectItem`] tree and replace every
+/// `OVER name` reference (and `OVER (name extra...)`) with the inlined
+/// WindowSpec from `named_windows`.
+fn resolve_named_windows_in_select_item(
+    item: &mut SelectItem,
+    named_windows: &std::collections::HashMap<String, sqlparser::ast::WindowSpec>,
+) -> Result<()> {
+    match item {
+        SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+            resolve_named_windows_in_expr(expr, named_windows)
+        }
+        _ => Ok(()),
+    }
+}
+
+fn resolve_named_windows_in_expr(
+    expr: &mut Expr,
+    named_windows: &std::collections::HashMap<String, sqlparser::ast::WindowSpec>,
+) -> Result<()> {
+    use sqlparser::ast::WindowType;
+    match expr {
+        Expr::Function(func) => {
+            if let Some(over) = func.over.as_mut() {
+                match over {
+                    WindowType::NamedWindow(name) => {
+                        let spec = named_windows
+                            .get(&name.value.to_ascii_lowercase())
+                            .cloned()
+                            .ok_or_else(|| {
+                                Error::UnsupportedSql(format!(
+                                    "OVER references unknown window: {}",
+                                    name.value
+                                ))
+                            })?;
+                        *over = WindowType::WindowSpec(spec);
+                    }
+                    WindowType::WindowSpec(spec) => {
+                        if spec.window_name.is_some() {
+                            *spec = merge_window_with_base(spec, named_windows)?;
+                        }
+                    }
+                }
+            }
+            // Recurse into function arguments (so window calls nested
+            // inside e.g. coalesce(..) still resolve).
+            if let sqlparser::ast::FunctionArguments::List(list) = &mut func.args {
+                for arg in &mut list.args {
+                    resolve_named_windows_in_function_arg(arg, named_windows)?;
+                }
+            }
+        }
+        Expr::Nested(inner) => resolve_named_windows_in_expr(inner, named_windows)?,
+        Expr::BinaryOp { left, right, .. } => {
+            resolve_named_windows_in_expr(left, named_windows)?;
+            resolve_named_windows_in_expr(right, named_windows)?;
+        }
+        Expr::UnaryOp { expr, .. } => resolve_named_windows_in_expr(expr, named_windows)?,
+        Expr::Cast { expr, .. } => resolve_named_windows_in_expr(expr, named_windows)?,
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            if let Some(operand) = operand.as_mut() {
+                resolve_named_windows_in_expr(operand, named_windows)?;
+            }
+            for when in conditions {
+                resolve_named_windows_in_expr(&mut when.condition, named_windows)?;
+                resolve_named_windows_in_expr(&mut when.result, named_windows)?;
+            }
+            if let Some(else_result) = else_result.as_mut() {
+                resolve_named_windows_in_expr(else_result, named_windows)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn resolve_named_windows_in_function_arg(
+    arg: &mut sqlparser::ast::FunctionArg,
+    named_windows: &std::collections::HashMap<String, sqlparser::ast::WindowSpec>,
+) -> Result<()> {
+    use sqlparser::ast::{FunctionArg, FunctionArgExpr};
+    match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+        | FunctionArg::Named {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        }
+        | FunctionArg::ExprNamed {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        } => resolve_named_windows_in_expr(expr, named_windows),
+        _ => Ok(()),
     }
 }
 
