@@ -48,6 +48,7 @@ pub(crate) mod vec;
 
 mod agg;
 mod agg_eval;
+pub(crate) mod intern;
 use agg::*;
 mod insert;
 use insert::*;
