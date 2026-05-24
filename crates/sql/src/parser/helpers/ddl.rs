@@ -118,9 +118,17 @@ pub(crate) fn convert_column_def(
                 let expr_text = match &generation_expr {
                     Some(e) => e.to_string(),
                     None => {
-                        return Err(Error::UnsupportedSql(
-                            "GENERATED column requires an expression".to_owned(),
-                        ));
+                        // Track J — `GENERATED { ALWAYS | BY DEFAULT } AS
+                        // IDENTITY` (Postgres). No expression: treat the
+                        // column as an INTEGER PRIMARY KEY auto-increment
+                        // (SQLite's nearest equivalent). The kernel will
+                        // pick up an auto-assigned rowid on INSERT, matching
+                        // the Postgres surface result for ordered output.
+                        constraints.push(ColumnConstraintSpec::PrimaryKey {
+                            sort_dir: SortDir::Asc,
+                            conflict: ConflictAction::Abort,
+                        });
+                        continue;
                     }
                 };
                 let kind = match generation_expr_mode {
