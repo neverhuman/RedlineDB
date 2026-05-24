@@ -858,3 +858,75 @@ fn create_index_using_gin_is_parseable() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0][0], SqlValue::Integer(1));
 }
+
+// ---------------------------------------------------------------------------
+// Track H — beyond-SQLite (Postgres parity) coverage.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pg_date_trunc_month_floors_to_first_of_month() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('month', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_year_floors_to_jan_1() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('year', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-01-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_hour_clears_smaller_units() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('hour', '2025-04-17 13:25:42')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-17 13:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_quarter_floors_to_quarter_start() {
+    let (_d, c) = open();
+    // April → Q2, which starts in April. 2025-04-17 → 2025-04-01.
+    let v = q1(&c, "SELECT date_trunc('quarter', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-01 00:00:00")));
+    // July → Q3, which starts in July. 2025-07-15 → 2025-07-01.
+    let v = q1(&c, "SELECT date_trunc('quarter', '2025-07-15 06:00:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-07-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_unknown_field_returns_null() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('nope', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Null);
+}
+
+#[test]
+fn pg_gen_random_uuid_renders_36_char_canonical() {
+    let (_d, c) = open();
+    // Canonical 8-4-4-4-12 with hyphens is exactly 36 chars.
+    let v = q1(&c, "SELECT length(gen_random_uuid())");
+    assert_eq!(v, SqlValue::Integer(36));
+    // Two calls produce distinct outputs (probabilistically certain at 122 bits).
+    let v = q1(&c, "SELECT gen_random_uuid() = gen_random_uuid()");
+    assert_eq!(v, SqlValue::Integer(0));
+}
+
+#[test]
+fn pg_gen_random_uuid_has_v4_variant_bits() {
+    let (_d, c) = open();
+    // Position 15 (1-based) of the canonical string is the version nibble;
+    // it must be '4' for a v4 UUID.
+    let v = q1(&c, "SELECT substr(gen_random_uuid(), 15, 1)");
+    assert_eq!(v, SqlValue::Text(Arc::from("4")));
+    // Position 20 (1-based) is the variant nibble; for RFC 4122 it must be
+    // one of 8, 9, a, b (binary 10xx). GLOB '[89ab]' returns 1 when so.
+    // Parens around the substr call sidestep a parser limitation where
+    // `func() GLOB ...` is otherwise rejected by the bundled sqlparser.
+    let v = q1(
+        &c,
+        "SELECT (substr(gen_random_uuid(), 20, 1)) GLOB '[89ab]'",
+    );
+    assert_eq!(v, SqlValue::Integer(1));
+}

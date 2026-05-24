@@ -518,3 +518,150 @@ pub(crate) fn vector_distance_to_value(
         .map_err(|e| Error::UnsupportedSql(format!("vector distance: {e}")))?;
     Ok(SqlValue::Real(d as f64))
 }
+
+// ---------------------------------------------------------------------------
+// Track H — beyond-SQLite (Postgres parity) value helpers.
+//
+// These helpers implement Postgres-style scalar semantics so that the
+// beyond_sqlite oracle can compare RedlineDB output against psql 16 without
+// needing a separate compatibility mode. Each helper returns a TEXT-shaped
+// SqlValue formatted the way PG renders the result in unaligned + tuples-only
+// mode (`-A -t`), which is the format the runner captures.
+// ---------------------------------------------------------------------------
+
+/// `date_trunc(field, ts)` — truncates a timestamp/date string to the
+/// granularity of `field`. The supported field values match PG's documented
+/// set (`year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`,
+/// `second`, `millennium`, `century`, `decade`); unrecognised fields propagate
+/// NULL the same way an out-of-range julian-day input does.
+///
+/// The output is always rendered as `YYYY-MM-DD HH:MM:SS` (PG's default
+/// timestamp text shape under `format=unaligned`), even when the input was a
+/// pure date — matches `psql -A -t`.
+pub(crate) fn pg_date_trunc(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() != 2 || values.iter().any(|v| matches!(v, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let field = value_to_string(&values[0]).to_ascii_lowercase();
+    let ts_str = value_to_string(&values[1]);
+    let mut dt = match crate::datetime::parse_timestring(&ts_str) {
+        Ok(v) => v,
+        Err(_) => return Ok(SqlValue::Null),
+    };
+    // Always clear sub-second precision before applying coarser truncation.
+    dt.micro = 0;
+    match field.as_str() {
+        "second" => {}
+        "minute" => {
+            dt.second = 0;
+        }
+        "hour" => {
+            dt.second = 0;
+            dt.minute = 0;
+        }
+        "day" => {
+            dt.second = 0;
+            dt.minute = 0;
+            dt.hour = 0;
+        }
+        "week" => {
+            // PG truncates to Monday of the week. Compute the offset using
+            // Zeller-style civil-day math via to_unix.
+            dt.second = 0;
+            dt.minute = 0;
+            dt.hour = 0;
+            let unix_days = dt.to_unix().div_euclid(86_400);
+            // 1970-01-01 was a Thursday → weekday index 3 (Mon=0).
+            let wd = (unix_days + 3).rem_euclid(7);
+            let monday = unix_days - wd;
+            dt = crate::datetime::DateTime::from_unix(monday * 86_400, 0);
+        }
+        "month" => {
+            dt.second = 0;
+            dt.minute = 0;
+            dt.hour = 0;
+            dt.day = 1;
+        }
+        "quarter" => {
+            dt.second = 0;
+            dt.minute = 0;
+            dt.hour = 0;
+            dt.day = 1;
+            // Quarter: 1,2,3 → 1; 4,5,6 → 4; 7,8,9 → 7; 10,11,12 → 10.
+            dt.month = ((dt.month - 1) / 3) * 3 + 1;
+        }
+        "year" => {
+            dt.second = 0;
+            dt.minute = 0;
+            dt.hour = 0;
+            dt.day = 1;
+            dt.month = 1;
+        }
+        "decade" => {
+            dt.second = 0;
+            dt.minute = 0;
+            dt.hour = 0;
+            dt.day = 1;
+            dt.month = 1;
+            dt.year = (dt.year / 10) * 10;
+        }
+        "century" => {
+            dt.second = 0;
+            dt.minute = 0;
+            dt.hour = 0;
+            dt.day = 1;
+            dt.month = 1;
+            // PG: 2000 belongs to the 20th century, so floor by 100 and shift.
+            dt.year = ((dt.year - 1) / 100) * 100 + 1;
+        }
+        "millennium" => {
+            dt.second = 0;
+            dt.minute = 0;
+            dt.hour = 0;
+            dt.day = 1;
+            dt.month = 1;
+            dt.year = ((dt.year - 1) / 1000) * 1000 + 1;
+        }
+        _ => return Ok(SqlValue::Null),
+    }
+    if !dt.is_formattable() {
+        return Ok(SqlValue::Null);
+    }
+    Ok(SqlValue::Text(Arc::from(dt.format_datetime())))
+}
+
+/// `gen_random_uuid()` — emits a random UUID v4 in canonical 8-4-4-4-12
+/// lowercase hex form. Uses the existing kernel RNG (no new crate dep) and
+/// sets the version (bits 12-15 of byte 6) and variant (bits 6-7 of byte 8)
+/// fields per RFC 4122 §4.4.
+pub(crate) fn pg_gen_random_uuid(values: &[SqlValue]) -> Result<SqlValue> {
+    if !values.is_empty() {
+        return Err(Error::UnsupportedSql(
+            "gen_random_uuid takes no arguments".to_owned(),
+        ));
+    }
+    let mut bytes = [0u8; 16];
+    // Each random_i64() call gives us 8 random bytes; one call covers half
+    // the UUID, two cover the whole 16-byte buffer.
+    let lo = random_i64() as u64;
+    let hi = random_i64() as u64;
+    bytes[..8].copy_from_slice(&lo.to_le_bytes());
+    bytes[8..].copy_from_slice(&hi.to_le_bytes());
+    // RFC 4122 §4.4 — v4 marker bits.
+    bytes[6] = (bytes[6] & 0x0F) | 0x40;
+    bytes[8] = (bytes[8] & 0x3F) | 0x80;
+    Ok(SqlValue::Text(Arc::from(format_uuid_bytes(&bytes))))
+}
+
+/// Render 16 raw bytes as a canonical lowercase 8-4-4-4-12 UUID string.
+pub(crate) fn format_uuid_bytes(bytes: &[u8; 16]) -> String {
+    let mut out = String::with_capacity(36);
+    use std::fmt::Write as _;
+    for (i, b) in bytes.iter().enumerate() {
+        if matches!(i, 4 | 6 | 8 | 10) {
+            out.push('-');
+        }
+        let _ = write!(out, "{b:02x}");
+    }
+    out
+}
