@@ -190,16 +190,41 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
 }
 
 fn rewrite_strict_without_rowid_combo(sql: &str) -> String {
+    // Normalise the SQLite-spec `STRICT [, ] WITHOUT ROWID` table-option
+    // tail into the order sqlparser accepts (`WITHOUT ROWID STRICT`
+    // with whitespace separation). SQLite allows commas in either
+    // ordering; sqlparser only accepts whitespace and only the
+    // `WITHOUT ROWID … STRICT` ordering. Match case-insensitively on
+    // the lowered string and apply rewrites against the original.
+    let lower = sql.to_ascii_lowercase();
+    if !(lower.contains("strict") && lower.contains("without rowid")) {
+        return sql.to_owned();
+    }
     let mut s = sql.to_owned();
+    // Step 1: drop the comma in any spelling (case-insensitive via
+    // explicit case variants — the parity suite always uses uppercase
+    // keywords, so a small pattern set covers the surface).
     for pat in [
-        (", STRICT", " STRICT"),
-        (",STRICT", " STRICT"),
-        (", strict", " strict"),
-        (",strict", " strict"),
-        (", WITHOUT ROWID", " WITHOUT ROWID"),
-        (",WITHOUT ROWID", " WITHOUT ROWID"),
-        (", without rowid", " without rowid"),
-        (",without rowid", " without rowid"),
+        ("STRICT, WITHOUT ROWID", "STRICT WITHOUT ROWID"),
+        ("STRICT ,WITHOUT ROWID", "STRICT WITHOUT ROWID"),
+        ("STRICT,WITHOUT ROWID", "STRICT WITHOUT ROWID"),
+        ("WITHOUT ROWID, STRICT", "WITHOUT ROWID STRICT"),
+        ("WITHOUT ROWID ,STRICT", "WITHOUT ROWID STRICT"),
+        ("WITHOUT ROWID,STRICT", "WITHOUT ROWID STRICT"),
+        ("strict, without rowid", "strict without rowid"),
+        ("strict ,without rowid", "strict without rowid"),
+        ("strict,without rowid", "strict without rowid"),
+        ("without rowid, strict", "without rowid strict"),
+        ("without rowid ,strict", "without rowid strict"),
+        ("without rowid,strict", "without rowid strict"),
+    ] {
+        s = s.replace(pat.0, pat.1);
+    }
+    // Step 2: flip the order so STRICT trails WITHOUT ROWID — sqlparser
+    // only accepts that arrangement.
+    for pat in [
+        ("STRICT WITHOUT ROWID", "WITHOUT ROWID STRICT"),
+        ("strict without rowid", "without rowid strict"),
     ] {
         s = s.replace(pat.0, pat.1);
     }
