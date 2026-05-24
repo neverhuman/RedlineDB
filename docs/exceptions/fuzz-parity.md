@@ -23,10 +23,10 @@ because:
    runs the generated SQL against two fresh in-memory engines (rusqlite
    and RedlineDB) per iteration. The SQL never reaches production code,
    never opens a tenant database, never crosses a trust boundary.
-2. The fuzzer is the *gate* against parity drift, not a downstream
-   consumer of one. Replacing `format!()` with parameterized AST nodes
-   would simply move the same string-emission a layer down (the engines
-   parse text).
+2. The fuzzer is a local development regression harness, not an official
+   SQLite parity coverage, benchmark, report, sentinel, or proof-evidence
+   producer. Official parity evidence is produced only through the pinned
+   `neverhuman/redline-testing` release artifact.
 3. Both target engines run against fresh in-memory databases that are
    discarded at the end of every test. Even a worst-case generator
    producing a malicious payload (it does not) would only affect a
@@ -46,5 +46,5 @@ the gate across two compilation units for no benefit.
 - Migration path: none required. If a future audit rule for
   fuzzer-specific patterns lands, swap this path-level exception for
   the per-rule waiver.
-- Proof lane: `just fuzz-parity` exercises the generator end-to-end
-  against the rusqlite oracle on every PR.
+- Proof lane: none. Public fuzz-parity lanes are disabled so RedlineDB cannot
+  produce local SQLite parity evidence outside pinned `redline-testing`.

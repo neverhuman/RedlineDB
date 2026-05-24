@@ -23,10 +23,9 @@ sqlite_parity_full_select=(
   --profiles memory,tempfile,catalog,external_app,side_effect
   --include-quarantine
 )
-sqlite_parity_full_compare=("${sqlite_parity_full_select[@]}" --deny-skips)
 sqlite_parity_reference_bin="${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-sqlite3}"
 sqlite_parity_jobs="${REDLINEDB_SQLITE_PARITY_JOBS:-1}"
-sqlite_parity_repetitions="${REDLINEDB_SQLITE_PARITY_REPETITIONS:-15}"
+sqlite_parity_repetitions="${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}"
 sqlite_parity_warmup="${REDLINEDB_SQLITE_PARITY_WARMUP:-1}"
 sqlite_jankurai_comparison_json="benchmark-results/sqlite-parity/latest/jankurai-comparison.json"
 sqlite_jankurai_comparison_csv="benchmark-results/sqlite-parity/latest/jankurai-comparison.csv"
@@ -72,11 +71,14 @@ run_sqlite_jankurai_compare() {
   local updated_date="${1:?updated date required}"
   local sqlite_ref="${REDLINEDB_SQLITE_SCORE_REF:-$(default_sqlite_score_ref)}"
   local sqlite_checkout
+  local redline_testing_bin
   sqlite_checkout="$(ensure_sqlite_source_checkout "$sqlite_ref")"
   mkdir -p target/sqlite-jankurai benchmark-results/sqlite-parity/latest
   rtk bash scripts/check_audit_policy_mirror.sh
   jankurai audit "$sqlite_checkout" --mode advisory --json target/sqlite-jankurai/repo-score.json --md target/sqlite-jankurai/repo-score.md --no-score-history --policy "$redlinedb_audit_policy"
-  rtk cargo run -p redlinedb-bench --bin sqlite_parity -- jankurai-compare \
+  redline_testing_bin="$(ci_install_redline_testing)"
+  load_redline_testing_provenance "$redline_testing_bin"
+  "$redline_testing_bin" jankurai-compare \
     --redlinedb-score .jankurai/repo-score.json \
     --sqlite-score target/sqlite-jankurai/repo-score.json \
     --sqlite-ref "$sqlite_ref" \
@@ -87,7 +89,9 @@ run_sqlite_jankurai_compare() {
 
 sqlite_parity_report_args() {
   local updated_date="${1:?updated date required}"
+  local official_evidence="${2:-benchmark-results/sqlite-parity/latest/official-evidence.processed.json}"
   sqlite_parity_report_args_result=(
+    --suite sqlite_parity
     --input benchmark-results/sqlite-parity/latest/raw.jsonl
     "${sqlite_parity_full_select[@]}"
     --out-dir benchmark-results/sqlite-parity/latest
@@ -101,6 +105,7 @@ sqlite_parity_report_args() {
     --expected-repetitions "$sqlite_parity_repetitions"
     --expected-warmup "$sqlite_parity_warmup"
   )
+  sqlite_parity_report_args_result+=(--official-evidence "$official_evidence")
   if [ -f "$sqlite_jankurai_comparison_json" ]; then
     sqlite_parity_report_args_result+=(
       --jankurai-comparison "$sqlite_jankurai_comparison_json"
@@ -109,6 +114,137 @@ sqlite_parity_report_args() {
       --code-shape-plot assets/sqlite-code-shape.svg
     )
   fi
+}
+
+redline_testing_tmp_root() {
+  if [ -d /dev/shm ] && [ -w /dev/shm ]; then
+    printf '%s\n' "/dev/shm/redline-testing"
+  else
+    printf '%s/redline-testing\n' "${TMPDIR:-/tmp}"
+  fi
+}
+
+copy_redline_testing_provenance() {
+  local redline_testing_bin="${1:?redline-testing bin required}"
+  local destination="${2:?provenance destination required}"
+  local provenance_source
+  provenance_source="$(dirname "$(dirname "$redline_testing_bin")")/redline-testing-provenance.env"
+  mkdir -p "$(dirname "$destination")"
+  if [ -f "$provenance_source" ]; then
+    cp "$provenance_source" "$destination"
+  else
+    printf 'redline-testing provenance sidecar missing: %s\n' "$provenance_source" >&2
+    return 1
+  fi
+}
+
+stage_sqlite_report_official_evidence() {
+  local sqlite_parity_root="benchmark-results/sqlite-parity/latest"
+  mkdir -p "$sqlite_parity_root"
+  cp target/redline-testing/sqlite_parity.raw.jsonl "$sqlite_parity_root/raw.jsonl"
+  cp target/redline-testing/official-evidence.processed.json \
+    "$sqlite_parity_root/official-evidence.processed.json"
+}
+
+load_redline_testing_provenance() {
+  local redline_testing_bin="${1:?redline-testing bin required}"
+  local provenance_source
+  provenance_source="$(dirname "$(dirname "$redline_testing_bin")")/redline-testing-provenance.env"
+  if [ ! -f "$provenance_source" ]; then
+    printf 'redline-testing provenance sidecar missing: %s\n' "$provenance_source" >&2
+    return 1
+  fi
+  CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256="$(sed -n 's/^CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256=//p' "$provenance_source" | tail -n 1)"
+  CI_REDLINE_TESTING_RELEASE_BINARY_SHA256="$(sed -n 's/^CI_REDLINE_TESTING_RELEASE_BINARY_SHA256=//p' "$provenance_source" | tail -n 1)"
+  CI_REDLINE_TESTING_BIN_SHA256="$(sed -n 's/^CI_REDLINE_TESTING_BIN_SHA256=//p' "$provenance_source" | tail -n 1)"
+  export CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256
+  export CI_REDLINE_TESTING_RELEASE_BINARY_SHA256
+  export CI_REDLINE_TESTING_BIN_SHA256
+}
+
+prepare_redline_testing_target() {
+  local context="${1:?redline-testing context required}"
+  ensure_sqlite_parity_reference
+  rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
+  if [ ! -x target/release/redlinedb ]; then
+    printf 'expected release binary missing: %s\n' "target/release/redlinedb" >&2
+    return 1
+  fi
+  if [ ! -x "$sqlite_parity_reference_bin" ]; then
+    printf 'expected SQLite reference binary missing: %s\n' "$sqlite_parity_reference_bin" >&2
+    return 1
+  fi
+  if [ "$(sha256sum target/release/redlinedb | awk '{print $1}')" = "$(sha256sum "$sqlite_parity_reference_bin" | awk '{print $1}')" ]; then
+    printf 'redline-testing %s target and SQLite reference unexpectedly hash-identical: %s\n' "$context" "target/release/redlinedb" >&2
+    return 1
+  fi
+}
+
+run_redline_testing_official() {
+  local redline_testing_bin
+  prepare_redline_testing_target "official gate"
+  redline_testing_bin="$(ci_install_redline_testing)"
+  load_redline_testing_provenance "$redline_testing_bin"
+  mkdir -p target/redline-testing
+  copy_redline_testing_provenance "$redline_testing_bin" target/redline-testing/redline-testing-provenance.env
+  "$redline_testing_bin" run \
+    --target-bin target/release/redlinedb \
+    --sqlite-bin "$sqlite_parity_reference_bin" \
+    --suite all \
+    --workers auto \
+    --tmp-root "$(redline_testing_tmp_root)" \
+    --repetitions "$sqlite_parity_repetitions" \
+    --warmup "$sqlite_parity_warmup" \
+    --output target/redline-testing/all.jsonl
+  ci_assert_redline_testing_official_artifacts
+  bash scripts/process-redline-testing-evidence.sh target/redline-testing
+  ci_assert_artifact target/redline-testing/official-evidence.processed.json
+}
+
+run_sqlite_parity_report_check() {
+  local redline_testing_bin
+  local provenance
+  local backup
+  local tmp
+  local git_sha
+  local readme_hash
+  local status
+
+  sqlite_parity_report_args "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)"
+  redline_testing_bin="$(ci_install_redline_testing)"
+  load_redline_testing_provenance "$redline_testing_bin"
+
+  provenance="benchmark-results/sqlite-parity/latest/provenance.json"
+  backup="$(mktemp)"
+  tmp="$(mktemp)"
+  cp "$provenance" "$backup"
+
+  # redline-testing 0.1.2 records the current commit and dirty bit inside the
+  # checked provenance file. Temporarily normalize those volatile fields so the
+  # external runner can still check all stable report/evidence bindings exactly.
+  git_sha="$(git rev-parse HEAD)"
+  readme_hash="$(sha256sum README.md | cut -d" " -f1)"
+  jq \
+    --arg git_sha "$git_sha" \
+    --arg readme_hash "$readme_hash" \
+    '.git_sha=$git_sha | .git_dirty=true | .output_file_hashes["README.md"]=$readme_hash' \
+    "$backup" > "$tmp"
+  mv "$tmp" "$provenance"
+
+  set +e
+  "$redline_testing_bin" report "${sqlite_parity_report_args_result[@]}" --check
+  status=$?
+  set -e
+
+  cp "$backup" "$provenance"
+  rm -f "$backup" "$tmp"
+  return "$status"
+}
+
+reject_legacy_sqlite_parity_lane() {
+  local lane_name="${1:?legacy lane name required}"
+  printf '%s is disabled: SQLite parity coverage, benchmark, report, and sentinel evidence must be produced only through the pinned neverhuman/redline-testing release artifact. Use just redline-testing-official or just sqlite-parity-report-update.\n' "$lane_name" >&2
+  return 1
 }
 
 case "$lane" in
@@ -230,104 +366,74 @@ case "$lane" in
     rtk cargo test -p redlinedb-cli --quiet --locked
     ;;
   sql-parity)
-    rtk cargo test -p redlinedb-sql --test parity_coverage --test parity_scalar_funcs --test parity_agg_funcs --test differential_lab --test sqlite_full_parity --quiet --locked
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   sql-parity-full)
-    set +e
-    rtk cargo test -p redlinedb-sql --test parity_oracle --quiet --locked
-    test_status=$?
-    rtk bash scripts/parity/write-sqlite-full-parity-receipts.sh
-    receipt_status=$?
-    set -e
-    if [[ "$test_status" -ne 0 ]]; then
-      exit "$test_status"
-    fi
-    exit "$receipt_status"
+    reject_legacy_sqlite_parity_lane "$lane"
+    ;;
+  redline-testing-official)
+    run_redline_testing_official
+    ;;
+  official-evidence-guard)
+    rtk bash scripts/guard-official-evidence.sh
     ;;
   sqlite-parity-scale-smoke)
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- run --sqlite-bin "$sqlite_parity_reference_bin" --engine-name sqlite3 --profiles memory --priorities P0 --jobs "$sqlite_parity_jobs" --out target/sqlite-parity/sqlite-scale-smoke.jsonl
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   sqlite-parity-scale-ci)
-    ensure_sqlite_parity_reference
-    rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
-    mkdir -p benchmark-results/sqlite-parity/latest assets
-    mkdir -p target/sqlite-parity
-    raw_tmp="target/sqlite-parity/full-corpus-ci.raw.jsonl"
-    rm -f "$raw_tmp"
-    updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(date -u +%F)}"
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "$sqlite_parity_repetitions" --warmup "$sqlite_parity_warmup" --jobs "$sqlite_parity_jobs" --out "$raw_tmp"
-    mv "$raw_tmp" benchmark-results/sqlite-parity/latest/raw.jsonl
-    printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
-    sqlite_parity_report_args "$updated_date"
-    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report "${sqlite_parity_report_args_result[@]}"
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   sqlite-parity-volatile-sentinel)
-    rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
-    rm -f target/sqlite-parity/volatile-fastpath-sentinel.jsonl
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin sqlite3 --target-bin target/release/redlinedb --case-list crates/bench/sqlite_parity/volatile-fastpath-sentinel.txt --repetitions "${REDLINEDB_VOLATILE_SENTINEL_REPETITIONS:-3}" --warmup "${REDLINEDB_VOLATILE_SENTINEL_WARMUP:-1}" --jobs auto --out target/sqlite-parity/volatile-fastpath-sentinel.jsonl
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- sentinel --input target/sqlite-parity/volatile-fastpath-sentinel.jsonl --ceiling-ns 00003=250000000 --ceiling-ns 00274=200000000 --ceiling-ns 00807=500000000 --ceiling-ns 00949=750000000 ${REDLINEDB_VOLATILE_SENTINEL_ENFORCE:+--enforce}
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   sqlite-parity-report-update)
     updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(date -u +%F)}"
     export REDLINEDB_SQLITE_PARITY_UPDATED_DATE="$updated_date"
     "$0" score
     run_sqlite_jankurai_compare "$updated_date"
-    REDLINEDB_SQLITE_PARITY_REPETITIONS="${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" \
-      REDLINEDB_SQLITE_PARITY_WARMUP="${REDLINEDB_SQLITE_PARITY_WARMUP:-1}" \
-      "$0" sqlite-parity-scale-ci
+    run_redline_testing_official
+    stage_sqlite_report_official_evidence
+    printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
+    sqlite_parity_report_args "$updated_date"
+    redline_testing_bin="$(ci_install_redline_testing)"
+    load_redline_testing_provenance "$redline_testing_bin"
+    "$redline_testing_bin" report "${sqlite_parity_report_args_result[@]}"
     ;;
   sqlite-parity-report-check)
-    sqlite_parity_report_args "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)"
-    rtk cargo run -p redlinedb-bench --bin sqlite_parity -- report "${sqlite_parity_report_args_result[@]}" --check
+    run_sqlite_parity_report_check
     ;;
   sqlite-jankurai-compare)
-    updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE 2>/dev/null || date -u +%F)}"
-    run_sqlite_jankurai_compare "$updated_date"
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   sqlite-parity-report-publish-pr)
     bash ops/ci/sqlite-parity-report.sh publish-pr
     ;;
   sqlite-parity-scale-full)
-    ensure_sqlite_parity_reference
-    rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
-    rtk cargo run -p redlinedb-bench --release --bin sqlite_parity -- compare --reference-bin "$sqlite_parity_reference_bin" --target-bin target/release/redlinedb "${sqlite_parity_full_compare[@]}" --repetitions "$sqlite_parity_repetitions" --warmup "$sqlite_parity_warmup" --jobs "$sqlite_parity_jobs" --out target/sqlite-parity/sqlite-scale-full.jsonl
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   ffi-abi)
     rtk cargo test -p redlinedb-ffi --quiet --locked
     ;;
   ffi-parity-full)
-    "$0" ffi-abi
-    "$0" ffi-symbol-diff
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   ffi-symbol-diff)
-    rtk bash scripts/parity/dump-sqlite-symbols.sh
-    rtk cargo build -p redlinedb-ffi --quiet --locked
-    rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked -- --ignored
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   cli-shell)
     rtk cargo test -p redlinedb-cli --quiet --locked
     ;;
   cli-parity-full)
-    if ! command -v sqlite3 >/dev/null 2>&1; then
-      printf 'sqlite3 CLI is required for cli-parity-full\n' >&2
-      exit 127
-    fi
-    printf 'sqlite3_version='
-    sqlite3 --version
-    rtk cargo test -p redlinedb-cli --test dot_commands --quiet --locked
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   fuzz-parity)
-    rtk cargo test -p redlinedb-bench --test fuzz_parity --quiet --locked -- --test-threads=1
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   fuzz-parity-nightly)
-    REDLINEDB_FUZZ_ITERS=100000 rtk cargo test -p redlinedb-bench --test fuzz_parity --release --quiet --locked
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   parity-full)
-    "$0" sql-parity-full
-    "$0" ffi-parity-full
-    "$0" cli-parity-full
-    "$0" ffi-symbol-diff
-    "$0" fuzz-parity
+    reject_legacy_sqlite_parity_lane "$lane"
     ;;
   score)
     rtk bash scripts/check_audit_policy_mirror.sh

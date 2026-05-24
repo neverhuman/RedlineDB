@@ -7,15 +7,15 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779567470`
-- Started at: `1779567470`
-- Elapsed: `6550` ms
+- Run ID: `1779620843`
+- Started at: `1779620843`
+- Elapsed: `6523` ms
 - Scope: `full`
 - Raw score: `85`
-- Final score: `85`
-- Decision: `advisory`
+- Final score: `78`
+- Decision: `fail`
 - Minimum score: `85`
-- Caps applied: `none`
+- Caps applied: `agent-tool-supply-chain-gap`
 
 ## Hard Rule Caps
 
@@ -48,7 +48,7 @@
 | `destructive-migration-risk` | 70 | no |
 | `authz-or-data-isolation-gap` | 78 | no |
 | `input-boundary-gap` | 78 | no |
-| `agent-tool-supply-chain-gap` | 78 | no |
+| `agent-tool-supply-chain-gap` | 78 | yes |
 | `release-readiness-gap` | 80 | no |
 | `missing-rust-property-or-integration-tests` | 82 | no |
 | `no-agent-friendly-exception-pattern` | 76 | no |
@@ -70,15 +70,15 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`72` files=`328`
+- Status: `review` hard=`0` warning=`73` files=`329`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`165` tokens=`461` bytes=`4430`
+- Duplicate volume: lines=`166` tokens=`467` bytes=`4483`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 22 lower-ranked classes
+  - showing the top 50 classes and omitting 23 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
@@ -119,6 +119,7 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/redlinedb/src/value_conv.rs:245-246, crates/redlinedb/src/value_conv.rs:253-254` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:233-234, crates/redlinedb/src/statement.rs:204-205` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/driver.rs:159-160, crates/redlinedb-sqlx/src/driver.rs:187-188` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/bench/src/sqlite_parity/report_gen/tests.rs:532-533, crates/bench/src/sqlite_parity/report_gen/tests.rs:558-559` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/bridge/options.rs:223-224, crates/redlinedb-sqlx/src/bridge/runtime.rs:52-53` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:91-92, crates/redlinedb/src/connection.rs:97-98` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/bench/src/sqlite_parity/engine.rs:383-384, crates/bench/src/sqlite_parity/engine.rs:422-423` | `same body appears under different names across files` |
@@ -131,7 +132,6 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/domain/src/error.rs:73-74, crates/domain/src/error.rs:91-92` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb-sqlx/src/bridge/options.rs:255-256, crates/redlinedb-sqlx/src/bridge/runtime.rs:129-130` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:304-305, crates/sql/src/parser.rs:329-330` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/savepoint.rs:64-65, crates/sql/src/parser/savepoint.rs:84-85` | `same body appears under different names across files` |
 
 ## Dimensions
 
@@ -231,6 +231,17 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
+3. `high` `security` `docs/testing.md:85`
+   Rule: `HLT-024-AGENT-TOOL-SUPPLY-GAP`
+   Check: `HLT-024-AGENT-TOOL-SUPPLY-GAP:security` `hard` confidence `0.88`
+   Route: TLR `Security, secrets, agency`, lane `security`, owner `standard`
+   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
+   Matched term: `agent tool supply`
+   Reason: agent tool supply-chain changes alter execution authority
+   Fix: pin and review agent tools, MCP servers, hooks, and rule files; keep untrusted tool output separate from trusted policy
+   Rerun: `just security`
+   Fingerprint: `sha256:4b3e93f391c6463dbcbaaf62016437ffdcf698ca1e6a86c586298c1cd0e6e664`
+   Evidence: `benchmark-results/sqlite-parity/latest/`, and `sqlite-parity-report-check`
 
 ## Policy
 
@@ -242,5 +253,7 @@ No audited runtime boundary reclassifications declared.
 
 1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-2. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+2. `high` `HLT-024-AGENT-TOOL-SUPPLY-GAP` `docs/testing.md` - pin and review agent tools, MCP servers, hooks, and rule files; keep untrusted tool output separate from trusted policy
+   Route: `Security, secrets, agency`/`security`
+3. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`

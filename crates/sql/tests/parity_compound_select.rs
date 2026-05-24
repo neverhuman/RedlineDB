@@ -144,7 +144,7 @@ fn except_returns_left_only_rows() {
 
 #[test]
 fn union_all_order_by_position_matches_fuzz_iter_110() {
-    // Regression for target/proof/sqlite-full-parity/fuzz-divergence.txt
+    // Regression from the local differential fuzz parity lane.
     // seed=7 iter=110: ORDER BY 1 after UNION ALL was a no-op because the
     // bare integer literal evaluated to the constant `Integer(1)` per row
     // instead of being treated as a 1-based output-column reference.

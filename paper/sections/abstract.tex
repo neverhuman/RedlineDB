@@ -6,7 +6,7 @@ API contract from scratch in safe Rust and measured what it costs to
 keep the contract while removing the cliff. % sqlite-parity-loc:abstract:begin
 RedlineDB exposes the
 \texttt{sqlite3.h} C ABI and a native \texttt{rldb\_*} surface from
-53.7 KSLOC of scanner-counted core Rust source versus SQLite's fixed
+55.2 KSLOC of scanner-counted core Rust source versus SQLite's fixed
 155.8 KSLOC reference, and replaces the
 % sqlite-parity-loc:abstract:end
 single-writer WAL with a multi-version concurrency control kernel,

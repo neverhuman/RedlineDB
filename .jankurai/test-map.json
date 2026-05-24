@@ -75,8 +75,13 @@
       "purpose": "verify manifests remain parseable and authoritative"
     },
     "benchmark-results/": {
-      "command": "just benchmark-export-existing",
-      "purpose": "verify benchmark-results artifacts export cleanly and stay reproducible"
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify committed benchmark-results artifacts remain bound to official-evidence.processed.json"
+    },
+    "paper/data/loc_comparison.csv": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify the generated paper LOC comparison stays in sync with the committed official evidence artifact",
+      "proof_lane": "sqlite-parity-report-check"
     },
     ".jankurai/coverage-sources.toml": {
       "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
@@ -136,7 +141,27 @@
     },
     "assets/beyond-sqlite-feature-progress.svg": {
       "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the beyond-SQLite feature progress chart stays in sync with the backlog status table",
+      "purpose": "verify the committed official evidence still feeds the beyond-SQLite feature progress chart and backlog status table",
+      "proof_lane": "sqlite-parity-report-check"
+    },
+    "assets/sqlite-parity-latency-gap.svg": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify the generated SQLite parity latency-gap chart stays in sync with the committed official evidence artifact",
+      "proof_lane": "sqlite-parity-report-check"
+    },
+    "assets/sqlite-parity-performance-histogram.svg": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify the generated SQLite parity performance histogram stays in sync with the committed official evidence artifact",
+      "proof_lane": "sqlite-parity-report-check"
+    },
+    "assets/sqlite-parity-ksloc.svg": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify the generated production KSLOC chart stays in sync with the committed official evidence artifact",
+      "proof_lane": "sqlite-parity-report-check"
+    },
+    "assets/sqlite-jankurai-comparison.svg": {
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "verify the generated compact Jankurai comparison chart stays in sync with the committed official evidence artifact",
       "proof_lane": "sqlite-parity-report-check"
     },
     "CHANGELOG.md": {
@@ -200,8 +225,9 @@
       "purpose": "verify root proof-lane routing stays executable"
     },
     "just/lanes.just": {
-      "command": "just fast",
-      "purpose": "verify split lane definitions stay executable"
+      "command": "rtk just --list && rtk just official-evidence-guard && rtk just redline-testing-official",
+      "purpose": "verify split lane definitions expose the official guard and execute the pinned external redline-testing gate",
+      "proof_lane": "official-evidence-guard"
     },
     "crates/kernel/src/index/cursor/raw.rs": {
       "command": "just kernel-cursor",
@@ -227,6 +253,26 @@
       "command": "just fast",
       "purpose": "verify scripts referenced by proof lanes stay executable"
     },
+    "scripts/just/run.sh": {
+      "command": "rtk bash -n scripts/just/run.sh && rtk just official-evidence-guard && rtk just redline-testing-official",
+      "purpose": "verify just lane dispatch guards official evidence and runs the official external suite",
+      "proof_lane": "redline-testing-official"
+    },
+    "scripts/guard-official-evidence.sh": {
+      "command": "rtk bash -n scripts/guard-official-evidence.sh && rtk just official-evidence-guard",
+      "purpose": "fail if RedlineDB reintroduces official benchmark/report generation outside pinned redline-testing",
+      "proof_lane": "official-evidence-guard"
+    },
+    "scripts/process-redline-testing-evidence.sh": {
+      "command": "rtk bash -n scripts/process-redline-testing-evidence.sh",
+      "purpose": "verify the official evidence processor stays shell-parseable",
+      "proof_lane": "redline-testing-official"
+    },
+    "scripts/ci-local.sh": {
+      "command": "rtk bash -n scripts/ci-local.sh && rtk bash scripts/ci-local.sh pr-ci",
+      "purpose": "verify the local PR CI mirror uses the same redline-testing official wrapper as GitHub CI",
+      "proof_lane": "pr-ci"
+    },
     ".jankurai/zyal/": {
       "command": "just score",
       "purpose": "verify canonical ZYAL runbooks stay under .jankurai/zyal and only use the .zyal extension"
@@ -236,12 +282,12 @@
       "purpose": "verify app surfaces remain routed through the audit"
     },
     "contracts/": {
-      "command": "rtk just ffi-symbol-diff",
-      "purpose": "verify exported C ABI symbols stay aligned with the sqlite3-compatible contract surface"
+      "command": "rtk just ffi-abi",
+      "purpose": "verify exported C ABI behavior without generating local SQLite parity evidence"
     },
     "contracts/c-abi/": {
-      "command": "rtk just ffi-symbol-diff",
-      "purpose": "verify the canonical hand-authored C ABI header stays aligned with exported symbols"
+      "command": "rtk just ffi-abi",
+      "purpose": "verify the canonical hand-authored C ABI header without generating local SQLite parity evidence"
     },
     "crates/": {
       "command": "just fast",
@@ -301,9 +347,19 @@
       "purpose": "verify ops surfaces remain visible to the audit"
     },
     ".github/workflows/ci.yml": {
-      "command": "just beyond-sqlite-manifest",
-      "purpose": "verify the beyond-SQLite CI lane remains routed through the manifest and aggregate test relay",
-      "proof_lane": "beyond-sqlite-manifest"
+      "command": "rtk bash scripts/ci-local.sh pr-ci",
+      "purpose": "verify GitHub CI remains mirrored by the local PR dispatcher and runs the pinned redline-testing official gate",
+      "proof_lane": "pr-ci"
+    },
+    "ops/ci/lib.sh": {
+      "command": "rtk bash -n ops/ci/lib.sh && rtk just redline-testing-official",
+      "purpose": "verify the shared CI library installs and verifies the pinned redline-testing release artifact",
+      "proof_lane": "redline-testing-official"
+    },
+    "ops/ci/parity.sh": {
+      "command": "rtk bash -n ops/ci/parity.sh && rtk just redline-testing-official",
+      "purpose": "verify parity CI dispatch fails through the external official redline-testing gate instead of in-tree fallback lanes",
+      "proof_lane": "redline-testing-official"
     },
     "ops/ci/beyond-postgres-reference.sh": {
       "command": "rtk bash ops/ci/beyond-postgres-reference.sh",
@@ -353,39 +409,39 @@
       "proof_lane": "fast"
     },
     "crates/bench/sqlite_parity/": {
-      "command": "rtk just sqlite-parity-scale-smoke",
-      "purpose": "prove the bench-owned SQLite parity scale corpus manifest and P0 memory shell contracts execute",
-      "proof_lane": "sqlite-parity-scale-smoke"
+      "command": "rtk just redline-testing-official",
+      "purpose": "prove the external redline-testing official suite entrypoint still reaches the pinned parity gate",
+      "proof_lane": "redline-testing-official"
     },
     "crates/bench/src/sqlite_parity/": {
-      "command": "rtk cargo test -p redlinedb-bench --quiet --locked && rtk just sqlite-parity-scale-smoke",
-      "purpose": "prove the Rust sqlite_parity runner parses the canonical manifest and executes the P0 memory scale smoke",
-      "proof_lane": "sqlite-parity-scale-smoke"
+      "command": "rtk just redline-testing-official",
+      "purpose": "prove the Rust sqlite_parity runner stays compatible with the external redline-testing gate",
+      "proof_lane": "redline-testing-official"
     },
     "crates/bench/src/sqlite_parity/report_gen/": {
-      "command": "rtk cargo test -p redlinedb-bench --bin sqlite_parity --locked",
-      "purpose": "prove README metric generation, summary JSON fields, and report SVG generation",
+      "command": "rtk just sqlite-parity-report-check",
+      "purpose": "prove the committed official evidence still feeds the report generator and the derived README/SVG artifacts stay in sync",
       "proof_lane": "sqlite-parity-report-check"
     },
     "assets/sqlite-jankurai-score.svg": {
       "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify generated compact Jankurai score chart has no drift",
+      "purpose": "verify the generated compact Jankurai score chart stays in sync with the committed official evidence artifact",
       "proof_lane": "sqlite-parity-report-check"
     },
     "assets/sqlite-code-shape.svg": {
       "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify generated compact code-shape chart has no drift",
+      "purpose": "verify the generated compact code-shape chart stays in sync with the committed official evidence artifact",
       "proof_lane": "sqlite-parity-report-check"
     },
     "assets/sqlite-median-test-performance.svg": {
       "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify generated compact median test performance chart has no drift",
+      "purpose": "verify the generated compact median test performance chart stays in sync with the committed official evidence artifact",
       "proof_lane": "sqlite-parity-report-check"
     },
     "crates/bench/src/bin/sqlite_parity.rs": {
-      "command": "rtk cargo test -p redlinedb-bench --quiet --locked && rtk just sqlite-parity-scale-smoke",
-      "purpose": "prove the sqlite_parity binary entrypoint routes to the bench-owned scale runner",
-      "proof_lane": "sqlite-parity-scale-smoke"
+      "command": "rtk just redline-testing-official",
+      "purpose": "prove the sqlite_parity binary entrypoint remains compatible with the external official suite gate",
+      "proof_lane": "redline-testing-official"
     },
     "crates/ffi/tests/exec_input_boundary.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked",
@@ -421,14 +477,12 @@
       "purpose": "prove documented ownership invariants for the FFI surface"
     },
     "crates/ffi/tests/symbol_diff.rs": {
-      "command": "rtk cargo test -p redlinedb-ffi --test symbol_diff --quiet --locked -- --ignored",
-      "purpose": "D6 FFI symbol-diff against libsqlite3 public surface (allowlisted exclusions in crates/ffi/tests/symbol_allowlist.toml)",
-      "proof_lane": "ffi-symbol-diff"
+      "command": "rtk just ffi-abi",
+      "purpose": "FFI ABI regression lane; local SQLite parity symbol-diff evidence is disabled"
     },
     "crates/bench/tests/fuzz_parity.rs": {
-      "command": "rtk cargo test -p redlinedb-bench --test fuzz_parity --quiet --locked -- --test-threads=1",
-      "purpose": "D7 differential SQL fuzz parity gate (rate-monotone baseline at target/proof/sqlite-full-parity/fuzz-divergence.txt)",
-      "proof_lane": "fuzz-parity"
+      "command": "rtk cargo check -p redlinedb-bench --locked",
+      "purpose": "compile the local fuzz harness; public fuzz-parity proof lanes are disabled so official evidence remains redline-testing-only"
     },
     "contracts/c-abi/": {
       "command": "rtk cargo test -p redlinedb-ffi --quiet --locked",

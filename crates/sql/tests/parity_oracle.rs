@@ -1,17 +1,16 @@
 //! Differential SQL parity oracle (Workstream A1).
 //!
 //! Drives the seed corpus under `tests/parity_corpus/<tag>/*.sql` through
-//! both `rusqlite` and `redlinedb_sql`, normalises the result, and writes a
-//! baseline divergence summary under
-//! `target/proof/sqlite-full-parity/baseline-divergence.txt`.
+//! both `rusqlite` and `redlinedb_sql`, normalises the result, and prints a
+//! divergence summary when failures occur.
 //!
 //! The harness itself lives at `tests/parity_oracle/harness.rs` so it can
 //! grow without bloating this test wrapper. The corpus directory layout
 //! drives the `#[test]` matrix below; each tag (basic, compound, …) gets
 //! one test function so failures localise to a feature surface.
 //!
-//! The test writes the divergence summary before asserting, so a failing
-//! run still leaves a raw receipt for triage.
+//! This is a local regression test only. Official SQLite parity evidence is
+//! produced through the pinned `neverhuman/redline-testing` release artifact.
 
 #[path = "parity_oracle/harness.rs"]
 mod harness;
@@ -30,18 +29,6 @@ fn corpus_dir(tag: &str) -> PathBuf {
         .join("tests")
         .join("parity_corpus")
         .join(tag)
-}
-
-fn proof_dir() -> PathBuf {
-    let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
-    let workspace_root = Path::new(&manifest)
-        .ancestors()
-        .nth(2)
-        .expect("workspace root");
-    workspace_root
-        .join("target")
-        .join("proof")
-        .join("sqlite-full-parity")
 }
 
 fn list_sql_files(dir: &Path) -> Vec<PathBuf> {
@@ -109,14 +96,9 @@ fn run_tag(tag: &str) -> TagReport {
     report
 }
 
-fn write_summary(reports: &[TagReport]) {
-    let dir = proof_dir();
-    if let Err(e) = fs::create_dir_all(&dir) {
-        eprintln!("could not create proof dir {}: {e}", dir.display());
-        return;
-    }
+fn render_summary(reports: &[TagReport]) -> String {
     let mut out = String::new();
-    out.push_str("# SQLite parity oracle — baseline divergence\n");
+    out.push_str("# SQLite parity oracle - local divergence summary\n");
     out.push_str("# Tag | Files | Passed | Failed\n");
     let mut total_files = 0usize;
     let mut total_passed = 0usize;
@@ -151,16 +133,13 @@ fn write_summary(reports: &[TagReport]) {
             out.push('\n');
         }
     }
-    let path = dir.join("baseline-divergence.txt");
-    if let Err(e) = fs::write(&path, out) {
-        eprintln!("could not write {}: {e}", path.display());
-    }
+    out
 }
 
 #[test]
 fn parity_oracle_baseline() {
     let reports: Vec<TagReport> = TAGS.iter().map(|t| run_tag(t)).collect();
-    write_summary(&reports);
+    let summary = render_summary(&reports);
 
     // Print a one-line summary to stdout so CI logs surface the number.
     let total: (usize, usize, usize) = reports.iter().fold((0, 0, 0), |(f, p, e), r| {
@@ -197,11 +176,9 @@ fn parity_oracle_baseline() {
     }
 
     assert_eq!(
-        total.2,
-        0,
-        "parity_oracle found {} divergent corpus file(s); see {}",
-        total.2,
-        proof_dir().join("baseline-divergence.txt").display()
+        total.2, 0,
+        "parity_oracle found {} divergent corpus file(s):\n{}",
+        total.2, summary
     );
 }
 
