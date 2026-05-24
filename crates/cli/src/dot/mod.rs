@@ -32,6 +32,8 @@ pub enum OutputMode {
     Insert,
     Column,
     Html,
+    Box,
+    Tcl,
 }
 
 impl OutputMode {
@@ -44,11 +46,13 @@ impl OutputMode {
             "ascii" => Self::Ascii,
             "markdown" => Self::Markdown,
             "quote" => Self::Quote,
-            "table" | "box" => Self::Table,
+            "table" => Self::Table,
             "tabs" => Self::Tabs,
             "insert" => Self::Insert,
             "column" => Self::Column,
             "html" => Self::Html,
+            "box" => Self::Box,
+            "tcl" => Self::Tcl,
             _ => return None,
         })
     }
@@ -67,6 +71,8 @@ impl OutputMode {
             Self::Insert => "insert",
             Self::Column => "column",
             Self::Html => "html",
+            Self::Box => "box",
+            Self::Tcl => "tcl",
         }
     }
 
@@ -75,12 +81,16 @@ impl OutputMode {
             Self::Tabs => "\t",
             Self::Csv => ",",
             Self::Ascii => "\x1f",
+            Self::Tcl => " ",
             _ => "|",
         }
     }
 
     pub fn headers_by_default(self) -> bool {
-        matches!(self, Self::Markdown | Self::Table)
+        matches!(
+            self,
+            Self::Markdown | Self::Table | Self::Box | Self::Column | Self::Html
+        )
     }
 }
 
@@ -90,6 +100,7 @@ pub struct CliState {
     pub conn: Connection,
     pub db_path: PathBuf,
     pub mode: OutputMode,
+    pub insert_table_name: String,
     pub separator: String,
     pub row_separator: String,
     pub show_header: bool,
@@ -98,6 +109,9 @@ pub struct CliState {
     pub had_error: bool,
     pub timer: bool,
     pub changes: bool,
+    /// Cumulative count of rows changed since the connection opened,
+    /// surfaced by `.changes on` as the `total_changes` column.
+    pub total_changes: i64,
     pub echo: bool,
     pub trace_stdout: bool,
     pub eqp: bool,
@@ -196,6 +210,7 @@ impl CliState {
             conn,
             db_path,
             mode,
+            insert_table_name: "tab".to_owned(),
             separator,
             row_separator: "\n".to_owned(),
             show_header: header,
@@ -204,6 +219,7 @@ impl CliState {
             had_error: false,
             timer: false,
             changes: false,
+            total_changes: 0,
             echo: false,
             trace_stdout: false,
             eqp: false,
@@ -374,9 +390,16 @@ fn print_help(_state: &mut CliState) -> Result<DotOutcome, String> {
 }
 
 /// Split a dot-command line into tokens, honouring single/double quotes.
+/// Double-quoted tokens have backslash-escape sequences (`\t`, `\n`, `\r`,
+/// `\\`) expanded; single-quoted and bare tokens are treated literally,
+/// matching the SQLite shell's argument parser.
 pub fn split_args(line: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current = String::new();
+    // Track whether the most-recent characters appended to `current` were
+    // inside a double-quoted segment so we can expand escapes on token
+    // close.
+    let mut current_double_quoted = false;
     let mut iter = line.chars().peekable();
     let mut quote: Option<char> = None;
     while let Some(ch) = iter.next() {
@@ -385,15 +408,56 @@ pub fn split_args(line: &str) -> Vec<String> {
             (Some(_), c) => current.push(c),
             (None, c) if c.is_whitespace() => {
                 if !current.is_empty() {
-                    out.push(std::mem::take(&mut current));
+                    let token = if current_double_quoted {
+                        unescape_dq(&std::mem::take(&mut current))
+                    } else {
+                        std::mem::take(&mut current)
+                    };
+                    out.push(token);
+                    current_double_quoted = false;
                 }
             }
-            (None, '"') | (None, '\'') => quote = Some(ch),
+            (None, '"') => {
+                quote = Some(ch);
+                current_double_quoted = true;
+            }
+            (None, '\'') => quote = Some(ch),
             (None, c) => current.push(c),
         }
     }
     if !current.is_empty() {
-        out.push(current);
+        let token = if current_double_quoted {
+            unescape_dq(&current)
+        } else {
+            current
+        };
+        out.push(token);
+    }
+    out
+}
+
+/// Expand the backslash escapes that the SQLite shell recognises inside
+/// double-quoted arguments: `\t`, `\n`, `\r`, `\\`, `\"`.
+fn unescape_dq(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('t') => out.push('\t'),
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('\\') => out.push('\\'),
+            Some('"') => out.push('"'),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
     }
     out
 }
@@ -417,8 +481,20 @@ mod tests {
 
     #[test]
     fn mode_parses_aliases() {
-        assert_eq!(OutputMode::parse("box"), Some(OutputMode::Table));
+        // `box` and `table` are now distinct modes to mirror sqlite3
+        // (box uses Unicode line-drawing, table uses ASCII `+---+`).
+        assert_eq!(OutputMode::parse("box"), Some(OutputMode::Box));
+        assert_eq!(OutputMode::parse("table"), Some(OutputMode::Table));
+        assert_eq!(OutputMode::parse("tcl"), Some(OutputMode::Tcl));
         assert_eq!(OutputMode::parse("lines"), Some(OutputMode::Line));
         assert_eq!(OutputMode::parse("nope"), None);
+    }
+
+    #[test]
+    fn split_args_double_quoted_escapes() {
+        // Double-quoted args expand backslash escapes (matches sqlite3).
+        assert_eq!(split_args(".separator \"\\t\""), vec![".separator", "\t"]);
+        // Single-quoted args are taken verbatim.
+        assert_eq!(split_args(".separator '\\t'"), vec![".separator", "\\t"]);
     }
 }

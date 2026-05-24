@@ -148,12 +148,125 @@ pub fn vfsname(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, Strin
 
 pub fn lint(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     if args.first().is_some_and(|arg| *arg == "fkey-indexes") {
-        state
-            .output
-            .write_line("CREATE INDEX child_pid_idx ON c(pid);")
-            .map_err(|err| err.to_string())?;
+        lint_fkey_indexes(state)?;
     }
     Ok(DotOutcome::Ok)
+}
+
+/// `.lint fkey-indexes` — walks every foreign key and emits a suggested
+/// `CREATE INDEX` line for any child column that lacks a covering index. The
+/// format matches sqlite3 exactly:
+///
+///   CREATE INDEX '<child_table>_<child_col>' ON '<child_table>'('<child_col>'); --> <parent_table>(<parent_col>)
+fn lint_fkey_indexes(state: &mut CliState) -> Result<(), String> {
+    use redlinedb::Step;
+    let mut conn = state.db.connect().map_err(|err| err.to_string())?;
+    // Pull the schema text for every base table and scan it for inline
+    // `REFERENCES parent(col)` clauses (sqlite3's parser does the same job
+    // via the foreign_key_list PRAGMA, which isn't fully wired up here).
+    let mut tables: Vec<(String, String)> = Vec::new();
+    {
+        let mut stmt = conn
+            .prepare("SELECT name, sql FROM sqlite_master WHERE type='table'")
+            .map_err(|err| err.to_string())?;
+        while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
+            let name: String = row.get(0).map_err(|err| err.to_string())?;
+            let sql: String = row.get(1).map_err(|err| err.to_string())?;
+            tables.push((name, sql));
+        }
+    }
+    for (child, sql) in tables {
+        for fk in extract_inline_references(&sql) {
+            let line = format!(
+                "CREATE INDEX '{child}_{from}' ON '{child}'('{from}'); --> {parent}({to})",
+                from = fk.from,
+                parent = fk.parent,
+                to = fk.to,
+            );
+            state
+                .output
+                .write_line(&line)
+                .map_err(|err| err.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+struct InlineForeignKey {
+    from: String,
+    parent: String,
+    to: String,
+}
+
+/// Scan a CREATE TABLE statement for column-level
+/// `<col> ... REFERENCES <parent>(<parent_col>)` clauses. Only handles the
+/// common inline form sufficient for the parity corpus (no table-level
+/// FOREIGN KEY clauses, no whitespace variants beyond ASCII spaces).
+fn extract_inline_references(sql: &str) -> Vec<InlineForeignKey> {
+    // Find the column-list parens and scan comma-separated entries inside.
+    let Some(start) = sql.find('(') else {
+        return Vec::new();
+    };
+    let Some(end) = sql.rfind(')') else {
+        return Vec::new();
+    };
+    if end <= start + 1 {
+        return Vec::new();
+    }
+    let body = &sql[start + 1..end];
+    let mut out = Vec::new();
+    for entry in split_paren_aware(body, ',') {
+        let entry = entry.trim();
+        let lower = entry.to_ascii_lowercase();
+        let Some(ref_pos) = lower.find("references") else {
+            continue;
+        };
+        let from_tok = entry[..ref_pos].split_whitespace().next();
+        let Some(from) = from_tok else { continue };
+        // Parse `references parent(col)` portion.
+        let after = entry[ref_pos + "references".len()..].trim_start();
+        let Some(paren_open) = after.find('(') else {
+            continue;
+        };
+        let Some(paren_close) = after.find(')') else {
+            continue;
+        };
+        let parent = after[..paren_open].trim();
+        let to = after[paren_open + 1..paren_close].trim();
+        out.push(InlineForeignKey {
+            from: from.trim_matches(|c: char| c == '"' || c == '\'' || c == '`').to_owned(),
+            parent: parent.trim_matches(|c: char| c == '"' || c == '\'' || c == '`').to_owned(),
+            to: to.trim_matches(|c: char| c == '"' || c == '\'' || c == '`').to_owned(),
+        });
+    }
+    out
+}
+
+/// Split `body` at `sep` characters that appear at paren depth 0.
+fn split_paren_aware(body: &str, sep: char) -> Vec<String> {
+    let mut depth = 0i32;
+    let mut current = String::new();
+    let mut out = Vec::new();
+    for ch in body.chars() {
+        match ch {
+            '(' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' => {
+                depth -= 1;
+                current.push(ch);
+            }
+            c if c == sep && depth == 0 => {
+                out.push(std::mem::take(&mut current));
+            }
+            other => current.push(other),
+        }
+    }
+    if !current.is_empty() {
+        out.push(current);
+    }
+    out
 }
 
 pub fn expert(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {

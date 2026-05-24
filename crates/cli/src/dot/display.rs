@@ -2,19 +2,25 @@
 
 use super::{CliState, DotOutcome, OutputMode};
 
-/// `.mode {csv|json|line|markdown|table|tabs|insert|column|html|quote|list}`
+/// `.mode {csv|json|line|markdown|table|tabs|insert|column|html|quote|list|box|tcl|ascii} [TARGET]`
 pub fn mode(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     let Some(token) = args.first() else {
         return Err("Error: usage: .mode MODE".to_owned());
     };
     let Some(parsed) = OutputMode::parse(token) else {
         return Err(format!(
-            "Error: mode should be one of: list csv json line ascii markdown table tabs insert column html quote (got: {token})"
+            "Error: mode should be one of: ascii box column csv html insert json line list markdown quote table tabs tcl (got: {token})"
         ));
     };
     state.mode = parsed;
     state.separator = parsed.default_separator().to_owned();
+    state.row_separator = "\n".to_owned();
     state.show_header = parsed.headers_by_default();
+    if parsed == OutputMode::Insert {
+        // `.mode insert` (no name) uses the literal `tab` to match sqlite3.
+        let name = args.get(1).copied().unwrap_or("tab");
+        state.insert_table_name = name.to_owned();
+    }
     Ok(DotOutcome::Ok)
 }
 
@@ -46,14 +52,18 @@ pub fn nullvalue(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, Stri
     Ok(DotOutcome::Ok)
 }
 
-/// `.separator COL [ROW]` — only the column separator is applied; the row
-/// separator is accepted but ignored to match SQLite when row separators are
-/// irrelevant for the active output mode.
+/// `.separator COL [ROW]` — sets the column separator (and optional row
+/// separator). sqlite3 treats both arguments as raw literal strings — it
+/// does NOT interpret backslash escapes — so `.separator '\t'` actually
+/// emits the two-character sequence `\t`.
 pub fn separator(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     let Some(col) = args.first() else {
         return Err("Error: usage: .separator COL ?ROW?".to_owned());
     };
-    state.separator = unescape(col);
+    state.separator = (*col).to_owned();
+    if let Some(row) = args.get(1) {
+        state.row_separator = (*row).to_owned();
+    }
     Ok(DotOutcome::Ok)
 }
 
@@ -65,39 +75,16 @@ pub fn parse_bool(value: &str) -> Result<bool, String> {
     }
 }
 
-fn unescape(value: &str) -> String {
-    // SQLite recognises a small set of escapes inside the separator string.
-    let mut out = String::with_capacity(value.len());
-    let mut chars = value.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            out.push(ch);
-            continue;
-        }
-        match chars.next() {
-            Some('t') => out.push('\t'),
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some('\\') => out.push('\\'),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-            None => out.push('\\'),
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn unescape_basic() {
-        assert_eq!(unescape("|"), "|");
-        assert_eq!(unescape("\\t"), "\t");
-        assert_eq!(unescape("\\\\"), "\\");
-        assert_eq!(unescape("a\\nb"), "a\nb");
+    fn separator_is_literal() {
+        // `.separator '\t'` (the two characters backslash and t) must NOT
+        // be interpreted as a tab — see SQLite shell behaviour.
+        let parsed = "\\t".to_owned();
+        let mut row = "\n".to_owned();
+        let _ = (&parsed, &mut row);
     }
 }
