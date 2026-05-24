@@ -22,10 +22,16 @@ pub(crate) fn value_to_string(value: &SqlValue) -> String {
     }
 }
 
-/// Format a `f64` the way SQLite renders REAL values in text contexts
-/// (`%!.15g` semantics). Whole-valued finite reals keep a trailing `.0`
-/// so that `lower(1.0)` returns `"1.0"`, not `"1"` — matching the
-/// rusqlite oracle. Non-finite values render as SQLite's
+/// Format a `f64` the way SQLite renders REAL values in text contexts.
+///
+/// Mirrors `sqlite3_str_appendf(..,"%!.*g", nFpDigit, r)` from the SQLite
+/// source: scientific when the decimal exponent is `< -4` or `>= 17`,
+/// 17 significant digits, trailing zeros stripped, exponent zero-padded
+/// to two digits with an explicit sign, and a `.0` suffix when the
+/// mantissa would otherwise be integer. The two reduction rules
+/// (trailing-9 round-up and trailing-0 truncation against `z[13..15]`)
+/// are applied so that 1.5e100 renders as `1.5e+100` and not the verbose
+/// 17-digit form. Non-finite values render as SQLite's
 /// `"Inf"` / `"-Inf"` / `"NaN"` literals.
 pub(crate) fn format_real_sqlite(v: f64) -> String {
     if v.is_nan() {
@@ -38,11 +44,216 @@ pub(crate) fn format_real_sqlite(v: f64) -> String {
             "Inf".to_owned()
         };
     }
-    let s = format!("{v}");
-    if s.contains('.') || s.contains('e') || s.contains('E') {
+    if v == 0.0 {
+        return if v.is_sign_negative() {
+            "-0.0".to_owned()
+        } else {
+            "0.0".to_owned()
+        };
+    }
+
+    // Acquire 18 significant digits — SQLite's FpDecode passes 18 to
+    // Fp2Convert10 even when `iRound==17`, so the reduction checks can
+    // inspect the 18th digit.
+    let raw = format!("{:.17e}", v);
+    let (mantissa_raw, exp_str) = match raw.split_once('e') {
+        Some(pair) => pair,
+        None => return raw,
+    };
+    let exp_e: i32 = exp_str.parse().unwrap_or(0);
+    let (sign_str, mantissa_no_sign) = match mantissa_raw.strip_prefix('-') {
+        Some(rest) => ("-", rest),
+        None => ("", mantissa_raw),
+    };
+    let (int_part, frac_part) = mantissa_no_sign
+        .split_once('.')
+        .unwrap_or((mantissa_no_sign, ""));
+    let digits18: Vec<u8> = int_part
+        .bytes()
+        .chain(frac_part.bytes())
+        .map(|b| b - b'0')
+        .collect();
+
+    let (effective_digits, adjusted_exp) =
+        sqlite_real_reduce(&digits18, exp_e, sign_str, v);
+    let needs_scientific = adjusted_exp < -4 || adjusted_exp >= 17;
+
+    if needs_scientific {
+        let mantissa = sqlite_real_build_mantissa(&effective_digits);
+        let exp_sign = if adjusted_exp >= 0 { '+' } else { '-' };
+        let exp_abs = adjusted_exp.unsigned_abs();
+        let exp_padded = if exp_abs < 10 {
+            format!("0{exp_abs}")
+        } else {
+            exp_abs.to_string()
+        };
+        format!("{sign_str}{mantissa}e{exp_sign}{exp_padded}")
+    } else {
+        let body = sqlite_real_render_plain(&effective_digits, adjusted_exp);
+        format!("{sign_str}{body}")
+    }
+}
+
+/// Apply SQLite's `iRound == 17` reduction rules to `digits18`. Returns
+/// the trimmed digit sequence and the canonical decimal exponent (with
+/// possible +1 shift from a rounding carry).
+fn sqlite_real_reduce(
+    digits18: &[u8],
+    exp_e: i32,
+    sign_str: &str,
+    target: f64,
+) -> (Vec<u8>, i32) {
+    // Base: round 18 digits down to 17 (half-up on the 18th), strip
+    // trailing zeros, track any rounding-carry exponent shift.
+    let (mut base17, mut base_exp) = sqlite_real_round_to_17(digits18, exp_e);
+    while base17.len() > 1 && *base17.last().unwrap() == 0 {
+        base17.pop();
+    }
+
+    // Rule 1: z[14] == 9 && z[15] == 9 — try rounding up a trailing run
+    // of 9s and accept the shorter form if it still round-trips.
+    if digits18.len() >= 16 && digits18[14] == 9 && digits18[15] == 9 {
+        let mut jj: usize = 14;
+        while jj > 0 && digits18[jj - 1] == 9 {
+            jj -= 1;
+        }
+        let (v2_digits, exp_shift) = if jj == 0 {
+            (vec![1u8], 1_i32)
+        } else {
+            let mut new_digits: Vec<u8> = digits18[..jj].to_vec();
+            let mut carry = 1u8;
+            let mut shifted = false;
+            for i in (0..new_digits.len()).rev() {
+                let nv = new_digits[i] + carry;
+                if nv >= 10 {
+                    new_digits[i] = nv - 10;
+                    carry = 1;
+                } else {
+                    new_digits[i] = nv;
+                    carry = 0;
+                    break;
+                }
+            }
+            if carry == 1 {
+                new_digits.insert(0, 1);
+                shifted = true;
+            }
+            while new_digits.len() > 1 && *new_digits.last().unwrap() == 0 {
+                new_digits.pop();
+            }
+            (new_digits, if shifted { 1 } else { 0 })
+        };
+        let new_exp = exp_e + exp_shift;
+        let cand_str = sqlite_real_build_candidate(&v2_digits, new_exp, sign_str);
+        let reparsed: f64 = cand_str.parse().unwrap_or(f64::NAN);
+        if reparsed == target {
+            return (v2_digits, new_exp);
+        }
+    }
+
+    // Rule 2: z[13] == 0 && z[14] == 0 && z[15] == 0 — try truncating a
+    // trailing run of zeros.
+    if digits18.len() >= 16 && digits18[13] == 0 && digits18[14] == 0 && digits18[15] == 0 {
+        let mut jj: usize = 13;
+        while jj > 0 && digits18[jj - 1] == 0 {
+            jj -= 1;
+        }
+        if jj > 0 {
+            let candidate: Vec<u8> = digits18[..jj].to_vec();
+            let cand_str = sqlite_real_build_candidate(&candidate, exp_e, sign_str);
+            let reparsed: f64 = cand_str.parse().unwrap_or(f64::NAN);
+            if reparsed == target {
+                return (candidate, exp_e);
+            }
+        }
+    }
+
+    // Special-case the carry-overflow path so that `base_exp` already
+    // accounts for the digit shift induced by `round_to_17`.
+    let _ = &mut base_exp;
+    (base17, base_exp)
+}
+
+fn sqlite_real_round_to_17(digits18: &[u8], exp_e: i32) -> (Vec<u8>, i32) {
+    let mut result: Vec<u8> = digits18[..17.min(digits18.len())].to_vec();
+    let mut adjusted_exp = exp_e;
+    if digits18.len() > 17 && digits18[17] >= 5 {
+        let mut carry = 1u8;
+        for i in (0..result.len()).rev() {
+            let nv = result[i] + carry;
+            if nv >= 10 {
+                result[i] = nv - 10;
+                carry = 1;
+            } else {
+                result[i] = nv;
+                carry = 0;
+                break;
+            }
+        }
+        if carry == 1 {
+            result.insert(0, 1);
+            // Carry overflowed (e.g. 9.99...9 -> 10.00...0). The new
+            // leading 1 sits one position to the left of the original,
+            // so the exponent shifts up by 1. We also drop the now-spurious
+            // last digit to keep the count at 17.
+            result.pop();
+            adjusted_exp += 1;
+        }
+    }
+    (result, adjusted_exp)
+}
+
+fn sqlite_real_build_candidate(digits: &[u8], exp: i32, sign: &str) -> String {
+    let mantissa = sqlite_real_build_mantissa(digits);
+    let exp_sign = if exp >= 0 { '+' } else { '-' };
+    let exp_abs = exp.unsigned_abs();
+    let exp_padded = if exp_abs < 10 {
+        format!("0{exp_abs}")
+    } else {
+        exp_abs.to_string()
+    };
+    format!("{sign}{mantissa}e{exp_sign}{exp_padded}")
+}
+
+fn sqlite_real_build_mantissa(digits: &[u8]) -> String {
+    if digits.len() == 1 {
+        format!("{}.0", (b'0' + digits[0]) as char)
+    } else {
+        let first = (b'0' + digits[0]) as char;
+        let rest: String = digits[1..].iter().map(|&d| (b'0' + d) as char).collect();
+        format!("{first}.{rest}")
+    }
+}
+
+fn sqlite_real_render_plain(digits: &[u8], exp: i32) -> String {
+    let int_digits = (exp + 1).max(0) as usize;
+    if int_digits >= digits.len() {
+        let mut s: String = digits.iter().map(|&d| (b'0' + d) as char).collect();
+        let zeros_after = int_digits - digits.len();
+        for _ in 0..zeros_after {
+            s.push('0');
+        }
+        s.push_str(".0");
+        s
+    } else if int_digits == 0 {
+        let leading_zeros = (-exp - 1) as usize;
+        let mut s = String::from("0.");
+        for _ in 0..leading_zeros {
+            s.push('0');
+        }
+        for &d in digits {
+            s.push((b'0' + d) as char);
+        }
         s
     } else {
-        format!("{s}.0")
+        let int_str: String = digits[..int_digits].iter().map(|&d| (b'0' + d) as char).collect();
+        let frac_str: String = digits[int_digits..].iter().map(|&d| (b'0' + d) as char).collect();
+        let frac_str = if frac_str.is_empty() {
+            "0".to_owned()
+        } else {
+            frac_str
+        };
+        format!("{int_str}.{frac_str}")
     }
 }
 
