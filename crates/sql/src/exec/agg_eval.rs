@@ -1,12 +1,12 @@
 use super::*;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 thread_local! {
-    static GROUP_EVAL_CACHE: RefCell<Option<HashMap<usize, SqlValue>>> = const {
+    static GROUP_EVAL_CACHE: RefCell<Option<ahash::AHashMap<usize, SqlValue>>> = const {
         RefCell::new(None)
     };
-    static GROUP_AGG_CACHE: RefCell<Option<HashMap<String, SqlValue>>> = const {
+    static GROUP_AGG_CACHE: RefCell<Option<ahash::AHashMap<String, SqlValue>>> = const {
         RefCell::new(None)
     };
 }
@@ -22,8 +22,8 @@ impl Drop for GroupEvalCacheGuard {
 }
 
 struct GroupEvalScope {
-    eval_prev: Option<HashMap<usize, SqlValue>>,
-    agg_prev: Option<HashMap<String, SqlValue>>,
+    eval_prev: Option<ahash::AHashMap<usize, SqlValue>>,
+    agg_prev: Option<ahash::AHashMap<String, SqlValue>>,
 }
 
 impl Drop for GroupEvalScope {
@@ -38,8 +38,8 @@ impl Drop for GroupEvalScope {
 }
 
 pub(super) fn with_group_eval_cache<T>(f: impl FnOnce() -> T) -> T {
-    let eval_prev = GROUP_EVAL_CACHE.with(|cache| cache.borrow_mut().replace(HashMap::new()));
-    let agg_prev = GROUP_AGG_CACHE.with(|cache| cache.borrow_mut().replace(HashMap::new()));
+    let eval_prev = GROUP_EVAL_CACHE.with(|cache| cache.borrow_mut().replace(ahash::AHashMap::new()));
+    let agg_prev = GROUP_AGG_CACHE.with(|cache| cache.borrow_mut().replace(ahash::AHashMap::new()));
     let _scope = GroupEvalScope {
         eval_prev,
         agg_prev,
@@ -102,7 +102,7 @@ pub(super) fn eval_group_scalar_with_ctx(
     let cached = GROUP_EVAL_CACHE.with(|cache| {
         let mut slot = cache.borrow_mut();
         if slot.is_none() {
-            *slot = Some(HashMap::new());
+            *slot = Some(ahash::AHashMap::new());
             cache_guard = Some(GroupEvalCacheGuard);
         }
         slot.as_ref()

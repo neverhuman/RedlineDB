@@ -55,8 +55,7 @@ pub(crate) fn execute_grouped_select(
     let groups = if plan.group_by.is_empty() {
         vec![filtered]
     } else {
-        use std::collections::HashMap;
-        let mut index_by_key: HashMap<Vec<u8>, usize> = HashMap::with_capacity(filtered.len());
+        let mut index_by_key: ahash::AHashMap<Vec<u8>, usize> = ahash::AHashMap::with_capacity(filtered.len());
         let mut groups: Vec<Vec<SqlRow>> = Vec::with_capacity(filtered.len());
         for row in filtered {
             let key = eval_group_key(&plan.group_by, &row, bindings)?;
