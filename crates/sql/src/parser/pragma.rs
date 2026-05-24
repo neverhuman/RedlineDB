@@ -1131,6 +1131,7 @@ fn pragma_static_select(
                 rows: Arc::from(rows),
             },
             distinct: false,
+            distinct_on: Vec::new(),
             projection: Vec::new(),
             selection: None,
             group_by: Vec::new(),

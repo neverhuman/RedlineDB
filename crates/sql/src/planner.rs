@@ -347,6 +347,10 @@ pub(crate) fn build_plan(
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
         }
+        PreparedKind::Merge(plan) => simple_node(
+            PhysicalKind::Constant,
+            format!("MERGE INTO {}", plan.target.name),
+        ),
     };
 
     if let Some(metrics) = metrics {

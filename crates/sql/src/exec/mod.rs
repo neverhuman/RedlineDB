@@ -59,6 +59,8 @@ pub(crate) mod cross_db;
 pub(crate) mod cte;
 pub(crate) mod fk;
 pub(crate) mod json_tv;
+// Track K — SQL:2003 MERGE dispatch.
+pub(crate) mod merge;
 pub(crate) mod pragma_tv;
 pub(crate) mod set_ops;
 pub(crate) mod table_valued;
@@ -543,6 +545,17 @@ pub fn execute_prepared(
             }
             Ok(result)
         }
+        PreparedKind::Merge(plan) => {
+            let result = crate::exec::merge::execute_merge(conn, plan, bindings)?;
+            if result.affected_rows > 0 {
+                with_session_reentrant(conn, |session| {
+                    session.changes += result.affected_rows;
+                    session.total_changes += result.affected_rows;
+                    Ok(())
+                })?;
+            }
+            Ok(result)
+        }
         PreparedKind::Analyze(plan) => {
             analyze_database(conn, plan)?;
             Ok(ExecutionResult {
@@ -830,6 +843,8 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropSchema { .. }
         | PreparedKind::CreateSequence { .. }
         | PreparedKind::DropSequence { .. } => true,
+        | PreparedKind::Merge(_)
+        | PreparedKind::CrossDbSql(_) => true,
     }
 }
 

@@ -364,6 +364,7 @@ pub(crate) fn from_static(
             rows: Arc::from(rows),
         },
         distinct: false,
+        distinct_on: Vec::new(),
         projection: Vec::new(),
         selection: None,
         group_by: Vec::new(),
@@ -392,6 +393,7 @@ pub(crate) fn template_from_static(
         kind: PreparedKind::Select(SelectPlan {
             source: SelectSource::StaticRows { rows },
             distinct: false,
+            distinct_on: Vec::new(),
             projection: Vec::new(),
             selection: None,
             group_by: Vec::new(),
