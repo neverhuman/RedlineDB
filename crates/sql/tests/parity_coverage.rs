@@ -564,3 +564,57 @@ fn ctas_rolls_back_on_source_runtime_error() {
 
     lab.assert_parity("SELECT count(*) FROM sqlite_schema WHERE name = 'fail'");
 }
+
+// ── Track A scalar-functions coverage (SQL_MATH / STRING / PATTERN / BLOB) ───
+//
+// These exercise the SQLite math1 / string / pattern / blob helpers we added
+// for the sqlite-parity sweep. Note: the rusqlite oracle is bundled with the
+// stock build of SQLite (no `SQLITE_ENABLE_MATH_FUNCTIONS`), so we can't use
+// the `CtasLab` parity helper for math1 calls — those are exercised against
+// the reference shell via the `sqlite_parity` corpus and unit-tested in
+// `parity_scalar_funcs.rs` for closed-form behaviour (NULL semantics, domain
+// errors). The tests below cover what the rusqlite oracle DOES expose:
+// `length(utf8)`, `octet_length`, `hex(NULL)`, GLOB operator, and `concat*`.
+
+#[test]
+fn sqlite_parity_track_a_string_helpers() {
+    let lab = CtasLab::new();
+    for sql in [
+        // UTF-8 char length vs byte length.
+        "SELECT length('héllo'), octet_length('héllo')",
+        // concat / concat_ws null handling.
+        "SELECT concat('a', NULL, 'b'), concat_ws(',', 'a', NULL, 'b')",
+        // hex(NULL) returns "" text, not NULL.
+        "SELECT hex(NULL), typeof(hex(NULL))",
+    ] {
+        lab.assert_parity(sql);
+    }
+}
+
+#[test]
+fn sqlite_parity_track_a_glob_operator_rewrite() {
+    let lab = CtasLab::new();
+    // GLOB operator (rewritten to glob() function call in the parser):
+    // wildcard, character class, NOT, NULL propagation.
+    for sql in [
+        "SELECT 'abc' GLOB 'a*', 'abc' GLOB '*c'",
+        "SELECT 'abc' GLOB 'a?c', 'ab' GLOB '???'",
+        "SELECT 'abc' GLOB '[abc]bc', 'abc' GLOB '[^abc]bc'",
+        "SELECT 'abc' NOT GLOB 'z*', 'abc' NOT GLOB 'a*'",
+        "SELECT NULL GLOB 'a*', 'abc' GLOB NULL",
+    ] {
+        lab.assert_parity(sql);
+    }
+}
+
+#[test]
+fn sqlite_parity_track_a_unhex() {
+    let lab = CtasLab::new();
+    for sql in [
+        "SELECT length(unhex('01ab')), hex(unhex('01ab')), typeof(unhex('01ab'))",
+        // Invalid hex returns NULL.
+        "SELECT unhex('xyz'), typeof(unhex('xyz'))",
+    ] {
+        lab.assert_parity(sql);
+    }
+}
