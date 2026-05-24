@@ -171,19 +171,21 @@ fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
 }
 
 fn lookup_table_column(row: &TableRow, name: &str) -> Result<SqlValue> {
-    if row.table.is_public_rowid_name(name) {
-        return Ok(SqlValue::Integer(row.rowid.0 as i64));
-    }
-    let idx = match row
+    // SQLite shadowing: a user column whose name matches a rowid
+    // alias ("rowid", "_rowid_", "oid") wins over the synthetic
+    // rowid. Resolve real columns first.
+    let real_idx = row
         .table
         .columns
         .iter()
-        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
-    {
-        Some(i) => i,
-        None => return Err(Error::UnknownColumn(name.to_owned())),
-    };
-    Ok(row.values[idx].clone())
+        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name));
+    if let Some(idx) = real_idx {
+        return Ok(row.values[idx].clone());
+    }
+    if row.table.is_public_rowid_name(name) {
+        return Ok(SqlValue::Integer(row.rowid.0 as i64));
+    }
+    Err(Error::UnknownColumn(name.to_owned()))
 }
 
 fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
