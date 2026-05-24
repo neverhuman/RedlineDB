@@ -239,6 +239,28 @@ fn row_value_in_subquery_matches() {
 }
 
 #[test]
+fn unqualified_correlated_in_subquery_is_not_cached_as_uncorrelated() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE outer_t(a INTEGER, marker INTEGER)")
+        .expect("create outer");
+    c.execute("CREATE TABLE inner_t(b INTEGER)")
+        .expect("create inner");
+    c.execute("INSERT INTO outer_t VALUES (1, 1), (2, 0)")
+        .expect("insert outer");
+    c.execute("INSERT INTO inner_t VALUES (1), (2)")
+        .expect("insert inner");
+
+    let rows = query_all(
+        &c,
+        "SELECT a FROM outer_t WHERE marker IN (SELECT marker FROM inner_t WHERE b = a) ORDER BY a",
+    );
+    assert_eq!(
+        rows,
+        vec![vec![SqlValue::Integer(1)], vec![SqlValue::Integer(2)]]
+    );
+}
+
+#[test]
 fn null_comparison_is_null() {
     let (_d, c) = open();
     // NULL = NULL → NULL, not 1

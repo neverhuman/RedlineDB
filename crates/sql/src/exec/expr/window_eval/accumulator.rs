@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 
 use crate::value::{SqlValue, compare_values};
 
+#[derive(Clone)]
 pub(super) struct Accumulator {
     kind: String,
     count: i64,
@@ -114,5 +115,9 @@ impl Accumulator {
             "max" => self.max.unwrap_or(SqlValue::Null),
             _ => SqlValue::Null,
         }
+    }
+
+    pub(super) fn value(&self) -> SqlValue {
+        self.clone().finalize()
     }
 }

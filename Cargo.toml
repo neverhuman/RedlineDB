@@ -17,3 +17,8 @@ resolver = "3"
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.95"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"

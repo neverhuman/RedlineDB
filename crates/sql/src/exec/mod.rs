@@ -79,6 +79,7 @@ thread_local! {
     /// context does not contain them.
     static OUTER_ROW_STACK: std::cell::RefCell<Vec<crate::exec::expr::scalar::row::SqlRow>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    static CORRELATED_LOOKUP_USED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Set the per-thread current-session pointer for the duration of `f`.
@@ -165,10 +166,21 @@ pub(crate) fn lookup_correlated<T>(
         for row in stack.iter().rev() {
             let ctx = row.context();
             if let Some(v) = f(&ctx) {
+                CORRELATED_LOOKUP_USED.with(|used| used.set(true));
                 return Some(v);
             }
         }
         None
+    })
+}
+
+pub(crate) fn with_correlated_lookup_tracking<T>(f: impl FnOnce() -> T) -> (T, bool) {
+    CORRELATED_LOOKUP_USED.with(|used| {
+        let prev = used.replace(false);
+        let result = f();
+        let current = used.get();
+        used.set(prev || current);
+        (result, current)
     })
 }
 
@@ -177,10 +189,12 @@ pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> 
         let prev = cell.replace(conn as *const Connection);
         if prev.is_null() {
             expr::clear_subquery_template_cache();
+            crate::json::scalar::clear_json_caches();
         }
         let result = f();
         if prev.is_null() {
             expr::clear_subquery_template_cache();
+            crate::json::scalar::clear_json_caches();
         }
         cell.set(prev);
         result

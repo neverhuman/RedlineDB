@@ -6,6 +6,9 @@ thread_local! {
     static GROUP_EVAL_CACHE: RefCell<Option<HashMap<usize, SqlValue>>> = const {
         RefCell::new(None)
     };
+    static GROUP_AGG_CACHE: RefCell<Option<HashMap<String, SqlValue>>> = const {
+        RefCell::new(None)
+    };
 }
 
 struct GroupEvalCacheGuard;
@@ -16,6 +19,32 @@ impl Drop for GroupEvalCacheGuard {
             *cache.borrow_mut() = None;
         });
     }
+}
+
+struct GroupEvalScope {
+    eval_prev: Option<HashMap<usize, SqlValue>>,
+    agg_prev: Option<HashMap<String, SqlValue>>,
+}
+
+impl Drop for GroupEvalScope {
+    fn drop(&mut self) {
+        GROUP_EVAL_CACHE.with(|cache| {
+            *cache.borrow_mut() = self.eval_prev.take();
+        });
+        GROUP_AGG_CACHE.with(|cache| {
+            *cache.borrow_mut() = self.agg_prev.take();
+        });
+    }
+}
+
+pub(super) fn with_group_eval_cache<T>(f: impl FnOnce() -> T) -> T {
+    let eval_prev = GROUP_EVAL_CACHE.with(|cache| cache.borrow_mut().replace(HashMap::new()));
+    let agg_prev = GROUP_AGG_CACHE.with(|cache| cache.borrow_mut().replace(HashMap::new()));
+    let _scope = GroupEvalScope {
+        eval_prev,
+        agg_prev,
+    };
+    f()
 }
 
 struct GroupCaseEvaluator<'group, 'ctx> {
@@ -503,7 +532,18 @@ fn eval_group_function(
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
     let name = func.name.to_string().to_ascii_lowercase();
-    match name.as_str() {
+    let cache_key = aggregate_cacheable(func).then(|| func.to_string());
+    if let Some(cache_key) = &cache_key
+        && let Some(value) = GROUP_AGG_CACHE.with(|cache| {
+            cache
+                .borrow()
+                .as_ref()
+                .and_then(|cache| cache.get(cache_key).cloned())
+        })
+    {
+        return Ok(value);
+    }
+    let result = match name.as_str() {
         "count" => {
             if let FunctionArguments::List(list) = &func.args {
                 if list.args.len() == 1
@@ -518,42 +558,43 @@ fn eval_group_function(
                             count += 1;
                         }
                     }
-                    return Ok(SqlValue::Integer(count));
-                }
-                let distinct = matches!(
-                    list.duplicate_treatment,
-                    Some(sqlparser::ast::DuplicateTreatment::Distinct)
-                );
-                let mut seen = HashSet::new();
-                let mut count = 0i64;
-                for row in group {
-                    if !row_passes_aggregate_filter(func, row, bindings)? {
-                        continue;
-                    }
-                    let ctx = row.context();
-                    let mut include = true;
-                    let mut values = Vec::new();
-                    for arg in &list.args {
-                        if let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg {
-                            let value = eval_scalar(expr, &ctx, bindings)?;
-                            if matches!(value, SqlValue::Null) {
-                                include = false;
-                            } else {
-                                values.push(value);
+                    Ok(SqlValue::Integer(count))
+                } else {
+                    let distinct = matches!(
+                        list.duplicate_treatment,
+                        Some(sqlparser::ast::DuplicateTreatment::Distinct)
+                    );
+                    let mut seen = HashSet::new();
+                    let mut count = 0i64;
+                    for row in group {
+                        if !row_passes_aggregate_filter(func, row, bindings)? {
+                            continue;
+                        }
+                        let ctx = row.context();
+                        let mut include = true;
+                        let mut values = Vec::new();
+                        for arg in &list.args {
+                            if let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg {
+                                let value = eval_scalar(expr, &ctx, bindings)?;
+                                if matches!(value, SqlValue::Null) {
+                                    include = false;
+                                } else {
+                                    values.push(value);
+                                }
                             }
                         }
-                    }
-                    if include {
-                        if distinct {
-                            let key = vec::hash_agg::encode_group_key_bytes(&values)?;
-                            if !seen.insert(key) {
-                                continue;
+                        if include {
+                            if distinct {
+                                let key = vec::hash_agg::encode_group_key_bytes(&values)?;
+                                if !seen.insert(key) {
+                                    continue;
+                                }
                             }
+                            count += 1;
                         }
-                        count += 1;
                     }
+                    Ok(SqlValue::Integer(count))
                 }
-                Ok(SqlValue::Integer(count))
             } else {
                 let mut count = 0i64;
                 for row in group {
@@ -882,7 +923,27 @@ fn eval_group_function(
                 ))),
             }
         }
+    }?;
+    if let Some(cache_key) = cache_key {
+        GROUP_AGG_CACHE.with(|cache| {
+            if let Some(cache) = cache.borrow_mut().as_mut() {
+                cache.insert(cache_key, result.clone());
+            }
+        });
     }
+    Ok(result)
+}
+
+fn aggregate_cacheable(func: &sqlparser::ast::Function) -> bool {
+    let rendered = func.to_string().to_ascii_lowercase();
+    !rendered.contains("random(")
+        && !rendered.contains("randomblob(")
+        && !rendered.contains("last_insert_rowid")
+        && !rendered.contains("changes(")
+        && !rendered.contains("total_changes(")
+        && !rendered.contains("current_date")
+        && !rendered.contains("current_time")
+        && !rendered.contains("current_timestamp")
 }
 
 fn percentile_argument(

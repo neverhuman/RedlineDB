@@ -532,6 +532,47 @@ pub fn run() {
 
 /// Drive a chunk of SQL with optional embedded dot-commands. Used by `--cmd`.
 fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
+    if !input_has_batch_control_lines(input) {
+        return execute_sql_buffer(state, input);
+    }
+    if input
+        .lines()
+        .any(|line| line.trim_start().starts_with(".once"))
+    {
+        return run_input_incremental(state, input);
+    }
+
+    let mut sql_chunk = String::new();
+    for raw_line in input.lines() {
+        let trimmed = raw_line.trim();
+        if !sql_chunk.trim().is_empty() && is_alternate_terminator(trimmed) {
+            execute_sql_chunk(state, &mut sql_chunk)?;
+            continue;
+        }
+        if raw_line.trim_start().starts_with('.') {
+            if !sql_chunk.trim().is_empty() && redlinedb::sql_input_complete(&sql_chunk) {
+                execute_sql_chunk(state, &mut sql_chunk)?;
+            }
+        }
+        if sql_chunk.trim().is_empty() && raw_line.trim_start().starts_with('.') {
+            match dot::dispatch(state, raw_line.trim())? {
+                DotOutcome::Ok => {}
+                DotOutcome::ReadFile(path) => run_script_file(state, &path)?,
+                DotOutcome::Exit(code) => {
+                    flush_output_or_exit(state);
+                    exit(code);
+                }
+            }
+            continue;
+        }
+        sql_chunk.push_str(raw_line);
+        sql_chunk.push('\n');
+    }
+    execute_sql_chunk(state, &mut sql_chunk)?;
+    Ok(())
+}
+
+fn run_input_incremental(state: &mut CliState, input: &str) -> Result<(), String> {
     let mut buffer = String::new();
     for raw_line in input.lines() {
         let trimmed = raw_line.trim();
@@ -561,6 +602,23 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
     if !buffer.trim().is_empty() {
         execute_sql_buffer(state, &buffer)?;
     }
+    Ok(())
+}
+
+fn input_has_batch_control_lines(input: &str) -> bool {
+    input.lines().any(|line| {
+        let trimmed = line.trim();
+        line.trim_start().starts_with('.') || is_alternate_terminator(trimmed)
+    })
+}
+
+fn execute_sql_chunk(state: &mut CliState, sql_chunk: &mut String) -> Result<(), String> {
+    if sql_chunk.trim().is_empty() {
+        sql_chunk.clear();
+        return Ok(());
+    }
+    execute_sql_buffer(state, sql_chunk)?;
+    sql_chunk.clear();
     Ok(())
 }
 

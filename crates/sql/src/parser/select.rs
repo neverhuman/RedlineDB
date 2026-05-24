@@ -716,7 +716,7 @@ pub(crate) fn returning_output_columns(
 }
 
 pub(crate) fn normalize_expr(expr: Expr, params: &mut ParamLayout) -> Result<Expr> {
-    Ok(match expr {
+    let normalized = match expr {
         Expr::Value(v) => {
             if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
                 let normalized = normalize_bind_marker(name, params)?;
@@ -853,7 +853,181 @@ pub(crate) fn normalize_expr(expr: Expr, params: &mut ParamLayout) -> Result<Exp
                 .map(Box::new),
         },
         other => other,
-    })
+    };
+    Ok(fold_constant_expr(normalized))
+}
+
+fn fold_constant_expr(expr: Expr) -> Expr {
+    if !expr_is_foldable(&expr) {
+        return expr;
+    }
+    match crate::exec::expr::eval_scalar(&expr, &crate::exec::expr::RowContext::Empty, &[]) {
+        Ok(value) => sql_value_to_expr(value),
+        Err(_) => expr,
+    }
+}
+
+fn expr_is_foldable(expr: &Expr) -> bool {
+    match expr {
+        Expr::Value(v) => crate::parser::bind::as_bind_name(&v.value).is_none(),
+        Expr::Nested(expr) => expr_is_foldable(expr),
+        Expr::UnaryOp { expr, .. } => expr_is_foldable(expr),
+        Expr::BinaryOp { left, right, .. } => expr_is_foldable(left) && expr_is_foldable(right),
+        Expr::Collate { .. } => false,
+        Expr::Cast { expr, .. } => expr_is_foldable(expr),
+        Expr::Ceil { expr, .. } | Expr::Floor { expr, .. } => expr_is_foldable(expr),
+        Expr::Substring {
+            expr,
+            substring_from,
+            substring_for,
+            ..
+        } => {
+            expr_is_foldable(expr)
+                && substring_from.as_deref().is_none_or(expr_is_foldable)
+                && substring_for.as_deref().is_none_or(expr_is_foldable)
+        }
+        Expr::Trim {
+            expr,
+            trim_what,
+            trim_characters,
+            ..
+        } => {
+            expr_is_foldable(expr)
+                && trim_what.as_deref().is_none_or(expr_is_foldable)
+                && trim_characters.iter().flatten().all(expr_is_foldable)
+        }
+        Expr::Between {
+            expr, low, high, ..
+        } => expr_is_foldable(expr) && expr_is_foldable(low) && expr_is_foldable(high),
+        Expr::InList { expr, list, .. } => {
+            expr_is_foldable(expr) && list.iter().all(expr_is_foldable)
+        }
+        Expr::IsNull(expr)
+        | Expr::IsNotNull(expr)
+        | Expr::IsTrue(expr)
+        | Expr::IsNotTrue(expr)
+        | Expr::IsFalse(expr)
+        | Expr::IsNotFalse(expr)
+        | Expr::IsUnknown(expr)
+        | Expr::IsNotUnknown(expr) => expr_is_foldable(expr),
+        Expr::IsDistinctFrom(left, right) | Expr::IsNotDistinctFrom(left, right) => {
+            expr_is_foldable(left) && expr_is_foldable(right)
+        }
+        Expr::Function(func) => function_is_foldable(func),
+        Expr::Identifier(_)
+        | Expr::CompoundIdentifier(_)
+        | Expr::Exists { .. }
+        | Expr::InSubquery { .. }
+        | Expr::Subquery(_)
+        | Expr::Like { .. }
+        | Expr::ILike { .. }
+        | Expr::Case { .. } => false,
+        _ => false,
+    }
+}
+
+fn function_is_foldable(func: &sqlparser::ast::Function) -> bool {
+    if func.over.is_some() || func.filter.is_some() {
+        return false;
+    }
+    let name = func.name.to_string().to_ascii_lowercase();
+    if !matches!(
+        name.as_str(),
+        "abs"
+            | "ceil"
+            | "ceiling"
+            | "char"
+            | "coalesce"
+            | "floor"
+            | "format"
+            | "hex"
+            | "ifnull"
+            | "instr"
+            | "json"
+            | "json_array"
+            | "json_array_length"
+            | "json_extract"
+            | "json_insert"
+            | "json_object"
+            | "json_quote"
+            | "json_replace"
+            | "json_set"
+            | "json_type"
+            | "json_valid"
+            | "length"
+            | "lower"
+            | "ltrim"
+            | "max"
+            | "min"
+            | "nullif"
+            | "pow"
+            | "power"
+            | "printf"
+            | "quote"
+            | "replace"
+            | "round"
+            | "rtrim"
+            | "sign"
+            | "sin"
+            | "sqrt"
+            | "substr"
+            | "substring"
+            | "trim"
+            | "typeof"
+            | "unicode"
+            | "upper"
+    ) {
+        return false;
+    }
+    function_args_are_foldable(&func.args) && function_args_are_foldable(&func.parameters)
+}
+
+fn function_args_are_foldable(args: &FunctionArguments) -> bool {
+    match args {
+        FunctionArguments::None => true,
+        FunctionArguments::List(list) => {
+            if list.duplicate_treatment.is_some() || !list.clauses.is_empty() {
+                return false;
+            }
+            list.args.iter().all(|arg| match arg {
+                FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+                | FunctionArg::Named {
+                    arg: FunctionArgExpr::Expr(expr),
+                    ..
+                }
+                | FunctionArg::ExprNamed {
+                    arg: FunctionArgExpr::Expr(expr),
+                    ..
+                } => expr_is_foldable(expr),
+                _ => false,
+            })
+        }
+        _ => false,
+    }
+}
+
+fn sql_value_to_expr(value: SqlValue) -> Expr {
+    Expr::Value(sql_value_to_ast_value(value).into())
+}
+
+fn sql_value_to_ast_value(value: SqlValue) -> Value {
+    match value {
+        SqlValue::Null => Value::Null,
+        SqlValue::Integer(value) => Value::Number(value.to_string(), false),
+        SqlValue::Real(value) => Value::Number(
+            crate::exec::expr::scalar::value::format_real_sqlite(value),
+            false,
+        ),
+        SqlValue::Text(value) => Value::SingleQuotedString(value.to_string()),
+        SqlValue::Blob(value) => {
+            let mut rendered = String::with_capacity(value.len() * 2);
+            for byte in value.iter() {
+                use std::fmt::Write as _;
+                let _ = write!(&mut rendered, "{byte:02X}");
+            }
+            Value::HexStringLiteral(rendered)
+        }
+    }
 }
 
 pub(crate) fn normalize_function_args(
