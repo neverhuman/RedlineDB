@@ -212,11 +212,12 @@ pub(crate) fn eval_scalar(
         Expr::Collate { expr, collation } => {
             // The COLLATE wrapper is transparent for value evaluation; the
             // collation only affects comparisons performed in eval_binary or
-            // ORDER BY. Validate the name here so unknown collations error.
+            // ORDER BY. Reject unknown collation names with SQLite's
+            // wording so callers can match the error text.
             let name = collation.to_string();
-            if crate::collation::Collation::parse(&name).is_none() {
-                return Err(Error::UnsupportedSql(format!(
-                    "unsupported collation: {name}"
+            if !crate::collation::Collation::is_known(&name) {
+                return Err(Error::Bind(format!(
+                    "no such collation sequence: {name}"
                 )));
             }
             eval_scalar(expr, row, bindings)?
