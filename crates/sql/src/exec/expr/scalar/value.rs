@@ -665,3 +665,63 @@ pub(crate) fn format_uuid_bytes(bytes: &[u8; 16]) -> String {
     }
     out
 }
+
+/// `pg_array_contains(lhs, rhs)` — PG `lhs @> rhs`. Returns 1 when every
+/// element of the JSON array `rhs` is present in `lhs`, else 0. NULL
+/// propagates. The inputs may arrive as TEXT or BLOB — both decode via
+/// `serde_json`.
+pub(crate) fn pg_array_contains(values: &[SqlValue]) -> Result<SqlValue> {
+    pg_array_set_op(values, ArraySetOp::Contains)
+}
+
+/// `pg_array_contained(lhs, rhs)` — PG `lhs <@ rhs`. Inverse of contains.
+pub(crate) fn pg_array_contained(values: &[SqlValue]) -> Result<SqlValue> {
+    pg_array_set_op(values, ArraySetOp::Contained)
+}
+
+/// `pg_array_overlap(lhs, rhs)` — PG `lhs && rhs`. Returns 1 when the two
+/// JSON arrays share at least one element, else 0.
+pub(crate) fn pg_array_overlap(values: &[SqlValue]) -> Result<SqlValue> {
+    pg_array_set_op(values, ArraySetOp::Overlap)
+}
+
+#[derive(Copy, Clone)]
+enum ArraySetOp {
+    Contains,
+    Contained,
+    Overlap,
+}
+
+fn pg_array_set_op(values: &[SqlValue], op: ArraySetOp) -> Result<SqlValue> {
+    if values.len() != 2 || values.iter().any(|v| matches!(v, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
+    let lhs = match parse_json_array(&values[0]) {
+        Some(v) => v,
+        None => return Ok(SqlValue::Null),
+    };
+    let rhs = match parse_json_array(&values[1]) {
+        Some(v) => v,
+        None => return Ok(SqlValue::Null),
+    };
+    let result = match op {
+        ArraySetOp::Contains => rhs.iter().all(|e| lhs.contains(e)),
+        ArraySetOp::Contained => lhs.iter().all(|e| rhs.contains(e)),
+        ArraySetOp::Overlap => lhs.iter().any(|e| rhs.contains(e)),
+    };
+    Ok(SqlValue::Integer(if result { 1 } else { 0 }))
+}
+
+/// Decode `value` as a JSON array. Returns `None` when the value is not a
+/// valid JSON array text; callers treat `None` as NULL.
+fn parse_json_array(value: &SqlValue) -> Option<Vec<serde_json::Value>> {
+    let text = match value {
+        SqlValue::Text(t) => t.to_string(),
+        SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
+        _ => return None,
+    };
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(serde_json::Value::Array(a)) => Some(a),
+        _ => None,
+    }
+}

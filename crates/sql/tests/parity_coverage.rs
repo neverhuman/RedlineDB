@@ -930,3 +930,142 @@ fn pg_gen_random_uuid_has_v4_variant_bits() {
     );
     assert_eq!(v, SqlValue::Integer(1));
 }
+
+#[test]
+fn pg_boolean_cast_from_text_aliases() {
+    let (_d, c) = open();
+    // PG-style truthy / falsy text aliases collapse to Integer(0|1) so
+    // SQLite-shape arithmetic and rendering keep working.
+    let r = query_all(
+        &c,
+        "SELECT 'yes'::bool, 'no'::bool, '1'::bool, '0'::bool, 't'::bool, 'f'::bool",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(
+        r[0],
+        vec![
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+        ]
+    );
+}
+
+#[test]
+fn pg_uuid_cast_normalises_to_canonical_lowercase() {
+    let (_d, c) = open();
+    let r = q1(
+        &c,
+        "SELECT '00000000000000000000000000000001'::uuid",
+    );
+    assert_eq!(
+        r,
+        SqlValue::Text(Arc::from("00000000-0000-0000-0000-000000000001"))
+    );
+    let r = q1(
+        &c,
+        "SELECT '{ABCDEF01-2345-6789-ABCD-EF0123456789}'::uuid",
+    );
+    assert_eq!(
+        r,
+        SqlValue::Text(Arc::from("abcdef01-2345-6789-abcd-ef0123456789"))
+    );
+}
+
+#[test]
+fn pg_array_literal_rewrites_to_json_array() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT ARRAY[10,20,30]");
+    assert_eq!(r, SqlValue::Text(Arc::from("[10,20,30]")));
+}
+
+#[test]
+fn pg_array_length_rewrites_to_json_array_length() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT array_length(ARRAY[10,20,30], 1)");
+    assert_eq!(r, SqlValue::Integer(3));
+}
+
+#[test]
+fn pg_array_index_is_one_based() {
+    let (_d, c) = open();
+    let r = query_all(
+        &c,
+        "SELECT (ARRAY['a','b','c'])[1], (ARRAY['a','b','c'])[3]",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(
+        r[0],
+        vec![
+            SqlValue::Text(Arc::from("a")),
+            SqlValue::Text(Arc::from("c")),
+        ]
+    );
+}
+
+#[test]
+fn pg_array_overlap_returns_zero_or_one() {
+    let (_d, c) = open();
+    let r = query_all(
+        &c,
+        "SELECT ARRAY[1,2,3] && ARRAY[3,4,5], ARRAY[1,2] && ARRAY[10,11]",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0], vec![SqlValue::Integer(1), SqlValue::Integer(0)]);
+}
+
+#[test]
+fn pg_decimal_arith_preserves_precision() {
+    let (_d, c) = open();
+    // The classic `0.1 + 0.2 = 0.3` torture test — needs TEXT-shaped
+    // decimal arithmetic to avoid the f64 rounding to 0.30000000000000004.
+    let r = q1(&c, "SELECT 0.1::numeric + 0.2::numeric");
+    assert_eq!(r, SqlValue::Text(Arc::from("0.3")));
+    // Equality between the sum and the literal `0.3::numeric`.
+    let r = q1(&c, "SELECT 0.1::numeric + 0.2::numeric = 0.3::numeric");
+    assert_eq!(r, SqlValue::Integer(1));
+    // Multiplication keeps precision and the explicit (10,2) cast pads
+    // the result to exactly two fractional digits.
+    let r = q1(&c, "SELECT (1.5::numeric * 3)::numeric(10,2)");
+    assert_eq!(r, SqlValue::Text(Arc::from("4.50")));
+}
+
+#[test]
+fn pg_decimal_division_renders_16_fractional_digits() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT 10::numeric / 3::numeric");
+    assert_eq!(r, SqlValue::Text(Arc::from("3.3333333333333333")));
+}
+
+#[test]
+fn pg_interval_add_to_date_via_modifier() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT '2025-01-01'::date + INTERVAL '5 days'");
+    assert_eq!(r, SqlValue::Text(Arc::from("2025-01-06 00:00:00")));
+}
+
+#[test]
+fn pg_timestamptz_at_time_zone_is_tz_naive() {
+    let (_d, c) = open();
+    let r = q1(
+        &c,
+        "SELECT '2025-01-15 12:00:00+00'::timestamptz AT TIME ZONE 'UTC'",
+    );
+    assert_eq!(r, SqlValue::Text(Arc::from("2025-01-15 12:00:00")));
+}
+
+#[test]
+fn pg_array_agg_with_order_by_keeps_ordering() {
+    let (_d, c) = open();
+    // array_agg(x ORDER BY x DESC) over (3,2,1)/(2,1,3) shapes — the
+    // rewriter swaps the function name and preserves the in-aggregate
+    // ORDER BY so the result is `[3,2,1]`.
+    let r = q1(
+        &c,
+        "WITH v(x) AS (VALUES (1),(2),(3)) SELECT array_agg(x ORDER BY x DESC) FROM v",
+    );
+    assert_eq!(r, SqlValue::Text(Arc::from("[3,2,1]")));
+}
