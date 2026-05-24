@@ -68,11 +68,13 @@ pub(crate) fn bind_statement(
             object_type,
             if_exists,
             names,
+            cascade,
             ..
-        } => bind_drop(sql, schema_epoch, object_type, if_exists, names),
+        } => bind_drop(sql, schema_epoch, object_type, if_exists, names, cascade),
         SqlStatement::AlterTable(alter_table) => bind_alter_table(
             schema_epoch,
             sql,
+            &schema,
             alter_table.name,
             alter_table.if_exists,
             alter_table.only,
