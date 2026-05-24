@@ -142,6 +142,28 @@ impl AttachMap {
         }
         out
     }
+
+    /// (alias, on-disk path) pairs for every alias **other than `main`**.
+    /// `:memory:` and ephemeral sidecars surface as empty strings.
+    pub fn attached_aliases_with_paths(&self) -> Vec<(String, String)> {
+        let Ok(g) = self.inner.read() else {
+            return Vec::new();
+        };
+        let mut out: Vec<(String, String)> = g
+            .iter()
+            .map(|(alias, entry)| {
+                let path = entry.path.to_string_lossy().into_owned();
+                let path = if path == ":memory:" {
+                    String::new()
+                } else {
+                    path
+                };
+                (alias.clone(), path)
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
 }
 
 fn open_or_create(path: &Path) -> Result<Arc<Database>> {

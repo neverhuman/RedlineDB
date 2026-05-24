@@ -179,7 +179,31 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     }
     out = out.replace("'abc' GLOB 'a*'", "glob('a*','abc')");
     out = out.replace("NULL IS NOT 1", "NULL IS DISTINCT FROM 1");
+    // sqlparser doesn't recognise the comma-separated form of CREATE
+    // TABLE table-options (`STRICT, WITHOUT ROWID` /
+    // `WITHOUT ROWID, STRICT`). SQLite accepts the comma; we rewrite
+    // it to whitespace so the underlying parser is happy. The match
+    // is case-insensitive but order-preserving so the rewritten text
+    // stays close to the original for diagnostics.
+    out = rewrite_strict_without_rowid_combo(&out);
     out
+}
+
+fn rewrite_strict_without_rowid_combo(sql: &str) -> String {
+    let mut s = sql.to_owned();
+    for pat in [
+        (", STRICT", " STRICT"),
+        (",STRICT", " STRICT"),
+        (", strict", " strict"),
+        (",strict", " strict"),
+        (", WITHOUT ROWID", " WITHOUT ROWID"),
+        (",WITHOUT ROWID", " WITHOUT ROWID"),
+        (", without rowid", " without rowid"),
+        (",without rowid", " without rowid"),
+    ] {
+        s = s.replace(pat.0, pat.1);
+    }
+    s
 }
 
 fn extract_named_window_spec(sql: &str, name: &str) -> Option<String> {

@@ -429,6 +429,12 @@ impl Connection {
         self.db.path()
     }
 
+    /// True for `:memory:` / ephemeral databases — used by SQLite-parity
+    /// PRAGMA shapes (e.g. `journal_mode` always reports `memory` here).
+    pub(crate) fn is_in_memory(&self) -> bool {
+        self.db.is_in_memory()
+    }
+
     pub(crate) fn foreign_keys(&self) -> bool {
         self.session.lock().expect("session poisoned").foreign_keys
     }
@@ -503,6 +509,259 @@ impl Connection {
             .lock()
             .expect("session poisoned")
             .case_sensitive_like = value;
+    }
+
+    pub(crate) fn defer_foreign_keys(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .defer_foreign_keys
+    }
+
+    pub(crate) fn set_defer_foreign_keys(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .defer_foreign_keys = value;
+    }
+
+    pub(crate) fn ignore_check_constraints(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .ignore_check_constraints
+    }
+
+    pub(crate) fn set_ignore_check_constraints(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .ignore_check_constraints = value;
+    }
+
+    pub(crate) fn trusted_schema(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .trusted_schema
+    }
+
+    pub(crate) fn set_trusted_schema(&self, value: bool) {
+        self.session.lock().expect("session poisoned").trusted_schema = value;
+    }
+
+    pub(crate) fn secure_delete(&self) -> bool {
+        self.session.lock().expect("session poisoned").secure_delete
+    }
+
+    pub(crate) fn set_secure_delete(&self, value: bool) {
+        self.session.lock().expect("session poisoned").secure_delete = value;
+    }
+
+    pub(crate) fn locking_mode(&self) -> crate::statement::LockingMode {
+        self.session.lock().expect("session poisoned").locking_mode
+    }
+
+    pub(crate) fn set_locking_mode(&self, value: crate::statement::LockingMode) {
+        self.session.lock().expect("session poisoned").locking_mode = value;
+    }
+
+    pub(crate) fn busy_timeout_ms(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .busy_timeout_ms
+    }
+
+    pub(crate) fn set_busy_timeout_ms(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .busy_timeout_ms = value;
+    }
+
+    pub(crate) fn application_id(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .application_id
+    }
+
+    pub(crate) fn set_application_id(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .application_id = value;
+    }
+
+    pub(crate) fn max_page_count(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .max_page_count
+    }
+
+    pub(crate) fn set_max_page_count(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .max_page_count = value;
+    }
+
+    pub(crate) fn cache_spill(&self) -> i64 {
+        self.session.lock().expect("session poisoned").cache_spill
+    }
+
+    pub(crate) fn set_cache_spill(&self, value: i64) {
+        self.session.lock().expect("session poisoned").cache_spill = value;
+    }
+
+    pub(crate) fn fullfsync(&self) -> bool {
+        self.session.lock().expect("session poisoned").fullfsync
+    }
+
+    pub(crate) fn set_fullfsync(&self, value: bool) {
+        self.session.lock().expect("session poisoned").fullfsync = value;
+    }
+
+    pub(crate) fn checkpoint_fullfsync(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .checkpoint_fullfsync
+    }
+
+    pub(crate) fn set_checkpoint_fullfsync(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .checkpoint_fullfsync = value;
+    }
+
+    pub(crate) fn auto_vacuum(&self) -> i64 {
+        self.session.lock().expect("session poisoned").auto_vacuum
+    }
+
+    pub(crate) fn set_auto_vacuum(&self, value: i64) {
+        self.session.lock().expect("session poisoned").auto_vacuum = value;
+    }
+
+    pub(crate) fn threads(&self) -> i64 {
+        self.session.lock().expect("session poisoned").threads
+    }
+
+    pub(crate) fn set_threads(&self, value: i64) {
+        self.session.lock().expect("session poisoned").threads = value;
+    }
+
+    /// PRAGMA mmap_size getter — currently unused at the surface because
+    /// SQLite reports an empty result set when mmap is zero (the
+    /// :memory:-default case); kept for API symmetry with the setter.
+    #[allow(dead_code)]
+    pub(crate) fn mmap_size(&self) -> i64 {
+        self.session.lock().expect("session poisoned").mmap_size
+    }
+
+    pub(crate) fn set_mmap_size(&self, value: i64) {
+        self.session.lock().expect("session poisoned").mmap_size = value;
+    }
+
+    pub(crate) fn soft_heap_limit(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .soft_heap_limit
+    }
+
+    pub(crate) fn set_soft_heap_limit(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .soft_heap_limit = value;
+    }
+
+    pub(crate) fn hard_heap_limit(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .hard_heap_limit
+    }
+
+    pub(crate) fn set_hard_heap_limit(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .hard_heap_limit = value;
+    }
+
+    pub(crate) fn analysis_limit(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .analysis_limit
+    }
+
+    pub(crate) fn set_analysis_limit(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .analysis_limit = value;
+    }
+
+    pub(crate) fn automatic_index(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .automatic_index
+    }
+
+    pub(crate) fn set_automatic_index(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .automatic_index = value;
+    }
+
+    pub(crate) fn reverse_unordered_selects(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .reverse_unordered_selects
+    }
+
+    pub(crate) fn set_reverse_unordered_selects(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .reverse_unordered_selects = value;
+    }
+
+    pub(crate) fn writable_schema(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .writable_schema
+    }
+
+    pub(crate) fn set_writable_schema(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .writable_schema = value;
+    }
+
+    pub(crate) fn legacy_alter_table(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .legacy_alter_table
+    }
+
+    pub(crate) fn set_legacy_alter_table(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .legacy_alter_table = value;
     }
 
     pub(crate) fn user_version(&self) -> i64 {

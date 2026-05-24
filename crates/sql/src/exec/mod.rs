@@ -285,14 +285,20 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::Pragma(plan) => {
-            if let PragmaPlan::SetJournalMode(value) = plan {
+            // Several SQLite SET-style PRAGMAs echo the freshly assigned
+            // value back as a single-row result set rather than returning
+            // silently. The parser flags these by attaching a non-empty
+            // `output_columns` list (e.g. `["journal_mode"]`). We honour
+            // that flag here by routing the response through a static
+            // row source whose payload is derived from the plan variant.
+            if let Some(echo_value) = pragma_set_echo_value(plan) {
                 execute_pragma(conn, plan)?;
                 return Ok(ExecutionResult {
                     runtime: RuntimeState::Select(SelectRuntime {
                         tx: SelectRuntimeTx::Empty,
                         restore_tx: false,
                         source: SelectRuntimeSource::StaticRows {
-                            rows: Arc::from(vec![vec![SqlValue::Text(Arc::from(value.as_str()))]]),
+                            rows: Arc::from(vec![vec![echo_value]]),
                             cursor: 0,
                         },
                         selection: None,
@@ -733,6 +739,29 @@ fn execute_create_table_as_select(
     })
 }
 
+/// Returns `Some(value)` when the given PRAGMA SET plan must echo a row
+/// back to the caller (matching SQLite's surface for `journal_mode`,
+/// `locking_mode`, `busy_timeout`, …). For SET pragmas that are silent
+/// (e.g. `defer_foreign_keys=1`), returns `None`.
+fn pragma_set_echo_value(plan: &PragmaPlan) -> Option<SqlValue> {
+    match plan {
+        PragmaPlan::SetJournalMode(value) => {
+            Some(SqlValue::Text(Arc::from(value.as_str())))
+        }
+        PragmaPlan::SetLockingMode(value) => {
+            Some(SqlValue::Text(Arc::from(value.as_str())))
+        }
+        PragmaPlan::SetBusyTimeout(value)
+        | PragmaPlan::SetMaxPageCount(value)
+        | PragmaPlan::SetThreads(value)
+        | PragmaPlan::SetAnalysisLimit(value) => Some(SqlValue::Integer(*value)),
+        PragmaPlan::SetSecureDelete(value) => {
+            Some(SqlValue::Integer(if *value { 1 } else { 0 }))
+        }
+        _ => None,
+    }
+}
+
 fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
     match plan {
         PragmaPlan::SetForeignKeys(value) => {
@@ -769,6 +798,90 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             Ok(())
         }
         PragmaPlan::WalCheckpoint => Ok(()),
+        PragmaPlan::SetAnalysisLimit(value) => {
+            conn.set_analysis_limit(*value);
+            Ok(())
+        }
+        PragmaPlan::SetApplicationId(value) => {
+            conn.set_application_id(*value);
+            Ok(())
+        }
+        PragmaPlan::SetAutoVacuum(value) => {
+            conn.set_auto_vacuum(*value);
+            Ok(())
+        }
+        PragmaPlan::SetAutomaticIndex(value) => {
+            conn.set_automatic_index(*value);
+            Ok(())
+        }
+        PragmaPlan::SetBusyTimeout(value) => {
+            conn.set_busy_timeout_ms(*value);
+            Ok(())
+        }
+        PragmaPlan::SetCacheSpill(value) => {
+            conn.set_cache_spill(*value);
+            Ok(())
+        }
+        PragmaPlan::SetCheckpointFullfsync(value) => {
+            conn.set_checkpoint_fullfsync(*value);
+            Ok(())
+        }
+        PragmaPlan::SetDeferForeignKeys(value) => {
+            conn.set_defer_foreign_keys(*value);
+            Ok(())
+        }
+        PragmaPlan::SetFullfsync(value) => {
+            conn.set_fullfsync(*value);
+            Ok(())
+        }
+        PragmaPlan::SetHardHeapLimit(value) => {
+            conn.set_hard_heap_limit(*value);
+            Ok(())
+        }
+        PragmaPlan::SetIgnoreCheckConstraints(value) => {
+            conn.set_ignore_check_constraints(*value);
+            Ok(())
+        }
+        PragmaPlan::SetLegacyAlterTable(value) => {
+            conn.set_legacy_alter_table(*value);
+            Ok(())
+        }
+        PragmaPlan::SetLockingMode(value) => {
+            conn.set_locking_mode(*value);
+            Ok(())
+        }
+        PragmaPlan::SetMaxPageCount(value) => {
+            conn.set_max_page_count(*value);
+            Ok(())
+        }
+        PragmaPlan::SetMmapSize(value) => {
+            conn.set_mmap_size(*value);
+            Ok(())
+        }
+        PragmaPlan::SetReverseUnorderedSelects(value) => {
+            conn.set_reverse_unordered_selects(*value);
+            Ok(())
+        }
+        PragmaPlan::SetSecureDelete(value) => {
+            conn.set_secure_delete(*value);
+            Ok(())
+        }
+        PragmaPlan::SetSoftHeapLimit(value) => {
+            conn.set_soft_heap_limit(*value);
+            Ok(())
+        }
+        PragmaPlan::SetThreads(value) => {
+            conn.set_threads(*value);
+            Ok(())
+        }
+        PragmaPlan::SetTrustedSchema(value) => {
+            conn.set_trusted_schema(*value);
+            Ok(())
+        }
+        PragmaPlan::SetWritableSchema(value) => {
+            conn.set_writable_schema(*value);
+            Ok(())
+        }
     }
 }
 

@@ -557,6 +557,9 @@ pub fn apply_alter_table(
             }
             table.name = table_name.name.original().into();
             table.folded = table_name.name.folded().into();
+            // Force regeneration of the user-visible CREATE TABLE text
+            // so `sqlite_master.sql` reflects the new name.
+            table.normalized_sql = None;
         }
         AlterTableOperationSpec::RenameColumn { old_name, new_name } => {
             if table
@@ -573,6 +576,8 @@ pub fn apply_alter_table(
                 .ok_or(Error::ObjectNotFound)?;
             column.name = new_name.original().into();
             column.folded = new_name.folded().into();
+            // sqlite_master must reflect the new column name.
+            table.normalized_sql = None;
         }
         AlterTableOperationSpec::AddColumn {
             column,
@@ -623,6 +628,9 @@ pub fn apply_alter_table(
                 default_expr: None,
                 generated: None,
             });
+            // Force CREATE TABLE re-render so the new column appears in
+            // sqlite_master.sql alongside the existing definitions.
+            table.normalized_sql = None;
         }
         AlterTableOperationSpec::DropColumn {
             column_name,
