@@ -377,12 +377,22 @@ pub(crate) fn bind_insert_conflict(
     };
 
     let target = match on_conflict.conflict_target {
-        Some(ConflictTarget::Columns(columns)) => Some(UpsertTarget::Columns(
-            columns
+        Some(ConflictTarget::Columns(columns)) => {
+            let ordinals: Vec<usize> = columns
                 .into_iter()
                 .map(|column| resolve_column_ordinal_in_table(table, &column.value))
-                .collect::<Result<Vec<_>>>()?,
-        )),
+                .collect::<Result<Vec<_>>>()?;
+            // SQLite parity: the conflict-target column set must match
+            // some UNIQUE / PRIMARY KEY constraint (including rowid-alias
+            // INTEGER PRIMARY KEY). Reject early with SQLite's wording.
+            if !upsert_target_columns_have_unique(table, &ordinals) {
+                return Err(Error::Bind(
+                    "ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint"
+                        .to_owned(),
+                ));
+            }
+            Some(UpsertTarget::Columns(ordinals))
+        }
         Some(ConflictTarget::OnConstraint(name)) => {
             let (schema, constraint) = split_name(name)?;
             if schema.is_some() {

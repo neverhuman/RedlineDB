@@ -88,7 +88,13 @@ pub(crate) fn convert_column_def(
                 });
             }
             ColumnOption::Collation(name) => {
-                collation = Some(name.to_string());
+                let collation_name = name.to_string();
+                if !crate::collation::Collation::is_known(&collation_name) {
+                    return Err(Error::Bind(format!(
+                        "no such collation sequence: {collation_name}"
+                    )));
+                }
+                collation = Some(collation_name);
             }
             ColumnOption::ForeignKey(fk) => {
                 // A6 SQLite-parity: column-level REFERENCES is normalised
