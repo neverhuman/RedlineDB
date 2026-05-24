@@ -23,11 +23,42 @@ pub(crate) fn value_to_string(value: &SqlValue) -> String {
 }
 
 /// Format a `f64` the way SQLite renders REAL values in text contexts
-/// (`%!.15g` semantics). Whole-valued finite reals keep a trailing `.0`
-/// so that `lower(1.0)` returns `"1.0"`, not `"1"` — matching the
-/// rusqlite oracle. Non-finite values render as SQLite's
-/// `"Inf"` / `"-Inf"` / `"NaN"` literals.
-pub(crate) fn format_real_sqlite(v: f64) -> String {
+/// (`%!.17g` semantics with trailing-`.0` for whole-valued finite reals).
+///
+/// SQLite's `printf("%g", x)` prints 17 significant digits unconditionally
+/// (matching its `sqlite3FpDecode` behaviour) and trims trailing zeros. This
+/// differs from Rust's default `{}` formatting which prints the shortest
+/// round-tripping representation (often 15-16 digits). Matching the 17-digit
+/// rendering exactly is required for sqlite-parity on math-function output
+/// (e.g. `acos(0.5)` must render as `1.0471975511965979`, not
+/// `1.0471975511965978`).
+///
+/// Non-finite values render as SQLite's `"Inf"` / `"-Inf"` / `"NaN"` literals.
+pub fn format_real_sqlite(v: f64) -> String {
+    format_real_g(v, 17)
+}
+
+/// SQLite-compatible `%g`-style formatter. Produces `precision` significant
+/// digits, trims trailing zeros, chooses fixed vs. scientific notation per
+/// POSIX `%g` rules, and appends `.0` for whole-valued finite reals so that
+/// `format_real_g(1.0, 17) == "1.0"`.
+///
+/// Mirrors the heart of SQLite's `sqlite3FpDecode`/`%!.17g` semantics
+/// (see `util.c`):
+///   1. Decompose into a digit string and a decimal exponent using
+///      `{:.precision+1 e}` (one extra digit acting as the rounding
+///      indicator). Apply round-half-up at the indicator.
+///   2. When `precision == 17` AND the 18-digit prefix has trailing zeros
+///      at positions 13/14/15 OR the 16th/15th digits are both `9`, try
+///      progressively shorter representations and pick the shortest that
+///      bit-exactly round-trips to the original `f64`. This matches the
+///      special-case path in `sqlite3FpDecode` that lets `0.1` render as
+///      `"0.1"` rather than `"0.10000000000000001"`.
+///   3. Trim trailing zeros from the chosen digit string.
+///   4. Emit fixed form when `-4 <= exp < precision`, scientific otherwise.
+///      Scientific notation uses SQLite's `e[+-]NN` convention with 2+
+///      exponent digits.
+fn format_real_g(v: f64, precision: usize) -> String {
     if v.is_nan() {
         return "NaN".to_owned();
     }
@@ -38,11 +69,181 @@ pub(crate) fn format_real_sqlite(v: f64) -> String {
             "Inf".to_owned()
         };
     }
-    let s = format!("{v}");
-    if s.contains('.') || s.contains('e') || s.contains('E') {
-        s
+    if v == 0.0 {
+        return "0.0".to_owned();
+    }
+    let neg = v < 0.0;
+    let av = if neg { -v } else { v };
+    // {:.N e} produces N+1 significant digits. Request precision+1 so we
+    // have one rounding-indicator digit.
+    let raw = format!("{:.*e}", precision + 1, av);
+    let pos_e = raw.find('e').expect("rust f64 fmt always emits 'e'");
+    let mantissa = &raw[..pos_e];
+    let mut exp: i32 = raw[pos_e + 1..]
+        .parse()
+        .expect("rust f64 fmt always emits valid exponent");
+    let dot_pos = mantissa.find('.').unwrap_or(mantissa.len());
+    let mut digits: Vec<u8> = Vec::with_capacity(precision + 4);
+    digits.extend_from_slice(mantissa[..dot_pos].as_bytes());
+    if dot_pos < mantissa.len() {
+        digits.extend_from_slice(mantissa[dot_pos + 1..].as_bytes());
+    }
+    // We have precision+2 digits (e.g. 19 for precision=17). For the
+    // round-trip shortening to work we keep the 18-digit form around: round
+    // the 19th into the 18th using round-half-up.
+    let work_len = precision + 1; // 18 for precision=17
+    if digits.len() > work_len {
+        let indicator = digits[work_len];
+        digits.truncate(work_len);
+        if indicator >= b'5' {
+            round_up_carry(&mut digits, &mut exp);
+        }
+    }
+    // Now `digits` has `work_len` digits. Apply SQLite's shortening special
+    // case for precision==17 (the `!`-flag in `%!.17g`).
+    if precision == 17 && digits.len() == 18 {
+        if let Some((shortened, new_exp)) = sqlite_shorten(&digits, exp, av, neg) {
+            let mut digits = shortened;
+            // Trim trailing zeros (keep at least one digit).
+            while digits.len() > 1 && *digits.last().unwrap() == b'0' {
+                digits.pop();
+            }
+            return assemble_g(&digits, new_exp, neg, precision as i32);
+        }
+    }
+    // Fallback: round the 18-digit form down to 17 digits.
+    if digits.len() > precision {
+        let indicator = digits[precision];
+        digits.truncate(precision);
+        if indicator >= b'5' {
+            round_up_carry(&mut digits, &mut exp);
+        }
+    }
+    while digits.len() > 1 && *digits.last().unwrap() == b'0' {
+        digits.pop();
+    }
+    assemble_g(&digits, exp, neg, precision as i32)
+}
+
+/// Round-up-with-carry helper — increments the last digit, cascading `9→0`
+/// carries leftward, and prepending `1` (with exponent adjustment) on
+/// overflow. Used by both the rounding-indicator step in `format_real_g`
+/// and the shortening probe in `sqlite_shorten`.
+fn round_up_carry(digits: &mut Vec<u8>, exp: &mut i32) {
+    if digits.is_empty() {
+        digits.push(b'1');
+        return;
+    }
+    let mut i = digits.len() - 1;
+    loop {
+        if digits[i] < b'9' {
+            digits[i] += 1;
+            return;
+        }
+        digits[i] = b'0';
+        if i == 0 {
+            digits.insert(0, b'1');
+            digits.pop();
+            *exp += 1;
+            return;
+        }
+        i -= 1;
+    }
+}
+
+/// Implements SQLite's `%!.17g` shortening probe (see `sqlite3FpDecode`):
+/// when the 18-digit prefix has trailing zeros at positions 13/14/15 *or*
+/// digits 15 and 14 are both `9`, try progressively shorter representations
+/// and return the shortest that bit-exactly round-trips to the original
+/// `f64`. Returns `None` to fall back to the standard 17-digit form.
+fn sqlite_shorten(
+    digits: &[u8],
+    exp: i32,
+    original: f64,
+    neg: bool,
+) -> Option<(Vec<u8>, i32)> {
+    debug_assert_eq!(digits.len(), 18);
+    // SQLite's trigger conditions (0-indexed against z[]).
+    let trigger_trailing_zeros = digits[13] == b'0' && digits[14] == b'0' && digits[15] == b'0';
+    let trigger_nines = digits[14] == b'9' && digits[15] == b'9';
+    if !trigger_trailing_zeros && !trigger_nines {
+        return None;
+    }
+    // Walk from shortest (1 digit) up — first round-trip wins (matches
+    // SQLite's preference for the shortest exact representation).
+    for new_len in 1..digits.len() {
+        let mut shortened = digits[..new_len].to_vec();
+        let mut new_exp = exp;
+        let indicator = digits[new_len];
+        if indicator >= b'5' {
+            round_up_carry(&mut shortened, &mut new_exp);
+        }
+        // Trim trailing zeros — sqlite normalises this way during the
+        // round-trip check too.
+        let mut trimmed = shortened.clone();
+        while trimmed.len() > 1 && *trimmed.last().unwrap() == b'0' {
+            trimmed.pop();
+        }
+        let candidate = assemble_g(&trimmed, new_exp, neg, 17);
+        if let Ok(parsed) = candidate.parse::<f64>() {
+            if parsed.to_bits() == original.to_bits()
+                || (neg && (-parsed).to_bits() == original.to_bits())
+            {
+                return Some((trimmed, new_exp));
+            }
+        }
+    }
+    None
+}
+
+/// Final emit step shared by `format_real_g` and the round-trip probe.
+/// Chooses fixed vs. scientific notation per POSIX `%g` rules and ensures
+/// whole-valued reals keep their `.0` suffix.
+fn assemble_g(digits: &[u8], exp: i32, neg: bool, precision: i32) -> String {
+    let sign = if neg { "-" } else { "" };
+    if exp >= -4 && exp < precision {
+        if exp >= 0 {
+            let int_digits = (exp + 1) as usize;
+            if int_digits >= digits.len() {
+                let mut out = String::from(sign);
+                out.push_str(std::str::from_utf8(digits).unwrap());
+                for _ in digits.len()..int_digits {
+                    out.push('0');
+                }
+                out.push_str(".0");
+                out
+            } else {
+                let mut out = String::from(sign);
+                out.push_str(std::str::from_utf8(&digits[..int_digits]).unwrap());
+                out.push('.');
+                out.push_str(std::str::from_utf8(&digits[int_digits..]).unwrap());
+                out
+            }
+        } else {
+            let zeros = (-exp - 1) as usize;
+            let mut out = String::from(sign);
+            out.push_str("0.");
+            for _ in 0..zeros {
+                out.push('0');
+            }
+            out.push_str(std::str::from_utf8(digits).unwrap());
+            out
+        }
     } else {
-        format!("{s}.0")
+        let mut out = String::from(sign);
+        out.push(digits[0] as char);
+        if digits.len() > 1 {
+            out.push('.');
+            out.push_str(std::str::from_utf8(&digits[1..]).unwrap());
+        }
+        out.push('e');
+        if exp < 0 {
+            out.push('-');
+        } else {
+            out.push('+');
+        }
+        out.push_str(&format!("{:02}", exp.abs()));
+        out
     }
 }
 
@@ -118,6 +319,36 @@ pub(crate) fn sqlite_ltrim_function(
         }
     };
     Ok(SqlValue::Text(Arc::from(result)))
+}
+
+// SQLite's unhex(X[, IGNORE]). Returns the BLOB obtained by decoding the
+// hex digits in X, optionally skipping any character that appears in IGNORE.
+// Any other character (besides matched hex pair or ignored char) yields NULL.
+// Empty / fully ignored input → empty BLOB.
+pub(crate) fn sqlite_unhex(input: &str, ignore: &str) -> Option<Vec<u8>> {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len() / 2);
+    let mut nibble: Option<u8> = None;
+    for &b in bytes {
+        if ignore.as_bytes().contains(&b) {
+            continue;
+        }
+        let value = match b {
+            b'0'..=b'9' => b - b'0',
+            b'a'..=b'f' => b - b'a' + 10,
+            b'A'..=b'F' => b - b'A' + 10,
+            _ => return None,
+        };
+        match nibble.take() {
+            Some(high) => out.push((high << 4) | value),
+            None => nibble = Some(value),
+        }
+    }
+    if nibble.is_some() {
+        // Odd hex digit count is an error in sqlite.
+        return None;
+    }
+    Some(out)
 }
 
 pub(crate) fn sqlite_rtrim_function(

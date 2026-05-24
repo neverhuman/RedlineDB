@@ -36,7 +36,14 @@ impl Cell {
             Self::Integer(v) => v.to_string(),
             Self::Real(v) => format_real(*v),
             Self::Text(v) => v.clone(),
-            Self::Blob(v) => format!("<blob:{}>", v.len()),
+            // SQLite's `.mode list` (and friends) renders BLOB columns by
+            // casting them to TEXT (`sqlite3_column_text`) — i.e. raw UTF-8
+            // bytes up to the first NUL — and then escaping any leading
+            // control character via the `^@`-style caret notation that
+            // `qrfEscape(QRF_ESC_Ascii)` emits. Match that here so blob
+            // payloads like `x'01ab'` render as `"^A"` followed by the raw
+            // 0xAB byte (not as a `<blob:N>` placeholder).
+            Self::Blob(v) => render_blob_as_text(v),
         }
     }
 
@@ -469,7 +476,7 @@ fn write_csv_value_ref<W: Write>(
         ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
         ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
         ValueRef::Text(v) => write_csv_cell(out, v, separator),
-        ValueRef::Blob(v) => write_csv_cell(out, &format!("<blob:{}>", v.len()), separator),
+        ValueRef::Blob(v) => write_csv_cell(out, &render_blob_as_text(v), separator),
     }
 }
 
@@ -493,7 +500,9 @@ fn write_text_value_ref<W: Write>(
                 out.write_all(v.as_bytes()).map_err(|err| err.to_string())
             }
         }
-        ValueRef::Blob(v) => write!(out, "<blob:{}>", v.len()).map_err(|err| err.to_string()),
+        ValueRef::Blob(v) => out
+            .write_all(render_blob_as_text(v).as_bytes())
+            .map_err(|err| err.to_string()),
     }
 }
 
@@ -512,22 +521,40 @@ fn escape_symbolic(value: &str) -> String {
 }
 
 fn format_real(value: f64) -> String {
-    if value.is_nan() {
-        return "NaN".to_owned();
-    }
-    if value.is_infinite() {
-        return if value < 0.0 {
-            "-Inf".to_owned()
+    // Delegate to the SQL crate's `format_real_sqlite` (re-exported via the
+    // `redlinedb` crate) so REAL output matches SQLite's reference shell
+    // (`%!.17g` semantics with trailing-`.0` for whole values).
+    redlinedb::format_real_sqlite(value)
+}
+
+/// Render a BLOB column the way SQLite's reference shell does for
+/// `.mode list` / `.mode tabs`: cast to TEXT (raw UTF-8 bytes up to the
+/// first NUL byte), then escape any control characters using the
+/// `^@`-style caret notation that `qrfEscape(QRF_ESC_Ascii)` emits.
+/// Tab, newline, and CR-LF are preserved.
+pub(crate) fn render_blob_as_text(bytes: &[u8]) -> String {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    let mut out = String::with_capacity(end);
+    let mut i = 0;
+    while i < end {
+        let c = bytes[i];
+        if c <= 0x1f
+            && c != b'\t'
+            && c != b'\n'
+            && !(c == b'\r' && bytes.get(i + 1) == Some(&b'\n'))
+        {
+            out.push('^');
+            out.push((0x40 + c) as char);
         } else {
-            "Inf".to_owned()
-        };
+            // Best-effort: render raw byte as Latin-1 codepoint so the
+            // terminal can decide what to do with high bytes. The
+            // SQLite shell ultimately writes the raw byte via fputs(),
+            // so any text/UTF-8 sequences inside the blob round-trip.
+            out.push(c as char);
+        }
+        i += 1;
     }
-    let rendered = format!("{value}");
-    if rendered.contains('.') || rendered.contains('e') || rendered.contains('E') {
-        rendered
-    } else {
-        format!("{rendered}.0")
-    }
+    out
 }
 
 fn write_joined<W: Write, I, S>(
