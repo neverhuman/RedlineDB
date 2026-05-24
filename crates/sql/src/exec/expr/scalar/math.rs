@@ -244,14 +244,16 @@ pub(crate) fn math_mod(values: &[SqlValue]) -> Result<SqlValue> {
 pub(crate) fn math_log(values: &[SqlValue]) -> Result<SqlValue> {
     match values.len() {
         0 => Ok(SqlValue::Null),
-        1 => math1_unary(values, f64::ln),
-        _ => math1_binary(values, |b, x| x.log(b)),
+        1 => math1_unary(values, libm::log),
+        // x.log(b) == ln(x) / ln(b); route both ln calls through libm for
+        // bit-exact glibc parity.
+        _ => math1_binary(values, |b, x| libm::log(x) / libm::log(b)),
     }
 }
 
 // trunc(x) - truncate towards zero. SQLite returns REAL with .0 suffix.
 pub(crate) fn math_trunc(values: &[SqlValue]) -> Result<SqlValue> {
-    math1_unary(values, f64::trunc)
+    math1_unary(values, libm::trunc)
 }
 
 pub(crate) fn math_pi() -> SqlValue {
