@@ -1041,22 +1041,10 @@ fn escape_symbolic(value: &str) -> String {
 }
 
 fn format_real(value: f64) -> String {
-    if value.is_nan() {
-        return "NaN".to_owned();
-    }
-    if value.is_infinite() {
-        return if value < 0.0 {
-            "-Inf".to_owned()
-        } else {
-            "Inf".to_owned()
-        };
-    }
-    let rendered = format!("{value}");
-    if rendered.contains('.') || rendered.contains('e') || rendered.contains('E') {
-        rendered
-    } else {
-        format!("{rendered}.0")
-    }
+    // Delegate to the SQL crate's SQLite-compatible %!.17g formatter so
+    // CLI REAL output matches sqlite3 reference (closes the
+    // SQL_TYPE_AFFINITY REAL_BIG / INT_BIG cases per Track B's note).
+    redlinedb::format_real_sqlite(value)
 }
 
 fn format_blob_text(bytes: &[u8]) -> String {
