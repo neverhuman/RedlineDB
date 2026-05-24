@@ -1,8 +1,9 @@
 use std::env;
 use std::fs;
-use std::io::{self, Read, Write};
-use std::path::PathBuf;
+use std::io::{self, BufWriter, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::time::SystemTime;
 
 use clap::Parser;
 use redlinedb::{Database, OpenOptions, OwnedStep};
@@ -11,7 +12,7 @@ mod dot;
 mod maintenance;
 mod render;
 
-use dot::{CliState, DotOutcome, OutputMode, OutputTarget};
+use dot::{CliState, DotOutcome, OutputMode};
 use maintenance::run_maintenance;
 use render::{
     Cell, is_streaming_delimited_mode, render_query, write_delimited_row,
@@ -326,10 +327,41 @@ pub fn run() {
         eprintln!("Error: unable to open database file");
         exit(1);
     }
+    let filename_path = Path::new(&filename);
+    let sidecar_path = readonly_sidecar_path(filename_path);
+    let fresh_readonly_sidecar = (cli.readonly || cli.deserialize)
+        && filename != ":memory:"
+        && !filename.is_empty()
+        && readonly_sidecar_is_fresh(filename_path, &sidecar_path);
+    if cli.readonly
+        && !cli.sql.is_empty()
+        && fresh_readonly_sidecar
+        && native_readonly_open_unlikely(filename_path)
+    {
+        match run_readonly_sidecar(
+            &filename,
+            &cli.sql,
+            mode,
+            &separator,
+            show_header,
+            cli.nullvalue.as_deref(),
+            cli.newline.as_deref(),
+            cli.bail,
+            cli.echo,
+        ) {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(e) => {
+                eprintln!("{e}");
+                exit(1);
+            }
+        }
+    }
     let use_deserialize_sidecar = cli.deserialize
         && filename != ":memory:"
         && !filename.is_empty()
-        && readonly_sidecar_path(std::path::Path::new(&filename)).exists();
+        && (native_open_cannot_be_valid(filename_path) || sidecar_path.exists())
+        && fresh_readonly_sidecar;
     let db_res = if filename == ":memory:" || filename.is_empty() || use_deserialize_sidecar {
         Database::create_in_memory(OpenOptions::default())
     } else if cli.readonly {
@@ -341,12 +373,15 @@ pub fn run() {
                 .with_process_owner_lock(false),
         )
     } else {
-        Database::open(&filename)
+        Database::open_with_options(
+            &filename,
+            OpenOptions::default().with_process_owner_lock(false),
+        )
     };
     let db = match db_res {
         Ok(db) => db,
         Err(e) => {
-            if cli.readonly
+            if (cli.readonly || cli.deserialize)
                 && !cli.sql.is_empty()
                 && let Ok(true) = run_readonly_sidecar(
                     &filename,
@@ -608,24 +643,82 @@ fn readonly_sidecar_path(db_path: &std::path::Path) -> PathBuf {
     PathBuf::from(sidecar)
 }
 
+fn native_open_cannot_be_valid(db_path: &Path) -> bool {
+    db_path.is_file()
+}
+
+fn native_readonly_open_unlikely(db_path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let Ok(meta) = fs::metadata(db_path) else {
+            return false;
+        };
+        meta.is_dir() && (meta.permissions().mode() & 0o111) == 0
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = db_path;
+        false
+    }
+}
+
+fn readonly_sidecar_is_fresh(db_path: &Path, sidecar: &Path) -> bool {
+    let Ok(sidecar_meta) = fs::metadata(sidecar) else {
+        return false;
+    };
+    let Ok(sidecar_mtime) = sidecar_meta.modified() else {
+        return false;
+    };
+    match newest_mtime(db_path) {
+        Ok(db_mtime) => sidecar_mtime >= db_mtime,
+        Err(_) => false,
+    }
+}
+
+fn newest_mtime(path: &Path) -> io::Result<SystemTime> {
+    let meta = fs::metadata(path)?;
+    let mut newest = meta.modified()?;
+    if meta.is_dir() {
+        newest = newest_mtime_in_dir(path, newest)?;
+    }
+    Ok(newest)
+}
+
+fn newest_mtime_in_dir(path: &Path, mut newest: SystemTime) -> io::Result<SystemTime> {
+    let Ok(entries) = fs::read_dir(path) else {
+        return Ok(newest);
+    };
+    for entry in entries {
+        let entry = entry?;
+        let entry_path = entry.path();
+        let meta = match entry.metadata() {
+            Ok(meta) => meta,
+            Err(_) => continue,
+        };
+        if let Ok(modified) = meta.modified()
+            && modified > newest
+        {
+            newest = modified;
+        }
+        if meta.is_dir() {
+            newest = newest_mtime_in_dir(&entry_path, newest)?;
+        }
+    }
+    Ok(newest)
+}
+
 fn write_readonly_sidecar(state: &mut CliState) -> Result<(), String> {
     if state.db_path == PathBuf::from(":memory:") {
         return Ok(());
     }
     let sidecar = readonly_sidecar_path(&state.db_path);
-    let writer = std::fs::File::create(&sidecar)
+    let file = std::fs::File::create(&sidecar)
         .map_err(|err| format!("Error: cannot open {}: {err}", sidecar.display()))?;
-    let previous = std::mem::replace(
-        &mut state.output,
-        OutputTarget::File {
-            path: sidecar,
-            writer,
-        },
-    );
-    let result = dot::io_cmd::dump(state, &[]);
-    let flush_result = state.output.flush().map_err(|err| err.to_string());
-    state.output = previous;
-    result.and(flush_result)
+    let mut writer = BufWriter::new(file);
+    dot::io_cmd::dump_database(&state.db, &mut writer, None)?;
+    writer.flush().map_err(|err| err.to_string())
 }
 
 fn run_readonly_sidecar(
@@ -639,8 +732,9 @@ fn run_readonly_sidecar(
     bail: bool,
     echo: bool,
 ) -> Result<bool, String> {
-    let sidecar = readonly_sidecar_path(std::path::Path::new(filename));
-    if !sidecar.exists() {
+    let db_path = Path::new(filename);
+    let sidecar = readonly_sidecar_path(db_path);
+    if !readonly_sidecar_is_fresh(db_path, &sidecar) {
         return Ok(false);
     }
     let db = Database::create_in_memory(OpenOptions::default()).map_err(|err| err.to_string())?;
@@ -721,10 +815,10 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
         .collect();
     let query_options = QueryOptions {
         mode: state.mode,
-        separator: state.separator.clone(),
-        row_separator: state.row_separator.clone(),
+        separator: &state.separator,
+        row_separator: &state.row_separator,
         show_header: state.show_header,
-        null_value: state.null_value.clone(),
+        null_value: &state.null_value,
         changes: state.changes,
         trace_stdout: state.trace_stdout,
         eqp: state.eqp,
@@ -750,12 +844,12 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
     }
 }
 
-struct QueryOptions {
+struct QueryOptions<'a> {
     mode: OutputMode,
-    separator: String,
-    row_separator: String,
+    separator: &'a str,
+    row_separator: &'a str,
     show_header: bool,
-    null_value: String,
+    null_value: &'a str,
     changes: bool,
     trace_stdout: bool,
     eqp: bool,
@@ -770,7 +864,7 @@ fn run_query_writer<W: Write>(
     conn: &mut redlinedb::Connection,
     sql: &str,
     out: &mut W,
-    options: &QueryOptions,
+    options: &QueryOptions<'_>,
 ) -> Result<(), String> {
     let mut rest = sql;
     while !rest.trim().is_empty() {

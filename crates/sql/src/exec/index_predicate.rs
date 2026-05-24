@@ -95,7 +95,45 @@ pub(crate) fn eval_generated_expr(
     expr_sql: &str,
     values: &[SqlValue],
 ) -> Result<SqlValue> {
+    if let Some(value) = eval_fast_generated_expr(table, expr_sql, values) {
+        return Ok(value);
+    }
     eval_index_value_expr(table, expr_sql, values)
+}
+
+fn eval_fast_generated_expr(
+    table: &TableDef,
+    expr_sql: &str,
+    values: &[SqlValue],
+) -> Option<SqlValue> {
+    let compact = expr_sql
+        .chars()
+        .filter(|ch| !ch.is_ascii_whitespace())
+        .collect::<String>();
+    let (left, right) = compact.split_once('*')?;
+    if left.is_empty() || right.is_empty() {
+        return None;
+    }
+    let (column_name, factor) = match right.parse::<i64>() {
+        Ok(factor) => (left, factor),
+        Err(_) => (right, left.parse::<i64>().ok()?),
+    };
+    if !column_name
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        return None;
+    }
+    let ordinal = table
+        .columns
+        .iter()
+        .position(|column| column.folded.as_ref().eq_ignore_ascii_case(column_name))?;
+    match values.get(ordinal)? {
+        SqlValue::Null => Some(SqlValue::Null),
+        SqlValue::Integer(value) => Some(SqlValue::Integer(value.wrapping_mul(factor))),
+        SqlValue::Real(value) => Some(SqlValue::Real(*value * factor as f64)),
+        _ => None,
+    }
 }
 
 /// Enumerate the column ordinals referenced inside a SQL expression

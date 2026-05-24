@@ -319,7 +319,7 @@ impl Connection {
     pub(crate) fn journal_statement(
         &self,
         sql: &str,
-        bindings: Vec<Option<crate::value::SqlValue>>,
+        bindings: &[Option<crate::value::SqlValue>],
     ) -> Result<()> {
         let mut session = self.session.lock().expect("session poisoned");
         if session.replay_in_progress || session.tx.is_none() {
@@ -327,7 +327,7 @@ impl Connection {
         }
         session.journal.push(JournalEntry {
             sql: sql.to_owned(),
-            bindings,
+            bindings: bindings.to_vec(),
         });
         Ok(())
     }

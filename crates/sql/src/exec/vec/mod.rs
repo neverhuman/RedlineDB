@@ -47,4 +47,4 @@ pub use select::{
 };
 pub use sort::SpillSort;
 pub use spill::{SPILL_BLOCK_BYTES, SpillFile, SpillReader, SpillWriter};
-pub use topk::{SortDirection, TOPK_LIMIT_THRESHOLD, TopKHeap};
+pub use topk::{SortDirection, TOPK_LIMIT_THRESHOLD, TopKBuffer, TopKHeap};

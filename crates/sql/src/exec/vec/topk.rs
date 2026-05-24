@@ -180,6 +180,116 @@ impl TopKHeap {
     }
 }
 
+#[derive(Debug, Clone)]
+struct BufferEntry {
+    keys: Vec<SqlValue>,
+    row: Vec<SqlValue>,
+    seq: u64,
+}
+
+/// Tiny sorted top-K buffer for the executor's `LIMIT <= 64` path.
+///
+/// Keeping the entries sorted costs O(k) per admitted row, but `k` is capped at
+/// [`TOPK_LIMIT_THRESHOLD`]. That avoids the heap path's per-entry direction
+/// handle while preserving the same key, NULL, direction, and tie behavior.
+#[derive(Debug)]
+pub struct TopKBuffer {
+    k: usize,
+    entries: Vec<BufferEntry>,
+    directions: Box<[SortDirection]>,
+    seen: u64,
+}
+
+impl TopKBuffer {
+    pub fn new(k: usize, directions: Vec<SortDirection>) -> Self {
+        Self {
+            k,
+            entries: Vec::with_capacity(k.min(TOPK_LIMIT_THRESHOLD)),
+            directions: directions.into_boxed_slice(),
+            seen: 0,
+        }
+    }
+
+    pub fn push(&mut self, keys: Vec<SqlValue>, row: Vec<SqlValue>) -> Result<()> {
+        debug_assert_eq!(keys.len(), self.directions.len());
+        if self.k == 0 {
+            return Ok(());
+        }
+        if !self.would_admit(&keys) {
+            self.seen = self.seen.saturating_add(1);
+            return Ok(());
+        }
+        let entry = BufferEntry {
+            keys,
+            row,
+            seq: self.seen,
+        };
+        self.seen = self.seen.saturating_add(1);
+        let insert_at = self.entries.partition_point(|existing| {
+            self.compare_entries(existing, &entry) != Ordering::Greater
+        });
+        self.entries.insert(insert_at, entry);
+        if self.entries.len() > self.k {
+            self.entries.pop();
+        }
+        Ok(())
+    }
+
+    pub fn would_admit(&self, keys: &[SqlValue]) -> bool {
+        debug_assert_eq!(keys.len(), self.directions.len());
+        if self.k == 0 {
+            return false;
+        }
+        if self.entries.len() < self.k {
+            return true;
+        }
+        self.compare_keys_to_existing(keys, self.seen, self.entries.len() - 1) == Ordering::Less
+    }
+
+    pub fn discard_candidate(&mut self) {
+        self.seen = self.seen.saturating_add(1);
+    }
+
+    pub fn into_sorted_rows(self) -> Vec<Vec<SqlValue>> {
+        self.entries.into_iter().map(|entry| entry.row).collect()
+    }
+
+    fn compare_keys_to_existing(
+        &self,
+        left_keys: &[SqlValue],
+        left_seq: u64,
+        right_idx: usize,
+    ) -> Ordering {
+        let right = &self.entries[right_idx];
+        for ((left, right), dir) in left_keys
+            .iter()
+            .zip(right.keys.iter())
+            .zip(self.directions.iter())
+        {
+            let ord = dir.compare_values(left, right);
+            if ord != Ordering::Equal {
+                return ord;
+            }
+        }
+        left_seq.cmp(&right.seq)
+    }
+
+    fn compare_entries(&self, left: &BufferEntry, right: &BufferEntry) -> Ordering {
+        for ((l, r), dir) in left
+            .keys
+            .iter()
+            .zip(right.keys.iter())
+            .zip(self.directions.iter())
+        {
+            let ord = dir.compare_values(l, r);
+            if ord != Ordering::Equal {
+                return ord;
+            }
+        }
+        left.seq.cmp(&right.seq)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,5 +422,37 @@ mod tests {
             .expect("push");
         assert!(heap.is_empty());
         assert!(heap.into_sorted_rows().is_empty());
+    }
+
+    #[test]
+    fn topk_buffer_matches_heap_ordering_and_ties() {
+        let values = [5, 1, 3, 3, 2, 4, 3];
+        let mut heap = TopKHeap::new(4, vec![SortDirection::Asc]);
+        let mut buffer = TopKBuffer::new(4, vec![SortDirection::Asc]);
+        for (idx, value) in values.into_iter().enumerate() {
+            let row = vec![SqlValue::Integer(value), SqlValue::Integer(idx as i64)];
+            heap.push(keys_int(value), row.clone()).expect("heap push");
+            buffer.push(keys_int(value), row).expect("buffer push");
+        }
+        assert_eq!(buffer.into_sorted_rows(), heap.into_sorted_rows());
+    }
+
+    #[test]
+    fn topk_buffer_desc_and_nulls_match_heap() {
+        let mut heap = TopKHeap::new(3, vec![SortDirection::DescNullsFirst]);
+        let mut buffer = TopKBuffer::new(3, vec![SortDirection::DescNullsFirst]);
+        let rows = [
+            (SqlValue::Null, "n"),
+            (SqlValue::Integer(2), "b"),
+            (SqlValue::Integer(4), "d"),
+            (SqlValue::Integer(3), "c"),
+        ];
+        for (key, label) in rows {
+            let row = vec![SqlValue::Text(Arc::from(label))];
+            heap.push(vec![key.clone()], row.clone())
+                .expect("heap push");
+            buffer.push(vec![key], row).expect("buffer push");
+        }
+        assert_eq!(buffer.into_sorted_rows(), heap.into_sorted_rows());
     }
 }

@@ -35,7 +35,42 @@ pub(crate) fn dml_target_rows(
         return Ok(rows);
     }
 
-    collect_table_rows(conn.engine(), tx, table)
+    if selection.is_none() {
+        return collect_table_rows(conn.engine(), tx, table);
+    }
+    let compiled = compile_table_predicate(table, selection, bindings);
+    if crate::exec::cte::is_cte_table_def(table) {
+        let rows = collect_table_rows(conn.engine(), tx, table)?;
+        return filter_dml_target_rows(rows, selection, compiled.as_ref(), bindings);
+    }
+
+    let mut filtered = Vec::new();
+    let mut rowids = conn.engine().relation_rowids(table.relation_id)?;
+    rowids.sort();
+    for rowid in rowids {
+        let Some(row) = load_table_row_by_rowid(conn.engine(), tx, table, rowid)? else {
+            continue;
+        };
+        if selection_passes_table(selection, compiled.as_ref(), &row, bindings)? {
+            filtered.push(row);
+        }
+    }
+    Ok(filtered)
+}
+
+fn filter_dml_target_rows(
+    rows: Vec<TableRow>,
+    selection: &Option<Expr>,
+    compiled: Option<&TablePredicate>,
+    bindings: &[Option<SqlValue>],
+) -> Result<Vec<TableRow>> {
+    let mut filtered = Vec::new();
+    for row in rows {
+        if selection_passes_table(selection, compiled, &row, bindings)? {
+            filtered.push(row);
+        }
+    }
+    Ok(filtered)
 }
 
 pub(crate) fn project_returning_row(

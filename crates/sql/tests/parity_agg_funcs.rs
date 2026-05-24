@@ -103,6 +103,27 @@ fn scalar_round_wraps_grouped_avg() {
 }
 
 #[test]
+fn grouped_distinct_round_having_and_order_match_sqlite() {
+    let (_dir, conn) = open();
+    let setup = [
+        "CREATE TABLE t(g TEXT, a INTEGER, b REAL)",
+        "INSERT INTO t VALUES \
+         ('a', 1, 1.25), ('a', 1, 2.75), ('a', 2, 3.0), \
+         ('b', 3, 10.0), ('b', 3, 12.0), \
+         ('c', NULL, NULL)",
+    ];
+    for statement in setup {
+        conn.execute(statement).expect("setup");
+    }
+    assert_matches_sqlite(
+        &conn,
+        &setup,
+        "SELECT g, count(*), count(DISTINCT a), sum(a), min(b), max(b), round(avg(b), 2) \
+         FROM t GROUP BY g HAVING count(*) >= 2 ORDER BY g DESC",
+    );
+}
+
+#[test]
 fn aggregate_distinct_and_filter_match_sqlite() {
     let (_dir, conn) = open();
     let setup = [

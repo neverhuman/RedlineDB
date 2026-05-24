@@ -214,9 +214,19 @@ fn create_ephemeral_database_inner(
 }
 
 pub(crate) fn create_in_memory_database(options: &OpenOptions) -> Result<Arc<DatabaseEntry>> {
-    let session_id = EPHEMERAL_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let session_name = format!("memory-{}-{session_id}", std::process::id());
-    create_ephemeral_database_inner(&session_name, options, true)
+    let fingerprint = OpenFingerprint::from_options(options);
+    let db =
+        redlinedb_sql::Database::create_in_memory(crate::private_in_memory_sql_options(options))?;
+    let path = db.path().to_path_buf();
+    Ok(Arc::new(DatabaseEntry {
+        db,
+        fingerprint,
+        _owner_lock: None,
+        _temp_root: None,
+        path,
+        interrupt: Arc::new(AtomicBool::new(false)),
+        busy_timeout: Mutex::new(options.busy_timeout),
+    }))
 }
 
 fn normalize_path(path: &Path, create: bool) -> Result<PathBuf> {
