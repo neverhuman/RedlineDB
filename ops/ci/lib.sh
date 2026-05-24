@@ -489,7 +489,7 @@ ci_prepare_redlinedb_release_smoke() {
     TARGET="x86_64-unknown-linux-gnu" \
     SOURCE_DIR="$source_dir" \
     OUTPUT_DIR="$output_dir" \
-        rtk bash ops/ci/release-build.sh
+        bash ops/ci/release-build.sh
 
     CI_REDLINEDB_RELEASE_OVERRIDE_URL="file://${output_dir}/${CI_REDLINEDB_RELEASE_ASSET}"
     CI_REDLINEDB_RELEASE_OVERRIDE_SHA256_URL="${CI_REDLINEDB_RELEASE_OVERRIDE_URL}.sha256"
