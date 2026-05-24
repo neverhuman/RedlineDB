@@ -556,7 +556,7 @@ pub(crate) fn bind_create_index(
             unique: create_index.unique,
             columns,
             origin: IndexOrigin::User,
-            normalized_sql: Some(sql.to_owned()),
+            normalized_sql: Some(strip_trailing_semicolon(sql)),
             predicate_sql,
         }),
     })
@@ -926,7 +926,7 @@ pub(crate) fn bind_create_view(
             session_scoped: create_view.temporary,
             columns,
             body_sql,
-            normalized_sql: Some(sql.to_owned()),
+            normalized_sql: Some(strip_trailing_semicolon(sql)),
         }),
     })
 }
@@ -1030,7 +1030,7 @@ pub(crate) fn bind_create_trigger(
             when_cols,
             when_predicate_sql,
             body_sql,
-            normalized_sql: Some(sql.to_owned()),
+            normalized_sql: Some(strip_trailing_semicolon(sql)),
         }),
     })
 }

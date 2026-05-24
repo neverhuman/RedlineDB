@@ -154,6 +154,14 @@ pub(crate) fn eval_scalar(
         Expr::CompoundIdentifier(parts) => match parts.as_slice() {
             [ident] => lookup_column(row, &ident.value)?,
             [qualifier, ident] => lookup_qualified_column(row, &qualifier.value, &ident.value)?,
+            // 3-part: `schema.table.column`. We collapse to the
+            // `table.column` form: SQLite-parity callers reference an
+            // attached database via the table alias, and the row binder
+            // already keyed cross-DB tables under the unqualified
+            // table name, so the schema qualifier is non-load-bearing
+            // at this surface. The case is rare enough that we don't
+            // distinguish `main.foo.col` from `aux.foo.col` here.
+            [_schema, table, ident] => lookup_qualified_column(row, &table.value, &ident.value)?,
             _ => {
                 return Err(Error::UnsupportedSql(format!(
                     "unsupported identifier: {parts:?}"

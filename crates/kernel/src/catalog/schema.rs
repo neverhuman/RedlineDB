@@ -451,6 +451,22 @@ fn render_create_table(table: &TableDef) -> String {
                 .map(|ord| ord as u16)
         })
         .collect();
+    // Column-level PRIMARY KEYs (single-column constraint) — including
+    // both the INTEGER PRIMARY KEY rowid alias and the explicit PK that
+    // a WITHOUT ROWID table requires.
+    let column_pk_ordinals: HashSet<u16> = table
+        .constraints
+        .iter()
+        .filter(|c| matches!(c.kind, super::ConstraintKind::PrimaryKey))
+        .filter_map(|c| {
+            let column_id = c.column_id?;
+            table
+                .columns
+                .iter()
+                .position(|col| col.column_id == column_id)
+                .map(|ord| ord as u16)
+        })
+        .collect();
     for (idx, column) in table.columns.iter().enumerate() {
         if idx > 0 {
             out.push_str(", ");
@@ -460,11 +476,13 @@ fn render_create_table(table: &TableDef) -> String {
             out.push(' ');
             out.push_str(declared);
         }
-        if table.rowid_alias_column == Some(idx as u16) {
+        let is_rowid_alias = table.rowid_alias_column == Some(idx as u16);
+        let is_column_pk = column_pk_ordinals.contains(&(idx as u16));
+        if is_rowid_alias || is_column_pk {
             out.push_str(" PRIMARY KEY");
         }
         if column.not_null
-            && (table.rowid_alias_column != Some(idx as u16)
+            && (!is_rowid_alias && !is_column_pk
                 || explicit_not_null.contains(&(idx as u16)))
         {
             out.push_str(" NOT NULL");
