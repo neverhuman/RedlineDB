@@ -213,9 +213,11 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     }
     out = rewrite_strict_without_rowid_combo(&out);
     // Track J — beyond-Postgres parity pre-parse rewrites: sequence option
-    // order + DROP IDENTITY shapes that sqlparser 0.61 rejects.
+    // order + DROP IDENTITY + OVERRIDING SYSTEM VALUE shapes that
+    // sqlparser 0.61 rejects.
     out = rewrite_create_sequence_options_order(&out);
     out = rewrite_alter_column_drop_identity(&out);
+    out = rewrite_overriding_system_value(&out);
     // Track H — beyond-SQLite (Postgres parity) pre-parse rewrites. Each
     // helper is a no-op unless the surface SQL contains the corresponding
     // PG token; the SELECT/DDL flow is otherwise unaffected for ordinary
@@ -3048,6 +3050,48 @@ fn replace_table_ident(sql: &str, ident: &str, replacement: &str) -> String {
 
 fn is_pg_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Track J: sqlparser-rs 0.61 rejects `OVERRIDING SYSTEM VALUE` and
+/// `OVERRIDING USER VALUE` clauses inside an INSERT. Strip the clause
+/// pre-parse so the rest of the insert binds cleanly. RedlineDB does not
+/// enforce the Postgres "ALWAYS GENERATED" restriction today, so dropping
+/// the override clause is a benign no-op.
+fn rewrite_overriding_system_value(sql: &str) -> String {
+    let lower = sql.to_ascii_lowercase();
+    if !lower.contains("overriding") {
+        return sql.to_owned();
+    }
+    let bytes = sql.as_bytes();
+    let lower_bytes = lower.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut last = 0usize;
+    let mut i = 0usize;
+    let needles: &[(&[u8], usize)] = &[
+        (b"overriding system value", 23),
+        (b"overriding user value", 21),
+    ];
+    while i < bytes.len() {
+        let mut hit = false;
+        for (needle, len) in needles {
+            if i + *len <= lower_bytes.len() && &lower_bytes[i..i + *len] == *needle {
+                out.push_str(&sql[last..i]);
+                let mut end = i + *len;
+                while end < bytes.len() && bytes[end].is_ascii_whitespace() {
+                    end += 1;
+                }
+                last = end;
+                i = end;
+                hit = true;
+                break;
+            }
+        }
+        if !hit {
+            i += 1;
+        }
+    }
+    out.push_str(&sql[last..]);
+    out
 }
 
 /// Track J: sqlparser-rs 0.61 lacks a parse arm for

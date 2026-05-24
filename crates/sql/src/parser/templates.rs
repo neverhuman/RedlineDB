@@ -303,6 +303,34 @@ fn bind_set_statement(
     schema_epoch: SchemaEpoch,
     set: sqlparser::ast::Set,
 ) -> Result<PreparedTemplate> {
+    // Track J: silently accept `SET search_path TO ...` (and other simple
+    // session-variable SET shapes) as no-ops. RedlineDB has no
+    // search_path concept; we just need to keep the parity probes from
+    // surfacing an "unsupported sql" wall after a benign SET.
+    if let sqlparser::ast::Set::SingleAssignment { variable, .. } = &set {
+        let var_name = variable.0.last().and_then(|p| match p {
+            ObjectNamePart::Identifier(ident) => Some(ident.value.as_str()),
+            _ => None,
+        });
+        if matches!(
+            var_name,
+            Some("search_path")
+                | Some("client_encoding")
+                | Some("standard_conforming_strings")
+                | Some("timezone")
+                | Some("statement_timeout")
+                | Some("application_name")
+        ) {
+            return Ok(template(
+                sql,
+                schema_epoch,
+                false,
+                PreparedKind::SetTransactionIsolation {
+                    level: crate::statement::TransactionIsolationLevel::ReadCommitted,
+                },
+            ));
+        }
+    }
     if let sqlparser::ast::Set::SetTransaction {
         modes,
         snapshot: _,
