@@ -1427,6 +1427,58 @@ fn is_pure_scalar_expr(expr: &Expr) -> bool {
                 && is_pure_scalar_expr(high)
         }
         Tuple(items) => items.iter().all(is_pure_scalar_expr),
+        // Phase 4.1: sqlparser parses several standard scalar functions
+        // into dedicated `Expr` variants instead of `Expr::Function`.
+        // The Phase 1.5 walker silently rejected all of these, forcing
+        // the slow path for any SELECT using substr/trim/position/etc.
+        Substring {
+            expr,
+            substring_from,
+            substring_for,
+            ..
+        } => {
+            is_pure_scalar_expr(expr)
+                && substring_from
+                    .as_ref()
+                    .is_none_or(|e| is_pure_scalar_expr(e))
+                && substring_for
+                    .as_ref()
+                    .is_none_or(|e| is_pure_scalar_expr(e))
+        }
+        Trim {
+            expr,
+            trim_what,
+            trim_characters,
+            ..
+        } => {
+            is_pure_scalar_expr(expr)
+                && trim_what.as_ref().is_none_or(|e| is_pure_scalar_expr(e))
+                && trim_characters
+                    .as_ref()
+                    .is_none_or(|chars| chars.iter().all(is_pure_scalar_expr))
+        }
+        Position { expr, r#in } => is_pure_scalar_expr(expr) && is_pure_scalar_expr(r#in),
+        Extract { expr, .. } => is_pure_scalar_expr(expr),
+        Convert { expr, .. } => is_pure_scalar_expr(expr),
+        Overlay {
+            expr,
+            overlay_what,
+            overlay_from,
+            overlay_for,
+        } => {
+            is_pure_scalar_expr(expr)
+                && is_pure_scalar_expr(overlay_what)
+                && is_pure_scalar_expr(overlay_from)
+                && overlay_for
+                    .as_ref()
+                    .is_none_or(|e| is_pure_scalar_expr(e))
+        }
+        Like { expr, pattern, .. } | ILike { expr, pattern, .. } => {
+            is_pure_scalar_expr(expr) && is_pure_scalar_expr(pattern)
+        }
+        IsDistinctFrom(a, b) | IsNotDistinctFrom(a, b) => {
+            is_pure_scalar_expr(a) && is_pure_scalar_expr(b)
+        }
         // Anything we don't explicitly recognize — fall through to the
         // slow path. Strictly conservative: we'd rather miss a fast-path
         // opportunity than evaluate an expression in the wrong context.
