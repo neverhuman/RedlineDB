@@ -1010,7 +1010,14 @@ fn write_text_value_ref<W: Write>(
         ValueRef::Null => out
             .write_all(null_value.as_bytes())
             .map_err(|err| err.to_string()),
-        ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
+        ValueRef::Integer(v) => {
+            // Phase 2.4: itoa is roughly 5-10x faster than Display
+            // formatting for i64 and writes directly to a stack buffer
+            // without any heap allocation.
+            let mut buf = itoa::Buffer::new();
+            out.write_all(buf.format(v).as_bytes())
+                .map_err(|err| err.to_string())
+        }
         ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
         ValueRef::Text(v) => {
             if escape_symbol {

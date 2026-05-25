@@ -1642,6 +1642,7 @@ dependencies = [
  "clap",
  "crossterm",
  "csv",
+ "itoa",
  "mimalloc",
  "redlinedb",
  "rustyline",
