@@ -68,6 +68,9 @@ run_ci_yml_pr_mirror() {
 
     printf 'ci-local pr-ci: official-evidence-guard\n' >&2
     bash "$ROOT/scripts/guard-official-evidence.sh"
+
+    printf 'ci-local pr-ci: metrics-readme (verify)\n' >&2
+    bash "$ROOT/scripts/generate-metrics-readme.sh" --check
 }
 
 case "$1" in

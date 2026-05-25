@@ -1,6 +1,15 @@
 fast:
   ./scripts/just/fast.sh
 
+# Regenerate the auto-metrics section of README.md from the latest
+# parity sweep + jankurai score + tokei LOC numbers. Run --check to
+# verify the README matches without writing.
+metrics-readme:
+  ./scripts/generate-metrics-readme.sh
+
+metrics-readme-check:
+  ./scripts/generate-metrics-readme.sh --check
+
 pr-ci:
   ./scripts/ci-local.sh pr-ci
 

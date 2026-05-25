@@ -132,6 +132,56 @@ jobs:
       - name: Guard official evidence boundary
         run: bash scripts/guard-official-evidence.sh
 
+  metrics-readme:
+    needs: [parity]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install tokei
+        run: cargo install tokei --locked --version 14.0.0
+      - name: Download parity evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: redline-testing-official-evidence
+          path: target/redline-testing
+      - name: Build SQLite reference (for LOC comparison)
+        run: bash scripts/sqlite/build-reference.sh
+      - name: Refresh jankurai score
+        run: bash ops/ci/jankurai-tools.sh audit-ci
+      - name: Regenerate README metrics section
+        run: bash scripts/generate-metrics-readme.sh
+      - name: Verify README is up-to-date (PR runs)
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --exit-code README.md; then
+            echo '::error::README.md is stale — run `bash scripts/generate-metrics-readme.sh` locally and commit the regenerated file.'
+            exit 1
+          fi
+      - name: Auto-commit refreshed README (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet README.md; then
+            echo "README.md already current; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "docs(readme): auto-refresh metrics section for ${GITHUB_SHA::8}
+
+[skip ci]"
+          git push origin HEAD:main
+
   # The branch ruleset requires checks named test/build/lint/typecheck/cli.
   # The aggregate test relay emits the required `test` context, while the
   # other relay jobs propagate the aggregate result under their required
