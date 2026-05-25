@@ -1683,12 +1683,52 @@ fn has_jsonb_question_op(sql: &str) -> bool {
                     i += 1;
                     continue;
                 }
-                return true;
+                if jsonb_question_op_shape(bytes, i) {
+                    return true;
+                }
+                i += 1;
             }
             _ => i += 1,
         }
     }
     false
+}
+
+/// True if the `?` byte at position `i` looks like a JSONB containment
+/// operator (`?`, `?|`, `?&`) rather than a SQL positional placeholder.
+///
+/// Disambiguation rule: only treat `?` as a JSONB operator when the
+/// right-hand side is one of the documented JSONB RHS shapes — a string
+/// literal for `?`, or `ARRAY[...]` for `?|` / `?&`. Anything else
+/// (including bare `?` followed by a SQL keyword, closing paren, comma,
+/// or end-of-input) is the parameter placeholder and must be left alone.
+fn jsonb_question_op_shape(bytes: &[u8], i: usize) -> bool {
+    let next = bytes.get(i + 1).copied();
+    let after_op = match next {
+        Some(b'|') | Some(b'&') => i + 2,
+        _ => i + 1,
+    };
+    let mut j = after_op;
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    if j >= bytes.len() {
+        return false;
+    }
+    match next {
+        Some(b'|') | Some(b'&') => {
+            // `?|` / `?&` require `ARRAY[`.
+            let prefix = b"ARRAY[";
+            if j + prefix.len() > bytes.len() {
+                return false;
+            }
+            bytes[j..j + prefix.len()]
+                .iter()
+                .zip(prefix.iter())
+                .all(|(a, b)| a.eq_ignore_ascii_case(b))
+        }
+        _ => bytes[j] == b'\'',
+    }
 }
 
 /// Rewrite JSONB question-mark operators (`?`, `?|`, `?&`) into the
@@ -1747,6 +1787,13 @@ fn rewrite_jsonb_question_ops(sql: &str) -> String {
             b'?' => {
                 // Skip `?<digit>` placeholders.
                 if i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
+                    out.push(b as char);
+                    i += 1;
+                    continue;
+                }
+                // Skip bare `?` placeholders (anything that doesn't match
+                // the JSONB RHS shape — see jsonb_question_op_shape).
+                if !jsonb_question_op_shape(bytes, i) {
                     out.push(b as char);
                     i += 1;
                     continue;
@@ -3049,9 +3096,10 @@ fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) -> Option<S
     if !lower.contains('.') {
         return None;
     }
-    let schemas = conn
-        .with_session(|session| Ok(session.pg_schemas.clone()))
-        .ok()?;
+    // Use the re-entrant session accessor so trigger-body parses, which
+    // run while the parent DML's session mutex is held, don't deadlock.
+    let schemas =
+        crate::exec::with_session_reentrant(conn, |session| Ok(session.pg_schemas.clone())).ok()?;
     if schemas.is_empty() {
         return None;
     }
@@ -3148,14 +3196,16 @@ fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
     if !names.iter().any(|n| lower.contains(&format!(" from {n}"))) {
         return None;
     }
-    let session_state = conn
-        .with_session(|session| {
-            Ok((
-                session.pg_schemas.iter().cloned().collect::<Vec<_>>(),
-                session.pg_sequences.keys().cloned().collect::<Vec<_>>(),
-            ))
-        })
-        .ok()?;
+    // Re-entrant session accessor — same reason as in
+    // `strip_registered_pg_schema_prefixes`: trigger-body parses must not
+    // re-lock the session mutex that the parent DML already holds.
+    let session_state = crate::exec::with_session_reentrant(conn, |session| {
+        Ok((
+            session.pg_schemas.iter().cloned().collect::<Vec<_>>(),
+            session.pg_sequences.keys().cloned().collect::<Vec<_>>(),
+        ))
+    })
+    .ok()?;
     let (mut namespaces, sequences) = session_state;
     namespaces.sort();
     namespaces.dedup();

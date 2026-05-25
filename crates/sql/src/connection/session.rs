@@ -787,6 +787,20 @@ impl Connection {
         if let Some(snapshot) = crate::exec::current_tx_schema_snapshot(self) {
             return snapshot;
         }
+        // If a re-entrant session pointer is installed (we are inside a
+        // trigger body fire, or any other thread-local context that has
+        // already acquired the session mutex) avoid re-locking — read
+        // through the pointer directly. The non-re-entrant
+        // `parking_lot::Mutex` would otherwise deadlock here.
+        if let Some(ptr) = crate::exec::current_session_ptr() {
+            // SAFETY: pointer installed by `with_write_tx` for a
+            // strictly-synchronous re-entrant scope.
+            let session_ref: &crate::session::SessionState = unsafe { &*ptr };
+            if let Some(tx) = session_ref.tx.as_ref() {
+                return self.db.engine.schema_snapshot_for_tx(tx);
+            }
+            return self.db.schema_snapshot();
+        }
         let session = self.session.lock().expect("session poisoned");
         if let Some(tx) = session.tx.as_ref() {
             return self.db.engine.schema_snapshot_for_tx(tx);

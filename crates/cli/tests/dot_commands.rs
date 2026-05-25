@@ -489,7 +489,6 @@ fn sql_savepoint_state_persists_across_input_lines() {
 }
 
 #[test]
-#[ignore]
 fn sql_multiline_trigger_body_is_one_statement() {
     let (out, err, code) = run_script(
         None,

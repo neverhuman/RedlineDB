@@ -36,7 +36,6 @@ fn exec(db: *mut rldb, sql: &str) {
 }
 
 #[test]
-#[ignore]
 fn open_read_write_close_round_trip() {
     let (_dir, db) = open_db();
     exec(db, "CREATE TABLE docs(id INTEGER PRIMARY KEY, body BLOB)");

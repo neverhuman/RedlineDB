@@ -114,7 +114,7 @@ fn with_current_session_ptr() -> Option<*mut SessionState> {
 /// the session mutex via `Connection::with_session`. Without this
 /// shortcut, nested `with_session` calls deadlock on the non-re-entrant
 /// `parking_lot::Mutex`.
-fn with_session_reentrant<T>(
+pub(crate) fn with_session_reentrant<T>(
     conn: &Connection,
     f: impl FnOnce(&mut SessionState) -> Result<T>,
 ) -> Result<T> {
