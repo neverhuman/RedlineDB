@@ -84,8 +84,9 @@ def main():
     ap.add_argument(
         "--regression-threshold",
         type=float,
-        default=5.0,
-        help="percent slower to flag as regressed (default 5.0)",
+        default=15.0,
+        help="percent slower to flag as regressed (default 15.0; medium-set "
+        "3-rep median noise floor is ~10-15%, so 5% is too tight)",
     )
     args = ap.parse_args()
 
