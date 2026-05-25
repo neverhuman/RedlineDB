@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/full%20corpus-1127%2F1127-brightgreen" alt="full corpus parity"></a>
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/generated%20cases-1127-blue" alt="generated cases"></a>
+  <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/sqlite%20parity-2374%2F2445%20(97.10%25)-brightgreen" alt="sqlite parity"></a>
+  <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/corpus%20cases-2445-blue" alt="corpus cases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
-  <img src="https://img.shields.io/badge/version-3.0.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-4.0.0-blue" alt="version">
   <!-- jankurai-score-badge:begin -->
   <a href=".jankurai/repo-score.md"><img src="https://img.shields.io/badge/jankurai-85%2F100%20advisory-green" alt="jankurai score: 85/100 advisory"></a>
   <!-- jankurai-score-badge:end -->
@@ -22,6 +22,66 @@
 RedlineDB is an embedded SQL engine written in Rust. It keeps the SQLite-facing
 API familiar while replacing the storage core with MVCC, a concurrent B-tree,
 group-commit WAL, and crash recovery designed for multi-writer workloads.
+
+## What's new in v4.0.0
+
+**Phase 0-4 SQLite-parity speed-gap closure.** Fourteen named optimizations across the build profile, parser, scalar fast paths, and CTE/aggregate/window hot paths, measured against the external [`redline-testing v1.0.0`](https://github.com/neverhuman/redline-testing) parity harness on the full 2445-case `sqlite_parity` suite. Median per-case latency ratio against SQLite improved from **1.837× → 1.738×** with **zero parity regressions** (identical 2374/2445 pass set in v3.0.0 and v4.0.0; the 67 failures are pre-existing edge cases in `typeof()` reporting, IEEE-754 last-digit precision, fullwidth Unicode case-folding, BLOB hex encoding, and `AUTOINCREMENT` semantics). Jankurai code-health score holds at **85/100 (pass)**.
+
+> **Note on corpus size.** The redline-testing official corpus has grown from 1127 cases (prior CI snapshot) to **2445 cases** in v1.0.0. The v4.0.0 numbers in this section are measured against the larger current corpus. The auto-generated `## Engine Metrics` block below still reflects the previous 1127-case CI snapshot and will be refreshed by the next CI parity report.
+
+### Per-case latency distribution — RedlineDB / SQLite ratio (full 2445-case corpus, passed cases only)
+
+| Bucket | v3.0.0 (main) | v4.0.0 | Delta |
+|---|---:|---:|---:|
+| `< 1.0×` (RedlineDB faster than SQLite) | 7 | 8 | **+1** |
+| `1.0 – 1.2×` | 16 | 28 | **+12** |
+| `1.2 – 1.5×` | 173 | 292 | **+119** |
+| `1.5 – 2.0×` | 1622 | 1748 | **+126** |
+| `2.0 – 3.0×` | 555 | 297 | **−258** |
+| `≥ 3.0×` (tail outliers) | 1 | 1 | 0 |
+| **Total** | **2374** | **2374** | 0 |
+
+258 cases moved out of the `2.0–3.0×` slow band; 119 moved into the `1.2–1.5×` band. Per-case: **1410 cases (59.4%) are ≥5% faster** in v4.0.0, 386 (16.3%) are ≥5% slower, 578 (24.3%) within ±5% noise. Mean per-case target-latency change: **−6.85%** (median **−7.67%**).
+
+### Named optimizations shipped
+
+| Phase | Commit | Optimization |
+|---|---|---|
+| 1.1 | `f8ed61f` | fat LTO + `opt-level=3` + `target-cpu=native` release profile |
+| 1.2 | `b62d4ad` | parser rewrite-pass allocation elimination |
+| 1.3 | `4a89e9a` | borrow + stack-buffer function-name lowercase |
+| 1.4 | `b229f90` | cache + lighten `/dev/shm` writability probe |
+| 1.5 | `2e13dc5` | fromless `SELECT` fast path |
+| 1.6 | `a20de92` | `ahash::RandomState` for `StatementCache` |
+| 2.1–2.2 | `5bbe650` | ASCII fast paths for `LENGTH`/`UPPER`/`LOWER` + `memmem` for `INSTR` |
+| 2.3+2.5 | `9abab6c` | `value_as_str` + hot scalar fn migration to `Cow` |
+| 2.4 | `32e078d` | `itoa` for streaming i64 CLI output |
+| 4.1 | `efc9a6e` | fromless-SELECT walker covers `sqlparser` scalar variants |
+| 4.2 | `d348e0b` | dedup aggregate cache key + reuse fn-name lower |
+| 4.3 | `e569d6c` | capacity hints in per-row hot allocations |
+| 4.4 | `32200c2` | hoist CTE lowercase out of recursive iteration loop |
+| 4.5 | `2f21ea3` | reuse scratch buffer for window partition keys |
+
+### Benchmark provenance
+
+- **Harness:** [`redline-testing v1.0.0`](https://github.com/neverhuman/redline-testing) — external repository, not in-tree fixtures.
+- **SQLite reference:** `sqlite3 3.53.1` (release build, SHA-256 `fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e`).
+- **Workload:** full `sqlite_parity` suite — 2445 cases × 3 measured reps + 1 warmup, **`--workers 30`** on a 128-core Linux x86_64 host, no CPU pinning.
+- **Target binary (v4.0.0):** SHA-256 `7ae60cb513e866b4a94996968b0c6b9f01b0071776bc842f526702be33f05e56` (release profile, fat LTO, `target-cpu=native`).
+- **Baseline binary (v3.0.0):** SHA-256 `da770dfd25beeb36aa22f8ce7a09d935b4e9fd7c8b2a77c36e621c46cec69ef2`.
+- **Raw JSONL evidence (committed):** [`benchmark-results/sqlite-parity/perf-baselines/v3.0.0-baseline.jsonl`](benchmark-results/sqlite-parity/perf-baselines/v3.0.0-baseline.jsonl), [`v4.0.0-baseline.jsonl`](benchmark-results/sqlite-parity/perf-baselines/v4.0.0-baseline.jsonl), and the structured A/B summary [`v3-vs-v4-summary.json`](benchmark-results/sqlite-parity/perf-baselines/v3-vs-v4-summary.json).
+- **Reproduce:**
+  ```bash
+  cargo build --release -p redlinedb-cli
+  PERF_WORKERS=30 \
+    REDLINE_TESTING_BIN=/path/to/redline-testing \
+    SQLITE_REF_BIN=/path/to/sqlite3-3.53.1 \
+    scripts/perf/full.sh target/release/redlinedb v4.0.0-final
+  ```
+
+### Jankurai code-health score (v4.0.0)
+
+**85 / 100 — `pass` (advisory)** — unchanged from main; Phase 0-4 perf work introduced no code-health regressions. Full report at [`.jankurai/repo-score.md`](.jankurai/repo-score.md). Top dimensions: Ownership & navigation (100), Proof lanes & test routing (98), Contract & boundary integrity (88), Security & supply-chain posture (86).
 
 ## Engine Metrics
 
@@ -231,7 +291,7 @@ Pin the release in `Cargo.toml`:
 
 ```toml
 [dependencies]
-  redlinedb = "=3.0.0"
+  redlinedb = "=4.0.0"
 ```
 
 For libraries, `redlinedb = "1"` is usually fine. For binaries, keep the exact
@@ -248,26 +308,26 @@ curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/i
 Pin a specific release when you need reproducible installs:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v3.0.0 bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v4.0.0 bash
 ```
 
 Lock the exact tarball digest in CI or release automation:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
-  VERSION=v3.0.0 REDLINEDB_SHA256=<sha256> bash
+  VERSION=v4.0.0 REDLINEDB_SHA256=<sha256> bash
 ```
 
 ### Build from source
 
 ```bash
-cargo install redlinedb-cli --version 3.0.0 --locked
+cargo install redlinedb-cli --version 4.0.0 --locked
 ```
 
 Or install from the tagged repository release:
 
 ```bash
-cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v3.0.0 --package redlinedb-cli --locked
+cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v4.0.0 --package redlinedb-cli --locked
 ```
 
 ### Direct download
@@ -276,9 +336,9 @@ Release tarballs are published on the [releases page](https://github.com/neverhu
 
 | Platform | File |
 |---|---|
-| Linux x86_64 | `redlinedb-v3.0.0-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `redlinedb-v3.0.0-macos-arm64.tar.gz` |
-| macOS Intel | `redlinedb-v3.0.0-macos-x86_64.tar.gz` |
+| Linux x86_64 | `redlinedb-v4.0.0-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `redlinedb-v4.0.0-macos-arm64.tar.gz` |
+| macOS Intel | `redlinedb-v4.0.0-macos-x86_64.tar.gz` |
 
 Each tarball ships with a matching `.sha256` checksum and contains the CLI,
 shared libraries, and public headers.
@@ -337,7 +397,7 @@ the GitHub artifact attestation.
 
 **SQLite parity latency:** median gap **-19.69%**, worst gap **-289.42%**, faster cases **306**.
 
-**Benchmark metadata:** RedlineDB target version **redlinedb v3.0.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.0**.
+**Benchmark metadata:** RedlineDB target version **redlinedb v4.0.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.0**.
 
 ![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)
 

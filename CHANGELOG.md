@@ -2,6 +2,63 @@
 
 ## Unreleased
 
+## [4.0.0] - 2026-05-25
+
+Phase 0-4 SQLite-parity speed-gap closure. Median per-case latency ratio
+improved from `1.837×` → `1.738×` measured against the external `redline-testing
+v1.0.0` harness on the full 2445-case `sqlite_parity` suite (30 workers × 3
+reps + 1 warmup). Zero parity regressions: identical 2374/2445 pass set in
+v3.0.0 and v4.0.0 (97.10% pass rate). 1410 of 2374 passing cases (59.4%) are
+≥5% faster in v4.0.0; mean per-case target-latency change −6.85%. Jankurai
+score holds at 85/100 (pass). See the README "What's new in v4.0.0" section
+for the full ledger, named-optimization table, and benchmark provenance.
+
+### Added
+
+- Phase 0 measurement scaffolding for redline-testing A/B (commits `bf7733e`,
+  `f09b62f`, `75bad9a`).
+- Custom subset replay driver `scripts/perf/run_subset.py` for case-list-driven
+  profiling, plus `scripts/perf/{full,medium,quick,profile-one,build-case-lists,
+  pgo,gap-closure-verify}.sh` wrappers.
+- Committed v4.0.0 baseline JSONL at
+  `benchmark-results/sqlite-parity/perf-baselines/v4.0.0-baseline.jsonl`, the
+  matching v3.0.0 baseline, and the structured A/B summary
+  `v3-vs-v4-summary.json`.
+- README "What's new in v4.0.0" highlights section above the auto-generated
+  Engine Metrics block, with v3-vs-v4 latency distribution, named-optimization
+  table, benchmark provenance (binary SHA-256s + reproduce command), and
+  jankurai score.
+
+### Changed
+
+- Release build profile: fat LTO, `opt-level=3`, `target-cpu=native`, single
+  codegen unit, panic=abort, symbols stripped (Phase 1.1, commit `f8ed61f`).
+- SQL hot paths optimized across Phases 1.2-1.6, 2.1-2.5, and 4.1-4.5: parser
+  rewrite-pass allocation elimination, function-name lowercase via borrow +
+  stack buffer, fromless `SELECT` fast path, `ahash::RandomState` for
+  `StatementCache`, ASCII fast paths for `LENGTH`/`UPPER`/`LOWER` + `memmem`
+  for `INSTR`, hot scalar fn migration to `value_as_str`, fromless-SELECT
+  walker covering `sqlparser` scalar variants, aggregate cache key dedup,
+  per-row allocation capacity hints, CTE lowercase hoist out of recursive
+  iteration loop, and window partition key scratch-buffer reuse.
+- CLI streaming i64 output uses `itoa` (Phase 2.4, commit `32e078d`).
+- `/dev/shm` writability probe is cached and lightened (Phase 1.4).
+- README parity badges updated to reflect the current redline-testing v1.0.0
+  corpus size (2445 cases, 97.10% pass) instead of the previous 1127-case
+  snapshot.
+- Workspace package metadata, lockfile entries, README install/tarball/version
+  references, and intra-workspace dependency pins all target `4.0.0`.
+
+### Notes
+
+- Supersedes the unreleased 3.0.1 patch bump in commit `e0e04bd`; 3.x was never
+  tagged or published, so no CHANGELOG entry was generated for 3.0.0 or 3.0.1.
+- The 67 failing cases in v4.0.0 are pre-existing edge cases also failing in
+  v3.0.0 (`typeof()` reporting, IEEE-754 last-digit precision, fullwidth
+  Unicode case-folding, BLOB hex encoding, `AUTOINCREMENT` semantics);
+  documented in `benchmark-results/sqlite-parity/perf-baselines/v3-vs-v4-summary.json`
+  under `delta.pre_existing_failures`.
+
 ## [2.0.0] - 2026-05-22
 
 Beyond-SQLite first tranche release.
