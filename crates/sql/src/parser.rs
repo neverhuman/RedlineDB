@@ -157,8 +157,7 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     // this allocation.
     if starts_with_pragma_keyword(stmt) {
         let lower = stmt.to_ascii_lowercase();
-        if let Some(template) =
-            parse_pragma_template(conn, trimmed, &lower, schema_epoch, &schema)?
+        if let Some(template) = parse_pragma_template(conn, trimmed, &lower, schema_epoch, &schema)?
         {
             return Ok(template);
         }

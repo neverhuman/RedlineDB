@@ -127,8 +127,7 @@ pub(crate) fn synth_table_def(
     rows: &[Vec<SqlValue>],
 ) -> Arc<TableDef> {
     let folded_name = name.to_ascii_lowercase();
-    let folded_columns: Vec<String> =
-        columns.iter().map(|n| n.to_ascii_lowercase()).collect();
+    let folded_columns: Vec<String> = columns.iter().map(|n| n.to_ascii_lowercase()).collect();
     synth_table_def_with_folded(name, columns, &folded_name, &folded_columns, rows)
 }
 

@@ -49,6 +49,14 @@ excluded_paths = [
   "tips/",
   "paper/scripts/",
   "scripts/bench/export_benchmark_results.py",
+  # Phase 0 perf measurement helpers (replay driver + case-list selector
+  # + diff). Pure stdlib Python, lives in scripts/perf/ which is repo
+  # tooling — never touched by the product surface, the proof-lane
+  # runner, or production DB ownership. Scoped to the same posture as
+  # scripts/bench/export_benchmark_results.py above.
+  "scripts/perf/build_case_lists.py",
+  "scripts/perf/run_subset.py",
+  "scripts/perf/diff.py",
   # Generated SQLite parity corpus wrappers are retained as evidence and
   # runner input. They are audited through generated_manifest.json,
   # report artifacts, and the sqlite_parity runner instead of per-wrapper SARIF.

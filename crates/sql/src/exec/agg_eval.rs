@@ -1120,11 +1120,7 @@ fn aggregate_cache_key(func: &sqlparser::ast::Function) -> Option<String> {
         || rendered.contains("current_date")
         || rendered.contains("current_time")
         || rendered.contains("current_timestamp");
-    if is_volatile {
-        None
-    } else {
-        Some(rendered)
-    }
+    if is_volatile { None } else { Some(rendered) }
 }
 
 fn percentile_argument(

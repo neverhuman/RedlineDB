@@ -253,15 +253,15 @@ pub(crate) fn eval_scalar_function_values(
         // expansion). NULL propagates.
         "lower" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(libc_lower(value_as_str(
-                other,
-            ).as_ref())))),
+            Some(other) => Ok(SqlValue::Text(Arc::from(libc_lower(
+                value_as_str(other).as_ref(),
+            )))),
         },
         "upper" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(libc_upper(value_as_str(
-                other,
-            ).as_ref())))),
+            Some(other) => Ok(SqlValue::Text(Arc::from(libc_upper(
+                value_as_str(other).as_ref(),
+            )))),
         },
         "abs" => match values.first() {
             // SQLite: abs(NULL) is NULL, not an error.
@@ -405,7 +405,9 @@ pub(crate) fn eval_scalar_function_values(
             let s = value_as_str(&values[0]);
             let from = value_as_str(&values[1]);
             let to = value_as_str(&values[2]);
-            Ok(SqlValue::Text(Arc::from(s.replace(from.as_ref(), to.as_ref()))))
+            Ok(SqlValue::Text(Arc::from(
+                s.replace(from.as_ref(), to.as_ref()),
+            )))
         }
         // SQLite printf/format — basic sprintf-style formatting.
         // We support %s %d %i %f %e %g %x %X %o %% placeholders.

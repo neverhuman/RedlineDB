@@ -1389,7 +1389,9 @@ fn is_pure_scalar_expr(expr: &Expr) -> bool {
             match &func.args {
                 FunctionArguments::None => true,
                 FunctionArguments::List(list) => list.args.iter().all(|arg| match arg {
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(inner)) => is_pure_scalar_expr(inner),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(inner)) => {
+                        is_pure_scalar_expr(inner)
+                    }
                     _ => false,
                 }),
                 FunctionArguments::Subquery(_) => false,
@@ -1397,9 +1399,17 @@ fn is_pure_scalar_expr(expr: &Expr) -> bool {
         }
         BinaryOp { left, right, .. } => is_pure_scalar_expr(left) && is_pure_scalar_expr(right),
         UnaryOp { expr, .. } => is_pure_scalar_expr(expr),
-        Nested(inner) | IsFalse(inner) | IsTrue(inner) | IsNull(inner) | IsNotNull(inner)
-        | IsUnknown(inner) | IsNotUnknown(inner) | IsNotFalse(inner) | IsNotTrue(inner)
-        | Collate { expr: inner, .. } | Cast { expr: inner, .. } => is_pure_scalar_expr(inner),
+        Nested(inner)
+        | IsFalse(inner)
+        | IsTrue(inner)
+        | IsNull(inner)
+        | IsNotNull(inner)
+        | IsUnknown(inner)
+        | IsNotUnknown(inner)
+        | IsNotFalse(inner)
+        | IsNotTrue(inner)
+        | Collate { expr: inner, .. }
+        | Cast { expr: inner, .. } => is_pure_scalar_expr(inner),
         Case {
             operand,
             conditions,
@@ -1410,9 +1420,9 @@ fn is_pure_scalar_expr(expr: &Expr) -> bool {
                 .as_ref()
                 .map(|e| is_pure_scalar_expr(e))
                 .unwrap_or(true)
-                && conditions.iter().all(|w| {
-                    is_pure_scalar_expr(&w.condition) && is_pure_scalar_expr(&w.result)
-                })
+                && conditions
+                    .iter()
+                    .all(|w| is_pure_scalar_expr(&w.condition) && is_pure_scalar_expr(&w.result))
                 && else_result
                     .as_ref()
                     .map(|e| is_pure_scalar_expr(e))
@@ -1421,11 +1431,9 @@ fn is_pure_scalar_expr(expr: &Expr) -> bool {
         InList { expr, list, .. } => {
             is_pure_scalar_expr(expr) && list.iter().all(is_pure_scalar_expr)
         }
-        Between { expr, low, high, .. } => {
-            is_pure_scalar_expr(expr)
-                && is_pure_scalar_expr(low)
-                && is_pure_scalar_expr(high)
-        }
+        Between {
+            expr, low, high, ..
+        } => is_pure_scalar_expr(expr) && is_pure_scalar_expr(low) && is_pure_scalar_expr(high),
         Tuple(items) => items.iter().all(is_pure_scalar_expr),
         // Phase 4.1: sqlparser parses several standard scalar functions
         // into dedicated `Expr` variants instead of `Expr::Function`.
@@ -1469,9 +1477,7 @@ fn is_pure_scalar_expr(expr: &Expr) -> bool {
             is_pure_scalar_expr(expr)
                 && is_pure_scalar_expr(overlay_what)
                 && is_pure_scalar_expr(overlay_from)
-                && overlay_for
-                    .as_ref()
-                    .is_none_or(|e| is_pure_scalar_expr(e))
+                && overlay_for.as_ref().is_none_or(|e| is_pure_scalar_expr(e))
         }
         Like { expr, pattern, .. } | ILike { expr, pattern, .. } => {
             is_pure_scalar_expr(expr) && is_pure_scalar_expr(pattern)

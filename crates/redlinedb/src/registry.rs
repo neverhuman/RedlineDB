@@ -384,10 +384,7 @@ fn lock_owner_file(file: &File) -> Result<()> {
     } else {
         Err(Error::new(
             ErrorCode::Busy,
-            format!(
-                "database already open: {}",
-                std::io::Error::last_os_error()
-            ),
+            format!("database already open: {}", std::io::Error::last_os_error()),
         ))
     }
 }
