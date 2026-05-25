@@ -82,7 +82,15 @@ perf_quiet_system() {
   fi
 }
 
-# Run redline-testing with the variance-controlled defaults baked in.
+# Run the parity workload with variance-controlled defaults.
+#
+# `redline-testing run` itself does not accept a case-list filter (only
+# `report` and `list` do), so for subset runs we use the local custom
+# replay driver at scripts/perf/run_subset.py which replays cases from
+# the corpus snapshot and emits JSONL matching the official schema.
+# For full-corpus runs (case-list empty) we use `redline-testing run`
+# directly.
+#
 # Usage: perf_run_jsonl <target-bin> <case-list-file-or-empty> <reps> <warmup> <output.jsonl> <tmp-tag>
 perf_run_jsonl() {
   local target_bin="$1" case_list="$2" reps="$3" warmup="$4" out="$5" tag="$6"
@@ -96,22 +104,37 @@ perf_run_jsonl() {
     taskset_cmd=("taskset" "-c" "${PERF_TASKSET_CPUS:-2-5}")
   fi
 
-  local case_list_arg=()
   if [ -n "$case_list" ] && [ -f "$case_list" ]; then
-    case_list_arg=("--case-list" "$case_list")
+    # Subset run via the custom replay driver.
+    local snapshot="$PERF_ROOT/corpus-snapshot.json"
+    if [ ! -f "$snapshot" ]; then
+      printf 'corpus snapshot missing at %s — run scripts/perf/build-case-lists.sh\n' "$snapshot" >&2
+      exit 2
+    fi
+    "${taskset_cmd[@]}" \
+      python3 "$(dirname "${BASH_SOURCE[0]}")/run_subset.py" \
+        --case-list   "$case_list" \
+        --target-bin  "$target_bin" \
+        --sqlite-bin  "$SQLITE_REF_BIN" \
+        --output      "$out" \
+        --repetitions "$reps" \
+        --warmup      "$warmup" \
+        --snapshot    "$snapshot" \
+        --tmp-root    "$tmp" \
+        --workers     "${PERF_WORKERS:-1}"
+  else
+    # Full-corpus run via the official harness.
+    "${taskset_cmd[@]}" \
+      "$REDLINE_TESTING_BIN" run \
+        --target-bin   "$target_bin" \
+        --sqlite-bin   "$SQLITE_REF_BIN" \
+        --suite        sqlite_parity \
+        --workers      "${PERF_WORKERS:-1}" \
+        --tmp-root     "$tmp" \
+        --repetitions  "$reps" \
+        --warmup       "$warmup" \
+        --output       "$out"
   fi
-
-  "${taskset_cmd[@]}" \
-    "$REDLINE_TESTING_BIN" run \
-      --target-bin   "$target_bin" \
-      --sqlite-bin   "$SQLITE_REF_BIN" \
-      --suite        sqlite_parity \
-      --workers      "${PERF_WORKERS:-1}" \
-      --tmp-root     "$tmp" \
-      --repetitions  "$reps" \
-      --warmup       "$warmup" \
-      --output       "$out" \
-      "${case_list_arg[@]}"
 }
 
 # Print a compact summary of a JSONL file. Used by the runner scripts so
