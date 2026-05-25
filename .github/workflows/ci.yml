@@ -109,7 +109,9 @@ jobs:
           # gating (skips SQL_VIRTUAL_TABLE_OPTIONAL cases 93–96 against
           # engines without fts5/rtree/dbstat) and the PINNED_ONLY env so
           # the run sticks to the 1127-case pinned upstream manifest.
-          CI_REDLINE_TESTING_REQUESTED_VERSION: "0.1.3"
+          # v1.0.0 is the GA release; the parity engine + corpus are
+          # unchanged from v0.1.3 (which introduced the gating).
+          CI_REDLINE_TESTING_REQUESTED_VERSION: "1.0.0"
           REDLINE_TESTING_PINNED_ONLY: "1"
         run: CI_PARITY_STAGE=${{ matrix.stage }} bash ops/ci/parity.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

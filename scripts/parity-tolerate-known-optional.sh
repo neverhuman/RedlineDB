@@ -6,9 +6,9 @@
 # by target capability gating). Exit non-zero otherwise — i.e. there is
 # a real parity regression that must be investigated before merging.
 #
-# The redline-testing v0.1.3+ release skips these cases via target
+# The redline-testing v1.0.0+ release skips these cases via target
 # capability gating; v0.1.2 (currently pinned via official-evidence)
-# does not, so we mirror the gate here until CI moves to v0.1.3.
+# does not, so we mirror the gate here until CI moves to v1.0.0.
 #
 # Known-optional case ids (SQL_VIRTUAL_TABLE_OPTIONAL):
 #   00093  CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL

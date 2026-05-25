@@ -319,7 +319,7 @@ for suite_name in REQUIRED_SUITE_NAMES:
         fail(f"suite {suite_name} failed {failed} test(s)")
     if suite_name in {"sqlite_parity", "memory"}:
         # The pinned manifest is 1127 cases. Up to 4 may be skipped via
-        # target capability gating (redline-testing v0.1.3+ skips the
+        # target capability gating (redline-testing v1.0.0+ skips the
         # SQL_VIRTUAL_TABLE_OPTIONAL cases — ids 93–96, fts5/rtree/dbstat
         # — when the target lacks the matching virtual-table module).
         # Every other case must pass.
