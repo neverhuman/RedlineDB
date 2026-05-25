@@ -89,6 +89,31 @@ pub(crate) struct IndexAccessMatch {
     /// reserved for the matched path and its tests.
     #[allow(dead_code)]
     pub(crate) ordered_limit: Option<usize>,
+    /// Phase 5 WS-A1: conjuncts from the original WHERE that the index
+    /// probe did NOT consume. The executor's normal path re-checks the
+    /// full predicate on each row, so residuals are harmless there.
+    /// Fast paths that skip the row-by-row recheck (COUNT-only,
+    /// covering scan, ordered-limit early stop) must NOT fire when
+    /// residuals exist — otherwise they ignore the residual conjunct
+    /// and return wrong answers (e.g. count includes rows that fail
+    /// `status='active'`).
+    pub(crate) residual_conjuncts: Vec<Expr>,
+    /// Phase 5 WS-A2: number of leading index key positions pinned to
+    /// a constant by equality on this match. `INDEX(tenant, k)` with
+    /// `WHERE tenant=?` → 1 (tenant pinned). `WHERE tenant=? AND k=?`
+    /// → 2. Range/BETWEEN on the leading key → 0 (not equality).
+    /// Lets ORDER-BY checks recognize that the cursor already emits in
+    /// `k`-order over the slice where `tenant` is constant.
+    pub(crate) equality_prefix_len: usize,
+}
+
+impl IndexAccessMatch {
+    /// Phase 5 WS-A1: true when every top-level AND conjunct in the
+    /// WHERE clause is consumed by the index probe. Required gate for
+    /// any fast path that skips row-by-row predicate recheck.
+    pub(crate) fn consumed_full_predicate(&self) -> bool {
+        self.residual_conjuncts.is_empty()
+    }
 }
 
 /// Try to plan an index-driven access path for `(table, selection)`.
@@ -162,7 +187,11 @@ pub(crate) fn try_match_index_access(
         // never honor a non-leading-only predicate.
         let leading_eq = first_constant_eq_for_column(&conjuncts, table, leading, bindings);
 
-        if let Some(leading_value) = leading_eq {
+        if let Some((leading_value, leading_idx)) = leading_eq {
+            // Phase 5 WS-A1: track which conjunct indices the probe
+            // consumed so residuals can be reported to the caller.
+            let mut consumed_idx: Vec<usize> = vec![leading_idx];
+
             // Check for full-key equality (every index key has a
             // matching `col = ?` conjunct). If so, that's a point
             // lookup; otherwise it's a leading-prefix range scan.
@@ -178,7 +207,10 @@ pub(crate) fn try_match_index_access(
                 };
                 let column = attnum as usize;
                 match first_constant_eq_for_column(&conjuncts, table, column, bindings) {
-                    Some(value) => full_key.push(value),
+                    Some((value, idx)) => {
+                        full_key.push(value);
+                        consumed_idx.push(idx);
+                    }
                     None => {
                         full_match = false;
                         break;
@@ -192,16 +224,23 @@ pub(crate) fn try_match_index_access(
                     table.columns[leading].name,
                     sql_value_to_explain(&full_key[0])
                 )];
+                let residual_conjuncts =
+                    residuals_from_consumed(&conjuncts, &consumed_idx);
                 return Some(IndexAccessMatch {
                     index: Arc::new(index.clone()),
                     kind: IndexProbeKind::PointLookup,
                     probe: IndexProbe::Point { key },
                     predicates,
                     ordered_limit: None,
+                    residual_conjuncts,
+                    equality_prefix_len: index.keys.len(),
                 });
             }
             // Leading-prefix range scan: encode just the leading value
-            // and walk every key that starts with that prefix.
+            // and walk every key that starts with that prefix. Only the
+            // leading-column equality was applied to the probe; any
+            // partial full-key probes we attempted above did NOT make
+            // it into the bytes, so they remain residuals.
             let prefix = encode_prefix_key(index, std::slice::from_ref(&leading_value));
             let (start, end) = prefix_bounds(&prefix);
             let predicates = vec![format!(
@@ -209,18 +248,25 @@ pub(crate) fn try_match_index_access(
                 table.columns[leading].name,
                 sql_value_to_explain(&leading_value)
             )];
+            let residual_conjuncts =
+                residuals_from_consumed(&conjuncts, &[leading_idx]);
             return Some(IndexAccessMatch {
                 index: Arc::new(index.clone()),
                 kind: IndexProbeKind::RangeScan,
                 probe: IndexProbe::Range { start, end },
                 predicates,
                 ordered_limit: None,
+                residual_conjuncts,
+                // Only the leading key was equality-pinned (we did NOT
+                // bake the partial full_key positions into the probe
+                // bytes — only `leading_value` made it into the prefix).
+                equality_prefix_len: 1,
             });
         }
 
         // No leading equality. Try a leading-column range (>=, >, <=, <,
         // BETWEEN) — also produces an `IndexRangeScan`.
-        if let Some((bounds, predicates)) =
+        if let Some((bounds, predicates, consumed_idx)) =
             leading_range_bounds(&conjuncts, table, leading, bindings)
         {
             let start = match &bounds.lower {
@@ -237,17 +283,39 @@ pub(crate) fn try_match_index_access(
                 }
                 None => max_key_for(index),
             };
+            let residual_conjuncts =
+                residuals_from_consumed(&conjuncts, &consumed_idx);
             return Some(IndexAccessMatch {
                 index: Arc::new(index.clone()),
                 kind: IndexProbeKind::RangeScan,
                 probe: IndexProbe::Range { start, end },
                 predicates,
                 ordered_limit: None,
+                residual_conjuncts,
+                // Range/BETWEEN on the leading key is not equality.
+                equality_prefix_len: 0,
             });
         }
     }
 
     None
+}
+
+/// Phase 5 WS-A1: clone the conjuncts NOT named in `consumed` into
+/// owned Exprs. Owned because `IndexAccessMatch` must outlive the
+/// borrow on the original `selection` Expr.
+fn residuals_from_consumed(conjuncts: &[&Expr], consumed: &[usize]) -> Vec<Expr> {
+    conjuncts
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, expr)| {
+            if consumed.contains(&idx) {
+                None
+            } else {
+                Some((*expr).clone())
+            }
+        })
+        .collect()
 }
 
 /// Run a point lookup through the index MVCC visibility filter and return
@@ -438,20 +506,23 @@ fn flatten_top_level_and(expr: &Expr) -> Vec<&Expr> {
     out
 }
 
+/// Returns `(value, conjunct_index)` — `conjunct_index` lets the caller
+/// mark exactly which conjunct was consumed so the residual set stays
+/// honest (Phase 5 WS-A1).
 fn first_constant_eq_for_column(
     conjuncts: &[&Expr],
     table: &TableDef,
     column: usize,
     bindings: &[Option<SqlValue>],
-) -> Option<SqlValue> {
-    for expr in conjuncts {
+) -> Option<(SqlValue, usize)> {
+    for (idx, expr) in conjuncts.iter().enumerate() {
         if let Some(value) = constant_eq_for_column(expr, table, column, bindings) {
             // SQLite NULL parity: `col = NULL` is never true; never
             // route a NULL probe through the index — fall back to scan.
             if matches!(value, SqlValue::Null) {
                 continue;
             }
-            return Some(value);
+            return Some((value, idx));
         }
     }
     None
@@ -488,16 +559,20 @@ struct LeadingRange {
     upper: Option<(SqlValue, bool)>,
 }
 
+/// Returns `(bounds, predicates, consumed_indices)`. `consumed_indices`
+/// lists which conjuncts were folded into the range — anything outside
+/// that set becomes a residual predicate (Phase 5 WS-A1).
 fn leading_range_bounds(
     conjuncts: &[&Expr],
     table: &TableDef,
     column: usize,
     bindings: &[Option<SqlValue>],
-) -> Option<(LeadingRange, Vec<String>)> {
+) -> Option<(LeadingRange, Vec<String>, Vec<usize>)> {
     let mut bounds = LeadingRange::default();
     let mut predicates: Vec<String> = Vec::new();
+    let mut consumed: Vec<usize> = Vec::new();
     let column_name = table.columns.get(column).map(|c| c.name.to_string())?;
-    for expr in conjuncts {
+    for (idx, expr) in conjuncts.iter().enumerate() {
         let stripped = strip_nested(expr);
         if let Expr::BinaryOp { left, op, right } = stripped
             && let Some(side) = comparison_constant_for_column(left, right, table, column, bindings)
@@ -543,6 +618,7 @@ fn leading_range_bounds(
             } else {
                 bounds.upper = Some((value, inclusive_upper));
             }
+            consumed.push(idx);
             continue;
         }
         if let Expr::Between {
@@ -566,12 +642,13 @@ fn leading_range_bounds(
             ));
             bounds.lower = Some((lo, true));
             bounds.upper = Some((hi, true));
+            consumed.push(idx);
         }
     }
     if bounds.lower.is_none() && bounds.upper.is_none() {
         return None;
     }
-    Some((bounds, predicates))
+    Some((bounds, predicates, consumed))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

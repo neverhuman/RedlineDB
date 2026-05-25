@@ -23,6 +23,9 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+# shellcheck source=scripts/perf/lib-rustflags.sh
+. "$(git rev-parse --show-toplevel)/scripts/perf/lib-rustflags.sh"
+
 PGO_DATA_DIR="${PGO_DATA_DIR:-/tmp/redlinedb-pgo-data}"
 PGO_PROFILE_DIR="${PGO_PROFILE_DIR:-/tmp/redlinedb-pgo-profile}"
 REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-/home/ubuntu/redline-testing/target/release/redline-testing}"
@@ -54,7 +57,7 @@ rm -rf "$PGO_DATA_DIR" "$PGO_PROFILE_DIR"
 mkdir -p "$PGO_DATA_DIR" "$PGO_PROFILE_DIR"
 
 echo ">>> [2/3] Building instrumented binary"
-RUSTFLAGS="-C target-cpu=native -Cprofile-generate=$PGO_DATA_DIR" \
+RUSTFLAGS="${REDLINE_BASE_RUSTFLAGS} -Cprofile-generate=$PGO_DATA_DIR" \
     cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked
 
 INSTR_BIN="target/release-pgo/redlinedb"
@@ -78,7 +81,7 @@ echo ">>> [3b/3] Merging .profraw files"
 "$LLVM_PROFDATA" merge -output="$PGO_PROFILE_DIR/merged.profdata" "$PGO_DATA_DIR"/*.profraw
 
 echo ">>> [3c/3] Building final PGO-optimized binary"
-RUSTFLAGS="-C target-cpu=native -Cprofile-use=$PGO_PROFILE_DIR/merged.profdata -Cllvm-args=-pgo-warn-missing-function" \
+RUSTFLAGS="${REDLINE_BASE_RUSTFLAGS} -Cprofile-use=$PGO_PROFILE_DIR/merged.profdata -Cllvm-args=-pgo-warn-missing-function" \
     cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked
 
 echo ""

@@ -119,6 +119,12 @@ fn build_select_runtime(
             index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
         && index_access::open_handle(conn.engine(), &matched.index).is_some()
+        // Phase 5 WS-A1: the count fast path skips per-row predicate
+        // recheck, so any residual conjunct would be silently dropped
+        // (e.g. WHERE k BETWEEN ? AND ? AND status='active' would
+        // return the BETWEEN-range count instead of the AND-filtered
+        // count). Bail to the heap-scan path when residuals exist.
+        && matched.consumed_full_predicate()
     {
         let tx_ref = tx.as_mut().expect("tx present");
         let count = index_access::execute_index_count_range(
@@ -147,7 +153,12 @@ fn build_select_runtime(
         && index_access::open_handle(conn.engine(), &matched.index).is_some()
         && let Some(out_columns) =
             covering_projection_for_index(table, &matched.index, &plan.projection)
-        && covering_order_satisfies(&matched.index, table, &plan.order_by)
+        && order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by)
+        // Phase 5 WS-A1: covering scan returns the index leaf bytes
+        // directly without re-loading the heap or re-checking the
+        // predicate. Residual conjuncts would be silently dropped,
+        // producing wrong rows.
+        && matched.consumed_full_predicate()
     {
         let tx_ref = tx.as_mut().expect("tx present");
         let cover_limit = if plan.order_by.is_empty() {
@@ -1112,40 +1123,53 @@ fn covering_projection_for_index(
     Some(out)
 }
 
-/// Phase 11 W1-E: for the covering path, the cursor already emits in
-/// the index leading-column order. `ORDER BY k` (or no ORDER BY)
-/// matches; anything else needs a downstream sort and falls through.
-fn covering_order_satisfies(
-    index: &redlinedb_kernel::catalog::IndexDef,
+/// Phase 5 WS-A2: prefix-aware ORDER BY satisfaction check.
+///
+/// The cursor walks the index in key order. When the leading key
+/// positions are pinned to constants by equality (e.g. `WHERE tenant=?`
+/// on `INDEX(tenant, k)`), the cursor effectively walks in `k`-order
+/// over the slice where `tenant` is constant. So `ORDER BY k` IS
+/// satisfied by the index walk even though `k` is not the leading
+/// column of the index itself.
+///
+/// Strip `equality_prefix_len` leading key positions; then ORDER BY
+/// columns must align one-for-one with the next unpinned key positions.
+/// Empty ORDER BY is always satisfied. DESC ORDER BY currently disqual-
+/// ifies (kernel cursor walks left-to-right only).
+fn order_satisfied_by_index_with_prefix(
+    matched: &index_access::IndexAccessMatch,
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
     order_by: &[OrderByExpr],
 ) -> bool {
     if order_by.is_empty() {
         return true;
     }
-    if order_by.len() != 1 {
+    let remaining = matched
+        .index
+        .keys
+        .get(matched.equality_prefix_len..)
+        .unwrap_or(&[]);
+    if order_by.len() > remaining.len() {
         return false;
     }
-    let item = &order_by[0];
-    if matches!(item.options.asc, Some(false)) {
-        // Desc ORDER BY does not match an Asc index; the cursor walks
-        // left-to-right and does not currently support reverse
-        // iteration. Use the sort path instead.
-        return false;
+    for (item, key) in order_by.iter().zip(remaining.iter()) {
+        if matches!(item.options.asc, Some(false)) {
+            return false;
+        }
+        let Expr::Identifier(ident) = &item.expr else {
+            return false;
+        };
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = key.source else {
+            return false;
+        };
+        let Some(col) = table.columns.get(attnum as usize) else {
+            return false;
+        };
+        if !col.folded.as_ref().eq_ignore_ascii_case(&ident.value) {
+            return false;
+        }
     }
-    let Expr::Identifier(ident) = &item.expr else {
-        return false;
-    };
-    let Some(first_key) = index.keys.first() else {
-        return false;
-    };
-    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source else {
-        return false;
-    };
-    table
-        .columns
-        .get(attnum as usize)
-        .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(&ident.value))
+    true
 }
 
 fn order_by_rowid_alias(
@@ -1214,7 +1238,7 @@ fn try_ordered_index_limit_path(
     if !matches!(matched.probe, index_access::IndexProbe::Range { .. }) {
         return Ok(None);
     }
-    if !covering_order_satisfies(&matched.index, table, &plan.order_by) {
+    if !order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by) {
         return Ok(None);
     }
     if index_access::open_handle(conn.engine(), &matched.index).is_none() {

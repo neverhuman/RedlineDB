@@ -6,7 +6,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use redlinedb::{
-    BackupOptions, Database, OpenOptions as DbOpenOptions, RestoreOptions, Step, ValueRef,
+    BackupOptions, Database, OpenOptions as DbOpenOptions, OwnedStatement, OwnedStep,
+    RestoreOptions, Step, ValueRef,
 };
 
 use super::{CliState, DotOutcome, OutputTarget};
@@ -254,45 +255,79 @@ pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
         .flexible(true)
         .from_reader(file);
     let mut header: Option<Vec<String>> = None;
-    let mut insert_sql: Option<String> = None;
+    let mut stmt: Option<OwnedStatement> = None;
+    // Wrap the row loop in a transaction so N inserts pay one WAL group commit
+    // instead of N; prepare once so we avoid re-parse+plan per row.
+    state
+        .conn
+        .execute("BEGIN", ())
+        .map_err(|err| err.to_string())?;
+    let result = import_rows(state, &mut reader, &mut header, &mut stmt, table);
+    drop(stmt);
+    match result {
+        Ok(()) => {
+            state
+                .conn
+                .execute("COMMIT", ())
+                .map_err(|err| err.to_string())?;
+            Ok(DotOutcome::Ok)
+        }
+        Err(err) => {
+            let _ = state.conn.execute("ROLLBACK", ());
+            Err(err)
+        }
+    }
+}
+
+fn import_rows(
+    state: &mut CliState,
+    reader: &mut csv::Reader<File>,
+    header: &mut Option<Vec<String>>,
+    stmt: &mut Option<OwnedStatement>,
+    table: &str,
+) -> Result<(), String> {
     for record in reader.records() {
         let record = record.map_err(|err| format!("Error: {err}"))?;
         if header.is_none() && state.show_header {
-            header = Some(record.iter().map(str::to_owned).collect());
+            *header = Some(record.iter().map(str::to_owned).collect());
             continue;
         }
-        let columns = match header.as_ref() {
-            Some(h) => h.len(),
-            None => record.len(),
-        };
-        let sql = match &insert_sql {
-            Some(s) => s.clone(),
-            None => {
-                let placeholders = std::iter::repeat_n("?", columns)
+        if stmt.is_none() {
+            let columns = match header.as_ref() {
+                Some(h) => h.len(),
+                None => record.len(),
+            };
+            let placeholders = std::iter::repeat_n("?", columns)
+                .collect::<Vec<_>>()
+                .join(",");
+            let sql = if let Some(h) = header.as_ref() {
+                let cols = h
+                    .iter()
+                    .map(|c| quote_ident(c))
                     .collect::<Vec<_>>()
                     .join(",");
-                let sql = if let Some(h) = header.as_ref() {
-                    let cols = h
-                        .iter()
-                        .map(|c| quote_ident(c))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    format!("INSERT INTO {table}({cols}) VALUES ({placeholders})")
-                } else {
-                    format!("INSERT INTO {table} VALUES ({placeholders})")
-                };
-                insert_sql = Some(sql.clone());
-                sql
-            }
-        };
-        let mut stmt = state.conn.prepare(&sql).map_err(|err| err.to_string())?;
+                format!("INSERT INTO {table}({cols}) VALUES ({placeholders})")
+            } else {
+                format!("INSERT INTO {table} VALUES ({placeholders})")
+            };
+            *stmt = Some(
+                state
+                    .conn
+                    .prepare_owned(&sql)
+                    .map_err(|err| err.to_string())?,
+            );
+        }
+        let prepared = stmt.as_mut().expect("statement initialised above");
+        prepared.reset().map_err(|err| err.to_string())?;
+        prepared.clear_bindings();
         for (i, field) in record.iter().enumerate() {
-            stmt.bind_text(i + 1, field)
+            prepared
+                .bind_text(i + 1, field)
                 .map_err(|err| err.to_string())?;
         }
-        while let Step::Row(_) = stmt.step().map_err(|err| err.to_string())? {}
+        while let OwnedStep::Row = prepared.step().map_err(|err| err.to_string())? {}
     }
-    Ok(DotOutcome::Ok)
+    Ok(())
 }
 
 /// `.dump [TABLE]` — serialise the database (or one table) to SQLite-shell

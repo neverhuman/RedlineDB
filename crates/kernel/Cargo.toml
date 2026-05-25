@@ -9,6 +9,8 @@ rust-version.workspace = true
 ahash = "0.8"
 arc-swap = "1.7"
 crc32fast = "1.5"
+crossbeam-queue = "0.3"
+crossbeam-utils = "0.8"
 fail = { version = "0.5", features = ["failpoints"], optional = true }
 parking_lot = "0.12"
 redlinedb-domain = { path = "../domain" }

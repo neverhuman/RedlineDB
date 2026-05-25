@@ -666,9 +666,27 @@ fn sqlite_shell_error_text(err: &str) -> String {
 
 /// Execute `.read FILE` by streaming the file through [`run_input`].
 fn run_script_file(state: &mut CliState, path: &std::path::Path) -> Result<(), String> {
-    let contents = fs::read_to_string(path)
+    let file = fs::File::open(path)
         .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?;
-    run_input(state, &contents)
+    let len = file
+        .metadata()
+        .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?
+        .len();
+    if len == 0 {
+        return run_input(state, "");
+    }
+    // SAFETY: mmap is unsafe because concurrent mutation of the backing file
+    // by another process would race; `.read` accepts that risk like SQLite.
+    let mmap = unsafe { memmap2::Mmap::map(&file) }
+        .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?;
+    let contents = std::str::from_utf8(&mmap).map_err(|err| {
+        format!(
+            "Error: {} is not valid UTF-8 at byte {}",
+            path.display(),
+            err.valid_up_to()
+        )
+    })?;
+    run_input(state, contents)
 }
 
 fn readonly_sidecar_path(db_path: &std::path::Path) -> PathBuf {
