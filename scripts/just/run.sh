@@ -231,7 +231,7 @@ run_redline_testing_official() {
     # upstream corpus. The redline-testing v0.1.3+ release skips them
     # via target capability gating; v0.1.2 doesn't, so we mirror the
     # gate on the consumer side until CI moves to v0.1.3.
-    if ! python3 scripts/parity-tolerate-known-optional.py \
+    if ! bash scripts/parity-tolerate-known-optional.sh \
         target/redline-testing; then
       return "$rc"
     fi
