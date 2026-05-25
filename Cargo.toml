@@ -19,12 +19,30 @@ license = "Apache-2.0"
 rust-version = "1.95"
 
 [profile.release]
-lto = "thin"
+opt-level = 3
+lto = "fat"
 codegen-units = 1
 panic = "abort"
+strip = "symbols"
 
+# release-native inherits release; the per-host-CPU specialization is
+# applied via RUSTFLAGS="-C target-cpu=native" in .cargo/config.toml
+# (always on for the Linux toolchain). Build artifacts produced under
+# this profile are NOT portable across CPU classes — they target the
+# build host. By project policy users compile from source for their CPU.
 [profile.release-native]
 inherits = "release"
 
+# release-pgo trains via scripts/perf/pgo.sh + rebuilds with
+# -Cprofile-use. Consumed by the redline-testing parity gate in CI.
 [profile.release-pgo]
 inherits = "release-native"
+
+# release-fast is the contributor escape hatch: thin LTO + multiple
+# codegen units so dev iteration on `--release` builds doesn't pay the
+# ~2-3x link cost of fat LTO + codegen-units=1. Not used by CI or by
+# any official release artifact.
+[profile.release-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
