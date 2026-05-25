@@ -1,6 +1,20 @@
 [build]
 jobs = 50
 
+# Per-CPU-class specialization is the project policy: published binaries
+# are not portable across CPUs (users compile from source for their host).
+# This unlocks AVX2/AVX-512/BMI2 in scalar/vector kernels without
+# runtime dispatch overhead.
 [target.x86_64-unknown-linux-gnu]
 linker = "clang"
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=mold",
+    "-C", "target-cpu=native",
+]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "clang"
+rustflags = [
+    "-C", "link-arg=-fuse-ld=mold",
+    "-C", "target-cpu=native",
+]

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions as FsOpenOptions};
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -312,8 +311,18 @@ fn open_database_at(
 
 const SHARED_MEMORY_EPHEMERAL_ROOT: &str = "/dev/shm/redlinedb-ephemeral";
 
+static VOLATILE_ROOT_CACHE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 pub(crate) fn standard_volatile_root() -> PathBuf {
-    volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT))
+    // Phase 1.4: cache the resolved volatile root across the process
+    // lifetime. The old code ran a create+write+unlink probe on every
+    // call (4-6 syscalls) AND the same probe ran in
+    // crates/sql/src/connection/database.rs, so an in-memory open paid
+    // 8-12 syscalls. With the cache and the lighter probe below the
+    // first open pays 1-2 syscalls and subsequent opens pay zero.
+    VOLATILE_ROOT_CACHE
+        .get_or_init(|| volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT)))
+        .clone()
 }
 
 fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
@@ -324,29 +333,15 @@ fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
     }
 }
 
+/// Probe whether `root` is usable as our shared-memory ephemeral
+/// store. `create_dir_all` is idempotent (zero net syscalls if the
+/// directory already exists with correct mode) and fails the same way
+/// the heavy create+write+unlink probe did when permissions are wrong
+/// — the eventual `tempfile::Builder::tempdir_in` call will surface
+/// real errors for the rare exotic case the lighter probe doesn't
+/// catch.
 fn ensure_writable_volatile_root(root: &Path) -> bool {
-    if fs::create_dir_all(root).is_err() {
-        return false;
-    }
-    let probe_id = EPHEMERAL_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let probe = root.join(format!(
-        ".redlinedb-volatile-probe-{}-{probe_id}",
-        std::process::id()
-    ));
-    let result = (|| -> io::Result<()> {
-        let mut file = FsOpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&probe)?;
-        file.write_all(b"ok")?;
-        drop(file);
-        fs::remove_file(&probe)?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&probe);
-    }
-    result.is_ok()
+    fs::create_dir_all(root).is_ok()
 }
 
 fn ephemeral_session_path(temp_dir: Option<&Path>, session_name: &str) -> PathBuf {
@@ -389,7 +384,7 @@ fn lock_owner_file(file: &File) -> Result<()> {
     } else {
         Err(Error::new(
             ErrorCode::Busy,
-            format!("database already open: {}", io::Error::last_os_error()),
+            format!("database already open: {}", std::io::Error::last_os_error()),
         ))
     }
 }

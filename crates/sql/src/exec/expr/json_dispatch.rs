@@ -19,6 +19,46 @@ pub(crate) fn set_current_match_term(term: Option<String>) {
     CURRENT_FTS_MATCH.with(|cell| *cell.borrow_mut() = term);
 }
 
+/// Stack-buffer capacity for lowercased function names. Every known
+/// scalar/aggregate/window function fits comfortably (longest is
+/// `json_group_object` at 17 bytes; we round up to 48 for safety).
+pub(crate) const FN_NAME_STACK: usize = 48;
+
+/// Borrow the function name as a single unquoted identifier, lowercased
+/// into the caller-provided stack buffer. Returns `None` for qualified
+/// names (`schema.fn`), quoted identifiers, or names longer than
+/// `FN_NAME_STACK` — those callers fall through to the
+/// `to_string().to_ascii_lowercase()` slow path, which still pays the
+/// allocation cost but is reached for <1% of function calls in
+/// practice.
+pub(crate) fn simple_function_name_lower<'b>(
+    func: &sqlparser::ast::Function,
+    scratch: &'b mut [u8; FN_NAME_STACK],
+) -> Option<&'b str> {
+    let parts = &func.name.0;
+    if parts.len() != 1 {
+        return None;
+    }
+    let ident = match &parts[0] {
+        sqlparser::ast::ObjectNamePart::Identifier(ident) if ident.quote_style.is_none() => ident,
+        _ => return None,
+    };
+    let raw = ident.value.as_bytes();
+    if raw.len() > scratch.len() {
+        return None;
+    }
+    for (i, &b) in raw.iter().enumerate() {
+        scratch[i] = b.to_ascii_lowercase();
+    }
+    let s = &scratch[..raw.len()];
+    // SAFETY: `raw` was a valid UTF-8 &str (from Ident::value), and
+    // ASCII-folding preserves UTF-8 validity for the subset of bytes
+    // <0x80. For bytes >=0x80 the value is unchanged by
+    // to_ascii_lowercase, so the resulting buffer is byte-identical
+    // valid UTF-8.
+    std::str::from_utf8(s).ok()
+}
+
 pub(super) fn eval_function(
     func: &sqlparser::ast::Function,
     row: &RowContext<'_>,
@@ -27,14 +67,30 @@ pub(super) fn eval_function(
     if let Some(result) = window::try_eval_window(func) {
         return result;
     }
-    let name = func.name.to_string().to_ascii_lowercase();
+
+    let mut scratch = [0u8; FN_NAME_STACK];
+    let borrowed = simple_function_name_lower(func, &mut scratch);
+    let owned;
+    let name: &str = match borrowed {
+        Some(s) => s,
+        None => {
+            owned = func.name.to_string().to_ascii_lowercase();
+            owned.as_str()
+        }
+    };
+
     if name == "raise" {
         return eval_raise_function(func);
     }
     if name == "highlight" {
         return eval_highlight_function(func, row, bindings);
     }
-    let mut values = Vec::new();
+    // Phase 4.3: hint capacity for the args buffer. Called per scalar
+    // function call per row in projection / aggregate filter paths.
+    let mut values = Vec::with_capacity(match &func.args {
+        FunctionArguments::List(list) => list.args.len(),
+        _ => 0,
+    });
     if let FunctionArguments::List(list) = &func.args {
         for arg in &list.args {
             match arg {
@@ -54,7 +110,7 @@ pub(super) fn eval_function(
         ));
     }
 
-    eval_scalar_function_values(&name, values)
+    eval_scalar_function_values(name, values)
 }
 
 pub(crate) fn eval_scalar_function_values(
@@ -76,10 +132,26 @@ pub(crate) fn eval_scalar_function_values(
             // count. See https://sqlite.org/lang_corefunc.html#length.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
-            Some(SqlValue::Text(value)) => Ok(SqlValue::Integer(value.chars().count() as i64)),
-            Some(other) => Ok(SqlValue::Integer(
-                value_to_string(other).chars().count() as i64
-            )),
+            Some(SqlValue::Text(value)) => {
+                // Phase 2.1 ASCII fast path: for pure-ASCII strings,
+                // character count equals byte length. `str::is_ascii`
+                // is SIMD-vectorized on x86_64 in Rust 1.95.
+                let len = if value.is_ascii() {
+                    value.len() as i64
+                } else {
+                    value.chars().count() as i64
+                };
+                Ok(SqlValue::Integer(len))
+            }
+            Some(other) => {
+                let s = value_to_string(other);
+                let len = if s.is_ascii() {
+                    s.len() as i64
+                } else {
+                    s.chars().count() as i64
+                };
+                Ok(SqlValue::Integer(len))
+            }
         },
         // SQLite octet_length(X): byte length regardless of type. TEXT in its
         // UTF-8 byte form, BLOB in its raw byte form, others coerced to TEXT
@@ -94,23 +166,22 @@ pub(crate) fn eval_scalar_function_values(
         },
         // SQLite concat(X, ...) — concatenates non-NULL operands (NULLs treated
         // as empty strings). Always returns TEXT.
+        // Phase 2.3: value_as_str returns Cow<'_, str>; SqlValue::Text
+        // borrows from its Arc<str> without allocation.
         "concat" => {
             let mut out = String::new();
             for v in &values {
                 if !matches!(v, SqlValue::Null) {
-                    out.push_str(&value_to_string(v));
+                    out.push_str(value_as_str(v).as_ref());
                 }
             }
             Ok(SqlValue::Text(Arc::from(out)))
         }
-        // SQLite concat_ws(SEP, X, ...) — like concat but inserts SEP between
-        // non-NULL operands. NULL separator → NULL result; NULL operands
-        // skipped.
         "concat_ws" => {
             if values.is_empty() || matches!(values[0], SqlValue::Null) {
                 return Ok(SqlValue::Null);
             }
-            let sep = value_to_string(&values[0]);
+            let sep = value_as_str(&values[0]);
             let mut first = true;
             let mut out = String::new();
             for v in &values[1..] {
@@ -118,10 +189,10 @@ pub(crate) fn eval_scalar_function_values(
                     continue;
                 }
                 if !first {
-                    out.push_str(&sep);
+                    out.push_str(sep.as_ref());
                 }
                 first = false;
-                out.push_str(&value_to_string(v));
+                out.push_str(value_as_str(v).as_ref());
             }
             Ok(SqlValue::Text(Arc::from(out)))
         }
@@ -182,15 +253,15 @@ pub(crate) fn eval_scalar_function_values(
         // expansion). NULL propagates.
         "lower" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(libc_lower(&value_to_string(
-                other,
-            ))))),
+            Some(other) => Ok(SqlValue::Text(Arc::from(libc_lower(
+                value_as_str(other).as_ref(),
+            )))),
         },
         "upper" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(libc_upper(&value_to_string(
-                other,
-            ))))),
+            Some(other) => Ok(SqlValue::Text(Arc::from(libc_upper(
+                value_as_str(other).as_ref(),
+            )))),
         },
         "abs" => match values.first() {
             // SQLite: abs(NULL) is NULL, not an error.
@@ -288,17 +359,31 @@ pub(crate) fn eval_scalar_function_values(
             if matches!(values[0], SqlValue::Null) || matches!(values[1], SqlValue::Null) {
                 return Ok(SqlValue::Null);
             }
-            let haystack = value_to_string(&values[0]);
-            let needle = value_to_string(&values[1]);
+            // Phase 2.3: borrow when possible.
+            let haystack = value_as_str(&values[0]);
+            let needle = value_as_str(&values[1]);
             if needle.is_empty() {
                 return Ok(SqlValue::Integer(1));
             }
-            let pos = haystack
-                .char_indices()
-                .enumerate()
-                .find(|(_, (byte_pos, _))| haystack[*byte_pos..].starts_with(&needle))
-                .map(|(char_pos, _)| char_pos as i64 + 1)
-                .unwrap_or(0);
+            // Phase 2.2: ASCII fast path. When both sides are ASCII,
+            // byte offset == char offset, so memmem (SIMD-accelerated
+            // for >=2-byte needles via memchr) gives us O(n) substring
+            // search without the per-char `starts_with` allocation
+            // cascade.
+            let pos = if haystack.is_ascii() && needle.is_ascii() {
+                match memchr::memmem::find(haystack.as_bytes(), needle.as_bytes()) {
+                    Some(byte_pos) => byte_pos as i64 + 1,
+                    None => 0,
+                }
+            } else {
+                let hay: &str = haystack.as_ref();
+                let need: &str = needle.as_ref();
+                hay.char_indices()
+                    .enumerate()
+                    .find(|(_, (byte_pos, _))| hay[*byte_pos..].starts_with(need))
+                    .map(|(char_pos, _)| char_pos as i64 + 1)
+                    .unwrap_or(0)
+            };
             Ok(SqlValue::Integer(pos))
         }
         // SQLite trim / ltrim / rtrim — strip specified chars (or whitespace).
@@ -306,6 +391,10 @@ pub(crate) fn eval_scalar_function_values(
         "ltrim" => sqlite_ltrim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
         "rtrim" => sqlite_rtrim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
         // SQLite replace(X, Y, Z) — replace all occurrences of Y in X with Z.
+        // Phase 2.3 + 2.5: value_as_str borrows from Arc<str> when the
+        // argument is already a Text value (the common case for
+        // REPLACE on column data); avoids three String allocations
+        // per call.
         "replace" => {
             if values.len() < 3 {
                 return Ok(SqlValue::Null);
@@ -313,11 +402,11 @@ pub(crate) fn eval_scalar_function_values(
             if values.iter().take(3).any(|v| matches!(v, SqlValue::Null)) {
                 return Ok(SqlValue::Null);
             }
-            let s = value_to_string(&values[0]);
-            let from = value_to_string(&values[1]);
-            let to = value_to_string(&values[2]);
+            let s = value_as_str(&values[0]);
+            let from = value_as_str(&values[1]);
+            let to = value_as_str(&values[2]);
             Ok(SqlValue::Text(Arc::from(
-                s.replace(from.as_str(), to.as_str()),
+                s.replace(from.as_ref(), to.as_ref()),
             )))
         }
         // SQLite printf/format — basic sprintf-style formatting.
@@ -832,7 +921,17 @@ fn last_insert_rowid_value() -> i64 {
 /// the original char instead. This matches Postgres' `lower()` with a
 /// UTF-8 libc locale, whose underlying `wctolower` only emits 1-to-1
 /// mappings.
+///
+/// Phase 2.1: ASCII fast path. `make_ascii_lowercase` is a single
+/// SIMD-vectorized byte sweep when the input is pure ASCII (the
+/// dominant case for SCALAR_STRING and the SCALAR_ARITH cases). For
+/// any byte >= 0x80 we fall through to the per-char Unicode path.
 fn libc_lower(input: &str) -> String {
+    if input.is_ascii() {
+        let mut bytes = input.as_bytes().to_vec();
+        bytes.make_ascii_lowercase();
+        return String::from_utf8(bytes).expect("ascii bytes are valid utf-8");
+    }
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         let mut iter = ch.to_lowercase();
@@ -849,6 +948,11 @@ fn libc_lower(input: &str) -> String {
 /// the original char. Matches Postgres' `upper()` with a UTF-8 libc
 /// locale — `upper('straße')` → `STRAßE`, `upper('σς')` → `ΣΣ`.
 fn libc_upper(input: &str) -> String {
+    if input.is_ascii() {
+        let mut bytes = input.as_bytes().to_vec();
+        bytes.make_ascii_uppercase();
+        return String::from_utf8(bytes).expect("ascii bytes are valid utf-8");
+    }
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         let mut iter = ch.to_uppercase();

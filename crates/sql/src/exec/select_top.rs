@@ -33,6 +33,20 @@ pub(super) fn execute_select(
             }
         }
     }
+
+    // Phase 1.5: fromless SELECT fast path. For `SELECT <pure-expr>, ...;`
+    // with no FROM, no WHERE/GROUP/HAVING/ORDER/DISTINCT and a projection
+    // containing only pure scalar expressions (no subqueries / aggregates /
+    // window functions), evaluate the projection once against an empty row
+    // and return a StaticRows runtime. Skips begin_select_tx,
+    // QueryMemoryBroker::new, and the full build_select_runtime path.
+    //
+    // Hits the dominant SCALAR_STRING / SCALAR_ARITH / scalar-only cases,
+    // which are 100% fromless.
+    if let Some(runtime) = try_fromless_select_fast_path(plan, bindings)? {
+        return Ok(runtime);
+    }
+
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
     let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
     let memory = QueryMemoryBroker::new(
@@ -1275,6 +1289,252 @@ fn authorize_select_source(source: &SelectSource) -> Option<crate::udf::Authoriz
         | SelectSource::Cte { .. } => {}
     }
     if found { Some(worst) } else { None }
+}
+
+/// Phase 1.5 fast path. Returns `Some(runtime)` for a FROM-less SELECT
+/// whose projection contains only pure scalar expressions and that has
+/// no row-shaping clauses (WHERE/GROUP/HAVING/ORDER/DISTINCT/LIMIT/OFFSET).
+///
+/// Subqueries, aggregates, window functions, and modifiers all fall
+/// through to the regular `execute_select` path. Returning `None` means
+/// "use the slow path"; returning `Err` means evaluation failed and
+/// must be surfaced to the caller.
+fn try_fromless_select_fast_path(
+    plan: &crate::statement::SelectPlan,
+    bindings: &[Option<SqlValue>],
+) -> Result<Option<SelectRuntime>> {
+    if !matches!(plan.source, SelectSource::Empty) {
+        return Ok(None);
+    }
+    if plan.distinct
+        || !plan.distinct_on.is_empty()
+        || plan.selection.is_some()
+        || !plan.group_by.is_empty()
+        || plan.having.is_some()
+        || !plan.order_by.is_empty()
+        || plan.limit.is_some()
+        || plan.offset.is_some()
+    {
+        return Ok(None);
+    }
+    // Reject wildcards (`SELECT *` on no FROM is an error anyway, but be
+    // explicit) and any projection item containing a subquery or
+    // aggregate. Window functions are caught by `expr_has_aggregate`
+    // since `window::projection_has_window` would have routed them
+    // through the window pipeline; the conservative shape-check here
+    // re-uses the well-tested AST walker.
+    if plan.projection.is_empty() {
+        return Ok(None);
+    }
+    for item in &plan.projection {
+        let expr = match item {
+            SelectItem::UnnamedExpr(expr) => expr,
+            SelectItem::ExprWithAlias { expr, .. } => expr,
+            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {
+                return Ok(None);
+            }
+        };
+        if !is_pure_scalar_expr(expr) {
+            return Ok(None);
+        }
+    }
+
+    let mut row = Vec::with_capacity(plan.projection.len());
+    for item in &plan.projection {
+        let expr = match item {
+            SelectItem::UnnamedExpr(expr) => expr,
+            SelectItem::ExprWithAlias { expr, .. } => expr,
+            _ => unreachable!("wildcard filtered above"),
+        };
+        row.push(eval_scalar(expr, &RowContext::Empty, bindings)?);
+    }
+
+    Ok(Some(SelectRuntime {
+        tx: SelectRuntimeTx::Empty,
+        restore_tx: false,
+        source: SelectRuntimeSource::StaticRows {
+            rows: Arc::from(vec![row]),
+            cursor: 0,
+        },
+        selection: None,
+        projection: Vec::new(),
+        limit: usize::MAX,
+        offset: 0,
+        seen: 0,
+        yielded: 0,
+        memory: QueryMemoryBroker::new(0, 0, None),
+    }))
+}
+
+/// Conservative scalar-purity check. Returns `true` only when the
+/// expression tree is safely evaluable against `RowContext::Empty`
+/// without engine state — no Subquery, no Exists, no aggregate/window
+/// function, no identifier reference.
+fn is_pure_scalar_expr(expr: &Expr) -> bool {
+    use sqlparser::ast::Expr::*;
+    match expr {
+        Value(_) => true,
+        Identifier(_) | CompoundIdentifier(_) => false,
+        Subquery(_) | Exists { .. } | InSubquery { .. } | AnyOp { .. } | AllOp { .. } => false,
+        TypedString(_) => true,
+        Function(func) => {
+            // Window functions carry an OVER (...) clause.
+            if func.over.is_some() {
+                return false;
+            }
+            if is_aggregate_function_name(func) {
+                return false;
+            }
+            // Function with simple positional args of pure scalars is OK.
+            match &func.args {
+                FunctionArguments::None => true,
+                FunctionArguments::List(list) => list.args.iter().all(|arg| match arg {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(inner)) => {
+                        is_pure_scalar_expr(inner)
+                    }
+                    _ => false,
+                }),
+                FunctionArguments::Subquery(_) => false,
+            }
+        }
+        BinaryOp { left, right, .. } => is_pure_scalar_expr(left) && is_pure_scalar_expr(right),
+        UnaryOp { expr, .. } => is_pure_scalar_expr(expr),
+        Nested(inner)
+        | IsFalse(inner)
+        | IsTrue(inner)
+        | IsNull(inner)
+        | IsNotNull(inner)
+        | IsUnknown(inner)
+        | IsNotUnknown(inner)
+        | IsNotFalse(inner)
+        | IsNotTrue(inner)
+        | Collate { expr: inner, .. }
+        | Cast { expr: inner, .. } => is_pure_scalar_expr(inner),
+        Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            operand
+                .as_ref()
+                .map(|e| is_pure_scalar_expr(e))
+                .unwrap_or(true)
+                && conditions
+                    .iter()
+                    .all(|w| is_pure_scalar_expr(&w.condition) && is_pure_scalar_expr(&w.result))
+                && else_result
+                    .as_ref()
+                    .map(|e| is_pure_scalar_expr(e))
+                    .unwrap_or(true)
+        }
+        InList { expr, list, .. } => {
+            is_pure_scalar_expr(expr) && list.iter().all(is_pure_scalar_expr)
+        }
+        Between {
+            expr, low, high, ..
+        } => is_pure_scalar_expr(expr) && is_pure_scalar_expr(low) && is_pure_scalar_expr(high),
+        Tuple(items) => items.iter().all(is_pure_scalar_expr),
+        // Phase 4.1: sqlparser parses several standard scalar functions
+        // into dedicated `Expr` variants instead of `Expr::Function`.
+        // The Phase 1.5 walker silently rejected all of these, forcing
+        // the slow path for any SELECT using substr/trim/position/etc.
+        Substring {
+            expr,
+            substring_from,
+            substring_for,
+            ..
+        } => {
+            is_pure_scalar_expr(expr)
+                && substring_from
+                    .as_ref()
+                    .is_none_or(|e| is_pure_scalar_expr(e))
+                && substring_for
+                    .as_ref()
+                    .is_none_or(|e| is_pure_scalar_expr(e))
+        }
+        Trim {
+            expr,
+            trim_what,
+            trim_characters,
+            ..
+        } => {
+            is_pure_scalar_expr(expr)
+                && trim_what.as_ref().is_none_or(|e| is_pure_scalar_expr(e))
+                && trim_characters
+                    .as_ref()
+                    .is_none_or(|chars| chars.iter().all(is_pure_scalar_expr))
+        }
+        Position { expr, r#in } => is_pure_scalar_expr(expr) && is_pure_scalar_expr(r#in),
+        Extract { expr, .. } => is_pure_scalar_expr(expr),
+        Convert { expr, .. } => is_pure_scalar_expr(expr),
+        Overlay {
+            expr,
+            overlay_what,
+            overlay_from,
+            overlay_for,
+        } => {
+            is_pure_scalar_expr(expr)
+                && is_pure_scalar_expr(overlay_what)
+                && is_pure_scalar_expr(overlay_from)
+                && overlay_for.as_ref().is_none_or(|e| is_pure_scalar_expr(e))
+        }
+        Like { expr, pattern, .. } | ILike { expr, pattern, .. } => {
+            is_pure_scalar_expr(expr) && is_pure_scalar_expr(pattern)
+        }
+        IsDistinctFrom(a, b) | IsNotDistinctFrom(a, b) => {
+            is_pure_scalar_expr(a) && is_pure_scalar_expr(b)
+        }
+        // Anything we don't explicitly recognize — fall through to the
+        // slow path. Strictly conservative: we'd rather miss a fast-path
+        // opportunity than evaluate an expression in the wrong context.
+        _ => false,
+    }
+}
+
+/// Name-based aggregate detection. Mirrors the small allow-list used by
+/// the GROUP BY classifier; deliberately conservative — anything
+/// borderline must go through the regular path that consults the
+/// aggregate registry.
+fn is_aggregate_function_name(func: &sqlparser::ast::Function) -> bool {
+    let parts = &func.name.0;
+    if parts.len() != 1 {
+        return false;
+    }
+    let ident = match &parts[0] {
+        sqlparser::ast::ObjectNamePart::Identifier(ident) => ident,
+        _ => return false,
+    };
+    let name = ident.value.as_str();
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "count"
+            | "sum"
+            | "avg"
+            | "min"
+            | "max"
+            | "total"
+            | "group_concat"
+            | "string_agg"
+            | "array_agg"
+            | "json_group_array"
+            | "json_group_object"
+            | "jsonb_group_array"
+            | "jsonb_group_object"
+            | "every"
+            | "some"
+            | "any_value"
+            | "bool_and"
+            | "bool_or"
+            | "bit_and"
+            | "bit_or"
+            | "stddev"
+            | "stddev_pop"
+            | "stddev_samp"
+            | "variance"
+            | "var_pop"
+            | "var_samp"
+    )
 }
 
 /// Build a SELECT runtime that yields zero rows. Used when the

@@ -22,6 +22,26 @@ pub(crate) fn value_to_string(value: &SqlValue) -> String {
     }
 }
 
+/// Phase 2.3: borrow when possible. For `SqlValue::Text(Arc<str>)` and
+/// `SqlValue::Blob(Arc<[u8]>)` containing valid UTF-8, return
+/// `Cow::Borrowed` without allocating; for Null, return a borrowed
+/// empty string. Numeric and lossy-utf8 blob paths fall through to
+/// owned formatting.
+///
+/// Use this in scalar function dispatch where the call site only
+/// needs a `&str` (the most common pattern). `value_to_string`
+/// remains for the long tail that genuinely needs an owned String.
+pub(crate) fn value_as_str(value: &SqlValue) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
+    match value {
+        SqlValue::Null => Cow::Borrowed(""),
+        SqlValue::Integer(v) => Cow::Owned(v.to_string()),
+        SqlValue::Real(v) => Cow::Owned(format_real_sqlite(*v)),
+        SqlValue::Text(v) => Cow::Borrowed(v.as_ref()),
+        SqlValue::Blob(v) => String::from_utf8_lossy(v),
+    }
+}
+
 /// Format a `f64` the way SQLite renders REAL values in text contexts
 /// (`%!.17g` semantics with trailing-`.0` for whole-valued finite reals).
 ///

@@ -144,3 +144,25 @@ cli-check:
 
 cli-test:
   ./scripts/just/run.sh cli-test
+
+# Phase 0 perf lanes — A/B measurement via the redline-testing harness.
+# quick:   ~40 curated cases × 5 reps × 1 worker (~2-4 min iteration)
+# medium:  ~300 cases × 3 reps × 2 workers (~20-30 min PR-gate)
+# full:    1127-case corpus × 3 reps × auto workers (~3h; mirrors CI)
+perf-quick BIN="target/release/redlinedb" OUT="candidate":
+  ./scripts/perf/quick.sh {{BIN}} {{OUT}}
+
+perf-medium BIN="target/release/redlinedb" OUT="candidate":
+  ./scripts/perf/medium.sh {{BIN}} {{OUT}}
+
+perf-full BIN="target/release/redlinedb" OUT="candidate":
+  ./scripts/perf/full.sh {{BIN}} {{OUT}}
+
+perf-diff BEFORE AFTER:
+  python3 ./scripts/perf/diff.py {{BEFORE}} {{AFTER}}
+
+perf-profile-one CASE:
+  ./scripts/perf/profile-one.sh {{CASE}}
+
+perf-case-lists:
+  ./scripts/perf/build-case-lists.sh

@@ -55,7 +55,11 @@ pub(crate) fn project_row(
         return row.values();
     }
 
-    let mut out = Vec::new();
+    // Phase 4.3: project_row is called per-row in every materialized
+    // scan/agg/cte/window pipeline. Hinting capacity eliminates the
+    // grow-by-doubling reallocation cascade for projections with >0
+    // items (the dominant case).
+    let mut out = Vec::with_capacity(projection.len());
     for item in projection {
         match item {
             SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {

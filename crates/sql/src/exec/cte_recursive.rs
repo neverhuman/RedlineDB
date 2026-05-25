@@ -14,7 +14,9 @@ use crate::value::SqlValue;
 use redlinedb_kernel::catalog::{SchemaEpoch, SchemaSnapshot};
 
 use super::registry::{deregister_rows, register_cte_rows};
-use super::{CteDef, pop_scope, push_scope, run_query_to_rows, synth_table_def};
+use super::{
+    CteDef, pop_scope, push_scope, run_query_to_rows, synth_table_def, synth_table_def_with_folded,
+};
 
 /// Maximum recursive-CTE iterations before bailing out.
 pub(super) const RECURSIVE_CTE_ITERATION_LIMIT: usize = 10_000;
@@ -80,6 +82,16 @@ pub(super) fn materialize_cte(
     let columns_arc: Arc<[String]> = Arc::from(columns);
     let column_vec: Vec<String> = columns_arc.iter().cloned().collect();
 
+    // Phase 4.4: pre-compute the lowercased name + columns ONCE
+    // before the recursive loop. The recursive iterations all share
+    // the same cte_name and column_vec; only the rows change. The
+    // original synth_table_def re-lowercased on every call.
+    let folded_cte_name = cte_name.to_ascii_lowercase();
+    let folded_columns: Vec<String> = column_vec
+        .iter()
+        .map(|name| name.to_ascii_lowercase())
+        .collect();
+
     if !union_all {
         accumulated = dedup_rows(accumulated);
     }
@@ -88,7 +100,13 @@ pub(super) fn materialize_cte(
 
     for iter in 0..RECURSIVE_CTE_ITERATION_LIMIT {
         if working_set.is_empty() {
-            let table_def = synth_table_def(&cte_name, &column_vec, &accumulated);
+            let table_def = synth_table_def_with_folded(
+                &cte_name,
+                &column_vec,
+                &folded_cte_name,
+                &folded_columns,
+                &accumulated,
+            );
             let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
             register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
             return Ok(CteDef {
@@ -99,7 +117,13 @@ pub(super) fn materialize_cte(
             });
         }
 
-        let working_table = synth_table_def(&cte_name, &column_vec, &working_set);
+        let working_table = synth_table_def_with_folded(
+            &cte_name,
+            &column_vec,
+            &folded_cte_name,
+            &folded_columns,
+            &working_set,
+        );
         let working_rows: Arc<Vec<Vec<SqlValue>>> = Arc::new(working_set.clone());
         register_cte_rows(working_table.relation_id, Arc::clone(&working_rows));
         let mut scope = HashMap::new();
@@ -137,7 +161,13 @@ pub(super) fn materialize_cte(
         };
 
         if next_working.is_empty() {
-            let table_def = synth_table_def(&cte_name, &column_vec, &accumulated);
+            let table_def = synth_table_def_with_folded(
+                &cte_name,
+                &column_vec,
+                &folded_cte_name,
+                &folded_columns,
+                &accumulated,
+            );
             let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
             register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
             return Ok(CteDef {
@@ -163,7 +193,13 @@ pub(super) fn materialize_cte(
             )));
         }
     }
-    let table_def = synth_table_def(&cte_name, &column_vec, &accumulated);
+    let table_def = synth_table_def_with_folded(
+        &cte_name,
+        &column_vec,
+        &folded_cte_name,
+        &folded_columns,
+        &accumulated,
+    );
     let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
     register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
     Ok(CteDef {

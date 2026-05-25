@@ -74,7 +74,7 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
 
 fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
     let trimmed = sql.trim();
-    let lower = trimmed.trim_end_matches(';').trim().to_ascii_lowercase();
+    let stmt = trimmed.trim_end_matches(';').trim();
     let schema = conn.schema_snapshot();
     let schema_epoch = conn.schema_epoch();
 
@@ -101,7 +101,13 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
         return parse_prepared_template_impl(conn, &rewritten);
     }
 
-    if lower == "begin" || lower == "begin transaction" || lower == "begin deferred" {
+    // Phase 1.2 fast-paths: each `==` here was previously a comparison
+    // against a full-string `to_ascii_lowercase()` allocation of the SQL.
+    // `eq_ignore_ascii_case` does the byte-folding inline with no heap.
+    if stmt.eq_ignore_ascii_case("begin")
+        || stmt.eq_ignore_ascii_case("begin transaction")
+        || stmt.eq_ignore_ascii_case("begin deferred")
+    {
         return Ok(template(
             trimmed,
             schema_epoch,
@@ -109,7 +115,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
             PreparedKind::Begin(BeginMode::Deferred),
         ));
     }
-    if lower == "begin immediate" || lower == "begin immediate transaction" {
+    if stmt.eq_ignore_ascii_case("begin immediate")
+        || stmt.eq_ignore_ascii_case("begin immediate transaction")
+    {
         return Ok(template(
             trimmed,
             schema_epoch,
@@ -117,7 +125,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
             PreparedKind::Begin(BeginMode::Immediate),
         ));
     }
-    if lower == "begin exclusive" || lower == "begin exclusive transaction" {
+    if stmt.eq_ignore_ascii_case("begin exclusive")
+        || stmt.eq_ignore_ascii_case("begin exclusive transaction")
+    {
         return Ok(template(
             trimmed,
             schema_epoch,
@@ -125,14 +135,14 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
             PreparedKind::Begin(BeginMode::Exclusive),
         ));
     }
-    if lower == "commit"
-        || lower == "commit transaction"
-        || lower == "end"
-        || lower == "end transaction"
+    if stmt.eq_ignore_ascii_case("commit")
+        || stmt.eq_ignore_ascii_case("commit transaction")
+        || stmt.eq_ignore_ascii_case("end")
+        || stmt.eq_ignore_ascii_case("end transaction")
     {
         return Ok(template(trimmed, schema_epoch, false, PreparedKind::Commit));
     }
-    if lower == "rollback" || lower == "rollback transaction" {
+    if stmt.eq_ignore_ascii_case("rollback") || stmt.eq_ignore_ascii_case("rollback transaction") {
         return Ok(template(
             trimmed,
             schema_epoch,
@@ -141,8 +151,16 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
         ));
     }
 
-    if let Some(template) = parse_pragma_template(conn, trimmed, &lower, schema_epoch, &schema)? {
-        return Ok(template);
+    // Only compute the lowercased SQL when the statement actually looks
+    // like a PRAGMA. The pragma template needs case-folded matching on
+    // many internal keywords; non-pragma statements should never pay
+    // this allocation.
+    if starts_with_pragma_keyword(stmt) {
+        let lower = stmt.to_ascii_lowercase();
+        if let Some(template) = parse_pragma_template(conn, trimmed, &lower, schema_epoch, &schema)?
+        {
+            return Ok(template);
+        }
     }
 
     if let Some(template) = parse_detach_template(trimmed, schema_epoch) {
@@ -193,9 +211,79 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     templates::bind_statement(conn, schema, schema_epoch, trimmed, statements.remove(0))
 }
 
+/// Allocation-free prefix check for the PRAGMA keyword. Mirrors
+/// `parse_pragma_template`'s internal `lower.starts_with("pragma")`
+/// gate so we can avoid lowercasing the full statement for the 99% of
+/// non-pragma statements.
+fn starts_with_pragma_keyword(stmt: &str) -> bool {
+    let bytes = stmt.as_bytes();
+    if bytes.len() < 6 {
+        return false;
+    }
+    matches!(
+        (
+            bytes[0] | 0x20,
+            bytes[1] | 0x20,
+            bytes[2] | 0x20,
+            bytes[3] | 0x20,
+            bytes[4] | 0x20,
+            bytes[5] | 0x20,
+        ),
+        (b'p', b'r', b'a', b'g', b'm', b'a')
+    )
+}
+
+/// Allocation-free case-insensitive substring search.
+///
+/// Replaces the `haystack.to_ascii_lowercase().contains(needle_lower)`
+/// idiom that was repeated 13+ times across `rewrite_sqlite_compat_syntax`.
+/// `needle_lower` must already be lowercase ASCII (`needle.eq_ignore_ascii_case`
+/// is not enforced — callers pass a literal). For ASCII haystacks the cost
+/// is one memmem-style byte walk instead of a full-string allocation.
+pub(crate) fn contains_ignore_ascii_case(haystack: &str, needle_lower: &[u8]) -> bool {
+    let hay = haystack.as_bytes();
+    if needle_lower.is_empty() {
+        return true;
+    }
+    if hay.len() < needle_lower.len() {
+        return false;
+    }
+    let head = needle_lower[0];
+    let head_alt = match head {
+        b'a'..=b'z' => head - 32,
+        _ => head,
+    };
+    let end = hay.len() - needle_lower.len() + 1;
+    let mut i = 0;
+    while i < end {
+        let b = hay[i];
+        if b == head || b == head_alt {
+            let mut matched = true;
+            for j in 1..needle_lower.len() {
+                let h = hay[i + j];
+                let n = needle_lower[j];
+                let eq = if (b'a'..=b'z').contains(&n) {
+                    h == n || h == n - 32
+                } else {
+                    h == n
+                };
+                if !eq {
+                    matched = false;
+                    break;
+                }
+            }
+            if matched {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     let mut out = sql.to_owned();
-    if out.to_ascii_lowercase().contains(" window win as ")
+    if contains_ignore_ascii_case(&out, b" window win as ")
         && let Some(spec) = extract_named_window_spec(&out, "win")
     {
         out = out.replace("OVER win", &format!("OVER ({spec})"));
@@ -204,7 +292,7 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if has_window_exclude(&out) {
         out = rewrite_window_exclude(&out);
     }
-    if out.to_ascii_lowercase().contains(" on conflict") {
+    if contains_ignore_ascii_case(&out, b" on conflict") {
         out = wrap_insert_select_with_upsert(&out);
         out = rewrite_on_conflict_clauses(&out);
     }
@@ -213,7 +301,7 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if has_jsonb_question_op(&out) {
         out = rewrite_jsonb_question_ops(&out);
     }
-    if out.to_ascii_lowercase().contains("using ") {
+    if contains_ignore_ascii_case(&out, b"using ") {
         out = strip_create_index_using_clause(&out);
     }
     out = rewrite_strict_without_rowid_combo(&out);
@@ -239,10 +327,10 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if has_pg_bytea_literal(&out) {
         out = rewrite_pg_bytea_literal(&out);
     }
-    if out.to_ascii_lowercase().contains("array_length(") {
+    if contains_ignore_ascii_case(&out, b"array_length(") {
         out = rewrite_array_length_function(&out);
     }
-    if out.to_ascii_lowercase().contains("array_agg(") {
+    if contains_ignore_ascii_case(&out, b"array_agg(") {
         out = rewrite_array_agg_function(&out);
     }
     if out.contains("&&") {
@@ -258,13 +346,13 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     // UTC, so we drop the trailing `AT TIME ZONE 'TZ'` clause. The downstream
     // parse_timestring helper now strips a trailing `+HH[:MM]` offset from
     // the literal itself, so the round-trip is correct for UTC inputs.
-    if out.to_ascii_uppercase().contains("AT TIME ZONE") {
+    if contains_ignore_ascii_case(&out, b"at time zone") {
         out = rewrite_at_time_zone(&out);
     }
     // `INTERVAL 'N units'` literal → SQLite-style `'+N units'` text. This
     // turns the `date + INTERVAL '5 days'` shape into `date + '+5 days'`
     // which we then rewrite below into `datetime(date, '+5 days')`.
-    if out.to_ascii_uppercase().contains("INTERVAL ") {
+    if contains_ignore_ascii_case(&out, b"interval ") {
         out = rewrite_pg_interval_literal(&out);
     }
     // `date + 'modifier'` / `date - 'modifier'` (where 'modifier' is a
@@ -277,7 +365,7 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     // Track K — `SELECT ... INTO table_name [FROM ...]` is the PG-standard
     // form of `CREATE TABLE table_name AS SELECT ... [FROM ...]`. Rewrite
     // pre-parse so the existing CTAS path handles it.
-    if out.to_ascii_uppercase().contains(" INTO ") {
+    if contains_ignore_ascii_case(&out, b" into ") {
         out = rewrite_select_into_to_ctas(&out);
     }
     // Track K — PG `GROUP BY ROLLUP (...)` and `GROUP BY CUBE (...)` are
@@ -285,9 +373,8 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     // hierarchical (rollup) or combinatorial (cube) expansion. Lower
     // both to the canonical GROUPING SETS form so the next pass handles
     // them uniformly.
-    let upper_for_grouping = out.to_ascii_uppercase();
-    if upper_for_grouping.contains(" GROUP BY ROLLUP ")
-        || upper_for_grouping.contains(" GROUP BY CUBE ")
+    if contains_ignore_ascii_case(&out, b" group by rollup ")
+        || contains_ignore_ascii_case(&out, b" group by cube ")
     {
         out = rewrite_rollup_cube_to_grouping_sets(&out);
     }
@@ -295,10 +382,7 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     // itself into N parallel SELECTs combined via UNION ALL. The expansion
     // re-uses the surrounding SELECT body (FROM, WHERE) per grouping set
     // and projects NULL for any non-grouped grouping-key column.
-    if out
-        .to_ascii_uppercase()
-        .contains(" GROUP BY GROUPING SETS ")
-    {
+    if contains_ignore_ascii_case(&out, b" group by grouping sets ") {
         out = rewrite_grouping_sets_to_union_all(&out);
     }
     // Track K — `[CROSS|LEFT] JOIN LATERAL (SELECT ...) [AS alias]` is a
@@ -310,8 +394,9 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     //     correlated subquery
     // The lateral relation reference (`alias.col`) is replaced by the
     // inlined / scalar form; the lateral FROM term is dropped.
-    let upper_for_lat = out.to_ascii_uppercase();
-    if upper_for_lat.contains(" JOIN LATERAL ") || upper_for_lat.contains(",LATERAL ") {
+    if contains_ignore_ascii_case(&out, b" join lateral ")
+        || contains_ignore_ascii_case(&out, b",lateral ")
+    {
         out = rewrite_join_lateral_to_subquery(&out);
     }
     out
