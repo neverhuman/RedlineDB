@@ -19,6 +19,46 @@ pub(crate) fn set_current_match_term(term: Option<String>) {
     CURRENT_FTS_MATCH.with(|cell| *cell.borrow_mut() = term);
 }
 
+/// Stack-buffer capacity for lowercased function names. Every known
+/// scalar/aggregate/window function fits comfortably (longest is
+/// `json_group_object` at 17 bytes; we round up to 48 for safety).
+const FN_NAME_STACK: usize = 48;
+
+/// Borrow the function name as a single unquoted identifier, lowercased
+/// into the caller-provided stack buffer. Returns `None` for qualified
+/// names (`schema.fn`), quoted identifiers, or names longer than
+/// `FN_NAME_STACK` — those callers fall through to the
+/// `to_string().to_ascii_lowercase()` slow path, which still pays the
+/// allocation cost but is reached for <1% of function calls in
+/// practice.
+fn simple_function_name_lower<'b>(
+    func: &sqlparser::ast::Function,
+    scratch: &'b mut [u8; FN_NAME_STACK],
+) -> Option<&'b str> {
+    let parts = &func.name.0;
+    if parts.len() != 1 {
+        return None;
+    }
+    let ident = match &parts[0] {
+        sqlparser::ast::ObjectNamePart::Identifier(ident) if ident.quote_style.is_none() => ident,
+        _ => return None,
+    };
+    let raw = ident.value.as_bytes();
+    if raw.len() > scratch.len() {
+        return None;
+    }
+    for (i, &b) in raw.iter().enumerate() {
+        scratch[i] = b.to_ascii_lowercase();
+    }
+    let s = &scratch[..raw.len()];
+    // SAFETY: `raw` was a valid UTF-8 &str (from Ident::value), and
+    // ASCII-folding preserves UTF-8 validity for the subset of bytes
+    // <0x80. For bytes >=0x80 the value is unchanged by
+    // to_ascii_lowercase, so the resulting buffer is byte-identical
+    // valid UTF-8.
+    std::str::from_utf8(s).ok()
+}
+
 pub(super) fn eval_function(
     func: &sqlparser::ast::Function,
     row: &RowContext<'_>,
@@ -27,7 +67,18 @@ pub(super) fn eval_function(
     if let Some(result) = window::try_eval_window(func) {
         return result;
     }
-    let name = func.name.to_string().to_ascii_lowercase();
+
+    let mut scratch = [0u8; FN_NAME_STACK];
+    let borrowed = simple_function_name_lower(func, &mut scratch);
+    let owned;
+    let name: &str = match borrowed {
+        Some(s) => s,
+        None => {
+            owned = func.name.to_string().to_ascii_lowercase();
+            owned.as_str()
+        }
+    };
+
     if name == "raise" {
         return eval_raise_function(func);
     }
@@ -54,7 +105,7 @@ pub(super) fn eval_function(
         ));
     }
 
-    eval_scalar_function_values(&name, values)
+    eval_scalar_function_values(name, values)
 }
 
 pub(crate) fn eval_scalar_function_values(
