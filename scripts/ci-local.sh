@@ -69,8 +69,13 @@ run_ci_yml_pr_mirror() {
     printf 'ci-local pr-ci: official-evidence-guard\n' >&2
     bash "$ROOT/scripts/guard-official-evidence.sh"
 
-    printf 'ci-local pr-ci: metrics-readme (verify)\n' >&2
-    bash "$ROOT/scripts/generate-metrics-readme.sh" --check
+    printf 'ci-local pr-ci: metrics-readme (regenerate)\n' >&2
+    # Auto-regenerate the README's auto-managed section so a local pr-ci
+    # run mirrors the CI lane (which auto-commits on every push). CI does
+    # not gate on README drift because measured per-case numbers fluctuate
+    # between runs; running the generator locally just keeps the working
+    # tree in sync with the latest parity sweep.
+    bash "$ROOT/scripts/generate-metrics-readme.sh"
 }
 
 case "$1" in
