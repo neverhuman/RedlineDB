@@ -1,0 +1,469 @@
+diff --git a/crates/cli/src/dot/mod.rs b/crates/cli/src/dot/mod.rs
+index 6d6be97..b7f0c72 100644
+--- a/crates/cli/src/dot/mod.rs
++++ b/crates/cli/src/dot/mod.rs
+@@ -5,7 +5,7 @@
+ //! called by `main` after observing a `.`-prefixed line at the start of an
+ //! input buffer.
+ 
+-use std::fs::File;
++use std::fs::{File, OpenOptions};
+ use std::io::{self, BufWriter, Write};
+ use std::path::PathBuf;
+@@ -131,6 +131,10 @@ pub struct CliState {
+     pub output: OutputTarget,
+     pub defer_output_flush: bool,
++    /// SQLite-shell `-append` compatibility.  This affects output files opened
++    /// by `.output` and `.once`; keeping it in state avoids repeatedly walking
++    /// argv during the hot dot-command path.
++    pub append_output: bool,
+     pub snapshots: std::collections::BTreeMap<PathBuf, Database>,
+@@ -163,7 +167,7 @@ pub enum OutputTarget {
+     Stdout(BufWriter<io::Stdout>),
+     Null,
+-    File { path: PathBuf, writer: File },
++    File { path: PathBuf, writer: BufWriter<File> },
+ }
+ 
+ impl OutputTarget {
+@@ -171,6 +175,24 @@ impl OutputTarget {
+         Self::Stdout(BufWriter::new(io::stdout()))
+     }
++
++    /// Open an output file using the same buffered path as stdout.  The old
++    /// implementation stored a raw `File`, so every small row write went through
++    /// the OS write path.  The CLI tempfile corpus is dominated by tiny files
++    /// (`SELECT 1`, `SELECT 2`, readfile verification), so buffering removes the
++    /// syscall tax without changing shell-visible semantics.  `flush()` still
++    /// forces durability at `.output stdout`, `.once` completion, and process
++    /// exit.
++    pub fn file(path: PathBuf, append: bool) -> io::Result<Self> {
++        let file = OpenOptions::new()
++            .write(true)
++            .create(true)
++            .append(append)
++            .truncate(!append)
++            .open(&path)?;
++        Ok(Self::File {
++            path,
++            writer: BufWriter::with_capacity(64 * 1024, file),
++        })
++    }
+ 
+     pub fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+@@ -247,6 +269,7 @@ impl CliState {
+             limits: Vec::new(),
+             output: OutputTarget::stdout(),
+             defer_output_flush: false,
++            append_output: false,
+             snapshots: std::collections::BTreeMap::new(),
+             params: std::collections::BTreeMap::new(),
+diff --git a/crates/cli/src/dot/io_cmd.rs b/crates/cli/src/dot/io_cmd.rs
+index 25e2edc..1f77d80 100644
+--- a/crates/cli/src/dot/io_cmd.rs
++++ b/crates/cli/src/dot/io_cmd.rs
+@@ -3,7 +3,7 @@
+ //! `.import`, `.print`.
+ 
+-use std::fs::{File, OpenOptions};
++use std::fs::File;
+ use std::io::Write;
+ use std::path::PathBuf;
+@@ -31,16 +31,10 @@ pub fn output(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
+         Some(path) => {
+             state.output.flush().map_err(|err| err.to_string())?;
+             let path_buf = PathBuf::from(path);
+-            let writer = OpenOptions::new()
+-                .write(true)
+-                .create(true)
+-                .truncate(true)
+-                .open(&path_buf)
+-                .map_err(|err| format!("Error: cannot open {path}: {err}"))?;
+-            state.output = OutputTarget::File {
+-                path: path_buf,
+-                writer,
+-            };
++            state.output = OutputTarget::file(path_buf, state.append_output)
++                .map_err(|err| format!("Error: cannot open {path}: {err}"))?;
+         }
+     }
+     Ok(DotOutcome::Ok)
+diff --git a/crates/cli/src/lib.rs b/crates/cli/src/lib.rs
+index c6cf3fb..da90ae0 100644
+--- a/crates/cli/src/lib.rs
++++ b/crates/cli/src/lib.rs
+@@ -1,6 +1,6 @@
+ use std::env;
+-use std::fs;
+-use std::io::{self, Read, Write};
++use std::fs::{self, OpenOptions};
++use std::io::{self, BufRead, BufReader, Read, Write};
+ use std::path::PathBuf;
+ use std::process::exit;
+@@ -370,6 +370,7 @@ pub fn run() {
+     state.bail = cli.bail;
+     state.echo = cli.echo;
+     state.stats = cli.stats;
++    state.append_output = cli.append;
+     state.defer_output_flush = stdin_is_batch || !cli.sql.is_empty();
+     state.escape_symbol = cli.escape.as_deref() == Some("symbol");
+@@ -652,9 +653,47 @@ fn sqlite_shell_error_text(err: &str) -> String {
+ 
+ /// Execute `.read FILE` by streaming the file through [`run_input`].
+ fn run_script_file(state: &mut CliState, path: &std::path::Path) -> Result<(), String> {
+-    let contents = fs::read_to_string(path)
+-        .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?;
+-    run_input(state, &contents)
++    let file = fs::File::open(path)
++        .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?;
++    let mut reader = BufReader::with_capacity(64 * 1024, file);
++    run_input_reader(state, &mut reader)
++}
++
++/// Streaming sibling of `run_input` used by `.read`.  The old path read the
++/// entire script into a `String`, then re-scanned it line-by-line.  For the
++/// tempfile parity cases that is only a small fixed tax, but for real `.read`
++/// workloads it is an O(script_size) allocation before the first statement can
++/// start.  This parser intentionally follows `run_input_incremental`: it
++/// preserves `.once`, alternate terminators, echo, nested `.read`, and normal
++/// SQL-completion semantics while keeping peak memory bounded by one SQL
++/// statement plus one input line.
++fn run_input_reader<R: BufRead>(state: &mut CliState, reader: &mut R) -> Result<(), String> {
++    let mut buffer = String::new();
++    let mut raw = String::new();
++    loop {
++        raw.clear();
++        let read = reader.read_line(&mut raw).map_err(|err| err.to_string())?;
++        if read == 0 {
++            break;
++        }
++        let raw_line = raw.trim_end_matches(&['\r', '\n'][..]);
++        let trimmed = raw_line.trim();
++        if !buffer.trim().is_empty() && is_alternate_terminator(trimmed) {
++            execute_sql_buffer(state, &buffer)?;
++            buffer.clear();
++            continue;
++        }
++        if buffer.is_empty() && raw_line.trim_start().starts_with('.') {
++            if state.echo {
++                println!("{}", raw_line.trim_end());
++            }
++            match dot::dispatch(state, raw_line.trim())? {
++                DotOutcome::Ok => {}
++                DotOutcome::ReadFile(path) => run_script_file(state, &path)?,
++                DotOutcome::Exit(code) => {
++                    flush_output_or_exit(state);
++                    exit(code);
++                }
++            }
++            continue;
++        }
++        buffer.push_str(raw_line);
++        buffer.push('\n');
++        if redlinedb::sql_input_complete(&buffer) {
++            execute_sql_buffer(state, &buffer)?;
++            buffer.clear();
++        }
++    }
++    if !buffer.trim().is_empty() {
++        execute_sql_buffer(state, &buffer)?;
++    }
++    Ok(())
+ }
+@@ -676,15 +715,10 @@ fn write_readonly_sidecar(state: &mut CliState) -> Result<(), String> {
+     if state.db_path == PathBuf::from(":memory:") {
+         return Ok(());
+     }
+     let sidecar = readonly_sidecar_path(&state.db_path);
+-    let writer = std::fs::File::create(&sidecar)
+-        .map_err(|err| format!("Error: cannot open {}: {err}", sidecar.display()))?;
+     let previous = std::mem::replace(
+         &mut state.output,
+-        OutputTarget::File {
+-            path: sidecar,
+-            writer,
+-        },
++        OutputTarget::file(sidecar, false).map_err(|err| err.to_string())?,
+     );
+     let result = dot::io_cmd::dump(state, &[]);
+@@ -875,14 +909,18 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
+     let total_changes_before = state.total_changes;
+     if let Some(path) = state.once.take() {
+-        let file = std::fs::File::create(&path)
++        let file = OpenOptions::new()
++            .write(true)
++            .create(true)
++            .append(state.append_output)
++            .truncate(!state.append_output)
++            .open(&path)
+             .map_err(|err| format!("Error: cannot open {}: {err}", path.display()))?;
+-        let mut writer = io::BufWriter::new(file);
++        let mut writer = io::BufWriter::with_capacity(64 * 1024, file);
+         let mut local_total = total_changes_before;
+         let result = run_query_writer(
+@@ -1080,16 +1118,14 @@ fn write_cli_readfile_hex_query<W: Write>(
+     let bytes =
+         std::fs::read(&path).map_err(|err| format!("cannot read {}: {err}", path.display()))?;
+-    let mut rendered = String::with_capacity(bytes.len() * 2);
+-    for byte in bytes {
+-        use std::fmt::Write as _;
+-        let _ = write!(&mut rendered, "{byte:02X}");
+-    }
+     if options.show_header {
+         out.write_all(b"hex(readfile())")
+             .map_err(|err| err.to_string())?;
+         write_row_separator(out, &options.row_separator)?;
+     }
+-    out.write_all(rendered.as_bytes())
++    let rendered = hex_upper_bytes(&bytes);
++    out.write_all(&rendered)
+         .map_err(|err| err.to_string())?;
+     write_row_separator(out, &options.row_separator)?;
+     Ok(true)
+ }
++
++fn hex_upper_bytes(bytes: &[u8]) -> Vec<u8> {
++    const HEX: &[u8; 16] = b"0123456789ABCDEF";
++    let mut out = Vec::with_capacity(bytes.len() * 2);
++    for &byte in bytes {
++        out.push(HEX[(byte >> 4) as usize]);
++        out.push(HEX[(byte & 0x0f) as usize]);
++    }
++    out
++}
+diff --git a/crates/sql/src/exec/expr/window_eval.rs b/crates/sql/src/exec/expr/window_eval.rs
+index 67e420f..7e1d4f6 100644
+--- a/crates/sql/src/exec/expr/window_eval.rs
++++ b/crates/sql/src/exec/expr/window_eval.rs
+@@ -267,6 +267,15 @@ fn eval_window_call(
+ 
+     let mut results = vec![SqlValue::Null; rows.len()];
+     let layouts = window_cache.layouts_for(window)?;
++    // Whole-partition aggregate windows are the top RSS offender in the
++    // generated corpus.  With no ORDER BY, SQLite's default frame is the
++    // entire partition; the generic executor currently recomputes SUM/COUNT/etc.
++    // for every row in that partition, which is O(n^2) work and creates a large
++    // allocation footprint.  Accumulate once per partition and fan the final
++    // value out to every row.
++    if partition_total_aggregate_window(&func_name, &args, rows, layouts, &frame, bindings, &mut results)? {
++        return Ok(results);
++    }
+     if prefix_aggregate_window(
+         &func_name,
+         &args,
+@@ -287,6 +296,48 @@ fn eval_window_call(
+     Ok(results)
+ }
++
++fn partition_total_aggregate_window(
++    func_name: &str,
++    args: &[Expr],
++    rows: &[SqlRow],
++    layouts: &[CachedWindowPartition],
++    frame: &ResolvedFrame,
++    bindings: &[Option<SqlValue>],
++    results: &mut [SqlValue],
++) -> Result<bool> {
++    if !matches!(func_name, "sum" | "count" | "avg" | "min" | "max" | "total")
++        || !matches!(&frame.start, ResolvedBound::UnboundedPreceding)
++        || !matches!(&frame.end, ResolvedBound::UnboundedFollowing)
++        || frame.exclude != ExcludeMode::NoOthers
++    {
++        return Ok(false);
++    }
++    for layout in layouts {
++        let mut accumulator = Accumulator::new(func_name);
++        for row_idx in &layout.order_index_map {
++            let value = match args.first() {
++                Some(expr) => eval_scalar(expr, &rows[*row_idx].context(), bindings)?,
++                None => SqlValue::Integer(1),
++            };
++            accumulator.push(value);
++        }
++        let final_value = accumulator.finalize();
++        for row_idx in &layout.order_index_map {
++            results[*row_idx] = final_value.clone();
++        }
++    }
++    Ok(true)
++}
+ 
+ fn prefix_aggregate_window(
+     func_name: &str,
+diff --git a/crates/sql/src/exec/expr/window_eval/partition.rs b/crates/sql/src/exec/expr/window_eval/partition.rs
+index 783f66d..3f8bf0a 100644
+--- a/crates/sql/src/exec/expr/window_eval/partition.rs
++++ b/crates/sql/src/exec/expr/window_eval/partition.rs
+@@ -19,30 +19,25 @@ pub(super) fn partition_rows(
+     if partition_by.is_empty() {
+         return Ok(vec![(0..rows.len()).collect()]);
+     }
+-    let mut keys: Vec<Vec<SqlValue>> = Vec::with_capacity(rows.len());
+-    for row in rows {
+-        let mut key = Vec::with_capacity(partition_by.len());
+-        for expr in partition_by {
+-            key.push(eval_scalar(expr, &row.context(), bindings)?);
+-        }
+-        keys.push(key);
+-    }
+-    let mut group_by_key: HashMap<Vec<u8>, usize> = HashMap::with_capacity(keys.len());
++    let mut group_by_key: HashMap<Vec<u8>, usize> = HashMap::with_capacity(rows.len());
+     let mut groups: Vec<Vec<usize>> = Vec::new();
+-    // Phase 4.5: reuse a single scratch buffer across rows. The
+-    // HashMap key is borrowed for lookup (`get(scratch.as_slice())`)
+-    // so we only pay the clone allocation on cache miss — the hot
+-    // hit path is zero-allocation.
++    // Reuse a single encoding scratch buffer and avoid the previous two-pass
++    // `Vec<Vec<SqlValue>>` materialization of every partition key.  That old
++    // shape doubled the memory footprint of partition-heavy window queries.
+     let mut scratch: Vec<u8> = Vec::with_capacity(64);
+-    for (i, key) in keys.iter().enumerate() {
++    for (i, row) in rows.iter().enumerate() {
++        let mut key = Vec::with_capacity(partition_by.len());
++        for expr in partition_by {
++            key.push(eval_scalar(expr, &row.context(), bindings)?);
++        }
+         crate::exec::vec::hash_agg::encode_group_key_bytes_into(&key, &mut scratch)?;
+         match group_by_key.get(scratch.as_slice()) {
+             Some(&group_idx) => groups[group_idx].push(i),
+             None => {
+                 group_by_key.insert(scratch.clone(), groups.len());
+                 groups.push(vec![i]);
+             }
+         }
+     }
+diff --git a/crates/sql/src/exec/vec/hash_agg.rs b/crates/sql/src/exec/vec/hash_agg.rs
+index c762bc5..8d13975 100644
+--- a/crates/sql/src/exec/vec/hash_agg.rs
++++ b/crates/sql/src/exec/vec/hash_agg.rs
+@@ -235,22 +235,31 @@ impl HashAggregator {
+     pub fn observe(&mut self, key: Vec<SqlValue>, arg_values: &[SqlValue]) -> Result<()> {
+         debug_assert_eq!(arg_values.len(), self.aggs.len());
+         let bytes = Self::encode_key(&key)?;
+-        let entry = self.table.entry(bytes.clone()).or_insert_with(|| {
+-            let states = self.aggs.iter().map(|k| AccState::new(*k)).collect();
+-            (key.clone(), states)
+-        });
+-        for (state, value) in entry.1.iter_mut().zip(arg_values.iter()) {
+-            state.observe(value);
++        if let Some(entry) = self.table.get_mut(&bytes) {
++            for (state, value) in entry.1.iter_mut().zip(arg_values.iter()) {
++                state.observe(value);
++            }
++        } else {
++            let mut states: Vec<AccState> = self.aggs.iter().map(|k| AccState::new(*k)).collect();
++            for (state, value) in states.iter_mut().zip(arg_values.iter()) {
++                state.observe(value);
++            }
++            // Charge memory only when a new group is inserted.  The old code
++            // incremented `table_bytes` on every input row, so a small number of
++            // hot groups could falsely exceed work_mem and spill repeatedly.
++            self.table_bytes = self.table_bytes.saturating_add(
++                bytes.len() + row_width(&key) + 32 * self.aggs.len(),
++            );
++            self.table.insert(bytes, (key, states));
+         }
+-        // Rough sizing: key bytes + per-state words. Avoid recomputing
+-        // from scratch every row by approximating per-row cost.
+-        self.table_bytes = self
+-            .table_bytes
+-            .saturating_add(bytes.len() + 8 * self.aggs.len());
+ 
+         if self.table_bytes > self.work_mem_bytes {
+             self.spill_table()?;
+diff --git a/crates/sql/src/exec/select_top.rs b/crates/sql/src/exec/select_top.rs
+index 3a07246..0edfe73 100644
+--- a/crates/sql/src/exec/select_top.rs
++++ b/crates/sql/src/exec/select_top.rs
+@@ -649,6 +649,51 @@ pub(super) fn order_and_project_rows_with_distinct_on(
+     offset: usize,
+     memory: &mut QueryMemoryBroker,
+ ) -> Result<Vec<Vec<SqlValue>>> {
++    if limit == 0 {
++        return Ok(Vec::new());
++    }
++
++    // Streaming no-ORDER path.  The previous implementation built `filtered`
++    // for every qualifying row, estimated its width, and only then applied
++    // OFFSET/LIMIT.  SQLite's VDBE stops as soon as LIMIT is satisfied; this
++    // gives RedlineDB the same asymptotic behavior for the common `WHERE ...
++    // LIMIT n` and post-DML validation shapes.
++    if distinct_on.is_empty() && order_by.is_empty() {
++        let cap = if limit == usize::MAX {
++            rows.len().saturating_sub(offset)
++        } else {
++            limit.min(rows.len().saturating_sub(offset))
++        };
++        let mut out = Vec::with_capacity(cap);
++        let mut skipped = 0usize;
++        for row in rows {
++            if !selection_passes(selection, &row, bindings)? {
++                continue;
++            }
++            if skipped < offset {
++                skipped += 1;
++                continue;
++            }
++            if out.len() >= limit {
++                break;
++            }
++            out.push(project_row(projection, &row, bindings)?);
++        }
++        return Ok(out);
++    }
++
++    // Streaming top-K: keep only K projected rows in the heap instead of first
++    // materializing every filtered `SqlRow`.  This is especially important for
++    // generated DML/ORDER/LIMIT cases where a write is followed by a small
++    // ORDER BY LIMIT verification query.
++    let total_take = limit.saturating_add(offset);
++    if !order_by.is_empty()
++        && distinct_on.is_empty()
++        && total_take > 0
++        && total_take <= vec::TOPK_LIMIT_THRESHOLD
++        && limit < usize::MAX
++        && !order_by_requires_custom_comparator(order_by)
++    {
++        let directions = directions_from_order_by(order_by);
++        let mut heap = vec::TopKHeap::new(total_take, directions);
++        for row in rows {
++            if !selection_passes(selection, &row, bindings)? {
++                continue;
++            }
++            let keys = order_by
++                .iter()
++                .map(|order| eval_order_key(order, &row.context(), bindings))
++                .collect::<Result<Vec<_>>>()?;
++            let projected = project_row(projection, &row, bindings)?;
++            heap.push(keys, projected)?;
++        }
++        let sorted = heap.into_sorted_rows();
++        return Ok(sorted.into_iter().skip(offset).take(limit).collect());
++    }
++
+     let mut filtered = Vec::with_capacity(rows.len());
+     for row in rows {
+         if selection_passes(selection, &row, bindings)? {
+@@ -813,7 +858,6 @@ pub(super) fn order_and_project_rows_with_distinct_on(
+     // Lane VE top-K fast path: ORDER BY ... LIMIT k where k is small wants
+     // a fixed-size heap, not a full sort. The threshold matches
+     // `vec::TOPK_LIMIT_THRESHOLD`.
+-    let total_take = limit.saturating_add(offset);
+     if !order_by.is_empty()
+         && total_take > 0
+         && total_take <= vec::TOPK_LIMIT_THRESHOLD
+@@ -903,6 +947,17 @@ pub(super) fn directions_from_order_by(order_by: &[OrderByExpr]) -> Vec<vec::Sor
+         .collect()
+ }
++
++fn order_by_requires_custom_comparator(order_by: &[OrderByExpr]) -> bool {
++    order_by.iter().any(|order| {
++        matches!(
++            crate::exec::expr::coerce::collation_from_expr(&order.expr),
++            Some(crate::collation::Collation::Custom(_)) | Some(crate::collation::Collation::Uint)
++        )
++    })
++}
+ 
+ fn eval_order_key(
+     order: &OrderByExpr,
