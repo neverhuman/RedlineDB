@@ -126,14 +126,33 @@ pub(crate) fn synth_table_def(
     columns: &[String],
     rows: &[Vec<SqlValue>],
 ) -> Arc<TableDef> {
+    let folded_name = name.to_ascii_lowercase();
+    let folded_columns: Vec<String> =
+        columns.iter().map(|n| n.to_ascii_lowercase()).collect();
+    synth_table_def_with_folded(name, columns, &folded_name, &folded_columns, rows)
+}
+
+/// Phase 4.4: variant of `synth_table_def` that accepts pre-computed
+/// lowercase forms of the name + columns. Called per recursive CTE
+/// iteration from `cte_recursive::materialize_cte` to skip
+/// `to_ascii_lowercase` allocations on every iteration when the names
+/// don't change.
+pub(crate) fn synth_table_def_with_folded(
+    name: &str,
+    columns: &[String],
+    folded_name: &str,
+    folded_columns: &[String],
+    rows: &[Vec<SqlValue>],
+) -> Arc<TableDef> {
+    debug_assert_eq!(folded_columns.len(), columns.len());
     let column_defs: Vec<ColumnDef> = columns
         .iter()
         .enumerate()
-        .map(|(idx, name)| ColumnDef {
+        .map(|(idx, col_name)| ColumnDef {
             column_id: ColumnId((idx + 1) as u64),
             ordinal: idx as u16,
-            name: Box::from(name.as_str()),
-            folded: Box::from(name.to_ascii_lowercase().as_str()),
+            name: Box::from(col_name.as_str()),
+            folded: Box::from(folded_columns[idx].as_str()),
             declared_type: None,
             affinity: infer_affinity(rows, idx),
             not_null: false,
@@ -148,7 +167,7 @@ pub(crate) fn synth_table_def(
         schema_id: SchemaId(0),
         relation_id: rel,
         name: Box::from(name),
-        folded: Box::from(name.to_ascii_lowercase().as_str()),
+        folded: Box::from(folded_name),
         columns: column_defs,
         indexes: Vec::new(),
         constraints: Vec::new(),
