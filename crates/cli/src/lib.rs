@@ -301,9 +301,10 @@ pub fn run() {
         None => mode.default_separator().to_owned(),
     };
 
-    let show_header = flag_state
-        .header
-        .unwrap_or_else(|| mode.headers_by_default());
+    let show_header = match flag_state.header {
+        Some(explicit) => explicit,
+        None => mode.headers_by_default(),
+    };
 
     // `:memory:` and `""` open a fresh per-process ephemeral database, matching
     // the SQLite shell semantics where in-memory state never spills to a real
