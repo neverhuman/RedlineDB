@@ -132,6 +132,84 @@ jobs:
       - name: Guard official evidence boundary
         run: bash scripts/guard-official-evidence.sh
 
+  metrics-readme:
+    needs: [parity]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          # For pull_request events, github.ref is refs/pull/N/merge (the
+          # merge commit) — checking that out and pushing HEAD back to the
+          # branch would overwrite the PR with the merge commit. Use
+          # github.head_ref (the actual PR branch name) when available so
+          # the workspace is on the real branch tip and a subsequent
+          # `git push` updates the branch cleanly.
+          ref: ${{ github.head_ref || github.ref }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install tokei
+        run: cargo install tokei --locked --version 14.0.0
+      - name: Download parity evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: redline-testing-official-evidence
+          path: target/redline-testing
+      - name: Build SQLite reference (for LOC comparison)
+        run: bash scripts/sqlite/build-reference.sh
+      - name: Refresh jankurai score
+        run: bash ops/ci/jankurai-tools.sh audit-ci
+      - name: Regenerate README metrics section
+        run: bash scripts/generate-metrics-readme.sh
+      - name: Summarize README diff
+        id: diff
+        run: |
+          if git diff --quiet README.md; then
+            echo "drift=false" >>"$GITHUB_OUTPUT"
+            echo "README.md is already current."
+          else
+            echo "drift=true" >>"$GITHUB_OUTPUT"
+            adds="$(git diff --numstat README.md | awk '{print $1}')"
+            dels="$(git diff --numstat README.md | awk '{print $2}')"
+            echo "drift_summary=+${adds} / -${dels} lines" >>"$GITHUB_OUTPUT"
+            echo "README drift: +${adds}/-${dels} lines (measured-number rerolling)"
+          fi
+      - name: Upload refreshed README artifact
+        # Always upload — even when there's no drift the artifact is the
+        # canonical "what the README should look like for this commit"
+        # snapshot reviewers can fetch.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: refreshed-readme
+          path: README.md
+      - name: Auto-commit refreshed README (main only)
+        # Only commit back on main. On PR branches we'd create a
+        # follow-up commit that re-triggers CI (or, with [skip ci],
+        # leaves the PR in a BLOCKED state because required checks
+        # have no run on the new head). main has no required checks
+        # so the bot commit is a clean fast-forward.
+        if: |
+          steps.diff.outputs.drift == 'true' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          msg="docs(readme): auto-refresh metrics for ${GITHUB_SHA:0:8} [skip ci]"
+          git commit -m "$msg"
+          if ! git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+              HEAD:main; then
+            echo "::warning::could not push refreshed README to main — likely branch protection. README artifact remains available."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # The branch ruleset requires checks named test/build/lint/typecheck/cli.
   # The aggregate test relay emits the required `test` context, while the
   # other relay jobs propagate the aggregate result under their required
