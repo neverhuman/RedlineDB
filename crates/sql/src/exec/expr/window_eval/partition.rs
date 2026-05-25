@@ -29,12 +29,17 @@ pub(super) fn partition_rows(
     }
     let mut group_by_key: HashMap<Vec<u8>, usize> = HashMap::with_capacity(keys.len());
     let mut groups: Vec<Vec<usize>> = Vec::new();
+    // Phase 4.5: reuse a single scratch buffer across rows. The
+    // HashMap key is borrowed for lookup (`get(scratch.as_slice())`)
+    // so we only pay the clone allocation on cache miss — the hot
+    // hit path is zero-allocation.
+    let mut scratch: Vec<u8> = Vec::with_capacity(64);
     for (i, key) in keys.iter().enumerate() {
-        let encoded = crate::exec::vec::hash_agg::encode_group_key_bytes(key)?;
-        match group_by_key.get(&encoded) {
+        crate::exec::vec::hash_agg::encode_group_key_bytes_into(key, &mut scratch)?;
+        match group_by_key.get(scratch.as_slice()) {
             Some(&group_idx) => groups[group_idx].push(i),
             None => {
-                group_by_key.insert(encoded, groups.len());
+                group_by_key.insert(scratch.clone(), groups.len());
                 groups.push(vec![i]);
             }
         }

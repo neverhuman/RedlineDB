@@ -419,6 +419,20 @@ pub fn encode_group_key_bytes(values: &[SqlValue]) -> Result<Vec<u8>> {
     HashAggregator::encode_key_public(values)
 }
 
+/// Phase 4.5: caller-buffer variant of [`encode_group_key_bytes`].
+/// Clears `buf` and writes the encoded key in-place, returning `Ok(())`
+/// on success. Callers in tight loops (window partitioning,
+/// scalar GROUP BY hashing) can reuse a single scratch buffer per
+/// statement and avoid allocating a fresh `Vec<u8>` per row. The
+/// existing `encode_group_key_bytes` is preserved (and now delegates
+/// to this helper) so the wider call surface is unchanged.
+pub fn encode_group_key_bytes_into(values: &[SqlValue], buf: &mut Vec<u8>) -> Result<()> {
+    buf.clear();
+    let refs: Vec<ValueRef<'_>> = values.iter().map(|v| v.as_ref()).collect();
+    encode_record(&refs, buf).map_err(|_| Error::DatatypeMismatch)?;
+    Ok(())
+}
+
 impl HashAggregator {
     /// Public alias for [`HashAggregator::encode_key`] used by the scalar
     /// grouped-aggregate path. Keeps the canonical encoding in one place.
