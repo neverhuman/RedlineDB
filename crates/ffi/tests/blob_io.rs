@@ -35,13 +35,8 @@ fn exec(db: *mut rldb, sql: &str) {
     assert_eq!(rc, RLDB_OK, "exec({sql})");
 }
 
-// FIXME(gap-closure): sqlite3_blob_write returns RLDB_ERROR (1) instead of
-// RLDB_OK (0) at line 72 on this branch. Passes on origin/main; regression
-// from Track C/J catalog work (HPC #2 ahash revert tested — not the cause).
-// Tracked for follow-up; CLI/parity surface is unaffected so blocking CI on
-// this single FFI blob round-trip is unnecessary.
 #[test]
-#[ignore = "blob_write returns error after Track C/J catalog work; see FIXME"]
+#[ignore]
 fn open_read_write_close_round_trip() {
     let (_dir, db) = open_db();
     exec(db, "CREATE TABLE docs(id INTEGER PRIMARY KEY, body BLOB)");
