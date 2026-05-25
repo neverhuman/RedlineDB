@@ -22,7 +22,7 @@ pub(crate) fn set_current_match_term(term: Option<String>) {
 /// Stack-buffer capacity for lowercased function names. Every known
 /// scalar/aggregate/window function fits comfortably (longest is
 /// `json_group_object` at 17 bytes; we round up to 48 for safety).
-const FN_NAME_STACK: usize = 48;
+pub(crate) const FN_NAME_STACK: usize = 48;
 
 /// Borrow the function name as a single unquoted identifier, lowercased
 /// into the caller-provided stack buffer. Returns `None` for qualified
@@ -31,7 +31,7 @@ const FN_NAME_STACK: usize = 48;
 /// `to_string().to_ascii_lowercase()` slow path, which still pays the
 /// allocation cost but is reached for <1% of function calls in
 /// practice.
-fn simple_function_name_lower<'b>(
+pub(crate) fn simple_function_name_lower<'b>(
     func: &sqlparser::ast::Function,
     scratch: &'b mut [u8; FN_NAME_STACK],
 ) -> Option<&'b str> {

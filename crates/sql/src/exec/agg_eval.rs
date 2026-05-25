@@ -577,8 +577,28 @@ fn eval_group_function(
     group: &[SqlRow],
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    let name = func.name.to_string().to_ascii_lowercase();
-    let cache_key = aggregate_cacheable(func).then(|| func.to_string());
+    // Phase 4.2: borrow the function name into a stack buffer for the
+    // dispatch match instead of allocating + lowercasing the full
+    // ObjectName Display form. Mirrors the Phase 1.3 fast path in
+    // scalar function dispatch.
+    let mut name_scratch = [0u8; crate::exec::expr::json_dispatch::FN_NAME_STACK];
+    let borrowed_name =
+        crate::exec::expr::json_dispatch::simple_function_name_lower(func, &mut name_scratch);
+    let owned_name;
+    let name: &str = match borrowed_name {
+        Some(s) => s,
+        None => {
+            owned_name = func.name.to_string().to_ascii_lowercase();
+            owned_name.as_str()
+        }
+    };
+
+    // Phase 4.2: aggregate_cache_key renders the full function AST
+    // exactly once, lowercases it in place, and uses the same lowercased
+    // String as both the volatility check input and the cache key.
+    // Replaces the prior double-render (cacheable check + cache_key
+    // each called `func.to_string()` separately).
+    let cache_key = aggregate_cache_key(func);
     if let Some(cache_key) = &cache_key
         && let Some(value) = GROUP_AGG_CACHE.with(|cache| {
             cache
@@ -589,7 +609,7 @@ fn eval_group_function(
     {
         return Ok(value);
     }
-    let result = match name.as_str() {
+    let result = match name {
         "count" => {
             if let FunctionArguments::List(list) = &func.args {
                 if list.args.len() == 1
@@ -1057,7 +1077,7 @@ fn eval_group_function(
                 out
             };
             let db = crate::udf::current_db();
-            match crate::udf::call_registered_aggregate(db, name.as_str(), &rows) {
+            match crate::udf::call_registered_aggregate(db, name, &rows) {
                 Some(Ok(v)) => Ok(v),
                 Some(Err(msg)) => Err(Error::UnsupportedSql(msg)),
                 None => Err(Error::UnsupportedSql(format!(
@@ -1076,16 +1096,35 @@ fn eval_group_function(
     Ok(result)
 }
 
-fn aggregate_cacheable(func: &sqlparser::ast::Function) -> bool {
-    let rendered = func.to_string().to_ascii_lowercase();
-    !rendered.contains("random(")
-        && !rendered.contains("randomblob(")
-        && !rendered.contains("last_insert_rowid")
-        && !rendered.contains("changes(")
-        && !rendered.contains("total_changes(")
-        && !rendered.contains("current_date")
-        && !rendered.contains("current_time")
-        && !rendered.contains("current_timestamp")
+/// Phase 4.2: single-render cache-key + cacheability check.
+///
+/// Old shape allocated `func.to_string()` once in `aggregate_cacheable`
+/// (for the volatility check) and again in `eval_group_function` (for
+/// the cache key), then lowercased one of them. Both renders walk the
+/// full Function AST.
+///
+/// New shape: render once into a single String, lowercase in place via
+/// `make_ascii_lowercase`, then both decide cacheability AND use the
+/// lowercased form as the cache key. Returns `None` for any volatile
+/// function (random/randomblob/last_insert_rowid/changes/total_changes
+/// /current_date/current_time/current_timestamp), `Some(lowercased)`
+/// otherwise.
+fn aggregate_cache_key(func: &sqlparser::ast::Function) -> Option<String> {
+    let mut rendered = func.to_string();
+    rendered.make_ascii_lowercase();
+    let is_volatile = rendered.contains("random(")
+        || rendered.contains("randomblob(")
+        || rendered.contains("last_insert_rowid")
+        || rendered.contains("changes(")
+        || rendered.contains("total_changes(")
+        || rendered.contains("current_date")
+        || rendered.contains("current_time")
+        || rendered.contains("current_timestamp");
+    if is_volatile {
+        None
+    } else {
+        Some(rendered)
+    }
 }
 
 fn percentile_argument(
