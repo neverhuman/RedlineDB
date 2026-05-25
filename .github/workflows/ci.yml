@@ -105,6 +105,12 @@ jobs:
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
+          # Pin to the redline-testing release that ships target capability
+          # gating (skips SQL_VIRTUAL_TABLE_OPTIONAL cases 93–96 against
+          # engines without fts5/rtree/dbstat) and the PINNED_ONLY env so
+          # the run sticks to the 1127-case pinned upstream manifest.
+          CI_REDLINE_TESTING_REQUESTED_VERSION: "0.1.3"
+          REDLINE_TESTING_PINNED_ONLY: "1"
         run: CI_PARITY_STAGE=${{ matrix.stage }} bash ops/ci/parity.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
