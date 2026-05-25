@@ -1698,6 +1698,7 @@ dependencies = [
  "arc-swap",
  "fail",
  "libm",
+ "memchr",
  "parking_lot",
  "postgres",
  "proptest",

@@ -127,10 +127,26 @@ pub(crate) fn eval_scalar_function_values(
             // count. See https://sqlite.org/lang_corefunc.html#length.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
-            Some(SqlValue::Text(value)) => Ok(SqlValue::Integer(value.chars().count() as i64)),
-            Some(other) => Ok(SqlValue::Integer(
-                value_to_string(other).chars().count() as i64
-            )),
+            Some(SqlValue::Text(value)) => {
+                // Phase 2.1 ASCII fast path: for pure-ASCII strings,
+                // character count equals byte length. `str::is_ascii`
+                // is SIMD-vectorized on x86_64 in Rust 1.95.
+                let len = if value.is_ascii() {
+                    value.len() as i64
+                } else {
+                    value.chars().count() as i64
+                };
+                Ok(SqlValue::Integer(len))
+            }
+            Some(other) => {
+                let s = value_to_string(other);
+                let len = if s.is_ascii() {
+                    s.len() as i64
+                } else {
+                    s.chars().count() as i64
+                };
+                Ok(SqlValue::Integer(len))
+            }
         },
         // SQLite octet_length(X): byte length regardless of type. TEXT in its
         // UTF-8 byte form, BLOB in its raw byte form, others coerced to TEXT
@@ -344,12 +360,24 @@ pub(crate) fn eval_scalar_function_values(
             if needle.is_empty() {
                 return Ok(SqlValue::Integer(1));
             }
-            let pos = haystack
-                .char_indices()
-                .enumerate()
-                .find(|(_, (byte_pos, _))| haystack[*byte_pos..].starts_with(&needle))
-                .map(|(char_pos, _)| char_pos as i64 + 1)
-                .unwrap_or(0);
+            // Phase 2.2: ASCII fast path. When both sides are ASCII,
+            // byte offset == char offset, so memmem (SIMD-accelerated
+            // for >=2-byte needles via memchr) gives us O(n) substring
+            // search without the per-char `starts_with` allocation
+            // cascade.
+            let pos = if haystack.is_ascii() && needle.is_ascii() {
+                match memchr::memmem::find(haystack.as_bytes(), needle.as_bytes()) {
+                    Some(byte_pos) => byte_pos as i64 + 1,
+                    None => 0,
+                }
+            } else {
+                haystack
+                    .char_indices()
+                    .enumerate()
+                    .find(|(_, (byte_pos, _))| haystack[*byte_pos..].starts_with(&needle))
+                    .map(|(char_pos, _)| char_pos as i64 + 1)
+                    .unwrap_or(0)
+            };
             Ok(SqlValue::Integer(pos))
         }
         // SQLite trim / ltrim / rtrim — strip specified chars (or whitespace).
@@ -883,7 +911,17 @@ fn last_insert_rowid_value() -> i64 {
 /// the original char instead. This matches Postgres' `lower()` with a
 /// UTF-8 libc locale, whose underlying `wctolower` only emits 1-to-1
 /// mappings.
+///
+/// Phase 2.1: ASCII fast path. `make_ascii_lowercase` is a single
+/// SIMD-vectorized byte sweep when the input is pure ASCII (the
+/// dominant case for SCALAR_STRING and the SCALAR_ARITH cases). For
+/// any byte >= 0x80 we fall through to the per-char Unicode path.
 fn libc_lower(input: &str) -> String {
+    if input.is_ascii() {
+        let mut bytes = input.as_bytes().to_vec();
+        bytes.make_ascii_lowercase();
+        return String::from_utf8(bytes).expect("ascii bytes are valid utf-8");
+    }
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         let mut iter = ch.to_lowercase();
@@ -900,6 +938,11 @@ fn libc_lower(input: &str) -> String {
 /// the original char. Matches Postgres' `upper()` with a UTF-8 libc
 /// locale — `upper('straße')` → `STRAßE`, `upper('σς')` → `ΣΣ`.
 fn libc_upper(input: &str) -> String {
+    if input.is_ascii() {
+        let mut bytes = input.as_bytes().to_vec();
+        bytes.make_ascii_uppercase();
+        return String::from_utf8(bytes).expect("ascii bytes are valid utf-8");
+    }
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         let mut iter = ch.to_uppercase();
