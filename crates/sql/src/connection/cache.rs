@@ -1,8 +1,9 @@
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasher, Hash};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use ahash::RandomState;
 use parking_lot::RwLock;
 
 use crate::statement::PreparedTemplate;
@@ -15,9 +16,12 @@ pub(super) struct StatementCacheKey {
     pub(super) sql: Arc<str>,
 }
 
+type ShardMap = HashMap<StatementCacheKey, Arc<PreparedTemplate>, RandomState>;
+
 #[derive(Debug, Default)]
 pub(super) struct StatementCache {
-    shards: Vec<RwLock<HashMap<StatementCacheKey, Arc<PreparedTemplate>>>>,
+    shards: Vec<RwLock<ShardMap>>,
+    hasher: RandomState,
     capacity: usize,
     entries: AtomicUsize,
 }
@@ -34,12 +38,14 @@ impl StatementCache {
         } else {
             capacity.min(64).max(1)
         };
+        let hasher = RandomState::new();
         let mut shards = Vec::with_capacity(shard_count);
         for _ in 0..shard_count {
-            shards.push(RwLock::new(HashMap::new()));
+            shards.push(RwLock::new(HashMap::with_hasher(hasher.clone())));
         }
         Self {
             shards,
+            hasher,
             capacity,
             entries: AtomicUsize::new(0),
         }
@@ -50,9 +56,8 @@ impl StatementCache {
     }
 
     fn shard_index(&self, key: &StatementCacheKey) -> usize {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        key.hash(&mut hasher);
-        (hasher.finish() as usize) % self.shards.len().max(1)
+        let h = self.hasher.hash_one(key);
+        (h as usize) % self.shards.len().max(1)
     }
 
     pub(super) fn get(&self, key: &StatementCacheKey) -> Option<Arc<PreparedTemplate>> {
