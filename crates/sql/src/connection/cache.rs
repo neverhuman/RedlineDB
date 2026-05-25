@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::hash::{BuildHasher, Hash};
+use std::hash::Hash;
+// `hash_one` is an inherent method on `RandomState`; no trait import needed.
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
