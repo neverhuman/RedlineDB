@@ -85,7 +85,12 @@ pub(super) fn eval_function(
     if name == "highlight" {
         return eval_highlight_function(func, row, bindings);
     }
-    let mut values = Vec::new();
+    // Phase 4.3: hint capacity for the args buffer. Called per scalar
+    // function call per row in projection / aggregate filter paths.
+    let mut values = Vec::with_capacity(match &func.args {
+        FunctionArguments::List(list) => list.args.len(),
+        _ => 0,
+    });
     if let FunctionArguments::List(list) = &func.args {
         for arg in &list.args {
             match arg {
