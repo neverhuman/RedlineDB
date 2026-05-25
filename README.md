@@ -169,6 +169,22 @@ Top beyond-feature categories by coverage:
 - **Medium findings:** 2
 - **Low/info findings:** 0
 
+Score breakdown by dimension (ranked by weighted contribution):
+
+| Dimension | Weight | Score | Weighted |
+|---|---:|---:|---:|
+| Ownership and navigation surface | 13 | 100.0 | 13.0 |
+| Proof lanes and test routing | 12 | 98.0 | 11.8 |
+| Contract and boundary integrity | 13 | 88.0 | 11.4 |
+| Security and supply-chain posture | 12 | 86.0 | 10.3 |
+| Observability and repair evidence | 8 | 88.0 | 7.0 |
+| Data truth and workflow safety | 8 | 85.0 | 6.8 |
+| Context economy and agent instructions | 7 | 91.0 | 6.4 |
+| Jankurai tool adoption and CI replacement | 7 | 80.0 | 5.6 |
+| Code shape and semantic surface | 12 | 45.0 | 5.4 |
+| Python containment and polyglot hygiene | 4 | 100.0 | 4.0 |
+| Build speed signals | 4 | 80.0 | 3.2 |
+
 See `target/jankurai/repo-score.md` for the full report — the CI `audit-ci` lane fails if score drops below the policy minimum or any hard cap is applied.
 
 ## Lines of code

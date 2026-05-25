@@ -576,6 +576,27 @@ if final_score is not None:
     if hard_caps:
         push(f"- **Hard rule caps applied:** {', '.join(f'`{c}`' for c in hard_caps)}")
     push("")
+
+    # Dimensional breakdown — surfaces code-shape and other axes the user
+    # care about ("strong vs weak"), sorted by weighted contribution so
+    # the most impactful axis shows first.
+    dimensions = jankurai.get("dimensions") or []
+    if dimensions:
+        push("Score breakdown by dimension (ranked by weighted contribution):")
+        push("")
+        push("| Dimension | Weight | Score | Weighted |")
+        push("|---|---:|---:|---:|")
+        sorted_dims = sorted(
+            dimensions,
+            key=lambda d: float(d.get("weighted_points", 0)),
+            reverse=True,
+        )
+        for d in sorted_dims:
+            push(f"| {d.get('name','?')} | {d.get('weight',0)} | "
+                 f"{float(d.get('score',0)):.1f} | "
+                 f"{float(d.get('weighted_points',0)):.1f} |")
+        push("")
+
     push("See `target/jankurai/repo-score.md` for the full report — the CI "
          "`audit-ci` lane fails if score drops below the policy minimum or "
          "any hard cap is applied.")
