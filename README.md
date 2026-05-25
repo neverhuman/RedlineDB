@@ -35,14 +35,14 @@ group-commit WAL, and crash recovery designed for multi-writer workloads.
 |---|---:|---:|---:|---:|---:|
 | SQLite parity (`sqlite_parity`) | 1127 | 1123 | 4 | 0 | 99.6% |
 | Memory (`memory`) | 1127 | 1123 | 4 | 0 | 99.6% |
-| Beyond SQLite vs Postgres (`beyond_sqlite`) | 277 | 4 | 273 | 0 | 1.4% |
+| Beyond SQLite vs Postgres (`beyond_sqlite`) | 277 | 126 | 20 | 131 | 45.5% |
 
 ## At a glance
 
 | Metric | RedlineDB | SQLite | Ratio (RedlineDB / SQLite) |
 |---|---:|---:|---:|
-| Median per-case latency (parity, passed only) | 3.63 ms | 1.70 ms | 2.14× |
-| Median peak RSS (memory suite) | 14.5 MiB | 12 KiB | 1241.00× |
+| Median per-case latency (parity, passed only) | 3.27 ms | 1.71 ms | 1.90× |
+| Median peak RSS (memory suite) | 8.9 MiB | 12 KiB | 763.00× |
 | Source LOC (code lines) | 159,960 (Rust) | 205,957 (C) | 0.78× |
 | Jankurai score (final / raw, decision) | 85 / 85 (pass) | — | — |
 
@@ -70,23 +70,23 @@ Higher bars = RedlineDB took longer relative to SQLite for that case. These are 
 ```mermaid
 xychart-beta
     title "Top 10 slowest cases (latency ratio)"
-    x-axis ["00480","00414","00484","00470","00438","00481","00490","00429","00338","00471"]
-    y-axis "Ratio" 0 --> 3.3
-    bar [2.83,2.77,2.75,2.68,2.66,2.66,2.64,2.61,2.60,2.59]
+    x-axis ["00153","00149","00148","00202","00146","00073","00482","00501","00449","00973"]
+    y-axis "Ratio" 0 --> 20.8
+    bar [20.27,18.61,17.08,15.00,7.86,3.25,3.16,3.09,3.00,2.99]
 ```
 
 | Case | Name | Category | Median target | Median SQLite | Ratio |
 |---|---|---|---:|---:|---:|
-| `00480` | DML_WHERE_ORDER_LIMIT_093 | `GEN_SQL_DML` | 4.60 ms | 1.62 ms | 2.83× |
-| `00414` | DML_WHERE_ORDER_LIMIT_027 | `GEN_SQL_DML` | 4.81 ms | 1.77 ms | 2.77× |
-| `00484` | DML_WHERE_ORDER_LIMIT_097 | `GEN_SQL_DML` | 4.53 ms | 1.74 ms | 2.75× |
-| `00470` | DML_WHERE_ORDER_LIMIT_083 | `GEN_SQL_DML` | 4.43 ms | 1.74 ms | 2.68× |
-| `00438` | DML_WHERE_ORDER_LIMIT_051 | `GEN_SQL_DML` | 5.00 ms | 1.80 ms | 2.66× |
-| `00481` | DML_WHERE_ORDER_LIMIT_094 | `GEN_SQL_DML` | 4.46 ms | 1.67 ms | 2.66× |
-| `00490` | DML_WHERE_ORDER_LIMIT_103 | `GEN_SQL_DML` | 4.19 ms | 1.76 ms | 2.64× |
-| `00429` | DML_WHERE_ORDER_LIMIT_042 | `GEN_SQL_DML` | 4.38 ms | 1.71 ms | 2.61× |
-| `00338` | SCALAR_STRING_028 | `GEN_SQL_SCALAR` | 3.59 ms | 1.39 ms | 2.60× |
-| `00471` | DML_WHERE_ORDER_LIMIT_084 | `GEN_SQL_DML` | 4.50 ms | 1.66 ms | 2.59× |
+| `00153` | DOT_CD_TEMPFILE | `CLI_TEMPFILE` | 24.28 ms | 1.20 ms | 20.27× |
+| `00149` | DOT_ONCE_TEMPFILE | `CLI_TEMPFILE` | 27.46 ms | 1.48 ms | 18.61× |
+| `00148` | DOT_OUTPUT_TEMPFILE | `CLI_TEMPFILE` | 28.42 ms | 1.66 ms | 17.08× |
+| `00202` | OPT_APPEND_TEMPFILE | `CLI_OPTION_TEMPFILE` | 20.56 ms | 1.37 ms | 15.00× |
+| `00146` | DOT_READ_TEMPFILE | `CLI_TEMPFILE` | 20.18 ms | 2.57 ms | 7.86× |
+| `00073` | INDEXED_BY | `SQL_INDEX` | 5.08 ms | 1.56 ms | 3.25× |
+| `00482` | DML_WHERE_ORDER_LIMIT_095 | `GEN_SQL_DML` | 4.98 ms | 1.58 ms | 3.16× |
+| `00501` | DML_WHERE_ORDER_LIMIT_114 | `GEN_SQL_DML` | 5.06 ms | 1.64 ms | 3.09× |
+| `00449` | DML_WHERE_ORDER_LIMIT_062 | `GEN_SQL_DML` | 4.69 ms | 1.56 ms | 3.00× |
+| `00973` | VIEW_TRIGGER_GENERATED_026 | `GEN_SQL_VIEW_TRIGGER` | 5.30 ms | 1.77 ms | 2.99× |
 
 ## Latency — top 10 fastest cases (RedlineDB / SQLite ratio)
 
@@ -95,23 +95,23 @@ Lower bars = RedlineDB outpaced SQLite on that case. Wins to defend.
 ```mermaid
 xychart-beta
     title "Top 10 fastest cases (latency ratio)"
-    x-axis ["00209","00161","00160","00165","00203","00140","00156","00204","00158","00115"]
-    y-axis "Ratio" 0 --> 1.9
-    bar [0.04,0.09,0.09,0.49,1.00,1.11,1.12,1.27,1.34,1.37]
+    x-axis ["00209","00161","00160","00203","00165","00212","00170","00159","00220","00128"]
+    y-axis "Ratio" 0 --> 1.4
+    bar [0.04,0.07,0.08,0.10,0.53,0.71,0.71,0.73,0.83,0.87]
 ```
 
 | Case | Name | Category | Median target | Median SQLite | Ratio |
 |---|---|---|---:|---:|---:|
-| `00209` | OPT_INTERACTIVE_CATALOG | `CLI_OPTION_CATALOG` | 2.26 ms | 51.49 ms | 0.04× |
-| `00161` | DOT_WWW_EXTERNAL_APP | `CLI_EXTERNAL_APP` | 3.05 ms | 34.55 ms | 0.09× |
-| `00160` | DOT_EXCEL_EXTERNAL_APP | `CLI_EXTERNAL_APP` | 3.16 ms | 34.81 ms | 0.09× |
-| `00165` | DOT_INTCK_CATALOG | `CLI_CATALOG` | 2.73 ms | 5.51 ms | 0.49× |
-| `00203` | OPT_ARCHIVE_A_TEMPFILE_OPTIONAL | `CLI_OPTION_TEMPFILE_OPTIONAL` | 1.90 ms | 1.96 ms | 1.00× |
-| `00140` | DOT_EXPERT_OPTIONAL | `CLI_DOT_COMMAND_OPTIONAL` | 3.05 ms | 2.78 ms | 1.11× |
-| `00156` | DOT_RECOVER_TEMPFILE | `CLI_TEMPFILE` | 4.52 ms | 3.98 ms | 1.12× |
-| `00204` | OPT_ZIP_TEMPFILE_CATALOG | `CLI_OPTION_CATALOG` | 2.28 ms | 1.81 ms | 1.27× |
-| `00158` | DOT_SHELL_SIDE_EFFECT | `CLI_SIDE_EFFECT` | 2.76 ms | 2.06 ms | 1.34× |
-| `00115` | DOT_SCHEMA_TABLES_INDEXES | `CLI_DOT_COMMAND` | 3.30 ms | 2.40 ms | 1.37× |
+| `00209` | OPT_INTERACTIVE_CATALOG | `CLI_OPTION_CATALOG` | 2.31 ms | 51.59 ms | 0.04× |
+| `00161` | DOT_WWW_EXTERNAL_APP | `CLI_EXTERNAL_APP` | 2.46 ms | 34.09 ms | 0.07× |
+| `00160` | DOT_EXCEL_EXTERNAL_APP | `CLI_EXTERNAL_APP` | 2.44 ms | 31.90 ms | 0.08× |
+| `00203` | OPT_ARCHIVE_A_TEMPFILE_OPTIONAL | `CLI_OPTION_TEMPFILE_OPTIONAL` | 2.61 ms | 26.38 ms | 0.10× |
+| `00165` | DOT_INTCK_CATALOG | `CLI_CATALOG` | 2.01 ms | 3.79 ms | 0.53× |
+| `00212` | SQL_VACUUM_INTO_TEMPFILE | `SQL_TEMPFILE` | 54.83 ms | 77.65 ms | 0.71× |
+| `00170` | OPT_VERSION | `CLI_OPTION` | 1.70 ms | 2.39 ms | 0.71× |
+| `00159` | DOT_SYSTEM_SIDE_EFFECT | `CLI_SIDE_EFFECT` | 2.63 ms | 3.60 ms | 0.73× |
+| `00220` | DELETE_LIMIT_OPTIONAL | `SQL_DELETE_OPTIONAL` | 2.35 ms | 2.84 ms | 0.83× |
+| `00128` | DOT_DBCONFIG | `CLI_DOT_COMMAND` | 2.35 ms | 2.71 ms | 0.87× |
 
 ## Memory — top 10 cases by RSS overhead (RedlineDB / SQLite)
 
@@ -120,23 +120,23 @@ Per-case peak resident set size (RSS) on the `memory` suite, ranked by overhead 
 ```mermaid
 xychart-beta
     title "Top 10 cases by RSS overhead (ratio)"
-    x-axis ["00318","00521","00543","00606","01122","01119","01114","01110","01107","00061"]
-    y-axis "Ratio" 0 --> 5233.2
-    bar [4757.50,4757.50,4757.50,4757.50,3191.33,3189.33,3185.33,3183.67,3182.33,3171.67]
+    x-axis ["00832","00845","00811","00839","00865","00847","00034","00579","00761","00062"]
+    y-axis "Ratio" 0 --> 1406.4
+    bar [1278.50,1278.50,1275.50,1273.00,1268.00,1266.50,1266.00,1261.50,1247.50,1247.00]
 ```
 
 | Case | Name | Category | RedlineDB RSS | SQLite RSS | Ratio |
 |---|---|---|---:|---:|---:|
-| `00318` | SCALAR_STRING_023 | `GEN_SQL_SCALAR` | 37.2 MiB | 8 KiB | 4757.50× |
-| `00521` | AGG_GROUP_HAVING_014 | `GEN_SQL_AGGREGATE` | 37.2 MiB | 8 KiB | 4757.50× |
-| `00543` | AGG_GROUP_HAVING_036 | `GEN_SQL_AGGREGATE` | 37.2 MiB | 8 KiB | 4757.50× |
-| `00606` | AGG_GROUP_HAVING_099 | `GEN_SQL_AGGREGATE` | 37.2 MiB | 8 KiB | 4757.50× |
-| `01122` | INDEX_SCHEMA_PRAGMA_055 | `GEN_SQL_INDEX_PRAGMA` | 37.4 MiB | 12 KiB | 3191.33× |
-| `01119` | INDEX_SCHEMA_PRAGMA_052 | `GEN_SQL_INDEX_PRAGMA` | 37.4 MiB | 12 KiB | 3189.33× |
-| `01114` | INDEX_SCHEMA_PRAGMA_047 | `GEN_SQL_INDEX_PRAGMA` | 37.3 MiB | 12 KiB | 3185.33× |
-| `01110` | INDEX_SCHEMA_PRAGMA_043 | `GEN_SQL_INDEX_PRAGMA` | 37.3 MiB | 12 KiB | 3183.67× |
-| `01107` | INDEX_SCHEMA_PRAGMA_040 | `GEN_SQL_INDEX_PRAGMA` | 37.3 MiB | 12 KiB | 3182.33× |
-| `00061` | WINDOW_ROW_NUMBER_RANK | `SQL_WINDOW` | 37.2 MiB | 12 KiB | 3171.67× |
+| `00832` | WINDOW_PARTITION_SUM_045 | `GEN_SQL_WINDOW` | 10.0 MiB | 8 KiB | 1278.50× |
+| `00845` | WINDOW_PARTITION_SUM_058 | `GEN_SQL_WINDOW` | 10.0 MiB | 8 KiB | 1278.50× |
+| `00811` | WINDOW_PARTITION_SUM_024 | `GEN_SQL_WINDOW` | 10.0 MiB | 8 KiB | 1275.50× |
+| `00839` | WINDOW_PARTITION_SUM_052 | `GEN_SQL_WINDOW` | 9.9 MiB | 8 KiB | 1273.00× |
+| `00865` | WINDOW_PARTITION_SUM_078 | `GEN_SQL_WINDOW` | 9.9 MiB | 8 KiB | 1268.00× |
+| `00847` | WINDOW_PARTITION_SUM_060 | `GEN_SQL_WINDOW` | 9.9 MiB | 8 KiB | 1266.50× |
+| `00034` | EXPRESSION_INDEX | `SQL_INDEX` | 9.9 MiB | 8 KiB | 1266.00× |
+| `00579` | AGG_GROUP_HAVING_072 | `GEN_SQL_AGGREGATE` | 9.9 MiB | 8 KiB | 1261.50× |
+| `00761` | CTE_RECURSIVE_MATRIX_054 | `GEN_SQL_CTE` | 9.7 MiB | 8 KiB | 1247.50× |
+| `00062` | WINDOW_FRAMES_ROWS | `SQL_WINDOW` | 9.7 MiB | 8 KiB | 1247.00× |
 
 ## Beyond-SQLite features — vs Postgres oracle
 
@@ -144,22 +144,22 @@ The `beyond_sqlite` suite runs the Postgres-shaped feature corpus (`277` cases) 
 
 | Outcome | Cases | Share |
 |---|---:|---:|
-| Passes Postgres semantics | 4 | 1.4% |
-| Diverges (failing parity vs Postgres) | 0 | 0.0% |
-| Skipped (Postgres-only / manifest backlog) | 273 | 98.6% |
+| Passes Postgres semantics | 126 | 45.5% |
+| Diverges (failing parity vs Postgres) | 131 | 47.3% |
+| Skipped (Postgres-only / manifest backlog) | 20 | 7.2% |
 
 Top beyond-feature categories by coverage:
 
 | Category | Cases | Passing Postgres | Pass rate |
 |---|---:|---:|---:|
-| `BEYOND_PORTABILITY_SYNTAX` | 40 | 0 | 0.0% |
-| `BEYOND_RICH_TYPES` | 30 | 0 | 0.0% |
-| `BEYOND_COLLATIONS_ILIKE` | 30 | 0 | 0.0% |
-| `BEYOND_MIGRATION_ERGONOMICS` | 20 | 0 | 0.0% |
+| `BEYOND_PORTABILITY_SYNTAX` | 40 | 29 | 72.5% |
+| `BEYOND_RICH_TYPES` | 30 | 18 | 60.0% |
+| `BEYOND_COLLATIONS_ILIKE` | 30 | 20 | 66.7% |
+| `BEYOND_MIGRATION_ERGONOMICS` | 20 | 12 | 60.0% |
 | `BEYOND_MATERIALIZED_VIEWS` | 20 | 0 | 0.0% |
-| `BEYOND_SCHEMAS_SEQUENCES` | 20 | 0 | 0.0% |
+| `BEYOND_SCHEMAS_SEQUENCES` | 20 | 13 | 65.0% |
 | `BEYOND_STORED_PROCEDURES` | 20 | 0 | 0.0% |
-| `BEYOND_JSONB_INDEXING` | 20 | 0 | 0.0% |
+| `BEYOND_JSONB_INDEXING` | 20 | 20 | 100.0% |
 
 ## Code health (jankurai)
 
@@ -337,7 +337,7 @@ the GitHub artifact attestation.
 
 **SQLite parity latency:** median gap **-19.69%**, worst gap **-289.42%**, faster cases **306**.
 
-**Benchmark metadata:** RedlineDB target version **redlinedb v3.0.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 0.1.3**.
+**Benchmark metadata:** RedlineDB target version **redlinedb v3.0.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.0**.
 
 ![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)
 
