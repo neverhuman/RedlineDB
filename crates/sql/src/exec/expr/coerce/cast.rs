@@ -433,7 +433,11 @@ pub(crate) fn canonicalize_decimal(input: &str) -> Option<String> {
     let (int_part, frac_part) = body.split_once('.').unwrap_or((body, ""));
     // Strip leading zeros from the integer part (keep at least one).
     let int_trimmed = int_part.trim_start_matches('0');
-    let int_canon = if int_trimmed.is_empty() { "0" } else { int_trimmed };
+    let int_canon = if int_trimmed.is_empty() {
+        "0"
+    } else {
+        int_trimmed
+    };
     // Strip trailing zeros from the fractional part.
     let frac_trimmed = frac_part.trim_end_matches('0');
     let mut out = String::with_capacity(input.len());

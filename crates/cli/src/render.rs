@@ -497,7 +497,9 @@ fn render_column<W: Write>(
     // sized to fit every value, so no wrap is needed). When wrapping is
     // active sqlite3 also inserts a blank separator line between rows.
     let needs_wrap = !user_widths.is_empty()
-        && rows.iter().any(|row| row_needs_wrap(row, &widths, null_value));
+        && rows
+            .iter()
+            .any(|row| row_needs_wrap(row, &widths, null_value));
     let mut wrote_wrapped_row = false;
     for row in rows {
         let chunks_per_col: Vec<Vec<String>> = (0..widths.len())
@@ -948,10 +950,8 @@ fn write_tabs_cell<W: Write>(out: &mut W, text: &str) -> Result<(), String> {
     // SQLite shell quotes tab-delimited text values that contain a quote or
     // apostrophe with the same rules as CSV (minus the tab itself, which is
     // implicit in `tabs` mode).
-    let needs_quotes = text.contains('\'')
-        || text.contains('"')
-        || text.contains('\n')
-        || text.contains('\r');
+    let needs_quotes =
+        text.contains('\'') || text.contains('"') || text.contains('\n') || text.contains('\r');
     if needs_quotes {
         let escaped = text.replace('"', "\"\"");
         write!(out, "\"{escaped}\"").map_err(|err| err.to_string())

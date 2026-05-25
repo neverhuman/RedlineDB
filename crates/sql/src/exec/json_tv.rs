@@ -417,10 +417,7 @@ impl TvFunc for JsonbArrayElements {
                 ));
             }
         };
-        let rows = arr
-            .iter()
-            .map(|v| vec![jsonb_value_to_sql(v)])
-            .collect();
+        let rows = arr.iter().map(|v| vec![jsonb_value_to_sql(v)]).collect();
         Ok(TvResult {
             columns: cols,
             rows,
@@ -454,10 +451,7 @@ impl TvFunc for JsonbArrayElementsText {
                 ));
             }
         };
-        let rows = arr
-            .iter()
-            .map(|v| vec![jsonb_value_to_text(v)])
-            .collect();
+        let rows = arr.iter().map(|v| vec![jsonb_value_to_text(v)]).collect();
         Ok(TvResult {
             columns: cols,
             rows,

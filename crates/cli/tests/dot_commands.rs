@@ -315,7 +315,10 @@ fn cli_flags_select_the_expected_renderers() {
         (
             "-box",
             "SELECT 1 AS a, 'x' AS b;\n",
-            &["\u{2502} a \u{2502} b \u{2502}", "\u{2502} 1 \u{2502} x \u{2502}"],
+            &[
+                "\u{2502} a \u{2502} b \u{2502}",
+                "\u{2502} 1 \u{2502} x \u{2502}",
+            ],
         ),
         (
             "-table",
@@ -726,7 +729,15 @@ fn mode_flag_after_separator_resets_separator() {
 fn cmd_flag_repeated_runs_each_command() {
     let bin = cargo_bin("redlinedb-cli");
     let out = Command::new(&bin)
-        .args(["-cmd", "SELECT 1;", "-cmd", "SELECT 2;", "-list", "-batch", ":memory:"])
+        .args([
+            "-cmd",
+            "SELECT 1;",
+            "-cmd",
+            "SELECT 2;",
+            "-list",
+            "-batch",
+            ":memory:",
+        ])
         .arg("SELECT 3;")
         .output()
         .expect("run cli");
@@ -803,7 +814,10 @@ fn mode_insert_default_table_name_is_tab() {
 fn mode_box_uses_unicode_line_drawing() {
     let (out, err, code) = run_script(None, ".mode box\nSELECT 1 AS a, 2 AS b;\n");
     assert_eq!(code, 0, "stderr={err}");
-    assert!(out.starts_with('\u{256d}'), "expected box-top, stdout={out}");
+    assert!(
+        out.starts_with('\u{256d}'),
+        "expected box-top, stdout={out}"
+    );
     assert!(out.contains('\u{2502}'), "expected box-side, stdout={out}");
 }
 
@@ -853,20 +867,14 @@ fn mode_json_emits_one_row_per_line_with_blob_escapes() {
     assert_eq!(code, 0, "stderr={err}");
     assert_eq!(out, "[{\"a\":1},\n{\"a\":2},\n{\"a\":3}]\n");
 
-    let (out2, err2, code2) = run_script(
-        None,
-        ".mode json\nSELECT x'01ab' AS d;\n",
-    );
+    let (out2, err2, code2) = run_script(None, ".mode json\nSELECT x'01ab' AS d;\n");
     assert_eq!(code2, 0, "stderr={err2}");
     assert_eq!(out2, "[{\"d\":\"\\u0001\\u00ab\"}]\n");
 }
 
 #[test]
 fn mode_csv_quotes_apostrophes_and_uses_crlf_terminators() {
-    let (out, err, code) = run_script(
-        None,
-        ".mode csv\nSELECT 'a''b';\n",
-    );
+    let (out, err, code) = run_script(None, ".mode csv\nSELECT 'a''b';\n");
     assert_eq!(code, 0, "stderr={err}");
     assert_eq!(out, "\"a'b\"\r\n");
 }
@@ -910,10 +918,7 @@ fn mode_tcl_renders_strings_with_octal_escapes() {
 
 #[test]
 fn mode_line_uses_colon_and_aligns_names() {
-    let (out, err, code) = run_script(
-        None,
-        ".mode line\nSELECT 1 AS a, 'x' AS bb;\n",
-    );
+    let (out, err, code) = run_script(None, ".mode line\nSELECT 1 AS a, 'x' AS bb;\n");
     assert_eq!(code, 0, "stderr={err}");
     // Names right-aligned to the longest name width, separator is `: `.
     assert_eq!(out, " a: 1\nbb: x\n");
@@ -921,10 +926,7 @@ fn mode_line_uses_colon_and_aligns_names() {
 
 #[test]
 fn mode_line_wraps_multiline_values_with_indent() {
-    let (out, err, code) = run_script(
-        None,
-        ".mode line\nSELECT 1 AS a, 'first\nsecond' AS b;\n",
-    );
+    let (out, err, code) = run_script(None, ".mode line\nSELECT 1 AS a, 'first\nsecond' AS b;\n");
     assert_eq!(code, 0, "stderr={err}");
     // Continuation line is indented to align with the value column.
     assert_eq!(out, "a: 1\nb: first\n   second\n");
@@ -955,27 +957,21 @@ fn dot_tables_columns_use_five_space_separator_column_major() {
 fn dot_schema_sqlite_master_returns_canonical_schema() {
     let (out, err, code) = run_script(None, ".schema sqlite_master\n");
     assert_eq!(code, 0, "stderr={err}");
-    assert!(
-        out.contains("CREATE TABLE sqlite_schema ("),
-        "stdout={out}"
-    );
+    assert!(out.contains("CREATE TABLE sqlite_schema ("), "stdout={out}");
     assert!(out.contains("rootpage integer"), "stdout={out}");
 }
 
 #[test]
 fn dot_schema_accepts_indent_and_nosys_flags() {
-    let (out, err, code) = run_script(
-        None,
-        "CREATE TABLE foo(x INTEGER);\n.schema --indent\n",
-    );
+    let (out, err, code) = run_script(None, "CREATE TABLE foo(x INTEGER);\n.schema --indent\n");
     assert_eq!(code, 0, "stderr={err}");
     assert!(out.contains("CREATE TABLE foo(x INTEGER);"), "stdout={out}");
-    let (out2, err2, code2) = run_script(
-        None,
-        "CREATE TABLE foo(x INTEGER);\n.schema --nosys\n",
-    );
+    let (out2, err2, code2) = run_script(None, "CREATE TABLE foo(x INTEGER);\n.schema --nosys\n");
     assert_eq!(code2, 0, "stderr={err2}");
-    assert!(out2.contains("CREATE TABLE foo(x INTEGER);"), "stdout={out2}");
+    assert!(
+        out2.contains("CREATE TABLE foo(x INTEGER);"),
+        "stdout={out2}"
+    );
 }
 
 #[test]
@@ -988,14 +984,14 @@ fn dot_databases_uses_quoted_path_for_memory_db() {
 
 #[test]
 fn dot_echo_off_is_still_echoed_when_echo_was_on() {
-    let (out, _err, code) = run_script(
-        None,
-        ".mode list\n.echo on\n.echo off\nSELECT 1;\n",
-    );
+    let (out, _err, code) = run_script(None, ".mode list\n.echo on\n.echo off\nSELECT 1;\n");
     assert_eq!(code, 0);
     // `.echo off` is echoed (echo was on at that line), SELECT is not.
     assert!(out.contains(".echo off"), "stdout={out}");
-    assert!(!out.contains("SELECT 1"), "SELECT should NOT echo, stdout={out}");
+    assert!(
+        !out.contains("SELECT 1"),
+        "SELECT should NOT echo, stdout={out}"
+    );
     assert!(out.contains("1"), "stdout={out}");
 }
 
@@ -1036,10 +1032,7 @@ fn dot_lint_fkey_indexes_emits_create_index_per_reference() {
 
 #[test]
 fn dot_separator_double_quoted_argument_expands_escapes() {
-    let (out, err, code) = run_script(
-        None,
-        ".mode list\n.separator \"\\t\"\nSELECT 1,2,3;\n",
-    );
+    let (out, err, code) = run_script(None, ".mode list\n.separator \"\\t\"\nSELECT 1,2,3;\n");
     assert_eq!(code, 0, "stderr={err}");
     // `\t` inside double quotes becomes a real tab.
     assert_eq!(out, "1\t2\t3\n");
@@ -1047,10 +1040,7 @@ fn dot_separator_double_quoted_argument_expands_escapes() {
 
 #[test]
 fn dot_separator_single_quoted_argument_is_literal() {
-    let (out, err, code) = run_script(
-        None,
-        ".mode list\n.separator '\\t'\nSELECT 1,2,3;\n",
-    );
+    let (out, err, code) = run_script(None, ".mode list\n.separator '\\t'\nSELECT 1,2,3;\n");
     assert_eq!(code, 0, "stderr={err}");
     // `\t` inside single quotes stays as the two-character sequence.
     assert_eq!(out, "1\\t2\\t3\n");

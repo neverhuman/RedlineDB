@@ -32,22 +32,20 @@ pub(crate) fn eval_binary(
             (Some(false), Some(false)) => SqlValue::Integer(0),
             _ => SqlValue::Null,
         },
-        BinaryOperator::Plus => match try_pg_decimal_arith(
-            &left_value, &right_value, PgDecimalOp::Add,
-        ) {
-            Some(v) => v,
-            None => arithmetic(
-                left_value,
-                right_value,
-                |a, b| Some(a.wrapping_add(b)),
-                |a, b| Some(a + b),
-            )?,
-        },
+        BinaryOperator::Plus => {
+            match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Add) {
+                Some(v) => v,
+                None => arithmetic(
+                    left_value,
+                    right_value,
+                    |a, b| Some(a.wrapping_add(b)),
+                    |a, b| Some(a + b),
+                )?,
+            }
+        }
         BinaryOperator::Minus => match try_json_delete(&left_value, &right_value) {
             Some(v) => v,
-            None => match try_pg_decimal_arith(
-                &left_value, &right_value, PgDecimalOp::Sub,
-            ) {
+            None => match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Sub) {
                 Some(v) => v,
                 None => arithmetic(
                     left_value,
@@ -57,28 +55,28 @@ pub(crate) fn eval_binary(
                 )?,
             },
         },
-        BinaryOperator::Multiply => match try_pg_decimal_arith(
-            &left_value, &right_value, PgDecimalOp::Mul,
-        ) {
-            Some(v) => v,
-            None => arithmetic(
-                left_value,
-                right_value,
-                |a, b| Some(a.wrapping_mul(b)),
-                |a, b| Some(a * b),
-            )?,
-        },
-        BinaryOperator::Divide => match try_pg_decimal_arith(
-            &left_value, &right_value, PgDecimalOp::Div,
-        ) {
-            Some(v) => v,
-            None => arithmetic(
-                left_value,
-                right_value,
-                |a, b| if b == 0 { None } else { a.checked_div(b) },
-                |a, b| if b == 0.0 { None } else { Some(a / b) },
-            )?,
-        },
+        BinaryOperator::Multiply => {
+            match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Mul) {
+                Some(v) => v,
+                None => arithmetic(
+                    left_value,
+                    right_value,
+                    |a, b| Some(a.wrapping_mul(b)),
+                    |a, b| Some(a * b),
+                )?,
+            }
+        }
+        BinaryOperator::Divide => {
+            match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Div) {
+                Some(v) => v,
+                None => arithmetic(
+                    left_value,
+                    right_value,
+                    |a, b| if b == 0 { None } else { a.checked_div(b) },
+                    |a, b| if b == 0.0 { None } else { Some(a / b) },
+                )?,
+            }
+        }
         BinaryOperator::Modulo => arithmetic(
             left_value,
             right_value,
@@ -134,14 +132,12 @@ pub(crate) fn eval_binary(
             crate::json::jsonb::op_at_question(&left_value, &right_value)?
         }
         BinaryOperator::Question => crate::json::jsonb::op_question(&left_value, &right_value)?,
-        BinaryOperator::QuestionPipe => crate::json::jsonb::op_question_any(
-            &left_value,
-            std::slice::from_ref(&right_value),
-        )?,
-        BinaryOperator::QuestionAnd => crate::json::jsonb::op_question_all(
-            &left_value,
-            std::slice::from_ref(&right_value),
-        )?,
+        BinaryOperator::QuestionPipe => {
+            crate::json::jsonb::op_question_any(&left_value, std::slice::from_ref(&right_value))?
+        }
+        BinaryOperator::QuestionAnd => {
+            crate::json::jsonb::op_question_all(&left_value, std::slice::from_ref(&right_value))?
+        }
         BinaryOperator::Regexp => regexp_result(left_value, right_value, false)?,
         BinaryOperator::Match => match_result(left, left_value, right_value, row)?,
         // Postgres POSIX-regex match operators
@@ -150,18 +146,10 @@ pub(crate) fn eval_binary(
         // are the negated forms. Internally we delegate to the same `regex`
         // crate that backs `REGEXP`; the `(?i)` flag prefix yields case
         // insensitivity without recompiling against a different feature set.
-        BinaryOperator::PGRegexMatch => {
-            pg_regex_result(left_value, right_value, false, false)?
-        }
-        BinaryOperator::PGRegexIMatch => {
-            pg_regex_result(left_value, right_value, false, true)?
-        }
-        BinaryOperator::PGRegexNotMatch => {
-            pg_regex_result(left_value, right_value, true, false)?
-        }
-        BinaryOperator::PGRegexNotIMatch => {
-            pg_regex_result(left_value, right_value, true, true)?
-        }
+        BinaryOperator::PGRegexMatch => pg_regex_result(left_value, right_value, false, false)?,
+        BinaryOperator::PGRegexIMatch => pg_regex_result(left_value, right_value, false, true)?,
+        BinaryOperator::PGRegexNotMatch => pg_regex_result(left_value, right_value, true, false)?,
+        BinaryOperator::PGRegexNotIMatch => pg_regex_result(left_value, right_value, true, true)?,
         other => {
             return Err(Error::UnsupportedSql(format!(
                 "unsupported binary op {other:?}"
@@ -563,8 +551,18 @@ fn add_digit_streams(a: &[u8], b: &[u8]) -> Vec<u8> {
     let mut i = a.len();
     let mut j = b.len();
     while i > 0 || j > 0 || carry > 0 {
-        let da = if i > 0 { i -= 1; a[i] as u16 } else { 0 };
-        let db = if j > 0 { j -= 1; b[j] as u16 } else { 0 };
+        let da = if i > 0 {
+            i -= 1;
+            a[i] as u16
+        } else {
+            0
+        };
+        let db = if j > 0 {
+            j -= 1;
+            b[j] as u16
+        } else {
+            0
+        };
         let sum = da + db + carry;
         out.push((sum % 10) as u8);
         carry = sum / 10;
@@ -582,7 +580,12 @@ fn sub_digit_streams(a: &[u8], b: &[u8]) -> Vec<u8> {
     while i > 0 {
         i -= 1;
         let da = a[i] as i16;
-        let db = if j > 0 { j -= 1; b[j] as i16 } else { 0 };
+        let db = if j > 0 {
+            j -= 1;
+            b[j] as i16
+        } else {
+            0
+        };
         let mut diff = da - db - borrow;
         if diff < 0 {
             diff += 10;

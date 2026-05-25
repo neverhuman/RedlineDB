@@ -705,10 +705,9 @@ pub(super) fn order_and_project_rows_with_distinct_on(
             let mut already = false;
             for prev in &seen {
                 if prev.len() == on_key.len()
-                    && prev
-                        .iter()
-                        .zip(on_key.iter())
-                        .all(|(a, b)| crate::value::compare_values(a, b) == std::cmp::Ordering::Equal)
+                    && prev.iter().zip(on_key.iter()).all(|(a, b)| {
+                        crate::value::compare_values(a, b) == std::cmp::Ordering::Equal
+                    })
                 {
                     already = true;
                     break;

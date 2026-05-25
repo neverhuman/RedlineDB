@@ -244,9 +244,7 @@ pub(crate) fn eval_scalar(
             // wording so callers can match the error text.
             let name = collation.to_string();
             if !crate::collation::Collation::is_known(&name) {
-                return Err(Error::Bind(format!(
-                    "no such collation sequence: {name}"
-                )));
+                return Err(Error::Bind(format!("no such collation sequence: {name}")));
             }
             eval_scalar(expr, row, bindings)?
         }

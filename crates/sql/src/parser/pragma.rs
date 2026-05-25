@@ -692,9 +692,12 @@ pub(crate) fn parse_pragma_template(
                         "PRAGMA encoding={encoded} is not supported by RedlineDB"
                     )));
                 }
-                template(sql, schema_epoch, false, PreparedKind::Pragma(
-                    crate::statement::PragmaPlan::WalCheckpoint,
-                )) // no-op recall (only UTF-8 supported)
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::WalCheckpoint),
+                ) // no-op recall (only UTF-8 supported)
             } else {
                 pragma_static_select(
                     sql,
@@ -720,7 +723,9 @@ pub(crate) fn parse_pragma_template(
                     sql,
                     schema_epoch,
                     vec![String::from("locking_mode")],
-                    vec![vec![SqlValue::Text(Arc::from(conn.locking_mode().as_str()))]],
+                    vec![vec![SqlValue::Text(Arc::from(
+                        conn.locking_mode().as_str(),
+                    ))]],
                 )
             }
         }
@@ -1285,9 +1290,8 @@ fn parse_pragma_integer_or_hex(input: &str) -> Result<i64> {
         .strip_prefix("0x")
         .or_else(|| value.strip_prefix("0X"))
     {
-        return i64::from_str_radix(rest, 16).map_err(|_| {
-            Error::UnsupportedSql(format!("invalid hex PRAGMA value: {value}"))
-        });
+        return i64::from_str_radix(rest, 16)
+            .map_err(|_| Error::UnsupportedSql(format!("invalid hex PRAGMA value: {value}")));
     }
     if let Some(rest) = value
         .strip_prefix("-0x")
@@ -1428,9 +1432,7 @@ fn pragma_column_rows(
     let explicit_not_null: HashSet<u16> = table
         .constraints
         .iter()
-        .filter(|c| {
-            matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull)
-        })
+        .filter(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
         .filter_map(|c| {
             let column_id = c.column_id?;
             table
@@ -1621,10 +1623,7 @@ pub(crate) fn pragma_index_xinfo_rows(
 /// surrounding `with_write_tx` / `with_session` call to avoid
 /// re-acquiring the connection mutex (which would deadlock against
 /// the surrounding write transaction).
-fn pragma_foreign_key_check_rows(
-    conn: &Connection,
-    schema: &SchemaSnapshot,
-) -> Vec<Vec<SqlValue>> {
+fn pragma_foreign_key_check_rows(conn: &Connection, schema: &SchemaSnapshot) -> Vec<Vec<SqlValue>> {
     let pending = match crate::exec::current_session_ptr() {
         Some(ptr) => {
             // SAFETY: ptr installed by enclosing with_write_tx; lives for its scope.
@@ -1710,10 +1709,7 @@ fn fk_from_column_name(
 /// Render the parent-side column for one FK row. When the FK omits the
 /// parent column list SQLite emits NULL (the executor resolves to the
 /// parent table's PK at write time) so we mirror that surface.
-fn fk_parent_column_value(
-    fk: &redlinedb_kernel::catalog::ForeignKeyDef,
-    seq: usize,
-) -> SqlValue {
+fn fk_parent_column_value(fk: &redlinedb_kernel::catalog::ForeignKeyDef, seq: usize) -> SqlValue {
     if fk.parent_columns.is_empty() {
         return SqlValue::Null;
     }

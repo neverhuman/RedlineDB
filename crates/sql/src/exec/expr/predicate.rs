@@ -114,7 +114,6 @@ fn bind_subquery(conn: &Connection, subquery: &sqlparser::ast::Query) -> Result<
     Ok(template)
 }
 
-
 fn subquery_cache_key(conn: &Connection, subquery: &sqlparser::ast::Query) -> SubqueryCacheKey {
     SubqueryCacheKey {
         ast_addr: subquery as *const sqlparser::ast::Query as usize,

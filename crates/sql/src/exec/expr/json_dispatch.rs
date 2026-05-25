@@ -76,10 +76,10 @@ pub(crate) fn eval_scalar_function_values(
             // count. See https://sqlite.org/lang_corefunc.html#length.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
-            Some(SqlValue::Text(value)) => {
-                Ok(SqlValue::Integer(value.chars().count() as i64))
-            }
-            Some(other) => Ok(SqlValue::Integer(value_to_string(other).chars().count() as i64)),
+            Some(SqlValue::Text(value)) => Ok(SqlValue::Integer(value.chars().count() as i64)),
+            Some(other) => Ok(SqlValue::Integer(
+                value_to_string(other).chars().count() as i64
+            )),
         },
         // SQLite octet_length(X): byte length regardless of type. TEXT in its
         // UTF-8 byte form, BLOB in its raw byte form, others coerced to TEXT
@@ -88,7 +88,9 @@ pub(crate) fn eval_scalar_function_values(
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
             Some(SqlValue::Text(value)) => Ok(SqlValue::Integer(value.as_bytes().len() as i64)),
-            Some(other) => Ok(SqlValue::Integer(value_to_string(other).as_bytes().len() as i64)),
+            Some(other) => Ok(SqlValue::Integer(
+                value_to_string(other).as_bytes().len() as i64
+            )),
         },
         // SQLite concat(X, ...) — concatenates non-NULL operands (NULLs treated
         // as empty strings). Always returns TEXT.
@@ -127,7 +129,9 @@ pub(crate) fn eval_scalar_function_values(
         // and *not* compiled into sqlite3 v3.53.1 (`PRAGMA compile_options`
         // confirms it). Surface the same "no such function" error so parity
         // tests that expect rejection don't see a phantom success.
-        "soundex" => Err(Error::UnsupportedSql("no such function: soundex".to_owned())),
+        "soundex" => Err(Error::UnsupportedSql(
+            "no such function: soundex".to_owned(),
+        )),
         // SQLite unhex(X[, ignore]) — decode a hex string into a blob. If any
         // non-hex / non-ignore character appears, return NULL. Whitespace is
         // not implicit; only chars in `ignore` are skipped.
@@ -524,9 +528,10 @@ fn pg_sequence_nextval(values: &[SqlValue]) -> Result<SqlValue> {
         Error::UnsupportedSql("nextval requires an active connection context".to_owned())
     })?;
     let result = conn.with_session(|session| {
-        let entry = session.pg_sequences.get_mut(&name).ok_or_else(|| {
-            Error::UnsupportedSql(format!("relation \"{name}\" does not exist"))
-        })?;
+        let entry = session
+            .pg_sequences
+            .get_mut(&name)
+            .ok_or_else(|| Error::UnsupportedSql(format!("relation \"{name}\" does not exist")))?;
         let next = match entry.last_value {
             Some(v) => v + entry.increment,
             None => entry.start,
@@ -551,9 +556,10 @@ fn pg_sequence_currval(values: &[SqlValue]) -> Result<SqlValue> {
         Error::UnsupportedSql("currval requires an active connection context".to_owned())
     })?;
     let result = conn.with_session(|session| {
-        let entry = session.pg_sequences.get(&name).ok_or_else(|| {
-            Error::UnsupportedSql(format!("relation \"{name}\" does not exist"))
-        })?;
+        let entry = session
+            .pg_sequences
+            .get(&name)
+            .ok_or_else(|| Error::UnsupportedSql(format!("relation \"{name}\" does not exist")))?;
         match entry.last_value {
             Some(v) => Ok(v),
             None => Err(Error::UnsupportedSql(format!(
@@ -578,9 +584,9 @@ fn pg_sequence_setval(values: &[SqlValue]) -> Result<SqlValue> {
     let value = match &values[1] {
         SqlValue::Integer(v) => *v,
         SqlValue::Real(v) => *v as i64,
-        SqlValue::Text(t) => t.parse::<i64>().map_err(|_| {
-            Error::UnsupportedSql(format!("setval value must be integer: {t}"))
-        })?,
+        SqlValue::Text(t) => t
+            .parse::<i64>()
+            .map_err(|_| Error::UnsupportedSql(format!("setval value must be integer: {t}")))?,
         _ => {
             return Err(Error::UnsupportedSql(
                 "setval second argument must be integer".to_owned(),
@@ -599,9 +605,10 @@ fn pg_sequence_setval(values: &[SqlValue]) -> Result<SqlValue> {
         Error::UnsupportedSql("setval requires an active connection context".to_owned())
     })?;
     conn.with_session(|session| {
-        let entry = session.pg_sequences.get_mut(&name).ok_or_else(|| {
-            Error::UnsupportedSql(format!("relation \"{name}\" does not exist"))
-        })?;
+        let entry = session
+            .pg_sequences
+            .get_mut(&name)
+            .ok_or_else(|| Error::UnsupportedSql(format!("relation \"{name}\" does not exist")))?;
         if is_called {
             entry.last_value = Some(value);
         } else {

@@ -56,8 +56,16 @@ pub(crate) fn execute_merge(
             let mut matched_any = false;
             for target_row in &target_rows {
                 let joined = vec![
-                    joined_from(&plan.target, plan.target_alias.clone(), Some(target_row.clone())),
-                    joined_from(&plan.source, plan.source_alias.clone(), Some(source_row.clone())),
+                    joined_from(
+                        &plan.target,
+                        plan.target_alias.clone(),
+                        Some(target_row.clone()),
+                    ),
+                    joined_from(
+                        &plan.source,
+                        plan.source_alias.clone(),
+                        Some(source_row.clone()),
+                    ),
                 ];
                 let ctx = RowContext::Joined(&joined);
                 let on_ok = is_truthy(&eval_scalar(&plan.on, &ctx, bindings)?);
@@ -70,7 +78,9 @@ pub(crate) fn execute_merge(
                 for clause in &plan.clauses {
                     let (predicate, kind_matched) = match clause {
                         MergeClausePlan::MatchedUpdate { predicate, .. }
-                        | MergeClausePlan::MatchedDelete { predicate } => (predicate.as_ref(), true),
+                        | MergeClausePlan::MatchedDelete { predicate } => {
+                            (predicate.as_ref(), true)
+                        }
                         MergeClausePlan::NotMatchedInsert { .. } => (None, false),
                     };
                     if !kind_matched {
@@ -84,7 +94,13 @@ pub(crate) fn execute_merge(
                     match clause {
                         MergeClausePlan::MatchedUpdate { assignments, .. } => {
                             apply_matched_update(
-                                conn, tx, plan, target_row, &ctx, assignments, bindings,
+                                conn,
+                                tx,
+                                plan,
+                                target_row,
+                                &ctx,
+                                assignments,
+                                bindings,
                             )?;
                             affected += 1;
                         }
@@ -121,9 +137,7 @@ pub(crate) fn execute_merge(
                             continue;
                         }
                     }
-                    apply_not_matched_insert(
-                        conn, tx, plan, columns, values, &ctx, bindings,
-                    )?;
+                    apply_not_matched_insert(conn, tx, plan, columns, values, &ctx, bindings)?;
                     affected += 1;
                     break;
                 }
@@ -137,11 +151,7 @@ pub(crate) fn execute_merge(
     })
 }
 
-fn joined_from(
-    table: &Arc<TableDef>,
-    alias: Option<Arc<str>>,
-    row: Option<TableRow>,
-) -> JoinedRow {
+fn joined_from(table: &Arc<TableDef>, alias: Option<Arc<str>>, row: Option<TableRow>) -> JoinedRow {
     JoinedRow {
         table: Arc::clone(table),
         alias,
@@ -173,26 +183,16 @@ fn apply_matched_update(
         if *ordinal >= values.len() {
             return Err(Error::UnknownColumn(format!("ordinal {ordinal}")));
         }
-        values[*ordinal] = super::evaluate_dml_value(
-            &plan.target,
-            *ordinal,
-            expr,
-            ctx,
-            bindings,
-            &mut scratch,
-        )?;
+        values[*ordinal] =
+            super::evaluate_dml_value(&plan.target, *ordinal, expr, ctx, bindings, &mut scratch)?;
     }
     values = super::apply_row_affinity(&plan.target, values)?;
     values = super::compute_stored_generated_columns(&plan.target, values)?;
     super::apply_constraints(&plan.target, &values)?;
 
     let payload = encode_sql_row(plan.target.table_id.0, &values)?;
-    conn.engine().update_for_relation(
-        tx,
-        plan.target.relation_id,
-        fresh.rowid,
-        payload,
-    )?;
+    conn.engine()
+        .update_for_relation(tx, plan.target.relation_id, fresh.rowid, payload)?;
     super::index_dml::maintain_indexes_on_update(
         conn.engine(),
         tx,
@@ -211,15 +211,11 @@ fn apply_matched_delete(
     plan: &MergePlan,
     target_row: &TableRow,
 ) -> Result<()> {
-    let live = match super::load_table_row_by_rowid(
-        conn.engine(),
-        tx,
-        &plan.target,
-        target_row.rowid,
-    )? {
-        Some(row) => row.values,
-        None => return Ok(()),
-    };
+    let live =
+        match super::load_table_row_by_rowid(conn.engine(), tx, &plan.target, target_row.rowid)? {
+            Some(row) => row.values,
+            None => return Ok(()),
+        };
     conn.engine()
         .delete_for_relation(tx, plan.target.relation_id, target_row.rowid)?;
     super::index_dml::maintain_indexes_on_delete(
@@ -248,14 +244,8 @@ fn apply_not_matched_insert(
         if *ord >= row_values.len() {
             return Err(Error::UnknownColumn(format!("ordinal {ord}")));
         }
-        row_values[*ord] = super::evaluate_dml_value(
-            &plan.target,
-            *ord,
-            expr,
-            ctx,
-            bindings,
-            &mut scratch,
-        )?;
+        row_values[*ord] =
+            super::evaluate_dml_value(&plan.target, *ord, expr, ctx, bindings, &mut scratch)?;
         provided[*ord] = true;
     }
     // Apply defaults to unprovided columns.

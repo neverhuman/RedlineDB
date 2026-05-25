@@ -471,8 +471,7 @@ pub fn execute_prepared(
             // per-thread flag the catalog ops module reads when
             // rewriting dependent view / trigger bodies after a column
             // / table rename. Snapshot the bit, install, run, restore.
-            let prev_legacy =
-                redlinedb_kernel::catalog::legacy_alter_table_active_for_tests();
+            let prev_legacy = redlinedb_kernel::catalog::legacy_alter_table_active_for_tests();
             redlinedb_kernel::catalog::set_legacy_alter_table(conn.legacy_alter_table());
             let alter_result = with_write_tx(conn, |session, tx| {
                 conn.engine().alter_table(tx, spec.clone())?;
@@ -689,9 +688,8 @@ pub fn execute_prepared(
         // session value for `transaction_isolation`; other names yield "".
         PreparedKind::ShowVariable { name } => {
             let value = if name.eq_ignore_ascii_case("transaction_isolation") {
-                let iso = with_session_reentrant(conn, |session| {
-                    Ok(session.transaction_isolation)
-                })?;
+                let iso =
+                    with_session_reentrant(conn, |session| Ok(session.transaction_isolation))?;
                 SqlValue::Text(Arc::from(iso.as_pg_str()))
             } else {
                 SqlValue::Text(Arc::from(""))
@@ -722,14 +720,10 @@ pub fn execute_prepared(
                 let old_folded = old_name.to_ascii_lowercase();
                 let new_folded = new_name.to_ascii_lowercase();
                 let Some(schema_id) = snapshot.lookup_namespace("main") else {
-                    return Err(Error::Kernel(
-                        redlinedb_kernel::Error::ObjectNotFound,
-                    ));
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectNotFound));
                 };
                 if snapshot.lookup_index(schema_id, &old_folded).is_none() {
-                    return Err(Error::Kernel(
-                        redlinedb_kernel::Error::ObjectNotFound,
-                    ));
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectNotFound));
                 }
                 if snapshot.lookup_index(schema_id, &new_folded).is_some() {
                     return Err(Error::UnsupportedSql(format!(
@@ -843,8 +837,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropSchema { .. }
         | PreparedKind::CreateSequence { .. }
         | PreparedKind::DropSequence { .. } => true,
-        | PreparedKind::Merge(_)
-        | PreparedKind::CrossDbSql(_) => true,
+        PreparedKind::Merge(_) | PreparedKind::CrossDbSql(_) => true,
     }
 }
 
@@ -926,19 +919,13 @@ fn execute_create_table_as_select(
 /// (e.g. `defer_foreign_keys=1`), returns `None`.
 fn pragma_set_echo_value(plan: &PragmaPlan) -> Option<SqlValue> {
     match plan {
-        PragmaPlan::SetJournalMode(value) => {
-            Some(SqlValue::Text(Arc::from(value.as_str())))
-        }
-        PragmaPlan::SetLockingMode(value) => {
-            Some(SqlValue::Text(Arc::from(value.as_str())))
-        }
+        PragmaPlan::SetJournalMode(value) => Some(SqlValue::Text(Arc::from(value.as_str()))),
+        PragmaPlan::SetLockingMode(value) => Some(SqlValue::Text(Arc::from(value.as_str()))),
         PragmaPlan::SetBusyTimeout(value)
         | PragmaPlan::SetMaxPageCount(value)
         | PragmaPlan::SetThreads(value)
         | PragmaPlan::SetAnalysisLimit(value) => Some(SqlValue::Integer(*value)),
-        PragmaPlan::SetSecureDelete(value) => {
-            Some(SqlValue::Integer(if *value { 1 } else { 0 }))
-        }
+        PragmaPlan::SetSecureDelete(value) => Some(SqlValue::Integer(if *value { 1 } else { 0 })),
         _ => None,
     }
 }

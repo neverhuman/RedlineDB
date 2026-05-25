@@ -129,24 +129,29 @@ fn alter_table_drop_multiple_columns_is_unsupported() {
 }
 
 #[test]
-fn create_index_with_include_is_unsupported() {
+fn create_index_with_include_is_accepted() {
+    // Track J wired CREATE INDEX ... INCLUDE (...) — the INCLUDE list is
+    // parsed and discarded (covering-index optimisation is a no-op in
+    // RedlineDB; the index itself is created as a regular btree).
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER, b TEXT)")
         .expect("create");
-    // PostgreSQL-style INCLUDE is not supported
-    let res = c.execute("CREATE INDEX idx ON t(a) INCLUDE (b)");
-    assert_errors(res);
+    c.execute("CREATE INDEX idx ON t(a) INCLUDE (b)")
+        .expect("INCLUDE clause accepted");
 }
 
 // ── SELECT unsupported constructs ────────────────────────────────────────────
 
 #[test]
-fn distinct_on_is_unsupported() {
+fn distinct_on_is_accepted() {
+    // Track K landed DISTINCT ON (PG extension): keeps the first row per
+    // distinct combination of the DISTINCT ON expressions, ordered by an
+    // outer ORDER BY.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER, b TEXT)")
         .expect("create");
-    let res = c.execute("SELECT DISTINCT ON (a) a, b FROM t");
-    assert_unsupported(res, "not supported");
+    c.execute("SELECT DISTINCT ON (a) a, b FROM t")
+        .expect("DISTINCT ON accepted");
 }
 
 #[test]
@@ -158,12 +163,13 @@ fn group_by_all_is_unsupported() {
 }
 
 #[test]
-fn like_any_is_unsupported() {
+fn like_any_is_accepted() {
+    // Track G/H added LIKE ANY (Postgres extension) and the ARRAY[..]
+    // rewrite — the parse + exec round-trip now succeeds.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(v TEXT)").expect("create");
-    // LIKE ANY (pattern_list) — Postgres extension
-    let res = c.execute("SELECT v FROM t WHERE v LIKE ANY (ARRAY['%foo%'])");
-    assert_errors(res);
+    c.execute("SELECT v FROM t WHERE v LIKE ANY (ARRAY['%foo%'])")
+        .expect("LIKE ANY accepted");
 }
 
 #[test]

@@ -33,10 +33,14 @@ fn fetch_first_n_rows_only_limits_output() {
     let (_d, c) = open();
     c.execute("CREATE TABLE v (x int)").expect("create");
     for v in 1..=5 {
-        c.execute(&format!("INSERT INTO v VALUES ({v})")).expect("insert");
+        c.execute(&format!("INSERT INTO v VALUES ({v})"))
+            .expect("insert");
     }
     let r = rows(&c, "SELECT x FROM v ORDER BY x FETCH FIRST 2 ROWS ONLY");
-    assert_eq!(r, vec![vec![SqlValue::Integer(1)], vec![SqlValue::Integer(2)]]);
+    assert_eq!(
+        r,
+        vec![vec![SqlValue::Integer(1)], vec![SqlValue::Integer(2)]]
+    );
 }
 
 #[test]
@@ -44,7 +48,8 @@ fn fetch_next_n_rows_only_limits_output() {
     let (_d, c) = open();
     c.execute("CREATE TABLE v (x int)").expect("create");
     for v in 1..=5 {
-        c.execute(&format!("INSERT INTO v VALUES ({v})")).expect("insert");
+        c.execute(&format!("INSERT INTO v VALUES ({v})"))
+            .expect("insert");
     }
     let r = rows(&c, "SELECT x FROM v ORDER BY x FETCH NEXT 3 ROWS ONLY");
     assert_eq!(
@@ -62,13 +67,17 @@ fn offset_rows_fetch_next_paginates() {
     let (_d, c) = open();
     c.execute("CREATE TABLE v (x int)").expect("create");
     for v in 1..=5 {
-        c.execute(&format!("INSERT INTO v VALUES ({v})")).expect("insert");
+        c.execute(&format!("INSERT INTO v VALUES ({v})"))
+            .expect("insert");
     }
     let r = rows(
         &c,
         "SELECT x FROM v ORDER BY x OFFSET 2 ROWS FETCH NEXT 2 ROWS ONLY",
     );
-    assert_eq!(r, vec![vec![SqlValue::Integer(3)], vec![SqlValue::Integer(4)]]);
+    assert_eq!(
+        r,
+        vec![vec![SqlValue::Integer(3)], vec![SqlValue::Integer(4)]]
+    );
 }
 
 #[test]
@@ -76,7 +85,8 @@ fn fetch_first_row_only_defaults_quantity_to_one() {
     let (_d, c) = open();
     c.execute("CREATE TABLE v (x int)").expect("create");
     for v in 1..=3 {
-        c.execute(&format!("INSERT INTO v VALUES ({v})")).expect("insert");
+        c.execute(&format!("INSERT INTO v VALUES ({v})"))
+            .expect("insert");
     }
     let r = rows(&c, "SELECT x FROM v ORDER BY x FETCH FIRST ROW ONLY");
     assert_eq!(r, vec![vec![SqlValue::Integer(1)]]);
@@ -171,10 +181,12 @@ fn merge_matched_delete_removes_target_rows() {
     let (_d, c) = open();
     c.execute("CREATE TABLE bp_merge_d_t (id int primary key, v int)")
         .expect("create");
-    c.execute("CREATE TABLE bp_merge_d_s (id int)").expect("create");
+    c.execute("CREATE TABLE bp_merge_d_s (id int)")
+        .expect("create");
     c.execute("INSERT INTO bp_merge_d_t VALUES (1,10),(2,20),(3,30)")
         .expect("insert t");
-    c.execute("INSERT INTO bp_merge_d_s VALUES (2)").expect("insert s");
+    c.execute("INSERT INTO bp_merge_d_s VALUES (2)")
+        .expect("insert s");
     c.execute(
         "MERGE INTO bp_merge_d_t t USING bp_merge_d_s s ON t.id = s.id \
          WHEN MATCHED THEN DELETE",

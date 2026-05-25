@@ -178,8 +178,7 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
                 Ok(statements) => statements,
                 Err(_) => {
                     let pg_dialect = sqlparser::dialect::PostgreSqlDialect {};
-                    Parser::parse_sql(&pg_dialect, &sql_for_parser)
-                        .map_err(|_| first_err)?
+                    Parser::parse_sql(&pg_dialect, &sql_for_parser).map_err(|_| first_err)?
                 }
             }
         }
@@ -287,14 +286,19 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     // both to the canonical GROUPING SETS form so the next pass handles
     // them uniformly.
     let upper_for_grouping = out.to_ascii_uppercase();
-    if upper_for_grouping.contains(" GROUP BY ROLLUP ") || upper_for_grouping.contains(" GROUP BY CUBE ") {
+    if upper_for_grouping.contains(" GROUP BY ROLLUP ")
+        || upper_for_grouping.contains(" GROUP BY CUBE ")
+    {
         out = rewrite_rollup_cube_to_grouping_sets(&out);
     }
     // After ROLLUP/CUBE → GROUPING SETS, expand the GROUPING SETS form
     // itself into N parallel SELECTs combined via UNION ALL. The expansion
     // re-uses the surrounding SELECT body (FROM, WHERE) per grouping set
     // and projects NULL for any non-grouped grouping-key column.
-    if out.to_ascii_uppercase().contains(" GROUP BY GROUPING SETS ") {
+    if out
+        .to_ascii_uppercase()
+        .contains(" GROUP BY GROUPING SETS ")
+    {
         out = rewrite_grouping_sets_to_union_all(&out);
     }
     // Track K — `[CROSS|LEFT] JOIN LATERAL (SELECT ...) [AS alias]` is a
@@ -407,9 +411,7 @@ fn rewrite_select_into_in_statement(stmt: &str) -> String {
     // a new CTAS wrapper; the tail (post-name) is appended verbatim.
     let projection = &trimmed[..into_pos];
     let _ = after_name_upper;
-    format!(
-        "{leading_ws}CREATE TABLE {name} AS {projection}{after_name}"
-    )
+    format!("{leading_ws}CREATE TABLE {name} AS {projection}{after_name}")
 }
 
 fn find_top_level_keyword(upper: &str, bytes: &[u8], from: usize, kw: &str) -> Option<usize> {
@@ -527,10 +529,7 @@ fn find_top_level_on_conflict(lower: &str, bytes: &[u8], from: usize) -> Option<
             b';' if depth == 0 => return None,
             _ => {}
         }
-        if depth == 0
-            && i + 12 <= lower.len()
-            && &lower[i..i + 12] == " on conflict"
-        {
+        if depth == 0 && i + 12 <= lower.len() && &lower[i..i + 12] == " on conflict" {
             return Some(i);
         }
         i += 1;
@@ -1400,7 +1399,11 @@ fn find_atom_start(bytes: &[u8], end: usize) -> Option<usize> {
             candidate -= 1;
             if bytes[candidate] == quote {
                 // Could be either an opener or part of `''` escape.
-                let prev = if candidate > 0 { bytes[candidate - 1] } else { 0 };
+                let prev = if candidate > 0 {
+                    bytes[candidate - 1]
+                } else {
+                    0
+                };
                 if prev == quote {
                     // We're inside a doubled-quote pair; skip both.
                     if candidate == 0 {
@@ -1455,11 +1458,7 @@ fn find_atom_start(bytes: &[u8], end: usize) -> Option<usize> {
             break;
         }
     }
-    if j < i {
-        Some(j)
-    } else {
-        None
-    }
+    if j < i { Some(j) } else { None }
 }
 
 /// Forward equivalent of `find_atom_start`: pick out the end of an atom
@@ -1473,9 +1472,7 @@ fn find_atom_end(bytes: &[u8], start: usize) -> Option<usize> {
         return Some(scan_quoted(bytes, start, first));
     }
     // `x'01ab'` style blob literal.
-    if (first == b'x' || first == b'X')
-        && bytes.get(start + 1) == Some(&b'\'')
-    {
+    if (first == b'x' || first == b'X') && bytes.get(start + 1) == Some(&b'\'') {
         return Some(scan_quoted(bytes, start + 1, b'\''));
     }
     if first == b'(' {
@@ -1537,8 +1534,6 @@ fn trim_trailing_keyword_ci<'a>(text: &'a str, keyword: &str) -> Option<&'a str>
     Some(&text[..end])
 }
 
-
-
 /// has a single index implementation, so we strip the access-method
 /// hint pre-parse. JSONB opclass markers inside the column list
 /// (`jsonb_path_ops`, `jsonb_ops`) are also dropped — they only affect
@@ -1585,8 +1580,7 @@ fn strip_create_index_using_clause(sql: &str) -> String {
                     }
                     // Capture the method-name identifier.
                     let name_start = j;
-                    while j < bytes.len()
-                        && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_')
+                    while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_')
                     {
                         j += 1;
                     }
@@ -1864,9 +1858,9 @@ fn find_jsonb_lhs_start(prefix: &str) -> Option<usize> {
     let mut depth = 0i32;
     let mut idx = bytes.len();
     let stop_words: &[&[u8]] = &[
-        b"select", b"where", b"from", b"group", b"order", b"having", b"limit",
-        b"on", b"by", b"when", b"then", b"else", b"and", b"or", b"not",
-        b"in", b"is", b"as", b"case", b"join", b"using", b"set", b"values",
+        b"select", b"where", b"from", b"group", b"order", b"having", b"limit", b"on", b"by",
+        b"when", b"then", b"else", b"and", b"or", b"not", b"in", b"is", b"as", b"case", b"join",
+        b"using", b"set", b"values",
     ];
     while idx > 0 {
         idx -= 1;
@@ -2013,9 +2007,7 @@ fn collect_jsonb_rhs(bytes: &[u8], start: usize, is_array: bool) -> Option<(Stri
             Some((text.to_owned(), j))
         } else {
             while j < bytes.len()
-                && (bytes[j].is_ascii_alphanumeric()
-                    || bytes[j] == b'_'
-                    || bytes[j] == b'.')
+                && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_' || bytes[j] == b'.')
             {
                 j += 1;
             }
@@ -2027,8 +2019,6 @@ fn collect_jsonb_rhs(bytes: &[u8], start: usize, is_array: bool) -> Option<(Stri
         }
     }
 }
-
-
 
 fn rewrite_strict_without_rowid_combo(sql: &str) -> String {
     let mut s = sql.to_owned();
@@ -2103,7 +2093,8 @@ fn rewrite_pg_array_literal(sql: &str) -> String {
                 i += 1;
             }
             b'A' | b'a' => {
-                if matches_keyword_array(bytes, i) && !array_is_anyall_operand(bytes, i)
+                if matches_keyword_array(bytes, i)
+                    && !array_is_anyall_operand(bytes, i)
                     && let Some(end) = find_matching_bracket(bytes, i + 5)
                 {
                     // ARRAY[...] → json_array(...)
@@ -2463,9 +2454,7 @@ fn rewrite_postfix_index(sql: &str) -> String {
                             .trim()
                             .to_owned();
                         out.truncate(open);
-                        out.push_str(&format!(
-                            "json_extract({lhs}, '$[{zero_based}]')"
-                        ));
+                        out.push_str(&format!("json_extract({lhs}, '$[{zero_based}]')"));
                         i = close + 1;
                         continue;
                     }
@@ -2506,12 +2495,46 @@ fn find_matching_open_paren_at_end(bytes: &[u8]) -> Option<usize> {
 /// (exclusive), else `None`. Word boundaries are enforced on both sides.
 fn keyword_ends_at_index(bytes: &[u8], end: usize) -> Option<usize> {
     const KWS: &[&[u8]] = &[
-        b"SELECT", b"FROM", b"WHERE", b"GROUP", b"HAVING", b"ORDER", b"LIMIT",
-        b"OFFSET", b"AND", b"OR", b"NOT", b"BY", b"ON", b"WHEN", b"THEN",
-        b"ELSE", b"END", b"CASE", b"AS", b"IN", b"IS", b"LIKE", b"BETWEEN",
-        b"RETURNING", b"JOIN", b"INNER", b"LEFT", b"RIGHT", b"FULL", b"CROSS",
-        b"UNION", b"INTERSECT", b"EXCEPT", b"VALUES", b"WITH", b"DISTINCT",
-        b"INSERT", b"UPDATE", b"DELETE", b"SET",
+        b"SELECT",
+        b"FROM",
+        b"WHERE",
+        b"GROUP",
+        b"HAVING",
+        b"ORDER",
+        b"LIMIT",
+        b"OFFSET",
+        b"AND",
+        b"OR",
+        b"NOT",
+        b"BY",
+        b"ON",
+        b"WHEN",
+        b"THEN",
+        b"ELSE",
+        b"END",
+        b"CASE",
+        b"AS",
+        b"IN",
+        b"IS",
+        b"LIKE",
+        b"BETWEEN",
+        b"RETURNING",
+        b"JOIN",
+        b"INNER",
+        b"LEFT",
+        b"RIGHT",
+        b"FULL",
+        b"CROSS",
+        b"UNION",
+        b"INTERSECT",
+        b"EXCEPT",
+        b"VALUES",
+        b"WITH",
+        b"DISTINCT",
+        b"INSERT",
+        b"UPDATE",
+        b"DELETE",
+        b"SET",
     ];
     for kw in KWS {
         if end < kw.len() {
@@ -2604,8 +2627,8 @@ fn rewrite_array_length_function(sql: &str) -> String {
     let bytes = sql.as_bytes();
     while i < sql.len() {
         if lower[i..].starts_with("array_length(") {
-            let prev_is_ident = i > 0
-                && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+            let prev_is_ident =
+                i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
             if !prev_is_ident {
                 let open = i + "array_length".len();
                 if let Some(close) = find_matching_paren(bytes, open) {
@@ -2668,8 +2691,8 @@ fn rewrite_array_agg_function(sql: &str) -> String {
     let bytes = sql.as_bytes();
     while i < sql.len() {
         if lower[i..].starts_with("array_agg(") {
-            let prev_is_ident = i > 0
-                && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+            let prev_is_ident =
+                i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
             if !prev_is_ident {
                 let open = i + "array_agg".len();
                 if let Some(close) = find_matching_paren(bytes, open) {
@@ -2701,8 +2724,7 @@ fn rewrite_pg_interval_literal(sql: &str) -> String {
     while i < bytes.len() {
         if lower[i..].starts_with("interval ") {
             // Word boundary before.
-            let prev_ok = i == 0
-                || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
+            let prev_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
             if prev_ok {
                 // Find the literal — skip whitespace then expect `'`.
                 let mut j = i + "interval ".len();
@@ -2716,8 +2738,9 @@ fn rewrite_pg_interval_literal(sql: &str) -> String {
                         j += 1;
                     }
                     if j < bytes.len() {
-                        let body =
-                            std::str::from_utf8(&bytes[start + 1..j]).unwrap_or("").trim();
+                        let body = std::str::from_utf8(&bytes[start + 1..j])
+                            .unwrap_or("")
+                            .trim();
                         // Prefix `+` if not already signed.
                         let prefixed = if body.starts_with('-') || body.starts_with('+') {
                             body.to_owned()
@@ -2851,8 +2874,18 @@ fn looks_like_datetime_modifier(body: &str) -> bool {
     let unit = &lower[i..];
     matches!(
         unit,
-        "year" | "years" | "month" | "months" | "day" | "days"
-            | "hour" | "hours" | "minute" | "minutes" | "second" | "seconds"
+        "year"
+            | "years"
+            | "month"
+            | "months"
+            | "day"
+            | "days"
+            | "hour"
+            | "hours"
+            | "minute"
+            | "minutes"
+            | "second"
+            | "seconds"
     )
 }
 
@@ -2969,8 +3002,7 @@ fn rewrite_at_time_zone(sql: &str) -> String {
     while i < bytes.len() {
         if lower[i..].starts_with("at time zone") {
             // Word boundary before.
-            let prev_ok = i == 0
-                || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
+            let prev_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
             if prev_ok {
                 let mut j = i + "at time zone".len();
                 // Skip whitespace.
@@ -3051,7 +3083,9 @@ fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) -> Option<S
         // preceded by a non-identifier byte.
         let is_ident_start = b.is_ascii_alphabetic() || b == b'_';
         let prev_is_word = i > 0
-            && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_' || bytes[i - 1] == b'.');
+            && (bytes[i - 1].is_ascii_alphanumeric()
+                || bytes[i - 1] == b'_'
+                || bytes[i - 1] == b'.');
         if !is_ident_start || prev_is_word {
             i += 1;
             continue;
@@ -3118,11 +3152,7 @@ fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
         .with_session(|session| {
             Ok((
                 session.pg_schemas.iter().cloned().collect::<Vec<_>>(),
-                session
-                    .pg_sequences
-                    .keys()
-                    .cloned()
-                    .collect::<Vec<_>>(),
+                session.pg_sequences.keys().cloned().collect::<Vec<_>>(),
             ))
         })
         .ok()?;
@@ -3184,9 +3214,7 @@ fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
         }
         let mut subq = String::from("(SELECT ");
         if rows.is_empty() {
-            subq.push_str(
-                "NULL AS conname, NULL AS contype, NULL AS conrelid WHERE 0",
-            );
+            subq.push_str("NULL AS conname, NULL AS contype, NULL AS conrelid WHERE 0");
         } else {
             subq.push_str(
                 "column1 AS conname, column2 AS contype, column3 AS conrelid FROM (VALUES ",
@@ -3526,9 +3554,6 @@ fn rewrite_create_sequence_options_order(sql: &str) -> String {
     out
 }
 
-
-
-
 /// Track K — Rewrite PG's `GROUP BY ROLLUP (a, b, ...)` and
 /// `GROUP BY CUBE (a, b, ...)` into the canonical
 /// `GROUP BY GROUPING SETS (...)` form.
@@ -3821,10 +3846,7 @@ fn rewrite_grouping_sets_in_statement(stmt: &str) -> String {
     // Build one branch per set.
     let mut branches: Vec<String> = Vec::with_capacity(sets.len());
     for set in &sets {
-        let set_lower: Vec<String> = set
-            .iter()
-            .map(|c| c.trim().to_ascii_lowercase())
-            .collect();
+        let set_lower: Vec<String> = set.iter().map(|c| c.trim().to_ascii_lowercase()).collect();
         // Per-item: keep as-is if it's an aggregate OR if its base
         // identifier is in this set; otherwise substitute NULL [AS alias].
         // Aggregate items containing `GROUPING(col)` also get rewritten
@@ -3838,7 +3860,10 @@ fn rewrite_grouping_sets_in_statement(stmt: &str) -> String {
                     let rewritten = rewrite_grouping_calls(text, &set_lower);
                     new_items.push(rewritten);
                 }
-                ProjItem::Column { base, alias_or_base } => {
+                ProjItem::Column {
+                    base,
+                    alias_or_base,
+                } => {
                     let base_lower = base.to_ascii_lowercase();
                     if set_lower.iter().any(|c| c == &base_lower) {
                         new_items.push(alias_or_base.clone());
@@ -4040,14 +4065,13 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         let lower = out.to_ascii_lowercase();
         let bytes = out.as_bytes();
         // Find a join lateral pattern. Try CROSS first; if not, LEFT.
-        let (join_pos, join_kw_len, is_left) =
-            match lower.find(" cross join lateral ") {
-                Some(p) => (p, " cross join lateral ".len(), false),
-                None => match lower.find(" left join lateral ") {
-                    Some(p) => (p, " left join lateral ".len(), true),
-                    None => break,
-                },
-            };
+        let (join_pos, join_kw_len, is_left) = match lower.find(" cross join lateral ") {
+            Some(p) => (p, " cross join lateral ".len(), false),
+            None => match lower.find(" left join lateral ") {
+                Some(p) => (p, " left join lateral ".len(), true),
+                None => break,
+            },
+        };
         // After the LATERAL keyword, expect a `(...)` subquery.
         let after_kw = join_pos + join_kw_len;
         let mut j = after_kw;
@@ -4079,9 +4103,7 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
                 k += 1;
             }
             let alias_start = k;
-            while k < bytes.len()
-                && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_')
-            {
+            while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') {
                 k += 1;
             }
             if k > alias_start {
@@ -4090,9 +4112,7 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         } else {
             // Bare alias (no AS keyword) — also accept.
             let alias_start = k;
-            while k < bytes.len()
-                && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_')
-            {
+            while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') {
                 k += 1;
             }
             if k > alias_start {
@@ -4102,7 +4122,19 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
                 let up = candidate.to_ascii_uppercase();
                 if !matches!(
                     up.as_str(),
-                    "ON" | "WHERE" | "GROUP" | "ORDER" | "LIMIT" | "OFFSET" | "FETCH" | "CROSS" | "LEFT" | "INNER" | "JOIN" | "RIGHT" | "FULL" | "USING"
+                    "ON" | "WHERE"
+                        | "GROUP"
+                        | "ORDER"
+                        | "LIMIT"
+                        | "OFFSET"
+                        | "FETCH"
+                        | "CROSS"
+                        | "LEFT"
+                        | "INNER"
+                        | "JOIN"
+                        | "RIGHT"
+                        | "FULL"
+                        | "USING"
                 ) {
                     alias_name = Some(candidate);
                 } else {
@@ -4122,7 +4154,9 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
                 after_alias += 1;
             }
             let upper_rest = out.to_ascii_uppercase();
-            if after_alias + 3 > upper_rest.len() || &upper_rest[after_alias..after_alias + 3] != "ON " {
+            if after_alias + 3 > upper_rest.len()
+                || &upper_rest[after_alias..after_alias + 3] != "ON "
+            {
                 break;
             }
             after_alias += 3;
@@ -4170,14 +4204,10 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         // resolved expression / scalar subquery.
         let new_projection = match &kind {
             LateralKind::InlineExpr { name: _, body } => {
-                substitute_alias_column(&projection_text, &alias, |_| {
-                    Some(format!("({body})"))
-                })
+                substitute_alias_column(&projection_text, &alias, |_| Some(format!("({body})")))
             }
             LateralKind::ScalarSubquery { single_col_name: _ } => {
-                substitute_alias_column(&projection_text, &alias, |_| {
-                    Some(format!("({subquery})"))
-                })
+                substitute_alias_column(&projection_text, &alias, |_| Some(format!("({subquery})")))
             }
             LateralKind::Unsupported => break,
         };
@@ -4190,8 +4220,7 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         //   " FROM "
         //   <FROM up to join_pos>
         //   <FROM from after_alias onward>
-        let projection_start_abs =
-            leading_ws_len + select_offset + "SELECT ".len();
+        let projection_start_abs = leading_ws_len + select_offset + "SELECT ".len();
         let from_kw_abs = projection_start_abs + from_rel;
         // join_pos is relative to `out` (lowercase has same indexing).
         // Everything strictly before join_pos in the FROM clause is
@@ -4345,10 +4374,7 @@ fn rewrite_grouping_calls(item: &str, set_lower: &[String]) -> String {
                 // ORDER BY can name it.
                 let is_whole_item = i == 0 && close + 1 == bytes.len();
                 if is_whole_item {
-                    out.push_str(&format!(
-                        "{value} AS __grouping_{}",
-                        sanitize_ident(arg)
-                    ));
+                    out.push_str(&format!("{value} AS __grouping_{}", sanitize_ident(arg)));
                 } else {
                     out.push_str(&value.to_string());
                 }

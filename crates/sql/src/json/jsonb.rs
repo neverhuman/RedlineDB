@@ -169,8 +169,7 @@ pub fn parse_pg_path(value: &SqlValue) -> Result<JsonPath> {
         })?
     } else if trimmed.starts_with('$') {
         // Already in JSON-Path syntax — defer to the SQLite parser.
-        return JsonPath::parse(trimmed)
-            .map_err(|e| Error::Parse(format!("JSON path error: {e}")));
+        return JsonPath::parse(trimmed).map_err(|e| Error::Parse(format!("JSON path error: {e}")));
     } else {
         return Err(Error::Parse(format!(
             "JSON path literal must be `{{...}}` (got `{text}`)"
@@ -210,7 +209,6 @@ pub fn parse_pg_path(value: &SqlValue) -> Result<JsonPath> {
     JsonPath::parse(&path).map_err(|e| Error::Parse(format!("JSON path error: {e}")))
 }
 
-
 // ---------------------------------------------------------------------------
 // Containment
 // ---------------------------------------------------------------------------
@@ -223,7 +221,9 @@ pub fn contains(left: &Value, right: &Value) -> bool {
             Some(lv) => contains(lv, rv),
             None => false,
         }),
-        (Value::Array(l), Value::Array(r)) => r.iter().all(|rv| l.iter().any(|lv| contains(lv, rv))),
+        (Value::Array(l), Value::Array(r)) => {
+            r.iter().all(|rv| l.iter().any(|lv| contains(lv, rv)))
+        }
         // PG: a JSON array contains a scalar iff some element equals the scalar.
         (Value::Array(l), _) if !matches!(right, Value::Array(_) | Value::Object(_)) => {
             l.iter().any(|lv| lv == right)
@@ -258,7 +258,9 @@ pub fn op_arrow_at(left: &SqlValue, right: &SqlValue) -> Result<SqlValue> {
 pub fn key_exists(doc: &Value, key: &str) -> bool {
     match doc {
         Value::Object(map) => map.contains_key(key),
-        Value::Array(arr) => arr.iter().any(|v| matches!(v, Value::String(s) if s == key)),
+        Value::Array(arr) => arr
+            .iter()
+            .any(|v| matches!(v, Value::String(s) if s == key)),
         Value::String(s) => s == key,
         _ => false,
     }
@@ -283,7 +285,10 @@ pub fn op_question_any(left: &SqlValue, keys: &[SqlValue]) -> Result<SqlValue> {
     let any = keys.iter().any(|v| match v {
         SqlValue::Null => false,
         SqlValue::Text(s) => key_exists(&doc, s.as_ref()),
-        other => key_exists(&doc, &crate::exec::expr::scalar::value::value_to_string(other)),
+        other => key_exists(
+            &doc,
+            &crate::exec::expr::scalar::value::value_to_string(other),
+        ),
     });
     Ok(pg_bool(any))
 }
@@ -295,7 +300,10 @@ pub fn op_question_all(left: &SqlValue, keys: &[SqlValue]) -> Result<SqlValue> {
     let all = keys.iter().all(|v| match v {
         SqlValue::Null => false,
         SqlValue::Text(s) => key_exists(&doc, s.as_ref()),
-        other => key_exists(&doc, &crate::exec::expr::scalar::value::value_to_string(other)),
+        other => key_exists(
+            &doc,
+            &crate::exec::expr::scalar::value::value_to_string(other),
+        ),
     });
     Ok(pg_bool(all))
 }
@@ -1009,9 +1017,7 @@ fn parse_jsonpath(s: &str) -> Result<ParsedJsonPath> {
                 }
                 i += 1;
                 if i >= bytes.len() || bytes[i] != b']' {
-                    return Err(Error::Parse(
-                        "expected `]` after filter expression".into(),
-                    ));
+                    return Err(Error::Parse("expected `]` after filter expression".into()));
                 }
                 i += 1;
                 steps.push(JsonPathStep::Any);
@@ -1056,12 +1062,7 @@ fn is_jsonpath_member_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-fn eval_jsonpath_steps(
-    current: &Value,
-    steps: &[JsonPathStep],
-    idx: usize,
-    out: &mut Vec<Value>,
-) {
+fn eval_jsonpath_steps(current: &Value, steps: &[JsonPathStep], idx: usize, out: &mut Vec<Value>) {
     if idx >= steps.len() {
         out.push(current.clone());
         return;
@@ -1200,25 +1201,13 @@ mod tests {
     fn jsonb_set_replaces_and_creates() {
         let v = jsonb_set(&[t(r#"{"a":1,"b":2}"#), t("{a}"), t("99")]).unwrap();
         assert_eq!(v, SqlValue::Text(r#"{"a": 99, "b": 2}"#.into()));
-        let v = jsonb_set(&[
-            t(r#"{"a":1}"#),
-            t("{b}"),
-            t("7"),
-            SqlValue::Integer(1),
-        ])
-        .unwrap();
+        let v = jsonb_set(&[t(r#"{"a":1}"#), t("{b}"), t("7"), SqlValue::Integer(1)]).unwrap();
         assert_eq!(v, SqlValue::Text(r#"{"a": 1, "b": 7}"#.into()));
     }
 
     #[test]
     fn jsonb_set_with_create_false_skips_missing() {
-        let v = jsonb_set(&[
-            t(r#"{"a":1}"#),
-            t("{b}"),
-            t("7"),
-            SqlValue::Integer(0),
-        ])
-        .unwrap();
+        let v = jsonb_set(&[t(r#"{"a":1}"#), t("{b}"), t("7"), SqlValue::Integer(0)]).unwrap();
         assert_eq!(v, SqlValue::Text(r#"{"a": 1}"#.into()));
     }
 
@@ -1226,13 +1215,7 @@ mod tests {
     fn jsonb_insert_array_before_and_after() {
         let v = jsonb_insert(&[t("[1,2,3]"), t("{1}"), t("99")]).unwrap();
         assert_eq!(v, SqlValue::Text("[1, 99, 2, 3]".into()));
-        let v = jsonb_insert(&[
-            t("[1,2,3]"),
-            t("{1}"),
-            t("99"),
-            SqlValue::Integer(1),
-        ])
-        .unwrap();
+        let v = jsonb_insert(&[t("[1,2,3]"), t("{1}"), t("99"), SqlValue::Integer(1)]).unwrap();
         assert_eq!(v, SqlValue::Text("[1, 2, 99, 3]".into()));
     }
 

@@ -425,10 +425,7 @@ pub(crate) fn position_result(sub: SqlValue, haystack: SqlValue) -> Result<SqlVa
 /// pulls a single character out of an arbitrary sqlparser string literal
 /// node. Multi-character literals are rejected (PG and SQLite reject
 /// them too).
-fn extract_single_char_escape(
-    escape_char: Option<&Value>,
-    op_name: &str,
-) -> Result<Option<char>> {
+fn extract_single_char_escape(escape_char: Option<&Value>, op_name: &str) -> Result<Option<char>> {
     Ok(match escape_char {
         None => None,
         Some(Value::SingleQuotedString(s))

@@ -84,7 +84,8 @@ pub fn schema(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
 
     // sqlite3's `.schema sqlite_master` (or the historical alias
     // `sqlite_schema`) prints the canonical schema for the system table.
-    if pattern.eq_ignore_ascii_case("sqlite_master") || pattern.eq_ignore_ascii_case("sqlite_schema")
+    if pattern.eq_ignore_ascii_case("sqlite_master")
+        || pattern.eq_ignore_ascii_case("sqlite_schema")
     {
         for line in [
             "CREATE TABLE sqlite_schema (",

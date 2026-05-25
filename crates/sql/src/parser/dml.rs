@@ -500,7 +500,8 @@ pub(crate) fn bind_merge(
     let mut params = ParamLayout::default();
     let on_expr = normalize_expr(*on, &mut params)?;
 
-    let mut bound_clauses: Vec<crate::statement::MergeClausePlan> = Vec::with_capacity(clauses.len());
+    let mut bound_clauses: Vec<crate::statement::MergeClausePlan> =
+        Vec::with_capacity(clauses.len());
     for clause in clauses {
         let sqlparser::ast::MergeClause {
             clause_kind,
@@ -515,11 +516,8 @@ pub(crate) fn bind_merge(
         match clause_kind {
             sqlparser::ast::MergeClauseKind::Matched => match action {
                 sqlparser::ast::MergeAction::Update(update) => {
-                    let assignments = bind_merge_assignments(
-                        &target_def,
-                        update.assignments,
-                        &mut params,
-                    )?;
+                    let assignments =
+                        bind_merge_assignments(&target_def, update.assignments, &mut params)?;
                     if update.update_predicate.is_some() || update.delete_predicate.is_some() {
                         return Err(Error::UnsupportedSql(
                             "MERGE WHEN MATCHED THEN UPDATE WHERE/DELETE WHERE (Oracle) is not supported".to_owned(),
@@ -531,7 +529,8 @@ pub(crate) fn bind_merge(
                     });
                 }
                 sqlparser::ast::MergeAction::Delete { .. } => {
-                    bound_clauses.push(crate::statement::MergeClausePlan::MatchedDelete { predicate });
+                    bound_clauses
+                        .push(crate::statement::MergeClausePlan::MatchedDelete { predicate });
                 }
                 sqlparser::ast::MergeAction::Insert(_) => {
                     return Err(Error::UnsupportedSql(
@@ -709,9 +708,7 @@ fn upsert_target_columns_have_unique(
     }
     // Rowid-alias INTEGER PRIMARY KEY: a single-column target whose
     // ordinal equals the alias column is a valid PK target.
-    if target_ordinals.len() == 1
-        && table.rowid_alias_column == Some(target_ordinals[0] as u16)
-    {
+    if target_ordinals.len() == 1 && table.rowid_alias_column == Some(target_ordinals[0] as u16) {
         return true;
     }
     for index in &table.indexes {

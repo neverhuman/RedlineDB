@@ -472,7 +472,11 @@ fn cast_real_as_text_keeps_trailing_zero() {
 #[test]
 fn math1_acos_unit_circle() {
     let (_d, c) = open();
-    let cases = [(1.0, 0.0_f64.acos()), (0.0, 0.0_f64.asin().acos()), (-1.0, (-1.0_f64).acos())];
+    let cases = [
+        (1.0, 0.0_f64.acos()),
+        (0.0, 0.0_f64.asin().acos()),
+        (-1.0, (-1.0_f64).acos()),
+    ];
     // Each `acos(x)` matches the f64::acos result; out-of-domain returns NULL.
     for (x, _expect) in cases {
         let sql = format!("SELECT acos({x})");
@@ -501,7 +505,9 @@ fn math1_log_overload_natural_vs_base() {
 fn math1_atan2_quadrants() {
     let (_d, c) = open();
     let half_pi = q1(&c, "SELECT atan2(1.0, 0.0)");
-    assert!(matches!(half_pi, SqlValue::Real(v) if (v - std::f64::consts::FRAC_PI_2).abs() < 1e-12));
+    assert!(
+        matches!(half_pi, SqlValue::Real(v) if (v - std::f64::consts::FRAC_PI_2).abs() < 1e-12)
+    );
     assert_eq!(q1(&c, "SELECT atan2(NULL, 1.0)"), SqlValue::Null);
 }
 
@@ -605,14 +611,8 @@ fn unhex_one_and_two_arg_forms() {
 fn glob_function_form_matches_operator_form() {
     let (_d, c) = open();
     // Function form: glob(pattern, value) — note arg order.
-    assert_eq!(
-        q1(&c, "SELECT glob('a*', 'abc')"),
-        SqlValue::Integer(1)
-    );
-    assert_eq!(
-        q1(&c, "SELECT glob('z*', 'abc')"),
-        SqlValue::Integer(0)
-    );
+    assert_eq!(q1(&c, "SELECT glob('a*', 'abc')"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT glob('z*', 'abc')"), SqlValue::Integer(0));
     assert_eq!(q1(&c, "SELECT glob('a*', NULL)"), SqlValue::Null);
 }
 
@@ -622,32 +622,17 @@ fn glob_operator_form_via_parser_rewrite() {
     // before handing the SQL to sqlparser (which lacks a GLOB operator).
     // Verify end-to-end semantics including NULL propagation and NOT GLOB.
     let (_d, c) = open();
-    assert_eq!(
-        q1(&c, "SELECT 'abc' GLOB 'a*'"),
-        SqlValue::Integer(1)
-    );
-    assert_eq!(
-        q1(&c, "SELECT 'abc' GLOB '*c'"),
-        SqlValue::Integer(1)
-    );
-    assert_eq!(
-        q1(&c, "SELECT 'ABC' GLOB 'a*'"),
-        SqlValue::Integer(0)
-    );
+    assert_eq!(q1(&c, "SELECT 'abc' GLOB 'a*'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'abc' GLOB '*c'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'ABC' GLOB 'a*'"), SqlValue::Integer(0));
     // Character class: GLOB is case-sensitive.
     assert_eq!(
         q1(&c, "SELECT 'abc' GLOB '[a-z][a-z][a-z]'"),
         SqlValue::Integer(1)
     );
-    assert_eq!(
-        q1(&c, "SELECT 'abc' GLOB '[^abc]bc'"),
-        SqlValue::Integer(0)
-    );
+    assert_eq!(q1(&c, "SELECT 'abc' GLOB '[^abc]bc'"), SqlValue::Integer(0));
     // NOT GLOB.
-    assert_eq!(
-        q1(&c, "SELECT 'abc' NOT GLOB 'z*'"),
-        SqlValue::Integer(1)
-    );
+    assert_eq!(q1(&c, "SELECT 'abc' NOT GLOB 'z*'"), SqlValue::Integer(1));
     // NULL propagation.
     assert_eq!(q1(&c, "SELECT NULL GLOB 'a*'"), SqlValue::Null);
     assert_eq!(q1(&c, "SELECT 'abc' GLOB NULL"), SqlValue::Null);

@@ -555,7 +555,10 @@ impl Connection {
     }
 
     pub(crate) fn set_trusted_schema(&self, value: bool) {
-        self.session.lock().expect("session poisoned").trusted_schema = value;
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .trusted_schema = value;
     }
 
     pub(crate) fn secure_delete(&self) -> bool {

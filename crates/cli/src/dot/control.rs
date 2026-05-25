@@ -234,9 +234,15 @@ fn extract_inline_references(sql: &str) -> Vec<InlineForeignKey> {
         let parent = after[..paren_open].trim();
         let to = after[paren_open + 1..paren_close].trim();
         out.push(InlineForeignKey {
-            from: from.trim_matches(|c: char| c == '"' || c == '\'' || c == '`').to_owned(),
-            parent: parent.trim_matches(|c: char| c == '"' || c == '\'' || c == '`').to_owned(),
-            to: to.trim_matches(|c: char| c == '"' || c == '\'' || c == '`').to_owned(),
+            from: from
+                .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
+                .to_owned(),
+            parent: parent
+                .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
+                .to_owned(),
+            to: to
+                .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
+                .to_owned(),
         });
     }
     out

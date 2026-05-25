@@ -901,6 +901,9 @@ fn ilike_supports_wildcards_and_escape_clause() {
     assert_eq!(
         q1(&c, "SELECT '50' ILIKE '50!%' ESCAPE '!'"),
         SqlValue::Integer(0)
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Track H — beyond-SQLite (Postgres parity) coverage.
 // ---------------------------------------------------------------------------
@@ -1027,6 +1030,10 @@ fn ilike_unicode_folds_caf_e_to_caf_e_acute() {
     assert_eq!(
         q1(&c, "SELECT 'CAFÉ' ILIKE 'cafe'"),
         SqlValue::Integer(0)
+    );
+}
+
+#[test]
 fn pg_uuid_cast_normalises_to_canonical_lowercase() {
     let (_d, c) = open();
     let r = q1(
@@ -1066,6 +1073,10 @@ fn like_is_case_sensitive_with_pragma() {
     assert_eq!(
         q1(&c, "SELECT 'AbCdEf' LIKE '%CD%'"),
         SqlValue::Integer(0)
+    );
+}
+
+#[test]
 fn pg_array_literal_rewrites_to_json_array() {
     let (_d, c) = open();
     let r = q1(&c, "SELECT ARRAY[10,20,30]");
@@ -1262,6 +1273,9 @@ fn length_vs_octet_length_disagree_on_multibyte() {
         q1(&c, "SELECT octet_length('αβγ')"),
         SqlValue::Integer(6)
     );
+}
+
+#[test]
 fn pg_array_overlap_returns_zero_or_one() {
     let (_d, c) = open();
     let r = query_all(

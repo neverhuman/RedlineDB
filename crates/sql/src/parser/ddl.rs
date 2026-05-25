@@ -49,14 +49,13 @@ pub(crate) fn bind_create_table(
     // upfront error.
     if create_table.without_rowid
         && create_table.columns.iter().any(|column| {
-            column
-                .options
-                .iter()
-                .any(|opt| matches!(&opt.option,
+            column.options.iter().any(|opt| {
+                matches!(&opt.option,
                     sqlparser::ast::ColumnOption::DialectSpecific(tokens)
                         if tokens.len() == 1
                             && tokens[0].to_string().eq_ignore_ascii_case("AUTOINCREMENT")
-                ))
+                )
+            })
         })
     {
         return Err(Error::UnsupportedSql(
@@ -773,8 +772,7 @@ pub(crate) fn bind_alter_table(
         AlterTableOperation::AlterColumn { column_name, op } => match op {
             sqlparser::ast::AlterColumnOperation::SetDefault { value } => {
                 let lookup = std::collections::HashMap::new();
-                let expr_ast =
-                    super::helpers::expr::default_expr_to_kernel_ast(&value, &lookup)?;
+                let expr_ast = super::helpers::expr::default_expr_to_kernel_ast(&value, &lookup)?;
                 let default_value = match expr_ast {
                     ExprAst::Const(v) => Some(v),
                     _ => {
@@ -815,10 +813,7 @@ pub(crate) fn bind_alter_table(
                 generated_as,
                 sequence_options: _,
             } => {
-                let always = matches!(
-                    generated_as,
-                    Some(sqlparser::ast::GeneratedAs::Always)
-                );
+                let always = matches!(generated_as, Some(sqlparser::ast::GeneratedAs::Always));
                 redlinedb_kernel::catalog::AlterTableOperationSpec::AddColumnIdentity {
                     column_name: DbName::new(column_name.value),
                     always,

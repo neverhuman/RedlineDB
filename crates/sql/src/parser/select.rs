@@ -1377,17 +1377,22 @@ fn merge_window_with_base(
             window_frame: spec.window_frame.clone(),
         });
     };
-    let base = map.get(&base_name.value.to_ascii_lowercase()).ok_or_else(|| {
-        Error::UnsupportedSql(format!(
-            "named window references unknown window: {}",
-            base_name.value
-        ))
-    })?;
+    let base = map
+        .get(&base_name.value.to_ascii_lowercase())
+        .ok_or_else(|| {
+            Error::UnsupportedSql(format!(
+                "named window references unknown window: {}",
+                base_name.value
+            ))
+        })?;
     let mut partition_by = base.partition_by.clone();
     partition_by.extend(spec.partition_by.iter().cloned());
     let mut order_by = base.order_by.clone();
     order_by.extend(spec.order_by.iter().cloned());
-    let window_frame = spec.window_frame.clone().or_else(|| base.window_frame.clone());
+    let window_frame = spec
+        .window_frame
+        .clone()
+        .or_else(|| base.window_frame.clone());
     Ok(sqlparser::ast::WindowSpec {
         window_name: None,
         partition_by,

@@ -140,9 +140,7 @@ pub(crate) fn bind_statement(
             bind_alter_index(sql, schema_epoch, name, operation)
         }
         SqlStatement::Set(set) => bind_set_statement(sql, schema_epoch, set),
-        SqlStatement::ShowVariable { variable } => {
-            bind_show_variable(sql, schema_epoch, variable)
-        }
+        SqlStatement::ShowVariable { variable } => bind_show_variable(sql, schema_epoch, variable),
         // Track K — SQL:2003 MERGE
         SqlStatement::Merge(merge) => super::dml::bind_merge(schema, schema_epoch, sql, merge),
         other => Err(Error::UnsupportedSql(format!(

@@ -118,7 +118,10 @@ fn sequence_currval_setval_nextval_session_state() {
     assert_eq!(q1(&c, "SELECT currval('s')"), SqlValue::Integer(2));
     assert_eq!(q1(&c, "SELECT setval('s', 50)"), SqlValue::Integer(50));
     assert_eq!(q1(&c, "SELECT nextval('s')"), SqlValue::Integer(51));
-    assert_eq!(q1(&c, "SELECT setval('s', 100, false)"), SqlValue::Integer(100));
+    assert_eq!(
+        q1(&c, "SELECT setval('s', 100, false)"),
+        SqlValue::Integer(100)
+    );
     assert_eq!(q1(&c, "SELECT nextval('s')"), SqlValue::Integer(100));
 }
 
@@ -210,7 +213,8 @@ fn alter_table_add_drop_identity_marker() {
 #[test]
 fn alter_column_set_data_type_updates_declared_type() {
     let (_d, c) = open();
-    c.execute("CREATE TABLE t (id INTEGER, val TEXT)").expect("create");
+    c.execute("CREATE TABLE t (id INTEGER, val TEXT)")
+        .expect("create");
     c.execute("ALTER TABLE t ALTER COLUMN val SET DATA TYPE INTEGER")
         .expect("set type");
     let _ = c.prepare("SELECT id, val FROM t").expect("prepare");
@@ -220,7 +224,8 @@ fn alter_column_set_data_type_updates_declared_type() {
 fn alter_index_rename_in_place() {
     let (_d, c) = open();
     c.execute("CREATE TABLE t (id INTEGER)").expect("create");
-    c.execute("CREATE INDEX idx_old ON t(id)").expect("create idx");
+    c.execute("CREATE INDEX idx_old ON t(id)")
+        .expect("create idx");
     c.execute("ALTER INDEX idx_old RENAME TO idx_new")
         .expect("rename");
     let rows = query_all(

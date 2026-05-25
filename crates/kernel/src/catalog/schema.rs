@@ -482,8 +482,7 @@ fn render_create_table(table: &TableDef) -> String {
             out.push_str(" PRIMARY KEY");
         }
         if column.not_null
-            && (!is_rowid_alias && !is_column_pk
-                || explicit_not_null.contains(&(idx as u16)))
+            && (!is_rowid_alias && !is_column_pk || explicit_not_null.contains(&(idx as u16)))
         {
             out.push_str(" NOT NULL");
         }

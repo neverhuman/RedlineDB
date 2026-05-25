@@ -674,9 +674,10 @@ pub fn apply_alter_table(
                     column.not_null = false;
                 }
             }
-            table
-                .constraints
-                .retain(|c| !(matches!(c.kind, super::schema::ConstraintKind::NotNull) && c.column_id == Some(column_id)));
+            table.constraints.retain(|c| {
+                !(matches!(c.kind, super::schema::ConstraintKind::NotNull)
+                    && c.column_id == Some(column_id))
+            });
             table.normalized_sql = None;
         }
         AlterTableOperationSpec::SetColumnNotNull { column_name } => {
@@ -879,18 +880,19 @@ fn apply_alter_add_constraint(
     let name_clash = |table: &super::schema::TableDef, name: Option<&DbName>| -> bool {
         let Some(name) = name else { return false };
         let folded = name.folded();
-        table
-            .constraints
-            .iter()
-            .any(|c| c.name.as_ref().is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded))
-            || table
-                .checks
-                .iter()
-                .any(|c| c.name.as_ref().is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded))
-            || table
-                .foreign_keys
-                .iter()
-                .any(|c| c.name.as_ref().is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded))
+        table.constraints.iter().any(|c| {
+            c.name
+                .as_ref()
+                .is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded)
+        }) || table.checks.iter().any(|c| {
+            c.name
+                .as_ref()
+                .is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded)
+        }) || table.foreign_keys.iter().any(|c| {
+            c.name
+                .as_ref()
+                .is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded)
+        })
     };
     let constraint_name = match &constraint {
         TableConstraintSpec::PrimaryKey { name, .. }
@@ -946,9 +948,7 @@ fn apply_alter_add_constraint(
             let display_name = name
                 .as_ref()
                 .map(|n| n.original().to_owned())
-                .unwrap_or_else(|| {
-                    format!("sqlite_autoindex_{}_{}", table.folded, index_id.0)
-                });
+                .unwrap_or_else(|| format!("sqlite_autoindex_{}_{}", table.folded, index_id.0));
             let display_folded = display_name.to_ascii_lowercase();
             table.indexes.push(IndexDef {
                 index_id,
@@ -1054,8 +1054,7 @@ pub fn apply_rename_index(
     if !renamed {
         return Err(Error::ObjectNotFound);
     }
-    snapshot.meta.schema_epoch =
-        SchemaEpoch(snapshot.meta.schema_epoch.0.saturating_add(1));
+    snapshot.meta.schema_epoch = SchemaEpoch(snapshot.meta.schema_epoch.0.saturating_add(1));
     snapshot.rebuild_indexes();
     Ok(snapshot)
 }

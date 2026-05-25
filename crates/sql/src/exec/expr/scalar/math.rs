@@ -182,7 +182,11 @@ pub(crate) fn math1_unary(values: &[SqlValue], op: impl FnOnce(f64) -> f64) -> R
                 return Ok(SqlValue::Null);
             }
             let r = op(x);
-            if r.is_finite() { Ok(SqlValue::Real(r)) } else { Ok(SqlValue::Null) }
+            if r.is_finite() {
+                Ok(SqlValue::Real(r))
+            } else {
+                Ok(SqlValue::Null)
+            }
         }
     }
 }
@@ -211,7 +215,11 @@ pub(crate) fn math1_binary(
         return Ok(SqlValue::Null);
     }
     let r = op(a, b);
-    if r.is_finite() { Ok(SqlValue::Real(r)) } else { Ok(SqlValue::Null) }
+    if r.is_finite() {
+        Ok(SqlValue::Real(r))
+    } else {
+        Ok(SqlValue::Null)
+    }
 }
 
 // SQLite's mod(x,y) returns NULL when y == 0 (or either arg is non-numeric).

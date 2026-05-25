@@ -38,7 +38,8 @@ impl Drop for GroupEvalScope {
 }
 
 pub(super) fn with_group_eval_cache<T>(f: impl FnOnce() -> T) -> T {
-    let eval_prev = GROUP_EVAL_CACHE.with(|cache| cache.borrow_mut().replace(ahash::AHashMap::new()));
+    let eval_prev =
+        GROUP_EVAL_CACHE.with(|cache| cache.borrow_mut().replace(ahash::AHashMap::new()));
     let agg_prev = GROUP_AGG_CACHE.with(|cache| cache.borrow_mut().replace(ahash::AHashMap::new()));
     let _scope = GroupEvalScope {
         eval_prev,
@@ -615,7 +616,9 @@ fn eval_group_function(
                         .args
                         .iter()
                         .map(|a| match a {
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
+                                expr_collation(expr)
+                            }
                             _ => None,
                         })
                         .collect();
@@ -645,15 +648,21 @@ fn eval_group_function(
                                 let mut normalised: Vec<SqlValue> =
                                     Vec::with_capacity(values.len());
                                 for (idx, val) in values.iter().enumerate() {
-                                    normalised.push(match (val, collations.get(idx).and_then(|c| c.as_ref())) {
-                                        (SqlValue::Text(s), Some(crate::collation::Collation::NoCase)) => {
-                                            SqlValue::Text(Arc::from(s.to_ascii_lowercase()))
-                                        }
-                                        (SqlValue::Text(s), Some(crate::collation::Collation::RTrim)) => {
-                                            SqlValue::Text(Arc::from(s.trim_end_matches(' ').to_owned()))
-                                        }
-                                        _ => val.clone(),
-                                    });
+                                    normalised.push(
+                                        match (val, collations.get(idx).and_then(|c| c.as_ref())) {
+                                            (
+                                                SqlValue::Text(s),
+                                                Some(crate::collation::Collation::NoCase),
+                                            ) => SqlValue::Text(Arc::from(s.to_ascii_lowercase())),
+                                            (
+                                                SqlValue::Text(s),
+                                                Some(crate::collation::Collation::RTrim),
+                                            ) => SqlValue::Text(Arc::from(
+                                                s.trim_end_matches(' ').to_owned(),
+                                            )),
+                                            _ => val.clone(),
+                                        },
+                                    );
                                 }
                                 let key = vec::hash_agg::encode_group_key_bytes(&normalised)?;
                                 if !seen.insert(key) {
@@ -683,12 +692,10 @@ fn eval_group_function(
             let distinct = is_distinct_call(func);
             let mut seen: HashSet<Vec<u8>> = HashSet::new();
             let collation = if let FunctionArguments::List(list) = &func.args {
-                list.args
-                    .first()
-                    .and_then(|a| match a {
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
-                        _ => None,
-                    })
+                list.args.first().and_then(|a| match a {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    _ => None,
+                })
             } else {
                 None
             };
@@ -759,12 +766,10 @@ fn eval_group_function(
             let distinct = is_distinct_call(func);
             let mut seen: HashSet<Vec<u8>> = HashSet::new();
             let collation = if let FunctionArguments::List(list) = &func.args {
-                list.args
-                    .first()
-                    .and_then(|a| match a {
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
-                        _ => None,
-                    })
+                list.args.first().and_then(|a| match a {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    _ => None,
+                })
             } else {
                 None
             };
@@ -936,12 +941,10 @@ fn eval_group_function(
             let distinct = is_distinct_call(func);
             let mut seen: HashSet<Vec<u8>> = HashSet::new();
             let collation = if let FunctionArguments::List(list) = &func.args {
-                list.args
-                    .first()
-                    .and_then(|a| match a {
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
-                        _ => None,
-                    })
+                list.args.first().and_then(|a| match a {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    _ => None,
+                })
             } else {
                 None
             };

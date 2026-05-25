@@ -156,12 +156,7 @@ fn round_up_carry(digits: &mut Vec<u8>, exp: &mut i32) {
 /// digits 15 and 14 are both `9`, try progressively shorter representations
 /// and return the shortest that bit-exactly round-trips to the original
 /// `f64`. Returns `None` to fall back to the standard 17-digit form.
-fn sqlite_shorten(
-    digits: &[u8],
-    exp: i32,
-    original: f64,
-    neg: bool,
-) -> Option<(Vec<u8>, i32)> {
+fn sqlite_shorten(digits: &[u8], exp: i32, original: f64, neg: bool) -> Option<(Vec<u8>, i32)> {
     debug_assert_eq!(digits.len(), 18);
     // SQLite's trigger conditions (0-indexed against z[]).
     let trigger_trailing_zeros = digits[13] == b'0' && digits[14] == b'0' && digits[15] == b'0';

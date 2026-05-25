@@ -26,9 +26,15 @@ fn lookup_column_local(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
             }
         }
         RowContext::SqliteSchema(row) => match name.to_ascii_lowercase().as_str() {
-            "type" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(row.type_name.as_ref()))),
-            "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(row.name.as_ref()))),
-            "tbl_name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(row.tbl_name.as_ref()))),
+            "type" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.type_name.as_ref(),
+            ))),
+            "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.name.as_ref(),
+            ))),
+            "tbl_name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.tbl_name.as_ref(),
+            ))),
             "rootpage" => Ok(SqlValue::Integer(row.rootpage as i64)),
             "sql" => Ok(SqlValue::Text(Arc::from(row.sql.as_ref()))),
             _ => Err(Error::UnknownColumn(name.to_owned())),
@@ -161,9 +167,15 @@ fn row_matches_joined_qualifier(row: &JoinedRow, qualifier: &str) -> bool {
 
 fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
     match name.to_ascii_lowercase().as_str() {
-        "type" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(row.type_name.as_ref()))),
-        "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(row.name.as_ref()))),
-        "tbl_name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(row.tbl_name.as_ref()))),
+        "type" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.type_name.as_ref(),
+        ))),
+        "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.name.as_ref(),
+        ))),
+        "tbl_name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.tbl_name.as_ref(),
+        ))),
         "rootpage" => Ok(SqlValue::Integer(row.rootpage as i64)),
         "sql" => Ok(SqlValue::Text(Arc::from(row.sql.as_ref()))),
         _ => Err(Error::UnknownColumn(name.to_owned())),
