@@ -161,23 +161,22 @@ pub(crate) fn eval_scalar_function_values(
         },
         // SQLite concat(X, ...) — concatenates non-NULL operands (NULLs treated
         // as empty strings). Always returns TEXT.
+        // Phase 2.3: value_as_str returns Cow<'_, str>; SqlValue::Text
+        // borrows from its Arc<str> without allocation.
         "concat" => {
             let mut out = String::new();
             for v in &values {
                 if !matches!(v, SqlValue::Null) {
-                    out.push_str(&value_to_string(v));
+                    out.push_str(value_as_str(v).as_ref());
                 }
             }
             Ok(SqlValue::Text(Arc::from(out)))
         }
-        // SQLite concat_ws(SEP, X, ...) — like concat but inserts SEP between
-        // non-NULL operands. NULL separator → NULL result; NULL operands
-        // skipped.
         "concat_ws" => {
             if values.is_empty() || matches!(values[0], SqlValue::Null) {
                 return Ok(SqlValue::Null);
             }
-            let sep = value_to_string(&values[0]);
+            let sep = value_as_str(&values[0]);
             let mut first = true;
             let mut out = String::new();
             for v in &values[1..] {
@@ -185,10 +184,10 @@ pub(crate) fn eval_scalar_function_values(
                     continue;
                 }
                 if !first {
-                    out.push_str(&sep);
+                    out.push_str(sep.as_ref());
                 }
                 first = false;
-                out.push_str(&value_to_string(v));
+                out.push_str(value_as_str(v).as_ref());
             }
             Ok(SqlValue::Text(Arc::from(out)))
         }
@@ -249,15 +248,15 @@ pub(crate) fn eval_scalar_function_values(
         // expansion). NULL propagates.
         "lower" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(libc_lower(&value_to_string(
+            Some(other) => Ok(SqlValue::Text(Arc::from(libc_lower(value_as_str(
                 other,
-            ))))),
+            ).as_ref())))),
         },
         "upper" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(libc_upper(&value_to_string(
+            Some(other) => Ok(SqlValue::Text(Arc::from(libc_upper(value_as_str(
                 other,
-            ))))),
+            ).as_ref())))),
         },
         "abs" => match values.first() {
             // SQLite: abs(NULL) is NULL, not an error.
@@ -355,8 +354,9 @@ pub(crate) fn eval_scalar_function_values(
             if matches!(values[0], SqlValue::Null) || matches!(values[1], SqlValue::Null) {
                 return Ok(SqlValue::Null);
             }
-            let haystack = value_to_string(&values[0]);
-            let needle = value_to_string(&values[1]);
+            // Phase 2.3: borrow when possible.
+            let haystack = value_as_str(&values[0]);
+            let needle = value_as_str(&values[1]);
             if needle.is_empty() {
                 return Ok(SqlValue::Integer(1));
             }
@@ -371,10 +371,11 @@ pub(crate) fn eval_scalar_function_values(
                     None => 0,
                 }
             } else {
-                haystack
-                    .char_indices()
+                let hay: &str = haystack.as_ref();
+                let need: &str = needle.as_ref();
+                hay.char_indices()
                     .enumerate()
-                    .find(|(_, (byte_pos, _))| haystack[*byte_pos..].starts_with(&needle))
+                    .find(|(_, (byte_pos, _))| hay[*byte_pos..].starts_with(need))
                     .map(|(char_pos, _)| char_pos as i64 + 1)
                     .unwrap_or(0)
             };
@@ -385,6 +386,10 @@ pub(crate) fn eval_scalar_function_values(
         "ltrim" => sqlite_ltrim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
         "rtrim" => sqlite_rtrim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
         // SQLite replace(X, Y, Z) — replace all occurrences of Y in X with Z.
+        // Phase 2.3 + 2.5: value_as_str borrows from Arc<str> when the
+        // argument is already a Text value (the common case for
+        // REPLACE on column data); avoids three String allocations
+        // per call.
         "replace" => {
             if values.len() < 3 {
                 return Ok(SqlValue::Null);
@@ -392,12 +397,10 @@ pub(crate) fn eval_scalar_function_values(
             if values.iter().take(3).any(|v| matches!(v, SqlValue::Null)) {
                 return Ok(SqlValue::Null);
             }
-            let s = value_to_string(&values[0]);
-            let from = value_to_string(&values[1]);
-            let to = value_to_string(&values[2]);
-            Ok(SqlValue::Text(Arc::from(
-                s.replace(from.as_str(), to.as_str()),
-            )))
+            let s = value_as_str(&values[0]);
+            let from = value_as_str(&values[1]);
+            let to = value_as_str(&values[2]);
+            Ok(SqlValue::Text(Arc::from(s.replace(from.as_ref(), to.as_ref()))))
         }
         // SQLite printf/format — basic sprintf-style formatting.
         // We support %s %d %i %f %e %g %x %X %o %% placeholders.
