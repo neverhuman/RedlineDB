@@ -141,7 +141,13 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ${{ github.ref }}
+          # For pull_request events, github.ref is refs/pull/N/merge (the
+          # merge commit) — checking that out and pushing HEAD back to the
+          # branch would overwrite the PR with the merge commit. Use
+          # github.head_ref (the actual PR branch name) when available so
+          # the workspace is on the real branch tip and a subsequent
+          # `git push` updates the branch cleanly.
+          ref: ${{ github.head_ref || github.ref }}
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
