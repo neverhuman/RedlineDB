@@ -94,6 +94,60 @@ pub struct SessionState {
     pub query_only: bool,
     /// Mirrors SQLite's `PRAGMA case_sensitive_like`.
     pub case_sensitive_like: bool,
+    /// Mirrors SQLite's `PRAGMA defer_foreign_keys`. When ON, all FK
+    /// constraints behave as if DEFERRABLE INITIALLY DEFERRED until the
+    /// next COMMIT. Defaults OFF and is auto-cleared at each COMMIT.
+    pub defer_foreign_keys: bool,
+    /// Mirrors SQLite's `PRAGMA ignore_check_constraints`. When ON, the
+    /// executor skips CHECK clause evaluation. Defaults OFF.
+    pub ignore_check_constraints: bool,
+    /// Mirrors SQLite's `PRAGMA trusted_schema`. Recall-only.
+    pub trusted_schema: bool,
+    /// Mirrors SQLite's `PRAGMA secure_delete`. Recall-only — RedlineDB
+    /// always overwrites freed pages with zeros, matching the SQLite
+    /// compile-time default.
+    pub secure_delete: bool,
+    /// Mirrors SQLite's `PRAGMA locking_mode`. Recall-only; RedlineDB's
+    /// concurrency model already provides per-connection isolation.
+    pub locking_mode: crate::statement::LockingMode,
+    /// Mirrors SQLite's `PRAGMA busy_timeout`. Stored in ms; recall-only
+    /// because RedlineDB uses per-database lock timeouts.
+    pub busy_timeout_ms: i64,
+    /// Mirrors SQLite's `PRAGMA application_id`. Recall-only header value.
+    pub application_id: i64,
+    /// Mirrors SQLite's `PRAGMA max_page_count`. Recall-only soft cap.
+    pub max_page_count: i64,
+    /// Mirrors SQLite's `PRAGMA cache_spill`. Recall-only.
+    pub cache_spill: i64,
+    /// Mirrors SQLite's `PRAGMA fullfsync`. Recall-only boolean (0/1).
+    pub fullfsync: bool,
+    /// Mirrors SQLite's `PRAGMA checkpoint_fullfsync`. Recall-only.
+    pub checkpoint_fullfsync: bool,
+    /// Mirrors SQLite's `PRAGMA auto_vacuum` mode. Recall-only since
+    /// RedlineDB's storage engine does not implement page-level
+    /// vacuuming.
+    pub auto_vacuum: i64,
+    /// Mirrors SQLite's `PRAGMA threads`. Recall-only worker thread cap.
+    pub threads: i64,
+    /// Mirrors SQLite's `PRAGMA mmap_size`. Recall-only — RedlineDB does
+    /// not use mmap for storage.
+    pub mmap_size: i64,
+    /// Mirrors SQLite's `PRAGMA soft_heap_limit`. Recall-only.
+    pub soft_heap_limit: i64,
+    /// Mirrors SQLite's `PRAGMA hard_heap_limit`. Recall-only.
+    pub hard_heap_limit: i64,
+    /// Mirrors SQLite's `PRAGMA analysis_limit`. Recall-only — controls
+    /// ANALYZE per-index row scan cap in upstream sqlite3.
+    pub analysis_limit: i64,
+    /// Mirrors SQLite's `PRAGMA automatic_index`. Recall-only.
+    pub automatic_index: bool,
+    /// Mirrors SQLite's `PRAGMA reverse_unordered_selects`. Recall-only.
+    pub reverse_unordered_selects: bool,
+    /// Mirrors SQLite's `PRAGMA writable_schema`. Recall-only — RedlineDB
+    /// does not currently permit direct schema-table mutation.
+    pub writable_schema: bool,
+    /// Mirrors SQLite's `PRAGMA legacy_alter_table`. Recall-only.
+    pub legacy_alter_table: bool,
     /// Names created through CREATE TEMP TABLE in this connection. The
     /// current lightweight implementation stores their rows in the same
     /// engine but exposes them through sqlite_temp_schema.
@@ -117,6 +171,41 @@ pub struct SessionState {
     /// Drained at COMMIT; if any entry still violates referential integrity
     /// the commit is aborted with a `ConstraintViolation` mirroring SQLite.
     pub deferred_fk_checks: Vec<DeferredFkCheck>,
+    /// Track J — Postgres-style `CREATE SCHEMA <name>` namespaces registered
+    /// on this connection. SQLite has no schema layer; we keep the name set
+    /// so `<schema>.<table>` qualifier checks resolve and so the
+    /// `pg_namespace` shim returns the same names back to introspection
+    /// tools. Stored lowercase-folded for case-insensitive lookup.
+    pub pg_schemas: std::collections::BTreeSet<String>,
+    /// Track J — Postgres-style sequences keyed by folded sequence name.
+    /// Drives nextval/currval/setval.
+    pub pg_sequences: std::collections::BTreeMap<String, SequenceState>,
+    /// Track J — `SET TRANSACTION ISOLATION LEVEL` recall value. Default
+    /// is `ReadCommitted` (Postgres' default).
+    pub transaction_isolation: crate::statement::TransactionIsolationLevel,
+}
+
+/// Track J — runtime state for a PostgreSQL-style sequence.
+///
+/// `last_value` is the most-recently generated value (Postgres' `currval`
+/// semantics); `None` means `nextval` has not yet been called. `start` and
+/// `increment` carry over the `CREATE SEQUENCE` options so a
+/// `setval(..., false)` followed by `nextval` advances by the configured step.
+#[derive(Clone, Debug)]
+pub struct SequenceState {
+    pub start: i64,
+    pub increment: i64,
+    pub last_value: Option<i64>,
+}
+
+impl SequenceState {
+    pub fn new(start: i64, increment: i64) -> Self {
+        Self {
+            start,
+            increment,
+            last_value: None,
+        }
+    }
 }
 
 impl Default for SessionState {
@@ -127,13 +216,42 @@ impl Default for SessionState {
             changes: 0,
             total_changes: 0,
             foreign_keys: false,
-            recursive_triggers: true,
+            recursive_triggers: false,
             journal_mode: crate::statement::JournalMode::Memory,
-            synchronous: crate::statement::SynchronousLevel::Normal,
+            // SQLite's default is FULL (2). The previous Normal default
+            // produced 1 against sqlite3 v3.53.1's 2 for PRAGMA synchronous.
+            synchronous: crate::statement::SynchronousLevel::Full,
             temp_store: crate::statement::TempStoreMode::Default,
             cache_size: -2000,
             query_only: false,
             case_sensitive_like: false,
+            defer_foreign_keys: false,
+            ignore_check_constraints: false,
+            trusted_schema: false,
+            // SQLite's default is OFF (`0`) on a :memory: database; the
+            // SECURE_DELETE compile flag flips it to ON, but the
+            // reference v3.53.1 build the parity suite probes against
+            // does not set that flag. Mirror its surface.
+            secure_delete: false,
+            locking_mode: crate::statement::LockingMode::Normal,
+            busy_timeout_ms: 0,
+            application_id: 0,
+            // sqlite3 default for an empty :memory: db is 0xfffffffe (2^32 - 2)
+            // — exposed as 4294967294. Stored as the same i64.
+            max_page_count: 4_294_967_294,
+            cache_spill: 483,
+            fullfsync: false,
+            checkpoint_fullfsync: false,
+            auto_vacuum: 0,
+            threads: 0,
+            mmap_size: 0,
+            soft_heap_limit: 0,
+            hard_heap_limit: 0,
+            analysis_limit: 0,
+            automatic_index: true,
+            reverse_unordered_selects: false,
+            writable_schema: false,
+            legacy_alter_table: false,
             temp_tables: Vec::new(),
             last_insert_rowid: None,
             unique_guards: Vec::new(),
@@ -142,6 +260,15 @@ impl Default for SessionState {
             savepoints: Vec::new(),
             replay_in_progress: false,
             deferred_fk_checks: Vec::new(),
+            pg_schemas: {
+                // Track J — seed the Postgres-shipped namespaces.
+                let mut s = std::collections::BTreeSet::new();
+                s.insert("public".to_owned());
+                s.insert("pg_catalog".to_owned());
+                s
+            },
+            pg_sequences: std::collections::BTreeMap::new(),
+            transaction_isolation: crate::statement::TransactionIsolationLevel::ReadCommitted,
         }
     }
 }
@@ -154,13 +281,34 @@ impl SessionState {
         self.changes = 0;
         self.total_changes = 0;
         self.foreign_keys = false;
-        self.recursive_triggers = true;
+        self.recursive_triggers = false;
         self.journal_mode = crate::statement::JournalMode::Memory;
-        self.synchronous = crate::statement::SynchronousLevel::Normal;
+        self.synchronous = crate::statement::SynchronousLevel::Full;
         self.temp_store = crate::statement::TempStoreMode::Default;
         self.cache_size = -2000;
         self.query_only = false;
         self.case_sensitive_like = false;
+        self.defer_foreign_keys = false;
+        self.ignore_check_constraints = false;
+        self.trusted_schema = false;
+        self.secure_delete = false;
+        self.locking_mode = crate::statement::LockingMode::Normal;
+        self.busy_timeout_ms = 0;
+        self.application_id = 0;
+        self.max_page_count = 4_294_967_294;
+        self.cache_spill = 483;
+        self.fullfsync = false;
+        self.checkpoint_fullfsync = false;
+        self.auto_vacuum = 0;
+        self.threads = 0;
+        self.mmap_size = 0;
+        self.soft_heap_limit = 0;
+        self.hard_heap_limit = 0;
+        self.analysis_limit = 0;
+        self.automatic_index = true;
+        self.reverse_unordered_selects = false;
+        self.writable_schema = false;
+        self.legacy_alter_table = false;
         self.temp_tables.clear();
         self.last_insert_rowid = None;
         self.unique_guards.clear();
@@ -169,6 +317,11 @@ impl SessionState {
         self.savepoints.clear();
         self.replay_in_progress = false;
         self.deferred_fk_checks.clear();
+        self.pg_schemas.clear();
+        self.pg_schemas.insert("public".to_owned());
+        self.pg_schemas.insert("pg_catalog".to_owned());
+        self.pg_sequences.clear();
+        self.transaction_isolation = crate::statement::TransactionIsolationLevel::ReadCommitted;
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

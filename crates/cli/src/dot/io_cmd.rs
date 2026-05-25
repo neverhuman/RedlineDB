@@ -431,9 +431,7 @@ fn quote_blob(value: &[u8]) -> String {
 }
 
 fn format_real(value: f64) -> String {
-    if value.is_finite() && value.fract() == 0.0 {
-        format!("{value:.1}")
-    } else {
-        format!("{value}")
-    }
+    // Delegate to the SQL crate's `format_real_sqlite` so `.dump` / `.iotrace`
+    // output matches SQLite's reference shell `%!.17g` semantics.
+    redlinedb::format_real_sqlite(value)
 }

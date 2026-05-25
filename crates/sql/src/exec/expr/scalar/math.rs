@@ -159,3 +159,119 @@ pub(crate) fn parse_number(input: &str) -> Result<SqlValue> {
     }
     Err(Error::Parse(format!("invalid numeric literal {input}")))
 }
+
+// ── SQLite math1 extension functions ─────────────────────────────────────────
+//
+// SQLite's math1 extension (enabled by default in the reference build) exposes
+// the standard f64 transcendental functions. The shared NULL-and-domain wrapper
+// returns SQLite's canonical NULL for any non-finite result (NaN/inf) so that
+// e.g. `acos(2.0)`, `sqrt(-1.0)`, `log(0.0)` all return NULL rather than an
+// error or a NaN literal.
+//
+// One-arg form. Returns NULL when the input is NULL, non-numeric, or the
+// result is non-finite (NaN or infinity from out-of-domain inputs).
+pub(crate) fn math1_unary(values: &[SqlValue], op: impl FnOnce(f64) -> f64) -> Result<SqlValue> {
+    match values.first() {
+        None | Some(SqlValue::Null) => Ok(SqlValue::Null),
+        Some(v) => {
+            let x = match numeric_value(v) {
+                Ok(v) => v,
+                Err(_) => return Ok(SqlValue::Null),
+            };
+            if !x.is_finite() {
+                return Ok(SqlValue::Null);
+            }
+            let r = op(x);
+            if r.is_finite() {
+                Ok(SqlValue::Real(r))
+            } else {
+                Ok(SqlValue::Null)
+            }
+        }
+    }
+}
+
+// Two-arg form mirroring math1_unary's NULL/domain handling. Used by atan2 and
+// the two-argument form of log.
+pub(crate) fn math1_binary(
+    values: &[SqlValue],
+    op: impl FnOnce(f64, f64) -> f64,
+) -> Result<SqlValue> {
+    if values.len() < 2 {
+        return Ok(SqlValue::Null);
+    }
+    if matches!(values[0], SqlValue::Null) || matches!(values[1], SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let a = match numeric_value(&values[0]) {
+        Ok(v) => v,
+        Err(_) => return Ok(SqlValue::Null),
+    };
+    let b = match numeric_value(&values[1]) {
+        Ok(v) => v,
+        Err(_) => return Ok(SqlValue::Null),
+    };
+    if !a.is_finite() || !b.is_finite() {
+        return Ok(SqlValue::Null);
+    }
+    let r = op(a, b);
+    if r.is_finite() {
+        Ok(SqlValue::Real(r))
+    } else {
+        Ok(SqlValue::Null)
+    }
+}
+
+// SQLite's mod(x,y) returns NULL when y == 0 (or either arg is non-numeric).
+// Result is always REAL per sqlite docs.
+pub(crate) fn math_mod(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() < 2 {
+        return Ok(SqlValue::Null);
+    }
+    if matches!(values[0], SqlValue::Null) || matches!(values[1], SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let x = match numeric_value(&values[0]) {
+        Ok(v) => v,
+        Err(_) => return Ok(SqlValue::Null),
+    };
+    let y = match numeric_value(&values[1]) {
+        Ok(v) => v,
+        Err(_) => return Ok(SqlValue::Null),
+    };
+    if y == 0.0 || !x.is_finite() || !y.is_finite() {
+        return Ok(SqlValue::Null);
+    }
+    Ok(SqlValue::Real(x % y))
+}
+
+// SQLite log() is overloaded: log(X) is the natural log (alias for ln), and
+// log(B, X) is the base-B log of X. Single-arg log on a single arg actually
+// uses log base 10 in some compile modes (legacy), but in the reference build
+// with math1 it's the natural logarithm. We match the reference build.
+pub(crate) fn math_log(values: &[SqlValue]) -> Result<SqlValue> {
+    match values.len() {
+        0 => Ok(SqlValue::Null),
+        1 => math1_unary(values, libm::log),
+        // x.log(b) == ln(x) / ln(b); route both ln calls through libm for
+        // bit-exact glibc parity.
+        _ => math1_binary(values, |b, x| libm::log(x) / libm::log(b)),
+    }
+}
+
+// trunc(x) - truncate towards zero. SQLite returns REAL with .0 suffix.
+pub(crate) fn math_trunc(values: &[SqlValue]) -> Result<SqlValue> {
+    math1_unary(values, libm::trunc)
+}
+
+pub(crate) fn math_pi() -> SqlValue {
+    SqlValue::Real(std::f64::consts::PI)
+}
+
+pub(crate) fn math_degrees(values: &[SqlValue]) -> Result<SqlValue> {
+    math1_unary(values, |x| x.to_degrees())
+}
+
+pub(crate) fn math_radians(values: &[SqlValue]) -> Result<SqlValue> {
+    math1_unary(values, |x| x.to_radians())
+}

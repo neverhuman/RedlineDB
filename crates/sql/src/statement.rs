@@ -118,6 +118,79 @@ pub enum PreparedKind {
     Attach(crate::exec::attach::AttachPlan),
     CrossDbSql(CrossDbSqlPlan),
     CreateVirtualTable(CreateVirtualTablePlan),
+    /// Track J — `CREATE SCHEMA <name> [IF NOT EXISTS]`. Records the
+    /// namespace name on the session so `<schema>.<table>` qualifier
+    /// checks and `pg_namespace` introspection resolve.
+    CreateSchema {
+        name: Arc<str>,
+        if_not_exists: bool,
+    },
+    /// Track J — `DROP SCHEMA <name> [CASCADE]`. Removes a registered
+    /// namespace.
+    DropSchema {
+        name: Arc<str>,
+        if_exists: bool,
+        cascade: bool,
+    },
+    /// Track J — `CREATE SEQUENCE`. Stored as a sqlite_sequence-style row
+    /// keyed by sequence name; `nextval`/`currval`/`setval` scalar
+    /// functions read/write it.
+    CreateSequence {
+        name: Arc<str>,
+        if_not_exists: bool,
+        start_with: Option<i64>,
+        increment_by: Option<i64>,
+    },
+    /// Track J — `DROP SEQUENCE <name>`.
+    DropSequence {
+        name: Arc<str>,
+        if_exists: bool,
+    },
+    /// Track J — `SET TRANSACTION ISOLATION LEVEL <level>`. Recall-only
+    /// store on the session.
+    SetTransactionIsolation {
+        level: TransactionIsolationLevel,
+    },
+    /// Track J — `SHOW <name>` for session-state introspection. Today
+    /// returns the recalled `transaction_isolation`; other names return
+    /// empty string.
+    ShowVariable {
+        name: Arc<str>,
+    },
+    /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
+    AlterIndex {
+        old_name: Arc<str>,
+        new_name: Arc<str>,
+    },
+    /// Track K — SQL:2003 `MERGE INTO target USING source ON ... WHEN ...`
+    /// dispatches to per-clause UPDATE / DELETE / INSERT actions against
+    /// the target table.
+    Merge(MergePlan),
+}
+
+/// Track J — SQL-standard transaction isolation levels accepted via
+/// `SET TRANSACTION ISOLATION LEVEL ...`. The recorded value survives
+/// `SHOW transaction_isolation`; RedlineDB's engine continues to use its
+/// fixed snapshot isolation for reads and read-committed for writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionIsolationLevel {
+    ReadUncommitted,
+    ReadCommitted,
+    RepeatableRead,
+    Serializable,
+}
+
+impl TransactionIsolationLevel {
+    /// Postgres surface string for the value (`read committed`, `serializable`,
+    /// etc). Used by `SHOW transaction_isolation`.
+    pub fn as_pg_str(self) -> &'static str {
+        match self {
+            TransactionIsolationLevel::ReadUncommitted => "read uncommitted",
+            TransactionIsolationLevel::ReadCommitted => "read committed",
+            TransactionIsolationLevel::RepeatableRead => "repeatable read",
+            TransactionIsolationLevel::Serializable => "serializable",
+        }
+    }
 }
 
 /// Sentinel SQL prefix used to tag `PreparedTemplate`s built for
@@ -185,6 +258,27 @@ pub enum PragmaPlan {
     SetQueryOnly(bool),
     SetCaseSensitiveLike(bool),
     WalCheckpoint,
+    SetAnalysisLimit(i64),
+    SetApplicationId(i64),
+    SetAutoVacuum(i64),
+    SetAutomaticIndex(bool),
+    SetBusyTimeout(i64),
+    SetCacheSpill(i64),
+    SetCheckpointFullfsync(bool),
+    SetDeferForeignKeys(bool),
+    SetFullfsync(bool),
+    SetHardHeapLimit(i64),
+    SetIgnoreCheckConstraints(bool),
+    SetLegacyAlterTable(bool),
+    SetLockingMode(LockingMode),
+    SetMaxPageCount(i64),
+    SetMmapSize(i64),
+    SetReverseUnorderedSelects(bool),
+    SetSecureDelete(bool),
+    SetSoftHeapLimit(i64),
+    SetThreads(i64),
+    SetTrustedSchema(bool),
+    SetWritableSchema(bool),
 }
 
 /// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the
@@ -230,6 +324,26 @@ pub enum TempStoreMode {
     Default = 0,
     File = 1,
     Memory = 2,
+}
+
+/// SQLite-compatible `PRAGMA locking_mode` values. RedlineDB does not
+/// implement a literal file-locking surface — concurrency is handled by
+/// the kernel transaction layer — but we accept and recall the value so
+/// callers probing it (ORMs, migration tooling) see the SQLite-expected
+/// strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockingMode {
+    Normal,
+    Exclusive,
+}
+
+impl LockingMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LockingMode::Normal => "normal",
+            LockingMode::Exclusive => "exclusive",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -348,6 +462,11 @@ pub struct JoinSource {
 pub struct SelectPlan {
     pub source: SelectSource,
     pub distinct: bool,
+    /// Track K — Postgres `SELECT DISTINCT ON (exprs) ...` keeps the first
+    /// row per distinct combination of `exprs`, where "first" is decided by
+    /// any outer `ORDER BY`. Empty when no DISTINCT ON is requested. Holds
+    /// at most one entry per logical "ON" expression.
+    pub distinct_on: Vec<Expr>,
     pub projection: Vec<SelectItem>,
     pub selection: Option<Expr>,
     pub group_by: Vec<Expr>,
@@ -388,6 +507,42 @@ pub struct DeletePlan {
     pub table: Arc<TableDef>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
+}
+
+/// Track K — Lowered plan for SQL:2003 `MERGE INTO target USING source ON ...`.
+/// At execute time the dispatcher iterates source rows, looks for matching
+/// target rows under the ON predicate, and applies the first WHEN-clause
+/// whose AND-predicate holds.
+#[derive(Debug, Clone)]
+pub struct MergePlan {
+    pub target: Arc<TableDef>,
+    pub target_alias: Option<Arc<str>>,
+    pub source: Arc<TableDef>,
+    pub source_alias: Option<Arc<str>>,
+    pub on: Expr,
+    pub clauses: Vec<MergeClausePlan>,
+}
+
+/// Track K — A single `WHEN [NOT] MATCHED [AND pred] THEN <action>` clause
+/// in a [`MergePlan`].
+#[derive(Debug, Clone)]
+pub enum MergeClausePlan {
+    /// `WHEN MATCHED [AND pred] THEN UPDATE SET col = expr, ...`
+    MatchedUpdate {
+        predicate: Option<Expr>,
+        assignments: Vec<(usize, DmlValue)>,
+    },
+    /// `WHEN MATCHED [AND pred] THEN DELETE`
+    MatchedDelete { predicate: Option<Expr> },
+    /// `WHEN NOT MATCHED [AND pred] THEN INSERT (col, ...) VALUES (expr, ...)`
+    /// — `columns` lists target column ordinals; `values` lists exprs in the
+    /// same order. Implicit columns (no list) expand to all non-generated
+    /// columns at bind time.
+    NotMatchedInsert {
+        predicate: Option<Expr>,
+        columns: Vec<usize>,
+        values: Vec<DmlValue>,
+    },
 }
 
 #[allow(clippy::large_enum_variant)]

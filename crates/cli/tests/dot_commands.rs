@@ -305,7 +305,7 @@ fn cli_flags_select_the_expected_renderers() {
         (
             "-line",
             ".nullvalue NULL\nSELECT 1 AS a, 'x' AS b, NULL AS c;\n",
-            &["a = 1", "b = x", "c = NULL"],
+            &["a: 1", "b: x", "c: NULL"],
         ),
         (
             "-column",
@@ -315,7 +315,10 @@ fn cli_flags_select_the_expected_renderers() {
         (
             "-box",
             "SELECT 1 AS a, 'x' AS b;\n",
-            &["| a | b |", "| 1 | x |"],
+            &[
+                "\u{2502} a \u{2502} b \u{2502}",
+                "\u{2502} 1 \u{2502} x \u{2502}",
+            ],
         ),
         (
             "-table",
@@ -325,7 +328,7 @@ fn cli_flags_select_the_expected_renderers() {
         (
             "-html",
             ".headers on\nSELECT 1 AS a, '<tag>' AS b;\n",
-            &["<TH>a</TH>", "&lt;tag&gt;"],
+            &["<TH>a", "&lt;tag&gt;"],
         ),
         (
             "-ascii",
@@ -351,7 +354,9 @@ fn delimited_modes_stream_headers_nulls_and_escaping() {
         "SELECT 1 AS a, 'x,y' AS b, NULL AS c UNION ALL SELECT 2, 'quote''d', 'z';\n",
     );
     assert_eq!(code, 0, "stderr={err}");
-    assert_eq!(out, "a,b,c\n1,\"x,y\",\n2,quote'd,z\n");
+    // CSV mode uses RFC 4180 row termination (CRLF) and quotes any value
+    // containing an apostrophe so it round-trips through the parser.
+    assert_eq!(out, "a,b,c\r\n1,\"x,y\",\r\n2,\"quote'd\",z\r\n");
 
     let (out, err, code) = run_script_with_args(
         &["-tabs"],
@@ -408,7 +413,9 @@ fn dot_mode_markdown_renders_pipe_table() {
     );
     assert_eq!(code, 0, "stderr={err}");
     assert!(out.contains("| a | b |"), "stdout={out}");
-    assert!(out.contains("| --- | --- |"), "stdout={out}");
+    // sqlite3-style markdown separator: dashes are width+2 wide and the
+    // pipes are flush against them (no surrounding spaces).
+    assert!(out.contains("|---|---|"), "stdout={out}");
 }
 
 #[test]
@@ -661,6 +668,382 @@ fn dot_parameter_set_binds_named_placeholders() {
         out.lines().any(|l| l.trim() == "42"),
         "named parameter should bind: stdout={out}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Track E parity: CLI flag-order quirks
+// ---------------------------------------------------------------------------
+
+/// Mode flags reset header / nullvalue / separator / newline to the mode
+/// defaults, so order matters. `-header -list` puts `-list` *after*
+/// `-header`, which resets headers to "off" (list's default).
+#[test]
+fn mode_flag_after_header_resets_header_to_mode_default() {
+    let bin = cargo_bin("redlinedb-cli");
+    let out = Command::new(&bin)
+        .args(["-header", "-list", "-batch", ":memory:"])
+        .arg("SELECT 1 AS a;")
+        .output()
+        .expect("run cli");
+    assert!(out.status.success(), "stderr={:?}", out.stderr);
+    // No header row because `-list` ran after `-header`.
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "1\n");
+
+    let out2 = Command::new(&bin)
+        .args(["-list", "-header", "-batch", ":memory:"])
+        .arg("SELECT 1 AS a;")
+        .output()
+        .expect("run cli");
+    assert!(out2.status.success(), "stderr={:?}", out2.stderr);
+    // Header row present because `-header` ran after `-list`.
+    assert_eq!(String::from_utf8(out2.stdout).unwrap(), "a\n1\n");
+}
+
+#[test]
+fn mode_flag_after_nullvalue_resets_nullvalue() {
+    let bin = cargo_bin("redlinedb-cli");
+    let out = Command::new(&bin)
+        .args(["-nullvalue", "NULL", "-list", "-batch", ":memory:"])
+        .arg("SELECT NULL, 1;")
+        .output()
+        .expect("run cli");
+    assert!(out.status.success(), "stderr={:?}", out.stderr);
+    // `-list` reset nullvalue to default empty string.
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "|1\n");
+}
+
+#[test]
+fn mode_flag_after_separator_resets_separator() {
+    let bin = cargo_bin("redlinedb-cli");
+    let out = Command::new(&bin)
+        .args(["-separator", ";", "-list", "-batch", ":memory:"])
+        .arg("SELECT 1, 2, 3;")
+        .output()
+        .expect("run cli");
+    assert!(out.status.success(), "stderr={:?}", out.stderr);
+    // `-list` reset separator to its default `|`.
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "1|2|3\n");
+}
+
+#[test]
+fn cmd_flag_repeated_runs_each_command() {
+    let bin = cargo_bin("redlinedb-cli");
+    let out = Command::new(&bin)
+        .args([
+            "-cmd",
+            "SELECT 1;",
+            "-cmd",
+            "SELECT 2;",
+            "-list",
+            "-batch",
+            ":memory:",
+        ])
+        .arg("SELECT 3;")
+        .output()
+        .expect("run cli");
+    assert!(out.status.success(), "stderr={:?}", out.stderr);
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "1\n2\n3\n");
+}
+
+// ---------------------------------------------------------------------------
+// Track E parity: output mode rendering
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mode_column_centres_headers_and_right_aligns_numerics() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode column\n\
+         .headers on\n\
+         CREATE TABLE t(a INTEGER, b TEXT, c REAL);\n\
+         INSERT INTO t VALUES (1,'abc',3.14),(NULL,'a|b',2.0),(42,'a''b',0.5);\n\
+         SELECT * FROM t;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(
+        out,
+        "a    b    c\n--  ---  ----\n 1  abc  3.14\n    a|b   2.0\n42  a'b   0.5\n"
+    );
+}
+
+#[test]
+fn mode_column_honours_width_and_wraps_long_values() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode column\n\
+         .headers on\n\
+         .width 5 5 5\n\
+         CREATE TABLE t(a INTEGER, b TEXT, c REAL);\n\
+         INSERT INTO t VALUES (1,'abc',3.14),(NULL,'longerstring',2.0);\n\
+         SELECT * FROM t;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(
+        out,
+        "  a      b      c\n-----  -----  -----\n    1  abc     3.14\n\n       longe    2.0\n       rstri\n       ng\n"
+    );
+}
+
+#[test]
+fn mode_insert_with_blob_uses_lowercase_x_literal() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode insert t\n\
+         CREATE TABLE t(a INTEGER, b BLOB);\n\
+         INSERT INTO t VALUES (1, x'01ab');\n\
+         SELECT * FROM t;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(
+        out.contains("INSERT INTO t VALUES(1,x'01ab');"),
+        "stdout={out}"
+    );
+}
+
+#[test]
+fn mode_insert_default_table_name_is_tab() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode insert\nCREATE TABLE x(a); INSERT INTO x VALUES(7);\nSELECT * FROM x;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("INSERT INTO tab VALUES(7);"), "stdout={out}");
+}
+
+#[test]
+fn mode_box_uses_unicode_line_drawing() {
+    let (out, err, code) = run_script(None, ".mode box\nSELECT 1 AS a, 2 AS b;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(
+        out.starts_with('\u{256d}'),
+        "expected box-top, stdout={out}"
+    );
+    assert!(out.contains('\u{2502}'), "expected box-side, stdout={out}");
+}
+
+#[test]
+fn mode_table_uses_ascii_pluses_only_around_header() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode table\n\
+         SELECT 1 AS a, 'x' AS b UNION ALL SELECT 2, 'y';\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    // Three +---+ border lines: top, after header, bottom (NOT between rows).
+    let border_count = out.lines().filter(|l| l.starts_with('+')).count();
+    assert_eq!(border_count, 3, "stdout={out}");
+}
+
+#[test]
+fn mode_html_omits_table_wrapper_and_uses_single_open_tags() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode html\n\
+         CREATE TABLE t(a INTEGER); INSERT INTO t VALUES(1);\n\
+         SELECT * FROM t;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(!out.contains("<TABLE>"), "stdout={out}");
+    assert!(!out.contains("</TH>"), "stdout={out}");
+    assert!(!out.contains("</TD>"), "stdout={out}");
+    assert!(out.contains("<TR>\n<TH>a"), "stdout={out}");
+    assert!(out.contains("<TR>\n<TD>1"), "stdout={out}");
+}
+
+#[test]
+fn mode_html_renders_null_as_literal_null() {
+    let (out, err, code) = run_script(None, ".mode html\nSELECT NULL;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("<TD>null"), "stdout={out}");
+}
+
+#[test]
+fn mode_json_emits_one_row_per_line_with_blob_escapes() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode json\n\
+         SELECT 1 AS a UNION ALL SELECT 2 UNION ALL SELECT 3;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "[{\"a\":1},\n{\"a\":2},\n{\"a\":3}]\n");
+
+    let (out2, err2, code2) = run_script(None, ".mode json\nSELECT x'01ab' AS d;\n");
+    assert_eq!(code2, 0, "stderr={err2}");
+    assert_eq!(out2, "[{\"d\":\"\\u0001\\u00ab\"}]\n");
+}
+
+#[test]
+fn mode_csv_quotes_apostrophes_and_uses_crlf_terminators() {
+    let (out, err, code) = run_script(None, ".mode csv\nSELECT 'a''b';\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "\"a'b\"\r\n");
+}
+
+#[test]
+fn mode_markdown_separator_uses_three_dashes_per_cell() {
+    let (out, err, code) = run_script(None, ".mode markdown\nSELECT 1 AS a, 2 AS b;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    // Cell width 1 → separator `---` (3 dashes), wrapped with `|`.
+    assert!(out.contains("|---|---|"), "stdout={out}");
+}
+
+#[test]
+fn mode_markdown_respects_headers_off() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode markdown\n.headers off\nSELECT 1 AS a, 2 AS b;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    // Header + separator suppressed → only the data row remains.
+    assert_eq!(out, "| 1 | 2 |\n");
+}
+
+#[test]
+fn mode_quote_renders_blob_with_lowercase_x_literal() {
+    let (out, err, code) = run_script(None, ".mode quote\nSELECT x'4142';\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("x'4142'"), "stdout={out}");
+    assert!(!out.contains("X'4142'"), "stdout={out}");
+}
+
+#[test]
+fn mode_tcl_renders_strings_with_octal_escapes() {
+    let (out, err, code) = run_script(
+        None,
+        ".mode tcl\nCREATE TABLE t(a INTEGER, b TEXT);\nINSERT INTO t VALUES(1,'abc');\nSELECT * FROM t;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "1 \"abc\"\n");
+}
+
+#[test]
+fn mode_line_uses_colon_and_aligns_names() {
+    let (out, err, code) = run_script(None, ".mode line\nSELECT 1 AS a, 'x' AS bb;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    // Names right-aligned to the longest name width, separator is `: `.
+    assert_eq!(out, " a: 1\nbb: x\n");
+}
+
+#[test]
+fn mode_line_wraps_multiline_values_with_indent() {
+    let (out, err, code) = run_script(None, ".mode line\nSELECT 1 AS a, 'first\nsecond' AS b;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    // Continuation line is indented to align with the value column.
+    assert_eq!(out, "a: 1\nb: first\n   second\n");
+}
+
+// ---------------------------------------------------------------------------
+// Track E parity: dot commands
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dot_tables_columns_use_five_space_separator_column_major() {
+    let (out, err, code) = run_script(
+        None,
+        "CREATE TABLE alpha(x);\n\
+         CREATE TABLE bravo(y);\n\
+         CREATE TABLE charlie(z);\n\
+         .tables\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    // Each name padded to its own column width, 5-space inter-column gap.
+    assert!(
+        out.lines().any(|l| l == "alpha     bravo     charlie"),
+        "stdout={out}"
+    );
+}
+
+#[test]
+fn dot_schema_sqlite_master_returns_canonical_schema() {
+    let (out, err, code) = run_script(None, ".schema sqlite_master\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("CREATE TABLE sqlite_schema ("), "stdout={out}");
+    assert!(out.contains("rootpage integer"), "stdout={out}");
+}
+
+#[test]
+fn dot_schema_accepts_indent_and_nosys_flags() {
+    let (out, err, code) = run_script(None, "CREATE TABLE foo(x INTEGER);\n.schema --indent\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("CREATE TABLE foo(x INTEGER);"), "stdout={out}");
+    let (out2, err2, code2) = run_script(None, "CREATE TABLE foo(x INTEGER);\n.schema --nosys\n");
+    assert_eq!(code2, 0, "stderr={err2}");
+    assert!(
+        out2.contains("CREATE TABLE foo(x INTEGER);"),
+        "stdout={out2}"
+    );
+}
+
+#[test]
+fn dot_databases_uses_quoted_path_for_memory_db() {
+    let (out, err, code) = run_script(None, ".databases\n");
+    assert_eq!(code, 0, "stderr={err}");
+    // sqlite3 renders the main line as: `main: "" r/w` for `:memory:`.
+    assert!(out.contains("main: \"\" r/w"), "stdout={out}");
+}
+
+#[test]
+fn dot_echo_off_is_still_echoed_when_echo_was_on() {
+    let (out, _err, code) = run_script(None, ".mode list\n.echo on\n.echo off\nSELECT 1;\n");
+    assert_eq!(code, 0);
+    // `.echo off` is echoed (echo was on at that line), SELECT is not.
+    assert!(out.contains(".echo off"), "stdout={out}");
+    assert!(
+        !out.contains("SELECT 1"),
+        "SELECT should NOT echo, stdout={out}"
+    );
+    assert!(out.contains("1"), "stdout={out}");
+}
+
+#[test]
+fn dot_changes_skips_ddl_and_runs_total_for_dml() {
+    let (out, err, code) = run_script(
+        None,
+        ".changes on\n\
+         CREATE TABLE t(x);\n\
+         INSERT INTO t VALUES(1),(2),(3);\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    // CREATE counts as 0; INSERT counts as 3.
+    assert!(
+        out.contains("changes: 0   total_changes: 0"),
+        "stdout={out}"
+    );
+    assert!(
+        out.contains("changes: 3   total_changes: 3"),
+        "stdout={out}"
+    );
+}
+
+#[test]
+fn dot_lint_fkey_indexes_emits_create_index_per_reference() {
+    let (out, err, code) = run_script(
+        None,
+        "CREATE TABLE p(id INTEGER PRIMARY KEY);\n\
+         CREATE TABLE c(p_id INTEGER REFERENCES p(id));\n\
+         .lint fkey-indexes\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(
+        out.contains("CREATE INDEX 'c_p_id' ON 'c'('p_id'); --> p(id)"),
+        "stdout={out}"
+    );
+}
+
+#[test]
+fn dot_separator_double_quoted_argument_expands_escapes() {
+    let (out, err, code) = run_script(None, ".mode list\n.separator \"\\t\"\nSELECT 1,2,3;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    // `\t` inside double quotes becomes a real tab.
+    assert_eq!(out, "1\t2\t3\n");
+}
+
+#[test]
+fn dot_separator_single_quoted_argument_is_literal() {
+    let (out, err, code) = run_script(None, ".mode list\n.separator '\\t'\nSELECT 1,2,3;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    // `\t` inside single quotes stays as the two-character sequence.
+    assert_eq!(out, "1\\t2\\t3\n");
 }
 
 #[test]

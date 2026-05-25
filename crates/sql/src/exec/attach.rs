@@ -142,13 +142,62 @@ impl AttachMap {
         }
         out
     }
+
+    /// (alias, on-disk path) pairs for every alias **other than `main`**.
+    /// `:memory:` and ephemeral sidecars surface as empty strings.
+    pub fn attached_aliases_with_paths(&self) -> Vec<(String, String)> {
+        let Ok(g) = self.inner.read() else {
+            return Vec::new();
+        };
+        let mut out: Vec<(String, String)> = g
+            .iter()
+            .map(|(alias, entry)| {
+                let path = entry.path.to_string_lossy().into_owned();
+                let path = if path == ":memory:" {
+                    String::new()
+                } else {
+                    path
+                };
+                (alias.clone(), path)
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
 }
 
 fn open_or_create(path: &Path) -> Result<Arc<Database>> {
     if path == Path::new(":memory:") {
         return Database::create_in_memory(DbOptions::default());
     }
-    if path.exists() {
+    // Ensure the parent directory exists so `Database::create` can lay
+    // out the on-disk engine directory underneath it. ATTACH targets
+    // often live under a freshly allocated tmp root where the immediate
+    // parent has been created but `path` itself has not.
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent).map_err(|err| {
+            crate::error::Error::Config(format!(
+                "create attach parent dir {}: {}",
+                parent.display(),
+                err
+            ))
+        })?;
+    }
+    // SQLite-parity quirk: a parallel sqlite3 invocation leaves an empty
+    // file at the same path. RedlineDB's engine format is directory-
+    // shaped, so a zero-byte regular file at the target path must be
+    // removed before `Database::create` lays out the directory tree.
+    if path.is_file()
+        && std::fs::metadata(path)
+            .map(|m| m.len() == 0)
+            .unwrap_or(false)
+    {
+        let _ = std::fs::remove_file(path);
+    }
+    if path.is_dir() {
         Database::open(path, DbOptions::default())
     } else {
         Database::create(path, DbOptions::default())

@@ -97,6 +97,7 @@ fn build_select_runtime(
     if let SelectSource::Table(table) = &plan.source
         && plan.group_by.is_empty()
         && !plan.distinct
+        && plan.distinct_on.is_empty()
         && plan.order_by.is_empty()
         && plan.having.is_none()
         && is_count_star_only_projection(&plan.projection)
@@ -123,6 +124,7 @@ fn build_select_runtime(
         && let SelectSource::Table(table) = &plan.source
         && plan.group_by.is_empty()
         && !plan.distinct
+        && plan.distinct_on.is_empty()
         && !select_requires_aggregation(plan)
         && plan.having.is_none()
         && let Some(matched) =
@@ -310,10 +312,11 @@ fn build_select_runtime(
                         .map(SqlRow::Table)
                         .collect::<Vec<_>>();
                     SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
+                        node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                             rows,
                             &plan.selection,
                             &plan.order_by,
+                            &plan.distinct_on,
                             bindings,
                             &plan.projection,
                             limit,
@@ -336,10 +339,11 @@ fn build_select_runtime(
                 let rows =
                     collect_join_rows(conn.engine(), tx.as_mut().expect("tx present"), tables)?;
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -365,10 +369,11 @@ fn build_select_runtime(
                     bindings,
                 )?;
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -398,10 +403,11 @@ fn build_select_runtime(
                         .map(SqlRow::SqliteSchema)
                         .collect::<Vec<_>>();
                     SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
+                        node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                             sqlite_rows,
                             &plan.selection,
                             &plan.order_by,
+                            &plan.distinct_on,
                             bindings,
                             &plan.projection,
                             limit,
@@ -448,10 +454,11 @@ fn build_select_runtime(
                     })
                     .collect();
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         sql_rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -476,10 +483,11 @@ fn build_select_runtime(
                     .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
                     .collect::<Vec<_>>();
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -505,10 +513,11 @@ fn build_select_runtime(
                         .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
                         .collect::<Vec<_>>();
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -636,11 +645,17 @@ fn table_rows_for_select(
     collect_table_rows(conn.engine(), tx, table)
 }
 
+/// Track K — DISTINCT ON wrapper around the ordering/projection pipeline.
+/// When `distinct_on` is non-empty, the rows are sorted by ORDER BY first,
+/// then we walk in order and keep only the first row per distinct
+/// combination of the ON expressions. LIMIT/OFFSET are applied after the
+/// dedup pass.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn order_and_project_rows(
+pub(super) fn order_and_project_rows_with_distinct_on(
     rows: Vec<SqlRow>,
     selection: &Option<Expr>,
     order_by: &[OrderByExpr],
+    distinct_on: &[Expr],
     bindings: &[Option<SqlValue>],
     projection: &[SelectItem],
     limit: usize,
@@ -652,6 +667,64 @@ pub(super) fn order_and_project_rows(
         if selection_passes(selection, &row, bindings)? {
             filtered.push(row);
         }
+    }
+
+    // DISTINCT ON: sort by ORDER BY (which decides the "first" winner per
+    // ON-group), walk in order, and keep one row per distinct ON-key. We
+    // must compute ON keys against the raw `SqlRow` context (not the
+    // projected output), so the dedup needs to happen here before we drop
+    // the row context.
+    if !distinct_on.is_empty() {
+        // Sort first so the per-group winner is deterministic. We use the
+        // existing sort plumbing by transferring through a key+row vector.
+        let directions = directions_from_order_by(order_by);
+        let mut keyed: Vec<(Vec<SqlValue>, SqlRow)> = Vec::with_capacity(filtered.len());
+        for row in filtered {
+            let mut keys = Vec::with_capacity(order_by.len());
+            for order in order_by {
+                keys.push(eval_order_key(order, &row.context(), bindings)?);
+            }
+            keyed.push((keys, row));
+        }
+        keyed.sort_by(|a, b| {
+            for (idx, dir) in directions.iter().enumerate() {
+                let cmp = dir.compare_values(&a.0[idx], &b.0[idx]);
+                if cmp != std::cmp::Ordering::Equal {
+                    return cmp;
+                }
+            }
+            std::cmp::Ordering::Equal
+        });
+        let mut seen: Vec<Vec<SqlValue>> = Vec::with_capacity(keyed.len());
+        let mut deduped: Vec<SqlRow> = Vec::with_capacity(keyed.len());
+        for (_keys, row) in keyed {
+            let mut on_key = Vec::with_capacity(distinct_on.len());
+            for expr in distinct_on {
+                on_key.push(eval_scalar(expr, &row.context(), bindings)?);
+            }
+            let mut already = false;
+            for prev in &seen {
+                if prev.len() == on_key.len()
+                    && prev.iter().zip(on_key.iter()).all(|(a, b)| {
+                        crate::value::compare_values(a, b) == std::cmp::Ordering::Equal
+                    })
+                {
+                    already = true;
+                    break;
+                }
+            }
+            if !already {
+                seen.push(on_key);
+                deduped.push(row);
+            }
+        }
+        // Now project + apply LIMIT/OFFSET. The rows are already in the
+        // requested order so no further sort is needed.
+        let mut out = Vec::with_capacity(limit.min(deduped.len()));
+        for row in deduped.into_iter().skip(offset).take(limit) {
+            out.push(project_row(projection, &row, bindings)?);
+        }
+        return Ok(out);
     }
 
     // Comparator-only collation fallback: custom collations and SQLite's UINT

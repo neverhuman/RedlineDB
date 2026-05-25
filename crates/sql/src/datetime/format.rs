@@ -11,7 +11,7 @@ pub fn strftime(format: &str, dt: &DateTime) -> String {
             let spec = bytes[i + 1];
             i += 2;
             match spec {
-                b'Y' => out.push_str(&format!("{:04}", dt.year)),
+                b'Y' => out.push_str(&super::format_year_4(dt.year)),
                 b'm' => out.push_str(&format!("{:02}", dt.month)),
                 b'd' => out.push_str(&format!("{:02}", dt.day)),
                 b'e' => out.push_str(&format!("{:2}", dt.day)),
@@ -96,6 +96,7 @@ fn week_of_year_sunday(dt: &DateTime) -> u32 {
         second: 0,
         micro: 0,
         is_local: false,
+        out_of_range: None,
     };
     let jan1_dow = day_of_week(&jan1);
     let doy = day_of_year(dt);
@@ -118,6 +119,7 @@ fn week_of_year_monday(dt: &DateTime) -> u32 {
         second: 0,
         micro: 0,
         is_local: false,
+        out_of_range: None,
     };
     let jan1_dow = day_of_week(&jan1);
     let jan1_mon_dow = (jan1_dow + 6) % 7;

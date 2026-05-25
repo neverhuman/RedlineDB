@@ -108,13 +108,16 @@ struct Cli {
     tabs: bool,
 
     #[arg(long)]
+    tcl: bool,
+
+    #[arg(long)]
     separator: Option<String>,
 
     #[arg(long)]
     init: Option<String>,
 
-    #[arg(long)]
-    cmd: Option<String>,
+    #[arg(long, action = clap::ArgAction::Append)]
+    cmd: Vec<String>,
 
     #[arg(long)]
     mmap: Option<String>,
@@ -243,7 +246,7 @@ pub fn run() {
     if preloaded_stdin.is_none()
         && stdin_is_batch
         && cli.sql.is_empty()
-        && cli.cmd.is_none()
+        && cli.cmd.is_empty()
         && cli.init.is_none()
     {
         let mut input = String::new();
@@ -272,47 +275,35 @@ pub fn run() {
         exit(1);
     }
     if cli.pagecache.is_some() {
-        println!("Page cache size increased to 1296 to accommodate the 272-byte headers");
+        // Suppress the page-cache notice when both N and M are zero (the
+        // SQLite shell prints nothing in that case).
+        let suppress = cli
+            .pagecache
+            .as_ref()
+            .map(|v| v.iter().all(|x| x.trim() == "0"))
+            .unwrap_or(false);
+        if !suppress {
+            println!("Page cache size increased to 1296 to accommodate the 272-byte headers");
+        }
     }
     if cli.vfstrace {
         println!("trace.enabled_for(\"unix\")");
     }
 
-    // Determine output mode
-    let mut mode = OutputMode::List;
-    if cli.csv {
-        mode = OutputMode::Csv;
-    } else if cli.json {
-        mode = OutputMode::Json;
-    } else if cli.line {
-        mode = OutputMode::Line;
-    } else if cli.markdown {
-        mode = OutputMode::Markdown;
-    } else if cli.quote {
-        mode = OutputMode::Quote;
-    } else if cli.boxed || cli.table {
-        mode = OutputMode::Table;
-    } else if cli.column {
-        mode = OutputMode::Column;
-    } else if cli.html {
-        mode = OutputMode::Html;
-    } else if cli.tabs {
-        mode = OutputMode::Tabs;
-    } else if cli.ascii {
-        mode = OutputMode::Ascii;
-    }
+    // Walk the raw arguments in order, mirroring the sqlite3 shell where
+    // mode flags reset the header / nullvalue / separator to the mode's
+    // defaults. The last mode flag (and any post-mode override) wins.
+    let flag_state = resolve_cli_flags(&raw_args);
+    let mode = flag_state.mode;
 
-    let separator = match cli.separator {
-        Some(separator) => separator,
+    let separator = match flag_state.separator {
+        Some(sep) => sep,
         None => mode.default_separator().to_owned(),
     };
 
-    let show_header = if cli.noheader {
-        false
-    } else if cli.header {
-        true
-    } else {
-        mode.headers_by_default()
+    let show_header = match flag_state.header {
+        Some(explicit) => explicit,
+        None => mode.headers_by_default(),
     };
 
     // `:memory:` and `""` open a fresh per-process ephemeral database, matching
@@ -354,8 +345,8 @@ pub fn run() {
                     mode,
                     &separator,
                     show_header,
-                    cli.nullvalue.as_deref(),
-                    cli.newline.as_deref(),
+                    flag_state.null_value.as_deref(),
+                    None,
                     cli.bail,
                     cli.echo,
                 )
@@ -384,10 +375,10 @@ pub fn run() {
     state.stats = cli.stats;
     state.defer_output_flush = stdin_is_batch || !cli.sql.is_empty();
     state.escape_symbol = cli.escape.as_deref() == Some("symbol");
-    if let Some(nullvalue) = cli.nullvalue {
+    if let Some(nullvalue) = flag_state.null_value {
         state.null_value = nullvalue;
     }
-    if let Some(newline) = cli.newline {
+    if let Some(newline) = flag_state.row_separator {
         state.row_separator = newline;
     }
     state.safe_mode = cli.safe;
@@ -408,8 +399,8 @@ pub fn run() {
         }
     }
 
-    if let Some(cmd) = cli.cmd {
-        if let Err(e) = run_input(&mut state, &cmd) {
+    for cmd in &cli.cmd {
+        if let Err(e) = run_input(&mut state, cmd) {
             eprintln!("{e}");
             if state.bail {
                 exit(1);
@@ -555,6 +546,12 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
             }
         }
         if sql_chunk.trim().is_empty() && raw_line.trim_start().starts_with('.') {
+            // sqlite3 echoes every executed input line (including dot
+            // commands) when `.echo on` is active; check the flag BEFORE
+            // dispatching so a leading `.echo off` still gets logged.
+            if state.echo {
+                println!("{}", raw_line.trim_end());
+            }
             match dot::dispatch(state, raw_line.trim())? {
                 DotOutcome::Ok => {}
                 DotOutcome::ReadFile(path) => run_script_file(state, &path)?,
@@ -582,6 +579,9 @@ fn run_input_incremental(state: &mut CliState, input: &str) -> Result<(), String
             continue;
         }
         if buffer.is_empty() && raw_line.trim_start().starts_with('.') {
+            if state.echo {
+                println!("{}", raw_line.trim_end());
+            }
             match dot::dispatch(state, raw_line.trim())? {
                 DotOutcome::Ok => {}
                 DotOutcome::ReadFile(path) => run_script_file(state, &path)?,
@@ -624,6 +624,17 @@ fn execute_sql_chunk(state: &mut CliState, sql_chunk: &mut String) -> Result<(),
 
 fn is_alternate_terminator(line: &str) -> bool {
     line == "/" || line.eq_ignore_ascii_case("go")
+}
+
+/// Whether the leading keyword of an uppercased SQL statement actually
+/// mutates row data. sqlite3's `.changes` only counts these statements.
+fn statement_changes_rows(statement_upper: &str) -> bool {
+    let trimmed = statement_upper.trim_start();
+    let head = trimmed.split_whitespace().next().unwrap_or("");
+    matches!(
+        head,
+        "INSERT" | "UPDATE" | "DELETE" | "REPLACE" | "MERGE" | "UPSERT"
+    )
 }
 
 fn flush_output_or_exit(state: &mut CliState) {
@@ -725,6 +736,89 @@ fn run_readonly_sidecar(
     Ok(true)
 }
 
+/// Final state of the shell flags computed from the raw `argv` in source
+/// order, mirroring the SQLite shell's "mode flag resets dependent
+/// settings" quirk.
+struct CliFlagState {
+    mode: OutputMode,
+    header: Option<bool>,
+    null_value: Option<String>,
+    separator: Option<String>,
+    row_separator: Option<String>,
+}
+
+/// Iterate the raw CLI arguments in source order, returning the mode that
+/// was finally selected together with explicit header / nullvalue /
+/// separator / row-separator preferences (if the caller passed those
+/// options after the last mode flag).
+///
+/// SQLite has a long-standing quirk where every mode flag resets the
+/// dependent state (header / nullvalue / separator / newline) to that
+/// mode's defaults. As a result, `-header -list` ends up with headers OFF
+/// (because `-list` defaults to off and runs second) while `-list
+/// -header` ends up with headers ON. The same applies to `-newline`. We
+/// mirror that exactly.
+fn resolve_cli_flags(raw_args: &[String]) -> CliFlagState {
+    let mut state = CliFlagState {
+        mode: OutputMode::List,
+        header: None,
+        null_value: None,
+        separator: None,
+        row_separator: None,
+    };
+    let mut iter = raw_args.iter();
+    while let Some(arg) = iter.next() {
+        let token = arg.trim_start_matches('-');
+        let new_mode = match token {
+            "csv" => Some(OutputMode::Csv),
+            "json" => Some(OutputMode::Json),
+            "line" => Some(OutputMode::Line),
+            "markdown" => Some(OutputMode::Markdown),
+            "quote" => Some(OutputMode::Quote),
+            "box" => Some(OutputMode::Box),
+            "table" => Some(OutputMode::Table),
+            "column" => Some(OutputMode::Column),
+            "html" => Some(OutputMode::Html),
+            "tabs" => Some(OutputMode::Tabs),
+            "ascii" => Some(OutputMode::Ascii),
+            "list" => Some(OutputMode::List),
+            "tcl" => Some(OutputMode::Tcl),
+            _ => None,
+        };
+        if let Some(m) = new_mode {
+            state.mode = m;
+            // Mode flags reset every dependent state to the mode defaults;
+            // post-mode flags below override them again.
+            state.header = None;
+            state.null_value = None;
+            state.separator = None;
+            state.row_separator = None;
+            continue;
+        }
+        match token {
+            "header" => state.header = Some(true),
+            "noheader" => state.header = Some(false),
+            "nullvalue" => {
+                if let Some(value) = iter.next() {
+                    state.null_value = Some(value.clone());
+                }
+            }
+            "separator" => {
+                if let Some(value) = iter.next() {
+                    state.separator = Some(value.clone());
+                }
+            }
+            "newline" => {
+                if let Some(value) = iter.next() {
+                    state.row_separator = Some(value.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    state
+}
+
 fn print_sqlite_help() {
     println!("Usage: sqlite3 [OPTIONS] [FILENAME [SQL]]");
     println!("FILENAME is the name of an SQLite database.");
@@ -779,6 +873,7 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
         .collect();
     let query_options = QueryOptions {
         mode: state.mode,
+        insert_table_name: state.insert_table_name.clone(),
         separator: state.separator.clone(),
         row_separator: state.row_separator.clone(),
         show_header: state.show_header,
@@ -790,26 +885,45 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
         stats: state.stats,
         expert: state.expert,
         escape_symbol: state.escape_symbol,
+        widths: state.widths.clone(),
         params,
     };
+    let total_changes_before = state.total_changes;
     if let Some(path) = state.once.take() {
         let file = std::fs::File::create(&path)
             .map_err(|err| format!("Error: cannot open {}: {err}", path.display()))?;
         let mut writer = io::BufWriter::new(file);
-        let result = run_query_writer(&mut state.conn, sql, &mut writer, &query_options);
+        let mut local_total = total_changes_before;
+        let result = run_query_writer(
+            &mut state.conn,
+            sql,
+            &mut writer,
+            &query_options,
+            &mut local_total,
+        );
         writer.flush().map_err(|err| err.to_string())?;
+        state.total_changes = local_total;
         result
     } else {
-        let result = run_query_writer(&mut state.conn, sql, &mut state.output, &query_options);
+        let mut local_total = total_changes_before;
+        let result = run_query_writer(
+            &mut state.conn,
+            sql,
+            &mut state.output,
+            &query_options,
+            &mut local_total,
+        );
         if !state.defer_output_flush {
             state.output.flush().map_err(|err| err.to_string())?;
         }
+        state.total_changes = local_total;
         result
     }
 }
 
 struct QueryOptions {
     mode: OutputMode,
+    insert_table_name: String,
     separator: String,
     row_separator: String,
     show_header: bool,
@@ -821,6 +935,7 @@ struct QueryOptions {
     stats: bool,
     expert: bool,
     escape_symbol: bool,
+    widths: Vec<usize>,
     params: Vec<(String, dot::parameter::ParameterValue)>,
 }
 
@@ -829,6 +944,7 @@ fn run_query_writer<W: Write>(
     sql: &str,
     out: &mut W,
     options: &QueryOptions,
+    total_changes: &mut i64,
 ) -> Result<(), String> {
     let mut rest = sql;
     while !rest.trim().is_empty() {
@@ -866,6 +982,13 @@ fn run_query_writer<W: Write>(
         }
         let column_count = stmt.column_count();
         if is_streaming_delimited_mode(options.mode) {
+            // CSV is delimited per RFC 4180 — every row ends with CRLF. The
+            // other delimited modes use the configured row separator.
+            let row_terminator = if matches!(options.mode, OutputMode::Csv) {
+                "\r\n".to_owned()
+            } else {
+                options.row_separator.clone()
+            };
             let mut wrote_anything = false;
             if options.show_header && column_count > 0 {
                 write_delimited_row(
@@ -879,7 +1002,7 @@ fn run_query_writer<W: Write>(
             }
             while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
                 if wrote_anything {
-                    write_row_separator(out, &options.row_separator)?;
+                    write_row_separator(out, &row_terminator)?;
                 }
                 for index in 0..column_count {
                     if index > 0 {
@@ -898,7 +1021,7 @@ fn run_query_writer<W: Write>(
                 wrote_anything = true;
             }
             if wrote_anything {
-                write_row_separator(out, &options.row_separator)?;
+                write_row_separator(out, &row_terminator)?;
             }
         } else {
             let column_names: Vec<String> = (0..column_count)
@@ -921,12 +1044,24 @@ fn run_query_writer<W: Write>(
                 &options.separator,
                 options.show_header,
                 &options.null_value,
+                &options.insert_table_name,
+                &options.widths,
                 &column_names,
                 &rows,
             )?;
         }
         if options.changes {
-            writeln!(out, "changes: {}", stmt.affected_rows()).map_err(|err| err.to_string())?;
+            // sqlite3 only counts row-mutating statements (INSERT / UPDATE
+            // / DELETE / REPLACE). DDL like CREATE / DROP / ALTER reports
+            // zero changes.
+            let n = if statement_changes_rows(&statement_upper) {
+                stmt.affected_rows() as i64
+            } else {
+                0
+            };
+            *total_changes += n;
+            writeln!(out, "changes: {n}   total_changes: {total_changes}")
+                .map_err(|err| err.to_string())?;
         }
         if options.stats {
             writeln!(out, "Memory Used: 0 (max 0) bytes").map_err(|err| err.to_string())?;

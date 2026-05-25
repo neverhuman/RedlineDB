@@ -326,6 +326,29 @@ pub(crate) fn build_plan(
         PreparedKind::DropTrigger(_) => {
             simple_node(PhysicalKind::Constant, "DROP TRIGGER".to_owned())
         }
+        PreparedKind::CreateSchema { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE SCHEMA".to_owned())
+        }
+        PreparedKind::DropSchema { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP SCHEMA".to_owned())
+        }
+        PreparedKind::CreateSequence { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE SEQUENCE".to_owned())
+        }
+        PreparedKind::DropSequence { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP SEQUENCE".to_owned())
+        }
+        PreparedKind::SetTransactionIsolation { .. } => {
+            simple_node(PhysicalKind::Constant, "SET TRANSACTION".to_owned())
+        }
+        PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
+        PreparedKind::AlterIndex { .. } => {
+            simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
+        }
+        PreparedKind::Merge(plan) => simple_node(
+            PhysicalKind::Constant,
+            format!("MERGE INTO {}", plan.target.name),
+        ),
     };
 
     if let Some(metrics) = metrics {

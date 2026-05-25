@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ahash = "0.8"
 arc-swap = "1.7"
 crc32fast = "1.5"
 fail = { version = "0.5", features = ["failpoints"], optional = true }

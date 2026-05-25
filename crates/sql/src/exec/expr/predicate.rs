@@ -1,6 +1,5 @@
 use super::*;
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct SubqueryCacheKey {
@@ -11,10 +10,10 @@ struct SubqueryCacheKey {
 }
 
 thread_local! {
-    static SUBQUERY_TEMPLATE_CACHE: RefCell<HashMap<SubqueryCacheKey, PreparedTemplate>> =
-        RefCell::new(HashMap::new());
-    static IN_SUBQUERY_ROW_CACHE: RefCell<HashMap<SubqueryCacheKey, Vec<Vec<SqlValue>>>> =
-        RefCell::new(HashMap::new());
+    static SUBQUERY_TEMPLATE_CACHE: RefCell<ahash::AHashMap<SubqueryCacheKey, PreparedTemplate>> =
+        RefCell::new(ahash::AHashMap::new());
+    static IN_SUBQUERY_ROW_CACHE: RefCell<ahash::AHashMap<SubqueryCacheKey, Vec<Vec<SqlValue>>>> =
+        RefCell::new(ahash::AHashMap::new());
 }
 
 pub(crate) fn clear_subquery_template_cache() {
@@ -25,7 +24,7 @@ pub(crate) fn clear_subquery_template_cache() {
 pub(crate) fn truthy_opt(value: &SqlValue) -> Option<bool> {
     match value {
         SqlValue::Null => None,
-        _ => Some(is_truthy(value)),
+        _ => Some(super::pg_bool_or_truthy(value)),
     }
 }
 
@@ -62,7 +61,7 @@ where
     } else {
         for when in conditions {
             let condition = evaluator.eval_case_expr(&when.condition)?;
-            if !matches!(condition, SqlValue::Null) && is_truthy(&condition) {
+            if !matches!(condition, SqlValue::Null) && super::pg_bool_or_truthy(&condition) {
                 return evaluator.eval_case_expr(&when.result);
             }
         }
@@ -79,12 +78,17 @@ pub(crate) fn eval_subquery_value(
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
     let rows = evaluate_subquery_rows(subquery, row, bindings)?;
-    match rows.as_slice() {
-        [] => Ok(SqlValue::Null),
-        [row] if row.len() == 1 => Ok(row[0].clone()),
-        [row] if row.is_empty() => Ok(SqlValue::Null),
-        _ => Err(Error::UnsupportedSql(
-            "scalar subquery must return exactly one row and one column".to_owned(),
+    // SQLite scalar-subquery semantics
+    // (https://sqlite.org/lang_expr.html#subqueries): a multi-row
+    // subquery returns the value of the first row (in projection
+    // order). A multi-column subquery is still rejected since the
+    // expression context demands a single column.
+    match rows.first() {
+        None => Ok(SqlValue::Null),
+        Some(first) if first.is_empty() => Ok(SqlValue::Null),
+        Some(first) if first.len() == 1 => Ok(first[0].clone()),
+        Some(_) => Err(Error::UnsupportedSql(
+            "scalar subquery must return exactly one column".to_owned(),
         )),
     }
 }

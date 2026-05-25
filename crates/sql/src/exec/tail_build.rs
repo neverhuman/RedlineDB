@@ -252,8 +252,22 @@ pub(crate) fn apply_row_affinity(table: &TableDef, values: Vec<SqlValue>) -> Res
     let mut out = values;
     for (idx, column) in table.columns.iter().enumerate() {
         let original = out[idx].clone();
-        let coerced = apply_affinity(original.clone(), column.affinity)
-            .map_err(|_| Error::DatatypeMismatch)?;
+        // SQLite formats REAL → TEXT through its `%!.*g` printf path.
+        // Pre-format when the destination is TEXT affinity. Also: STRICT
+        // tables declared with the `ANY` pseudo-type preserve the input
+        // storage class as-is (SQLite v3.53 STRICT-ANY behavior).
+        let coerced = if matches!(column.affinity, redlinedb_kernel::catalog::Affinity::Text)
+            && let SqlValue::Real(v) = original
+        {
+            SqlValue::Text(std::sync::Arc::from(
+                crate::exec::expr::scalar::format_real_sqlite(v),
+            ))
+        } else if table.is_strict() && strict_declared_any(column) {
+            original.clone()
+        } else {
+            apply_affinity(original.clone(), column.affinity)
+                .map_err(|_| Error::DatatypeMismatch)?
+        };
         out[idx] = apply_strict_storage(table, column, &original, coerced)?;
     }
     Ok(out)
@@ -386,6 +400,25 @@ pub(crate) fn apply_constraints(table: &TableDef, values: &[SqlValue]) -> Result
         }
     }
 
+    // `PRAGMA ignore_check_constraints=ON` short-circuits CHECK
+    // evaluation for the active connection. This mirrors SQLite's
+    // surface — the pragma flips a per-session bit that is consulted
+    // by every INSERT / UPDATE write path. Read the bit through the
+    // thread-local session pointer rather than re-acquiring the session
+    // mutex: `apply_constraints` runs inside `with_write_tx`, which
+    // already holds the mutex, so going through `conn.with_session`
+    // would deadlock on the non-re-entrant `parking_lot::Mutex`.
+    let ignore_checks = match crate::exec::current_session_ptr() {
+        Some(ptr) => {
+            // SAFETY: ptr installed by enclosing with_write_tx; lives for its scope.
+            let session: &SessionState = unsafe { &*ptr };
+            session.ignore_check_constraints
+        }
+        None => false,
+    };
+    if ignore_checks {
+        return Ok(());
+    }
     for check in &table.checks {
         let row = TableRowSource { values };
         let result = eval_expr(&check.expr, &row, &mut scratch).map_err(|_| {

@@ -26,9 +26,15 @@ fn lookup_column_local(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
             }
         }
         RowContext::SqliteSchema(row) => match name.to_ascii_lowercase().as_str() {
-            "type" => Ok(SqlValue::Text(Arc::from(row.type_name.as_ref()))),
-            "name" => Ok(SqlValue::Text(Arc::from(row.name.as_ref()))),
-            "tbl_name" => Ok(SqlValue::Text(Arc::from(row.tbl_name.as_ref()))),
+            "type" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.type_name.as_ref(),
+            ))),
+            "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.name.as_ref(),
+            ))),
+            "tbl_name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.tbl_name.as_ref(),
+            ))),
             "rootpage" => Ok(SqlValue::Integer(row.rootpage as i64)),
             "sql" => Ok(SqlValue::Text(Arc::from(row.sql.as_ref()))),
             _ => Err(Error::UnknownColumn(name.to_owned())),
@@ -161,9 +167,15 @@ fn row_matches_joined_qualifier(row: &JoinedRow, qualifier: &str) -> bool {
 
 fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
     match name.to_ascii_lowercase().as_str() {
-        "type" => Ok(SqlValue::Text(Arc::from(row.type_name.as_ref()))),
-        "name" => Ok(SqlValue::Text(Arc::from(row.name.as_ref()))),
-        "tbl_name" => Ok(SqlValue::Text(Arc::from(row.tbl_name.as_ref()))),
+        "type" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.type_name.as_ref(),
+        ))),
+        "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.name.as_ref(),
+        ))),
+        "tbl_name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.tbl_name.as_ref(),
+        ))),
         "rootpage" => Ok(SqlValue::Integer(row.rootpage as i64)),
         "sql" => Ok(SqlValue::Text(Arc::from(row.sql.as_ref()))),
         _ => Err(Error::UnknownColumn(name.to_owned())),
@@ -171,19 +183,21 @@ fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
 }
 
 fn lookup_table_column(row: &TableRow, name: &str) -> Result<SqlValue> {
-    if row.table.is_public_rowid_name(name) {
-        return Ok(SqlValue::Integer(row.rowid.0 as i64));
-    }
-    let idx = match row
+    // SQLite shadowing: a user column whose name matches a rowid
+    // alias ("rowid", "_rowid_", "oid") wins over the synthetic
+    // rowid. Resolve real columns first.
+    let real_idx = row
         .table
         .columns
         .iter()
-        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
-    {
-        Some(i) => i,
-        None => return Err(Error::UnknownColumn(name.to_owned())),
-    };
-    Ok(row.values[idx].clone())
+        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name));
+    if let Some(idx) = real_idx {
+        return Ok(row.values[idx].clone());
+    }
+    if row.table.is_public_rowid_name(name) {
+        return Ok(SqlValue::Integer(row.rowid.0 as i64));
+    }
+    Err(Error::UnknownColumn(name.to_owned()))
 }
 
 fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {

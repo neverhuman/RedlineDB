@@ -36,6 +36,21 @@ impl Collation {
         }
     }
 
+    /// True if `name` is a built-in collation or has been registered
+    /// through the custom-collation FFI. SQLite rejects DDL and
+    /// `ORDER BY` references to unknown collations at compile time
+    /// (`no such collation sequence: NAME`) — call this from the
+    /// parser to mirror that error.
+    pub fn is_known(name: &str) -> bool {
+        if matches!(
+            name.to_ascii_uppercase().as_str(),
+            "BINARY" | "" | "NOCASE" | "RTRIM" | "UINT"
+        ) {
+            return true;
+        }
+        crate::udf::call_registered_collation(crate::udf::current_db(), name, "", "").is_some()
+    }
+
     pub fn compare_text(&self, a: &str, b: &str) -> Ordering {
         match self {
             Self::Binary => a.cmp(b),

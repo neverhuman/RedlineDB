@@ -21,7 +21,17 @@ use crate::value::SqlValue;
 use super::table_valued::{TvArg, TvFunc, TvResult};
 
 pub(super) fn registry() -> &'static [&'static dyn TvFunc] {
-    &[&JsonEach, &JsonTree]
+    &[
+        &JsonEach,
+        &JsonTree,
+        &JsonbArrayElements,
+        &JsonbArrayElementsText,
+        &JsonbObjectKeys,
+        &JsonbEach,
+        &JsonbEachText,
+        &JsonbPathQuery,
+        &JsonbToRecord,
+    ]
 }
 
 fn columns() -> Vec<String> {
@@ -329,5 +339,316 @@ fn emit_tree(
             }
         }
         _ => {}
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Postgres `jsonb_*` table-valued functions.
+// ---------------------------------------------------------------------------
+
+/// Common helper: pull a `jsonb` document argument from the first slot.
+fn parse_jsonb_doc(name: &'static str, args: &[TvArg]) -> Result<Option<Value>> {
+    if args.is_empty() {
+        return Err(Error::UnsupportedSql(format!(
+            "{name} requires at least 1 argument"
+        )));
+    }
+    match &args[0] {
+        TvArg::Null => Ok(None),
+        TvArg::Text(s) => serde_json::from_str(s.as_ref())
+            .map(Some)
+            .map_err(|e| Error::Parse(format!("malformed JSON: {e}"))),
+        TvArg::Integer(n) => Ok(Some(Value::Number((*n).into()))),
+    }
+}
+
+/// PostgreSQL renders a jsonb element with "compact-with-spaces". Scalars
+/// inside the output column also render as JSON tokens (`10`, not `10.0`).
+fn jsonb_value_to_sql(v: &Value) -> SqlValue {
+    use crate::json::jsonb::render_pg;
+    match v {
+        Value::Null => SqlValue::Null,
+        Value::Bool(true) => SqlValue::Text("true".into()),
+        Value::Bool(false) => SqlValue::Text("false".into()),
+        Value::Number(n) => SqlValue::Text(n.to_string().into()),
+        Value::String(_) | Value::Array(_) | Value::Object(_) => {
+            SqlValue::Text(render_pg(v).into())
+        }
+    }
+}
+
+/// `jsonb_array_elements_text` returns the text representation of each
+/// scalar (objects/arrays render as JSON text).
+fn jsonb_value_to_text(v: &Value) -> SqlValue {
+    use crate::json::jsonb::render_pg;
+    match v {
+        Value::Null => SqlValue::Null,
+        Value::Bool(true) => SqlValue::Text("true".into()),
+        Value::Bool(false) => SqlValue::Text("false".into()),
+        Value::Number(n) => SqlValue::Text(n.to_string().into()),
+        Value::String(s) => SqlValue::Text(s.clone().into()),
+        Value::Array(_) | Value::Object(_) => SqlValue::Text(render_pg(v).into()),
+    }
+}
+
+struct JsonbArrayElements;
+impl TvFunc for JsonbArrayElements {
+    fn name(&self) -> &'static str {
+        "jsonb_array_elements"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        let cols = vec!["value".to_owned()];
+        let Some(doc) = parse_jsonb_doc("jsonb_array_elements", args)? else {
+            return Ok(TvResult {
+                columns: cols,
+                rows: vec![],
+            });
+        };
+        let arr = match doc {
+            Value::Array(a) => a,
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "jsonb_array_elements: argument must be a JSON array".to_owned(),
+                ));
+            }
+        };
+        let rows = arr.iter().map(|v| vec![jsonb_value_to_sql(v)]).collect();
+        Ok(TvResult {
+            columns: cols,
+            rows,
+        })
+    }
+}
+
+struct JsonbArrayElementsText;
+impl TvFunc for JsonbArrayElementsText {
+    fn name(&self) -> &'static str {
+        "jsonb_array_elements_text"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        let cols = vec!["value".to_owned()];
+        let Some(doc) = parse_jsonb_doc("jsonb_array_elements_text", args)? else {
+            return Ok(TvResult {
+                columns: cols,
+                rows: vec![],
+            });
+        };
+        let arr = match doc {
+            Value::Array(a) => a,
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "jsonb_array_elements_text: argument must be a JSON array".to_owned(),
+                ));
+            }
+        };
+        let rows = arr.iter().map(|v| vec![jsonb_value_to_text(v)]).collect();
+        Ok(TvResult {
+            columns: cols,
+            rows,
+        })
+    }
+}
+
+struct JsonbObjectKeys;
+impl TvFunc for JsonbObjectKeys {
+    fn name(&self) -> &'static str {
+        "jsonb_object_keys"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        let cols = vec!["jsonb_object_keys".to_owned()];
+        let Some(doc) = parse_jsonb_doc("jsonb_object_keys", args)? else {
+            return Ok(TvResult {
+                columns: cols,
+                rows: vec![],
+            });
+        };
+        let map = match doc {
+            Value::Object(m) => m,
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "jsonb_object_keys: argument must be a JSON object".to_owned(),
+                ));
+            }
+        };
+        let rows = map
+            .keys()
+            .map(|k| vec![SqlValue::Text(Arc::from(k.as_str()))])
+            .collect();
+        Ok(TvResult {
+            columns: cols,
+            rows,
+        })
+    }
+}
+
+struct JsonbEach;
+impl TvFunc for JsonbEach {
+    fn name(&self) -> &'static str {
+        "jsonb_each"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        let cols = vec!["key".to_owned(), "value".to_owned()];
+        let Some(doc) = parse_jsonb_doc("jsonb_each", args)? else {
+            return Ok(TvResult {
+                columns: cols,
+                rows: vec![],
+            });
+        };
+        let map = match doc {
+            Value::Object(m) => m,
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "jsonb_each: argument must be a JSON object".to_owned(),
+                ));
+            }
+        };
+        let rows = map
+            .into_iter()
+            .map(|(k, v)| vec![SqlValue::Text(Arc::from(k)), jsonb_value_to_sql(&v)])
+            .collect();
+        Ok(TvResult {
+            columns: cols,
+            rows,
+        })
+    }
+}
+
+struct JsonbEachText;
+impl TvFunc for JsonbEachText {
+    fn name(&self) -> &'static str {
+        "jsonb_each_text"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        let cols = vec!["key".to_owned(), "value".to_owned()];
+        let Some(doc) = parse_jsonb_doc("jsonb_each_text", args)? else {
+            return Ok(TvResult {
+                columns: cols,
+                rows: vec![],
+            });
+        };
+        let map = match doc {
+            Value::Object(m) => m,
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "jsonb_each_text: argument must be a JSON object".to_owned(),
+                ));
+            }
+        };
+        let rows = map
+            .into_iter()
+            .map(|(k, v)| vec![SqlValue::Text(Arc::from(k)), jsonb_value_to_text(&v)])
+            .collect();
+        Ok(TvResult {
+            columns: cols,
+            rows,
+        })
+    }
+}
+
+struct JsonbToRecord;
+impl TvFunc for JsonbToRecord {
+    fn name(&self) -> &'static str {
+        "jsonb_to_record"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        let Some(doc) = parse_jsonb_doc("jsonb_to_record", args)? else {
+            return Ok(TvResult {
+                columns: vec![],
+                rows: vec![],
+            });
+        };
+        let map = match doc {
+            Value::Object(m) => m,
+            _ => {
+                return Err(Error::UnsupportedSql(
+                    "jsonb_to_record: argument must be a JSON object".to_owned(),
+                ));
+            }
+        };
+        let mut cols = Vec::with_capacity(map.len());
+        let mut row = Vec::with_capacity(map.len());
+        for (k, v) in map {
+            cols.push(k);
+            row.push(jsonb_value_to_text(&v));
+        }
+        Ok(TvResult {
+            columns: cols,
+            rows: vec![row],
+        })
+    }
+}
+
+struct JsonbPathQuery;
+impl TvFunc for JsonbPathQuery {
+    fn name(&self) -> &'static str {
+        "jsonb_path_query"
+    }
+    fn eval(
+        &self,
+        _conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        let cols = vec!["jsonb_path_query".to_owned()];
+        if args.len() < 2 {
+            return Err(Error::UnsupportedSql(
+                "jsonb_path_query requires (target, jsonpath)".to_owned(),
+            ));
+        }
+        let Some(doc) = parse_jsonb_doc("jsonb_path_query", args)? else {
+            return Ok(TvResult {
+                columns: cols,
+                rows: vec![],
+            });
+        };
+        let path = match &args[1] {
+            TvArg::Text(s) => s.to_string(),
+            TvArg::Null => {
+                return Ok(TvResult {
+                    columns: cols,
+                    rows: vec![],
+                });
+            }
+            TvArg::Integer(n) => n.to_string(),
+        };
+        let matches = crate::json::jsonb::collect_jsonpath_for_tvf(&doc, &path)?;
+        let rows = matches
+            .into_iter()
+            .map(|v| vec![jsonb_value_to_sql(&v)])
+            .collect();
+        Ok(TvResult {
+            columns: cols,
+            rows,
+        })
     }
 }

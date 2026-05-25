@@ -52,6 +52,10 @@ pub use phase8::{
 pub use redlinedb_kernel::format::{BackupId, Csn, DbId, Lsn, TimelineId, WalSegmentNo};
 pub use redlinedb_sql::BeginMode;
 pub use redlinedb_sql::RecoveryTarget;
+// Re-export the SQLite-style `f64` formatter so the CLI / FFI layers can
+// render REAL columns with the same `%!.17g` rounding the SQL evaluator
+// uses internally — required for sqlite-parity on math-function output.
+pub use redlinedb_sql::format_real_sqlite;
 pub use statement::{OwnedStatement, Prepared, Rows, Statement};
 pub use value::{Value, ValueRef};
 

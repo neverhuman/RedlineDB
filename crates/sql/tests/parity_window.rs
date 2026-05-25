@@ -252,3 +252,88 @@ fn nulls_first_or_last_in_window_order() {
     lab.execute("INSERT INTO t VALUES (NULL), (1), (NULL), (2)");
     lab.assert_match("SELECT v, ROW_NUMBER() OVER (ORDER BY v) AS rn FROM t ORDER BY v");
 }
+
+// ── Window-frame EXCLUDE clauses ──────────────────────────────────────────
+
+fn exclude_lab() -> Lab {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE w(g INTEGER, k INTEGER, v REAL)");
+    lab.execute(
+        "INSERT INTO w VALUES \
+         (1,1,1.0),(1,2,2.0),(1,3,4.0),(1,4,8.0),\
+         (2,1,3.0),(2,2,9.0),(2,3,27.0)",
+    );
+    lab
+}
+
+#[test]
+fn frame_exclude_current_row_sum() {
+    let lab = exclude_lab();
+    lab.assert_match(
+        "SELECT g, k, sum(v) OVER (\
+            PARTITION BY g ORDER BY k \
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW \
+            EXCLUDE CURRENT ROW) \
+         FROM w ORDER BY g, k",
+    );
+}
+
+#[test]
+fn frame_exclude_group_sum() {
+    let lab = exclude_lab();
+    lab.assert_match(
+        "SELECT g, k, sum(v) OVER (\
+            PARTITION BY g ORDER BY k \
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING \
+            EXCLUDE GROUP) \
+         FROM w ORDER BY g, k",
+    );
+}
+
+#[test]
+fn frame_exclude_ties_count() {
+    let lab = exclude_lab();
+    lab.assert_match(
+        "SELECT g, k, count(*) OVER (\
+            PARTITION BY g ORDER BY k \
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING \
+            EXCLUDE TIES) \
+         FROM w ORDER BY g, k",
+    );
+}
+
+#[test]
+fn frame_exclude_no_others_avg() {
+    let lab = exclude_lab();
+    lab.assert_match(
+        "SELECT g, k, avg(v) OVER (\
+            PARTITION BY g ORDER BY k \
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING \
+            EXCLUDE NO OTHERS) \
+         FROM w ORDER BY g, k",
+    );
+}
+
+#[test]
+fn frame_exclude_current_row_first_value() {
+    let lab = exclude_lab();
+    lab.assert_match(
+        "SELECT g, k, first_value(v) OVER (\
+            PARTITION BY g ORDER BY k \
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING \
+            EXCLUDE CURRENT ROW) \
+         FROM w ORDER BY g, k",
+    );
+}
+
+#[test]
+fn frame_exclude_group_last_value() {
+    let lab = exclude_lab();
+    lab.assert_match(
+        "SELECT g, k, last_value(v) OVER (\
+            PARTITION BY g ORDER BY k \
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING \
+            EXCLUDE GROUP) \
+         FROM w ORDER BY g, k",
+    );
+}

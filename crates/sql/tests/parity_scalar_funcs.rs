@@ -466,3 +466,196 @@ fn cast_real_as_text_keeps_trailing_zero() {
         assert_eq!(red, expected, "redline ≠ oracle for {sql}");
     }
 }
+
+// ── SQLite math1 extension functions (acos, cos, exp, log, ...) ───────────────
+
+#[test]
+fn math1_acos_unit_circle() {
+    let (_d, c) = open();
+    let cases = [
+        (1.0, 0.0_f64.acos()),
+        (0.0, 0.0_f64.asin().acos()),
+        (-1.0, (-1.0_f64).acos()),
+    ];
+    // Each `acos(x)` matches the f64::acos result; out-of-domain returns NULL.
+    for (x, _expect) in cases {
+        let sql = format!("SELECT acos({x})");
+        let v = q1(&c, &sql);
+        assert!(matches!(v, SqlValue::Real(_)), "acos({x}) → {v:?}");
+    }
+    assert_eq!(q1(&c, "SELECT acos(2.0)"), SqlValue::Null);
+    assert_eq!(q1(&c, "SELECT acos(-2.0)"), SqlValue::Null);
+    assert_eq!(q1(&c, "SELECT acos(NULL)"), SqlValue::Null);
+}
+
+#[test]
+fn math1_log_overload_natural_vs_base() {
+    let (_d, c) = open();
+    // log(x) = natural log; log(b, x) = log base b of x.
+    let one = q1(&c, "SELECT log(1.0)");
+    assert!(matches!(one, SqlValue::Real(v) if v.abs() < 1e-12));
+    let three = q1(&c, "SELECT log(2.0, 8.0)");
+    assert!(matches!(three, SqlValue::Real(v) if (v - 3.0).abs() < 1e-12));
+    // Domain errors return NULL, not an error.
+    assert_eq!(q1(&c, "SELECT log(0.0)"), SqlValue::Null);
+    assert_eq!(q1(&c, "SELECT log(-1.0)"), SqlValue::Null);
+}
+
+#[test]
+fn math1_atan2_quadrants() {
+    let (_d, c) = open();
+    let half_pi = q1(&c, "SELECT atan2(1.0, 0.0)");
+    assert!(
+        matches!(half_pi, SqlValue::Real(v) if (v - std::f64::consts::FRAC_PI_2).abs() < 1e-12)
+    );
+    assert_eq!(q1(&c, "SELECT atan2(NULL, 1.0)"), SqlValue::Null);
+}
+
+#[test]
+fn math1_pi_constant() {
+    let (_d, c) = open();
+    let pi = q1(&c, "SELECT pi()");
+    assert!(matches!(pi, SqlValue::Real(v) if (v - std::f64::consts::PI).abs() < 1e-15));
+}
+
+#[test]
+fn math1_mod_zero_divisor_returns_null() {
+    let (_d, c) = open();
+    let one = q1(&c, "SELECT mod(10, 3)");
+    assert!(matches!(one, SqlValue::Real(v) if (v - 1.0).abs() < 1e-12));
+    assert_eq!(q1(&c, "SELECT mod(5, 0)"), SqlValue::Null);
+    assert_eq!(q1(&c, "SELECT mod(NULL, 2)"), SqlValue::Null);
+}
+
+#[test]
+fn math1_degrees_radians_round_trip() {
+    let (_d, c) = open();
+    let deg = q1(&c, "SELECT degrees(radians(180.0))");
+    assert!(matches!(deg, SqlValue::Real(v) if (v - 180.0).abs() < 1e-9));
+}
+
+#[test]
+fn math1_trunc_round_toward_zero() {
+    let (_d, c) = open();
+    let one_pos = q1(&c, "SELECT trunc(1.7)");
+    assert!(matches!(one_pos, SqlValue::Real(v) if (v - 1.0).abs() < 1e-12));
+    let one_neg = q1(&c, "SELECT trunc(-1.7)");
+    assert!(matches!(one_neg, SqlValue::Real(v) if (v + 1.0).abs() < 1e-12));
+    assert_eq!(q1(&c, "SELECT trunc(NULL)"), SqlValue::Null);
+}
+
+// ── SQLite text helpers: length (chars), octet_length, concat, concat_ws ─────
+
+#[test]
+fn length_counts_utf8_characters_for_text() {
+    let (_d, c) = open();
+    // 'héllo' has 5 chars but 6 bytes (é is 2 bytes in UTF-8).
+    assert_eq!(q1(&c, "SELECT length('héllo')"), SqlValue::Integer(5));
+    assert_eq!(q1(&c, "SELECT octet_length('héllo')"), SqlValue::Integer(6));
+    assert_eq!(q1(&c, "SELECT length(NULL)"), SqlValue::Null);
+}
+
+#[test]
+fn concat_skips_nulls_concat_ws_uses_separator() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT concat('a', 'b', 'c')"),
+        SqlValue::Text(Arc::from("abc"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT concat('a', NULL, 'c')"),
+        SqlValue::Text(Arc::from("ac"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT concat_ws(', ', 'a', 'b', 'c')"),
+        SqlValue::Text(Arc::from("a, b, c"))
+    );
+    // NULL separator → NULL result; NULL operands are skipped.
+    assert_eq!(q1(&c, "SELECT concat_ws(NULL, 'a', 'b')"), SqlValue::Null);
+    assert_eq!(
+        q1(&c, "SELECT concat_ws(',', 'a', NULL, 'b')"),
+        SqlValue::Text(Arc::from("a,b"))
+    );
+}
+
+#[test]
+fn hex_of_null_returns_empty_string_not_null() {
+    // SQLite returns text "" (zero-length TEXT), not NULL — see func.c.
+    let (_d, c) = open();
+    assert_eq!(q1(&c, "SELECT hex(NULL)"), SqlValue::Text(Arc::from("")));
+    assert_eq!(
+        q1(&c, "SELECT typeof(hex(NULL))"),
+        SqlValue::Text(Arc::from("text"))
+    );
+}
+
+#[test]
+fn unhex_one_and_two_arg_forms() {
+    let (_d, c) = open();
+    match q1(&c, "SELECT unhex('01ab')") {
+        SqlValue::Blob(b) => assert_eq!(&b[..], &[0x01, 0xab]),
+        other => panic!("expected BLOB, got {other:?}"),
+    }
+    // Two-arg form: second arg is "ignore" set.
+    match q1(&c, "SELECT unhex('01 ab', ' ')") {
+        SqlValue::Blob(b) => assert_eq!(&b[..], &[0x01, 0xab]),
+        other => panic!("expected BLOB, got {other:?}"),
+    }
+    // Invalid hex returns NULL.
+    assert_eq!(q1(&c, "SELECT unhex('xyz')"), SqlValue::Null);
+    // NULL input propagates.
+    assert_eq!(q1(&c, "SELECT unhex(NULL)"), SqlValue::Null);
+}
+
+#[test]
+fn glob_function_form_matches_operator_form() {
+    let (_d, c) = open();
+    // Function form: glob(pattern, value) — note arg order.
+    assert_eq!(q1(&c, "SELECT glob('a*', 'abc')"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT glob('z*', 'abc')"), SqlValue::Integer(0));
+    assert_eq!(q1(&c, "SELECT glob('a*', NULL)"), SqlValue::Null);
+}
+
+#[test]
+fn glob_operator_form_via_parser_rewrite() {
+    // The parser pre-rewrites `<lhs> GLOB <rhs>` into `glob(<rhs>, <lhs>)`
+    // before handing the SQL to sqlparser (which lacks a GLOB operator).
+    // Verify end-to-end semantics including NULL propagation and NOT GLOB.
+    let (_d, c) = open();
+    assert_eq!(q1(&c, "SELECT 'abc' GLOB 'a*'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'abc' GLOB '*c'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'ABC' GLOB 'a*'"), SqlValue::Integer(0));
+    // Character class: GLOB is case-sensitive.
+    assert_eq!(
+        q1(&c, "SELECT 'abc' GLOB '[a-z][a-z][a-z]'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(q1(&c, "SELECT 'abc' GLOB '[^abc]bc'"), SqlValue::Integer(0));
+    // NOT GLOB.
+    assert_eq!(q1(&c, "SELECT 'abc' NOT GLOB 'z*'"), SqlValue::Integer(1));
+    // NULL propagation.
+    assert_eq!(q1(&c, "SELECT NULL GLOB 'a*'"), SqlValue::Null);
+    assert_eq!(q1(&c, "SELECT 'abc' GLOB NULL"), SqlValue::Null);
+}
+
+#[test]
+fn like_function_form_two_and_three_arg() {
+    let (_d, c) = open();
+    // SQLite-style like(pattern, value) is a function alias for the LIKE
+    // operator. NB: argument order is (pattern, value), unlike LIKE.
+    assert_eq!(q1(&c, "SELECT like('a%', 'abc')"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT like('a%', 'xyz')"), SqlValue::Integer(0));
+    // NULL propagation.
+    assert_eq!(q1(&c, "SELECT like('a%', NULL)"), SqlValue::Null);
+    assert_eq!(q1(&c, "SELECT like(NULL, 'abc')"), SqlValue::Null);
+}
+
+#[test]
+fn soundex_returns_error_when_compiled_out() {
+    // SQLite 3.53.1 reference binary is built without SQLITE_SOUNDEX, so
+    // calls to soundex() should surface as an "unsupported"/"no such
+    // function" error — we mirror that.
+    let (_d, c) = open();
+    let mut stmt = c.prepare("SELECT soundex('Robert')").expect("prepare");
+    assert!(stmt.step().is_err(), "soundex unexpectedly succeeded");
+}

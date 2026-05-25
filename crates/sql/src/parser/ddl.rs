@@ -43,6 +43,46 @@ pub(crate) fn bind_create_table(
 
     let session_scoped = crate::parser::bind::create_table_is_session_scoped(&create_table);
     let (schema, name) = split_name(create_table.name)?;
+    // SQLite rejects `AUTOINCREMENT` on a `WITHOUT ROWID` table — the
+    // sqlite_sequence machinery is rowid-based by design. Detect the
+    // combination ahead of column conversion so callers see the same
+    // upfront error.
+    if create_table.without_rowid
+        && create_table.columns.iter().any(|column| {
+            column.options.iter().any(|opt| {
+                matches!(&opt.option,
+                    sqlparser::ast::ColumnOption::DialectSpecific(tokens)
+                        if tokens.len() == 1
+                            && tokens[0].to_string().eq_ignore_ascii_case("AUTOINCREMENT")
+                )
+            })
+        })
+    {
+        return Err(Error::UnsupportedSql(
+            "AUTOINCREMENT not allowed on WITHOUT ROWID tables".to_owned(),
+        ));
+    }
+    // STRICT tables accept only the six well-defined affinities: INT,
+    // INTEGER, REAL, TEXT, BLOB, ANY. Reject everything else upfront so
+    // callers see the same surface as sqlite3. SQLite rejects NUMERIC
+    // because its type-affinity rules collide with strict typing.
+    if create_table.strict {
+        for column in &create_table.columns {
+            if column.data_type == sqlparser::ast::DataType::Unspecified {
+                return Err(Error::UnsupportedSql(format!(
+                    "STRICT table column {} requires a declared type",
+                    column.name.value
+                )));
+            }
+            let declared = column.data_type.to_string();
+            if !is_strict_table_allowed_type(&declared) {
+                return Err(Error::UnsupportedSql(format!(
+                    "STRICT table column {} declares unsupported type {declared}",
+                    column.name.value
+                )));
+            }
+        }
+    }
     let mut columns = Vec::with_capacity(create_table.columns.len());
     let mut column_lookup = std::collections::HashMap::new();
     for (ordinal, column) in create_table.columns.iter().enumerate() {
@@ -80,7 +120,7 @@ pub(crate) fn bind_create_table(
                 constraints,
                 strict: create_table.strict,
                 without_rowid: create_table.without_rowid,
-                normalized_sql: Some(sql.to_owned()),
+                normalized_sql: Some(strip_trailing_semicolon(sql)),
             })
         } else {
             PreparedKind::CreateTable(CreateTableSpec {
@@ -91,7 +131,7 @@ pub(crate) fn bind_create_table(
                 constraints,
                 strict: create_table.strict,
                 without_rowid: create_table.without_rowid,
-                normalized_sql: Some(sql.to_owned()),
+                normalized_sql: Some(strip_trailing_semicolon(sql)),
             })
         },
     })
@@ -144,7 +184,7 @@ fn bind_create_table_as_select(
                     constraints: Vec::new(),
                     strict: create_table.strict,
                     without_rowid: create_table.without_rowid,
-                    normalized_sql: Some(sql.to_owned()),
+                    normalized_sql: Some(strip_trailing_semicolon(sql)),
                 },
                 select: None,
             }),
@@ -175,7 +215,7 @@ fn bind_create_table_as_select(
                 constraints: Vec::new(),
                 strict: create_table.strict,
                 without_rowid: create_table.without_rowid,
-                normalized_sql: Some(sql.to_owned()),
+                normalized_sql: Some(strip_trailing_semicolon(sql)),
             },
             select: Some(select_plan),
         });
@@ -440,10 +480,16 @@ pub(crate) fn bind_create_index(
     sql: &str,
     create_index: sqlparser::ast::CreateIndex,
 ) -> Result<PreparedTemplate> {
+    // Track J — relaxed acceptance of common Postgres CREATE INDEX
+    // modifiers:
+    //   - `INCLUDE (...)` covering-index columns: parsed and ignored (the
+    //     covering set is a planner hint; query results match an ordinary
+    //     index).
+    //   - `NULLS [NOT] DISTINCT`: ignored (RedlineDB treats every NULL as
+    //     distinct in indexed columns, matching the default).
+    //   - `USING <method>` is stripped pre-parse by
+    //     `strip_create_index_using_clause`.
     if create_index.concurrently
-        || create_index.using.is_some()
-        || !create_index.include.is_empty()
-        || create_index.nulls_distinct.is_some()
         || !create_index.with.is_empty()
         || !create_index.index_options.is_empty()
         || !create_index.alter_options.is_empty()
@@ -509,7 +555,7 @@ pub(crate) fn bind_create_index(
             unique: create_index.unique,
             columns,
             origin: IndexOrigin::User,
-            normalized_sql: Some(sql.to_owned()),
+            normalized_sql: Some(strip_trailing_semicolon(sql)),
             predicate_sql,
         }),
     })
@@ -521,26 +567,61 @@ pub(crate) fn bind_drop(
     object_type: sqlparser::ast::ObjectType,
     if_exists: bool,
     names: Vec<ObjectName>,
+    cascade: bool,
 ) -> Result<PreparedTemplate> {
     if names.len() != 1 {
         return Err(Error::UnsupportedSql(
             "only single-object DROP is supported".to_owned(),
         ));
     }
-    let name = parse_qualified_name(names.into_iter().next().unwrap())?;
+    let raw_name = names.into_iter().next().unwrap();
     let kind = match object_type {
+        sqlparser::ast::ObjectType::Schema => {
+            // Track J: DROP SCHEMA <name> [CASCADE].
+            let schema_name = match raw_name.0.last() {
+                Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
+                _ => {
+                    return Err(Error::UnsupportedSql(
+                        "DROP SCHEMA requires a name".to_owned(),
+                    ));
+                }
+            };
+            PreparedKind::DropSchema {
+                name: Arc::from(schema_name),
+                if_exists,
+                cascade,
+            }
+        }
+        sqlparser::ast::ObjectType::Sequence => {
+            // Track J: DROP SEQUENCE <name>.
+            let seq_name = match raw_name.0.last() {
+                Some(ObjectNamePart::Identifier(ident)) => ident.value.clone(),
+                _ => {
+                    return Err(Error::UnsupportedSql(
+                        "DROP SEQUENCE requires a name".to_owned(),
+                    ));
+                }
+            };
+            PreparedKind::DropSequence {
+                name: Arc::from(seq_name),
+                if_exists,
+            }
+        }
         sqlparser::ast::ObjectType::Table => {
+            let name = parse_qualified_name(raw_name)?;
             PreparedKind::DropTable(DropTableSpec { name, if_exists })
         }
         sqlparser::ast::ObjectType::Index => {
+            let name = parse_qualified_name(raw_name)?;
             PreparedKind::DropIndex(DropIndexSpec { name, if_exists })
         }
         sqlparser::ast::ObjectType::View => {
+            let name = parse_qualified_name(raw_name)?;
             PreparedKind::DropView(DropViewSpec { name, if_exists })
         }
         _ => {
             return Err(Error::UnsupportedSql(
-                "only DROP TABLE, DROP INDEX, and DROP VIEW are supported".to_owned(),
+                "only DROP TABLE, DROP INDEX, DROP VIEW, DROP SCHEMA, and DROP SEQUENCE are supported".to_owned(),
             ));
         }
     };
@@ -559,6 +640,7 @@ pub(crate) fn bind_drop(
 pub(crate) fn bind_alter_table(
     schema_epoch: SchemaEpoch,
     sql: &str,
+    schema: &SchemaSnapshot,
     name: ObjectName,
     if_exists: bool,
     only: bool,
@@ -574,6 +656,22 @@ pub(crate) fn bind_alter_table(
             "only single-operation ALTER TABLE is supported".to_owned(),
         ));
     }
+    // Track J — ADD CONSTRAINT needs a column lookup so the check-expression
+    // identifiers resolve against the existing table at parse time.
+    let alter_target_lookup: std::collections::HashMap<String, usize> = (|| {
+        let qname = parse_qualified_name(name.clone()).ok()?;
+        let schema_id = schema.lookup_namespace("main")?;
+        let table = schema.lookup_table(schema_id, qname.name.folded())?;
+        Some(
+            table
+                .columns
+                .iter()
+                .enumerate()
+                .map(|(idx, col)| (col.folded.as_ref().to_owned(), idx))
+                .collect(),
+        )
+    })()
+    .unwrap_or_default();
     let operation = match operations.into_iter().next().expect("len checked") {
         AlterTableOperation::RenameTable { table_name } => {
             let table_name = match table_name {
@@ -669,6 +767,83 @@ pub(crate) fn bind_alter_table(
                 if_exists,
             }
         }
+        // Track J — ALTER COLUMN SET/DROP DEFAULT, SET/DROP NOT NULL,
+        // SET DATA TYPE, ADD GENERATED IDENTITY.
+        AlterTableOperation::AlterColumn { column_name, op } => match op {
+            sqlparser::ast::AlterColumnOperation::SetDefault { value } => {
+                let lookup = std::collections::HashMap::new();
+                let expr_ast = super::helpers::expr::default_expr_to_kernel_ast(&value, &lookup)?;
+                let default_value = match expr_ast {
+                    ExprAst::Const(v) => Some(v),
+                    _ => {
+                        return Err(Error::UnsupportedSql(
+                            "ALTER COLUMN SET DEFAULT requires a constant value".to_owned(),
+                        ));
+                    }
+                };
+                redlinedb_kernel::catalog::AlterTableOperationSpec::SetColumnDefault {
+                    column_name: DbName::new(column_name.value),
+                    default_value,
+                }
+            }
+            sqlparser::ast::AlterColumnOperation::DropDefault => {
+                redlinedb_kernel::catalog::AlterTableOperationSpec::DropColumnDefault {
+                    column_name: DbName::new(column_name.value),
+                }
+            }
+            sqlparser::ast::AlterColumnOperation::DropNotNull => {
+                redlinedb_kernel::catalog::AlterTableOperationSpec::DropColumnNotNull {
+                    column_name: DbName::new(column_name.value),
+                }
+            }
+            sqlparser::ast::AlterColumnOperation::SetNotNull => {
+                redlinedb_kernel::catalog::AlterTableOperationSpec::SetColumnNotNull {
+                    column_name: DbName::new(column_name.value),
+                }
+            }
+            sqlparser::ast::AlterColumnOperation::SetDataType {
+                data_type,
+                using: _,
+                had_set: _,
+            } => redlinedb_kernel::catalog::AlterTableOperationSpec::SetColumnType {
+                column_name: DbName::new(column_name.value),
+                declared_type: data_type.to_string(),
+            },
+            sqlparser::ast::AlterColumnOperation::AddGenerated {
+                generated_as,
+                sequence_options: _,
+            } => {
+                let always = matches!(generated_as, Some(sqlparser::ast::GeneratedAs::Always));
+                redlinedb_kernel::catalog::AlterTableOperationSpec::AddColumnIdentity {
+                    column_name: DbName::new(column_name.value),
+                    always,
+                }
+            }
+        },
+        AlterTableOperation::AddConstraint {
+            constraint,
+            not_valid: _,
+        } => {
+            let constraint_spec = convert_table_constraint(constraint, &alter_target_lookup)?;
+            redlinedb_kernel::catalog::AlterTableOperationSpec::AddNamedConstraint {
+                constraint: constraint_spec,
+                if_not_exists: false,
+            }
+        }
+        AlterTableOperation::DropConstraint {
+            if_exists,
+            name,
+            drop_behavior: _,
+        } => redlinedb_kernel::catalog::AlterTableOperationSpec::DropConstraint {
+            name: DbName::new(name.value),
+            if_exists,
+        },
+        AlterTableOperation::RenameConstraint { old_name, new_name } => {
+            redlinedb_kernel::catalog::AlterTableOperationSpec::RenameConstraint {
+                old_name: DbName::new(old_name.value),
+                new_name: DbName::new(new_name.value),
+            }
+        }
         other => {
             return Err(Error::UnsupportedSql(format!(
                 "ALTER TABLE operation not supported yet: {other:?}"
@@ -746,7 +921,7 @@ pub(crate) fn bind_create_view(
             session_scoped: create_view.temporary,
             columns,
             body_sql,
-            normalized_sql: Some(sql.to_owned()),
+            normalized_sql: Some(strip_trailing_semicolon(sql)),
         }),
     })
 }
@@ -850,7 +1025,7 @@ pub(crate) fn bind_create_trigger(
             when_cols,
             when_predicate_sql,
             body_sql,
-            normalized_sql: Some(sql.to_owned()),
+            normalized_sql: Some(strip_trailing_semicolon(sql)),
         }),
     })
 }
@@ -875,4 +1050,26 @@ pub(crate) fn bind_analyze(
         readonly: false,
         kind: PreparedKind::Analyze(crate::statement::AnalyzePlan { table }),
     })
+}
+
+/// True when `declared` is one of the six declared types SQLite allows
+/// inside a `CREATE TABLE … STRICT` definition: INT, INTEGER, REAL,
+/// TEXT, BLOB, ANY. Everything else (notably VARCHAR / NUMERIC) is
+/// rejected at CREATE-time. Matches SQLite case-insensitively.
+fn is_strict_table_allowed_type(declared: &str) -> bool {
+    const ALLOWED: &[&str] = &["INT", "INTEGER", "REAL", "TEXT", "BLOB", "ANY"];
+    let normalized = declared.trim().to_ascii_uppercase();
+    ALLOWED.iter().any(|t| *t == normalized)
+}
+
+/// Trim a single trailing `;` from a SQL statement before stashing it on
+/// `sqlite_master.sql`. SQLite never includes the terminator in the
+/// reflected text, so our `normalized_sql` field mirrors that surface.
+pub(crate) fn strip_trailing_semicolon(sql: &str) -> String {
+    let trimmed = sql.trim_end();
+    if let Some(stripped) = trimmed.strip_suffix(';') {
+        stripped.trim_end().to_owned()
+    } else {
+        trimmed.to_owned()
+    }
 }

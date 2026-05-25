@@ -362,10 +362,17 @@ fn nested_savepoint_release() {
 
 #[test]
 fn pragma_auto_vacuum() {
-    // RedlineDB rejects `PRAGMA auto_vacuum`; this test checks the
-    // rejection boundary directly.
+    // SQLite-parity surface: `PRAGMA auto_vacuum` is accepted and
+    // returns the recall-only session bit. Previously we rejected it
+    // because the RedlineDB storage engine doesn't track free-page
+    // lists; that diverged from the SQLite behaviour callers probe for
+    // at connection open time.
     let (_d, c) = open();
-    assert!(c.prepare("PRAGMA auto_vacuum").is_err());
+    assert_eq!(q1(&c, "PRAGMA auto_vacuum"), SqlValue::Integer(0));
+    c.execute("PRAGMA auto_vacuum=NONE").expect("set none");
+    assert_eq!(q1(&c, "PRAGMA auto_vacuum"), SqlValue::Integer(0));
+    c.execute("PRAGMA auto_vacuum=FULL").expect("set full");
+    assert_eq!(q1(&c, "PRAGMA auto_vacuum"), SqlValue::Integer(1));
 }
 
 #[test]
@@ -563,4 +570,726 @@ fn ctas_rolls_back_on_source_runtime_error() {
     );
 
     lab.assert_parity("SELECT count(*) FROM sqlite_schema WHERE name = 'fail'");
+}
+
+// ── Track A scalar-functions coverage (SQL_MATH / STRING / PATTERN / BLOB) ───
+//
+// These exercise the SQLite math1 / string / pattern / blob helpers we added
+// for the sqlite-parity sweep. Note: the rusqlite oracle is bundled with the
+// stock build of SQLite (no `SQLITE_ENABLE_MATH_FUNCTIONS`), so we can't use
+// the `CtasLab` parity helper for math1 calls — those are exercised against
+// the reference shell via the `sqlite_parity` corpus and unit-tested in
+// `parity_scalar_funcs.rs` for closed-form behaviour (NULL semantics, domain
+// errors). The tests below cover what the rusqlite oracle DOES expose:
+// `length(utf8)`, `octet_length`, `hex(NULL)`, GLOB operator, and `concat*`.
+
+#[test]
+fn sqlite_parity_track_a_string_helpers() {
+    let lab = CtasLab::new();
+    for sql in [
+        // UTF-8 char length vs byte length.
+        "SELECT length('héllo'), octet_length('héllo')",
+        // concat / concat_ws null handling.
+        "SELECT concat('a', NULL, 'b'), concat_ws(',', 'a', NULL, 'b')",
+        // hex(NULL) returns "" text, not NULL.
+        "SELECT hex(NULL), typeof(hex(NULL))",
+    ] {
+        lab.assert_parity(sql);
+    }
+}
+
+#[test]
+fn sqlite_parity_track_a_glob_operator_rewrite() {
+    let lab = CtasLab::new();
+    // GLOB operator (rewritten to glob() function call in the parser):
+    // wildcard, character class, NOT, NULL propagation.
+    for sql in [
+        "SELECT 'abc' GLOB 'a*', 'abc' GLOB '*c'",
+        "SELECT 'abc' GLOB 'a?c', 'ab' GLOB '???'",
+        "SELECT 'abc' GLOB '[abc]bc', 'abc' GLOB '[^abc]bc'",
+        "SELECT 'abc' NOT GLOB 'z*', 'abc' NOT GLOB 'a*'",
+        "SELECT NULL GLOB 'a*', 'abc' GLOB NULL",
+    ] {
+        lab.assert_parity(sql);
+    }
+}
+
+#[test]
+fn sqlite_parity_track_a_unhex() {
+    let lab = CtasLab::new();
+    for sql in [
+        "SELECT length(unhex('01ab')), hex(unhex('01ab')), typeof(unhex('01ab'))",
+        // Invalid hex returns NULL.
+        "SELECT unhex('xyz'), typeof(unhex('xyz'))",
+    ] {
+        lab.assert_parity(sql);
+    }
+}
+
+// ── JSONB operator and function surface (Track F) ────────────────────────────
+//
+// These tests cover the Postgres `jsonb` operator and `jsonb_*` function
+// shapes RedlineDB now implements on top of its text-stored JSON. The
+// reference oracle is the redline-testing beyond-SQLite corpus
+// (`BEYOND_JSONB_INDEXING`); each test here pins one of the closed cases
+// so a regression surfaces during local `cargo test`.
+
+fn text(s: &str) -> SqlValue {
+    SqlValue::Text(Arc::from(s))
+}
+
+#[test]
+fn jsonb_at_arrow_object_containment() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' @> '{\"a\":1}'"),
+        text("t")
+    );
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' @> '{\"a\":2}'"),
+        text("f")
+    );
+}
+
+#[test]
+fn jsonb_arrow_at_contained_by() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1}' <@ '{\"a\":1,\"b\":2}'"),
+        text("t")
+    );
+}
+
+#[test]
+fn jsonb_question_key_exists() {
+    let (_d, c) = open();
+    assert_eq!(q1(&c, "SELECT '{\"a\":1,\"b\":2}' ? 'a'"), text("t"));
+    assert_eq!(q1(&c, "SELECT '{\"a\":1,\"b\":2}' ? 'z'"), text("f"));
+}
+
+#[test]
+fn jsonb_question_any_exists() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' ?| ARRAY['z','b']"),
+        text("t")
+    );
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' ?| ARRAY['x','y']"),
+        text("f")
+    );
+}
+
+#[test]
+fn jsonb_question_all_exists() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' ?& ARRAY['a','b']"),
+        text("t")
+    );
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' ?& ARRAY['a','z']"),
+        text("f")
+    );
+}
+
+#[test]
+fn jsonb_hash_arrow_path_extract() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":{\"b\":1}}' #> '{a}'"),
+        text("{\"b\": 1}")
+    );
+    assert_eq!(q1(&c, "SELECT '{\"a\":{\"b\":1}}' #>> '{a,b}'"), text("1"));
+}
+
+#[test]
+fn jsonb_hash_minus_path_delete() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":{\"b\":1,\"c\":2}}' #- '{a,b}'"),
+        text("{\"a\": {\"c\": 2}}")
+    );
+}
+
+#[test]
+fn jsonb_concat_object_and_array() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1}' || '{\"b\":2}'"),
+        text("{\"a\": 1, \"b\": 2}")
+    );
+    assert_eq!(q1(&c, "SELECT '[1,2]' || '[3,4]'"), text("[1, 2, 3, 4]"));
+}
+
+#[test]
+fn jsonb_minus_text_removes_object_key() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' - 'a'"),
+        text("{\"b\": 2}")
+    );
+}
+
+#[test]
+fn jsonb_set_and_insert_pg_semantics() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT jsonb_set('{\"a\":1,\"b\":2}', '{a}', '99')"),
+        text("{\"a\": 99, \"b\": 2}")
+    );
+    assert_eq!(
+        q1(&c, "SELECT jsonb_set('{\"a\":1}', '{b}', '7', true)"),
+        text("{\"a\": 1, \"b\": 7}")
+    );
+    assert_eq!(
+        q1(&c, "SELECT jsonb_insert('[1,2,3]', '{1}', '99')"),
+        text("[1, 99, 2, 3]")
+    );
+    assert_eq!(
+        q1(&c, "SELECT jsonb_insert('[1,2,3]', '{1}', '99', true)"),
+        text("[1, 2, 99, 3]")
+    );
+}
+
+#[test]
+fn jsonb_strip_nulls_drops_nested_nulls() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(
+            &c,
+            "SELECT jsonb_strip_nulls('{\"a\":1,\"b\":null,\"c\":{\"d\":null,\"e\":2}}')"
+        ),
+        text("{\"a\": 1, \"c\": {\"e\": 2}}")
+    );
+}
+
+#[test]
+fn jsonb_pretty_indents_four_spaces() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT jsonb_pretty('{\"a\":1,\"b\":[1,2,3]}')");
+    let SqlValue::Text(s) = v else {
+        panic!("expected text output");
+    };
+    assert!(s.contains("    \"a\": 1"), "expected indented `a` row");
+    assert!(s.contains("        1,"), "expected nested array indent");
+}
+
+#[test]
+fn jsonb_path_exists_and_at_at_predicate() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT jsonb_path_exists('{\"a\":{\"b\":1}}', '$.a.b')"),
+        text("t")
+    );
+    assert_eq!(q1(&c, "SELECT '{\"a\":5}' @@ '$.a > 3'"), text("t"));
+    assert_eq!(q1(&c, "SELECT '{\"a\":5}' @@ '$.a > 9'"), text("f"));
+}
+
+#[test]
+fn jsonb_path_query_table_valued() {
+    let (_d, c) = open();
+    let rows = query_all(
+        &c,
+        "SELECT * FROM jsonb_path_query('[10,20,30]', '$[*]') ORDER BY jsonb_path_query::text",
+    );
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0][0], text("10"));
+    assert_eq!(rows[1][0], text("20"));
+    assert_eq!(rows[2][0], text("30"));
+}
+
+#[test]
+fn jsonb_array_elements_table_valued() {
+    let (_d, c) = open();
+    let rows = query_all(&c, "SELECT * FROM jsonb_array_elements('[10,20,30]')");
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0][0], text("10"));
+    let text_rows = query_all(
+        &c,
+        "SELECT * FROM jsonb_array_elements_text('[\"x\",\"y\"]') ORDER BY 1",
+    );
+    assert_eq!(text_rows.len(), 2);
+    assert_eq!(text_rows[0][0], text("x"));
+    assert_eq!(text_rows[1][0], text("y"));
+}
+
+#[test]
+fn jsonb_to_record_projects_columns() {
+    let (_d, c) = open();
+    let rows = query_all(
+        &c,
+        "SELECT * FROM jsonb_to_record('{\"a\":5,\"b\":\"x\"}') AS t(a int, b text)",
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], text("5"));
+    assert_eq!(rows[0][1], text("x"));
+}
+
+#[test]
+fn jsonb_where_clause_truthy_pg_bool() {
+    // PG boolean tokens (`t`/`f`) emitted by @> must be honoured by
+    // WHERE / CASE truthiness without breaking SQLite text semantics
+    // for unrelated cells.
+    let (_d, c) = open();
+    c.execute("CREATE TABLE bsp_doc(id INTEGER, doc TEXT)")
+        .expect("create");
+    c.execute("INSERT INTO bsp_doc VALUES (1, '{\"name\":\"alice\"}'), (2, '{\"name\":\"bob\"}')")
+        .expect("insert");
+    let rows = query_all(
+        &c,
+        "SELECT id FROM bsp_doc WHERE doc @> '{\"name\":\"bob\"}' ORDER BY id",
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], SqlValue::Integer(2));
+}
+
+#[test]
+fn create_index_using_gin_is_parseable() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE bsp_doc(id INTEGER PRIMARY KEY, doc TEXT)")
+        .expect("create");
+    c.execute("INSERT INTO bsp_doc VALUES (1, '{\"x\":1}')")
+        .expect("insert");
+    // `USING GIN` and the `jsonb_path_ops` opclass marker are stripped
+    // pre-parse; the index itself is created via the regular btree path.
+    c.execute("CREATE INDEX bsp_doc_gin ON bsp_doc USING GIN (doc jsonb_path_ops)")
+        .expect("create index using gin");
+    let rows = query_all(&c, "SELECT id FROM bsp_doc");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], SqlValue::Integer(1));
+}
+
+// ── Track G: BEYOND_COLLATIONS_ILIKE ──────────────────────────────────────────
+//
+// Coverage for the closable beyond-Postgres parity cases in this category:
+// ILIKE rendering, multibyte LOWER/UPPER, the four Postgres POSIX regex
+// operators (`~`, `~*`, `!~`, `!~*`), SIMILAR TO, POSITION, and
+// octet_length. Cases that the curator deferred (citext, named ICU
+// collations, nondeterministic collations) are intentionally not exercised.
+
+#[test]
+fn ilike_basic_mixed_case_matches_case_insensitively() {
+    let (_d, c) = open();
+    // Mirrors BEYOND-CASE-20031.
+    assert_eq!(q1(&c, "SELECT 'ABC' ILIKE 'abc'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'ABC' ILIKE 'AbC'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'ABC' ILIKE 'xyz'"), SqlValue::Integer(0));
+}
+
+#[test]
+fn ilike_supports_wildcards_and_escape_clause() {
+    let (_d, c) = open();
+    // Wildcard coverage (BEYOND-CASE-20032, 20033).
+    assert_eq!(
+        q1(&c, "SELECT 'Hello World' ILIKE '%world%'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(q1(&c, "SELECT 'ABC' ILIKE 'a_c'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'ABCDE' ILIKE 'a_c'"), SqlValue::Integer(0));
+    // ESCAPE clause (BEYOND-CASE-20034) — `!` escapes the literal `%`.
+    assert_eq!(
+        q1(&c, "SELECT '50%' ILIKE '50!%' ESCAPE '!'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT '50' ILIKE '50!%' ESCAPE '!'"),
+        SqlValue::Integer(0)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Track H — beyond-SQLite (Postgres parity) coverage.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pg_date_trunc_month_floors_to_first_of_month() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('month', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_year_floors_to_jan_1() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('year', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-01-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_hour_clears_smaller_units() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('hour', '2025-04-17 13:25:42')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-17 13:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_quarter_floors_to_quarter_start() {
+    let (_d, c) = open();
+    // April → Q2, which starts in April. 2025-04-17 → 2025-04-01.
+    let v = q1(&c, "SELECT date_trunc('quarter', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-04-01 00:00:00")));
+    // July → Q3, which starts in July. 2025-07-15 → 2025-07-01.
+    let v = q1(&c, "SELECT date_trunc('quarter', '2025-07-15 06:00:00')");
+    assert_eq!(v, SqlValue::Text(Arc::from("2025-07-01 00:00:00")));
+}
+
+#[test]
+fn pg_date_trunc_unknown_field_returns_null() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT date_trunc('nope', '2025-04-17 13:25:00')");
+    assert_eq!(v, SqlValue::Null);
+}
+
+#[test]
+fn pg_gen_random_uuid_renders_36_char_canonical() {
+    let (_d, c) = open();
+    // Canonical 8-4-4-4-12 with hyphens is exactly 36 chars.
+    let v = q1(&c, "SELECT length(gen_random_uuid())");
+    assert_eq!(v, SqlValue::Integer(36));
+    // Two calls produce distinct outputs (probabilistically certain at 122 bits).
+    let v = q1(&c, "SELECT gen_random_uuid() = gen_random_uuid()");
+    assert_eq!(v, SqlValue::Integer(0));
+}
+
+#[test]
+fn pg_gen_random_uuid_has_v4_variant_bits() {
+    let (_d, c) = open();
+    // Position 15 (1-based) of the canonical string is the version nibble;
+    // it must be '4' for a v4 UUID.
+    let v = q1(&c, "SELECT substr(gen_random_uuid(), 15, 1)");
+    assert_eq!(v, SqlValue::Text(Arc::from("4")));
+    // Position 20 (1-based) is the variant nibble; for RFC 4122 it must be
+    // one of 8, 9, a, b (binary 10xx). GLOB '[89ab]' returns 1 when so.
+    // Parens around the substr call sidestep a parser limitation where
+    // `func() GLOB ...` is otherwise rejected by the bundled sqlparser.
+    let v = q1(
+        &c,
+        "SELECT (substr(gen_random_uuid(), 20, 1)) GLOB '[89ab]'",
+    );
+    assert_eq!(v, SqlValue::Integer(1));
+}
+
+#[test]
+fn pg_boolean_cast_from_text_aliases() {
+    let (_d, c) = open();
+    // PG-style truthy / falsy text aliases collapse to Integer(0|1) so
+    // SQLite-shape arithmetic and rendering keep working.
+    let r = query_all(
+        &c,
+        "SELECT 'yes'::bool, 'no'::bool, '1'::bool, '0'::bool, 't'::bool, 'f'::bool",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(
+        r[0],
+        vec![
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+            SqlValue::Integer(1),
+            SqlValue::Integer(0),
+        ]
+    );
+}
+
+#[test]
+fn not_ilike_propagates_null() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20035.
+    assert_eq!(q1(&c, "SELECT 'ABC' NOT ILIKE 'abc'"), SqlValue::Integer(0));
+    assert_eq!(q1(&c, "SELECT 'XYZ' NOT ILIKE 'abc'"), SqlValue::Integer(1));
+    assert!(matches!(
+        q1(&c, "SELECT NULL NOT ILIKE 'x'"),
+        SqlValue::Null
+    ));
+}
+
+#[test]
+fn ilike_unicode_folds_caf_e_to_caf_e_acute() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20058: PG's ILIKE applies Unicode folding via libc
+    // locale, so `'CAFÉ' ILIKE 'café'` is true. The ASCII-only `cafe`
+    // form remains false because É and e are different chars.
+    assert_eq!(q1(&c, "SELECT 'CAFÉ' ILIKE 'café'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'CAFÉ' ILIKE 'cafe'"), SqlValue::Integer(0));
+}
+
+#[test]
+fn pg_uuid_cast_normalises_to_canonical_lowercase() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT '00000000000000000000000000000001'::uuid");
+    assert_eq!(
+        r,
+        SqlValue::Text(Arc::from("00000000-0000-0000-0000-000000000001"))
+    );
+    let r = q1(&c, "SELECT '{ABCDEF01-2345-6789-ABCD-EF0123456789}'::uuid");
+    assert_eq!(
+        r,
+        SqlValue::Text(Arc::from("abcdef01-2345-6789-abcd-ef0123456789"))
+    );
+}
+
+#[test]
+fn like_is_case_sensitive_with_pragma() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20059: With `case_sensitive_like = ON`, LIKE diverges
+    // from ILIKE on mixed-case input. The beyond-PG oracle enables the
+    // pragma in its preamble so redlinedb's LIKE matches Postgres'
+    // SQL-standard semantics.
+    c.execute("PRAGMA case_sensitive_like = 1").expect("pragma");
+    assert_eq!(q1(&c, "SELECT 'AbCdEf' LIKE '%cd%'"), SqlValue::Integer(0));
+    assert_eq!(q1(&c, "SELECT 'AbCdEf' ILIKE '%cd%'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'AbCdEf' LIKE '%CD%'"), SqlValue::Integer(0));
+}
+
+#[test]
+fn pg_array_literal_rewrites_to_json_array() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT ARRAY[10,20,30]");
+    assert_eq!(r, SqlValue::Text(Arc::from("[10,20,30]")));
+}
+
+#[test]
+fn pg_array_length_rewrites_to_json_array_length() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT array_length(ARRAY[10,20,30], 1)");
+    assert_eq!(r, SqlValue::Integer(3));
+}
+
+#[test]
+fn pg_array_index_is_one_based() {
+    let (_d, c) = open();
+    let r = query_all(
+        &c,
+        "SELECT (ARRAY['a','b','c'])[1], (ARRAY['a','b','c'])[3]",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(
+        r[0],
+        vec![
+            SqlValue::Text(Arc::from("a")),
+            SqlValue::Text(Arc::from("c")),
+        ]
+    );
+}
+
+#[test]
+fn lower_upper_fold_full_unicode_range() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20047, 20048.
+    assert_eq!(
+        q1(&c, "SELECT lower('ÉCOLE')"),
+        SqlValue::Text(Arc::from("école"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT lower('ÄÖÜ')"),
+        SqlValue::Text(Arc::from("äöü"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT upper('αβγ')"),
+        SqlValue::Text(Arc::from("ΑΒΓ"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT upper('σς')"),
+        SqlValue::Text(Arc::from("ΣΣ"))
+    );
+}
+
+#[test]
+fn upper_preserves_codepoints_without_simple_mapping() {
+    let (_d, c) = open();
+    // Mirrors Postgres' libc-locale `upper()` which uses `wctoupper`'s
+    // 1-to-1 mapping. `ß` has no simple uppercase mapping, so it must
+    // stay as `ß` (not expand to `SS`). Same rule keeps Turkish dotted
+    // `İ` from decomposing under lower().
+    assert_eq!(
+        q1(&c, "SELECT upper('straße')"),
+        SqlValue::Text(Arc::from("STRAßE"))
+    );
+}
+
+#[test]
+fn pg_regex_match_operators_dispatch() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20051: case-sensitive `~`.
+    assert_eq!(q1(&c, "SELECT 'Hello' ~ 'ello'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'Hello' ~ 'ELLO'"), SqlValue::Integer(0));
+    assert_eq!(q1(&c, "SELECT 'Hello' ~ '^H'"), SqlValue::Integer(1));
+    // BEYOND-CASE-20052: case-insensitive `~*`.
+    assert_eq!(q1(&c, "SELECT 'Hello' ~* 'ELLO'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'Hello' !~* 'XYZ'"), SqlValue::Integer(1));
+    // BEYOND-CASE-20053: negated forms.
+    assert_eq!(q1(&c, "SELECT 'Hello' !~ 'XYZ'"), SqlValue::Integer(1));
+    assert_eq!(q1(&c, "SELECT 'Hello' !~* 'ELLO'"), SqlValue::Integer(0));
+    assert_eq!(q1(&c, "SELECT 'Hello' !~ '^H'"), SqlValue::Integer(0));
+}
+
+#[test]
+fn pg_regex_match_propagates_null() {
+    let (_d, c) = open();
+    assert!(matches!(q1(&c, "SELECT NULL ~ 'abc'"), SqlValue::Null));
+    assert!(matches!(q1(&c, "SELECT 'abc' ~ NULL"), SqlValue::Null));
+}
+
+#[test]
+fn similar_to_basic_anchored_matches() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20054.
+    assert_eq!(q1(&c, "SELECT 'abc' SIMILAR TO 'a%'"), SqlValue::Integer(1));
+    assert_eq!(
+        q1(&c, "SELECT 'abc' SIMILAR TO '(a|b)bc'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'abc' SIMILAR TO 'a_c'"),
+        SqlValue::Integer(1)
+    );
+}
+
+#[test]
+fn similar_to_character_classes_pass_through() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20055: `[a-z]+` is a POSIX class; SIMILAR TO uses the
+    // same bracket syntax so it passes through to the regex engine.
+    assert_eq!(
+        q1(&c, "SELECT 'abc1' SIMILAR TO '[a-z]+[0-9]+'"),
+        SqlValue::Integer(1)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'ABC' SIMILAR TO '[a-z]+'"),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'ABC' SIMILAR TO '[A-Z]+'"),
+        SqlValue::Integer(1)
+    );
+}
+
+#[test]
+fn similar_to_null_propagation_and_anchoring() {
+    let (_d, c) = open();
+    assert!(matches!(
+        q1(&c, "SELECT NULL SIMILAR TO 'a%'"),
+        SqlValue::Null
+    ));
+    assert!(matches!(
+        q1(&c, "SELECT 'abc' SIMILAR TO NULL"),
+        SqlValue::Null
+    ));
+    // Anchored at both ends — partial matches must NOT pass.
+    assert_eq!(
+        q1(&c, "SELECT 'abcdef' SIMILAR TO 'abc'"),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(
+        q1(&c, "SELECT 'abcdef' SIMILAR TO 'abc%'"),
+        SqlValue::Integer(1)
+    );
+}
+
+#[test]
+fn position_returns_one_indexed_char_offset() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20056: char-indexed POSITION matches Postgres on
+    // multibyte input. `'é'` is one Unicode char (two UTF-8 bytes); the
+    // expected index is 4 in `'café'` (after c, a, f).
+    assert_eq!(
+        q1(&c, "SELECT position('é' IN 'café')"),
+        SqlValue::Integer(4)
+    );
+    assert_eq!(
+        q1(&c, "SELECT position('e' IN 'école')"),
+        SqlValue::Integer(5)
+    );
+    // Empty needle returns 1 (PG / SQLite convention).
+    assert_eq!(q1(&c, "SELECT position('' IN 'abc')"), SqlValue::Integer(1));
+    // Missing needle returns 0.
+    assert_eq!(
+        q1(&c, "SELECT position('z' IN 'abc')"),
+        SqlValue::Integer(0)
+    );
+    // NULL propagation.
+    assert!(matches!(
+        q1(&c, "SELECT position(NULL IN 'abc')"),
+        SqlValue::Null
+    ));
+    assert!(matches!(
+        q1(&c, "SELECT position('a' IN NULL)"),
+        SqlValue::Null
+    ));
+}
+
+#[test]
+fn length_vs_octet_length_disagree_on_multibyte() {
+    let (_d, c) = open();
+    // BEYOND-CASE-20057.
+    assert_eq!(q1(&c, "SELECT length('café')"), SqlValue::Integer(4));
+    assert_eq!(q1(&c, "SELECT octet_length('café')"), SqlValue::Integer(5));
+    assert_eq!(q1(&c, "SELECT length('αβγ')"), SqlValue::Integer(3));
+    assert_eq!(q1(&c, "SELECT octet_length('αβγ')"), SqlValue::Integer(6));
+}
+
+#[test]
+fn pg_array_overlap_returns_zero_or_one() {
+    let (_d, c) = open();
+    let r = query_all(
+        &c,
+        "SELECT ARRAY[1,2,3] && ARRAY[3,4,5], ARRAY[1,2] && ARRAY[10,11]",
+    );
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0], vec![SqlValue::Integer(1), SqlValue::Integer(0)]);
+}
+
+#[test]
+fn pg_decimal_arith_preserves_precision() {
+    let (_d, c) = open();
+    // The classic `0.1 + 0.2 = 0.3` torture test — needs TEXT-shaped
+    // decimal arithmetic to avoid the f64 rounding to 0.30000000000000004.
+    let r = q1(&c, "SELECT 0.1::numeric + 0.2::numeric");
+    assert_eq!(r, SqlValue::Text(Arc::from("0.3")));
+    // Equality between the sum and the literal `0.3::numeric`.
+    let r = q1(&c, "SELECT 0.1::numeric + 0.2::numeric = 0.3::numeric");
+    assert_eq!(r, SqlValue::Integer(1));
+    // Multiplication keeps precision and the explicit (10,2) cast pads
+    // the result to exactly two fractional digits.
+    let r = q1(&c, "SELECT (1.5::numeric * 3)::numeric(10,2)");
+    assert_eq!(r, SqlValue::Text(Arc::from("4.50")));
+}
+
+#[test]
+fn pg_decimal_division_renders_16_fractional_digits() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT 10::numeric / 3::numeric");
+    assert_eq!(r, SqlValue::Text(Arc::from("3.3333333333333333")));
+}
+
+#[test]
+fn pg_interval_add_to_date_via_modifier() {
+    let (_d, c) = open();
+    let r = q1(&c, "SELECT '2025-01-01'::date + INTERVAL '5 days'");
+    assert_eq!(r, SqlValue::Text(Arc::from("2025-01-06 00:00:00")));
+}
+
+#[test]
+fn pg_timestamptz_at_time_zone_is_tz_naive() {
+    let (_d, c) = open();
+    let r = q1(
+        &c,
+        "SELECT '2025-01-15 12:00:00+00'::timestamptz AT TIME ZONE 'UTC'",
+    );
+    assert_eq!(r, SqlValue::Text(Arc::from("2025-01-15 12:00:00")));
+}
+
+#[test]
+fn pg_array_agg_with_order_by_keeps_ordering() {
+    let (_d, c) = open();
+    // array_agg(x ORDER BY x DESC) over (3,2,1)/(2,1,3) shapes — the
+    // rewriter swaps the function name and preserves the in-aggregate
+    // ORDER BY so the result is `[3,2,1]`.
+    let r = q1(
+        &c,
+        "WITH v(x) AS (VALUES (1),(2),(3)) SELECT array_agg(x ORDER BY x DESC) FROM v",
+    );
+    assert_eq!(r, SqlValue::Text(Arc::from("[3,2,1]")));
 }

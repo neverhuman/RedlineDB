@@ -48,6 +48,7 @@ pub(crate) mod vec;
 
 mod agg;
 mod agg_eval;
+pub(crate) mod intern;
 use agg::*;
 mod insert;
 use insert::*;
@@ -58,6 +59,8 @@ pub(crate) mod cross_db;
 pub(crate) mod cte;
 pub(crate) mod fk;
 pub(crate) mod json_tv;
+// Track K — SQL:2003 MERGE dispatch.
+pub(crate) mod merge;
 pub(crate) mod pragma_tv;
 pub(crate) mod set_ops;
 pub(crate) mod table_valued;
@@ -111,7 +114,7 @@ fn with_current_session_ptr() -> Option<*mut SessionState> {
 /// the session mutex via `Connection::with_session`. Without this
 /// shortcut, nested `with_session` calls deadlock on the non-re-entrant
 /// `parking_lot::Mutex`.
-fn with_session_reentrant<T>(
+pub(crate) fn with_session_reentrant<T>(
     conn: &Connection,
     f: impl FnOnce(&mut SessionState) -> Result<T>,
 ) -> Result<T> {
@@ -285,14 +288,20 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::Pragma(plan) => {
-            if let PragmaPlan::SetJournalMode(value) = plan {
+            // Several SQLite SET-style PRAGMAs echo the freshly assigned
+            // value back as a single-row result set rather than returning
+            // silently. The parser flags these by attaching a non-empty
+            // `output_columns` list (e.g. `["journal_mode"]`). We honour
+            // that flag here by routing the response through a static
+            // row source whose payload is derived from the plan variant.
+            if let Some(echo_value) = pragma_set_echo_value(plan) {
                 execute_pragma(conn, plan)?;
                 return Ok(ExecutionResult {
                     runtime: RuntimeState::Select(SelectRuntime {
                         tx: SelectRuntimeTx::Empty,
                         restore_tx: false,
                         source: SelectRuntimeSource::StaticRows {
-                            rows: Arc::from(vec![vec![SqlValue::Text(Arc::from(value.as_str()))]]),
+                            rows: Arc::from(vec![vec![echo_value]]),
                             cursor: 0,
                         },
                         selection: None,
@@ -458,12 +467,20 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::AlterTable(spec) => {
-            with_write_tx(conn, |session, tx| {
+            // Surface `PRAGMA legacy_alter_table` to the kernel via the
+            // per-thread flag the catalog ops module reads when
+            // rewriting dependent view / trigger bodies after a column
+            // / table rename. Snapshot the bit, install, run, restore.
+            let prev_legacy = redlinedb_kernel::catalog::legacy_alter_table_active_for_tests();
+            redlinedb_kernel::catalog::set_legacy_alter_table(conn.legacy_alter_table());
+            let alter_result = with_write_tx(conn, |session, tx| {
                 conn.engine().alter_table(tx, spec.clone())?;
                 session.changes += 1;
                 session.total_changes += 1;
                 Ok(())
-            })?;
+            });
+            redlinedb_kernel::catalog::set_legacy_alter_table(prev_legacy);
+            alter_result?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 1,
@@ -527,6 +544,17 @@ pub fn execute_prepared(
             }
             Ok(result)
         }
+        PreparedKind::Merge(plan) => {
+            let result = crate::exec::merge::execute_merge(conn, plan, bindings)?;
+            if result.affected_rows > 0 {
+                with_session_reentrant(conn, |session| {
+                    session.changes += result.affected_rows;
+                    session.total_changes += result.affected_rows;
+                    Ok(())
+                })?;
+            }
+            Ok(result)
+        }
         PreparedKind::Analyze(plan) => {
             analyze_database(conn, plan)?;
             Ok(ExecutionResult {
@@ -567,6 +595,150 @@ pub fn execute_prepared(
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 0,
+            })
+        }
+        // Track J: register a Postgres-style schema name on the session.
+        // SQLite has no schema layer, so this is purely a name-bookkeeping
+        // operation that lets later `<schema>.<table>` references and
+        // `pg_namespace` introspection see the freshly-registered name.
+        PreparedKind::CreateSchema {
+            name,
+            if_not_exists,
+        } => {
+            let folded = name.to_ascii_lowercase();
+            with_session_reentrant(conn, |session| {
+                if !session.pg_schemas.insert(folded) && !if_not_exists {
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectExists));
+                }
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropSchema {
+            name,
+            if_exists,
+            cascade: _,
+        } => {
+            let folded = name.to_ascii_lowercase();
+            with_session_reentrant(conn, |session| {
+                if !session.pg_schemas.remove(&folded) && !if_exists {
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectNotFound));
+                }
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::CreateSequence {
+            name,
+            if_not_exists,
+            start_with,
+            increment_by,
+        } => {
+            let folded = name.to_ascii_lowercase();
+            let start = start_with.unwrap_or(1);
+            let increment = increment_by.unwrap_or(1);
+            with_session_reentrant(conn, |session| {
+                if session.pg_sequences.contains_key(&folded) {
+                    if *if_not_exists {
+                        return Ok(());
+                    }
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectExists));
+                }
+                session
+                    .pg_sequences
+                    .insert(folded, crate::session::SequenceState::new(start, increment));
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropSequence { name, if_exists } => {
+            let folded = name.to_ascii_lowercase();
+            with_session_reentrant(conn, |session| {
+                if session.pg_sequences.remove(&folded).is_none() && !if_exists {
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectNotFound));
+                }
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        // Track J: SET TRANSACTION ISOLATION LEVEL — recall-only stash.
+        PreparedKind::SetTransactionIsolation { level } => {
+            with_session_reentrant(conn, |session| {
+                session.transaction_isolation = *level;
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        // Track J: SHOW <name>. Returns a single-row result with the recalled
+        // session value for `transaction_isolation`; other names yield "".
+        PreparedKind::ShowVariable { name } => {
+            let value = if name.eq_ignore_ascii_case("transaction_isolation") {
+                let iso =
+                    with_session_reentrant(conn, |session| Ok(session.transaction_isolation))?;
+                SqlValue::Text(Arc::from(iso.as_pg_str()))
+            } else {
+                SqlValue::Text(Arc::from(""))
+            };
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Select(SelectRuntime {
+                    tx: SelectRuntimeTx::Empty,
+                    restore_tx: false,
+                    source: SelectRuntimeSource::StaticRows {
+                        rows: Arc::from(vec![vec![value]]),
+                        cursor: 0,
+                    },
+                    selection: None,
+                    projection: Vec::new(),
+                    limit: usize::MAX,
+                    offset: 0,
+                    seen: 0,
+                    yielded: 0,
+                    memory: QueryMemoryBroker::new(0, 0, None),
+                }),
+                affected_rows: 0,
+            })
+        }
+        // Track J: ALTER INDEX <old> RENAME TO <new>.
+        PreparedKind::AlterIndex { old_name, new_name } => {
+            with_write_tx(conn, |session, tx| {
+                let snapshot = conn.engine().schema_snapshot_for_tx(tx);
+                let old_folded = old_name.to_ascii_lowercase();
+                let new_folded = new_name.to_ascii_lowercase();
+                let Some(schema_id) = snapshot.lookup_namespace("main") else {
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectNotFound));
+                };
+                if snapshot.lookup_index(schema_id, &old_folded).is_none() {
+                    return Err(Error::Kernel(redlinedb_kernel::Error::ObjectNotFound));
+                }
+                if snapshot.lookup_index(schema_id, &new_folded).is_some() {
+                    return Err(Error::UnsupportedSql(format!(
+                        "an index named {new_name} already exists"
+                    )));
+                }
+                drop(snapshot);
+                conn.engine().rename_index(tx, &old_folded, new_name)?;
+                session.changes += 1;
+                session.total_changes += 1;
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 1,
             })
         }
     }
@@ -640,7 +812,9 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Analyze(_)
         | PreparedKind::Explain(_)
         | PreparedKind::Select(_)
-        | PreparedKind::Attach(_) => false,
+        | PreparedKind::Attach(_)
+        | PreparedKind::SetTransactionIsolation { .. }
+        | PreparedKind::ShowVariable { .. } => false,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)
@@ -653,11 +827,17 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropView(_)
         | PreparedKind::DropTrigger(_)
         | PreparedKind::AlterTable(_)
+        | PreparedKind::AlterIndex { .. }
         | PreparedKind::Insert(_)
         | PreparedKind::InsertView(_)
         | PreparedKind::Update(_)
         | PreparedKind::Delete(_)
-        | PreparedKind::CrossDbSql(_) => true,
+        | PreparedKind::CrossDbSql(_)
+        | PreparedKind::CreateSchema { .. }
+        | PreparedKind::DropSchema { .. }
+        | PreparedKind::CreateSequence { .. }
+        | PreparedKind::DropSequence { .. } => true,
+        PreparedKind::Merge(_) | PreparedKind::CrossDbSql(_) => true,
     }
 }
 
@@ -733,6 +913,23 @@ fn execute_create_table_as_select(
     })
 }
 
+/// Returns `Some(value)` when the given PRAGMA SET plan must echo a row
+/// back to the caller (matching SQLite's surface for `journal_mode`,
+/// `locking_mode`, `busy_timeout`, …). For SET pragmas that are silent
+/// (e.g. `defer_foreign_keys=1`), returns `None`.
+fn pragma_set_echo_value(plan: &PragmaPlan) -> Option<SqlValue> {
+    match plan {
+        PragmaPlan::SetJournalMode(value) => Some(SqlValue::Text(Arc::from(value.as_str()))),
+        PragmaPlan::SetLockingMode(value) => Some(SqlValue::Text(Arc::from(value.as_str()))),
+        PragmaPlan::SetBusyTimeout(value)
+        | PragmaPlan::SetMaxPageCount(value)
+        | PragmaPlan::SetThreads(value)
+        | PragmaPlan::SetAnalysisLimit(value) => Some(SqlValue::Integer(*value)),
+        PragmaPlan::SetSecureDelete(value) => Some(SqlValue::Integer(if *value { 1 } else { 0 })),
+        _ => None,
+    }
+}
+
 fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
     match plan {
         PragmaPlan::SetForeignKeys(value) => {
@@ -769,6 +966,90 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             Ok(())
         }
         PragmaPlan::WalCheckpoint => Ok(()),
+        PragmaPlan::SetAnalysisLimit(value) => {
+            conn.set_analysis_limit(*value);
+            Ok(())
+        }
+        PragmaPlan::SetApplicationId(value) => {
+            conn.set_application_id(*value);
+            Ok(())
+        }
+        PragmaPlan::SetAutoVacuum(value) => {
+            conn.set_auto_vacuum(*value);
+            Ok(())
+        }
+        PragmaPlan::SetAutomaticIndex(value) => {
+            conn.set_automatic_index(*value);
+            Ok(())
+        }
+        PragmaPlan::SetBusyTimeout(value) => {
+            conn.set_busy_timeout_ms(*value);
+            Ok(())
+        }
+        PragmaPlan::SetCacheSpill(value) => {
+            conn.set_cache_spill(*value);
+            Ok(())
+        }
+        PragmaPlan::SetCheckpointFullfsync(value) => {
+            conn.set_checkpoint_fullfsync(*value);
+            Ok(())
+        }
+        PragmaPlan::SetDeferForeignKeys(value) => {
+            conn.set_defer_foreign_keys(*value);
+            Ok(())
+        }
+        PragmaPlan::SetFullfsync(value) => {
+            conn.set_fullfsync(*value);
+            Ok(())
+        }
+        PragmaPlan::SetHardHeapLimit(value) => {
+            conn.set_hard_heap_limit(*value);
+            Ok(())
+        }
+        PragmaPlan::SetIgnoreCheckConstraints(value) => {
+            conn.set_ignore_check_constraints(*value);
+            Ok(())
+        }
+        PragmaPlan::SetLegacyAlterTable(value) => {
+            conn.set_legacy_alter_table(*value);
+            Ok(())
+        }
+        PragmaPlan::SetLockingMode(value) => {
+            conn.set_locking_mode(*value);
+            Ok(())
+        }
+        PragmaPlan::SetMaxPageCount(value) => {
+            conn.set_max_page_count(*value);
+            Ok(())
+        }
+        PragmaPlan::SetMmapSize(value) => {
+            conn.set_mmap_size(*value);
+            Ok(())
+        }
+        PragmaPlan::SetReverseUnorderedSelects(value) => {
+            conn.set_reverse_unordered_selects(*value);
+            Ok(())
+        }
+        PragmaPlan::SetSecureDelete(value) => {
+            conn.set_secure_delete(*value);
+            Ok(())
+        }
+        PragmaPlan::SetSoftHeapLimit(value) => {
+            conn.set_soft_heap_limit(*value);
+            Ok(())
+        }
+        PragmaPlan::SetThreads(value) => {
+            conn.set_threads(*value);
+            Ok(())
+        }
+        PragmaPlan::SetTrustedSchema(value) => {
+            conn.set_trusted_schema(*value);
+            Ok(())
+        }
+        PragmaPlan::SetWritableSchema(value) => {
+            conn.set_writable_schema(*value);
+            Ok(())
+        }
     }
 }
 

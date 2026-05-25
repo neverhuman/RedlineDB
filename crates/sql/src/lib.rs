@@ -25,3 +25,11 @@ pub use statement::{
     Step,
 };
 pub use value::{SqlValue, SqlValueRef};
+
+// Render an `f64` the way SQLite's `printf("%g")` does (17 sig digits with
+// trailing-zero trim and `.0` suffix for whole values). The CLI and FFI
+// layers call this so REAL column output matches SQLite's reference shell —
+// required for sqlite-parity on math-function results like `acos(0.5)`.
+pub fn format_real_sqlite(v: f64) -> String {
+    exec::expr::scalar::value::format_real_sqlite(v)
+}

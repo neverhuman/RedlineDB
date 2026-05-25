@@ -57,7 +57,12 @@ fn pragma_introspection_and_state_round_trips_work() {
             .iter()
             .any(|row| row.1 == "t_b_idx" && row.2 == 0 && row.3 == "c")
     );
-    assert!(index_rows.iter().any(|row| row.3 == "pk"));
+    // SQLite-parity: PRAGMA index_list hides the implicit `sqlite_autoindex_*`
+    // entry generated for an INTEGER PRIMARY KEY rowid alias. The PK
+    // is encoded by the rowid itself, so the user-visible index list
+    // contains only user-defined indexes (the single `c`-origin entry
+    // above).
+    assert!(!index_rows.iter().any(|row| row.3 == "pk"));
 
     let mut index_info = conn
         .prepare("PRAGMA index_info(t_b_idx)")
