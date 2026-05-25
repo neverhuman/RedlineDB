@@ -166,32 +166,49 @@ jobs:
         run: bash ops/ci/jankurai-tools.sh audit-ci
       - name: Regenerate README metrics section
         run: bash scripts/generate-metrics-readme.sh
-      - name: Auto-commit refreshed README
-        # Always commits — measured numbers naturally drift between runs,
-        # so a strict verify-on-PR step would never pass. The `[skip ci]`
-        # tag in the commit message blocks an infinite CI loop.
+      - name: Summarize README diff
+        id: diff
         run: |
           if git diff --quiet README.md; then
-            echo "README.md already current; nothing to commit."
-            exit 0
+            echo "drift=false" >>"$GITHUB_OUTPUT"
+            echo "README.md is already current."
+          else
+            echo "drift=true" >>"$GITHUB_OUTPUT"
+            adds="$(git diff --numstat README.md | awk '{print $1}')"
+            dels="$(git diff --numstat README.md | awk '{print $2}')"
+            echo "drift_summary=+${adds} / -${dels} lines" >>"$GITHUB_OUTPUT"
+            echo "README drift: +${adds}/-${dels} lines (measured-number rerolling)"
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          branch_ref="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
-          msg="docs(readme): auto-refresh metrics for ${GITHUB_SHA:0:8} [skip ci]"
-          git commit -m "$msg"
-          if ! git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-              "HEAD:${branch_ref}"; then
-            echo "::warning::could not push refreshed README to ${branch_ref} — likely branch protection on ${branch_ref}. README artifact still attached below."
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload refreshed README artifact
+        # Always upload — even when there's no drift the artifact is the
+        # canonical "what the README should look like for this commit"
+        # snapshot reviewers can fetch.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: refreshed-readme
           path: README.md
+      - name: Auto-commit refreshed README (main only)
+        # Only commit back on main. On PR branches we'd create a
+        # follow-up commit that re-triggers CI (or, with [skip ci],
+        # leaves the PR in a BLOCKED state because required checks
+        # have no run on the new head). main has no required checks
+        # so the bot commit is a clean fast-forward.
+        if: |
+          steps.diff.outputs.drift == 'true' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          msg="docs(readme): auto-refresh metrics for ${GITHUB_SHA:0:8} [skip ci]"
+          git commit -m "$msg"
+          if ! git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+              HEAD:main; then
+            echo "::warning::could not push refreshed README to main — likely branch protection. README artifact remains available."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # The branch ruleset requires checks named test/build/lint/typecheck/cli.
   # The aggregate test relay emits the required `test` context, while the
