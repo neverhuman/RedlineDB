@@ -390,8 +390,16 @@ fn volatile_db_options(mut opts: DbOptions) -> DbOptions {
 
 const SHARED_MEMORY_EPHEMERAL_ROOT: &str = "/dev/shm/redlinedb-ephemeral";
 
+static VOLATILE_ROOT_CACHE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 fn standard_volatile_root() -> PathBuf {
-    volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT))
+    // Phase 1.4: cache + lighten the probe. Mirrors the same change in
+    // crates/redlinedb/src/registry.rs. Together these eliminate the
+    // 8-12 syscalls each in-memory open previously incurred when the
+    // two duplicate probes both ran a create+write+unlink dance.
+    VOLATILE_ROOT_CACHE
+        .get_or_init(|| volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT)))
+        .clone()
 }
 
 fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
@@ -403,28 +411,7 @@ fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
 }
 
 fn ensure_writable_volatile_root(root: &Path) -> bool {
-    if fs::create_dir_all(root).is_err() {
-        return false;
-    }
-    let probe_id = EPHEMERAL_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
-    let probe = root.join(format!(
-        ".redlinedb-volatile-probe-{}-{probe_id}",
-        std::process::id()
-    ));
-    let result = (|| -> std::io::Result<()> {
-        let mut file = fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&probe)?;
-        file.write_all(b"ok")?;
-        drop(file);
-        fs::remove_file(&probe)?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&probe);
-    }
-    result.is_ok()
+    fs::create_dir_all(root).is_ok()
 }
 
 #[derive(Debug)]
