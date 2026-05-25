@@ -35,14 +35,14 @@ group-commit WAL, and crash recovery designed for multi-writer workloads.
 |---|---:|---:|---:|---:|---:|
 | SQLite parity (`sqlite_parity`) | 1127 | 1123 | 4 | 0 | 99.6% |
 | Memory (`memory`) | 1127 | 1123 | 4 | 0 | 99.6% |
-| Beyond SQLite vs Postgres (`beyond_sqlite`) | 277 | 126 | 20 | 131 | 45.5% |
+| Beyond SQLite vs Postgres (`beyond_sqlite`) | 277 | 4 | 273 | 0 | 1.4% |
 
 ## At a glance
 
 | Metric | RedlineDB | SQLite | Ratio (RedlineDB / SQLite) |
 |---|---:|---:|---:|
-| Median per-case latency (parity, passed only) | 4.51 ms | 2.42 ms | 1.86× |
-| Median peak RSS (memory suite) | 8.9 MiB | 12 KiB | 763.67× |
+| Median per-case latency (parity, passed only) | 3.63 ms | 1.70 ms | 2.14× |
+| Median peak RSS (memory suite) | 14.5 MiB | 12 KiB | 1241.00× |
 | Source LOC (code lines) | 159,960 (Rust) | 205,957 (C) | 0.78× |
 | Jankurai score (final / raw, decision) | 85 / 85 (pass) | — | — |
 
@@ -70,23 +70,23 @@ Higher bars = RedlineDB took longer relative to SQLite for that case. These are 
 ```mermaid
 xychart-beta
     title "Top 10 slowest cases (latency ratio)"
-    x-axis ["00202","00153","00822","00874","00396","00959","00838","00674","00946","00146"]
-    y-axis "Ratio" 0 --> 4.6
-    bar [4.05,3.52,2.89,2.84,2.82,2.81,2.80,2.79,2.78,2.73]
+    x-axis ["00480","00414","00484","00470","00438","00481","00490","00429","00338","00471"]
+    y-axis "Ratio" 0 --> 3.3
+    bar [2.83,2.77,2.75,2.68,2.66,2.66,2.64,2.61,2.60,2.59]
 ```
 
 | Case | Name | Category | Median target | Median SQLite | Ratio |
 |---|---|---|---:|---:|---:|
-| `00202` | OPT_APPEND_TEMPFILE | `CLI_OPTION_TEMPFILE` | 11.02 ms | 2.72 ms | 4.05× |
-| `00153` | DOT_CD_TEMPFILE | `CLI_TEMPFILE` | 8.69 ms | 2.47 ms | 3.52× |
-| `00822` | WINDOW_PARTITION_SUM_035 | `GEN_SQL_WINDOW` | 7.05 ms | 2.44 ms | 2.89× |
-| `00874` | CONSTRAINT_FK_SAVEPOINT_007 | `GEN_SQL_CONSTRAINT_TX` | 6.73 ms | 2.37 ms | 2.84× |
-| `00396` | DML_WHERE_ORDER_LIMIT_009 | `GEN_SQL_DML` | 6.72 ms | 2.39 ms | 2.82× |
-| `00959` | VIEW_TRIGGER_GENERATED_012 | `GEN_SQL_VIEW_TRIGGER` | 6.63 ms | 2.36 ms | 2.81× |
-| `00838` | WINDOW_PARTITION_SUM_051 | `GEN_SQL_WINDOW` | 6.66 ms | 2.38 ms | 2.80× |
-| `00674` | JOIN_SUBQUERY_EXISTS_067 | `GEN_SQL_JOIN_SUBQUERY` | 6.65 ms | 2.39 ms | 2.79× |
-| `00946` | CONSTRAINT_FK_SAVEPOINT_079 | `GEN_SQL_CONSTRAINT_TX` | 6.69 ms | 2.41 ms | 2.78× |
-| `00146` | DOT_READ_TEMPFILE | `CLI_TEMPFILE` | 6.53 ms | 2.39 ms | 2.73× |
+| `00480` | DML_WHERE_ORDER_LIMIT_093 | `GEN_SQL_DML` | 4.60 ms | 1.62 ms | 2.83× |
+| `00414` | DML_WHERE_ORDER_LIMIT_027 | `GEN_SQL_DML` | 4.81 ms | 1.77 ms | 2.77× |
+| `00484` | DML_WHERE_ORDER_LIMIT_097 | `GEN_SQL_DML` | 4.53 ms | 1.74 ms | 2.75× |
+| `00470` | DML_WHERE_ORDER_LIMIT_083 | `GEN_SQL_DML` | 4.43 ms | 1.74 ms | 2.68× |
+| `00438` | DML_WHERE_ORDER_LIMIT_051 | `GEN_SQL_DML` | 5.00 ms | 1.80 ms | 2.66× |
+| `00481` | DML_WHERE_ORDER_LIMIT_094 | `GEN_SQL_DML` | 4.46 ms | 1.67 ms | 2.66× |
+| `00490` | DML_WHERE_ORDER_LIMIT_103 | `GEN_SQL_DML` | 4.19 ms | 1.76 ms | 2.64× |
+| `00429` | DML_WHERE_ORDER_LIMIT_042 | `GEN_SQL_DML` | 4.38 ms | 1.71 ms | 2.61× |
+| `00338` | SCALAR_STRING_028 | `GEN_SQL_SCALAR` | 3.59 ms | 1.39 ms | 2.60× |
+| `00471` | DML_WHERE_ORDER_LIMIT_084 | `GEN_SQL_DML` | 4.50 ms | 1.66 ms | 2.59× |
 
 ## Latency — top 10 fastest cases (RedlineDB / SQLite ratio)
 
@@ -95,23 +95,23 @@ Lower bars = RedlineDB outpaced SQLite on that case. Wins to defend.
 ```mermaid
 xychart-beta
     title "Top 10 fastest cases (latency ratio)"
-    x-axis ["00209","00160","00161","00203","00165","00167","00873","00067","00264","01097"]
-    y-axis "Ratio" 0 --> 1.5
-    bar [0.05,0.15,0.15,0.42,0.55,0.94,0.94,0.95,0.95,0.95]
+    x-axis ["00209","00161","00160","00165","00203","00140","00156","00204","00158","00115"]
+    y-axis "Ratio" 0 --> 1.9
+    bar [0.04,0.09,0.09,0.49,1.00,1.11,1.12,1.27,1.34,1.37]
 ```
 
 | Case | Name | Category | Median target | Median SQLite | Ratio |
 |---|---|---|---:|---:|---:|
-| `00209` | OPT_INTERACTIVE_CATALOG | `CLI_OPTION_CATALOG` | 2.43 ms | 52.88 ms | 0.05× |
-| `00160` | DOT_EXCEL_EXTERNAL_APP | `CLI_EXTERNAL_APP` | 4.49 ms | 29.62 ms | 0.15× |
-| `00161` | DOT_WWW_EXTERNAL_APP | `CLI_EXTERNAL_APP` | 4.51 ms | 29.67 ms | 0.15× |
-| `00203` | OPT_ARCHIVE_A_TEMPFILE_OPTIONAL | `CLI_OPTION_TEMPFILE_OPTIONAL` | 4.58 ms | 10.81 ms | 0.42× |
-| `00165` | DOT_INTCK_CATALOG | `CLI_CATALOG` | 2.63 ms | 4.79 ms | 0.55× |
-| `00167` | DOT_UNMODULE_CATALOG | `CLI_CATALOG` | 2.56 ms | 2.73 ms | 0.94× |
-| `00873` | CONSTRAINT_FK_SAVEPOINT_006 | `GEN_SQL_CONSTRAINT_TX` | 4.54 ms | 4.83 ms | 0.94× |
-| `00067` | CASE_COALESCE_NULLIF_IIF | `SQL_EXPRESSIONS` | 4.43 ms | 4.68 ms | 0.95× |
-| `00264` | SCALAR_ARITH_010 | `GEN_SQL_SCALAR` | 4.48 ms | 4.73 ms | 0.95× |
-| `01097` | INDEX_SCHEMA_PRAGMA_030 | `GEN_SQL_INDEX_PRAGMA` | 4.71 ms | 4.95 ms | 0.95× |
+| `00209` | OPT_INTERACTIVE_CATALOG | `CLI_OPTION_CATALOG` | 2.26 ms | 51.49 ms | 0.04× |
+| `00161` | DOT_WWW_EXTERNAL_APP | `CLI_EXTERNAL_APP` | 3.05 ms | 34.55 ms | 0.09× |
+| `00160` | DOT_EXCEL_EXTERNAL_APP | `CLI_EXTERNAL_APP` | 3.16 ms | 34.81 ms | 0.09× |
+| `00165` | DOT_INTCK_CATALOG | `CLI_CATALOG` | 2.73 ms | 5.51 ms | 0.49× |
+| `00203` | OPT_ARCHIVE_A_TEMPFILE_OPTIONAL | `CLI_OPTION_TEMPFILE_OPTIONAL` | 1.90 ms | 1.96 ms | 1.00× |
+| `00140` | DOT_EXPERT_OPTIONAL | `CLI_DOT_COMMAND_OPTIONAL` | 3.05 ms | 2.78 ms | 1.11× |
+| `00156` | DOT_RECOVER_TEMPFILE | `CLI_TEMPFILE` | 4.52 ms | 3.98 ms | 1.12× |
+| `00204` | OPT_ZIP_TEMPFILE_CATALOG | `CLI_OPTION_CATALOG` | 2.28 ms | 1.81 ms | 1.27× |
+| `00158` | DOT_SHELL_SIDE_EFFECT | `CLI_SIDE_EFFECT` | 2.76 ms | 2.06 ms | 1.34× |
+| `00115` | DOT_SCHEMA_TABLES_INDEXES | `CLI_DOT_COMMAND` | 3.30 ms | 2.40 ms | 1.37× |
 
 ## Memory — top 10 cases by RSS overhead (RedlineDB / SQLite)
 
@@ -120,23 +120,23 @@ Per-case peak resident set size (RSS) on the `memory` suite, ranked by overhead 
 ```mermaid
 xychart-beta
     title "Top 10 cases by RSS overhead (ratio)"
-    x-axis ["00826","00844","00542","01048","00978","01006","00830","00605","01009","01015"]
-    y-axis "Ratio" 0 --> 1398.1
-    bar [1271.00,1271.00,1259.00,1256.50,1252.00,1250.50,1247.00,1246.50,1245.50,1237.50]
+    x-axis ["00318","00521","00543","00606","01122","01119","01114","01110","01107","00061"]
+    y-axis "Ratio" 0 --> 5233.2
+    bar [4757.50,4757.50,4757.50,4757.50,3191.33,3189.33,3185.33,3183.67,3182.33,3171.67]
 ```
 
 | Case | Name | Category | RedlineDB RSS | SQLite RSS | Ratio |
 |---|---|---|---:|---:|---:|
-| `00826` | WINDOW_PARTITION_SUM_039 | `GEN_SQL_WINDOW` | 9.9 MiB | 8 KiB | 1271.00× |
-| `00844` | WINDOW_PARTITION_SUM_057 | `GEN_SQL_WINDOW` | 9.9 MiB | 8 KiB | 1271.00× |
-| `00542` | AGG_GROUP_HAVING_035 | `GEN_SQL_AGGREGATE` | 9.8 MiB | 8 KiB | 1259.00× |
-| `01048` | JSON_EXTRACT_SET_041 | `GEN_SQL_JSON` | 9.8 MiB | 8 KiB | 1256.50× |
-| `00978` | VIEW_TRIGGER_GENERATED_031 | `GEN_SQL_VIEW_TRIGGER` | 9.8 MiB | 8 KiB | 1252.00× |
-| `01006` | VIEW_TRIGGER_GENERATED_059 | `GEN_SQL_VIEW_TRIGGER` | 9.8 MiB | 8 KiB | 1250.50× |
-| `00830` | WINDOW_PARTITION_SUM_043 | `GEN_SQL_WINDOW` | 9.7 MiB | 8 KiB | 1247.00× |
-| `00605` | AGG_GROUP_HAVING_098 | `GEN_SQL_AGGREGATE` | 9.7 MiB | 8 KiB | 1246.50× |
-| `01009` | JSON_EXTRACT_SET_002 | `GEN_SQL_JSON` | 9.7 MiB | 8 KiB | 1245.50× |
-| `01015` | JSON_EXTRACT_SET_008 | `GEN_SQL_JSON` | 9.7 MiB | 8 KiB | 1237.50× |
+| `00318` | SCALAR_STRING_023 | `GEN_SQL_SCALAR` | 37.2 MiB | 8 KiB | 4757.50× |
+| `00521` | AGG_GROUP_HAVING_014 | `GEN_SQL_AGGREGATE` | 37.2 MiB | 8 KiB | 4757.50× |
+| `00543` | AGG_GROUP_HAVING_036 | `GEN_SQL_AGGREGATE` | 37.2 MiB | 8 KiB | 4757.50× |
+| `00606` | AGG_GROUP_HAVING_099 | `GEN_SQL_AGGREGATE` | 37.2 MiB | 8 KiB | 4757.50× |
+| `01122` | INDEX_SCHEMA_PRAGMA_055 | `GEN_SQL_INDEX_PRAGMA` | 37.4 MiB | 12 KiB | 3191.33× |
+| `01119` | INDEX_SCHEMA_PRAGMA_052 | `GEN_SQL_INDEX_PRAGMA` | 37.4 MiB | 12 KiB | 3189.33× |
+| `01114` | INDEX_SCHEMA_PRAGMA_047 | `GEN_SQL_INDEX_PRAGMA` | 37.3 MiB | 12 KiB | 3185.33× |
+| `01110` | INDEX_SCHEMA_PRAGMA_043 | `GEN_SQL_INDEX_PRAGMA` | 37.3 MiB | 12 KiB | 3183.67× |
+| `01107` | INDEX_SCHEMA_PRAGMA_040 | `GEN_SQL_INDEX_PRAGMA` | 37.3 MiB | 12 KiB | 3182.33× |
+| `00061` | WINDOW_ROW_NUMBER_RANK | `SQL_WINDOW` | 37.2 MiB | 12 KiB | 3171.67× |
 
 ## Beyond-SQLite features — vs Postgres oracle
 
@@ -144,22 +144,22 @@ The `beyond_sqlite` suite runs the Postgres-shaped feature corpus (`277` cases) 
 
 | Outcome | Cases | Share |
 |---|---:|---:|
-| Passes Postgres semantics | 126 | 45.5% |
-| Diverges (failing parity vs Postgres) | 131 | 47.3% |
-| Skipped (Postgres-only / manifest backlog) | 20 | 7.2% |
+| Passes Postgres semantics | 4 | 1.4% |
+| Diverges (failing parity vs Postgres) | 0 | 0.0% |
+| Skipped (Postgres-only / manifest backlog) | 273 | 98.6% |
 
 Top beyond-feature categories by coverage:
 
 | Category | Cases | Passing Postgres | Pass rate |
 |---|---:|---:|---:|
-| `BEYOND_PORTABILITY_SYNTAX` | 40 | 29 | 72.5% |
-| `BEYOND_RICH_TYPES` | 30 | 18 | 60.0% |
-| `BEYOND_COLLATIONS_ILIKE` | 30 | 20 | 66.7% |
-| `BEYOND_MIGRATION_ERGONOMICS` | 20 | 12 | 60.0% |
+| `BEYOND_PORTABILITY_SYNTAX` | 40 | 0 | 0.0% |
+| `BEYOND_RICH_TYPES` | 30 | 0 | 0.0% |
+| `BEYOND_COLLATIONS_ILIKE` | 30 | 0 | 0.0% |
+| `BEYOND_MIGRATION_ERGONOMICS` | 20 | 0 | 0.0% |
 | `BEYOND_MATERIALIZED_VIEWS` | 20 | 0 | 0.0% |
-| `BEYOND_SCHEMAS_SEQUENCES` | 20 | 13 | 65.0% |
+| `BEYOND_SCHEMAS_SEQUENCES` | 20 | 0 | 0.0% |
 | `BEYOND_STORED_PROCEDURES` | 20 | 0 | 0.0% |
-| `BEYOND_JSONB_INDEXING` | 20 | 20 | 100.0% |
+| `BEYOND_JSONB_INDEXING` | 20 | 0 | 0.0% |
 
 ## Code health (jankurai)
 
