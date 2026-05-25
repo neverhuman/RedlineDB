@@ -145,15 +145,30 @@ pub enum ExplainSetting {
 }
 
 /// Sink for query output and `.print`.
+///
+/// Phase 5 WS-C5b: File sinks wrap a `BufWriter<File>` so per-row writes
+/// don't make one `write(2)` syscall per cell. Stdout was already buffered;
+/// File was not — addresses cases 00148/00149/00150/00151/00156/00202.
 pub enum OutputTarget {
     Stdout(BufWriter<io::Stdout>),
     Null,
-    File { path: PathBuf, writer: File },
+    File {
+        path: PathBuf,
+        writer: BufWriter<File>,
+    },
 }
 
 impl OutputTarget {
     pub fn stdout() -> Self {
         Self::Stdout(BufWriter::new(io::stdout()))
+    }
+
+    /// Construct a File sink with a 64 KB buffered writer.
+    pub fn file(path: PathBuf, file: File) -> Self {
+        Self::File {
+            path,
+            writer: BufWriter::with_capacity(64 * 1024, file),
+        }
     }
 
     pub fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {

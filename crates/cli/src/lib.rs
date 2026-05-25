@@ -702,13 +702,8 @@ fn write_readonly_sidecar(state: &mut CliState) -> Result<(), String> {
     let sidecar = readonly_sidecar_path(&state.db_path);
     let writer = std::fs::File::create(&sidecar)
         .map_err(|err| format!("Error: cannot open {}: {err}", sidecar.display()))?;
-    let previous = std::mem::replace(
-        &mut state.output,
-        OutputTarget::File {
-            path: sidecar,
-            writer,
-        },
-    );
+    // Phase 5 WS-C5c: BufWriter wrap to match the .output FILE fix.
+    let previous = std::mem::replace(&mut state.output, OutputTarget::file(sidecar, writer));
     let result = dot::io_cmd::dump(state, &[]);
     let flush_result = state.output.flush().map_err(|err| err.to_string());
     state.output = previous;

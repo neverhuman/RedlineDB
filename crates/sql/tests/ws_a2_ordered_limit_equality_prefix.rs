@@ -79,6 +79,51 @@ fn order_by_secondary_column_with_equality_leading_uses_index() {
 }
 
 #[test]
+fn order_by_multi_column_composite_satisfied_by_index() {
+    // Phase 5 WS-A2b coverage: confirm composite ORDER BY (k1, k2)
+    // is recognized as satisfied by INDEX(tenant, k1, k2) after the
+    // equality prefix on tenant.
+    let conn = open();
+    conn.execute(
+        "CREATE TABLE kv (id INTEGER PRIMARY KEY, tenant INTEGER, k1 INTEGER, k2 INTEGER)",
+    )
+    .expect("ddl");
+    conn.execute("CREATE INDEX kv_tkk ON kv(tenant, k1, k2)").expect("idx");
+    for (tenant, k1, k2) in [
+        (1, 2, 30), (1, 2, 10), (1, 1, 50),
+        (1, 1, 20), (1, 3, 5),  (1, 1, 10),
+        (2, 1, 1),  (2, 1, 2),
+    ] {
+        conn.execute(&format!(
+            "INSERT INTO kv(tenant, k1, k2) VALUES ({tenant}, {k1}, {k2})"
+        ))
+        .expect("insert");
+    }
+    // tenant=1 rows in (k1,k2) order: (1,10),(1,20),(1,50),(2,10),(2,30),(3,5)
+    let mut stmt = conn
+        .prepare(
+            "SELECT k1, k2 FROM kv WHERE tenant = 1 ORDER BY k1, k2",
+        )
+        .expect("prepare");
+    let mut out = Vec::new();
+    while let Step::Row = stmt.step().expect("step") {
+        let k1 = match stmt.column_value(0).expect("col").clone() {
+            SqlValue::Integer(n) => n,
+            _ => panic!("k1 not int"),
+        };
+        let k2 = match stmt.column_value(1).expect("col").clone() {
+            SqlValue::Integer(n) => n,
+            _ => panic!("k2 not int"),
+        };
+        out.push((k1, k2));
+    }
+    assert_eq!(
+        out,
+        vec![(1, 10), (1, 20), (1, 50), (2, 10), (2, 30), (3, 5)]
+    );
+}
+
+#[test]
 fn order_by_non_aligned_falls_back() {
     // Negative case: ORDER BY a column that does NOT align with the
     // remaining index keys after the equality prefix must still

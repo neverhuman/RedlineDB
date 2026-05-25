@@ -33,10 +33,7 @@ pub fn output(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
                 .truncate(true)
                 .open(&path_buf)
                 .map_err(|err| format!("Error: cannot open {path}: {err}"))?;
-            state.output = OutputTarget::File {
-                path: path_buf,
-                writer,
-            };
+            state.output = OutputTarget::file(path_buf, writer);
         }
     }
     Ok(DotOutcome::Ok)
