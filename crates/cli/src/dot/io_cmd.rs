@@ -237,6 +237,16 @@ pub fn cd(_state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
 }
 
 /// `.import FILE TABLE` — load CSV rows from FILE into TABLE.
+///
+/// Wave 1 already hoisted the prepared statement out of the per-row loop
+/// and wrapped the inserts in a single transaction. When the session
+/// flag `PRAGMA redline_bulk_import = ON` is set, this routine takes a
+/// further batched path: it groups CSV rows in chunks of
+/// `BULK_IMPORT_CHUNK` and submits each chunk as a single multi-row
+/// `INSERT INTO t VALUES (?,?,..),(?,?,..),...` statement. The
+/// executor's `with_write_tx` is then entered once per chunk instead of
+/// once per row, while still going through the existing parser/planner
+/// and constraint machinery (no engine boundary crossed).
 pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     let filtered = args
         .iter()
@@ -254,16 +264,22 @@ pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
         .has_headers(false)
         .flexible(true)
         .from_reader(file);
-    let mut header: Option<Vec<String>> = None;
-    let mut stmt: Option<OwnedStatement> = None;
+    let bulk_enabled = bulk_import_enabled(state);
     // Wrap the row loop in a transaction so N inserts pay one WAL group commit
     // instead of N; prepare once so we avoid re-parse+plan per row.
     state
         .conn
         .execute("BEGIN", ())
         .map_err(|err| err.to_string())?;
-    let result = import_rows(state, &mut reader, &mut header, &mut stmt, table);
-    drop(stmt);
+    let result = if bulk_enabled {
+        import_rows_batched(state, &mut reader, table)
+    } else {
+        let mut header: Option<Vec<String>> = None;
+        let mut stmt: Option<OwnedStatement> = None;
+        let res = import_rows(state, &mut reader, &mut header, &mut stmt, table);
+        drop(stmt);
+        res
+    };
     match result {
         Ok(()) => {
             state
@@ -276,6 +292,146 @@ pub fn import(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
             let _ = state.conn.execute("ROLLBACK", ());
             Err(err)
         }
+    }
+}
+
+/// Probe `PRAGMA redline_bulk_import` on the active connection. Any
+/// failure (PRAGMA not supported, no row) is treated as OFF so the
+/// caller falls through to the default path.
+fn bulk_import_enabled(state: &mut CliState) -> bool {
+    let mut stmt = match state.conn.prepare("PRAGMA redline_bulk_import") {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    match stmt.step() {
+        Ok(Step::Row(row)) => row.get::<i64>(0).map(|v| v != 0).unwrap_or(false),
+        _ => false,
+    }
+}
+
+/// Rows-per-batched-INSERT. SQLite uses 1000 for `.mode insert` and the
+/// host parser's parameter cap (32 766) limits any practical row arity
+/// at this chunk size.
+const BULK_IMPORT_CHUNK: usize = 1000;
+
+fn import_rows_batched(
+    state: &mut CliState,
+    reader: &mut csv::Reader<File>,
+    table: &str,
+) -> Result<(), String> {
+    let mut header: Option<Vec<String>> = None;
+    let mut columns: Option<usize> = None;
+    let mut full_stmt: Option<OwnedStatement> = None;
+    let mut buffer: Vec<csv::StringRecord> = Vec::with_capacity(BULK_IMPORT_CHUNK);
+
+    for record in reader.records() {
+        let record = record.map_err(|err| format!("Error: {err}"))?;
+        if header.is_none() && state.show_header {
+            *(&mut header) = Some(record.iter().map(str::to_owned).collect());
+            continue;
+        }
+        if columns.is_none() {
+            let n = header.as_ref().map(|h| h.len()).unwrap_or_else(|| record.len());
+            columns = Some(n);
+        }
+        buffer.push(record);
+        if buffer.len() >= BULK_IMPORT_CHUNK {
+            let cols = columns.expect("columns initialised above");
+            flush_chunk(state, &mut full_stmt, header.as_ref(), table, cols, &buffer)?;
+            buffer.clear();
+        }
+    }
+    if !buffer.is_empty() {
+        let cols = columns.expect("columns initialised when first record observed");
+        // Final chunk may be smaller than BULK_IMPORT_CHUNK; build a
+        // one-shot statement for the trailing rows rather than reusing
+        // the full-width prepared statement.
+        let sql = build_batched_insert_sql(table, header.as_ref(), cols, buffer.len());
+        let mut stmt = state
+            .conn
+            .prepare_owned(&sql)
+            .map_err(|err| err.to_string())?;
+        bind_chunk(&mut stmt, &buffer, cols)?;
+        while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {}
+    }
+    Ok(())
+}
+
+fn flush_chunk(
+    state: &mut CliState,
+    full_stmt: &mut Option<OwnedStatement>,
+    header: Option<&Vec<String>>,
+    table: &str,
+    cols: usize,
+    buffer: &[csv::StringRecord],
+) -> Result<(), String> {
+    if full_stmt.is_none() {
+        let sql = build_batched_insert_sql(table, header, cols, BULK_IMPORT_CHUNK);
+        *full_stmt = Some(
+            state
+                .conn
+                .prepare_owned(&sql)
+                .map_err(|err| err.to_string())?,
+        );
+    }
+    let stmt = full_stmt.as_mut().expect("statement initialised above");
+    stmt.reset().map_err(|err| err.to_string())?;
+    stmt.clear_bindings();
+    bind_chunk(stmt, buffer, cols)?;
+    while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {}
+    Ok(())
+}
+
+fn bind_chunk(
+    stmt: &mut OwnedStatement,
+    buffer: &[csv::StringRecord],
+    cols: usize,
+) -> Result<(), String> {
+    let mut slot = 1usize;
+    for record in buffer {
+        for c in 0..cols {
+            let field = record.get(c).unwrap_or("");
+            stmt.bind_text(slot, field).map_err(|err| err.to_string())?;
+            slot += 1;
+        }
+    }
+    Ok(())
+}
+
+fn build_batched_insert_sql(
+    table: &str,
+    header: Option<&Vec<String>>,
+    cols: usize,
+    rows: usize,
+) -> String {
+    let one_row = {
+        let mut s = String::with_capacity(cols * 2 + 2);
+        s.push('(');
+        for i in 0..cols {
+            if i > 0 {
+                s.push(',');
+            }
+            s.push('?');
+        }
+        s.push(')');
+        s
+    };
+    let mut values = String::with_capacity(rows * (one_row.len() + 1));
+    for i in 0..rows {
+        if i > 0 {
+            values.push(',');
+        }
+        values.push_str(&one_row);
+    }
+    if let Some(h) = header {
+        let col_list = h
+            .iter()
+            .map(|c| quote_ident(c))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("INSERT INTO {table}({col_list}) VALUES {values}")
+    } else {
+        format!("INSERT INTO {table} VALUES {values}")
     }
 }
 

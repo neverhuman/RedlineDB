@@ -366,6 +366,14 @@ pub(crate) fn parse_pragma_template(
                 )
             }
         }
+        "redline_bulk_import" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "redline_bulk_import",
+            conn.redline_bulk_import(),
+            crate::statement::PragmaPlan::SetRedlineBulkImport,
+        )?,
         "redline_index_check" => pragma_static_select(
             sql,
             schema_epoch,

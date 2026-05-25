@@ -1050,6 +1050,10 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             conn.set_writable_schema(*value);
             Ok(())
         }
+        PragmaPlan::SetRedlineBulkImport(value) => {
+            conn.set_redline_bulk_import(*value);
+            Ok(())
+        }
     }
 }
 

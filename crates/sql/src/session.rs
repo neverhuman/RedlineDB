@@ -148,6 +148,11 @@ pub struct SessionState {
     pub writable_schema: bool,
     /// Mirrors SQLite's `PRAGMA legacy_alter_table`. Recall-only.
     pub legacy_alter_table: bool,
+    /// RedlineDB-specific. When ON, the CLI `.import` dot-command takes a
+    /// batched-VALUES fast path that submits N rows per executor call
+    /// (instead of one row per prepared.step). No engine-side effect — the
+    /// flag is consulted by the CLI layer.
+    pub redline_bulk_import: bool,
     /// Names created through CREATE TEMP TABLE in this connection. The
     /// current lightweight implementation stores their rows in the same
     /// engine but exposes them through sqlite_temp_schema.
@@ -252,6 +257,7 @@ impl Default for SessionState {
             reverse_unordered_selects: false,
             writable_schema: false,
             legacy_alter_table: false,
+            redline_bulk_import: false,
             temp_tables: Vec::new(),
             last_insert_rowid: None,
             unique_guards: Vec::new(),
@@ -309,6 +315,7 @@ impl SessionState {
         self.reverse_unordered_selects = false;
         self.writable_schema = false;
         self.legacy_alter_table = false;
+        self.redline_bulk_import = false;
         self.temp_tables.clear();
         self.last_insert_rowid = None;
         self.unique_guards.clear();

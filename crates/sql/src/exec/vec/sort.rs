@@ -10,11 +10,20 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::path::PathBuf;
 
+use rayon::slice::ParallelSliceMut;
+
 use super::spill::{SpillFile, SpillReader};
 use super::topk::SortDirection;
 use crate::error::Result;
 use crate::exec::expr::row_width;
 use crate::value::SqlValue;
+
+/// Buffer length above which the in-memory sort uses Rayon's parallel
+/// `par_sort_by`. Below this threshold the serial path wins on dispatch
+/// overhead. The comparator (`SortDirection::compare_values` ->
+/// `crate::value::compare_values`) is pure — no executor thread-locals,
+/// no UDF callbacks — so parallel execution is sound.
+const PARALLEL_SORT_THRESHOLD: usize = 64 * 1024;
 
 /// One item in the merge-priority-queue: the head row of a run plus enough
 /// metadata to refill from the right source.
@@ -114,7 +123,7 @@ where
 
     fn sort_buffer(&mut self) {
         let directions = std::sync::Arc::clone(&self.directions);
-        self.buffer.sort_by(|a, b| {
+        let cmp = move |a: &(Vec<SqlValue>, Vec<SqlValue>), b: &(Vec<SqlValue>, Vec<SqlValue>)| {
             for ((l, r), dir) in a.0.iter().zip(b.0.iter()).zip(directions.iter()) {
                 let ord = dir.compare_values(l, r);
                 if ord != Ordering::Equal {
@@ -122,7 +131,12 @@ where
                 }
             }
             Ordering::Equal
-        });
+        };
+        if self.buffer.len() >= PARALLEL_SORT_THRESHOLD {
+            self.buffer.par_sort_by(cmp);
+        } else {
+            self.buffer.sort_by(cmp);
+        }
     }
 
     fn flush_run(&mut self) -> Result<()> {

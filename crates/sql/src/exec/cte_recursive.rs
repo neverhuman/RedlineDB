@@ -22,6 +22,12 @@ use super::{
 pub(super) const RECURSIVE_CTE_ITERATION_LIMIT: usize = 10_000;
 
 /// Materialize one CTE (anchor + optional recursive arm) into rows.
+///
+/// `row_cap` is an optional upper bound on accumulated rows. When the
+/// outer query is a bounded `SELECT ... FROM <cte> LIMIT K [OFFSET M]`
+/// with no filter/join/order/aggregate, the caller passes `Some(K+M)`
+/// so recursion stops once that many rows are produced. See
+/// `derive_cte_row_cap` in `cte.rs`.
 pub(super) fn materialize_cte(
     conn: &Connection,
     schema: Arc<SchemaSnapshot>,
@@ -29,6 +35,7 @@ pub(super) fn materialize_cte(
     sql: &str,
     cte: &Cte,
     parent_recursive: bool,
+    row_cap: Option<usize>,
 ) -> Result<CteDef> {
     let cte_name: Arc<str> = Arc::from(cte.alias.name.value.as_str());
     let declared_columns: Vec<String> = cte
@@ -94,6 +101,30 @@ pub(super) fn materialize_cte(
 
     if !union_all {
         accumulated = dedup_rows(accumulated);
+    }
+
+    // WS-A7: if the outer query has a bounded LIMIT we can stop the
+    // recursion as soon as enough rows have accumulated. SQLite calls
+    // this LIMIT pushdown into the recursive worktable.
+    if let Some(cap) = row_cap {
+        if accumulated.len() >= cap {
+            accumulated.truncate(cap);
+            let table_def = synth_table_def_with_folded(
+                &cte_name,
+                &column_vec,
+                &folded_cte_name,
+                &folded_columns,
+                &accumulated,
+            );
+            let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
+            register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
+            return Ok(CteDef {
+                name: cte_name,
+                columns: columns_arc,
+                rows: Arc::from(accumulated),
+                table_def: Some(table_def),
+            });
+        }
     }
 
     let mut working_set = accumulated.clone();
@@ -186,6 +217,28 @@ pub(super) fn materialize_cte(
 
         accumulated.extend(next_working.iter().cloned());
         working_set = next_working;
+
+        // WS-A7: stop once accumulated rows satisfy the outer LIMIT.
+        if let Some(cap) = row_cap {
+            if accumulated.len() >= cap {
+                accumulated.truncate(cap);
+                let table_def = synth_table_def_with_folded(
+                    &cte_name,
+                    &column_vec,
+                    &folded_cte_name,
+                    &folded_columns,
+                    &accumulated,
+                );
+                let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
+                register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
+                return Ok(CteDef {
+                    name: cte_name,
+                    columns: columns_arc,
+                    rows: Arc::from(accumulated),
+                    table_def: Some(table_def),
+                });
+            }
+        }
 
         if iter + 1 == RECURSIVE_CTE_ITERATION_LIMIT {
             return Err(Error::UnsupportedSql(format!(

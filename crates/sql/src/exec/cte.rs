@@ -269,6 +269,8 @@ pub(crate) fn bind_with_query(
     clear_permanent_ctes();
     let mut pushed_scopes = 0usize;
     for cte in cte_tables {
+        let cte_alias = cte.alias.name.value.clone();
+        let row_cap = derive_cte_row_cap(&body_query, &cte_alias);
         let def = recursive::materialize_cte(
             conn,
             Arc::clone(&schema),
@@ -276,6 +278,7 @@ pub(crate) fn bind_with_query(
             sql,
             &cte,
             recursive,
+            row_cap,
         )?;
         register_permanent_cte(def.name.to_string(), def.clone());
         let mut single = HashMap::new();
@@ -426,3 +429,93 @@ pub(crate) fn template_from_static(
 // Re-export Distinct so the parser scope picks it up if needed.
 #[allow(unused_imports)]
 use sqlparser::ast::Distinct;
+
+/// WS-A7: derive an upper bound on the number of CTE rows the outer
+/// query needs. Returns `Some(limit + offset)` only when the outer
+/// query has a shape that lets us safely truncate the recursion early.
+///
+/// Conservative shape requirements:
+/// - body is a single `SELECT ... FROM <cte>` (no joins),
+/// - no `WHERE` (a filter could reject rows; we'd need more than
+///   `limit` to satisfy it),
+/// - no `GROUP BY` / `HAVING` / `ORDER BY` / `DISTINCT` (each can
+///   require the full recursion result),
+/// - `LIMIT` and (optional) `OFFSET` are literal non-negative integers.
+///
+/// The cap is `limit + offset` so the trailing query can still apply
+/// its OFFSET to the truncated set. If we cannot prove safety we
+/// return `None` and fall back to the existing full-materialization
+/// path.
+fn derive_cte_row_cap(body_query: &Query, cte_name: &str) -> Option<usize> {
+    use sqlparser::ast::{GroupByExpr, LimitClause, SetExpr, TableFactor};
+
+    if body_query.with.is_some() {
+        return None;
+    }
+    if body_query.order_by.is_some() {
+        return None;
+    }
+
+    let select = match body_query.body.as_ref() {
+        SetExpr::Select(select) => select.as_ref(),
+        _ => return None,
+    };
+
+    if select.distinct.is_some()
+        || select.selection.is_some()
+        || select.having.is_some()
+        || !matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty())
+        || select.from.len() != 1
+        || !select.from[0].joins.is_empty()
+    {
+        return None;
+    }
+
+    // Confirm the single FROM source is exactly the recursive CTE.
+    let factor = &select.from[0].relation;
+    let from_name = match factor {
+        TableFactor::Table { name, .. } => name
+            .0
+            .last()
+            .and_then(|part| match part {
+                sqlparser::ast::ObjectNamePart::Identifier(ident) => Some(&ident.value),
+                _ => None,
+            })?,
+        _ => return None,
+    };
+    if !from_name.eq_ignore_ascii_case(cte_name) {
+        return None;
+    }
+
+    // Extract numeric LIMIT + OFFSET from a `LimitOffset` form.
+    let (limit_expr, offset_expr) = match body_query.limit_clause.as_ref()? {
+        LimitClause::LimitOffset {
+            limit,
+            offset,
+            limit_by,
+        } if limit_by.is_empty() => (limit.as_ref(), offset.as_ref().map(|o| &o.value)),
+        LimitClause::OffsetCommaLimit { offset, limit } => (Some(limit), Some(offset)),
+        _ => return None,
+    };
+
+    let limit_value = literal_u64(limit_expr?)?;
+    let offset_value = match offset_expr {
+        Some(expr) => literal_u64(expr)?,
+        None => 0,
+    };
+
+    let cap = limit_value.checked_add(offset_value)?;
+    // Saturate to usize to avoid pathological cap values on 32-bit.
+    usize::try_from(cap).ok()
+}
+
+fn literal_u64(expr: &sqlparser::ast::Expr) -> Option<u64> {
+    use sqlparser::ast::{Expr, Value, ValueWithSpan};
+    match expr {
+        Expr::Value(ValueWithSpan { value, .. }) => match value {
+            Value::Number(text, _) => text.parse::<u64>().ok(),
+            _ => None,
+        },
+        _ => None,
+    }
+}

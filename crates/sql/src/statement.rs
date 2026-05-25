@@ -279,6 +279,7 @@ pub enum PragmaPlan {
     SetThreads(i64),
     SetTrustedSchema(bool),
     SetWritableSchema(bool),
+    SetRedlineBulkImport(bool),
 }
 
 /// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the
