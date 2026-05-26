@@ -36,18 +36,21 @@ default:
     - rustup component add rustfmt clippy
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-/usr/local/cargo}/bin"'
-    # The runner pre_build_script exports CARGO_TARGET_DIR=/cache/cargo-targets/...
-    # but ops/ci/release-build.sh hardcodes `target/${TARGET}/release/redlinedb-cli`
-    # for its cp step. Unset so cargo writes to the project-relative ./target
-    # and the cp finds what it built. Cache benefit deferred to cargo registry
-    # cache (still mounted at /cache/cargo-home) and incremental rebuilds.
-    - unset CARGO_TARGET_DIR JERYU_CARGO_TARGET_ROOT
+    # Runner pre_build_script exports CARGO_TARGET_DIR=/cache/cargo-targets/...
+    # but ops/ci/release-build.sh hardcodes `target/${TARGET}/...` for its cp.
+    # Symlink ./target → $CARGO_TARGET_DIR so cargo keeps writing to the
+    # persistent cache AND cp succeeds. Falls through cleanly if the env var
+    # isn't set.
+    - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
 
 stages:
-  - preflight
+  # All jobs run in parallel — no inter-stage deps inside `test`. The
+  # `parity` stage waits on the test shards via `needs:` so a regression
+  # short-circuits before the 90-min parity run. `metrics` waits on
+  # parity for its artifact.
+  - smoke
   - test
   - parity
-  - guard
   - metrics
   - jankurai
   - tools
@@ -74,16 +77,54 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "web"
 
 # ── .github/workflows/ci.yml ───────────────────────────────────────────────
+#
+# The GH workflow has a `preflight` job that gates everything else and runs
+# {cargo fmt --check, file-size lint, parity-ledger lint, release smoke,
+# cargo check --workspace}. That serializes ~25min of work onto one job
+# before any test shard can start. The GitLab port splits those into
+# independent parallel jobs (smoke stage) and drops the `needs: preflight`
+# bar from the test shards so all 5 shards + release smoke + 3 fast lints
+# race together. Net: pipeline duration goes from
+# (preflight + max(test)) ≈ 25 + 15 = 40 min
+# to max(test, release-smoke) ≈ 15-20 min on warm cache.
 
-preflight:
-  stage: preflight
-  timeout: 60 minutes
+fmt-check:
+  stage: smoke
+  needs: []
+  timeout: 15 minutes
   script:
-    - CI_FAST_STAGE=preflight bash ops/ci/fast.sh
+    - cargo fmt --all -- --check
+
+file-size-lint:
+  stage: smoke
+  needs: []
+  timeout: 5 minutes
+  before_script: []
+  image: alpine:3.20
+  script:
+    - apk add --no-cache bash
+    - bash scripts/check_file_sizes.sh
+
+parity-ledger-lint:
+  stage: smoke
+  needs: []
+  timeout: 5 minutes
+  before_script: []
+  image: alpine:3.20
+  script:
+    - apk add --no-cache bash
+    - bash scripts/parity/lint-sqlite-parity-ledger.sh
+
+release-smoke:
+  stage: smoke
+  needs: []
+  timeout: 45 minutes
+  script:
+    - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_verify_redlinedb_release_smoke'
 
 .test_shard:
   stage: test
-  needs: ["preflight"]
+  needs: []
   timeout: 60 minutes
   script:
     - CI_FAST_STAGE="$SHARD" bash ops/ci/fast.sh
@@ -110,7 +151,7 @@ preflight:
 
 parity:
   stage: parity
-  needs: ["preflight"]
+  needs: ["test:core", "test:kernel", "test:sql-unit", "test:sql-contracts", "test:bench"]
   timeout: 240 minutes
   variables:
     CI_REDLINE_TESTING_REQUESTED_VERSION: "1.0.0"
@@ -125,7 +166,7 @@ parity:
     expire_in: 7 days
 
 official-evidence-guard:
-  stage: guard
+  stage: smoke
   needs: []
   tags: [default]
   timeout: 10 minutes
