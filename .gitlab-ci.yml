@@ -692,3 +692,68 @@ benchmark:
     expire_in: 30 days
     reports:
       metrics: target/perf/v4.0.x-native-ci.jsonl
+
+# Sibling benchmark on the RQL (Redline Query Language) phase-1 suite.
+# Same native compile, same triggers as the sqlite_parity benchmark;
+# different `--suite rql_phase1` flag against the redline-testing
+# harness. Pairs with the sqlite_parity numbers so the README can show
+# RQL-side performance alongside SQLite-parity ratios.
+benchmark-rql:
+  stage: benchmark
+  tags: [docker-build]
+  needs: []
+  timeout: 240 minutes
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+  variables:
+    CI_REDLINE_TESTING_URL: "https://github.com/neverhuman/redline-testing/releases/download/v1.0.0/redline-testing-1.0.0-linux-x86_64.tar.gz"
+    PERF_WORKERS: "10"
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3
+    - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
+    - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
+  script:
+    - mkdir -p target/ci/redline-testing
+    - 'curl -fsSL "$CI_REDLINE_TESTING_URL" -o target/ci/redline-testing/redline-testing.tar.gz'
+    - tar -xzf target/ci/redline-testing/redline-testing.tar.gz -C target/ci/redline-testing
+    - export REDLINE_TESTING_BIN="$(find target/ci/redline-testing -maxdepth 3 -type f -name redline-testing -executable | head -1)"
+    - "$REDLINE_TESTING_BIN version"
+    - bash scripts/sqlite/build-reference.sh
+    - export SQLITE_REF_BIN="$(pwd)/target/sqlite-reference/3.53.1/bin/sqlite3"
+    # Reuse the native-compiled binary from the sqlite_parity benchmark
+    # if available via cache; otherwise rebuild with znver2 microarch.
+    - |
+      if [ ! -x target/release/redlinedb ]; then
+        RUSTFLAGS="-C link-arg=-fuse-ld=mold -C target-cpu=znver2" \
+          cargo build --release --locked -p redlinedb-cli --bin redlinedb
+      fi
+    # Direct redline-testing invocation with --suite rql_phase1.
+    # Lib.sh's perf_run_jsonl is sqlite_parity-pinned, so we call the
+    # binary directly here.
+    - mkdir -p target/perf target/ci/perf-tmp
+    - |
+      "$REDLINE_TESTING_BIN" run \
+        --target-bin   "$(pwd)/target/release/redlinedb" \
+        --sqlite-bin   "$SQLITE_REF_BIN" \
+        --suite        rql_phase1 \
+        --workers      "$PERF_WORKERS" \
+        --tmp-root     "$(pwd)/target/ci/perf-tmp" \
+        --repetitions  3 \
+        --warmup       1 \
+        --output       "$(pwd)/target/perf/v4.0.x-rql-phase1-native-ci.jsonl"
+    - 'echo "== rql-phase1 summary =="; ls -la target/perf/; head -5 target/perf/v4.0.x-rql-phase1-native-ci.jsonl 2>/dev/null || true'
+  artifacts:
+    when: always
+    name: "redlinedb-rql-phase1-benchmark-evidence"
+    paths:
+      - target/perf/v4.0.x-rql-phase1-native-ci.jsonl
+    expire_in: 30 days
