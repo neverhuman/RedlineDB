@@ -5,6 +5,12 @@ read_only = false
 source = "installed jankurai binary"
 
 [[zone]]
+command = "translated by hand from .github/workflows/{ci,jankurai,jankurai-tools}.yml — must stay in lockstep with the GitHub Actions surface"
+path = ".gitlab-ci.yml"
+read_only = false
+source = "GitLab CI mirror of the .github/workflows/*.yml suite. The jankurai HLT-034 detectors are GitHub-Actions-shape-specific (look for `concurrency:`, top-level `permissions:`, `timeout-minutes:`, `github/codeql-action/upload-sarif`); none of these are valid GitLab CI keys, so they would always flag the GitLab port as bad-CI. The actual concurrency, permissions, timeout, and SARIF semantics are wired with GitLab-native equivalents (`interruptible:`, top-level workflow rules, per-job `timeout:`, `artifacts.reports.sast:`). Real evidence lives in the GitHub workflows which remain in scope; the GitLab port is the secondary surface for the local JeRyu runners."
+
+[[zone]]
 command = "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
 path = ".jankurai/repo-score.md"
 read_only = false
