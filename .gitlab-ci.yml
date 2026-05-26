@@ -51,6 +51,15 @@ variables:
   RUST_BACKTRACE: "1"
   REDLINEDB_BENCH_GIT_SHA: "$CI_COMMIT_SHA"
   GIT_DEPTH: "0"
+  # Disable runner's auto-wired sccache. Pipeline 437 hung 3 jobs at
+  # 0% CPU each — `cargo install cargo-audit --locked` and
+  # `cargo build --release --locked` each had a `[sccache] <defunct>`
+  # zombie child and never made progress. The runner's pre_build_script
+  # at ~/.jeryu/runners/*/config.toml sets RUSTC_WRAPPER=sccache +
+  # SCCACHE_NO_DAEMON=1, which is incompatible with cargo's parallel
+  # spawn pattern in newer toolchains. Force-disable.
+  JERYU_SCCACHE_ENABLED: "0"
+  RUSTC_WRAPPER: ""
 
 workflow:
   rules:
