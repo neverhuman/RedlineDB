@@ -323,7 +323,11 @@ jankurai-audit:
         while IFS= read -r -d '' path; do changed+=(--changed "$path"); done \
           < <(git diff --name-only -z --diff-filter=ACMRT "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"...HEAD --)
       fi
-      jankurai proofbind verify . "${changed[@]:-}"
+      # `"${changed[@]:-}"` expands to a single empty string when the array
+      # is empty (push-to-main events), and jankurai rejects empty args with
+      # "error: unexpected argument '' found". Use the bash-safe pattern
+      # `${changed[@]+...}` which expands to nothing when the array is unset.
+      jankurai proofbind verify . ${changed[@]+"${changed[@]}"}
     - jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
     - jankurai rust witness build .
     - jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json

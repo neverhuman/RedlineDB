@@ -52,7 +52,7 @@ pub(crate) mod intern;
 use agg::*;
 mod insert;
 use insert::*;
-mod select_top;
+pub(crate) mod select_top;
 use select_top::*;
 pub(crate) mod attach;
 pub(crate) mod cross_db;
@@ -242,6 +242,52 @@ pub(crate) fn with_current_rayon_pool<T>(
 pub(crate) fn current_rayon_pool() -> Option<Arc<rayon::ThreadPool>> {
     CURRENT_RAYON_POOL.with(|cell| cell.borrow().as_ref().map(Arc::clone))
 }
+
+/// WS-C3 R2: snapshot whether the executor's correlated-row stack is empty.
+/// The parallel covering-scan gate refuses to dispatch when the stack is
+/// non-empty because an inner scan running on a worker thread would lose
+/// access to the outer scope's row context (`OUTER_ROW_STACK` is
+/// thread-local and intentionally NOT Send). The gate uses this snapshot
+/// at decision time; the assertion inside
+/// [`with_executor_context_on_worker`] enforces the same invariant once
+/// the worker actually starts.
+pub fn outer_row_stack_is_empty() -> bool {
+    OUTER_ROW_STACK.with(|cell| cell.borrow().is_empty())
+}
+
+/// WS-C3 R2: snapshot-only worker context. Installs the minimum set of
+/// per-thread pointers that a Rayon worker needs to evaluate snapshot
+/// visibility (currently: none — `SnapshotView` is `Copy`, so the
+/// snapshot itself is passed by value through the closure). The helper
+/// exists so the call site documents the intent and so the debug-only
+/// assert below short-circuits if a future refactor accidentally lets
+/// `CURRENT_TX` leak onto a worker thread.
+///
+/// `CURRENT_TX` is a thread-local raw pointer to a `Txn`. The pointer is
+/// not `Send`, the `Txn` it references is not `Sync`, and the
+/// snapshot-only read path never legitimately needs it. Any worker that
+/// observes a non-null `CURRENT_TX` is using the wrong execution
+/// pathway; the debug assert below makes that surface as a panic
+/// instead of as silent UB.
+pub fn with_executor_context_on_worker<R>(
+    _snapshot: WorkerSnapshotCarrier,
+    f: impl FnOnce() -> R,
+) -> R {
+    debug_assert!(
+        CURRENT_TX.with(|cell| cell.get().is_null()),
+        "WS-C3 R2 invariant: parallel-scan worker observed non-null CURRENT_TX; \
+         executor code must not migrate the active Txn onto a worker thread — \
+         only SnapshotView-style reads are safe."
+    );
+    f()
+}
+
+/// Snapshot-only carrier handed to [`with_executor_context_on_worker`].
+/// Distinct type so call sites cannot accidentally pass a `Txn` pointer.
+/// The carrier owns no references — its sole purpose is documentation +
+/// type discipline at the worker boundary.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WorkerSnapshotCarrier;
 
 pub(crate) fn current_connection() -> Option<&'static Connection> {
     CURRENT_CONNECTION.with(|cell| {

@@ -197,6 +197,20 @@ pub(crate) fn wrap_project(input: PhysicalPlan, plan: &SelectPlan) -> PhysicalPl
 }
 
 pub(crate) fn wrap_limit(input: PhysicalPlan, plan: &SelectPlan) -> PhysicalPlan {
+    wrap_limit_with_conn(None, input, plan)
+}
+
+/// R2-C: optional `Connection`-aware variant of `wrap_limit`. When the
+/// PRAGMA `redline_planner_use_access_path = ON` is set, the planner
+/// consults the `AccessPath` IR's `hard_limit()` accessor to decide
+/// LIMIT pushdown into an ordered index range scan, rather than the
+/// ad-hoc `IndexScan + RangeScan + output_order non-empty` match below.
+/// The non-PRAGMA path is byte-for-byte identical to v4.0.3.
+pub(crate) fn wrap_limit_with_conn(
+    conn: Option<&Connection>,
+    input: PhysicalPlan,
+    plan: &SelectPlan,
+) -> PhysicalPlan {
     let input_rows = input.cost.rows;
     let input_width = input.cost.width;
     let input_total = input.cost.total;
@@ -215,13 +229,38 @@ pub(crate) fn wrap_limit(input: PhysicalPlan, plan: &SelectPlan) -> PhysicalPlan
         _ => None,
     });
     let mut input = input;
-    if let (PhysicalKind::IndexScan, Some(n)) = (input.kind, limit_n)
+    // R2-C: PRAGMA-ON path. Consult the IR directly — does this access
+    // path support a hard limit? `AccessPath::hard_limit()` already
+    // enforces the residual-empty + order_satisfies safety checks, so
+    // we can trust its answer without re-deriving the conditions.
+    if planner_use_access_path()
+        && let Some(conn) = conn
+        && let Some(n) = limit_n
+        && matches!(input.kind, PhysicalKind::IndexScan)
+    {
+        if let SelectSource::Table(table) = &plan.source {
+            let ir = choose_access_path_ir(
+                conn.engine(),
+                table,
+                &plan.selection,
+                &[],
+                plan.table_hint.as_ref(),
+                &plan.order_by,
+                Some(n),
+            );
+            if let Some(k) = ir.hard_limit() {
+                input.ordered_index_scan_limit = Some(k);
+            }
+        }
+    } else if let (PhysicalKind::IndexScan, Some(n)) = (input.kind, limit_n)
         && !input.output_order.is_empty()
         && input
             .index_probe_kind
             .map(|k| k == "RangeScan")
             .unwrap_or(false)
     {
+        // Default-OFF path: v4.0.3 ad-hoc match. Preserves byte-for-byte
+        // parity when the PRAGMA is not set.
         input.ordered_index_scan_limit = Some(n);
     }
     let mut node = PhysicalPlan::new(PhysicalKind::Limit);

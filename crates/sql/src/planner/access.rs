@@ -13,13 +13,38 @@ pub(crate) fn choose_access_path(
     table: &Arc<TableDef>,
     _projection: &[SelectItem],
     selection: &Option<Expr>,
-    _order_by: &[OrderByExpr],
+    order_by: &[OrderByExpr],
     rowid: Option<RowId>,
     bindings: &[Option<SqlValue>],
     _table_stats: Option<&TableStats>,
     _optimizer: &OptimizerConfig,
     table_hint: Option<&crate::statement::TableAccessHint>,
 ) -> AccessPath {
+    // Phase 6 R2-C: when `PRAGMA redline_planner_use_access_path = ON`
+    // is set, route every decision through the formal `AccessPath` IR
+    // defined in `planner::access_path`. The IR carries pre-computed
+    // `order_satisfies` / `hard_limit` facts the caller can read
+    // without re-pattern-matching the raw `IndexAccessMatch`. We then
+    // lower back to the legacy `super::AccessPath` enum so `build.rs`
+    // can build the `PhysicalPlan` leaf unchanged.
+    //
+    // The legacy default-OFF path below is byte-for-byte identical to
+    // v4.0.3: when the PRAGMA is OFF, NOTHING in this function's
+    // output changes, so parity remains intact for every consumer
+    // that did not opt in. Tests in `tests/access_path_ir.rs` assert
+    // this invariant explicitly.
+    if planner_use_access_path() {
+        let ir = choose_access_path_ir(
+            conn.engine(),
+            table,
+            selection,
+            bindings,
+            table_hint,
+            order_by,
+            None,
+        );
+        return lower_access_path_to_legacy(&ir);
+    }
     // Order matters and mirrors the executor in `exec.rs`:
     //   1. The integer-PK rowid alias (if the predicate is `id = ?` on
     //      a rowid table) is the cheapest path; it lands in

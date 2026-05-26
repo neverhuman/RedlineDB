@@ -253,6 +253,239 @@ fn unsupported_function_returns_none() {
     assert!(compile(&expr, &ctx).expect("no error").is_none());
 }
 
+// ── R2-A wiring + explicit differential cases ─────────────────────────────
+//
+// Phase 6 R2-A wires the Tier-0 VM into the production `eval_scalar`
+// behind an opt-in toggle. These explicit cases lock in bit-identical
+// agreement between the VM and the embedded AST oracle on the headline
+// shapes the brief enumerates (integer arith, real arith, NULL
+// propagation, CASE WHEN, string concat, boolean ops, comparison) plus
+// the unsupported shapes (`IS NULL` / `IS NOT NULL`) where the
+// contract is "compile returns Ok(None) and the AST evaluator handles
+// it".
+//
+// `diff_case` runs both evaluators and asserts equality. `vm_rejects`
+// asserts that compile returns `Ok(None)` so we know the AST fallback
+// path is the one production code takes for that shape.
+
+fn diff_case(sql: &str) {
+    let expr = parse_expr(sql);
+    let cols: Vec<(String, usize)> = (0..3).map(|i| (format!("c{i}"), i)).collect();
+    let ctx = CompileCtx {
+        columns: cols.as_slice(),
+    };
+    let prog = compile(&expr, &ctx)
+        .expect("compile error")
+        .unwrap_or_else(|| panic!("expected VM-compilable: {sql}"));
+    let row = vec![SqlValue::Integer(7), SqlValue::Real(2.5), SqlValue::Null];
+    let bindings: Vec<Option<SqlValue>> = vec![
+        Some(SqlValue::Integer(11)),
+        Some(SqlValue::Integer(-3)),
+        Some(SqlValue::Null),
+    ];
+    let vm = evaluate(&prog, &row, &bindings).expect("vm eval");
+    let oracle = ast_eval(&expr, &cols, &row, &bindings);
+    assert!(
+        values_equivalent(&vm, &oracle),
+        "vm {vm:?} != oracle {oracle:?} for {sql}"
+    );
+}
+
+fn vm_rejects(sql: &str) {
+    let expr = parse_expr(sql);
+    let cols: Vec<(String, usize)> = (0..3).map(|i| (format!("c{i}"), i)).collect();
+    let ctx = CompileCtx {
+        columns: cols.as_slice(),
+    };
+    assert!(
+        compile(&expr, &ctx).expect("compile error").is_none(),
+        "expected VM to reject: {sql}"
+    );
+}
+
+// integer arithmetic — 4 cases
+#[test]
+fn diff_int_add() {
+    diff_case("c0 + 5");
+}
+#[test]
+fn diff_int_sub_mul() {
+    diff_case("c0 - 2 * 3");
+}
+#[test]
+fn diff_int_div_floor() {
+    diff_case("c0 / 2");
+}
+#[test]
+fn diff_int_mod() {
+    diff_case("c0 % 3");
+}
+
+// real arithmetic — 3 cases
+#[test]
+fn diff_real_add() {
+    diff_case("c1 + 1.5");
+}
+#[test]
+fn diff_real_mul_neg() {
+    diff_case("c1 * -2.0");
+}
+#[test]
+fn diff_real_mixed() {
+    diff_case("c0 * 0.5 + c1");
+}
+
+// NULL propagation — 4 cases
+#[test]
+fn diff_null_arith_left() {
+    diff_case("c2 + 1");
+}
+#[test]
+fn diff_null_arith_right() {
+    diff_case("1 + c2");
+}
+#[test]
+fn diff_null_compare() {
+    diff_case("c2 = c0");
+}
+#[test]
+fn diff_null_concat() {
+    diff_case("'x' || c2");
+}
+
+// CASE WHEN — 3 cases
+#[test]
+fn diff_case_when_true_branch() {
+    diff_case("CASE WHEN c0 > 0 THEN 'pos' ELSE 'np' END");
+}
+#[test]
+fn diff_case_when_false_branch() {
+    diff_case("CASE WHEN c0 < 0 THEN 'neg' ELSE 'np' END");
+}
+#[test]
+fn diff_case_no_else() {
+    // Tier-0 doesn't compile `IS NOT NULL`, so use a numeric truthy
+    // check here and lock the unsupported shape in `vm_rejects` below.
+    diff_case("CASE WHEN c0 < 0 THEN 1 END");
+}
+
+// string concat — 2 cases
+#[test]
+fn diff_concat_two_text() {
+    diff_case("'foo' || 'bar'");
+}
+#[test]
+fn diff_concat_with_lower() {
+    diff_case("lower('ABC') || 'X'");
+}
+
+// boolean ops — 4 cases
+#[test]
+fn diff_and_short_circuit() {
+    diff_case("c0 > 0 AND c0 < 10");
+}
+#[test]
+fn diff_or_short_circuit() {
+    diff_case("c0 = 0 OR c0 = 7");
+}
+#[test]
+fn diff_not_truthy() {
+    diff_case("NOT (c0 > 0)");
+}
+#[test]
+fn diff_and_with_null() {
+    diff_case("c2 AND c0");
+}
+
+// comparison — 6 cases
+#[test]
+fn diff_cmp_eq() {
+    diff_case("c0 = 7");
+}
+#[test]
+fn diff_cmp_ne() {
+    diff_case("c0 <> 7");
+}
+#[test]
+fn diff_cmp_lt() {
+    diff_case("c0 < 100");
+}
+#[test]
+fn diff_cmp_le() {
+    diff_case("c0 <= 7");
+}
+#[test]
+fn diff_cmp_gt() {
+    diff_case("c1 > 0");
+}
+#[test]
+fn diff_cmp_ge() {
+    diff_case("c1 >= 0");
+}
+
+// IS NULL / IS NOT NULL — Tier-0 doesn't compile these; the production
+// `eval_scalar` falls back to the AST walker. Lock in the contract.
+#[test]
+fn diff_is_null_rejected() {
+    vm_rejects("c2 IS NULL");
+}
+#[test]
+fn diff_is_not_null_rejected() {
+    vm_rejects("c0 IS NOT NULL");
+}
+
+// length / abs — 2 supplementary cases to exercise CallScalar1
+#[test]
+fn diff_fn_abs() {
+    diff_case("abs(c0)");
+}
+#[test]
+fn diff_fn_length() {
+    diff_case("length('hello')");
+}
+
+// Smoke-test the toggle + counter wiring. The counter is process-wide
+// so we snapshot it, drive a few VM-incompatible shapes through the
+// helper, and assert the delta. The differential test above already
+// covers correctness of supported shapes.
+#[test]
+fn vm_dispatch_toggle_and_counter() {
+    use program::{
+        is_vm_dispatch_enabled, reset_vm_compile_failed_total, set_vm_dispatch_enabled,
+        vm_compile_failed_total,
+    };
+
+    // Save + reset so concurrent tests do not bleed state in.
+    let prev = is_vm_dispatch_enabled();
+    set_vm_dispatch_enabled(false);
+    assert!(!is_vm_dispatch_enabled());
+    set_vm_dispatch_enabled(true);
+    assert!(is_vm_dispatch_enabled());
+
+    reset_vm_compile_failed_total();
+    assert_eq!(vm_compile_failed_total(), 0);
+
+    // Manually drive the compile-failure record path the way
+    // `scalar::vm_dispatch::try_eval_scalar_via_vm` would in
+    // production. We can't import that helper from the test (it's
+    // `pub(crate)` and the test crate doesn't see private items), so
+    // we exercise the public counter contract directly.
+    for _ in 0..4 {
+        let expr = parse_expr("c0 BETWEEN 1 AND 10");
+        if compile(&expr, &CompileCtx::empty())
+            .expect("no error")
+            .is_none()
+        {
+            // Simulate the executor's record-failure hook.
+            program::record_compile_failure();
+        }
+    }
+    assert_eq!(vm_compile_failed_total(), 4);
+
+    // Restore.
+    set_vm_dispatch_enabled(prev);
+}
+
 // ── Embedded AST oracle ───────────────────────────────────────────────────
 //
 // A minimal AST evaluator covering the Tier-0 surface so the differential

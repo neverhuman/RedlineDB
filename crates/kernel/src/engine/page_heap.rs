@@ -14,6 +14,9 @@ mod directory;
 mod mutation;
 #[path = "page_heap/policy.rs"]
 mod policy;
+#[path = "page_heap/scan.rs"]
+mod scan;
+pub use scan::{HeapScanRow, ParallelScanDiagnostics, parallel_scan_diagnostics};
 
 #[derive(Debug)]
 pub struct PageBackedHeap {
@@ -109,6 +112,14 @@ impl PageBackedHeap {
 
     pub fn page_count(&self) -> Result<u64> {
         self.buffer.page_count()
+    }
+
+    /// WS-C3 R2: borrow the underlying buffer pool. The scan module
+    /// uses this to pin pages from worker threads inside a
+    /// `std::thread::scope`; we keep the field itself private so other
+    /// code paths stay routed through the explicit helpers.
+    pub(super) fn buffer_ref(&self) -> &BufferPool {
+        &self.buffer
     }
 }
 

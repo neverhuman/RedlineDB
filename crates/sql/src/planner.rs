@@ -27,6 +27,12 @@ mod policy;
 use access::*;
 #[allow(unused_imports)]
 pub(crate) use access_path::AccessPath as AccessPathIr;
+#[allow(unused_imports)]
+pub(crate) use access_path::{
+    OrderSatisfies as AccessPathOrderSatisfies, choose_access_path as choose_access_path_ir,
+    lower_to_legacy as lower_access_path_to_legacy, planner_use_access_path,
+    set_planner_use_access_path,
+};
 use build::*;
 use optimize::*;
 use policy::*;

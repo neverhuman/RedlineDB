@@ -123,6 +123,18 @@ pub(crate) fn eval_scalar(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
+    // Phase 6 R2-A: opt-in ScalarProgram VM dispatch.
+    //
+    // When the process-wide toggle is OFF (default), `try_eval_scalar_via_vm`
+    // short-circuits to `None` with zero overhead and the AST walker
+    // below runs unchanged. When the toggle is ON, the helper attempts
+    // to compile + evaluate via the Tier-0 bytecode VM. `None` indicates
+    // an unsupported shape — we fall through and let the AST walker
+    // handle it (the VM compile-failure counter is bumped from inside
+    // the helper so the corpus diff can audit silent fall-backs).
+    if let Some(result) = try_eval_scalar_via_vm(expr, row, bindings) {
+        return result;
+    }
     if let Expr::Value(v) = expr {
         if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
             return resolve_binding(name, bindings);
