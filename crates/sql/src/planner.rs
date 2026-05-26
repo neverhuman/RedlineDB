@@ -19,11 +19,14 @@ pub(crate) mod helpers;
 use helpers::*;
 
 mod access;
+pub mod access_path;
 mod build;
 mod optimize;
 mod policy;
 
 use access::*;
+#[allow(unused_imports)]
+pub(crate) use access_path::AccessPath as AccessPathIr;
 use build::*;
 use optimize::*;
 use policy::*;

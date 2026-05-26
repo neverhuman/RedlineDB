@@ -2,6 +2,98 @@
 
 ## Unreleased
 
+## [4.0.3] - 2026-05-26
+
+Phase 6 Round 1 — five parallel R1 work-streams shipped on top of v4.0.2
+(`2a39a86 release(v4.0.2): Phase 6 wave 1 — 5 parallel work-streams`).
+All R1 agents ran with strict file-disjoint boundaries to avoid Wave 2-style
+collisions. Workspace test count grew **1786 → 1887** (+101 tests). Zero
+regressions; `cargo test --workspace` green at every step.
+
+### Added — Phase 6 R1 work-streams
+
+- **R1-B Morsel M2 + M3** (scan source + SIMD filter) — new
+  `crates/sql/src/exec/morsel/{scan.rs,filter.rs}` adds a `ScanSource`
+  trait that rebatches row-at-a-time producers into `Morsel<'arena>`s
+  plus six `filter_i64_{eq,ne,lt,le,gt,ge}` ops with runtime-dispatched
+  AVX2 4-lane kernels and scalar fallbacks. 32 new tests including six
+  differential SIMD-vs-scalar suites (each 6 seeds × 7 targets × the
+  0..=20 length sweep, all bit-identical). Release synthetic bench:
+  1M i64 rows → 977 morsels in 5.74 ms → 174.35 M rows/s. New
+  `.jankurai/unsafe-ledger.toml` entries under owner
+  `phase6-r1b-morsel-simd-filter` (15 entries: 6 dispatch sites,
+  6 AVX2-load sites, 1 mask helper call site, 2 helper defs for
+  x86_64/x86).
+- **R1-C Two-Tier ScalarProgram VM** — new `crates/sql/src/exec/expr/program.rs`
+  (~900 LOC, 30 opcodes) ships a register-file expression VM with a tight
+  `match` dispatch loop. 27 in-crate tests + proptest seeds; integrated
+  into `crates/sql/src/exec/expr/mod.rs` behind a compile-time gate while
+  Round 2 wires VM dispatch into hot scalar sites.
+- **R1-D WS-C3 parallel scan (kernel API)** — new `parallel_scan` and
+  `serial_scan` helpers in `crates/kernel/src/engine/concurrent_heap.rs`
+  partition the per-lane visible-row walk across `std::thread::scope`
+  workers (no new deps). 5 tests (serial==parallel row-set equality
+  on 50k rows; worker_count=1 parity; oversubscription clamping;
+  pre/post-commit visibility; env-gated 1M-row release smoke). Release
+  bench: 1M-row scan 373 ms serial → 236 ms parallel(4) = 1.58× speedup.
+  SQL-side wiring deferred to Round 2 (the plan-cited covering-scan
+  consumer path doesn't match `PageBackedHeap` — production heap port
+  needed).
+- **R1-E WS-A6 multi-writer hot-row + WAL `CombinedSemanticDelta`** —
+  new `WalPayload::CombinedSemanticDelta` tag (14) in
+  `crates/kernel/src/wal/payload.rs` (older binaries reject via the
+  existing `CorruptWal("unknown wal payload tag")` gate — no silent
+  corruption; verified by `unknown_payload_tag_still_rejected`).
+  New `HotRowCoordinator` in `crates/sql/src/exec/hot_row.rs` keyed
+  by `(RelId, RowId)` with first-writer-coordinator semantics, 50 µs
+  batch window, 64-batch cap, Condvar publish, deadlock-free single-slot
+  lock discipline. Recovery handler in `crates/kernel/src/engine/recovery.rs`
+  treats the new variant as a no-op (HeapUpdate replay provides authoritative
+  state). 13 new tests (7 kernel encode/decode + backward-compat,
+  6 SQL multi-thread including 16-thread × 200-iter counter,
+  RETURNING/trigger/non-commutative fallbacks).
+- **R1-F AccessPath IR scaffolding** — new
+  `crates/sql/src/planner/access_path.rs` (~600 LOC) lays the IR groundwork
+  for the Phase 6 Candidate 5 covering+hard-limit access path enum.
+  18 tests in `crates/sql/tests/access_path_ir.rs`; planner-side wiring
+  for the IR's `order_satisfies` + `hard_limit` cost-model entries lands
+  in Round 2.
+
+### Added — CI / infrastructure
+
+- `.gitlab-ci.yml` mirrors the GitHub Actions suite end-to-end for the
+  local GitLab/JeRyu CI (`http://127.0.0.1:8929`): 22 jobs covering
+  `ci.yml` (preflight + 5 test shards + parity + evidence guard +
+  metrics-readme), `jankurai.yml` (branch-freshness, audit, security,
+  dependency-review), and `jankurai-tools.yml` (audit-ci, proof-routing,
+  security, contract-drift, authz-matrix, input-boundary,
+  agent-tool-supply, release-readiness, cost-budget). `gh`-CLI–bound
+  workflows (`sqlite-parity-report.yml` PR creator, `release-build.yml`
+  GitHub release uploader) remain GitHub-only with a documented skip
+  note. Validated via the GitLab `/ci/lint` REST API:
+  `valid: true, 0 errors, 0 warnings`.
+- JeRyu fleet adoption — ran `jeryu repo adopt --direct --protect-main
+  --main-relay` to wire the `jeryu` git remote and the local `.jeryu/{repo,
+  policy,backup,ci}.toml` policy files. Global registration at
+  `~/.jeryu/local/repos/redlinedb.toml` already includes the
+  shadow-main → `github.com/neverhuman/RedlineDB` mirror policy.
+
+### Deferred to Round 2
+
+- Wave-6a v2 PGO + BOLT pipeline — LLVM-21 toolchain installed, but the
+  PGO-instrumented binary still emits `LLVM Profile Warning: instrumentation
+  for ...` to stderr, which the parity training-gate's stderr-diff flags
+  as per-case failure (1382/2445 cases "fail"). Mitigation requires
+  either a `2>/dev/null` carve-out in the training-gate or an upstream
+  LLVM patch that silences the warning when counters initialize via
+  `__llvm_profile_set_filename`. Tracked as task #70.
+- WS-C3 SQL-side `parallel_scan` gate (covering-scan dispatch into
+  `HashAggregator` / `SpillSort` on `PageBackedHeap`).
+- R1-C ScalarProgram VM hot-site wiring (currently compile-time gated;
+  Round 2 flips it on for SCALAR_* parity cases).
+- R1-F AccessPath IR planner integration (`order_satisfies` +
+  `hard_limit` cost-model wiring).
+
 ## [4.0.1] - 2026-05-26
 
 Phase 5 SQLite-parity speed-gap closure (patch release on top of v4.0.0).

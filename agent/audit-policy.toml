@@ -46,6 +46,15 @@ excluded_paths = [
   # UX QA config is control-plane metadata; it is not evidence that this repo
   # has a rendered web product surface.
   ".jankurai/ux-qa.toml",
+  # GitLab CI mirror of .github/workflows/ — the jankurai HLT-034 detectors
+  # are GitHub-Actions-shape-specific (concurrency:, permissions:,
+  # timeout-minutes:, github/codeql-action/upload-sarif), all of which are
+  # not valid GitLab CI keys. The real evidence lives in the GitHub
+  # workflows, which remain in scope; the GitLab port is the secondary
+  # surface for the local JeRyu runners and is wired with GitLab-native
+  # equivalents (interruptible: true, timeout: <N> minutes per job, top-level
+  # workflow rules, artifacts.reports.sast).
+  ".gitlab-ci.yml",
   "tips/",
   "paper/scripts/",
   "scripts/bench/export_benchmark_results.py",
