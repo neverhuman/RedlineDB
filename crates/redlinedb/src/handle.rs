@@ -112,6 +112,18 @@ impl Database {
         })
     }
 
+    pub fn prepare_rql(&self, statement: &redlinedb_sql::RqlStatement) -> Result<Prepared> {
+        let conn = self.connect()?;
+        let template = conn.inner.prepare_rql_template(statement)?;
+        if conn.read_only && !template.readonly {
+            return Err(crate::Error::new(
+                crate::ErrorCode::ReadOnly,
+                "connection is read-only",
+            ));
+        }
+        Ok(Prepared { template })
+    }
+
     pub fn checkpoint(&self) -> Result<CheckpointStats> {
         let checkpoint = self.inner.db.checkpoint()?;
         let _ = phase8::update_retention(self);
