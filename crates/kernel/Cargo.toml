@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb-kernel"
-version = "4.0.6"
+version = "4.0.7"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,11 @@ ahash = "0.8"
 arc-swap = "1.7"
 bumpalo = "3"
 crc32fast = "1.5"
+# Phase 6 R4-B (wal_pipeline): bounded channel for the dedicated
+# append-only WAL writer thread. The crate is opt-in via the
+# `wal_pipeline` feature, but Cargo's resolver requires it sit
+# unconditionally in `[dependencies]` for `optional = true` to work.
+crossbeam-channel = { version = "0.5", optional = true }
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 fail = { version = "0.5", features = ["failpoints"], optional = true }
@@ -38,3 +43,8 @@ numa = ["dep:hwlocality"]
 vector_v1_unmerged = []
 # WS-C6: opt-in cross-lane WAL flush coalescer.
 wal_cross_lane_coalescer = []
+# Phase 6 R4-B (Candidate 4): opt-in append-only WAL writer thread
+# with `writev`/`pwritev` batching and a dirty-page queue sorted by
+# page id. Off by default — the no-feature build does not pull in
+# `crossbeam-channel` and is byte-identical to the pre-R4-B binary.
+wal_pipeline = ["dep:crossbeam-channel"]
