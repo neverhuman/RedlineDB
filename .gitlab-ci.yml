@@ -179,7 +179,7 @@ jankurai-audit:
     - apt-get install -y -qq tar
     - cargo install cargo-audit --locked
     - cargo install cargo-deny --locked --version 0.18.0
-    - [ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_gitleaks
+    - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_gitleaks'
     - curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /usr/local/bin actionlint
     - curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz | tar -xz -C /usr/local/bin syft
     - |
@@ -200,7 +200,7 @@ jankurai-audit:
         echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2; exit 1
       fi
       cp .jankurai/accepted-baseline.json target/jankurai/accepted-baseline.json
-    - [ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; mkdir -p .jankurai && ci_install_jankurai_logged .jankurai/jankurai-install.log
+    - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; mkdir -p .jankurai && ci_install_jankurai_logged .jankurai/jankurai-install.log'
     - bash scripts/check_audit_policy_mirror.sh
     - jankurai --version
     - |
@@ -279,7 +279,7 @@ jankurai-security:
   script:
     - cargo install cargo-audit --locked
     - cargo install cargo-deny --locked --version 0.18.0
-    - [ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_gitleaks
+    - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_gitleaks'
     - curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /usr/local/bin actionlint
     - curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz | tar -xz -C /usr/local/bin syft
     - bash ops/ci/security.sh
