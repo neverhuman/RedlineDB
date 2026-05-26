@@ -126,37 +126,80 @@ release-smoke:
   script:
     - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_verify_redlinedb_release_smoke'
 
-.test_shard:
+.test_crate: &test_crate
   stage: test
   needs: []
   tags: [build]
-  timeout: 60 minutes
-  script:
-    - CI_FAST_STAGE="$SHARD" bash ops/ci/fast.sh
+  timeout: 45 minutes
 
-"test:core":
-  extends: .test_shard
-  variables: { SHARD: "core" }
+# fast.sh "core" was 6 crates in a single nextest run. Fan them out:
+# every crate gets its own job so 6 jobs race in parallel across the
+# 16-worker pool (default + build pools were both scaled to 8 workers).
+"test:redlinedb":
+  <<: *test_crate
+  script: [cargo nextest run -p redlinedb --locked --no-fail-fast]
+
+"test:tokio":
+  <<: *test_crate
+  script: [cargo nextest run -p redlinedb-tokio --locked --no-fail-fast]
+
+"test:sqlx":
+  <<: *test_crate
+  script: [cargo nextest run -p redlinedb-sqlx --locked --no-fail-fast]
+
+"test:server":
+  <<: *test_crate
+  script: [cargo nextest run -p redlinedb-server --locked --no-fail-fast]
+
+"test:cli":
+  <<: *test_crate
+  script: [cargo nextest run -p redlinedb-cli --locked --no-fail-fast]
+
+"test:ffi":
+  <<: *test_crate
+  script: [cargo nextest run -p redlinedb-ffi --locked --no-fail-fast]
 
 "test:kernel":
-  extends: .test_shard
-  variables: { SHARD: "kernel" }
+  <<: *test_crate
+  script: [cargo test -p redlinedb-kernel --quiet --locked]
 
 "test:sql-unit":
-  extends: .test_shard
-  variables: { SHARD: "sql-unit" }
+  <<: *test_crate
+  script: [cargo test -p redlinedb-sql --lib --quiet --locked]
 
-"test:sql-contracts":
-  extends: .test_shard
-  variables: { SHARD: "sql-contracts" }
+# fast.sh "sql-contracts" was 3 cargo test invocations sequentially.
+# Split into 3 jobs.
+"test:sql-phase11-temp-roots":
+  <<: *test_crate
+  script: [cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked]
+
+"test:sql-phase11-veox-queue":
+  <<: *test_crate
+  script: [cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked]
+
+"test:sql-phase11-xdoug-compat":
+  <<: *test_crate
+  script: [cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked]
 
 "test:bench":
-  extends: .test_shard
-  variables: { SHARD: "bench" }
+  <<: *test_crate
+  script: [cargo test -p redlinedb-bench --quiet --locked]
 
 parity:
   stage: parity
-  needs: ["test:core", "test:kernel", "test:sql-unit", "test:sql-contracts", "test:bench"]
+  needs:
+    - "test:redlinedb"
+    - "test:tokio"
+    - "test:sqlx"
+    - "test:server"
+    - "test:cli"
+    - "test:ffi"
+    - "test:kernel"
+    - "test:sql-unit"
+    - "test:sql-phase11-temp-roots"
+    - "test:sql-phase11-veox-queue"
+    - "test:sql-phase11-xdoug-compat"
+    - "test:bench"
   tags: [build]
   timeout: 240 minutes
   variables:
