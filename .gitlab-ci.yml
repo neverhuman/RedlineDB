@@ -112,6 +112,7 @@ parity:
 official-evidence-guard:
   stage: guard
   needs: []
+  tags: [default]
   timeout: 10 minutes
   before_script: []
   image: alpine:3.20
@@ -256,6 +257,7 @@ jankurai-audit:
 jankurai-security:
   stage: jankurai
   needs: []
+  tags: [mr]
   timeout: 20 minutes
   script:
     - cargo install cargo-audit --locked
@@ -268,6 +270,7 @@ jankurai-security:
 dependency-review:
   stage: jankurai
   needs: []
+  tags: [mr]
   timeout: 10 minutes
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -280,6 +283,7 @@ dependency-review:
 .jankurai_tool: &jankurai_tool
   stage: tools
   needs: []
+  tags: [default]
   timeout: 20 minutes
 
 "tools:audit-ci":
