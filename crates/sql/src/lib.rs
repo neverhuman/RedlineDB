@@ -26,6 +26,22 @@ pub use statement::{
 };
 pub use value::{SqlValue, SqlValueRef};
 
+/// WS-C3 R2 test surface. Exposes the parallel covering-scan gate's
+/// most recent decision and the worker-context invariant helper so
+/// `crates/sql/tests/ws_c3_parallel_scan_safety.rs` can assert per-
+/// condition branching without reaching into private modules. Not
+/// stable — callers outside the test suite should treat the surface
+/// as internal.
+#[doc(hidden)]
+pub mod ws_c3_testing {
+    pub use crate::exec::select_top::{
+        ParallelCoveringDecision, take_last_parallel_covering_decision,
+    };
+    pub use crate::exec::{
+        WorkerSnapshotCarrier, outer_row_stack_is_empty, with_executor_context_on_worker,
+    };
+}
+
 // Render an `f64` the way SQLite's `printf("%g")` does (17 sig digits with
 // trailing-zero trim and `.0` suffix for whole values). The CLI and FFI
 // layers call this so REAL column output matches SQLite's reference shell —
