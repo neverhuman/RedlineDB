@@ -73,16 +73,18 @@ default:
 stages:
   # All jobs run in parallel — no inter-stage deps inside `test`. The
   # `parity` stage waits on the test shards via `needs:` so a regression
-  # short-circuits before the 90-min parity run. `metrics` waits on
-  # parity for its artifact. `benchmark` is the heavy native-compile +
-  # full-corpus perf measurement; main-only + manual trigger.
+  # short-circuits before the 90-min parity run. `benchmark` is the
+  # heavy native-compile + full-corpus perf measurement (main-only /
+  # manual). `metrics` waits on parity and (optionally) benchmark so
+  # README perf numbers prefer the ultra-fast native-compile evidence
+  # when available.
   - smoke
   - test
   - parity
+  - benchmark
   - metrics
   - jankurai
   - tools
-  - benchmark
 
 variables:
   CARGO_TERM_COLOR: "always"
@@ -276,11 +278,18 @@ metrics-readme:
   needs:
     - job: parity
       artifacts: true
-  # README regenerator from parity evidence — non-blocking. The .github
-  # workflow's metrics-readme is in the same posture: it only auto-commits
-  # back on main (`if: github.ref == 'refs/heads/main'`) and is excluded
-  # from the required-check set. Mirror that policy here so MR merging
-  # isn't blocked by a README drift detector that needs main-only ops.
+    # benchmark stage is main-only/manual; when present, its target/perf/*.jsonl
+    # is the preferred input for the README perf numbers (native-compile,
+    # target-cpu=znver2). When absent (MR pipelines), the script falls
+    # back to the parity job's sqlite_parity.raw.jsonl.
+    - job: benchmark
+      artifacts: true
+      optional: true
+  # README regenerator — non-blocking. The .github workflow's
+  # metrics-readme is in the same posture: it only auto-commits back on
+  # main (`if: github.ref == 'refs/heads/main'`) and is excluded from
+  # the required-check set. Mirror that policy here so MR merging isn't
+  # blocked by a README drift detector that needs main-only ops.
   allow_failure: true
   timeout: 30 minutes
   script:

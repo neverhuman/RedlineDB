@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 # Generate the auto-metrics section of README.md.
 #
-# Reads:
+# Reads (in priority order — first non-empty wins):
+#   target/perf/*.jsonl                (CI benchmark stage: native-compile
+#                                        target-cpu=znver2 + full corpus —
+#                                        the canonical ultra-fast numbers
+#                                        the README should reflect)
+#   target/redline-testing/sqlite_parity.raw.jsonl  (parity verification)
 #   target/redline-testing/all.jsonl   (parity run output)
 #   target/jankurai/repo-score.json    (audit score)
 #   tokei output                       (LOC: redlinedb vs sqlite reference)
+#
+# The CI benchmark JSONL has the same redline-testing record schema as
+# the parity output (case_id, latency_ratio, status, ...) so it's a
+# drop-in input for this generator.
 #
 # Writes (between `<!-- BEGIN: auto-generated:metrics -->` and the matching
 # END marker in README.md): the metrics section with mermaid charts and
@@ -49,19 +58,40 @@ sqlite_ref_dir="${repo_root}/target/sqlite-reference/source"
 begin_marker='<!-- sqlite-parity-metrics:begin -->'
 end_marker='<!-- sqlite-parity-metrics:end -->'
 
-# Pick the richest input we have. The redlineDB CI pipeline writes the per-
-# suite files plus the concatenated all.jsonl; partial runs may have only
-# one of them.
+# Pick the richest input we have. Priority order:
+#   1. target/perf/*.jsonl — CI native-compile benchmark output. These
+#      numbers come from the `benchmark` stage in .gitlab-ci.yml which
+#      compiles redlinedb-cli with RUSTFLAGS="-C target-cpu=znver2" and
+#      runs the full redline-testing v1.0.0 corpus × 3 reps × 10 workers.
+#      This is the canonical "ultra-fast" measurement the README should
+#      reflect. Lands as the `redlinedb-native-benchmark-evidence`
+#      artifact (target/perf/<name>.jsonl).
+#   2. target/redline-testing/sqlite_parity.raw.jsonl — parity job output
+#      (verifies pre-built evidence; numbers may reflect a non-native
+#      compile depending on how the parity job built the target binary).
+#   3. target/redline-testing/all.jsonl — concatenated parity run output.
 parity_input=""
-for candidate in "$sqlite_raw" "$all_jsonl"; do
-    if [ -s "$candidate" ]; then
-        parity_input="$candidate"
-        break
+# Prefer the most recent benchmark JSONL if any exist.
+perf_dir="${repo_root}/target/perf"
+if [ -d "$perf_dir" ]; then
+    bench_input="$(ls -1t "$perf_dir"/*.jsonl 2>/dev/null | head -n 1)"
+    if [ -n "$bench_input" ] && [ -s "$bench_input" ]; then
+        parity_input="$bench_input"
+        printf 'generate-metrics: using native-benchmark evidence %s\n' "$bench_input" >&2
     fi
-done
+fi
 if [ -z "$parity_input" ]; then
-    printf 'generate-metrics: no parity JSONL under %s (tried sqlite_parity.raw.jsonl, all.jsonl)\n' \
-        "$evidence_dir" >&2
+    for candidate in "$sqlite_raw" "$all_jsonl"; do
+        if [ -s "$candidate" ]; then
+            parity_input="$candidate"
+            printf 'generate-metrics: using parity evidence %s\n' "$candidate" >&2
+            break
+        fi
+    done
+fi
+if [ -z "$parity_input" ]; then
+    printf 'generate-metrics: no JSONL found (tried target/perf/*.jsonl, %s/sqlite_parity.raw.jsonl, %s/all.jsonl)\n' \
+        "$evidence_dir" "$evidence_dir" >&2
     exit 1
 fi
 
