@@ -26,8 +26,8 @@ use std::sync::Arc;
 
 use smallvec::SmallVec;
 use sqlparser::ast::{
-    BinaryOperator, CaseWhen, Expr, FunctionArg, FunctionArgExpr, FunctionArguments,
-    UnaryOperator, Value,
+    BinaryOperator, CaseWhen, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, UnaryOperator,
+    Value,
 };
 
 use crate::error::{Error, Result};
@@ -151,7 +151,10 @@ impl<'a> CompileCtx<'a> {
 /// back to the AST evaluator. Never panics.
 pub fn compile(expr: &Expr, ctx: &CompileCtx<'_>) -> Result<Option<ScalarProgram>> {
     let mut program = ScalarProgram::new();
-    let mut state = CompileState { stack: 0, max_stack: 0 };
+    let mut state = CompileState {
+        stack: 0,
+        max_stack: 0,
+    };
     if !compile_into(expr, ctx, &mut program, &mut state)? {
         return Ok(None);
     }
@@ -569,7 +572,9 @@ pub fn evaluate(
         match op {
             Op::LoadConstI64(i) => stack.push(SqlValue::Integer(program.const_i64[i as usize])),
             Op::LoadConstReal(i) => stack.push(SqlValue::Real(program.const_real[i as usize])),
-            Op::LoadConstText(i) => stack.push(SqlValue::Text(program.const_text[i as usize].clone())),
+            Op::LoadConstText(i) => {
+                stack.push(SqlValue::Text(program.const_text[i as usize].clone()))
+            }
             Op::LoadConstNull => stack.push(SqlValue::Null),
             Op::LoadCol(i) => {
                 let v = row.get(i as usize).cloned().unwrap_or(SqlValue::Null);
@@ -585,17 +590,32 @@ pub fn evaluate(
             Op::AddI64 => {
                 let r = stack.pop().unwrap();
                 let l = stack.pop().unwrap();
-                stack.push(arith(l, r, |a, b| Some(a.wrapping_add(b)), |a, b| Some(a + b))?);
+                stack.push(arith(
+                    l,
+                    r,
+                    |a, b| Some(a.wrapping_add(b)),
+                    |a, b| Some(a + b),
+                )?);
             }
             Op::SubI64 => {
                 let r = stack.pop().unwrap();
                 let l = stack.pop().unwrap();
-                stack.push(arith(l, r, |a, b| Some(a.wrapping_sub(b)), |a, b| Some(a - b))?);
+                stack.push(arith(
+                    l,
+                    r,
+                    |a, b| Some(a.wrapping_sub(b)),
+                    |a, b| Some(a - b),
+                )?);
             }
             Op::MulI64 => {
                 let r = stack.pop().unwrap();
                 let l = stack.pop().unwrap();
-                stack.push(arith(l, r, |a, b| Some(a.wrapping_mul(b)), |a, b| Some(a * b))?);
+                stack.push(arith(
+                    l,
+                    r,
+                    |a, b| Some(a.wrapping_mul(b)),
+                    |a, b| Some(a * b),
+                )?);
             }
             Op::DivI64 => {
                 let r = stack.pop().unwrap();
@@ -671,9 +691,9 @@ pub fn evaluate(
             Op::Return => break,
         }
     }
-    stack.pop().ok_or_else(|| {
-        Error::UnsupportedSql("scalar program produced no value".to_owned())
-    })
+    stack
+        .pop()
+        .ok_or_else(|| Error::UnsupportedSql("scalar program produced no value".to_owned()))
 }
 
 fn binary_cmp(stack: &mut SmallVec<[SqlValue; MAX_STACK]>, accept: fn(Ordering) -> bool) {
@@ -830,19 +850,21 @@ fn call_scalar1(f: ScalarFn, v: SqlValue) -> Result<SqlValue> {
             SqlValue::Text(s) => Ok(SqlValue::Integer(s.chars().count() as i64)),
             SqlValue::Blob(b) => Ok(SqlValue::Integer(b.len() as i64)),
             SqlValue::Integer(n) => Ok(SqlValue::Integer(n.to_string().len() as i64)),
-            SqlValue::Real(f) => Ok(SqlValue::Integer(
-                crate::format_real_sqlite(f).len() as i64,
-            )),
+            SqlValue::Real(f) => Ok(SqlValue::Integer(crate::format_real_sqlite(f).len() as i64)),
         },
         ScalarFn::Lower => match v {
             SqlValue::Null => Ok(SqlValue::Null),
             SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_lowercase()))),
-            other => Ok(SqlValue::Text(Arc::from(value_to_string(&other).to_lowercase()))),
+            other => Ok(SqlValue::Text(Arc::from(
+                value_to_string(&other).to_lowercase(),
+            ))),
         },
         ScalarFn::Upper => match v {
             SqlValue::Null => Ok(SqlValue::Null),
             SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_uppercase()))),
-            other => Ok(SqlValue::Text(Arc::from(value_to_string(&other).to_uppercase()))),
+            other => Ok(SqlValue::Text(Arc::from(
+                value_to_string(&other).to_uppercase(),
+            ))),
         },
     }
 }

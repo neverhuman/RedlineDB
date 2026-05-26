@@ -51,13 +51,13 @@ fn where_rowid_pk_renders_rowid_search() {
     let (_dir, conn) = open_database();
     conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER)")
         .expect("create");
-    conn.execute("INSERT INTO t VALUES (1, 10)").expect("insert");
+    conn.execute("INSERT INTO t VALUES (1, 10)")
+        .expect("insert");
     let plan = explain_text(&conn, "SELECT v FROM t WHERE id = 1");
     // SQLite-parity wording for an integer-PK direct lookup goes
     // through either "rowid=?" or a USING-INTEGER-PRIMARY-KEY shape.
     assert!(
-        plan.to_ascii_lowercase().contains("rowid")
-            || plan.contains("USING INTEGER PRIMARY KEY"),
+        plan.to_ascii_lowercase().contains("rowid") || plan.contains("USING INTEGER PRIMARY KEY"),
         "expected rowid-PK access, got plan:\n{plan}"
     );
 }
@@ -69,7 +69,8 @@ fn where_single_key_equality_renders_index_point_lookup() {
         .expect("create");
     conn.execute("CREATE INDEX t_k_idx ON t(k)")
         .expect("create index");
-    conn.execute("INSERT INTO t VALUES (5, 50)").expect("insert");
+    conn.execute("INSERT INTO t VALUES (5, 50)")
+        .expect("insert");
     let plan = explain_text(&conn, "SELECT v FROM t WHERE k = 5");
     assert!(
         plan.contains("USING INDEX") && plan.contains("PointLookup"),

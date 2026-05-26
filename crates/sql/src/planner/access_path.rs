@@ -29,8 +29,7 @@ use redlinedb_kernel::engine::Engine;
 use sqlparser::ast::{Expr, OrderByExpr};
 
 use crate::exec::index_access::{
-    IndexAccessMatch, IndexProbe, IndexProbeKind, OutputColumnSource,
-    try_match_index_access_hinted,
+    IndexAccessMatch, IndexProbe, IndexProbeKind, OutputColumnSource, try_match_index_access_hinted,
 };
 use crate::statement::TableAccessHint;
 use crate::value::SqlValue;
@@ -179,9 +178,7 @@ pub(crate) fn choose_access_path(
     }
 
     // Step 2: legacy `try_match_index_access_hinted` -> Point/Range.
-    if let Some(matched) =
-        try_match_index_access_hinted(engine, table, selection, bindings, hint)
-    {
+    if let Some(matched) = try_match_index_access_hinted(engine, table, selection, bindings, hint) {
         return translate_index_access_match(matched, requested_order, requested_limit);
     }
 
@@ -356,8 +353,8 @@ mod tests {
 
     fn fresh_conn() -> (tempfile::TempDir, Arc<Connection>) {
         let dir = tempdir().expect("tempdir");
-        let db = Database::create(dir.path().join("t.db"), DbOptions::default())
-            .expect("create db");
+        let db =
+            Database::create(dir.path().join("t.db"), DbOptions::default()).expect("create db");
         let conn = db.connect();
         (dir, conn)
     }
@@ -472,7 +469,10 @@ mod tests {
         exec_sql(&conn, "CREATE TABLE t(k INTEGER); CREATE INDEX ix ON t(k);");
         let plan = select_plan_for(&conn, "SELECT k FROM t WHERE k = 1");
         let hint = TableAccessHint::NotIndexed;
-        assert!(matches!(choose(&conn, &plan, Some(&hint)), AccessPath::TableScan { .. }));
+        assert!(matches!(
+            choose(&conn, &plan, Some(&hint)),
+            AccessPath::TableScan { .. }
+        ));
     }
 
     // --- variant: RowIdGet --------------------------------------------------
@@ -483,7 +483,9 @@ mod tests {
         exec_sql(&conn, "CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER)");
         let plan = select_plan_for(&conn, "SELECT v FROM t WHERE id = 42");
         match choose(&conn, &plan, None) {
-            AccessPath::RowIdGet { rowid, residual, .. } => {
+            AccessPath::RowIdGet {
+                rowid, residual, ..
+            } => {
                 assert_eq!(rowid, SqlValue::Integer(42));
                 assert!(residual.is_empty());
             }
@@ -497,7 +499,10 @@ mod tests {
         exec_sql(&conn, "CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER)");
         let plan = select_plan_for(&conn, "SELECT v FROM t WHERE id = 1");
         let hint = TableAccessHint::NotIndexed;
-        assert!(matches!(choose(&conn, &plan, Some(&hint)), AccessPath::TableScan { .. }));
+        assert!(matches!(
+            choose(&conn, &plan, Some(&hint)),
+            AccessPath::TableScan { .. }
+        ));
     }
 
     // --- variant: IndexPointLookup ------------------------------------------
@@ -511,7 +516,12 @@ mod tests {
         );
         let plan = select_plan_for(&conn, "SELECT v FROM t WHERE k = 5");
         match choose(&conn, &plan, None) {
-            AccessPath::IndexPointLookup { key, residual, covering, .. } => {
+            AccessPath::IndexPointLookup {
+                key,
+                residual,
+                covering,
+                ..
+            } => {
                 assert!(!key.is_empty(), "encoded key should be non-empty");
                 assert!(residual.is_empty());
                 assert!(covering.is_none(), "scaffolding never sets covering");
@@ -528,9 +538,11 @@ mod tests {
             "CREATE TABLE t(tenant INTEGER, k INTEGER, v INTEGER); \
              CREATE INDEX ix ON t(tenant, k);",
         );
-        let plan =
-            select_plan_for(&conn, "SELECT v FROM t WHERE tenant = 1 AND k = 5");
-        assert!(matches!(choose(&conn, &plan, None), AccessPath::IndexPointLookup { .. }));
+        let plan = select_plan_for(&conn, "SELECT v FROM t WHERE tenant = 1 AND k = 5");
+        assert!(matches!(
+            choose(&conn, &plan, None),
+            AccessPath::IndexPointLookup { .. }
+        ));
     }
 
     // --- variant: IndexRange ------------------------------------------------
@@ -644,8 +656,7 @@ mod tests {
     fn table_scan_residual_contains_every_top_level_conjunct() {
         let (_dir, conn) = fresh_conn();
         exec_sql(&conn, "CREATE TABLE t(a INTEGER, b INTEGER, c INTEGER)");
-        let plan =
-            select_plan_for(&conn, "SELECT a FROM t WHERE a = 1 AND b = 2 AND c = 3");
+        let plan = select_plan_for(&conn, "SELECT a FROM t WHERE a = 1 AND b = 2 AND c = 3");
         match choose(&conn, &plan, None) {
             AccessPath::TableScan { residual, .. } => {
                 assert_eq!(residual.len(), 3, "all three conjuncts must round-trip");

@@ -54,15 +54,8 @@ pub struct MorselScan<'a, S: ScanSource> {
 impl<'a, S: ScanSource> MorselScan<'a, S> {
     /// Open a scan against `source`, allocating into `arena`. `kinds`
     /// must match the row width returned by `source.next_row()`.
-    pub fn new(
-        source: S,
-        arena: &'a Bump,
-        kinds: &[ColumnKind],
-        batch_target_rows: u16,
-    ) -> Self {
-        let target = batch_target_rows
-            .max(1)
-            .min(MAX_BATCH_ROWS as u16);
+    pub fn new(source: S, arena: &'a Bump, kinds: &[ColumnKind], batch_target_rows: u16) -> Self {
+        let target = batch_target_rows.max(1).min(MAX_BATCH_ROWS as u16);
         let mut column_kinds: SmallVec<[ColumnKind; 8]> = SmallVec::with_capacity(kinds.len());
         column_kinds.extend_from_slice(kinds);
         Self {

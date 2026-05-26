@@ -175,10 +175,7 @@ fn logical_and_or_not() {
 
 #[test]
 fn concat_text() {
-    assert_eq!(
-        run("'a' || 'b'", &[], &[]),
-        SqlValue::Text(Arc::from("ab"))
-    );
+    assert_eq!(run("'a' || 'b'", &[], &[]), SqlValue::Text(Arc::from("ab")));
     assert_eq!(run("'a' || NULL", &[], &[]), SqlValue::Null);
 }
 
@@ -186,7 +183,10 @@ fn concat_text() {
 fn fn_abs_length_lower_upper() {
     assert_eq!(run("abs(-5)", &[], &[]), SqlValue::Integer(5));
     assert_eq!(run("length('hello')", &[], &[]), SqlValue::Integer(5));
-    assert_eq!(run("lower('HI')", &[], &[]), SqlValue::Text(Arc::from("hi")));
+    assert_eq!(
+        run("lower('HI')", &[], &[]),
+        SqlValue::Text(Arc::from("hi"))
+    );
     assert_eq!(
         run("upper('hi')", &[], &[]),
         SqlValue::Text(Arc::from("HI"))
@@ -370,8 +370,12 @@ fn ast_eval_ident(name: &str, cols: &[(String, usize)], row: &[SqlValue]) -> Sql
 
 fn ast_eval_binary(op: &BinaryOperator, l: SqlValue, r: SqlValue) -> SqlValue {
     match op {
-        BinaryOperator::Plus => oracle_arith(l, r, |a, b| Some(a.wrapping_add(b)), |a, b| Some(a + b)),
-        BinaryOperator::Minus => oracle_arith(l, r, |a, b| Some(a.wrapping_sub(b)), |a, b| Some(a - b)),
+        BinaryOperator::Plus => {
+            oracle_arith(l, r, |a, b| Some(a.wrapping_add(b)), |a, b| Some(a + b))
+        }
+        BinaryOperator::Minus => {
+            oracle_arith(l, r, |a, b| Some(a.wrapping_sub(b)), |a, b| Some(a - b))
+        }
         BinaryOperator::Multiply => {
             oracle_arith(l, r, |a, b| Some(a.wrapping_mul(b)), |a, b| Some(a * b))
         }
@@ -535,13 +539,34 @@ enum ExprShape {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum ArithOp { Add, Sub, Mul, Div, Mod }
+enum ArithOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+}
 #[derive(Debug, Clone, Copy)]
-enum CmpOp { Eq, Ne, Lt, Le, Gt, Ge }
+enum CmpOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
 #[derive(Debug, Clone, Copy)]
-enum LogicOp { And, Or }
+enum LogicOp {
+    And,
+    Or,
+}
 #[derive(Debug, Clone, Copy)]
-enum Fn1Kind { Abs, Length, Lower, Upper }
+enum Fn1Kind {
+    Abs,
+    Length,
+    Lower,
+    Upper,
+}
 
 fn shape_strategy() -> impl Strategy<Value = ExprShape> {
     let atom = prop_oneof![
@@ -565,9 +590,15 @@ fn shape_strategy() -> impl Strategy<Value = ExprShape> {
             (inner.clone(), inner.clone())
                 .prop_map(|(l, r)| ExprShape::Concat(Box::new(l), Box::new(r))),
             (fn1_strategy(), inner.clone()).prop_map(|(f, e)| ExprShape::Fn1(f, Box::new(e))),
-            (prop::collection::vec((inner.clone(), inner.clone()), 1..3), prop::option::of(inner))
+            (
+                prop::collection::vec((inner.clone(), inner.clone()), 1..3),
+                prop::option::of(inner)
+            )
                 .prop_map(|(ws, e)| ExprShape::Case {
-                    whens: ws.into_iter().map(|(c, r)| (Box::new(c), Box::new(r))).collect(),
+                    whens: ws
+                        .into_iter()
+                        .map(|(c, r)| (Box::new(c), Box::new(r)))
+                        .collect(),
                     else_: e.map(Box::new),
                 }),
         ]
@@ -621,9 +652,15 @@ fn lit_int(n: i64) -> Expr {
     } else {
         Value::Number(n.to_string(), false)
     };
-    let inner = Expr::Value(ValueWithSpan { value: v, span: span() });
+    let inner = Expr::Value(ValueWithSpan {
+        value: v,
+        span: span(),
+    });
     if n < 0 {
-        Expr::UnaryOp { op: UnaryOperator::Minus, expr: Box::new(inner) }
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: Box::new(inner),
+        }
     } else {
         inner
     }
@@ -645,7 +682,10 @@ fn lit_real(f: f64) -> Expr {
         span: span(),
     });
     if f < 0.0 {
-        Expr::UnaryOp { op: UnaryOperator::Minus, expr: Box::new(inner) }
+        Expr::UnaryOp {
+            op: UnaryOperator::Minus,
+            expr: Box::new(inner),
+        }
     } else {
         inner
     }
@@ -659,7 +699,10 @@ fn lit_text(s: &str) -> Expr {
 }
 
 fn lit_null() -> Expr {
-    Expr::Value(ValueWithSpan { value: Value::Null, span: span() })
+    Expr::Value(ValueWithSpan {
+        value: Value::Null,
+        span: span(),
+    })
 }
 
 fn ident(name: &str) -> Expr {
@@ -801,11 +844,13 @@ fn shape_is_safe(shape: &ExprShape) -> bool {
             ExprShape::Fn1(Fn1Kind::Lower | Fn1Kind::Upper, _) => true,
             ExprShape::Fn1(_, i) => touches_text(i),
             ExprShape::Neg(i) | ExprShape::Not(i) => touches_text(i),
-            ExprShape::Arith(_, l, r)
-            | ExprShape::Cmp(_, l, r)
-            | ExprShape::Logic(_, l, r) => touches_text(l) || touches_text(r),
+            ExprShape::Arith(_, l, r) | ExprShape::Cmp(_, l, r) | ExprShape::Logic(_, l, r) => {
+                touches_text(l) || touches_text(r)
+            }
             ExprShape::Case { whens, else_ } => {
-                whens.iter().any(|(c, r)| touches_text(c) || touches_text(r))
+                whens
+                    .iter()
+                    .any(|(c, r)| touches_text(c) || touches_text(r))
                     || else_.as_ref().is_some_and(|e| touches_text(e))
             }
         }
@@ -824,7 +869,9 @@ fn shape_is_safe(shape: &ExprShape) -> bool {
             ExprShape::Fn1(Fn1Kind::Abs, i) => touches_text(i) || arith_with_text(i),
             ExprShape::Fn1(_, i) => arith_with_text(i),
             ExprShape::Case { whens, else_ } => {
-                whens.iter().any(|(c, r)| arith_with_text(c) || arith_with_text(r))
+                whens
+                    .iter()
+                    .any(|(c, r)| arith_with_text(c) || arith_with_text(r))
                     || else_.as_ref().is_some_and(|e| arith_with_text(e))
             }
         }

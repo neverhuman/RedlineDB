@@ -72,8 +72,8 @@ use bitmap::Bitmap;
 use builder::ColumnKind;
 use filter::{
     filter_i64_eq, filter_i64_eq_scalar, filter_i64_ge, filter_i64_ge_scalar, filter_i64_gt,
-    filter_i64_gt_scalar, filter_i64_le, filter_i64_le_scalar, filter_i64_lt,
-    filter_i64_lt_scalar, filter_i64_ne, filter_i64_ne_scalar,
+    filter_i64_gt_scalar, filter_i64_le, filter_i64_le_scalar, filter_i64_lt, filter_i64_lt_scalar,
+    filter_i64_ne, filter_i64_ne_scalar,
 };
 use scan::{MorselScan, RowRef, ScanSource};
 
@@ -252,7 +252,9 @@ fn lcg_seq(seed: u64, count: usize) -> Vec<i64> {
     let mut x = seed;
     (0..count)
         .map(|_| {
-            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             x as i64
         })
         .collect()
@@ -278,7 +280,15 @@ where
         let len = 1 + (len_seed as usize % 257);
         let col = lcg_seq(*seed, len);
         // Test against several targets (including ones that appear in `col`).
-        let targets = [col[0], col[len / 2], col[len - 1], 0i64, -1i64, i64::MAX, i64::MIN];
+        let targets = [
+            col[0],
+            col[len / 2],
+            col[len - 1],
+            0i64,
+            -1i64,
+            i64::MAX,
+            i64::MIN,
+        ];
         for t in targets {
             let mut v_simd = Bitmap::new_all_set(len);
             let mut v_scalar = Bitmap::new_all_set(len);

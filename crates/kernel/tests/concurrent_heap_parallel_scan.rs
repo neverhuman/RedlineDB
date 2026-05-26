@@ -50,7 +50,9 @@ fn parallel_scan_worker_count_one_matches_serial() {
     let snap = txs.snapshot();
 
     let serial = heap.serial_scan(&txs, &snap, None).expect("serial");
-    let parallel = heap.parallel_scan(&txs, &snap, None, 1).expect("parallel-1");
+    let parallel = heap
+        .parallel_scan(&txs, &snap, None, 1)
+        .expect("parallel-1");
     assert_eq!(serial.len(), parallel.len());
 }
 
@@ -102,9 +104,7 @@ fn parallel_scan_speedup_smoke() {
 
     assert_eq!(s.len(), rows);
     assert_eq!(p.len(), rows);
-    eprintln!(
-        "ws_c3 parallel_scan 1M rows: serial={serial_ms} ms parallel(4)={par_ms} ms"
-    );
+    eprintln!("ws_c3 parallel_scan 1M rows: serial={serial_ms} ms parallel(4)={par_ms} ms");
 }
 
 #[test]

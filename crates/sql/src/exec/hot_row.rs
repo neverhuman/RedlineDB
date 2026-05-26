@@ -496,14 +496,15 @@ impl HotRowCoordinator {
         if is_coordinator {
             // The first writer waits briefly for joiners before
             // flushing. Re-acquire after sleep to absorb any merges.
-            let (mut batch, _) = match slot
-                .cv
-                .wait_timeout_while(batch, COORDINATOR_BATCH_WINDOW, |b| {
-                    !b.flushed && b.writer_count < COORDINATOR_MAX_BATCH
-                }) {
-                Ok(r) => r,
-                Err(_) => return CoordinatorRole::Bypass,
-            };
+            let (mut batch, _) =
+                match slot
+                    .cv
+                    .wait_timeout_while(batch, COORDINATOR_BATCH_WINDOW, |b| {
+                        !b.flushed && b.writer_count < COORDINATOR_MAX_BATCH
+                    }) {
+                    Ok(r) => r,
+                    Err(_) => return CoordinatorRole::Bypass,
+                };
 
             // Snapshot the merged batch and mark it as in-flight by
             // setting writer_count to the negative sentinel via
@@ -513,7 +514,9 @@ impl HotRowCoordinator {
             // _new_ coordinator on a fresh batch (we cleared above).
             let merged_deltas = std::mem::take(&mut batch.deltas);
             let merged_replacements: Vec<(u16, CombinedReplacementValue)> =
-                std::mem::take(&mut batch.replacements).into_iter().collect();
+                std::mem::take(&mut batch.replacements)
+                    .into_iter()
+                    .collect();
             let batched_count = batch.writer_count;
             // Re-arm the slot for the next coordinator. We DO NOT drop
             // the slot from the map here — that happens lazily on the
@@ -532,13 +535,14 @@ impl HotRowCoordinator {
             })
         } else {
             // Joiner path: wait for the coordinator to publish.
-            let (batch, _) = match slot
-                .cv
-                .wait_timeout_while(batch, Duration::from_millis(500), |b| !b.flushed)
-            {
-                Ok(r) => r,
-                Err(_) => return CoordinatorRole::Bypass,
-            };
+            let (batch, _) =
+                match slot
+                    .cv
+                    .wait_timeout_while(batch, Duration::from_millis(500), |b| !b.flushed)
+                {
+                    Ok(r) => r,
+                    Err(_) => return CoordinatorRole::Bypass,
+                };
             if batch.failed {
                 CoordinatorRole::Bypass
             } else {
@@ -595,12 +599,8 @@ pub(crate) fn lift_plans_for_coordinator(
                     SqlValue::Null => CombinedReplacementValue::Null,
                     SqlValue::Integer(n) => CombinedReplacementValue::Integer(*n),
                     SqlValue::Real(r) => CombinedReplacementValue::Real(*r),
-                    SqlValue::Text(t) => {
-                        CombinedReplacementValue::Text(t.as_bytes().to_vec())
-                    }
-                    SqlValue::Blob(b) => {
-                        CombinedReplacementValue::Blob(b.as_ref().to_vec())
-                    }
+                    SqlValue::Text(t) => CombinedReplacementValue::Text(t.as_bytes().to_vec()),
+                    SqlValue::Blob(b) => CombinedReplacementValue::Blob(b.as_ref().to_vec()),
                 };
                 replacements.push((u16::try_from(*col).ok()?, lifted));
             }

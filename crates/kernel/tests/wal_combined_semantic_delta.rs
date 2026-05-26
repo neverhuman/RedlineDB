@@ -37,7 +37,10 @@ fn combined_semantic_delta_round_trip_mixed() {
             (3, CombinedReplacementValue::Integer(99)),
             (5, CombinedReplacementValue::Real(3.14159)),
             (6, CombinedReplacementValue::Text(b"hello".to_vec())),
-            (8, CombinedReplacementValue::Blob(vec![0xDE, 0xAD, 0xBE, 0xEF])),
+            (
+                8,
+                CombinedReplacementValue::Blob(vec![0xDE, 0xAD, 0xBE, 0xEF]),
+            ),
         ],
         batched_count: 64,
     };

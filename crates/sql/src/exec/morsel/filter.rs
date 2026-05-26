@@ -437,11 +437,7 @@ unsafe fn filter_i64_ge_avx2(col: &[i64], target: i64, validity: &mut Bitmap) {
 #[cfg(target_arch = "x86_64")]
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn apply_mask_4(
-    mask: std::arch::x86_64::__m256i,
-    base: usize,
-    validity: &mut Bitmap,
-) {
+unsafe fn apply_mask_4(mask: std::arch::x86_64::__m256i, base: usize, validity: &mut Bitmap) {
     use std::arch::x86_64::_mm256_movemask_epi8;
 
     // movemask_epi8 turns each byte's MSB into one bit of an i32; each
@@ -464,11 +460,7 @@ unsafe fn apply_mask_4(
 /// # Safety
 ///
 /// The caller must only invoke this on a CPU where AVX2 is available.
-unsafe fn apply_mask_4(
-    mask: std::arch::x86::__m256i,
-    base: usize,
-    validity: &mut Bitmap,
-) {
+unsafe fn apply_mask_4(mask: std::arch::x86::__m256i, base: usize, validity: &mut Bitmap) {
     use std::arch::x86::_mm256_movemask_epi8;
     let bits = _mm256_movemask_epi8(mask) as u32;
     for lane in 0..4 {

@@ -40,7 +40,9 @@ fn many_threads_increment_same_counter_sum_to_n() {
         h.join().expect("thread");
     }
 
-    let mut stmt = conn.prepare("SELECT v FROM ctr WHERE id = 1").expect("prepare");
+    let mut stmt = conn
+        .prepare("SELECT v FROM ctr WHERE id = 1")
+        .expect("prepare");
     assert_eq!(stmt.step().expect("step"), Step::Row);
     let observed = stmt.column_i64(0).expect("v");
     assert_eq!(
@@ -54,10 +56,8 @@ fn many_threads_increment_same_counter_sum_to_n() {
 #[test]
 fn mixed_delta_and_replacement_preserves_serializable_result() {
     let (_dir, conn) = open_database();
-    conn.execute(
-        "CREATE TABLE row (id INTEGER PRIMARY KEY, version INTEGER, last_actor INTEGER)",
-    )
-    .expect("create");
+    conn.execute("CREATE TABLE row (id INTEGER PRIMARY KEY, version INTEGER, last_actor INTEGER)")
+        .expect("create");
     conn.execute("INSERT INTO row VALUES (1, 0, -1)")
         .expect("insert");
 
@@ -68,8 +68,9 @@ fn mixed_delta_and_replacement_preserves_serializable_result() {
         let conn = Arc::clone(&conn);
         handles.push(thread::spawn(move || {
             for _ in 0..ITERS {
-                let sql =
-                    format!("UPDATE row SET version = version + 1, last_actor = {actor} WHERE id = 1");
+                let sql = format!(
+                    "UPDATE row SET version = version + 1, last_actor = {actor} WHERE id = 1"
+                );
                 conn.execute(&sql).expect("update");
             }
         }));
@@ -124,7 +125,9 @@ fn returning_clause_disqualifies_fast_path() {
         }
     }
 
-    let mut stmt = conn.prepare("SELECT v FROM ctr WHERE id = 1").expect("prepare");
+    let mut stmt = conn
+        .prepare("SELECT v FROM ctr WHERE id = 1")
+        .expect("prepare");
     assert_eq!(stmt.step().expect("step"), Step::Row);
     assert_eq!(stmt.column_i64(0).expect("v"), ITERS as i64);
 }
@@ -134,8 +137,10 @@ fn trigger_present_disqualifies_fast_path() {
     let (_dir, conn) = open_database();
     conn.execute("CREATE TABLE ctr (id INTEGER PRIMARY KEY, v INTEGER)")
         .expect("create");
-    conn.execute("CREATE TABLE log (n INTEGER)").expect("create log");
-    conn.execute("INSERT INTO ctr VALUES (1, 0)").expect("insert");
+    conn.execute("CREATE TABLE log (n INTEGER)")
+        .expect("create log");
+    conn.execute("INSERT INTO ctr VALUES (1, 0)")
+        .expect("insert");
     conn.execute(
         "CREATE TRIGGER ctr_log AFTER UPDATE ON ctr \
          BEGIN INSERT INTO log VALUES (NEW.v); END",
@@ -148,7 +153,9 @@ fn trigger_present_disqualifies_fast_path() {
             .expect("update");
     }
 
-    let mut stmt = conn.prepare("SELECT v FROM ctr WHERE id = 1").expect("prepare");
+    let mut stmt = conn
+        .prepare("SELECT v FROM ctr WHERE id = 1")
+        .expect("prepare");
     assert_eq!(stmt.step().expect("step"), Step::Row);
     assert_eq!(stmt.column_i64(0).expect("v"), ITERS as i64);
 
@@ -171,14 +178,17 @@ fn non_commutative_set_clause_falls_back_to_slow_path() {
     let (_dir, conn) = open_database();
     conn.execute("CREATE TABLE ctr (id INTEGER PRIMARY KEY, v INTEGER)")
         .expect("create");
-    conn.execute("INSERT INTO ctr VALUES (1, 1)").expect("insert");
+    conn.execute("INSERT INTO ctr VALUES (1, 1)")
+        .expect("insert");
 
     for _ in 0..5 {
         conn.execute("UPDATE ctr SET v = v * 2 WHERE id = 1")
             .expect("update");
     }
 
-    let mut stmt = conn.prepare("SELECT v FROM ctr WHERE id = 1").expect("prepare");
+    let mut stmt = conn
+        .prepare("SELECT v FROM ctr WHERE id = 1")
+        .expect("prepare");
     assert_eq!(stmt.step().expect("step"), Step::Row);
     assert_eq!(stmt.column_i64(0).expect("v"), 32);
 }
@@ -195,13 +205,16 @@ fn coordinator_lift_round_trip() {
     let (_dir, conn) = open_database();
     conn.execute("CREATE TABLE ctr (id INTEGER PRIMARY KEY, v INTEGER)")
         .expect("create");
-    conn.execute("INSERT INTO ctr VALUES (1, 0)").expect("insert");
+    conn.execute("INSERT INTO ctr VALUES (1, 0)")
+        .expect("insert");
     // A single update suffices to exercise the lift; the coordinator's
     // submit/publish path is exercised by the multi-thread tests
     // above.
     conn.execute("UPDATE ctr SET v = v + 1 WHERE id = 1")
         .expect("update");
-    let mut stmt = conn.prepare("SELECT v FROM ctr WHERE id = 1").expect("prepare");
+    let mut stmt = conn
+        .prepare("SELECT v FROM ctr WHERE id = 1")
+        .expect("prepare");
     assert_eq!(stmt.step().expect("step"), Step::Row);
     assert_eq!(stmt.column_i64(0).expect("v"), 1);
 }
@@ -215,14 +228,17 @@ fn ws_a6_throughput_baseline_vs_coordinator() {
         let (_dir, conn) = open_database();
         conn.execute("CREATE TABLE ctr (id INTEGER PRIMARY KEY, v INTEGER)")
             .expect("create");
-        conn.execute("INSERT INTO ctr VALUES (1, 0)").expect("insert");
+        conn.execute("INSERT INTO ctr VALUES (1, 0)")
+            .expect("insert");
         let start = Instant::now();
         for _ in 0..(16 * ITERS) {
             conn.execute("UPDATE ctr SET v = v + 1 WHERE id = 1")
                 .expect("update");
         }
         let elapsed = start.elapsed();
-        let mut stmt = conn.prepare("SELECT v FROM ctr WHERE id = 1").expect("prepare");
+        let mut stmt = conn
+            .prepare("SELECT v FROM ctr WHERE id = 1")
+            .expect("prepare");
         assert_eq!(stmt.step().expect("step"), Step::Row);
         assert_eq!(stmt.column_i64(0).expect("v"), (16 * ITERS) as i64);
         eprintln!(
@@ -234,7 +250,8 @@ fn ws_a6_throughput_baseline_vs_coordinator() {
         let (_dir, conn) = open_database();
         conn.execute("CREATE TABLE ctr (id INTEGER PRIMARY KEY, v INTEGER)")
             .expect("create");
-        conn.execute("INSERT INTO ctr VALUES (1, 0)").expect("insert");
+        conn.execute("INSERT INTO ctr VALUES (1, 0)")
+            .expect("insert");
         let start = Instant::now();
         let mut handles = Vec::new();
         for _ in 0..16 {
@@ -250,7 +267,9 @@ fn ws_a6_throughput_baseline_vs_coordinator() {
             h.join().unwrap();
         }
         let elapsed = start.elapsed();
-        let mut stmt = conn.prepare("SELECT v FROM ctr WHERE id = 1").expect("prepare");
+        let mut stmt = conn
+            .prepare("SELECT v FROM ctr WHERE id = 1")
+            .expect("prepare");
         assert_eq!(stmt.step().expect("step"), Step::Row);
         assert_eq!(stmt.column_i64(0).expect("v"), (16 * ITERS) as i64);
         eprintln!(
