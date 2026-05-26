@@ -257,7 +257,7 @@ jankurai-audit:
 jankurai-security:
   stage: jankurai
   needs: []
-  tags: [mr]
+  tags: [default]
   timeout: 20 minutes
   script:
     - cargo install cargo-audit --locked
@@ -270,7 +270,7 @@ jankurai-security:
 dependency-review:
   stage: jankurai
   needs: []
-  tags: [mr]
+  tags: [default]
   timeout: 10 minutes
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
