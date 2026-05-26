@@ -374,6 +374,61 @@ pub(crate) fn parse_pragma_template(
             conn.redline_bulk_import(),
             crate::statement::PragmaPlan::SetRedlineBulkImport,
         )?,
+        // Phase 6 R3-A: `PRAGMA redline_scalar_vm = ON|OFF` flips the
+        // process-wide Tier-0 scalar-VM dispatch toggle. The toggle is a
+        // plain `AtomicBool` (see `exec::expr::program`), so the side-
+        // effect fires here at parse time rather than going through a
+        // `PragmaPlan` variant. Subsequent `step()` calls just emit the
+        // static-SELECT recall row. PRAGMA bypasses the statement cache
+        // (see `prepare_cached_inner`) so re-issuing the directive
+        // always re-runs the parser arm.
+        "redline_scalar_vm" => {
+            // When SET: report what we just wrote (closing the race
+            // window for a concurrent thread that might flip the
+            // process-wide `AtomicBool` between our store and a
+            // subsequent reload). When recalling (no `= value`): read
+            // the live state.
+            let observed = if let Some(raw) = value {
+                let parsed = parse_pragma_bool(&raw)?;
+                crate::exec::expr::program::set_vm_dispatch_enabled(parsed);
+                parsed
+            } else {
+                crate::exec::expr::program::is_vm_dispatch_enabled()
+            };
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("redline_scalar_vm")],
+                vec![vec![SqlValue::Integer(if observed { 1 } else { 0 })]],
+            )
+        }
+        // Phase 6 R3-A: `PRAGMA redline_planner_use_access_path = ON|OFF`
+        // flips the thread-local AccessPath-IR planner gate. Same parse-
+        // time-side-effect pattern as `redline_scalar_vm` above; the
+        // underlying cell is per-thread but `Connection::execute` is
+        // sync on the calling thread, so the flag observed by the
+        // planner during this connection's queries is the one we just
+        // wrote here.
+        "redline_planner_use_access_path" => {
+            // Same set-or-read shape as `redline_scalar_vm` above; the
+            // underlying cell is thread-local so concurrent tests
+            // cannot race in here, but we keep the symmetry anyway —
+            // future moves to a process-wide flag would inherit the
+            // correct semantics for free.
+            let observed = if let Some(raw) = value {
+                let parsed = parse_pragma_bool(&raw)?;
+                crate::planner::access_path::set_planner_use_access_path(parsed);
+                parsed
+            } else {
+                crate::planner::access_path::planner_use_access_path()
+            };
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("redline_planner_use_access_path")],
+                vec![vec![SqlValue::Integer(if observed { 1 } else { 0 })]],
+            )
+        }
         "redline_index_check" => pragma_static_select(
             sql,
             schema_epoch,

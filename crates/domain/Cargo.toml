@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb-domain"
-version = "4.0.7"
+version = "4.0.8"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
