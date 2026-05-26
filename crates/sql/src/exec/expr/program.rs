@@ -876,7 +876,9 @@ mod tests {
     use sqlparser::parser::Parser;
 
     fn parse_expr(sql: &str) -> Expr {
-        let stmt_sql = format!("SELECT {sql}");
+        let mut stmt_sql = String::with_capacity(7 + sql.len());
+        stmt_sql.push_str("SELECT ");
+        stmt_sql.push_str(sql);
         let stmts = Parser::parse_sql(&GenericDialect {}, &stmt_sql).expect("parse");
         let sqlparser::ast::Statement::Query(q) = &stmts[0] else {
             panic!("expected query")
@@ -891,7 +893,7 @@ mod tests {
         }
     }
 
-    fn eval(sql: &str) -> SqlValue {
+    fn run_eval(sql: &str) -> SqlValue {
         let expr = parse_expr(sql);
         let ctx = CompileCtx::empty();
         let prog = compile(&expr, &ctx).unwrap().expect("compile");
@@ -900,23 +902,23 @@ mod tests {
 
     #[test]
     fn literal_integer() {
-        assert_eq!(eval("42"), SqlValue::Integer(42));
+        assert_eq!(run_eval("42"), SqlValue::Integer(42));
     }
 
     #[test]
     fn literal_null() {
-        assert_eq!(eval("NULL"), SqlValue::Null);
+        assert_eq!(run_eval("NULL"), SqlValue::Null);
     }
 
     #[test]
     fn add_two_integers() {
-        assert_eq!(eval("1 + 2"), SqlValue::Integer(3));
+        assert_eq!(run_eval("1 + 2"), SqlValue::Integer(3));
     }
 
     #[test]
     fn case_when_branch() {
         assert_eq!(
-            eval("CASE WHEN 1 THEN 'yes' ELSE 'no' END"),
+            run_eval("CASE WHEN 1 THEN 'yes' ELSE 'no' END"),
             SqlValue::Text(Arc::from("yes"))
         );
     }
