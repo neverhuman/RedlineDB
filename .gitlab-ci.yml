@@ -147,7 +147,7 @@ parity-ledger-lint:
 release-smoke:
   stage: smoke
   needs: []
-  tags: [build]
+  tags: [docker-build]
   timeout: 45 minutes
   script:
     - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_verify_redlinedb_release_smoke'
@@ -155,7 +155,7 @@ release-smoke:
 .test_crate: &test_crate
   stage: test
   needs: []
-  tags: [build]
+  tags: [docker-build]
   timeout: 45 minutes
 
 # fast.sh "core" was 6 crates in a single nextest run. Fan them out:
@@ -185,13 +185,22 @@ release-smoke:
   <<: *test_crate
   script: [cargo nextest run -p redlinedb-ffi --locked --no-fail-fast]
 
+## Kernel + sql-unit are the heaviest individual jobs (~120s each).
+## Switch to nextest and shard via `parallel:` so each splits into 4
+## parallel partitions on the docker-build pool. GitLab sets
+## CI_NODE_INDEX (1..4) and CI_NODE_TOTAL (4); nextest --partition
+## consumes them as `count:N/M`.
 "test:kernel":
   <<: *test_crate
-  script: [cargo test -p redlinedb-kernel --quiet --locked]
+  parallel: 4
+  script:
+    - 'cargo nextest run -p redlinedb-kernel --locked --no-fail-fast --partition "count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}"'
 
 "test:sql-unit":
   <<: *test_crate
-  script: [cargo test -p redlinedb-sql --lib --quiet --locked]
+  parallel: 4
+  script:
+    - 'cargo nextest run -p redlinedb-sql --lib --locked --no-fail-fast --partition "count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}"'
 
 # fast.sh "sql-contracts" was 3 cargo test invocations sequentially.
 # Split into 3 jobs.
@@ -226,7 +235,7 @@ parity:
     - "test:sql-phase11-veox-queue"
     - "test:sql-phase11-xdoug-compat"
     - "test:bench"
-  tags: [build]
+  tags: [docker-build]
   timeout: 240 minutes
   variables:
     CI_REDLINE_TESTING_REQUESTED_VERSION: "1.0.0"
@@ -601,7 +610,7 @@ benchmark:
   # bare-metal; the JSONL evidence is comparable across runs on the
   # same runner class, but only a shell runner gives numbers directly
   # comparable to local hand-runs.
-  tags: [build]
+  tags: [docker-build]
   needs: []
   timeout: 240 minutes
   rules:
