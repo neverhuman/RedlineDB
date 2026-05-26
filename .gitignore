@@ -48,3 +48,6 @@ FUCKIT.md
 
 # claude-code agent runtime: scheduled-tasks state + isolated worktrees
 .claude/
+
+# Local-only safety-net backups (e.g., backup of stashes during dir moves)
+.scratch/

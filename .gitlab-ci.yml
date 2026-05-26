@@ -31,19 +31,41 @@ default:
   tags: [default]
   interruptible: true
   before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
-    - rustup component add rustfmt clippy
-    - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
-    # nextest installs as `cargo-nextest` — cargo finds subcommands via PATH.
-    # Runner sets CARGO_HOME=/cache/cargo-home which isn't on the default PATH,
-    # so install into /usr/local/bin to guarantee reachability.
-    - 'curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C /usr/local/bin cargo-nextest'
-    # Runner pre_build_script exports CARGO_TARGET_DIR=/cache/cargo-targets/...
+    # The default before_script handles BOTH docker (root) and shell-runner
+    # (non-root, gitlab-runner user) execution paths.
+    #
+    # Docker path: apt-get installs build deps; nextest into /usr/local/bin.
+    # Shell-runner path: skip apt-get (no sudo); assume host has all deps
+    # pre-installed; install nextest into per-user CARGO_HOME if missing.
+    - |
+      if [ "$(id -u)" = "0" ]; then
+        # docker container — full apt install
+        apt-get update -qq
+        apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
+        rustup component add rustfmt clippy
+        # nextest into /usr/local/bin (writable for root)
+        if ! command -v cargo-nextest >/dev/null 2>&1; then
+          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C /usr/local/bin cargo-nextest
+        fi
+      else
+        # bare-metal shell runner — verify host has the deps the docker
+        # path would install. Fail fast if anything is missing.
+        for tool in cargo rustc clang mold sqlite3 jq curl git; do
+          command -v "$tool" >/dev/null 2>&1 || { echo "shell-runner host missing $tool"; exit 1; }
+        done
+        # nextest into the user-writable CARGO_HOME/bin (host operator
+        # installed rustup under ~/.cargo)
+        mkdir -p "${CARGO_HOME:-$HOME/.cargo}/bin"
+        if ! command -v cargo-nextest >/dev/null 2>&1; then
+          curl -LsSf https://get.nexte.st/0.9.133/linux \
+            | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin" cargo-nextest
+        fi
+        export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+      fi
+    # Runner pre_build_script may export CARGO_TARGET_DIR=/cache/cargo-targets/...
     # but ops/ci/release-build.sh hardcodes `target/${TARGET}/...` for its cp.
     # Symlink ./target → $CARGO_TARGET_DIR so cargo keeps writing to the
-    # persistent cache AND cp succeeds. Falls through cleanly if the env var
-    # isn't set.
+    # persistent cache AND cp succeeds. Falls through cleanly if env unset.
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
 
 stages:
