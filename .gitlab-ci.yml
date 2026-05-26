@@ -1,0 +1,402 @@
+---
+# Mirrors the .github/workflows/*.yml suite onto the local GitLab / JeRyu CI.
+#
+# Coverage:
+#   - .github/workflows/ci.yml              → preflight, tests:* (5 shards),
+#                                              parity, official-evidence-guard,
+#                                              metrics-readme, relay jobs
+#   - .github/workflows/jankurai.yml        → branch-freshness, audit, security,
+#                                              dependency-review
+#   - .github/workflows/jankurai-tools.yml  → tools:audit-ci, proof-routing,
+#                                              security, contract-drift,
+#                                              authz-matrix, input-boundary,
+#                                              agent-tool-supply,
+#                                              release-readiness, cost-budget
+#   - .github/workflows/sqlite-parity-report.yml  → SKIPPED (uses `gh pr` CLI;
+#                                              GitHub-only — kept as GH workflow)
+#   - .github/workflows/release-build.yml   → SKIPPED (uses `gh release upload`
+#                                              + macOS runners; GitHub-only)
+#
+# Runner: jeryu-default Docker executor with image `rust:1.95.0`. The
+# runner pre_build_script wires sccache + cargo cache automatically
+# (volumes mount /cache:rw), so no `cache:` stanza is needed here.
+#
+# Trigger semantics:
+#   $CI_PIPELINE_SOURCE == "merge_request_event" mirrors `pull_request:` events.
+#   $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+#     mirrors `push: branches: [main]`.
+
+default:
+  image: rust:1.95.0
+  tags: [default]
+  interruptible: true
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq build-essential mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
+    - rustup component add rustfmt clippy
+    - 'curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-/usr/local/cargo}/bin"'
+
+stages:
+  - preflight
+  - test
+  - parity
+  - guard
+  - metrics
+  - jankurai
+  - tools
+
+variables:
+  CARGO_TERM_COLOR: "always"
+  RUST_BACKTRACE: "1"
+  REDLINEDB_BENCH_GIT_SHA: "$CI_COMMIT_SHA"
+  GIT_DEPTH: "0"
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+# ── .github/workflows/ci.yml ───────────────────────────────────────────────
+
+preflight:
+  stage: preflight
+  timeout: 30 minutes
+  script:
+    - CI_FAST_STAGE=preflight bash ops/ci/fast.sh
+
+.test_shard:
+  stage: test
+  needs: ["preflight"]
+  timeout: 30 minutes
+  script:
+    - CI_FAST_STAGE="$SHARD" bash ops/ci/fast.sh
+
+"test:core":
+  extends: .test_shard
+  variables: { SHARD: "core" }
+
+"test:kernel":
+  extends: .test_shard
+  variables: { SHARD: "kernel" }
+
+"test:sql-unit":
+  extends: .test_shard
+  variables: { SHARD: "sql-unit" }
+
+"test:sql-contracts":
+  extends: .test_shard
+  variables: { SHARD: "sql-contracts" }
+
+"test:bench":
+  extends: .test_shard
+  variables: { SHARD: "bench" }
+
+parity:
+  stage: parity
+  needs: ["preflight"]
+  timeout: 180 minutes
+  variables:
+    CI_REDLINE_TESTING_REQUESTED_VERSION: "1.0.0"
+    REDLINE_TESTING_PINNED_ONLY: "1"
+  script:
+    - CI_PARITY_STAGE=redline-testing-official bash ops/ci/parity.sh
+  artifacts:
+    when: always
+    name: "redline-testing-official-evidence"
+    paths:
+      - target/redline-testing/
+    expire_in: 7 days
+
+official-evidence-guard:
+  stage: guard
+  needs: []
+  timeout: 10 minutes
+  before_script: []
+  image: alpine:3.20
+  script:
+    - apk add --no-cache bash git
+    - bash scripts/guard-official-evidence.sh
+
+metrics-readme:
+  stage: metrics
+  needs:
+    - job: parity
+      artifacts: true
+  timeout: 15 minutes
+  script:
+    - cargo install tokei --locked --version 14.0.0
+    - bash scripts/sqlite/build-reference.sh
+    - bash ops/ci/jankurai-tools.sh audit-ci
+    - bash scripts/generate-metrics-readme.sh
+    - |
+      if git diff --quiet README.md; then
+        echo "README.md is already current."
+      else
+        echo "README drift detected:"
+        git diff --numstat README.md
+      fi
+  artifacts:
+    name: "refreshed-readme"
+    paths: [README.md]
+    expire_in: 7 days
+
+# ── .github/workflows/jankurai.yml ─────────────────────────────────────────
+
+branch-freshness:
+  stage: jankurai
+  needs: []
+  timeout: 10 minutes
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  before_script: []
+  image: alpine:3.20
+  script:
+    - apk add --no-cache git
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --quiet
+    - |
+      if ! git merge-base --is-ancestor "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" HEAD; then
+        echo "MR branch is behind origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME. Rebase or merge before committing."
+        exit 1
+      fi
+
+jankurai-audit:
+  stage: jankurai
+  needs: []
+  timeout: 45 minutes
+  script:
+    - apt-get install -y -qq tar
+    - cargo install cargo-audit --locked
+    - cargo install cargo-deny --locked --version 0.18.0
+    - source ops/ci/lib.sh && ci_install_gitleaks
+    - curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /usr/local/bin actionlint
+    - curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz | tar -xz -C /usr/local/bin syft
+    - |
+      set -euo pipefail
+      mkdir -p .jankurai target/jankurai
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --depth=1
+        if git show "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:.jankurai/baselines/main.repo-score.json" > .jankurai/accepted-baseline.json 2>/dev/null; then
+          echo "baseline sourced from origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+        elif [ -f .jankurai/baselines/main.repo-score.json ]; then
+          cp .jankurai/baselines/main.repo-score.json .jankurai/accepted-baseline.json
+        else
+          echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2; exit 1
+        fi
+      elif [ -f .jankurai/baselines/main.repo-score.json ]; then
+        cp .jankurai/baselines/main.repo-score.json .jankurai/accepted-baseline.json
+      else
+        echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2; exit 1
+      fi
+      cp .jankurai/accepted-baseline.json target/jankurai/accepted-baseline.json
+    - source ops/ci/lib.sh && mkdir -p .jankurai && ci_install_jankurai_logged .jankurai/jankurai-install.log
+    - bash scripts/check_audit_policy_mirror.sh
+    - jankurai --version
+    - |
+      set -euo pipefail
+      changed=()
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        while IFS= read -r -d '' path; do changed+=(--changed "$path"); done \
+          < <(git diff --name-only -z --diff-filter=ACMRT "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"...HEAD --)
+      fi
+      jankurai proofbind verify . "${changed[@]:-}"
+    - jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+    - jankurai rust witness build .
+    - jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
+    - jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+    - |
+      set -euo pipefail
+      source ops/ci/lib.sh
+      rm -rf .jankurai/jankurai-src
+      if ci_verify_jankurai_source && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" .jankurai/jankurai-src 2>/dev/null; then
+        resolved_rev="$(git -C .jankurai/jankurai-src rev-parse HEAD)"
+        if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
+          echo "jankurai language test clone resolved to $resolved_rev, expected $CI_JANKURAI_REV" >&2
+          exit 1
+        fi
+        ( cd .jankurai/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
+          > >(tee target/jankurai/language-bad-behavior.log) 2>&1
+      else
+        printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
+          | tee target/jankurai/language-bad-behavior.log
+      fi
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        BASE_REF="origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" bash ops/ci/jankurai-staged-gate.sh
+      fi
+    - >
+      jankurai audit . --mode advisory
+      --json target/jankurai/repo-score.json
+      --md target/jankurai/repo-score.md
+      --sarif target/jankurai/jankurai.sarif
+      --repair-queue-jsonl target/jankurai/repair-queue.jsonl
+      --policy agent/audit-policy.toml
+    - |
+      if [ -f target/jankurai/jankurai.sarif ]; then
+        bash ops/ci/filter-generated-sarif.sh target/jankurai/jankurai.sarif
+      fi
+  artifacts:
+    when: always
+    name: "jankurai-adoption-evidence"
+    paths:
+      - .jankurai/repo-score.json
+      - .jankurai/repo-score.md
+      - .jankurai/cost-budget.toml
+      - .jankurai/baselines/main.repo-score.json
+      - .jankurai/jankurai.sarif
+      - .jankurai/repair-queue.jsonl
+      - target/jankurai/
+      - agent/repo-score.json
+      - agent/repo-score.md
+    expire_in: 14 days
+    reports:
+      sast: target/jankurai/jankurai.sarif
+
+jankurai-security:
+  stage: jankurai
+  needs: []
+  timeout: 20 minutes
+  script:
+    - cargo install cargo-audit --locked
+    - cargo install cargo-deny --locked --version 0.18.0
+    - source ops/ci/lib.sh && ci_install_gitleaks
+    - curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /usr/local/bin actionlint
+    - curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz | tar -xz -C /usr/local/bin syft
+    - bash ops/ci/security.sh
+
+dependency-review:
+  stage: jankurai
+  needs: []
+  timeout: 10 minutes
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - cargo install cargo-deny --locked --version 0.18.0
+    - bash ops/ci/dependency-review.sh
+
+# ── .github/workflows/jankurai-tools.yml ───────────────────────────────────
+
+.jankurai_tool: &jankurai_tool
+  stage: tools
+  needs: []
+  timeout: 20 minutes
+
+"tools:audit-ci":
+  <<: *jankurai_tool
+  script: [bash ops/ci/jankurai-tools.sh audit-ci]
+  artifacts:
+    when: always
+    name: "jankurai-audit-ci-receipt"
+    paths:
+      - target/jankurai/audit-ci/
+      - target/jankurai/repo-score.json
+      - target/jankurai/repo-score.md
+      - agent/repo-score.json
+      - agent/repo-score.md
+
+"tools:proof-routing":
+  <<: *jankurai_tool
+  script: [bash ops/ci/jankurai-tools.sh proof-routing]
+  artifacts:
+    when: always
+    name: "jankurai-proof-routing-receipt"
+    paths:
+      - target/jankurai/proof-routing/
+      - target/jankurai/repo-score.json
+      - target/jankurai/repo-score.md
+      - agent/repo-score.json
+      - agent/repo-score.md
+
+"tools:security":
+  <<: *jankurai_tool
+  script: [bash ops/ci/jankurai-tools.sh security]
+  artifacts:
+    when: always
+    name: "jankurai-tools-security-receipt"
+    paths:
+      - target/jankurai/security/
+
+"tools:contract-drift":
+  <<: *jankurai_tool
+  script: [bash ops/ci/jankurai-tools.sh contract-drift]
+  artifacts:
+    when: always
+    name: "jankurai-contract-drift-receipt"
+    paths:
+      - target/jankurai/contract-drift/
+      - target/jankurai/repo-score.json
+      - target/jankurai/repo-score.md
+      - agent/repo-score.json
+      - agent/repo-score.md
+      - contracts/c-abi/redlinedb.h
+
+"tools:authz-matrix":
+  <<: *jankurai_tool
+  script: [bash ops/ci/jankurai-tools.sh authz-matrix]
+  artifacts:
+    when: always
+    name: "jankurai-authz-matrix-receipt"
+    paths:
+      - target/jankurai/authz-matrix/
+      - target/jankurai/repo-score.json
+      - target/jankurai/repo-score.md
+      - agent/repo-score.json
+      - agent/repo-score.md
+
+"tools:input-boundary":
+  <<: *jankurai_tool
+  script:
+    - bash ops/ci/jankurai-tools.sh input-boundary
+    - cargo test -p redlinedb-ffi --test exec_input_boundary --locked --no-run
+  artifacts:
+    when: always
+    name: "jankurai-input-boundary-receipt"
+    paths:
+      - target/jankurai/input-boundary/
+      - target/jankurai/repo-score.json
+      - target/jankurai/repo-score.md
+      - agent/repo-score.json
+      - agent/repo-score.md
+
+"tools:agent-tool-supply":
+  <<: *jankurai_tool
+  script: [bash ops/ci/jankurai-tools.sh agent-tool-supply]
+  artifacts:
+    when: always
+    name: "jankurai-agent-tool-supply-receipt"
+    paths:
+      - target/jankurai/agent-tool-supply/
+      - target/jankurai/repo-score.json
+      - target/jankurai/repo-score.md
+      - agent/repo-score.json
+      - agent/repo-score.md
+      - .jankurai/tool-adoption.toml
+      - agent/tool-adoption.toml
+
+"tools:release-readiness":
+  <<: *jankurai_tool
+  script: [bash ops/ci/jankurai-tools.sh release-readiness]
+  artifacts:
+    when: always
+    name: "jankurai-release-readiness-receipt"
+    paths:
+      - target/jankurai/release-readiness/
+      - target/jankurai/repo-score.json
+      - target/jankurai/repo-score.md
+      - agent/repo-score.json
+      - agent/repo-score.md
+      - CHANGELOG.md
+
+"tools:cost-budget":
+  <<: *jankurai_tool
+  script: [bash ops/ci/jankurai-tools.sh cost-budget]
+  artifacts:
+    when: always
+    name: "jankurai-cost-budget-receipt"
+    paths:
+      - target/jankurai/cost-budget/
+      - target/jankurai/repo-score.json
+      - target/jankurai/repo-score.md
+      - agent/repo-score.json
+      - agent/repo-score.md
+      - .jankurai/cost-budget.toml

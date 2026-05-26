@@ -348,6 +348,14 @@ fn recover_heap(
             | WalPayload::TimelineFork { .. }
             | WalPayload::LogicalTxn { .. }
             | WalPayload::CatalogSnapshot { .. } => {}
+            // WS-A6 multi-writer hot-row: the coordinator emits this
+            // record alongside the per-batch HeapUpdate, so recovery's
+            // heap-state reconstruction comes from the HeapUpdate path
+            // above. The CombinedSemanticDelta serves as an audit /
+            // observability marker (batched_count = how many original
+            // UPDATEs the coordinator merged); we accept and decode it
+            // here for forward-compat but do not re-apply.
+            WalPayload::CombinedSemanticDelta { .. } => {}
             WalPayload::Commit { .. } => unreachable!("commit records are skipped above"),
         }
     }
@@ -533,7 +541,8 @@ fn recover_indexes(
             | WalPayload::BackupEnd { .. }
             | WalPayload::TimelineFork { .. }
             | WalPayload::LogicalTxn { .. }
-            | WalPayload::CatalogSnapshot { .. } => {}
+            | WalPayload::CatalogSnapshot { .. }
+            | WalPayload::CombinedSemanticDelta { .. } => {}
         }
     }
     Ok(())

@@ -32,6 +32,9 @@ impl<'row, 'bindings> CaseEvaluator for ScalarCaseEvaluator<'row, 'bindings> {
 pub(crate) mod coerce;
 pub(crate) mod json_dispatch;
 mod predicate;
+// Phase 6 R1-C: Two-tier ScalarProgram VM (Tier 0). Parallel module —
+// the AST→bytecode fallback wiring lands in a later round.
+pub(crate) mod program;
 pub(crate) mod scalar;
 pub(crate) mod window;
 pub(crate) mod window_eval;

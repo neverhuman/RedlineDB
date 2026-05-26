@@ -15,6 +15,8 @@ pub mod arena;
 pub mod bitmap;
 pub mod builder;
 pub mod column;
+pub mod filter;
+pub mod scan;
 
 #[allow(unused_imports)]
 pub use arena::BytesArena;
@@ -24,6 +26,12 @@ pub use bitmap::Bitmap;
 pub use builder::{ColumnKind, MorselBuilder};
 #[allow(unused_imports)]
 pub use column::ColumnBatch;
+#[allow(unused_imports)]
+pub use filter::{
+    filter_i64_eq, filter_i64_ge, filter_i64_gt, filter_i64_le, filter_i64_lt, filter_i64_ne,
+};
+#[allow(unused_imports)]
+pub use scan::{MorselScan, RowRef, ScanSource};
 
 /// Hard upper bound on rows per morsel. Matches the inline-storage budget
 /// of `Bitmap` (16 × u64 = 1024 bits).

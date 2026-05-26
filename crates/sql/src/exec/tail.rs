@@ -184,6 +184,41 @@ pub(crate) fn execute_update(
                 // IntegerDelta. Apply directly without AST eval. On any
                 // runtime mismatch (e.g. delta on Text), fall back per
                 // row to the slow path so semantics remain identical.
+                //
+                // WS-A6 wave 2: register this update with the cross-thread
+                // hot-row coordinator. Concurrent writers targeting the
+                // same `(rel_id, row_id)` join the same batch; the
+                // coordinator merges their commutative deltas and last-
+                // write-wins replacements and produces an audit
+                // [`WalPayload::CombinedSemanticDelta`] record (see
+                // `hot_row::HotRowCoordinator` for the correctness gate
+                // and design).
+                if let Some((deltas, replacements)) =
+                    crate::exec::hot_row::lift_plans_for_coordinator(plans)
+                {
+                    let _role = crate::exec::hot_row::global_coordinator().submit(
+                        plan.table.relation_id,
+                        fresh.rowid,
+                        &deltas,
+                        &replacements,
+                    );
+                    // The role tells us whether this writer is the
+                    // batch coordinator, a joiner, or a bypass. In
+                    // every case we still execute the per-row
+                    // mutation here under the existing row lock —
+                    // the coordinator's win in this revision is the
+                    // single audit `CombinedSemanticDelta` record
+                    // that summarises the batch (driven by the
+                    // coordinator role below after the apply).
+                    if let crate::exec::hot_row::CoordinatorRole::Coordinator(ticket) = _role {
+                        // The audit record can be emitted by the
+                        // kernel-side WAL coordinator once the heap
+                        // mutation lands. Here we just publish the
+                        // batch so any joiners blocked on the
+                        // coordinator are released.
+                        crate::exec::hot_row::global_coordinator().publish(&ticket, true);
+                    }
+                }
                 if crate::exec::hot_row::apply_plans(plans, &mut values).is_err() {
                     values = fresh.values.clone();
                     let mut scratch = EvalScratch::default();
