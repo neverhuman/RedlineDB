@@ -1,7 +1,14 @@
 //! Recursive CTE evaluation: body analysis, anchor/recursive arm splitting,
 //! iterative working-set fixpoint, and deduplication.
+//!
+//! WS-A7b: the per-iteration `working_set` clone is replaced by a
+//! `Range<usize>` "frontier" into the single `accumulated` vector, and the
+//! linear `row_in` UNION dedup is replaced by an `AHashSet` keyed on the
+//! encoded row bytes. The encoded bytes themselves live in a `bumpalo::Bump`
+//! arena so set keys are zero-copy `&'arena [u8]` slices.
 
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use sqlparser::ast::{
@@ -11,7 +18,7 @@ use sqlparser::ast::{
 use crate::connection::Connection;
 use crate::error::{Error, Result};
 use crate::value::SqlValue;
-use redlinedb_kernel::catalog::{SchemaEpoch, SchemaSnapshot};
+use redlinedb_kernel::catalog::{SchemaEpoch, SchemaSnapshot, ValueRef, encode_record};
 
 use super::registry::{deregister_rows, register_cte_rows};
 use super::{
@@ -78,7 +85,7 @@ pub(super) fn materialize_cte(
     let (anchor_branch, recursive_branch, union_all) =
         split_recursive_body(&body_query, &cte_name)?;
 
-    let (mut accumulated, columns) = run_query_to_rows(
+    let (anchor_rows, columns) = run_query_to_rows(
         conn,
         Arc::clone(&schema),
         schema_epoch,
@@ -99,8 +106,26 @@ pub(super) fn materialize_cte(
         .map(|name| name.to_ascii_lowercase())
         .collect();
 
-    if !union_all {
-        accumulated = dedup_rows(accumulated);
+    // WS-A7b: arena holds encoded-row-byte dedup keys for the lifetime
+    // of this materialization. The set borrows directly into the arena
+    // so a hit costs one hash + memcmp and no allocation.
+    let arena = bumpalo::Bump::new();
+    let mut dedup: ahash::AHashSet<&[u8]> = ahash::AHashSet::new();
+    let mut encode_buf: Vec<u8> = Vec::new();
+
+    // Single owned vector for the full result; frontier is a Range<usize>
+    // into it. Replaces the prior per-iteration `working_set.clone()`.
+    let mut accumulated: Vec<Vec<SqlValue>> = Vec::with_capacity(anchor_rows.len());
+    for row in anchor_rows {
+        if union_all {
+            accumulated.push(row);
+        } else {
+            let key = encode_row_into(&row, &mut encode_buf);
+            let slot: &[u8] = arena.alloc_slice_copy(key);
+            if dedup.insert(slot) {
+                accumulated.push(row);
+            }
+        }
     }
 
     // WS-A7: if the outer query has a bounded LIMIT we can stop the
@@ -109,53 +134,48 @@ pub(super) fn materialize_cte(
     if let Some(cap) = row_cap {
         if accumulated.len() >= cap {
             accumulated.truncate(cap);
-            let table_def = synth_table_def_with_folded(
-                &cte_name,
+            return finish_cte(
+                cte_name,
+                columns_arc,
                 &column_vec,
                 &folded_cte_name,
                 &folded_columns,
-                &accumulated,
+                accumulated,
             );
-            let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
-            register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
-            return Ok(CteDef {
-                name: cte_name,
-                columns: columns_arc,
-                rows: Arc::from(accumulated),
-                table_def: Some(table_def),
-            });
         }
     }
 
-    let mut working_set = accumulated.clone();
+    // Frontier of "rows discovered in the previous iteration" — what the
+    // recursive arm sees as the working table. Initial frontier is the
+    // (deduplicated) anchor result.
+    let mut frontier: Range<usize> = 0..accumulated.len();
 
     for iter in 0..RECURSIVE_CTE_ITERATION_LIMIT {
-        if working_set.is_empty() {
-            let table_def = synth_table_def_with_folded(
-                &cte_name,
+        if frontier.is_empty() {
+            return finish_cte(
+                cte_name,
+                columns_arc,
                 &column_vec,
                 &folded_cte_name,
                 &folded_columns,
-                &accumulated,
+                accumulated,
             );
-            let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
-            register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
-            return Ok(CteDef {
-                name: cte_name,
-                columns: columns_arc,
-                rows: Arc::from(accumulated),
-                table_def: Some(table_def),
-            });
         }
 
+        // Materialize the frontier slice into the registry. We still
+        // need an owned Vec here because the registry stores
+        // `Arc<Vec<Vec<SqlValue>>>` and we can't keep a borrow live
+        // across the recursive run_query call. This is bounded by
+        // |frontier|, not |accumulated| — the prior code cloned both.
+        let frontier_rows: Vec<Vec<SqlValue>> = accumulated[frontier.clone()].to_vec();
         let working_table = synth_table_def_with_folded(
             &cte_name,
             &column_vec,
             &folded_cte_name,
             &folded_columns,
-            &working_set,
+            &frontier_rows,
         );
-        let working_rows: Arc<Vec<Vec<SqlValue>>> = Arc::new(working_set.clone());
+        let working_rows: Arc<Vec<Vec<SqlValue>>> = Arc::new(frontier_rows);
         register_cte_rows(working_table.relation_id, Arc::clone(&working_rows));
         let mut scope = HashMap::new();
         scope.insert(
@@ -163,7 +183,7 @@ pub(super) fn materialize_cte(
             CteDef {
                 name: Arc::clone(&cte_name),
                 columns: Arc::clone(&columns_arc),
-                rows: Arc::from(working_set.clone()),
+                rows: Arc::from(working_rows.as_slice().to_vec()),
                 table_def: Some(Arc::clone(&working_table)),
             },
         );
@@ -182,61 +202,47 @@ pub(super) fn materialize_cte(
 
         let (new_rows, _) = recursive_result?;
 
-        let next_working: Vec<Vec<SqlValue>> = if union_all {
-            new_rows
+        let frontier_start = accumulated.len();
+        if union_all {
+            accumulated.extend(new_rows);
         } else {
-            new_rows
-                .into_iter()
-                .filter(|row| !row_in(&accumulated, row))
-                .collect::<Vec<_>>()
-        };
+            for row in new_rows {
+                let key = encode_row_into(&row, &mut encode_buf);
+                // Probe by reference first (no allocation on hit); only
+                // copy into the arena on insert.
+                if !dedup.contains(key) {
+                    let slot: &[u8] = arena.alloc_slice_copy(key);
+                    dedup.insert(slot);
+                    accumulated.push(row);
+                }
+            }
+        }
 
-        if next_working.is_empty() {
-            let table_def = synth_table_def_with_folded(
-                &cte_name,
+        if accumulated.len() == frontier_start {
+            return finish_cte(
+                cte_name,
+                columns_arc,
                 &column_vec,
                 &folded_cte_name,
                 &folded_columns,
-                &accumulated,
+                accumulated,
             );
-            let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
-            register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
-            return Ok(CteDef {
-                name: cte_name,
-                columns: columns_arc,
-                rows: Arc::from(accumulated),
-                table_def: Some(table_def),
-            });
         }
 
-        let next_working = if union_all {
-            next_working
-        } else {
-            dedup_rows(next_working)
-        };
-
-        accumulated.extend(next_working.iter().cloned());
-        working_set = next_working;
+        frontier = frontier_start..accumulated.len();
 
         // WS-A7: stop once accumulated rows satisfy the outer LIMIT.
         if let Some(cap) = row_cap {
             if accumulated.len() >= cap {
                 accumulated.truncate(cap);
-                let table_def = synth_table_def_with_folded(
-                    &cte_name,
+                return finish_cte(
+                    cte_name,
+                    columns_arc,
                     &column_vec,
                     &folded_cte_name,
                     &folded_columns,
-                    &accumulated,
+                    accumulated,
                 );
-                let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
-                register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
-                return Ok(CteDef {
-                    name: cte_name,
-                    columns: columns_arc,
-                    rows: Arc::from(accumulated),
-                    table_def: Some(table_def),
-                });
             }
         }
 
@@ -246,11 +252,86 @@ pub(super) fn materialize_cte(
             )));
         }
     }
-    let table_def = synth_table_def_with_folded(
-        &cte_name,
+    finish_cte(
+        cte_name,
+        columns_arc,
         &column_vec,
         &folded_cte_name,
         &folded_columns,
+        accumulated,
+    )
+}
+
+/// Encode one row into `encode_buf` and return a slice borrow.
+/// `encode_record` clears `encode_buf` itself so the same buffer can
+/// be reused across all rows in the loop.
+fn encode_row_into<'buf>(row: &[SqlValue], encode_buf: &'buf mut Vec<u8>) -> &'buf [u8] {
+    let mut refs = ValueRefStack::new();
+    for v in row {
+        refs.push(v.as_ref());
+    }
+    encode_record(refs.as_slice(), encode_buf)
+        .expect("encode_record on owned SqlValue cannot fail");
+    encode_buf.as_slice()
+}
+
+/// Inline-stack helper for `ValueRef` collections during row encoding.
+/// Avoids allocating a fresh `Vec` per row for the common case of
+/// <= 16 columns; falls back to heap for wider rows.
+struct ValueRefStack<'a> {
+    inline: [ValueRef<'a>; 16],
+    len: usize,
+    spill: Option<Vec<ValueRef<'a>>>,
+}
+
+impl<'a> ValueRefStack<'a> {
+    #[inline]
+    fn new() -> Self {
+        Self {
+            inline: [ValueRef::Null; 16],
+            len: 0,
+            spill: None,
+        }
+    }
+
+    #[inline]
+    fn push(&mut self, v: ValueRef<'a>) {
+        if let Some(spill) = self.spill.as_mut() {
+            spill.push(v);
+        } else if self.len < self.inline.len() {
+            self.inline[self.len] = v;
+            self.len += 1;
+        } else {
+            let mut spill = Vec::with_capacity(self.len * 2);
+            spill.extend_from_slice(&self.inline[..self.len]);
+            spill.push(v);
+            self.spill = Some(spill);
+        }
+    }
+
+    #[inline]
+    fn as_slice(&self) -> &[ValueRef<'a>] {
+        if let Some(spill) = self.spill.as_ref() {
+            spill.as_slice()
+        } else {
+            &self.inline[..self.len]
+        }
+    }
+}
+
+fn finish_cte(
+    cte_name: Arc<str>,
+    columns_arc: Arc<[String]>,
+    column_vec: &[String],
+    folded_cte_name: &str,
+    folded_columns: &[String],
+    accumulated: Vec<Vec<SqlValue>>,
+) -> Result<CteDef> {
+    let table_def = synth_table_def_with_folded(
+        &cte_name,
+        column_vec,
+        folded_cte_name,
+        folded_columns,
         &accumulated,
     );
     let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(accumulated.clone());
@@ -394,27 +475,4 @@ fn expr_uses_name(expr: &Expr, name: &str) -> bool {
         },
         _ => false,
     }
-}
-
-pub(super) fn dedup_rows(rows: Vec<Vec<SqlValue>>) -> Vec<Vec<SqlValue>> {
-    let mut seen: Vec<Vec<SqlValue>> = Vec::with_capacity(rows.len());
-    for row in rows {
-        if !row_in(&seen, &row) {
-            seen.push(row);
-        }
-    }
-    seen
-}
-
-fn row_in(rows: &[Vec<SqlValue>], probe: &[SqlValue]) -> bool {
-    rows.iter().any(|row| rows_equal(row, probe))
-}
-
-fn rows_equal(left: &[SqlValue], right: &[SqlValue]) -> bool {
-    if left.len() != right.len() {
-        return false;
-    }
-    left.iter()
-        .zip(right.iter())
-        .all(|(a, b)| crate::value::compare_values(a, b) == std::cmp::Ordering::Equal)
 }

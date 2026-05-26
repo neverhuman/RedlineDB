@@ -526,6 +526,17 @@ pub struct UpdatePlan {
     pub assignments: Vec<(usize, DmlValue)>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
+    /// Phase 5 WS-A2f: optional `ORDER BY` keys to deterministically pick
+    /// which rows participate when `limit` is set. sqlparser 0.61 does NOT
+    /// parse `UPDATE ... ORDER BY` in SQLite dialect, so this stays empty
+    /// today; populated only if a future parser pre-rewrite teaches it.
+    pub order_by: Vec<OrderByExpr>,
+    /// Phase 5 WS-A2f: optional `LIMIT n`. When `Some`, at most `n` rows
+    /// are updated (after applying `order_by` and `offset`).
+    pub limit: Option<Expr>,
+    /// Phase 5 WS-A2f: optional `OFFSET n`. sqlparser does not emit OFFSET
+    /// for UPDATE; kept for symmetry with `DeletePlan`.
+    pub offset: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -533,6 +544,14 @@ pub struct DeletePlan {
     pub table: Arc<TableDef>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
+    /// Phase 5 WS-A2f: optional `ORDER BY` keys. Empty when DELETE has no
+    /// ORDER BY clause; existing fast paths remain unchanged in that case.
+    pub order_by: Vec<OrderByExpr>,
+    /// Phase 5 WS-A2f: optional `LIMIT n`.
+    pub limit: Option<Expr>,
+    /// Phase 5 WS-A2f: optional `OFFSET n`. sqlparser 0.61 does not parse
+    /// OFFSET on DELETE; reserved for a future parser pre-rewrite.
+    pub offset: Option<Expr>,
 }
 
 /// Track K — Lowered plan for SQL:2003 `MERGE INTO target USING source ON ...`.

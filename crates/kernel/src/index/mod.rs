@@ -16,6 +16,7 @@ use crate::{Error, Result};
 
 mod cells;
 mod cursor;
+pub mod keycmp;
 mod latches;
 mod locks;
 mod lookup;
@@ -25,10 +26,12 @@ mod policy;
 mod scan;
 
 use cells::{Entry, InternalCell, LeafCell, LeafEntry};
+pub use keycmp::cmp_keys;
 use latches::PageLatchTable;
 
 pub use cursor::{
-    CursorYield, IndexCursor, KeyRange, RawIndexCursor, RawPointCursor, SnapshotView,
+    CursorYield, Direction, IndexCursor, IndexScanScratch, KeyRange, RawIndexCursor,
+    RawPointCursor, SnapshotView,
 };
 pub use locks::{UniqueKeyGuard, UniqueKeyLockTable, poly_hash_u64};
 
@@ -433,6 +436,39 @@ impl BtreeIndex {
             .find_leaf_path(page_id, key)?
             .last()
             .ok_or(Error::CorruptPage("empty search path"))?)
+    }
+
+    /// Phase 5 WS-A2c: descend to the right-most leaf of the tree by
+    /// always picking the last internal child at every level. Used by
+    /// the reverse cursor when the caller's range has an unbounded end
+    /// so there is no key to `find_leaf` on.
+    pub(super) fn find_rightmost_leaf(&self, root_page_id: PageId) -> Result<PageId> {
+        let mut page_id = root_page_id;
+        loop {
+            let latch = self.inner.latches.get(page_id);
+            let _page_read = latch.read();
+            let guard = self.inner.buffer.pin(page_id)?;
+            let next = guard.with_page(|page| {
+                let header = Self::read_page_header(page)?;
+                if header.kind == PAGE_LEAF_KIND {
+                    return Ok(None);
+                }
+                let mut chosen = header.left;
+                if chosen.is_none() {
+                    return Err(Error::CorruptPage("internal page missing leftmost child"));
+                }
+                for entry in self.read_entries(page)? {
+                    if let Entry::Internal { child, .. } = entry {
+                        chosen = Some(child);
+                    }
+                }
+                Ok(chosen)
+            })?;
+            match next {
+                Some(next_id) if next_id != page_id => page_id = next_id,
+                _ => return Ok(page_id),
+            }
+        }
     }
 
     pub(super) fn find_leaf_path(&self, mut page_id: PageId, key: &[u8]) -> Result<Vec<PageId>> {

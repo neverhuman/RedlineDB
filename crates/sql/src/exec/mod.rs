@@ -58,6 +58,7 @@ pub(crate) mod attach;
 pub(crate) mod cross_db;
 pub(crate) mod cte;
 pub(crate) mod fk;
+pub(crate) mod hot_row;
 pub(crate) mod json_tv;
 // Track K — SQL:2003 MERGE dispatch.
 pub(crate) mod merge;
@@ -71,6 +72,14 @@ pub(crate) mod window;
 thread_local! {
     static CURRENT_CONNECTION: Cell<*const Connection> = const { Cell::new(std::ptr::null()) };
     static CURRENT_TX: Cell<*mut Txn> = const { Cell::new(std::ptr::null_mut()) };
+    /// WS-C7: per-statement Rayon pool slot. Embedders install the active
+    /// `Database`'s pool via [`with_current_rayon_pool`] before stepping a
+    /// statement; intra-query parallel operators (parallel sort, parallel
+    /// hash-agg, parallel scan) read it via [`current_rayon_pool`] and call
+    /// `pool.install(|| ...)` to confine work to the dedicated pool. `None`
+    /// means no pool was installed — operators must take the serial path.
+    static CURRENT_RAYON_POOL: std::cell::RefCell<Option<Arc<rayon::ThreadPool>>> =
+        const { std::cell::RefCell::new(None) };
     /// Lane A5-triggers: pointer to the currently-locked SessionState.
     /// Set by [`with_write_tx`] inside `with_session`, cleared on exit.
     /// Re-entrant calls (e.g. trigger body fires) can borrow it directly
@@ -202,6 +211,30 @@ pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> 
         cell.set(prev);
         result
     })
+}
+
+/// Install `pool` as the per-thread Rayon pool for the duration of `f`.
+/// Restores the prior pool on exit so nested calls behave like a stack.
+/// Pass `None` to clear the slot for the scope.
+#[allow(dead_code)]
+pub(crate) fn with_current_rayon_pool<T>(
+    pool: Option<Arc<rayon::ThreadPool>>,
+    f: impl FnOnce() -> T,
+) -> T {
+    let prev = CURRENT_RAYON_POOL.with(|cell| std::mem::replace(&mut *cell.borrow_mut(), pool));
+    let result = f();
+    CURRENT_RAYON_POOL.with(|cell| {
+        *cell.borrow_mut() = prev;
+    });
+    result
+}
+
+/// Snapshot the currently-installed per-database Rayon pool, if any. Returns
+/// `None` when no pool has been installed for this thread — operators must
+/// fall back to their serial path.
+#[allow(dead_code)]
+pub(crate) fn current_rayon_pool() -> Option<Arc<rayon::ThreadPool>> {
+    CURRENT_RAYON_POOL.with(|cell| cell.borrow().as_ref().map(Arc::clone))
 }
 
 pub(crate) fn current_connection() -> Option<&'static Connection> {

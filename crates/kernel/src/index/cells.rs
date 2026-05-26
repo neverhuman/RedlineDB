@@ -47,7 +47,7 @@ impl Entry {
                 Entry::Leaf {
                     physical: right, ..
                 },
-            ) => left.cmp(right),
+            ) => crate::index::keycmp::cmp_keys(left, right),
             (
                 Entry::Internal {
                     separator: left, ..

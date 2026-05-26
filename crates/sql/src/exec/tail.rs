@@ -14,6 +14,70 @@ pub(crate) use stats::*;
 
 use super::*;
 
+/// Phase 5 WS-A2f: shared candidate-row reducer for DML with ORDER BY /
+/// LIMIT / OFFSET. Applies the WHERE predicate, sorts by the ORDER BY
+/// keys (NULLs ordered the same way SELECT does — see [`vec::SortDirection`]),
+/// and takes the requested window. When `order_by` is empty and `limit`
+/// is `None` the original `rows` are returned unchanged so the legacy
+/// fast paths are preserved bit-for-bit.
+pub(crate) fn restrict_dml_rows(
+    rows: Vec<TableRow>,
+    selection: &Option<Expr>,
+    order_by: &[OrderByExpr],
+    limit: Option<&Expr>,
+    offset: Option<&Expr>,
+    bindings: &[Option<SqlValue>],
+) -> Result<Vec<TableRow>> {
+    if order_by.is_empty() && limit.is_none() && offset.is_none() {
+        return Ok(rows);
+    }
+    let mut filtered: Vec<TableRow> = Vec::with_capacity(rows.len());
+    for row in rows {
+        if selection_passes(selection, &SqlRow::Table(row.clone()), bindings)? {
+            filtered.push(row);
+        }
+    }
+    if !order_by.is_empty() {
+        let directions: Vec<crate::exec::vec::SortDirection> = order_by
+            .iter()
+            .map(|order| {
+                crate::exec::vec::SortDirection::from_order_options(
+                    matches!(order.options.asc, Some(false)),
+                    order.options.nulls_first,
+                )
+            })
+            .collect();
+        let mut keyed: Vec<(Vec<SqlValue>, TableRow)> = Vec::with_capacity(filtered.len());
+        for row in filtered {
+            let row_ctx = SqlRow::Table(row.clone());
+            let mut keys = Vec::with_capacity(order_by.len());
+            for order in order_by {
+                keys.push(eval_scalar(&order.expr, &row_ctx.context(), bindings)?);
+            }
+            keyed.push((keys, row));
+        }
+        keyed.sort_by(|a, b| {
+            for (idx, dir) in directions.iter().enumerate() {
+                let cmp = dir.compare_values(&a.0[idx], &b.0[idx]);
+                if cmp != std::cmp::Ordering::Equal {
+                    return cmp;
+                }
+            }
+            std::cmp::Ordering::Equal
+        });
+        filtered = keyed.into_iter().map(|(_, row)| row).collect();
+    }
+    let offset_n = match offset {
+        Some(expr) => scalar_to_usize(&eval_scalar(expr, &RowContext::Empty, bindings)?)?,
+        None => 0,
+    };
+    let limit_n = match limit {
+        Some(expr) => scalar_to_usize(&eval_scalar(expr, &RowContext::Empty, bindings)?)?,
+        None => usize::MAX,
+    };
+    Ok(filtered.into_iter().skip(offset_n).take(limit_n).collect())
+}
+
 pub(crate) fn execute_update(
     conn: &Connection,
     plan: &crate::statement::UpdatePlan,
@@ -30,16 +94,74 @@ pub(crate) fn execute_update(
             ));
         }
     }
+    // Phase 5 WS-A6 fast path: pre-classify the SET clause so we can
+    // skip the per-row `eval_scalar` walk when every assignment is a
+    // pure literal/binding replacement or an integer-delta of the
+    // assigned column. Structural eligibility (no RETURNING, no
+    // generated cols, no FK/CHECK, no indexed write column, no rowid
+    // alias move) is checked separately; trigger lookup needs the
+    // schema snapshot so it happens inside `with_write_tx` below.
+    //
+    // Phase 5 WS-A2f: also disable the fast path when ORDER BY / LIMIT /
+    // OFFSET are present — the SQLite contract requires evaluating the
+    // ORDER BY against the pre-image and applying writes only to the
+    // selected window. The fast path skips that step.
+    let order_or_limit =
+        !plan.order_by.is_empty() || plan.limit.is_some() || plan.offset.is_some();
+    let fast_plans = if !order_or_limit && crate::exec::hot_row::structurally_eligible(plan) {
+        match crate::exec::hot_row::classify_assignments(plan, bindings)? {
+            crate::exec::hot_row::ClassifyResult::Supported(plans) => Some(plans),
+            crate::exec::hot_row::ClassifyResult::Unsupported => None,
+        }
+    } else {
+        None
+    };
     with_write_tx(conn, |session, tx| {
-        let target_rowids =
-            if let Some(rowid) = selection_rowid_eq(&plan.table, &plan.selection, bindings)? {
-                vec![rowid]
-            } else {
-                dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?
-                    .into_iter()
-                    .map(|row| row.rowid)
-                    .collect()
-            };
+        let target_rowids = if order_or_limit {
+            // ORDER BY / LIMIT mode: scan + WHERE + sort + window, then
+            // hand off rowids to the per-row writer loop below.
+            let rows = dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?;
+            restrict_dml_rows(
+                rows,
+                &plan.selection,
+                &plan.order_by,
+                plan.limit.as_ref(),
+                plan.offset.as_ref(),
+                bindings,
+            )?
+            .into_iter()
+            .map(|row| row.rowid)
+            .collect()
+        } else if let Some(rowid) = selection_rowid_eq(&plan.table, &plan.selection, bindings)? {
+            vec![rowid]
+        } else {
+            dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?
+                .into_iter()
+                .map(|row| row.rowid)
+                .collect()
+        };
+        // Final trigger check: only safe to fast-path when no
+        // BEFORE/AFTER UPDATE triggers are attached to the table.
+        let fast_plans = fast_plans.as_deref().filter(|_| {
+            use redlinedb_kernel::catalog::{TriggerEventKind, TriggerTimeKind, triggers_for};
+            let schema = conn.engine().schema_snapshot();
+            triggers_for(
+                &schema,
+                plan.table.schema_id,
+                &plan.table.folded,
+                TriggerEventKind::Update,
+                TriggerTimeKind::Before,
+            )
+            .is_empty()
+                && triggers_for(
+                    &schema,
+                    plan.table.schema_id,
+                    &plan.table.folded,
+                    TriggerEventKind::Update,
+                    TriggerTimeKind::After,
+                )
+                .is_empty()
+        });
         let mut count = 0usize;
         let mut returning_rows = Vec::new();
         for rowid in target_rowids {
@@ -58,19 +180,43 @@ pub(crate) fn execute_update(
             }
             let old_values = fresh.values.clone();
             let mut values = fresh.values.clone();
-            let mut scratch = EvalScratch::default();
-            for (ordinal, expr) in &plan.assignments {
-                if *ordinal >= values.len() {
-                    return Err(Error::UnknownColumn(format!("ordinal {ordinal}")));
+            if let Some(plans) = fast_plans {
+                // WS-A6 fast path: every assignment is a Replacement or
+                // IntegerDelta. Apply directly without AST eval. On any
+                // runtime mismatch (e.g. delta on Text), fall back per
+                // row to the slow path so semantics remain identical.
+                if crate::exec::hot_row::apply_plans(plans, &mut values).is_err() {
+                    values = fresh.values.clone();
+                    let mut scratch = EvalScratch::default();
+                    for (ordinal, expr) in &plan.assignments {
+                        if *ordinal >= values.len() {
+                            return Err(Error::UnknownColumn(format!("ordinal {ordinal}")));
+                        }
+                        values[*ordinal] = evaluate_dml_value(
+                            &plan.table,
+                            *ordinal,
+                            expr,
+                            &RowContext::Table(&fresh),
+                            bindings,
+                            &mut scratch,
+                        )?;
+                    }
                 }
-                values[*ordinal] = evaluate_dml_value(
-                    &plan.table,
-                    *ordinal,
-                    expr,
-                    &RowContext::Table(&fresh),
-                    bindings,
-                    &mut scratch,
-                )?;
+            } else {
+                let mut scratch = EvalScratch::default();
+                for (ordinal, expr) in &plan.assignments {
+                    if *ordinal >= values.len() {
+                        return Err(Error::UnknownColumn(format!("ordinal {ordinal}")));
+                    }
+                    values[*ordinal] = evaluate_dml_value(
+                        &plan.table,
+                        *ordinal,
+                        expr,
+                        &RowContext::Table(&fresh),
+                        bindings,
+                        &mut scratch,
+                    )?;
+                }
             }
             values = apply_row_affinity(&plan.table, values)?;
             // Phase-11 SQL-D A6: an UPDATE may have touched an input to
@@ -297,10 +443,27 @@ pub(crate) fn execute_delete(
     }
     with_write_tx(conn, |session, tx| {
         let rows = dml_target_rows(conn, tx, &plan.table, &plan.selection, bindings)?;
+        // Phase 5 WS-A2f: when ORDER BY / LIMIT / OFFSET are present we
+        // pre-filter via WHERE, sort by the ORDER BY keys, then take the
+        // requested window. Naive scan+sort — performance is correct but
+        // not optimal; routing through index ordered-limit is a follow-up.
+        let rows = restrict_dml_rows(
+            rows,
+            &plan.selection,
+            &plan.order_by,
+            plan.limit.as_ref(),
+            plan.offset.as_ref(),
+            bindings,
+        )?;
         let mut count = 0usize;
         let mut returning_rows = Vec::new();
+        let order_or_limit = !plan.order_by.is_empty() || plan.limit.is_some();
         for row in rows {
-            if !selection_passes(&plan.selection, &SqlRow::Table(row.clone()), bindings)? {
+            // Already filtered above when ORDER BY / LIMIT is set; in the
+            // legacy path keep the per-row selection check for parity.
+            if !order_or_limit
+                && !selection_passes(&plan.selection, &SqlRow::Table(row.clone()), bindings)?
+            {
                 continue;
             }
             if let Some(returning) = &plan.returning {

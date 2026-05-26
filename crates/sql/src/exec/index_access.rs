@@ -36,6 +36,7 @@ use super::index_batch::{
     execute_index_count_range as batch_count_range,
     execute_index_covering_range as batch_covering_range,
     execute_index_range_scan_ordered as batch_range_ordered,
+    execute_index_range_scan_ordered_desc as batch_range_ordered_desc,
     execute_index_range_scan_streaming as batch_range_streaming,
 };
 use super::policy::{ActiveExecBatchPolicy, ExecBatchPolicy};
@@ -504,6 +505,35 @@ pub(crate) fn execute_index_probe_with_limit(
         },
         IndexProbe::Range { start, end } => match limit {
             Some(n) => batch_range_ordered(engine, tx, table, index, start, end, n),
+            None => execute_index_range_scan_streaming(engine, tx, table, index, start, end, limit),
+        },
+    }
+}
+
+/// Phase 5 WS-A2c: DESC variant of [`execute_index_probe_with_limit`].
+/// Used when the caller knows the cursor's leading key direction aligns
+/// with `ORDER BY ... DESC`; the index leaf chain is walked right-to-left
+/// so the result is index-ordered descending with the same early-stop
+/// guarantee the forward path enjoys. Point probes are treated the same
+/// as forward (the result is at most one row).
+pub(crate) fn execute_index_probe_with_limit_desc(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    index: &IndexDef,
+    probe: &IndexProbe,
+    limit: Option<usize>,
+) -> Result<Vec<RowId>> {
+    match probe {
+        IndexProbe::Point { key } => match limit {
+            Some(n) => {
+                let end = next_key(key);
+                batch_range_ordered_desc(engine, tx, table, index, key, &end, n)
+            }
+            None => execute_index_point_lookup(engine, tx, table, index, key),
+        },
+        IndexProbe::Range { start, end } => match limit {
+            Some(n) => batch_range_ordered_desc(engine, tx, table, index, start, end, n),
             None => execute_index_range_scan_streaming(engine, tx, table, index, start, end, limit),
         },
     }

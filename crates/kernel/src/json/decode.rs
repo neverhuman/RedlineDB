@@ -22,7 +22,7 @@ pub fn decode(bytes: &[u8]) -> Result<Value> {
     Ok(value)
 }
 
-pub(crate) fn decode_node(buf: &[u8], offset: usize) -> Result<(Value, usize)> {
+pub fn decode_node(buf: &[u8], offset: usize) -> Result<(Value, usize)> {
     let t = read_tag(buf, offset)?;
     match t {
         tag::NULL => Ok((Value::Null, 1)),

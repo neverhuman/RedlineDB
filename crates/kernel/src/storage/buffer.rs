@@ -5,9 +5,11 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crossbeam_queue::ArrayQueue;
+use crossbeam_utils::CachePadded;
 
 use crate::format::{Lsn, Page, PageId, PageKind, RelId};
 use crate::storage::PageFile;
+use crate::storage::numa;
 use crate::storage::policy::{ActiveBufferPolicy, BufferPolicy};
 use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
@@ -57,7 +59,8 @@ struct Inner {
     capacity: usize,
     shards: Vec<Mutex<HashMap<PageId, Arc<FrameEntry>>>>,
     next_page_id: AtomicU64,
-    resident: AtomicUsize,
+    // Phase 5 WS-B5: avoid false-sharing with adjacent counters.
+    resident: CachePadded<AtomicUsize>,
     clock_hand: AtomicUsize,
     eviction: Mutex<()>,
     stats: BufferPoolStatsInner,
@@ -72,12 +75,13 @@ pub struct BufferPoolStats {
     pub checkpoint_flushes: u64,
 }
 
+// Phase 5 WS-B5: avoid false-sharing with adjacent counters.
 #[derive(Debug, Default)]
 struct BufferPoolStatsInner {
-    reads: AtomicU64,
-    writes: AtomicU64,
-    evictions: AtomicU64,
-    checkpoint_flushes: AtomicU64,
+    reads: CachePadded<AtomicU64>,
+    writes: CachePadded<AtomicU64>,
+    evictions: CachePadded<AtomicU64>,
+    checkpoint_flushes: CachePadded<AtomicU64>,
 }
 
 #[derive(Debug)]
@@ -116,7 +120,18 @@ impl BufferPool {
         let parallelism = thread::available_parallelism()
             .map(|value| value.get())
             .unwrap_or(4);
-        let shard_count = capacity.min((parallelism * 4).max(16)).max(1);
+        let base_shard_count = capacity.min((parallelism * 4).max(16)).max(1);
+        // Phase 5 WS-B6: with `--features numa` round the shard count up
+        // to a multiple of the host's NUMA node count so each node owns
+        // a disjoint slab of shards (`shard_idx % nodes == node_id`).
+        // Without the feature `numa_node_count()` returns 1 and the
+        // round-up is a no-op, so the off-feature build keeps the
+        // pre-B6 shard layout byte-identical.
+        let nodes = numa::numa_node_count().max(1);
+        let shard_count = base_shard_count
+            .div_ceil(nodes)
+            .saturating_mul(nodes)
+            .max(1);
         let mut shards = Vec::with_capacity(shard_count);
         for _ in 0..shard_count {
             shards.push(Mutex::new(HashMap::new()));
@@ -127,7 +142,7 @@ impl BufferPool {
             capacity,
             shards,
             next_page_id: AtomicU64::new(next_page_id),
-            resident: AtomicUsize::new(0),
+            resident: CachePadded::new(AtomicUsize::new(0)),
             clock_hand: AtomicUsize::new(0),
             eviction: Mutex::new(()),
             stats: BufferPoolStatsInner::default(),

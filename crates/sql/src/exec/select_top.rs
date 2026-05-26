@@ -1155,7 +1155,7 @@ fn covering_projection_for_index(
 /// Strip `equality_prefix_len` leading key positions; then ORDER BY
 /// columns must align one-for-one with the next unpinned key positions.
 /// Empty ORDER BY is always satisfied. DESC ORDER BY currently disqual-
-/// ifies (kernel cursor walks left-to-right only).
+/// ifies (caller routes DESC through `order_reverse_satisfied_by_index`).
 fn order_satisfied_by_index_with_prefix(
     matched: &index_access::IndexAccessMatch,
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
@@ -1174,6 +1174,47 @@ fn order_satisfied_by_index_with_prefix(
     }
     for (item, key) in order_by.iter().zip(remaining.iter()) {
         if matches!(item.options.asc, Some(false)) {
+            return false;
+        }
+        let Expr::Identifier(ident) = &item.expr else {
+            return false;
+        };
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = key.source else {
+            return false;
+        };
+        let Some(col) = table.columns.get(attnum as usize) else {
+            return false;
+        };
+        if !col.folded.as_ref().eq_ignore_ascii_case(&ident.value) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Phase 5 WS-A2c: reverse-walk variant of
+/// `order_satisfied_by_index_with_prefix`. Returns true iff every ORDER
+/// BY item is `DESC` and otherwise aligns with the equality-prefix-shifted
+/// key positions. ASC items disqualify (the caller routes those through
+/// the forward-walk check instead).
+fn order_reverse_satisfied_by_index(
+    matched: &index_access::IndexAccessMatch,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    order_by: &[OrderByExpr],
+) -> bool {
+    if order_by.is_empty() {
+        return false;
+    }
+    let remaining = matched
+        .index
+        .keys
+        .get(matched.equality_prefix_len..)
+        .unwrap_or(&[]);
+    if order_by.len() > remaining.len() {
+        return false;
+    }
+    for (item, key) in order_by.iter().zip(remaining.iter()) {
+        if !matches!(item.options.asc, Some(false)) {
             return false;
         }
         let Expr::Identifier(ident) = &item.expr else {
@@ -1262,21 +1303,35 @@ fn try_ordered_index_limit_path(
     if !matches!(matched.probe, index_access::IndexProbe::Range { .. }) {
         return Ok(None);
     }
-    if !order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by) {
+    let order_asc = order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by);
+    let order_desc = !order_asc
+        && order_reverse_satisfied_by_index(&matched, table, &plan.order_by);
+    if !order_asc && !order_desc {
         return Ok(None);
     }
     if index_access::open_handle(conn.engine(), &matched.index).is_none() {
         return Ok(None);
     }
     let take = limit.saturating_add(offset);
-    let rowids = index_access::execute_index_probe_with_limit(
-        conn.engine(),
-        tx,
-        table,
-        &matched.index,
-        &matched.probe,
-        Some(take),
-    )?;
+    let rowids = if order_desc {
+        index_access::execute_index_probe_with_limit_desc(
+            conn.engine(),
+            tx,
+            table,
+            &matched.index,
+            &matched.probe,
+            Some(take),
+        )?
+    } else {
+        index_access::execute_index_probe_with_limit(
+            conn.engine(),
+            tx,
+            table,
+            &matched.index,
+            &matched.probe,
+            Some(take),
+        )?
+    };
     Ok(Some(rowids))
 }
 

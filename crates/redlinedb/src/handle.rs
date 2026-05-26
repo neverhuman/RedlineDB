@@ -268,6 +268,34 @@ impl Database {
     pub fn path(&self) -> &Path {
         &self.inner.path
     }
+
+    /// Number of threads in this database's dedicated Rayon pool. Returns
+    /// `0` when the pool is disabled (`OpenOptions::rayon_threads =
+    /// Some(0|1)`). Exposed for tests and capacity-planning tools.
+    pub fn rayon_thread_count(&self) -> usize {
+        self.inner
+            .rayon_pool
+            .as_ref()
+            .map(|pool| pool.current_num_threads())
+            .unwrap_or(0)
+    }
+
+    /// Internal accessor for the database's Rayon pool. `None` when the
+    /// pool is disabled. Future intra-query parallel operators will call
+    /// `pool.install(|| ...)` instead of polluting the global Rayon pool.
+    #[allow(dead_code)]
+    pub(crate) fn rayon_pool(&self) -> Option<Arc<rayon::ThreadPool>> {
+        self.inner.rayon_pool.as_ref().map(Arc::clone)
+    }
+
+    /// WS-C9: configured buffer pool capacity, in pages. Mainly exposed
+    /// for tests / capacity-planning tools that need to assert the
+    /// `lean_ephemeral` flavor was honoured. Default opens see the value
+    /// derived from `memory.cache_bytes`; lean opens see
+    /// `LEAN_BUFFER_POOL_PAGES`.
+    pub fn buffer_pool_pages(&self) -> usize {
+        self.inner.db.engine_config().buffer_pool_pages
+    }
 }
 
 fn volatile_open_options(mut options: OpenOptions) -> OpenOptions {
@@ -291,7 +319,13 @@ impl Clone for Database {
 pub(crate) fn sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
     let mut db = redlinedb_sql::DbOptions::default();
     let page_size = db.engine.page_size.max(1);
-    let buffer_pages = (options.memory.cache_bytes / page_size).max(16);
+    // WS-C9: lean mode forces a 1 MB pool regardless of `cache_bytes`.
+    // Long-lived databases keep the user's `cache_bytes` calculation.
+    let buffer_pages = if options.lean_ephemeral {
+        crate::options::LEAN_BUFFER_POOL_PAGES
+    } else {
+        (options.memory.cache_bytes / page_size).max(16)
+    };
     db.engine.buffer_pool_pages = buffer_pages;
     db.engine.busy_timeout = options.busy_timeout;
     db.engine.commit_durability = match options.durability {
@@ -308,7 +342,13 @@ pub(crate) fn sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
     db.query_memory.work_mem_bytes = options.query_memory.work_mem_bytes;
     db.query_memory.max_spill_bytes = options.query_memory.max_spill_bytes;
     db.query_memory.batch_rows = options.query_memory.batch_rows;
-    db.statement_cache_capacity = options.statement_cache_capacity;
+    // WS-C9: lean mode caps the statement cache so short-lived sessions
+    // do not retain dozens of prepared statements they will never replay.
+    db.statement_cache_capacity = if options.lean_ephemeral {
+        crate::options::LEAN_STATEMENT_CACHE_CAPACITY
+    } else {
+        options.statement_cache_capacity
+    };
     db.temp_dir = options.temp_dir.clone();
     db.stats.exact_analyze_row_threshold = options.stats.exact_analyze_row_threshold;
     db.stats.sample_rows = options.stats.sample_rows;

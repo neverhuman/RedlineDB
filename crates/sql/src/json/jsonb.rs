@@ -1033,9 +1033,7 @@ fn parse_jsonpath(s: &str) -> Result<ParsedJsonPath> {
                 continue;
             }
             let start = i;
-            while i < bytes.len() && bytes[i] != b']' {
-                i += 1;
-            }
+            i = simd_tokenize::find_byte(bytes, i, b']').unwrap_or(bytes.len());
             if i >= bytes.len() {
                 return Err(Error::Parse("unterminated `[` in JSONPath".into()));
             }
@@ -1046,7 +1044,7 @@ fn parse_jsonpath(s: &str) -> Result<ParsedJsonPath> {
                 .map_err(|_| Error::Parse(format!("bad JSONPath index `{inner}`")))?;
             steps.push(JsonPathStep::Index(idx));
         } else if b.is_ascii_whitespace() {
-            i += 1;
+            i = simd_tokenize::find_first_non_whitespace(bytes, i);
         } else {
             // Unrecognised tail — stop here so predicate splitting can
             // pick up the rest (`$.a > 3` etc.).
@@ -1103,6 +1101,274 @@ fn eval_jsonpath_steps(current: &Value, steps: &[JsonPathStep], idx: usize, out:
             }
             _ => {}
         },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SIMD tokenize helpers (WS-B3b)
+// ---------------------------------------------------------------------------
+
+/// AVX2-accelerated byte scanners for JSON / JSONPath tokenisation.
+///
+/// These helpers replicate the inner loops `simd-json` uses to skip
+/// whitespace and locate structural bytes. RedlineDB currently delegates
+/// JSON body parsing to `serde_json`, so the helpers are wired into the
+/// JSONPath tokenizer above; the [`find_next_structural`] entry point is
+/// retained for future custom tokenisers that scan raw JSON text directly
+/// (planned follow-up to the simd-json structural-character indexer).
+///
+/// All public helpers fall back to a tight scalar loop on non-x86 hosts
+/// or when AVX2 is not present at runtime; the differential test in
+/// `crates/sql/tests/ws_b3b_simd_json_tokenize.rs` proves that the SIMD
+/// and scalar paths agree byte-for-byte.
+pub(super) mod simd_tokenize {
+    /// JSON-style whitespace bytes (space, tab, line feed, carriage return).
+    #[inline]
+    const fn is_ws(b: u8) -> bool {
+        matches!(b, b' ' | b'\t' | b'\n' | b'\r')
+    }
+
+    /// JSON structural bytes (`{ } [ ] : , "`).
+    #[inline]
+    const fn is_structural(b: u8) -> bool {
+        matches!(
+            b,
+            b'{' | b'}' | b'[' | b']' | b':' | b',' | b'"'
+        )
+    }
+
+    /// Return the first index `>= start` whose byte is NOT JSON whitespace,
+    /// or `bytes.len()` if the suffix is entirely whitespace.
+    #[inline]
+    pub fn find_first_non_whitespace(bytes: &[u8], start: usize) -> usize {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if std::is_x86_feature_detected!("avx2") {
+                // SAFETY: `is_x86_feature_detected!("avx2")` returned true,
+                // satisfying the `target_feature = "avx2"` precondition of
+                // `find_first_non_whitespace_avx2`.
+                unsafe {
+                    return find_first_non_whitespace_avx2(bytes, start);
+                }
+            }
+        }
+        find_first_non_whitespace_scalar(bytes, start)
+    }
+
+    /// Locate the next JSON structural byte at or after `start`, returning
+    /// `(offset, byte)`. Returns `None` if no structural byte is found.
+    ///
+    /// Currently unused by the live tokenizer (JSONPath has no need for it);
+    /// retained as the building block for a future custom JSON body
+    /// tokeniser modelled on `simd-json`'s structural-character indexer.
+    #[allow(dead_code)]
+    #[inline]
+    pub fn find_next_structural(bytes: &[u8], start: usize) -> Option<(usize, u8)> {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if std::is_x86_feature_detected!("avx2") {
+                // SAFETY: `is_x86_feature_detected!("avx2")` returned true,
+                // satisfying the `target_feature = "avx2"` precondition of
+                // `find_next_structural_avx2`.
+                unsafe {
+                    return find_next_structural_avx2(bytes, start);
+                }
+            }
+        }
+        find_next_structural_scalar(bytes, start)
+    }
+
+    /// Locate the first occurrence of `target` at or after `start`.
+    #[inline]
+    pub fn find_byte(bytes: &[u8], start: usize, target: u8) -> Option<usize> {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if std::is_x86_feature_detected!("avx2") {
+                // SAFETY: `is_x86_feature_detected!("avx2")` returned true,
+                // satisfying the `target_feature = "avx2"` precondition of
+                // `find_byte_avx2`.
+                unsafe {
+                    return find_byte_avx2(bytes, start, target);
+                }
+            }
+        }
+        find_byte_scalar(bytes, start, target)
+    }
+
+    // ----- scalar fallbacks (also the reference for the differential test) -----
+
+    #[inline]
+    pub(super) fn find_first_non_whitespace_scalar(bytes: &[u8], start: usize) -> usize {
+        let mut i = start;
+        while i < bytes.len() && is_ws(bytes[i]) {
+            i += 1;
+        }
+        i
+    }
+
+    #[allow(dead_code)] // paired with `find_next_structural` (see doc).
+    #[inline]
+    pub(super) fn find_next_structural_scalar(bytes: &[u8], start: usize) -> Option<(usize, u8)> {
+        let mut i = start;
+        while i < bytes.len() {
+            let b = bytes[i];
+            if is_structural(b) {
+                return Some((i, b));
+            }
+            i += 1;
+        }
+        None
+    }
+
+    #[inline]
+    pub(super) fn find_byte_scalar(bytes: &[u8], start: usize, target: u8) -> Option<usize> {
+        let mut i = start;
+        while i < bytes.len() {
+            if bytes[i] == target {
+                return Some(i);
+            }
+            i += 1;
+        }
+        None
+    }
+
+    // ----- AVX2 implementations -----
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    /// # Safety
+    ///
+    /// The caller must only invoke this on a CPU where AVX2 is available;
+    /// the dispatcher in `find_first_non_whitespace` enforces that with
+    /// `is_x86_feature_detected!("avx2")`.
+    unsafe fn find_first_non_whitespace_avx2(bytes: &[u8], start: usize) -> usize {
+        #[cfg(target_arch = "x86")]
+        use std::arch::x86::*;
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::*;
+
+        const LANES: usize = 32;
+        let len = bytes.len();
+        if start >= len {
+            return len;
+        }
+        let mut i = start;
+        let space = _mm256_set1_epi8(b' ' as i8);
+        let tab = _mm256_set1_epi8(b'\t' as i8);
+        let lf = _mm256_set1_epi8(b'\n' as i8);
+        let cr = _mm256_set1_epi8(b'\r' as i8);
+        while i + LANES <= len {
+            // SAFETY: loop guard `i + LANES <= len` bounds the 32-byte
+            // unaligned load to `bytes[i..i+32]`; `_mm256_loadu_si256`
+            // accepts any alignment; AVX2 upheld by the outer
+            // `#[target_feature(enable = "avx2")]`.
+            let chunk = unsafe {
+                _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)
+            };
+            let eq_space = _mm256_cmpeq_epi8(chunk, space);
+            let eq_tab = _mm256_cmpeq_epi8(chunk, tab);
+            let eq_lf = _mm256_cmpeq_epi8(chunk, lf);
+            let eq_cr = _mm256_cmpeq_epi8(chunk, cr);
+            let any_ws = _mm256_or_si256(
+                _mm256_or_si256(eq_space, eq_tab),
+                _mm256_or_si256(eq_lf, eq_cr),
+            );
+            // mask bit k = 1 means byte k IS whitespace.
+            let mask = _mm256_movemask_epi8(any_ws) as u32;
+            // We want the first byte that is NOT whitespace.
+            let not_ws = !mask;
+            if not_ws != 0 {
+                return i + not_ws.trailing_zeros() as usize;
+            }
+            i += LANES;
+        }
+        find_first_non_whitespace_scalar(bytes, i)
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    /// # Safety
+    ///
+    /// The caller must only invoke this on a CPU where AVX2 is available;
+    /// the dispatcher in `find_next_structural` enforces that.
+    #[allow(dead_code)] // retained for future custom JSON tokeniser (simd-json port)
+    unsafe fn find_next_structural_avx2(bytes: &[u8], start: usize) -> Option<(usize, u8)> {
+        #[cfg(target_arch = "x86")]
+        use std::arch::x86::*;
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::*;
+
+        const LANES: usize = 32;
+        let len = bytes.len();
+        if start >= len {
+            return None;
+        }
+        let mut i = start;
+        let lcurly = _mm256_set1_epi8(b'{' as i8);
+        let rcurly = _mm256_set1_epi8(b'}' as i8);
+        let lsquare = _mm256_set1_epi8(b'[' as i8);
+        let rsquare = _mm256_set1_epi8(b']' as i8);
+        let colon = _mm256_set1_epi8(b':' as i8);
+        let comma = _mm256_set1_epi8(b',' as i8);
+        let quote = _mm256_set1_epi8(b'"' as i8);
+        while i + LANES <= len {
+            // SAFETY: loop guard `i + LANES <= len` bounds the 32-byte load.
+            let chunk = unsafe {
+                _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)
+            };
+            let m1 = _mm256_cmpeq_epi8(chunk, lcurly);
+            let m2 = _mm256_cmpeq_epi8(chunk, rcurly);
+            let m3 = _mm256_cmpeq_epi8(chunk, lsquare);
+            let m4 = _mm256_cmpeq_epi8(chunk, rsquare);
+            let m5 = _mm256_cmpeq_epi8(chunk, colon);
+            let m6 = _mm256_cmpeq_epi8(chunk, comma);
+            let m7 = _mm256_cmpeq_epi8(chunk, quote);
+            let any = _mm256_or_si256(
+                _mm256_or_si256(_mm256_or_si256(m1, m2), _mm256_or_si256(m3, m4)),
+                _mm256_or_si256(_mm256_or_si256(m5, m6), m7),
+            );
+            let mask = _mm256_movemask_epi8(any) as u32;
+            if mask != 0 {
+                let off = i + mask.trailing_zeros() as usize;
+                return Some((off, bytes[off]));
+            }
+            i += LANES;
+        }
+        find_next_structural_scalar(bytes, i)
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    /// # Safety
+    ///
+    /// The caller must only invoke this on a CPU where AVX2 is available;
+    /// the dispatcher in `find_byte` enforces that.
+    unsafe fn find_byte_avx2(bytes: &[u8], start: usize, target: u8) -> Option<usize> {
+        #[cfg(target_arch = "x86")]
+        use std::arch::x86::*;
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::*;
+
+        const LANES: usize = 32;
+        let len = bytes.len();
+        if start >= len {
+            return None;
+        }
+        let mut i = start;
+        let needle = _mm256_set1_epi8(target as i8);
+        while i + LANES <= len {
+            // SAFETY: loop guard `i + LANES <= len` bounds the 32-byte load.
+            let chunk = unsafe {
+                _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)
+            };
+            let eq = _mm256_cmpeq_epi8(chunk, needle);
+            let mask = _mm256_movemask_epi8(eq) as u32;
+            if mask != 0 {
+                return Some(i + mask.trailing_zeros() as usize);
+            }
+            i += LANES;
+        }
+        find_byte_scalar(bytes, i, target)
     }
 }
 

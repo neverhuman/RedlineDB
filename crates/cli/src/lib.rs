@@ -10,6 +10,7 @@ use redlinedb::{Database, OpenOptions, OwnedStep};
 mod dot;
 mod maintenance;
 mod render;
+mod shellzero;
 
 use dot::{CliState, DotOutcome, OutputMode, OutputTarget};
 use maintenance::run_maintenance;
@@ -176,6 +177,9 @@ struct Cli {
     #[arg(long = "unsafe-testing")]
     unsafe_testing: bool,
 
+    #[arg(long = "shellzero")]
+    shellzero: bool,
+
     #[arg(long)]
     escape: Option<String>,
 
@@ -305,6 +309,29 @@ pub fn run() {
         Some(explicit) => explicit,
         None => mode.headers_by_default(),
     };
+
+    // WS-C8: ShellZero pre-open fast path. Default-off; only attempted when
+    // the user explicitly passes `--shellzero`. Returning `None` means the
+    // input isn't on the audited surface and we fall through to the regular
+    // path with no behavior change.
+    if cli.shellzero
+        && (filename == ":memory:" || filename.is_empty())
+        && cli.init.is_none()
+        && !cli.echo
+        && !cli.bail
+        && !cli.stats
+    {
+        let args = shellzero::ShellZeroArgs {
+            sql: &cli.sql,
+            cmd: &cli.cmd,
+            separator: &separator,
+            row_separator: flag_state.row_separator.as_deref().unwrap_or("\n"),
+            null_value: flag_state.null_value.as_deref().unwrap_or(""),
+        };
+        if let Some(code) = shellzero::try_handle_pre_open(&args, preloaded_stdin.as_deref()) {
+            exit(code);
+        }
+    }
 
     // `:memory:` and `""` open a fresh per-process ephemeral database, matching
     // the SQLite shell semantics where in-memory state never spills to a real
