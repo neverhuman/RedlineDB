@@ -814,9 +814,21 @@ impl Statement {
                     self.template = new_template;
                     self.bindings = new_bindings;
                 }
-                let result = execute_prepared(conn, &self.template, &self.bindings)?;
-                self.affected_rows = result.affected_rows;
-                self.runtime = result.runtime;
+                // Phase 6 R3-B: scope the per-thread ScalarProgram VM
+                // compile cache to this statement's execution. The
+                // cache is cleared on entry so we never reuse a
+                // previous statement's fingerprints (column mappings
+                // differ across queries). `execute_prepared` builds
+                // the runtime that subsequent `step()` calls iterate;
+                // the cache persists across those iterations because
+                // the thread-local scope only resets on a fresh
+                // `execute_prepared` call.
+                crate::exec::expr::program::with_program_cache_scope(|| -> Result<()> {
+                    let result = execute_prepared(conn, &self.template, &self.bindings)?;
+                    self.affected_rows = result.affected_rows;
+                    self.runtime = result.runtime;
+                    Ok(())
+                })?;
                 // Journal this statement's SQL+bindings if the savepoint
                 // stack is non-empty and this is a non-readonly mutation.
                 // We deliberately journal AFTER `execute_prepared` succeeded

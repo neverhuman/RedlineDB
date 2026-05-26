@@ -21,7 +21,11 @@
 // the executor over. Silence the dead-code noise until then.
 #![allow(dead_code)]
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 
@@ -79,6 +83,210 @@ pub fn reset_vm_compile_failed_total() {
 /// returns `Ok(None)` (or an error) while dispatch is enabled.
 pub(crate) fn record_compile_failure() {
     VM_COMPILE_FAILED_TOTAL.fetch_add(1, AtomicOrdering::Relaxed);
+}
+
+// ── Phase 6 R3-B: per-PreparedStatement ScalarProgram compile cache ───────
+//
+// R2-A's `scalar::vm_dispatch::try_eval_scalar_via_vm` calls `compile`
+// once per row evaluation. For a `WHERE a + b > 100` over 1M rows the
+// same `Expr` AST is compiled 1M times — the compile output is pure and
+// deterministic given `(expr, ctx.columns)`, so the redundant work is
+// pure overhead.
+//
+// `ProgramCache` keys a compiled `ScalarProgram` (or the sentinel
+// "rejected by Tier-0" entry) by a 64-bit fingerprint of the expression's
+// `Display` output. `get_or_compile` returns:
+//   * `Ok(Some(Arc<ScalarProgram>))` — compile succeeded; reused on hits.
+//   * `Ok(None)` — Tier-0 rejected this shape; the cache remembers the
+//     negative result so we don't pay the compile cost again on the next
+//     row. Mirrors the behaviour of `compile()` which already returns
+//     `Ok(None)` for unsupported shapes.
+//   * `Err(_)` — compile returned a hard error. We do NOT cache hard
+//     errors: the next call re-runs `compile` so a transient parser-
+//     surface change surfaces honestly. (`compile` itself is
+//     deterministic, so re-running is functionally identical but
+//     keeping the cache narrow keeps the failure mode auditable.)
+//
+// Telemetry counters (`PROGRAM_CACHE_HITS_TOTAL` /
+// `PROGRAM_CACHE_MISSES_TOTAL`) are process-wide and let the corpus
+// diff tally how often the cache pays off. A miss is bumped exactly
+// once per unique fingerprint per scope; a hit is bumped on every
+// subsequent `get_or_compile` for the same fingerprint.
+
+static PROGRAM_CACHE_HITS_TOTAL: AtomicU64 = AtomicU64::new(0);
+static PROGRAM_CACHE_MISSES_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Stable 64-bit fingerprint for an expression's compiled output. We
+/// hash the `Display` string because `sqlparser::ast::Expr` does not
+/// implement `Hash` and the textual form is the same canonical key the
+/// AST evaluator's subquery cache uses for structural equality checks.
+/// Collisions would silently reuse the wrong program, so the fingerprint
+/// also folds in the column-mapping context — different row shapes
+/// compile to different bytecode (different `LoadCol(u8)` indices).
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct ExprFingerprint(pub u64);
+
+impl ExprFingerprint {
+    pub fn of(expr: &Expr, ctx: &CompileCtx<'_>) -> Self {
+        let mut h = DefaultHasher::new();
+        // `Expr: Display` formats back to canonical SQL — different
+        // expressions (`a + b` vs `a - b`) produce different strings.
+        // We allocate the formatted string once here; it would be
+        // wasteful to do this per row, which is exactly why the cache
+        // exists.
+        format!("{expr}").hash(&mut h);
+        // Fold column mapping into the key so identical SQL evaluated
+        // against different row shapes (which produce different
+        // `LoadCol` indices) does not alias.
+        for (name, idx) in ctx.columns.iter() {
+            name.as_bytes().hash(&mut h);
+            idx.hash(&mut h);
+        }
+        ExprFingerprint(h.finish())
+    }
+}
+
+/// Cached compile output. `None` is a sentinel for "Tier-0 rejected
+/// this shape" — we cache the negative result so we do not re-pay the
+/// compile cost on subsequent rows.
+type CachedProgram = Option<Arc<ScalarProgram>>;
+
+/// Per-execution cache of compiled Tier-0 programs.
+///
+/// `HashMap<u64, CachedProgram>` because the cache is scoped to a
+/// single query execution and an `ahash::AHashMap` import would pull a
+/// new dependency edge into `program.rs` for no measurable win at the
+/// expected cache size (a single query usually evaluates < 16 distinct
+/// expression shapes).
+#[derive(Default)]
+pub struct ProgramCache {
+    entries: HashMap<u64, CachedProgram>,
+}
+
+impl ProgramCache {
+    pub fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+        }
+    }
+
+    /// Get the compiled program for `expr` or compile + cache it.
+    ///
+    /// On a hit, bumps `program_cache_hits_total`. On a miss, bumps
+    /// `program_cache_misses_total` exactly once for the new entry.
+    /// Returns:
+    ///   * `Ok(Some(_))` — Tier-0 compile succeeded.
+    ///   * `Ok(None)`    — Tier-0 rejected the shape (cached so the
+    ///     next call does not re-run `compile`).
+    ///   * `Err(_)`      — `compile()` returned a hard error. NOT
+    ///     cached: a transient surface change should resurface.
+    pub fn get_or_compile(&mut self, expr: &Expr, ctx: &CompileCtx<'_>) -> Result<CachedProgram> {
+        let key = ExprFingerprint::of(expr, ctx).0;
+        if let Some(cached) = self.entries.get(&key) {
+            PROGRAM_CACHE_HITS_TOTAL.fetch_add(1, AtomicOrdering::Relaxed);
+            return Ok(cached.clone());
+        }
+        let compiled = compile(expr, ctx)?.map(Arc::new);
+        self.entries.insert(key, compiled.clone());
+        PROGRAM_CACHE_MISSES_TOTAL.fetch_add(1, AtomicOrdering::Relaxed);
+        Ok(compiled)
+    }
+
+    /// Drop all cached entries. Called by the query-scope guard at the
+    /// end of `execute_prepared` so the cache does not grow without
+    /// bound across long-lived statements.
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    /// Number of cached entries. Exposed for tests that assert the
+    /// cache stays bounded by the per-query scope.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Probe whether an entry already exists for `(expr, ctx)`. Used by
+    /// `vm_dispatch` to disambiguate first-time misses (where the
+    /// failure counter should be bumped) from cached negative hits
+    /// (where it should not). Cheaper than re-running `compile`.
+    pub(crate) fn entries_contains_key(&self, expr: &Expr, ctx: &CompileCtx<'_>) -> bool {
+        let key = ExprFingerprint::of(expr, ctx).0;
+        self.entries.contains_key(&key)
+    }
+}
+
+/// Snapshot of the running count of cache hits across the process.
+pub fn program_cache_hits_total() -> u64 {
+    PROGRAM_CACHE_HITS_TOTAL.load(AtomicOrdering::Relaxed)
+}
+
+/// Snapshot of the running count of cache misses across the process.
+pub fn program_cache_misses_total() -> u64 {
+    PROGRAM_CACHE_MISSES_TOTAL.load(AtomicOrdering::Relaxed)
+}
+
+/// Reset both cache telemetry counters. For integration tests only;
+/// production code treats the counters as monotonic.
+pub fn reset_program_cache_counters() {
+    PROGRAM_CACHE_HITS_TOTAL.store(0, AtomicOrdering::Relaxed);
+    PROGRAM_CACHE_MISSES_TOTAL.store(0, AtomicOrdering::Relaxed);
+}
+
+thread_local! {
+    /// Per-thread scratch cache. The `vm_dispatch` hot path reaches
+    /// into this thread-local rather than threading a cache through
+    /// every `eval_scalar` signature — the AST walker recurses through
+    /// closures and runtime state that would be very disruptive to
+    /// re-plumb, and the established crate-wide pattern (see the
+    /// subquery template cache in `predicate.rs` and the cross-DB
+    /// cache in `cross_db.rs`) is exactly this shape.
+    ///
+    /// Lifetime is bounded by `with_program_cache_scope`, which clears
+    /// the cache on entry (so we never reuse a previous query's
+    /// fingerprints — important because column mappings change). The
+    /// scope guard is wired around `execute_prepared` in
+    /// `statement.rs`.
+    static PROGRAM_CACHE: RefCell<ProgramCache> = RefCell::new(ProgramCache::new());
+}
+
+/// Run `f` with a freshly-cleared per-thread program cache.
+///
+/// IMPORTANT: the cache is cleared on entry but NOT on exit. The
+/// `Statement::step` wiring calls this around `execute_prepared`,
+/// which builds the runtime for subsequent per-row `step()` calls;
+/// those follow-up `step()` calls evaluate scalar expressions and
+/// expect the cache built during `execute_prepared` (or the first
+/// `step`) to persist. The next statement's `execute_prepared` will
+/// clear it on entry, which is sufficient to prevent cross-statement
+/// pollution.
+pub fn with_program_cache_scope<R>(f: impl FnOnce() -> R) -> R {
+    PROGRAM_CACHE.with(|cell| cell.borrow_mut().clear());
+    f()
+}
+
+/// Explicitly clear the per-thread cache. Used by integration tests
+/// that want to assert pre/post counter deltas without relying on
+/// statement-boundary timing.
+pub fn clear_program_cache() {
+    PROGRAM_CACHE.with(|cell| cell.borrow_mut().clear());
+}
+
+/// Borrow the per-thread cache to run `f`. Used by the hot-path
+/// `vm_dispatch` helper. Held borrow is single-threaded by definition
+/// (thread-local), so re-entrancy is the only failure mode — callers
+/// must not re-invoke `eval_scalar` from inside `f`.
+pub(crate) fn with_program_cache<R>(f: impl FnOnce(&mut ProgramCache) -> R) -> R {
+    PROGRAM_CACHE.with(|cell| f(&mut cell.borrow_mut()))
+}
+
+/// Number of entries currently held in the thread-local cache. Exposed
+/// for tests that assert per-query scoping.
+pub fn program_cache_len() -> usize {
+    PROGRAM_CACHE.with(|cell| cell.borrow().len())
 }
 
 /// Hard cap on the evaluation stack depth. Programs whose maximum stack
