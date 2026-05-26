@@ -10,14 +10,17 @@
 use redlinedb::{Database, OpenOptions};
 
 #[test]
-fn default_pool_uses_min_num_cpus_capped_at_eight() {
+fn default_pool_is_opt_in_zero() {
+    // Phase 5 hot-fix: default to NO pool. Spawning 8 worker threads at
+    // every Database::open paid a ~1.5 ms startup tax for zero benefit
+    // until Phase 6 Morsel/Vector wires intra-query parallel operators.
+    // Callers that want the pool opt in via with_rayon_threads(Some(n)).
     let db = Database::create_in_memory(OpenOptions::default()).expect("create db");
-    let expected = num_cpus::get().min(8);
-    if expected <= 1 {
-        assert_eq!(db.rayon_thread_count(), 0, "single-core hosts skip the pool");
-    } else {
-        assert_eq!(db.rayon_thread_count(), expected, "default thread count");
-    }
+    assert_eq!(
+        db.rayon_thread_count(),
+        0,
+        "default opts out of the pool (Phase 5 startup hot-fix)"
+    );
 }
 
 #[test]

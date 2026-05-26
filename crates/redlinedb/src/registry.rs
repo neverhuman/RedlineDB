@@ -133,15 +133,23 @@ fn open_lock_for_path(registry: &mut Registry, path: &Path) -> Arc<Mutex<()>> {
 }
 
 /// Build the per-database Rayon pool, honouring `OpenOptions::rayon_threads`.
-/// `None` => `min(num_cpus, 8)` threads. `Some(0|1)` => no pool (serial path).
-/// `Some(n)` => `n`-thread non-global pool. The build is non-global: it must
-/// never call `build_global`, otherwise hosts that already own a Rayon pool
-/// (axum, sqlx, an embedder's own analytics stack) would see their pool
-/// pre-empted by `redlinedb`.
+///
+/// **Default policy (Phase 5 hot-fix)**: `None` => NO pool (serial path).
+/// Spawning 8 worker threads at every Database::open paid a ~1.5 ms startup
+/// tax for ZERO benefit until intra-query parallel operators are wired
+/// (Phase 6 Morsel/Vector). The parity harness spawns ~1127 fresh processes,
+/// so the cost was ~1.7 seconds spread across the corpus and inflated the
+/// median latency ratio by ~40%.
+///
+/// `Some(0|1)` => no pool (serial path; same as default).
+/// `Some(n)` for n >= 2 => `n`-thread non-global pool. The build is
+/// non-global: it must never call `build_global`, otherwise hosts that
+/// already own a Rayon pool (axum, sqlx, an embedder's own analytics stack)
+/// would see their pool pre-empted by `redlinedb`.
 fn build_rayon_pool(options: &OpenOptions) -> Result<Option<Arc<rayon::ThreadPool>>> {
-    let n = options
-        .rayon_threads
-        .unwrap_or_else(|| num_cpus::get().min(8));
+    let Some(n) = options.rayon_threads else {
+        return Ok(None);
+    };
     if n <= 1 {
         return Ok(None);
     }
