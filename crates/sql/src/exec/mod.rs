@@ -68,6 +68,12 @@ pub(crate) mod table_valued;
 pub(crate) mod trigger;
 pub(crate) mod view;
 pub(crate) mod window;
+// Phase 6 M1 scaffolding: Morsel/ColumnBatch/Bitmap/BytesArena types.
+// Operator wiring lands in M2-M8; module stays under `pub(crate)` so the
+// existing tuple path is unaffected. See `docs/phase6-morsel-vector.md`.
+pub(crate) mod morsel;
+#[allow(unused_imports)]
+use morsel as _morsel_scaffold_marker;
 
 thread_local! {
     static CURRENT_CONNECTION: Cell<*const Connection> = const { Cell::new(std::ptr::null()) };

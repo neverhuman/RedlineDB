@@ -1,3 +1,5 @@
+#[cfg(feature = "wal_cross_lane_coalescer")]
+pub mod coalescer;
 pub mod combiner;
 pub mod lanes;
 pub mod manager;

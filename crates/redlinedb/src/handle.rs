@@ -305,6 +305,12 @@ fn volatile_open_options(mut options: OpenOptions) -> OpenOptions {
     if options.temp_dir.is_none() {
         options.temp_dir = Some(registry::standard_volatile_root());
     }
+    // Wave-6b: in-memory / ephemeral opens default to lean buffer-pool +
+    // statement-cache sizing. An explicit `with_lean_ephemeral(false)`
+    // from the caller is preserved.
+    if options.lean_ephemeral.is_none() {
+        options.lean_ephemeral = Some(true);
+    }
     options
 }
 
@@ -321,7 +327,12 @@ pub(crate) fn sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
     let page_size = db.engine.page_size.max(1);
     // WS-C9: lean mode forces a 1 MB pool regardless of `cache_bytes`.
     // Long-lived databases keep the user's `cache_bytes` calculation.
-    let buffer_pages = if options.lean_ephemeral {
+    // Wave-6b: `effective_lean_ephemeral(false)` resolves the `Option<bool>`
+    // for an on-disk caller. The volatile helper below has already promoted
+    // `None` to `Some(true)` for `:memory:` / `create_ephemeral` opens, so
+    // the same call also returns `true` for those paths.
+    let lean = options.effective_lean_ephemeral(false);
+    let buffer_pages = if lean {
         crate::options::LEAN_BUFFER_POOL_PAGES
     } else {
         (options.memory.cache_bytes / page_size).max(16)
@@ -344,7 +355,7 @@ pub(crate) fn sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
     db.query_memory.batch_rows = options.query_memory.batch_rows;
     // WS-C9: lean mode caps the statement cache so short-lived sessions
     // do not retain dozens of prepared statements they will never replay.
-    db.statement_cache_capacity = if options.lean_ephemeral {
+    db.statement_cache_capacity = if lean {
         crate::options::LEAN_STATEMENT_CACHE_CAPACITY
     } else {
         options.statement_cache_capacity

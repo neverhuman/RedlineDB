@@ -10,6 +10,7 @@ members = [
     "crates/ffi",
     "crates/cli",
     "crates/server",
+    "crates/redlinedb-lite",
 ]
 resolver = "3"
 

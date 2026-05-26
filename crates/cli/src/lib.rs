@@ -180,6 +180,9 @@ struct Cli {
     #[arg(long = "shellzero")]
     shellzero: bool,
 
+    #[arg(long = "no-shellzero")]
+    no_shellzero: bool,
+
     #[arg(long)]
     escape: Option<String>,
 
@@ -300,6 +303,15 @@ pub fn run() {
     let flag_state = resolve_cli_flags(&raw_args);
     let mode = flag_state.mode;
 
+    // Wave-6b: capture which formatting overrides the user supplied
+    // explicitly BEFORE the matches below consume the optional fields —
+    // the shellzero auto-default needs to know the user accepted every
+    // List-mode default.
+    let explicit_header = flag_state.header.is_some();
+    let explicit_null_value = flag_state.null_value.is_some();
+    let explicit_separator = flag_state.separator.is_some();
+    let explicit_row_separator = flag_state.row_separator.is_some();
+
     let separator = match flag_state.separator {
         Some(sep) => sep,
         None => mode.default_separator().to_owned(),
@@ -310,17 +322,32 @@ pub fn run() {
         None => mode.headers_by_default(),
     };
 
-    // WS-C8: ShellZero pre-open fast path. Default-off; only attempted when
-    // the user explicitly passes `--shellzero`. Returning `None` means the
-    // input isn't on the audited surface and we fall through to the regular
-    // path with no behavior change.
-    if cli.shellzero
-        && (filename == ":memory:" || filename.is_empty())
+    // WS-C8 / Wave-6b: ShellZero pre-open fast path. The auto-default
+    // ("safe shape") is conservative: `:memory:` filename + a single
+    // positional SQL arg + no execution-state flags + no formatting
+    // overrides + no stdin script + no `--cmd`. Anything outside that
+    // surface (mode flags, header toggles, dot-commands piped via stdin,
+    // …) falls through to the full CLI so the existing behaviour and
+    // tests are preserved. `--shellzero` still works as an explicit
+    // opt-in for the broader audited surface; `--no-shellzero` disables
+    // both paths.
+    let shellzero_base_eligible = (filename == ":memory:" || filename.is_empty())
         && cli.init.is_none()
         && !cli.echo
         && !cli.bail
-        && !cli.stats
-    {
+        && !cli.stats;
+    let safe_auto_shape = shellzero_base_eligible
+        && mode == OutputMode::List
+        && !explicit_header
+        && !explicit_null_value
+        && !explicit_separator
+        && !explicit_row_separator
+        && cli.cmd.is_empty()
+        && preloaded_stdin.is_none()
+        && !cli.sql.is_empty();
+    let shellzero_enabled =
+        !cli.no_shellzero && ((cli.shellzero && shellzero_base_eligible) || safe_auto_shape);
+    if shellzero_enabled {
         let args = shellzero::ShellZeroArgs {
             sql: &cli.sql,
             cmd: &cli.cmd,

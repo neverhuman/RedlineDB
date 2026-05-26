@@ -1,6 +1,6 @@
 [package]
 name = "redlinedb-kernel"
-version = "4.0.1"
+version = "4.0.2"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -36,3 +36,5 @@ numa = ["dep:hwlocality"]
 # feature flag and the gated items in `crates/kernel/src/vector/distance.rs`
 # in one pass, leaving Lane V1's SIMD-aware kernels in place.
 vector_v1_unmerged = []
+# WS-C6: opt-in cross-lane WAL flush coalescer.
+wal_cross_lane_coalescer = []
