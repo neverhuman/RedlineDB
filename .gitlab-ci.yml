@@ -50,13 +50,15 @@ stages:
   # All jobs run in parallel — no inter-stage deps inside `test`. The
   # `parity` stage waits on the test shards via `needs:` so a regression
   # short-circuits before the 90-min parity run. `metrics` waits on
-  # parity for its artifact.
+  # parity for its artifact. `benchmark` is the heavy native-compile +
+  # full-corpus perf measurement; main-only + manual trigger.
   - smoke
   - test
   - parity
   - metrics
   - jankurai
   - tools
+  - benchmark
 
 variables:
   CARGO_TERM_COLOR: "always"
@@ -549,3 +551,78 @@ dependency-review:
       - agent/repo-score.json
       - agent/repo-score.md
       - .jankurai/cost-budget.toml
+
+# ── Native-compile benchmark (heavy, manual / main-only) ───────────────────
+#
+# Runs `scripts/perf/full.sh` end-to-end against the redline-testing
+# v1.0.0 official corpus, with a `target-cpu=native` release build of
+# `redlinedb-cli`. Writes `target/perf/<name>.jsonl` as the canonical
+# CI-produced evidence — README perf numbers come from THIS artifact, not
+# local hand-runs (closing the "benchmarking must be in CI" gap).
+#
+# Trigger semantics:
+#   - Manual button on every pipeline (`when: manual`)
+#   - Auto on main pushes (the `release` cell wants a fresh benchmark on
+#     every merge)
+# Skipped on MR pipelines because the 2-3hr corpus run isn't worth gating
+# every MR on — parity (against pre-built evidence) covers regression
+# detection. The benchmark job is for measurement, not gating.
+benchmark:
+  stage: benchmark
+  tags: [build]
+  needs: []
+  timeout: 240 minutes
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+  variables:
+    CI_REDLINE_TESTING_REQUESTED_VERSION: "1.0.0"
+    REDLINE_TESTING_PINNED_ONLY: "1"
+    CI_REDLINE_TESTING_URL: "https://github.com/neverhuman/redline-testing/releases/download/v1.0.0/redline-testing-1.0.0-linux-x86_64.tar.gz"
+    PERF_WORKERS: "10"
+    PERF_ROOT: "target/perf"
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3
+    - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
+    - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
+  script:
+    # 1. Resolve + install the redline-testing binary via lib.sh (uses
+    #    CI_REDLINE_TESTING_URL bypass — no gh CLI needed).
+    - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_redline_testing'
+    - export REDLINE_TESTING_BIN="$(ci_redline_testing_installed_path)"
+    - "$REDLINE_TESTING_BIN version"
+    # 2. Build the sqlite3 reference (3.53.1 release build) — pinned per
+    #    scripts/sqlite/build-reference.sh so the comparison is stable.
+    - bash scripts/sqlite/build-reference.sh
+    - export SQLITE_REF_BIN="$(pwd)/target/sqlite-reference/3.53.1/bin/sqlite3"
+    - "$SQLITE_REF_BIN --version"
+    # 3. Compile RedlineDB release with native CPU targeting. The
+    #    .cargo/config.toml default is x86-64-v3 (portable); override
+    #    locally to native so we use every microarch feature the runner
+    #    container exposes. cargo build emits to target/release/redlinedb
+    #    via the [[bin]] entry in crates/cli/Cargo.toml.
+    - 'RUSTFLAGS="-C link-arg=-fuse-ld=mold -C target-cpu=native" cargo build --release --locked -p redlinedb-cli --bin redlinedb'
+    - 'sha256sum target/release/redlinedb | tee target/perf-native-binary.sha256.txt || true'
+    # 4. Run the full perf corpus (1127 cases × 3 reps + 1 warmup × 10 workers).
+    #    ~2-3 hours wall time. PERF_TASKSET_DISABLE=1 lets workers span cores.
+    - mkdir -p target/perf
+    - 'bash scripts/perf/full.sh target/release/redlinedb v4.0.x-native-ci'
+    # 5. Print summary
+    - 'echo "== benchmark summary =="; ls -la target/perf/; head -20 target/perf/v4.0.x-native-ci.jsonl 2>/dev/null || true'
+  artifacts:
+    when: always
+    name: "redlinedb-native-benchmark-evidence"
+    paths:
+      - target/perf/
+      - target/perf-native-binary.sha256.txt
+    expire_in: 30 days
+    reports:
+      metrics: target/perf/v4.0.x-native-ci.jsonl
