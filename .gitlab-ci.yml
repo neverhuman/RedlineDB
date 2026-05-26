@@ -32,7 +32,7 @@ default:
   interruptible: true
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq build-essential mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
+    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
     - rustup component add rustfmt clippy
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-/usr/local/cargo}/bin"'
