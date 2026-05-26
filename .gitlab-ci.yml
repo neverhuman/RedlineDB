@@ -257,10 +257,15 @@ jankurai-audit:
 jankurai-security:
   stage: jankurai
   needs: []
-  # Probe runner 3 (jeryu-untrusted, tags [mr, sandbox, untrusted]) —
-  # libssl3 was just installed on the host; if runner 3 picks this up
-  # successfully, expand [mr] to dependency-review + branch-freshness.
-  tags: [mr]
+  # Runner 3 (jeryu-untrusted) probe failed: its custom executor at
+  # /usr/local/bin/jeryu inside the runner container is built against
+  # newer glibc (needs GLIBC_2.32+) than the container's libc, AND the
+  # container is missing libssl.so.3 + libcrypto.so.3. Host-side libssl3
+  # install does not reach into the runner container. Operator fix
+  # required: rebuild the wrapper against older glibc, OR install
+  # libssl3 + libcrypto3 in each `gitlab/gitlab-runner` container, OR
+  # upgrade the runner image. Until then, route through [default].
+  tags: [default]
   timeout: 20 minutes
   script:
     - cargo install cargo-audit --locked
