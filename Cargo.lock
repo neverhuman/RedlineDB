@@ -1809,6 +1809,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "redlinedb-lite"
+version = "4.0.1"
+dependencies = [
+ "assert_cmd",
+]
+
+[[package]]
 name = "redlinedb-server"
 version = "4.0.1"
 dependencies = [
