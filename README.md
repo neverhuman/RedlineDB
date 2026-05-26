@@ -13,7 +13,7 @@
   <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/corpus%20cases-2445-blue" alt="corpus cases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
-  <img src="https://img.shields.io/badge/version-4.0.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-4.0.8-blue" alt="version">
   <!-- jankurai-score-badge:begin -->
   <a href=".jankurai/repo-score.md"><img src="https://img.shields.io/badge/jankurai-85%2F100%20advisory-green" alt="jankurai score: 85/100 advisory"></a>
   <!-- jankurai-score-badge:end -->
@@ -22,6 +22,22 @@
 RedlineDB is an embedded SQL engine written in Rust. It keeps the SQLite-facing
 API familiar while replacing the storage core with MVCC, a concurrent B-tree,
 group-commit WAL, and crash recovery designed for multi-writer workloads.
+
+## What's new in v4.0.1 → v4.0.8 (Phase 5 / Phase 6 release train)
+
+**Phase 5** (v4.0.1) shipped 20+ workstreams across five waves — median ratio vs SQLite **1.904× → 1.857×**, cases ≥ 2.0× slower **193 → 60 (−69%)**. **Phase 6** (v4.0.2 → v4.0.8) ships eight further releases — full per-version detail in [CHANGELOG.md](CHANGELOG.md). Highlights:
+
+| Release | Work-stream | Headline |
+|---|---|---|
+| v4.0.4 | R2 — ScalarProgram VM dispatch + parallel-scan kernel API + AccessPath IR planner wiring | +55 tests; PRAGMA toggles for opt-in |
+| v4.0.5 | R3-B — per-PreparedStatement VM compile cache | +11 tests; thread-local scoped cache |
+| v4.0.6 | R3-C + R4-A — SQL-side parallel-scan dispatch + Morsel hash-aggregator | +21 tests; AVX2 SUM(i64) **14.4× speedup** vs scalar |
+| v4.0.7 | R4-B — WAL group-commit pipeline (`wal_pipeline` feature) | **194× WAL throughput speedup**, 250× syscall reduction |
+| v4.0.8 | R3-A — `PRAGMA redline_scalar_vm` + `PRAGMA redline_planner_use_access_path` | SQL surface for the R2-A/R2-C toggles |
+
+Workspace test count: **1786 → 1990 (+204)** with zero regressions. SIMD wins gated behind runtime `is_x86_feature_detected!` dispatch + the `unsafe-ledger.toml` audit; WAL group-commit and parallel-scan dispatch are feature-flagged so default builds remain byte-identical to v4.0.3.
+
+Updated SQLite-parity-corpus numbers will appear in the auto-generated `## Engine Metrics` block below on the next CI benchmark refresh; the v4.0.0 ratio table in the section that follows is the last hand-measured snapshot, retained for historical context.
 
 ## What's new in v4.0.0
 
@@ -149,26 +165,26 @@ curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/i
 Pin a specific release when you need reproducible installs:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v4.0.0 bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v4.0.8 bash
 ```
 
 Lock the exact tarball digest in CI or release automation:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
-  VERSION=v4.0.0 REDLINEDB_SHA256=<sha256> bash
+  VERSION=v4.0.8 REDLINEDB_SHA256=<sha256> bash
 ```
 
 ### Build from source
 
 ```bash
-cargo install redlinedb-cli --version 4.0.0 --locked
+cargo install redlinedb-cli --version 4.0.8 --locked
 ```
 
 Or install from the tagged repository release:
 
 ```bash
-cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v4.0.0 --package redlinedb-cli --locked
+cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v4.0.8 --package redlinedb-cli --locked
 ```
 
 ### Direct download
@@ -177,9 +193,9 @@ Release tarballs are published on the [releases page](https://github.com/neverhu
 
 | Platform | File |
 |---|---|
-| Linux x86_64 | `redlinedb-v4.0.0-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `redlinedb-v4.0.0-macos-arm64.tar.gz` |
-| macOS Intel | `redlinedb-v4.0.0-macos-x86_64.tar.gz` |
+| Linux x86_64 | `redlinedb-v4.0.8-linux-x86_64.tar.gz` |
+| macOS Apple Silicon | `redlinedb-v4.0.8-macos-arm64.tar.gz` |
+| macOS Intel | `redlinedb-v4.0.8-macos-x86_64.tar.gz` |
 
 Each tarball ships with a matching `.sha256` checksum and contains the CLI,
 shared libraries, and public headers.
