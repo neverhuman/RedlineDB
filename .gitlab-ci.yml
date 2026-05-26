@@ -118,6 +118,7 @@ parity-ledger-lint:
 release-smoke:
   stage: smoke
   needs: []
+  tags: [build]
   timeout: 45 minutes
   script:
     - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_verify_redlinedb_release_smoke'
@@ -125,6 +126,7 @@ release-smoke:
 .test_shard:
   stage: test
   needs: []
+  tags: [build]
   timeout: 60 minutes
   script:
     - CI_FAST_STAGE="$SHARD" bash ops/ci/fast.sh
