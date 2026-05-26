@@ -295,7 +295,11 @@ metrics-readme:
   script:
     - cargo install tokei --locked --version 14.0.0
     - bash scripts/sqlite/build-reference.sh
-    - bash ops/ci/jankurai-tools.sh audit-ci
+    # audit-ci writes target/jankurai/repo-score.json regardless of
+    # ratchet decision; tolerate non-zero exit so the README generator
+    # downstream still gets the score artifact. (The audit gate itself
+    # runs as a separate `jankurai-audit` job in the jankurai stage.)
+    - bash ops/ci/jankurai-tools.sh audit-ci || true
     - bash scripts/generate-metrics-readme.sh
     - |
       if git diff --quiet README.md; then
