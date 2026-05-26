@@ -20,8 +20,31 @@ out="$PERF_ROOT/${out_name}.jsonl"
 printf '==> full.sh: %s -> %s\n' "$target_bin" "$out"
 # Full-corpus run uses 10 workers (project convention) + no taskset
 # (workers will span cores). Disable taskset by default for this lane.
+# Tolerate non-zero exit from redline-testing — the binary fails when
+# any case fails, but we want the JSONL produced regardless so the
+# post-filter (parity-tolerate-known-optional.sh) can apply the known-
+# intentional-drift list. Real regressions still surface via the
+# post-filter exit code.
+set +e
 PERF_WORKERS="${PERF_WORKERS:-10}" PERF_TASKSET_DISABLE=1 perf_run_jsonl \
   "$target_bin" "" 3 1 "$out" "full-${out_name}"
+run_exit=$?
+set -e
+
+if [ ! -s "$out" ]; then
+  printf 'perf-full: redline-testing produced no JSONL at %s (exit=%d)\n' "$out" "$run_exit" >&2
+  exit "$run_exit"
+fi
+
+# Apply tolerance for the known-intentional-drift cases (fts5/rtree/dbstat
+# virtual tables RedlineDB doesn't implement; DELETE/UPDATE LIMIT which
+# RedlineDB supports more spec-correctly than the SQLite amalgamation).
+evidence_dir="$(dirname "$out")"
+cp "$out" "$evidence_dir/sqlite_parity.raw.jsonl" 2>/dev/null || true
+if ! bash "$(dirname "$0")/../parity-tolerate-known-optional.sh" "$evidence_dir"; then
+  printf 'perf-full: unexpected parity failures (not in tolerance list); see above\n' >&2
+  exit 1
+fi
 
 printf '\n== summary ==\n'
 perf_summarize_jsonl "$out"
