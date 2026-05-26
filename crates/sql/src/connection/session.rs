@@ -115,6 +115,49 @@ impl Connection {
         Ok(last)
     }
 
+    /// Prepare one typed Redline Query Language statement.
+    pub fn prepare_rql(self: &Arc<Self>, statement: &crate::RqlStatement) -> Result<Statement> {
+        let template = self.prepare_rql_template(statement)?;
+        Ok(Statement::new(Arc::clone(self), template))
+    }
+
+    /// Build a detached RQL template for facade-level caches.
+    #[doc(hidden)]
+    pub fn prepare_rql_template(
+        self: &Arc<Self>,
+        statement: &crate::RqlStatement,
+    ) -> Result<Arc<PreparedTemplate>> {
+        crate::exec::with_current_connection(self.as_ref(), || {
+            let template = crate::rql::prepare_template(self.as_ref(), statement)?;
+            if !template.readonly
+                && self.with_session(|session| Ok(!session.savepoints.is_empty()))?
+            {
+                return Err(Error::UnsupportedSql(
+                    "RQL mutations inside SAVEPOINT are not supported".to_owned(),
+                ));
+            }
+            Ok(Arc::new(template))
+        })
+    }
+
+    /// Execute a typed RQL program and return the last statement result count.
+    pub fn execute_rql(self: &Arc<Self>, program: &crate::RqlProgram) -> Result<usize> {
+        let mut last = 0usize;
+        for statement in &program.statements {
+            let mut stmt = self.prepare_rql(statement)?;
+            let mut rows = 0usize;
+            while let Step::Row = stmt.step()? {
+                rows += 1;
+            }
+            last = if stmt.is_readonly() {
+                rows
+            } else {
+                stmt.affected_rows()
+            };
+        }
+        Ok(last)
+    }
+
     /// Build a "marker" template for savepoint statements. The side-effects
     /// fire during `prepare_v2`; the returned `Statement` is constructed
     /// with `runtime = Done` so it never invokes the executor. We tag the
