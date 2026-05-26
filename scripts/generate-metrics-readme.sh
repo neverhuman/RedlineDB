@@ -143,10 +143,18 @@ def load_jsonl(path_env: str):
 
 def load_json(path_env: str):
     path_str = os.environ.get(path_env, "")
-    if not path_str or not Path(path_str).is_file():
+    if not path_str:
         return {}
-    with open(path_str) as f:
-        return json.load(f)
+    p = Path(path_str)
+    if not p.is_file() or p.stat().st_size == 0:
+        return {}
+    try:
+        with open(path_str) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        # Tolerate corrupted/partial JSON (e.g. when audit-ci hit a cap
+        # mid-write). README block still renders with empty audit data.
+        return {}
 
 def shell_emoji(status: str) -> str:
     return {"passed": "✅", "skipped": "⏭️", "failed": "❌"}.get(status, "❓")
