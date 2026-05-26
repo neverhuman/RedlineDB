@@ -241,6 +241,12 @@ metrics-readme:
   needs:
     - job: parity
       artifacts: true
+  # README regenerator from parity evidence — non-blocking. The .github
+  # workflow's metrics-readme is in the same posture: it only auto-commits
+  # back on main (`if: github.ref == 'refs/heads/main'`) and is excluded
+  # from the required-check set. Mirror that policy here so MR merging
+  # isn't blocked by a README drift detector that needs main-only ops.
+  allow_failure: true
   timeout: 30 minutes
   script:
     - cargo install tokei --locked --version 14.0.0
