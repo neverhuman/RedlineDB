@@ -152,23 +152,41 @@ impl BufferPool {
         let prefetch_queue = Arc::new(ArrayQueue::<PageId>::new(queue_capacity));
         let shutdown = Arc::new(AtomicBool::new(false));
 
-        // Worker holds Weak<Inner> + the queue + the shutdown flag.
-        // Holding a strong ref would create a cycle that prevents
-        // `Drop for BufferPool` from ever running.
-        let weak_inner: Weak<Inner> = Arc::downgrade(&inner);
-        let worker_queue = Arc::clone(&prefetch_queue);
-        let worker_shutdown = Arc::clone(&shutdown);
-        let handle = thread::Builder::new()
-            .name("redlinedb-prefetch".to_string())
-            .spawn(move || prefetch_worker(weak_inner, worker_queue, worker_shutdown))
-            .map_err(|_| Error::CorruptPage("spawn prefetch worker failed"))?;
-
+        // Phase 5 hot-fix: prefetch worker is LAZY — spawned on first
+        // try_prefetch call instead of at construction. Workloads that
+        // never prefetch (in-memory DBs, short-lived CLI scripts) skip
+        // the thread-spawn cost entirely (was ~0.2 ms per Database::new
+        // × 1127 parity processes = ~225 ms aggregate noise).
         Ok(Self {
             inner,
             prefetch_queue,
             shutdown,
-            worker: Mutex::new(Some(handle)),
+            worker: Mutex::new(None),
         })
+    }
+
+    /// Ensure the prefetch worker is spawned. No-op if already spawned.
+    fn ensure_prefetch_worker(&self) {
+        let mut guard = match self.worker.lock() {
+            Ok(g) => g,
+            Err(_) => return, // poisoned — skip; worker is best-effort
+        };
+        if guard.is_some() {
+            return;
+        }
+        let weak_inner: Weak<Inner> = Arc::downgrade(&self.inner);
+        let worker_queue = Arc::clone(&self.prefetch_queue);
+        let worker_shutdown = Arc::clone(&self.shutdown);
+        if let Ok(handle) = thread::Builder::new()
+            .name("redlinedb-prefetch".to_string())
+            .spawn(move || prefetch_worker(weak_inner, worker_queue, worker_shutdown))
+        {
+            *guard = Some(handle);
+        }
+        // On spawn failure we silently leave the worker unset; future
+        // try_prefetch calls will simply enqueue with no consumer — the
+        // queue overflows and prefetch_dropped fires. Acceptable since
+        // prefetch is advisory.
     }
 
     pub fn allocate(&self, kind: PageKind, rel_id: RelId) -> Result<PageGuard> {
@@ -185,6 +203,9 @@ impl BufferPool {
     /// unparked on a successful push so latency is bounded by one
     /// thread wake-up, not by the park timeout.
     pub fn try_prefetch(&self, page_id: PageId, counters: &Phase11Counters) {
+        // Lazy worker: spawn on first prefetch hint. Subsequent calls
+        // hit the fast path (already-Some lock check + unpark).
+        self.ensure_prefetch_worker();
         match self.prefetch_queue.push(page_id) {
             Ok(()) => {
                 if let Ok(guard) = self.worker.lock() {
