@@ -16,7 +16,7 @@
 //! flip the toggle around the workload they want to run through the VM.
 
 use super::super::program::{
-    CompileCtx, compile, evaluate, is_vm_dispatch_enabled, record_compile_failure,
+    CompileCtx, evaluate, is_vm_dispatch_enabled, record_compile_failure, with_program_cache,
 };
 use super::row::RowContext;
 use crate::error::Result;
@@ -50,23 +50,47 @@ pub(crate) fn try_eval_scalar_via_vm(
     let ctx = CompileCtx {
         columns: cols.as_slice(),
     };
-    let prog = match compile(expr, &ctx) {
-        Ok(Some(p)) => p,
-        Ok(None) => {
-            record_compile_failure();
+    // Phase 6 R3-B: route through the per-execution program cache so
+    // the SAME expression evaluated against successive rows compiles
+    // exactly once per query. The cache is a thread-local scoped to
+    // `execute_prepared` via `with_program_cache_scope`, so each
+    // statement starts with a clean slate and cross-query pollution is
+    // impossible.
+    //
+    // `record_compile_failure` is bumped only when the cache *misses*
+    // and produces a `None` sentinel — subsequent rows return the
+    // cached `None` via a cache-hit path and short-circuit silently.
+    // Doing it the naive way (bumping on every `Ok(None)` arm below)
+    // would explode the failure counter on a 1M-row scan over an
+    // unsupported shape, defeating the purpose of the diagnostic.
+    let compiled = match with_program_cache(|cache| {
+        // Snapshot whether the entry already exists so we can
+        // disambiguate first-time misses (record_compile_failure
+        // should fire) from cached negative hits (it should NOT —
+        // otherwise the counter explodes on a 1M-row scan).
+        let was_first_seen = !cache.entries_contains_key(expr, &ctx);
+        cache
+            .get_or_compile(expr, &ctx)
+            .map(|res| (res, was_first_seen))
+    }) {
+        Ok((Some(p), _)) => p,
+        Ok((None, was_first_seen)) => {
+            if was_first_seen {
+                record_compile_failure();
+            }
             return None;
         }
         Err(_) => {
-            // Treat a hard compile error the same as `Ok(None)` — the
-            // AST evaluator handles many shapes the Tier-0 compiler
-            // doesn't, and silently surfacing a compile-side panic to
-            // the user would change observable behaviour.
+            // Hard compile error path: NOT cached (the cache stores
+            // only `Ok(...)` results). Always bumps the failure
+            // counter because the surface is rare and a steady
+            // trickle is exactly what we want to surface.
             record_compile_failure();
             return None;
         }
     };
     let row_values = flatten_row(row)?;
-    Some(evaluate(&prog, &row_values, bindings))
+    Some(evaluate(&compiled, &row_values, bindings))
 }
 
 /// Build a `CompileCtx` column map from a row context. Returns an
