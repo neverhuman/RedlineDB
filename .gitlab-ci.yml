@@ -154,10 +154,20 @@ release-smoke:
 parity:
   stage: parity
   needs: ["test:core", "test:kernel", "test:sql-unit", "test:sql-contracts", "test:bench"]
+  tags: [build]
   timeout: 240 minutes
   variables:
     CI_REDLINE_TESTING_REQUESTED_VERSION: "1.0.0"
     REDLINE_TESTING_PINNED_ONLY: "1"
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
+    - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
+    - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
+    # gh CLI for the redline-testing release asset fetch (lib.sh uses
+    # `gh api repos/.../releases/tags/...`). Public repo, no auth needed.
+    - 'curl -fsSL https://github.com/cli/cli/releases/download/v2.69.0/gh_2.69.0_linux_amd64.tar.gz | tar -xz -C /usr/local --strip-components=1 gh_2.69.0_linux_amd64/bin/gh'
+    - gh --version
   script:
     - CI_PARITY_STAGE=redline-testing-official bash ops/ci/parity.sh
   artifacts:
