@@ -222,8 +222,17 @@ pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> 
 /// Install `pool` as the per-thread Rayon pool for the duration of `f`.
 /// Restores the prior pool on exit so nested calls behave like a stack.
 /// Pass `None` to clear the slot for the scope.
-#[allow(dead_code)]
-pub(crate) fn with_current_rayon_pool<T>(
+///
+/// WS-C3 R3: this is the embedder-facing installer that lights up the
+/// parallel covering-scan gate. Without a pool installed, the gate
+/// always returns `FallbackNoPool`. The expected call shape is
+/// `with_current_rayon_pool(Some(db.rayon_pool()?), || stmt.step())`
+/// so the SQL executor sees the active pool for the duration of one
+/// statement-step cycle. The `pub` surface lives in
+/// `redlinedb_sql::ws_c3_testing` so callers outside the test suite
+/// treat the API as internal until WS-C7 wires it implicitly
+/// through `redlinedb::Connection`.
+pub fn with_current_rayon_pool<T>(
     pool: Option<Arc<rayon::ThreadPool>>,
     f: impl FnOnce() -> T,
 ) -> T {
@@ -238,8 +247,7 @@ pub(crate) fn with_current_rayon_pool<T>(
 /// Snapshot the currently-installed per-database Rayon pool, if any. Returns
 /// `None` when no pool has been installed for this thread — operators must
 /// fall back to their serial path.
-#[allow(dead_code)]
-pub(crate) fn current_rayon_pool() -> Option<Arc<rayon::ThreadPool>> {
+pub fn current_rayon_pool() -> Option<Arc<rayon::ThreadPool>> {
     CURRENT_RAYON_POOL.with(|cell| cell.borrow().as_ref().map(Arc::clone))
 }
 

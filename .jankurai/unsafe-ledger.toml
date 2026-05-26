@@ -1014,3 +1014,29 @@ owner = "phase6-r1b-morsel-simd-filter"
 invariant = "`apply_mask_4` (x86 variant) definition: mirrors the x86_64 entry above; bounds and AVX2 invariant identical."
 proof_lane = "rtk cargo test -p redlinedb-sql --test morsel_scan_filter --quiet --locked"
 proof_test = "redlinedb-sql::morsel_scan_filter::filter_chained_predicates_compose_via_and"
+
+# ---- Phase 6 R4-A (morsel hash aggregator SIMD) ----
+
+[[entries]]
+file = "crates/sql/src/exec/morsel/hash_agg.rs"
+line = 443
+owner = "phase6-r4a-morsel-hash-agg"
+invariant = "AVX2 dispatch upheld at runtime via `std::is_x86_feature_detected!(\"avx2\")`; calling `sum_i64_avx2` only when its `target_feature = \"avx2\"` precondition is satisfied. Length precondition (`col.len() >= 4`) makes at least one SIMD body iteration valid; shorter slices fall back to scalar."
+proof_lane = "rtk cargo test -p redlinedb-sql --test morsel_hash_agg --quiet --locked"
+proof_test = "redlinedb-sql::morsel_hash_agg::large_morsel_1024_rows_simd_eq_scalar"
+
+[[entries]]
+file = "crates/sql/src/exec/morsel/hash_agg.rs"
+line = 489
+owner = "phase6-r4a-morsel-hash-agg"
+invariant = "Loop guard `i + lanes <= n` (with `lanes = 4` and `n = col.len()`) bounds the 4-lane unaligned load `_mm256_loadu_si256` to `col[i..i+4]`; `_mm256_loadu_si256` accepts any alignment; AVX2 upheld by the enclosing function's `#[target_feature(enable = \"avx2\")]`. `_mm256_add_epi64` has no memory side; `acc` lives entirely in a vector register."
+proof_lane = "rtk cargo test -p redlinedb-sql --test morsel_hash_agg --quiet --locked"
+proof_test = "redlinedb-sql::morsel_hash_agg::large_morsel_1024_rows_simd_eq_scalar"
+
+[[entries]]
+file = "crates/sql/src/exec/morsel/hash_agg.rs"
+line = 500
+owner = "phase6-r4a-morsel-hash-agg"
+invariant = "`lanes_out` is a 32-byte stack-allocated `[i64; 4]` (4 * 8 = 32 bytes); `_mm256_storeu_si256` accepts any alignment so the unaligned store is valid; AVX2 upheld by the enclosing function's `#[target_feature(enable = \"avx2\")]`. No data race because `lanes_out` is a fresh stack local with exclusive `&mut` access."
+proof_lane = "rtk cargo test -p redlinedb-sql --test morsel_hash_agg --quiet --locked"
+proof_test = "redlinedb-sql::morsel_hash_agg::large_morsel_1024_rows_simd_eq_scalar"

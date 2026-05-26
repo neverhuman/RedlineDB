@@ -170,16 +170,20 @@ fn build_select_runtime(
         // producing wrong rows.
         && matched.consumed_full_predicate()
     {
-        // WS-C3 R2: consult the parallel covering-scan gate. The gate
-        // is purely advisory today — the production covering path
-        // walks index leaves rather than heap pages, so the actual
-        // parallel dispatch (`PageBackedHeap::parallel_scan_page_range`)
-        // is not the appropriate engine for this particular pipeline.
-        // We still evaluate the gate so the wiring is exercised and
-        // tests can observe its decisions; the returned strategy is
-        // consulted via [`ParallelCoveringDecision::would_dispatch`]
-        // before any worker is spawned. See R1-D's partial-ship note
-        // for the same pattern on `ConcurrentHeap::parallel_scan`.
+        // WS-C3 R2/R3: consult the parallel covering-scan gate.
+        //
+        // R2 (kernel + gate predicate) shipped the gate that
+        // evaluates per-condition fallbacks. R3-C (this commit)
+        // wires the actual dispatch: when the gate returns
+        // `Dispatch` AND the downstream operator is HashAggregator
+        // or SpillSort, we route the read through
+        // `Engine::parallel_scan_page_range` (the public R2 kernel
+        // API) inside `pool.install(|| ...)` so workers run in the
+        // database's dedicated Rayon pool. Without a pool installed,
+        // the gate returns `FallbackNoPool` and we keep the
+        // index-leaf serial covering path. Result-set parity vs
+        // the serial path is enforced by
+        // `tests/ws_c3_parallel_scan_dispatch.rs`.
         let parallel_decision = decide_parallel_covering_scan(plan, limit);
         debug_assert!(
             !parallel_decision.would_dispatch() || super::outer_row_stack_is_empty(),
@@ -195,15 +199,49 @@ fn build_select_runtime(
         } else {
             None
         };
-        let rows = index_access::execute_index_covering_range(
-            conn.engine(),
-            tx_ref,
-            &matched.index,
-            start,
-            end,
-            &out_columns,
-            cover_limit,
-        )?;
+        let rows = match parallel_decision {
+            ParallelCoveringDecision::Dispatch { worker_count } => {
+                // R3-C: heap parallel-scan dispatch. The pool was
+                // installed by the embedder (or the test surface);
+                // `current_rayon_pool` returns it and we use
+                // `pool.install` to confine worker affinity to the
+                // dedicated pool. Falls through to the serial
+                // covering path when the pool slot is empty between
+                // the gate decision and dispatch — this is the
+                // safety net that keeps the executor honest in the
+                // face of races on the per-thread slot.
+                match super::current_rayon_pool() {
+                    Some(pool) => dispatch_parallel_covering_scan(
+                        conn.engine(),
+                        tx_ref,
+                        table,
+                        &plan.selection,
+                        &plan.projection,
+                        bindings,
+                        worker_count,
+                        &pool,
+                    )?,
+                    None => index_access::execute_index_covering_range(
+                        conn.engine(),
+                        tx_ref,
+                        &matched.index,
+                        start,
+                        end,
+                        &out_columns,
+                        cover_limit,
+                    )?,
+                }
+            }
+            _ => index_access::execute_index_covering_range(
+                conn.engine(),
+                tx_ref,
+                &matched.index,
+                start,
+                end,
+                &out_columns,
+                cover_limit,
+            )?,
+        };
         fast_path_rows = Some(rows);
     }
 
@@ -1759,6 +1797,123 @@ thread_local! {
 
 fn record_parallel_covering_decision(decision: ParallelCoveringDecision) {
     LAST_PARALLEL_DECISION.with(|cell| cell.set(Some(decision)));
+}
+
+/// WS-C3 R3-C: dispatch the heap-side parallel scan and reshape its
+/// output into the same `Vec<Vec<SqlValue>>` projection that the
+/// serial covering path produces. The serial path walks the index
+/// leaf chain; the parallel path walks every heap page belonging to
+/// `table.relation_id` in parallel, applies the WHERE predicate
+/// post-scan, then evaluates `projection` per surviving row.
+///
+/// Result ordering is intentionally NOT preserved: the kernel
+/// `parallel_scan_page_range` documents that rows arrive in an
+/// order determined by which worker drains its slice of pages
+/// first, and the WS-C3 R2 gate refuses to dispatch when an
+/// `ORDER BY` consumer downstream would observe a different shape.
+/// The two downstream operators that tolerate this — HashAggregator
+/// and SpillSort — re-establish order from the data itself.
+///
+/// The `pool.install(|| ...)` wrap is what keeps the worker
+/// threads bound to the database's dedicated pool; without it, the
+/// kernel would still parallelise but the `std::thread::scope`
+/// workers would not see the pool's affinity / NUMA hints.
+#[allow(clippy::too_many_arguments)]
+fn dispatch_parallel_covering_scan(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    selection: &Option<Expr>,
+    projection: &[SelectItem],
+    bindings: &[Option<SqlValue>],
+    worker_count: usize,
+    pool: &Arc<rayon::ThreadPool>,
+) -> Result<Vec<Vec<SqlValue>>> {
+    use redlinedb_kernel::format::PageId;
+
+    // R3-C: the scan needs a page-range bound that covers every page
+    // currently holding a live tuple for this relation. The
+    // engine-level `heap_page_count` (derived from the heap file's
+    // on-disk size) is too low when writes are still buffered in
+    // the WAL + buffer pool and the heap file has not yet
+    // extended. `relation_entries` walks the in-memory row
+    // directory: every row's `TuplePtr` carries the `PageId`, so
+    // `max + 1` of those page ids is a safe upper bound that
+    // covers both flushed and buffered pages. We take the max of
+    // the two bounds so the scan also visits any pages already on
+    // disk that don't yet have a directory entry for this
+    // relation (the per-page `rel_filter` discards rows belonging
+    // to other relations).
+    let entries = engine.relation_entries(table.relation_id)?;
+    let max_page = entries
+        .iter()
+        .map(|(_, ptr)| ptr.page_id.0)
+        .max()
+        .unwrap_or(0);
+    let mut total_pages = engine.heap_page_count()?;
+    // Take whichever bound is larger — `page_count` covers any pages
+    // already extended on disk (including pages from other relations
+    // that the per-page rel_filter will skip), and `max_page+1`
+    // covers any in-memory pages not yet flushed.
+    total_pages = total_pages.max(max_page.saturating_add(1));
+    if total_pages == 0 || entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rel_filter = Some(table.relation_id);
+    let snapshot = tx.snapshot().clone();
+    let owner = Some(tx.id());
+
+    // The pool is dedicated to this database; `install` confines the
+    // `thread::scope` workers spawned inside
+    // `parallel_scan_page_range` to that pool's affinity. We still
+    // pass `worker_count` so the dispatcher knows how many slices to
+    // make.
+    //
+    // `PageId(0)` is reserved for the control file / catalog header
+    // and pinning it returns `CorruptPage("page id zero is invalid")`,
+    // so the page range starts at `PageId(1)`. Higher non-heap pages
+    // (catalog / undo / index) are skipped per-page inside
+    // `collect_heap_page` via the page-kind check.
+    let scan_start = PageId(1);
+    let heap_rows = pool.install(|| {
+        engine.parallel_scan_page_range(
+            &snapshot,
+            owner,
+            scan_start..PageId(total_pages),
+            rel_filter,
+            worker_count,
+            None,
+        )
+    })?;
+
+    // Decode payloads -> SqlRow, apply WHERE, project. The decoding
+    // and predicate evaluation stay serial (downstream operator) —
+    // the parallel speedup lives in the I/O + page-pin phase.
+    let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(heap_rows.len());
+    for heap_row in heap_rows {
+        let Some((table_id, mut values)) = decode_sql_row(&heap_row.payload)? else {
+            continue;
+        };
+        if table_id != table.table_id.0 {
+            continue;
+        }
+        if values.len() < table.columns.len() {
+            values.resize(table.columns.len(), SqlValue::Null);
+            values = build_default_values(table, values)?;
+        }
+        let table_row = TableRow {
+            rowid: heap_row.row_id,
+            values,
+            table: Arc::clone(table),
+            alias: None,
+        };
+        let row = SqlRow::Table(table_row);
+        if !selection_passes(selection, &row, bindings)? {
+            continue;
+        }
+        out.push(project_row(projection, &row, bindings)?);
+    }
+    Ok(out)
 }
 
 /// WS-C3 R2 test hook: read and clear the most recent decision the

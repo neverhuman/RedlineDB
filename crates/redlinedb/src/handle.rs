@@ -280,11 +280,16 @@ impl Database {
             .unwrap_or(0)
     }
 
-    /// Internal accessor for the database's Rayon pool. `None` when the
-    /// pool is disabled. Future intra-query parallel operators will call
-    /// `pool.install(|| ...)` instead of polluting the global Rayon pool.
-    #[allow(dead_code)]
-    pub(crate) fn rayon_pool(&self) -> Option<Arc<rayon::ThreadPool>> {
+    /// WS-C3 R3: accessor for the database's Rayon pool. `None` when
+    /// the pool is disabled (the `parallel_executor` /
+    /// `with_rayon_threads` builder was never called or was called
+    /// with `0`/`1`). Intra-query parallel operators (parallel
+    /// covering-scan, parallel sort, parallel hash aggregation) call
+    /// `pool.install(|| ...)` instead of polluting the global Rayon
+    /// pool. Now `pub` because the SQL crate's parallel-scan
+    /// dispatch test installs the pool onto the executor's per-
+    /// thread slot directly via `redlinedb_sql::ws_c3_testing`.
+    pub fn rayon_pool(&self) -> Option<Arc<rayon::ThreadPool>> {
         self.inner.rayon_pool.as_ref().map(Arc::clone)
     }
 

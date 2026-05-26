@@ -158,6 +158,33 @@ impl OpenOptions {
         self
     }
 
+    /// WS-C3 R3 (Phase 6): build a per-`Database` Rayon thread pool
+    /// dedicated to intra-query parallel operators (parallel
+    /// covering-scan, parallel sort, parallel hash aggregation).
+    ///
+    /// This is the user-facing entry point that lights up the WS-C3
+    /// R2 parallel covering-scan gate: with no pool installed the
+    /// gate always falls back to the serial path
+    /// ([`ParallelCoveringDecision::FallbackNoPool`]); with a pool
+    /// installed the gate dispatches when downstream is
+    /// HashAggregator or SpillSort.
+    ///
+    /// Behaviour mirrors [`OpenOptions::with_rayon_threads`] — the
+    /// fluent name is what the WS-C3 R3 brief calls out so the public
+    /// API matches the wiring document. Passing `0` or `1` keeps the
+    /// serial path (no pool is constructed); passing `n >= 2` builds
+    /// an `n`-thread non-global pool. Embedders that already host a
+    /// Rayon pool (axum, sqlx, host analytics stacks) are NOT
+    /// affected — the build never calls `build_global`.
+    ///
+    /// [`ParallelCoveringDecision::FallbackNoPool`]:
+    ///     https://docs.rs/redlinedb-sql/latest/redlinedb_sql/ws_c3_testing/enum.ParallelCoveringDecision.html
+    #[must_use]
+    pub fn parallel_executor(mut self, num_threads: usize) -> Self {
+        self.rayon_threads = Some(num_threads);
+        self
+    }
+
     /// WS-C9: pin the lean ephemeral defaults explicitly. See
     /// [`OpenOptions::lean_ephemeral`]. Callers that want to override the
     /// Wave-6b auto-default for in-memory / ephemeral opens should pass

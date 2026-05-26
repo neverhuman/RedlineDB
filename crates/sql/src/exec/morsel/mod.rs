@@ -16,6 +16,7 @@ pub mod bitmap;
 pub mod builder;
 pub mod column;
 pub mod filter;
+pub mod hash_agg;
 pub mod scan;
 
 #[allow(unused_imports)]
@@ -30,6 +31,8 @@ pub use column::ColumnBatch;
 pub use filter::{
     filter_i64_eq, filter_i64_ge, filter_i64_gt, filter_i64_le, filter_i64_lt, filter_i64_ne,
 };
+#[allow(unused_imports)]
+pub use hash_agg::{AggKind as MorselAggKind, AggSpec, GroupSpec, MorselHashAggregator};
 #[allow(unused_imports)]
 pub use scan::{MorselScan, RowRef, ScanSource};
 
