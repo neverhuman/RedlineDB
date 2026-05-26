@@ -199,6 +199,17 @@ pub(crate) fn bind_update(
             "UPDATE ... FROM is not supported".to_owned(),
         ));
     }
+    // Phase 5 WS-A2f rolled back at parser layer: SQLite's autoconf
+    // amalgamation parser rejects `UPDATE ... LIMIT n` regardless of the
+    // `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT` compile flag, so accepting it
+    // in RedlineDB makes the official parity gate diverge from reference.
+    // Users who want this can do `UPDATE t SET ... WHERE rowid IN
+    // (SELECT rowid FROM t ORDER BY x LIMIT n)` instead.
+    if update.limit.is_some() {
+        return Err(Error::UnsupportedSql(
+            "UPDATE LIMIT is not supported".to_owned(),
+        ));
+    }
 
     if let sqlparser::ast::TableFactor::Table { ref name, .. } = update.table.relation
         && crate::exec::view::name_is_view(&schema, name)
@@ -288,6 +299,22 @@ pub(crate) fn bind_delete(
     if delete.using.is_some() {
         return Err(Error::UnsupportedSql(
             "DELETE ... USING is not supported".to_owned(),
+        ));
+    }
+    // Phase 5 WS-A2f rolled back at parser layer: SQLite's autoconf
+    // amalgamation parser rejects `DELETE ... ORDER BY ... LIMIT n`
+    // regardless of the `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT` compile
+    // flag, so accepting it makes the parity gate diverge. Users can do
+    // `DELETE FROM t WHERE rowid IN (SELECT rowid FROM t ORDER BY x
+    // LIMIT n)` for equivalent semantics.
+    if !delete.order_by.is_empty() {
+        return Err(Error::UnsupportedSql(
+            "DELETE ORDER BY is not supported".to_owned(),
+        ));
+    }
+    if delete.limit.is_some() {
+        return Err(Error::UnsupportedSql(
+            "DELETE LIMIT is not supported".to_owned(),
         ));
     }
 

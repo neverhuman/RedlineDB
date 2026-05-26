@@ -62,31 +62,24 @@ fn delete_using_is_unsupported() {
 }
 
 #[test]
-fn delete_limit_is_supported() {
-    // Phase 5 WS-A2f: `DELETE ... LIMIT n` is now accepted (SQLite
-    // parity). Without ORDER BY the row pick is implementation-defined,
-    // so we only assert the cap.
+fn delete_limit_is_unsupported() {
+    // WS-A2f rolled back at parser layer to match the SQLite autoconf
+    // amalgamation (which rejects the syntax regardless of the
+    // -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT compile flag). Users can do
+    // `DELETE FROM t WHERE rowid IN (SELECT rowid FROM t LIMIT n)`.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
-    c.execute("INSERT INTO t VALUES (1),(2),(3)")
-        .expect("insert");
-    let affected = c.execute("DELETE FROM t LIMIT 1").expect("delete limit");
-    assert_eq!(affected, 1);
+    let res = c.execute("DELETE FROM t LIMIT 1");
+    assert_errors(res);
 }
 
 #[test]
-fn delete_order_by_is_supported() {
-    // Phase 5 WS-A2f: `DELETE ... ORDER BY ...` is now accepted (SQLite
-    // parity). Without LIMIT every row is deleted, but the ordering
-    // controls how RETURNING / triggers / FK cascades observe them.
+fn delete_order_by_is_unsupported() {
+    // WS-A2f rolled back at parser layer (see above).
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
-    c.execute("INSERT INTO t VALUES (1),(2),(3)")
-        .expect("insert");
-    let affected = c
-        .execute("DELETE FROM t ORDER BY id")
-        .expect("delete order by");
-    assert_eq!(affected, 3);
+    let res = c.execute("DELETE FROM t ORDER BY id");
+    assert_errors(res);
 }
 
 #[test]
