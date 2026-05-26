@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:0605026fb67821fc64f00084044dbcbd68168305015f6737884bfd9ce4c72e94",
-  "input_fingerprint": "sha256:70f7f3a270459177e2c7ef3943c30a50418adfe33762ee75e2e8fdd3c224a7e7",
-  "policy_fingerprint": "sha256:affaf294fc444a2dc116f4046213e166d7f8474be08d78d6278feb240d9a2c00",
+  "report_fingerprint": "sha256:c554078b4db3a7d8076769042132c3612c8ae67eadc2cc7c6bbe7196c5b6b1d6",
+  "input_fingerprint": "sha256:040d5e78b784be846a9bfcdb8f6598eb07943e59f1990adf6228c299d892f665",
+  "policy_fingerprint": "sha256:aaaee40a902eafdce540ca464af48d69d5fb586b3793747163671d4d8eef72cf",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779668764",
+  "generated_at": "1779770964",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -14,87 +14,43 @@
   "target_stack_id": "rust-ts-vite-react-postgres-bounded-python",
   "target_stack": "Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service",
   "claimed_conformance_level": "HL3",
-  "observed_conformance_level": "HL2",
-  "conformance_decision": "block",
-  "conformance_blockers": [
-    "HLT-000-SCORE-DIMENSION:proof on .",
-    "HLT-009-GENERATED-SECURITY on .github/workflows",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/ci.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/jankurai-tools.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/jankurai.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/release-build.yml",
-    "HLT-042-CI-LOCAL-PARITY on .github/workflows/sqlite-parity-report.yml",
-    "HLT-008-FALSE-GREEN-RISK on crates/",
-    "HLT-017-OPAQUE-OBSERVABILITY on crates/domain",
-    "HLT-025-RELEASE-READINESS-GAP on docs/release.md"
-  ],
+  "observed_conformance_level": "HL3",
+  "conformance_decision": "pass",
+  "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1779668764",
-  "started_at": "1779668764",
-  "elapsed_ms": 330,
+  "run_id": "1779770964",
+  "started_at": "1779770964",
+  "elapsed_ms": 11483,
   "scope": {
-    "mode": "changed-fast",
-    "paths": [
-      ".jankurai/repo-score.json",
-      ".jankurai/repo-score.md",
-      "crates/cli/src/lib.rs"
-    ]
+    "mode": "full",
+    "paths": []
   },
-  "score": 52,
-  "raw_score": 52,
+  "score": 85,
+  "raw_score": 85,
   "decision": {
-    "status": "fail",
+    "status": "advisory",
     "minimum_score": 85,
-    "passed": false,
-    "hard_findings": 15,
-    "soft_findings": 13,
+    "passed": true,
+    "hard_findings": 0,
+    "soft_findings": 2,
     "ratchet": {
       "baseline_score": 85,
       "allowed_drop": 0,
-      "passed": false,
-      "score_delta": -33,
-      "baseline_report_fingerprint": "sha256:0e7188462b148813372d3a50075cb2c7d6d0497569b4691ac5c551d1a2f933ae",
-      "baseline_input_fingerprint": "sha256:4778b1bb7a0688d9bf55767c6bd402b815c86fe39c54dda5126e428d58a2cda8",
-      "baseline_policy_fingerprint": "sha256:affaf294fc444a2dc116f4046213e166d7f8474be08d78d6278feb240d9a2c00",
-      "new_caps": [
-        "ci-local-parity",
-        "missing-agent-readable-docs",
-        "missing-rust-property-or-integration-tests",
-        "no-agent-friendly-exception-pattern",
-        "no-one-command-setup-or-validation",
-        "no-security-lane-on-high-risk-repo",
-        "release-readiness-gap"
-      ],
-      "new_hard_findings": [
-        "sha256:1991b318cb68e7d158d2872f47f6e4698eb2aca6768d4d912c31d6f943f74454",
-        "sha256:538667a01e35d8e91eae100627364816dd225911862fa2fa1578642af63d4af8",
-        "sha256:65427f2c3aa76a8a34f7a609ea37d0405490203f08708acc06c9374be0e492d9",
-        "sha256:6bfbb5bdddc89654f88ac6c8ee166a84a0f6c585adeb94ab8f1e90a0ced148b7",
-        "sha256:6e2f06d88000364d6f14d3c2bba6673a6d677049ea02fbfb850f3811ee546f5d",
-        "sha256:6fd989baadfed487d1f5858af58297b91cfa03225a7016fe053a02e62e5d90ca",
-        "sha256:7010147691f443ae19d3d8603c11ec84958d455885b09e09eca0b9fa91933bde",
-        "sha256:74a357e809d6139da803756394fac01291989a8f4b2b140ca8e27a91e29c46ca",
-        "sha256:7aaa615018d4c0d9cf01c97f73deed15b1c663ad47923711d07e0fec3068133f",
-        "sha256:8ece7234070a20910736663e65a530625acd16dac7fa57476cfc7c9a74bd745c",
-        "sha256:9d1efc3c6547e854d812122da68fe084f4fd645d7ff6368e15787b5946fcd78d",
-        "sha256:b790943aaff8144a344d3277fc015c48ebe71af808e63a4f1eb6006c456763d4",
-        "sha256:beef8b01b8447985b9c3fb008eb50af0e8f2e58cf64fd1be36c44d4eeb46d602",
-        "sha256:c249be982d975721833fe396cdfff422f53a2d61819df881968fba63fdd6b9bf",
-        "sha256:d8ec9f107cf44462f7b5d4065db1938c765752b9912de361a2ae5bdcfc4c0e6c"
-      ],
+      "passed": true,
+      "score_delta": 0,
+      "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "baseline_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "new_caps": [],
+      "new_hard_findings": [],
       "policy_changed": false
     }
   },
   "git": {
-    "head": "fe2d2d2",
+    "head": "2a5760d",
     "base": null,
-    "changed_files": 3,
-    "mode": "changed-fast",
+    "changed_files": 0,
+    "mode": "full",
     "dirty_worktree": true
   },
   "policy": {
@@ -108,22 +64,14 @@
       "medium",
       "low"
     ],
-    "mode": "ratchet",
+    "mode": "advisory",
     "standard_version": "0.9.0",
     "auditor_version": "1.5.1",
     "schema_version": "1.9.0",
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
-  "caps_applied": [
-    "no-one-command-setup-or-validation",
-    "no-security-lane-on-high-risk-repo",
-    "release-readiness-gap",
-    "missing-rust-property-or-integration-tests",
-    "no-agent-friendly-exception-pattern",
-    "missing-agent-readable-docs",
-    "ci-local-parity"
-  ],
+  "caps_applied": [],
   "hard_rules": [
     {
       "id": "no-root-agent-instructions",
@@ -314,80 +262,101 @@
     {
       "name": "Ownership and navigation surface",
       "weight": 13,
-      "score": 44,
-      "weighted_points": 5.72,
+      "score": 100,
+      "weighted_points": 13.0,
       "evidence": [
         "root `AGENTS.md` present",
+        "`CODEOWNERS` present",
+        "local `AGENTS.md` file(s)",
+        "reference-profile cell `api` is canonical",
+        "reference-profile cell `api` has local AGENTS.md guidance",
+        "reference-profile cell `domain` is canonical",
+        "reference-profile cell `domain` has local AGENTS.md guidance",
+        "reference-profile cell `application` is canonical",
+        "reference-profile cell `application` has local AGENTS.md guidance",
+        "reference-profile cell `adapters` is canonical",
+        "reference-profile cell `adapters` has local AGENTS.md guidance",
+        "reference-profile cell `workers` is canonical",
+        "reference-profile cell `workers` has local AGENTS.md guidance",
+        "reference-profile cell `contracts` is canonical",
+        "reference-profile cell `contracts` has local AGENTS.md guidance",
+        "reference-profile cell `db` is canonical",
+        "reference-profile cell `db` has local AGENTS.md guidance",
+        "reference-profile cell `ops` is canonical",
+        "reference-profile cell `ops` has local AGENTS.md guidance",
+        "root `README.md` routes to workspace layout",
         "owner map covers audited paths",
         "test map covers audited paths",
         "authored code file exceeds 500 LOC",
         "authored code file exceeds 1000 LOC"
       ],
-      "notes": [
-        "reference-profile cell `ops` is detected outside its canonical folder",
-        "reference-profile cell `ops` lacks local AGENTS.md guidance"
-      ]
+      "notes": []
     },
     {
       "name": "Contract and boundary integrity",
       "weight": 13,
-      "score": 43,
-      "weighted_points": 5.59,
+      "score": 88,
+      "weighted_points": 11.44,
       "evidence": [
-        "Rust typed boundary helpers found"
+        "contract surface found",
+        "generated contract artifacts found",
+        "polyglot boundary layout present",
+        "Rust typed boundary helpers found",
+        "all contract sources have generated zone entries"
       ],
       "notes": []
     },
     {
       "name": "Proof lanes and test routing",
       "weight": 12,
-      "score": 65,
-      "weighted_points": 7.8,
+      "score": 98,
+      "weighted_points": 11.76,
       "evidence": [
+        "one-command setup/validation lane found",
         "deterministic fast lane found",
         "test runner present in automation surface",
         "GitHub workflow files present",
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "proofbind artifact found: surfaces=113 missing=113 high_or_critical_missing=33 verdict=review"
+        "Rust property/integration tests present or no Rust surface"
       ],
-      "notes": [
-        "no one-command setup/validation lane",
-        "Rust surface lacks property or integration tests",
-        "proofbind reports 113 unresolved obligation(s)",
-        "proofbind reports 33 missing high/critical semantic proof obligation(s)"
-      ]
+      "notes": []
     },
     {
       "name": "Security and supply-chain posture",
       "weight": 12,
-      "score": 66,
-      "weighted_points": 7.92,
+      "score": 86,
+      "weighted_points": 10.32,
       "evidence": [
         "lockfile present",
         "secret or dependency scan tooling found",
         "provenance/SBOM tooling found",
         "workflow linting tooling found",
+        "security lane present",
+        "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 19",
-        "ci bad-behavior advisory signals: 3"
+        "rust bad-behavior advisory signals: 2140",
+        "ci bad-behavior advisory signals: 3",
+        "git bad-behavior advisory signals: 2",
+        "secret scanning command is operational"
       ],
-      "notes": [
-        "no explicit security lane found"
-      ]
+      "notes": []
     },
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 35,
-      "weighted_points": 4.2,
+      "score": 45,
+      "weighted_points": 5.4,
       "evidence": [
-        "largest authored code file: crates/cli/src/lib.rs (1130 LOC)",
+        "largest authored code file: crates/sql/src/parser.rs (4564 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
-        "rust bad-behavior advisory signals: 19",
+        "most code files stay under 300 LOC",
+        "copy-code advisory classes found: 90 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 2140",
         "ci bad-behavior advisory signals: 3",
+        "git bad-behavior advisory signals: 2",
         "no hard bad-behavior findings across detector-backed language families"
       ],
       "notes": []
@@ -395,37 +364,46 @@
     {
       "name": "Data truth and workflow safety",
       "weight": 8,
-      "score": 50,
-      "weighted_points": 4.0,
-      "evidence": [],
+      "score": 85,
+      "weighted_points": 6.8,
+      "evidence": [
+        "database surface present",
+        "migration directory present",
+        "constraint or RLS language found"
+      ],
       "notes": []
     },
     {
       "name": "Observability and repair evidence",
       "weight": 8,
-      "score": 23,
-      "weighted_points": 1.84,
+      "score": 88,
+      "weighted_points": 7.04,
       "evidence": [
-        "repair receipts or raw artifact language found"
+        "observability libraries or patterns found",
+        "ops/observability directory present",
+        "repair receipts or raw artifact language found",
+        "agent-friendly exception pattern found",
+        "repair-hint and receipt convention are documented",
+        "repair receipt guidance is documented"
       ],
       "notes": [
-        "no agent-friendly exception pattern found",
         "free-form logging appears in scope"
       ]
     },
     {
       "name": "Context economy and agent instructions",
       "weight": 7,
-      "score": 45,
-      "weighted_points": 3.15,
+      "score": 91,
+      "weighted_points": 6.37,
       "evidence": [
         "root `AGENTS.md` present",
         "root `AGENTS.md` stays short",
-        "thin IDE/agent adapters are present"
+        "thin IDE/agent adapters are present",
+        "local instruction files present",
+        "root README routes to the right docs",
+        "core agent-readable docs present"
       ],
-      "notes": [
-        "missing agent-readable docs: README.md, docs/architecture.md or docs/boundaries.md, docs/testing.md"
-      ]
+      "notes": []
     },
     {
       "name": "Jankurai tool adoption and CI replacement",
@@ -434,10 +412,10 @@
       "weighted_points": 5.6,
       "evidence": [
         "control-plane files present",
-        "applicable=14",
+        "applicable=16",
         "configured=0",
-        "ci_evidence=14",
-        "artifact_verified=14"
+        "ci_evidence=16",
+        "artifact_verified=16"
       ],
       "notes": [
         "some applicable tools are not configured"
@@ -456,17 +434,16 @@
     {
       "name": "Build speed signals",
       "weight": 4,
-      "score": 60,
-      "weighted_points": 2.4,
+      "score": 80,
+      "weighted_points": 3.2,
       "evidence": [
         "build acceleration markers found",
         "targeted test/build commands found",
         "locked dependency graph present",
-        "CI cache hint found"
+        "CI cache hint found",
+        "explicit cache marker plus narrow per-package target found"
       ],
-      "notes": [
-        "missing one-command setup/validation"
-      ]
+      "notes": []
     }
   ],
   "ux_qa": {
@@ -477,11 +454,17 @@
       "accessibility": [],
       "api_mocks": [],
       "artifact_backed_proof": [
-        "crates/cli/src/lib.rs"
+        ".jankurai/proof-lanes.toml",
+        ".jankurai/test-map.json",
+        ".jankurai/unsafe-ledger.toml",
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/dick-head-choas-smoke.json",
+        "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json"
       ],
       "design_tokens": [],
       "geometry_runtime": [],
-      "layout_stability": [],
+      "layout_stability": [
+        "crates/sql/tests/ws_b3b_simd_json_tokenize.rs"
+      ],
       "playwright_visual": [],
       "storybook": [],
       "visual_review": []
@@ -489,11 +472,11 @@
   },
   "tool_adoption": {
     "control_plane_present": true,
-    "applicable_count": 14,
+    "applicable_count": 16,
     "configured_count": 0,
-    "ci_evidence_count": 14,
-    "artifact_verified_count": 14,
-    "replaced_count": 14,
+    "ci_evidence_count": 16,
+    "artifact_verified_count": 16,
+    "replaced_count": 16,
     "items": [
       {
         "id": "audit-ci",
@@ -765,16 +748,20 @@
         "id": "contract-drift",
         "category": "contract",
         "mode": "auto",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "artifact_verified",
         "replaced_tools": [
           "handwritten contract drift checks",
           "openapi diff"
         ],
         "evidence": [
-          "mode=auto"
+          "mode=auto",
+          "CI command found in workflow",
+          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -874,15 +861,19 @@
         "id": "input-boundary",
         "category": "security",
         "mode": "auto",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "artifact_verified",
         "replaced_tools": [
           "manual unsafe sink review"
         ],
         "evidence": [
-          "mode=auto"
+          "mode=auto",
+          "CI command found in workflow",
+          "artifact uploads found: agent/repo-score.json, agent/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json agent/repo-score.json --md agent/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -964,7 +955,7 @@
       }
     ],
     "evidence": {
-      "applicable_count": 14,
+      "applicable_count": 16,
       "applicable_tools": [
         "audit-ci",
         "proof-routing",
@@ -975,13 +966,15 @@
         "ci-bad-behavior",
         "git-bad-behavior",
         "release-bad-behavior",
+        "contract-drift",
         "rust-witness",
         "authz-matrix",
+        "input-boundary",
         "agent-tool-supply",
         "release-readiness",
         "cost-budget"
       ],
-      "artifact_verified_count": 14,
+      "artifact_verified_count": 16,
       "artifact_verified_tools": [
         "audit-ci",
         "proof-routing",
@@ -992,13 +985,15 @@
         "ci-bad-behavior",
         "git-bad-behavior",
         "release-bad-behavior",
+        "contract-drift",
         "rust-witness",
         "authz-matrix",
+        "input-boundary",
         "agent-tool-supply",
         "release-readiness",
         "cost-budget"
       ],
-      "ci_evidence_count": 14,
+      "ci_evidence_count": 16,
       "ci_evidence_tools": [
         "audit-ci",
         "proof-routing",
@@ -1009,8 +1004,10 @@
         "ci-bad-behavior",
         "git-bad-behavior",
         "release-bad-behavior",
+        "contract-drift",
         "rust-witness",
         "authz-matrix",
+        "input-boundary",
         "agent-tool-supply",
         "release-readiness",
         "cost-budget"
@@ -1022,33 +1019,17 @@
     },
     "missing": []
   },
-  "security_evidence": {
-    "artifact": {
-      "path": "target/jankurai/security/evidence.json",
-      "envelope_exit_code": 0,
-      "elapsed_ms": 53839,
-      "wrapper_strict": false,
-      "profile": "local",
-      "commands_ran": 1,
-      "commands_skipped": 0,
-      "commands_failed": 0,
-      "required_commands_skipped": 0,
-      "required_commands_failed": 0,
-      "blocking_commands": [],
-      "generated_at": "1779631279",
-      "git_head": "37342ced9d7a1b9dd18891e12f2a28b6963cae53"
-    }
-  },
+  "security_evidence": {},
   "boundaries": {
     "reclassifications": []
   },
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "",
-    "repo": "",
+    "generated_at": "2026-05-26T04:49:13.166513273+00:00",
+    "repo": ".",
     "auditor_version": "1.5.1",
-    "status": "skipped",
+    "status": "review",
     "policy": {
       "active_source_only": true,
       "include_tests": false,
@@ -1056,33 +1037,2338 @@
       "min_tokens": 100,
       "max_findings": 50,
       "strict": false,
-      "excluded_roots": [],
-      "warning_only_roots": []
+      "excluded_roots": [
+        "build/",
+        "cache/",
+        "dist/",
+        "docs/",
+        "generated/",
+        "node_modules/",
+        "paper/",
+        "reference/",
+        "target/",
+        "tips/",
+        "vendor/"
+      ],
+      "warning_only_roots": [
+        "config/",
+        "docker/",
+        "fixtures/",
+        "migrations/",
+        "ops/scripts/",
+        "python_runtime/",
+        "stories/",
+        "runtime_payload/",
+        "seed_data/",
+        "tests/"
+      ]
     },
     "summary": {
-      "files_scanned": 0,
-      "files_considered": 0,
-      "active_files": 0,
+      "files_scanned": 1102,
+      "files_considered": 336,
+      "active_files": 336,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 0,
+      "warning_classes": 90,
       "hard_instances": 0,
-      "warning_instances": 0,
-      "duplicate_lines": 0,
-      "duplicate_tokens": 0,
-      "duplicate_bytes": 0,
-      "total_redundant_lines": 0,
-      "total_redundant_tokens": 0,
-      "total_redundant_bytes": 0
+      "warning_instances": 253,
+      "duplicate_lines": 197,
+      "duplicate_tokens": 581,
+      "duplicate_bytes": 5496,
+      "total_redundant_lines": 368,
+      "total_redundant_tokens": 979,
+      "total_redundant_bytes": 9831
     },
-    "classes": [],
-    "notes": []
+    "classes": [
+      {
+        "id": "copy-code-unit-rust-e3eba62657620309",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "eval",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 9,
+        "duplicate_bytes": 128,
+        "instance_count": 14,
+        "total_redundant_lines": 65,
+        "total_redundant_tokens": 117,
+        "total_redundant_bytes": 1664,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "e98f1e016fd6a075",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 228,
+            "end_line": 233,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 283,
+            "end_line": 288,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 399,
+            "end_line": 404,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 433,
+            "end_line": 438,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 467,
+            "end_line": 472,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 504,
+            "end_line": 509,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 541,
+            "end_line": 546,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 578,
+            "end_line": 583,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 616,
+            "end_line": 621,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 220,
+            "end_line": 225,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 243,
+            "end_line": 248,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 282,
+            "end_line": 287,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 370,
+            "end_line": 375,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/table_valued.rs",
+            "language": "rust",
+            "start_line": 77,
+            "end_line": 82,
+            "unit_name": "eval"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-012d89e6ee61ae7e",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "infer_affinity",
+        "duplicate_lines": 13,
+        "duplicate_tokens": 42,
+        "duplicate_bytes": 424,
+        "instance_count": 3,
+        "total_redundant_lines": 26,
+        "total_redundant_tokens": 84,
+        "total_redundant_bytes": 848,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "42e597035ea1288b",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/cross_db.rs",
+            "language": "rust",
+            "start_line": 203,
+            "end_line": 216,
+            "unit_name": "infer_affinity"
+          },
+          {
+            "path": "crates/sql/src/exec/cte.rs",
+            "language": "rust",
+            "start_line": 181,
+            "end_line": 194,
+            "unit_name": "infer_affinity"
+          },
+          {
+            "path": "crates/sql/src/exec/view.rs",
+            "language": "rust",
+            "start_line": 180,
+            "end_line": 193,
+            "unit_name": "infer_affinity"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-eae604cd6a041810",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "eval",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 9,
+        "duplicate_bytes": 127,
+        "instance_count": 6,
+        "total_redundant_lines": 25,
+        "total_redundant_tokens": 45,
+        "total_redundant_bytes": 635,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "53cfc88938b16fa0",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 76,
+            "end_line": 81,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 108,
+            "end_line": 113,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 134,
+            "end_line": 139,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 429,
+            "end_line": 434,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 463,
+            "end_line": 468,
+            "unit_name": "eval"
+          },
+          {
+            "path": "crates/sql/src/exec/pragma_tv.rs",
+            "language": "rust",
+            "start_line": 496,
+            "end_line": 501,
+            "unit_name": "eval"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-b36a384c67e1073c",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 7,
+        "duplicate_tokens": 16,
+        "duplicate_bytes": 167,
+        "instance_count": 4,
+        "total_redundant_lines": 21,
+        "total_redundant_tokens": 48,
+        "total_redundant_bytes": 501,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "9dfdb4f77e92d892",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 472,
+            "end_line": 479,
+            "unit_name": "render_column"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 591,
+            "end_line": 598,
+            "unit_name": "render_table"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 652,
+            "end_line": 659,
+            "unit_name": "render_box"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 726,
+            "end_line": 733,
+            "unit_name": "render_markdown"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-17c997c926894f93",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "function_args_contain_aggregate",
+        "duplicate_lines": 16,
+        "duplicate_tokens": 37,
+        "duplicate_bytes": 458,
+        "instance_count": 2,
+        "total_redundant_lines": 16,
+        "total_redundant_tokens": 37,
+        "total_redundant_bytes": 458,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "ba723dc1366d9ddd",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/agg/select.rs",
+            "language": "rust",
+            "start_line": 85,
+            "end_line": 101,
+            "unit_name": "function_args_contain_aggregate"
+          },
+          {
+            "path": "crates/sql/src/planner/access/projection.rs",
+            "language": "rust",
+            "start_line": 153,
+            "end_line": 169,
+            "unit_name": "function_args_contain_aggregate"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-ee3fef1ed051e6fd",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 3,
+        "duplicate_bytes": 24,
+        "instance_count": 7,
+        "total_redundant_lines": 12,
+        "total_redundant_tokens": 18,
+        "total_redundant_bytes": 144,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "0226ee1520715f67",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 112,
+            "end_line": 114,
+            "unit_name": "progress"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 116,
+            "end_line": 118,
+            "unit_name": "log"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 120,
+            "end_line": 122,
+            "unit_name": "prompt"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 124,
+            "end_line": 126,
+            "unit_name": "connection"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 137,
+            "end_line": 139,
+            "unit_name": "auth"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 291,
+            "end_line": 293,
+            "unit_name": "scanstats"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 374,
+            "end_line": 376,
+            "unit_name": "external_app"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-01571490214d8da5",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "day_of_week",
+        "duplicate_lines": 11,
+        "duplicate_tokens": 57,
+        "duplicate_bytes": 308,
+        "instance_count": 2,
+        "total_redundant_lines": 11,
+        "total_redundant_tokens": 57,
+        "total_redundant_bytes": 308,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "567f684bd9cd98fd",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/datetime/format.rs",
+            "language": "rust",
+            "start_line": 75,
+            "end_line": 86,
+            "unit_name": "day_of_week"
+          },
+          {
+            "path": "crates/sql/src/datetime/modifiers.rs",
+            "language": "rust",
+            "start_line": 192,
+            "end_line": 203,
+            "unit_name": "day_of_week"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-fde626afb5b5fcf2",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 31,
+        "instance_count": 12,
+        "total_redundant_lines": 11,
+        "total_redundant_tokens": 44,
+        "total_redundant_bytes": 341,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "ed13562922881eb3",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1629,
+            "end_line": 1630,
+            "unit_name": "strip_create_index_using_clause"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1734,
+            "end_line": 1735,
+            "unit_name": "has_jsonb_question_op"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1833,
+            "end_line": 1834,
+            "unit_name": "rewrite_jsonb_question_ops"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 2204,
+            "end_line": 2205,
+            "unit_name": "rewrite_pg_array_literal"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 2356,
+            "end_line": 2357,
+            "unit_name": "rewrite_pg_bytea_literal"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 2399,
+            "end_line": 2400,
+            "unit_name": "rewrite_pg_array_overlap"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 2544,
+            "end_line": 2545,
+            "unit_name": "rewrite_postfix_index"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 2854,
+            "end_line": 2855,
+            "unit_name": "rewrite_pg_interval_literal"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 2902,
+            "end_line": 2903,
+            "unit_name": "rewrite_date_arith_with_modifier"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 3132,
+            "end_line": 3133,
+            "unit_name": "rewrite_at_time_zone"
+          },
+          {
+            "path": "crates/sql/src/parser/split.rs",
+            "language": "rust",
+            "start_line": 33,
+            "end_line": 34,
+            "unit_name": "split_first_statement_state"
+          },
+          {
+            "path": "crates/sql/src/parser/split.rs",
+            "language": "rust",
+            "start_line": 162,
+            "end_line": 163,
+            "unit_name": "is_blank_sql"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-288f2d33c4682e4a",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 2,
+        "duplicate_bytes": 17,
+        "instance_count": 10,
+        "total_redundant_lines": 9,
+        "total_redundant_tokens": 18,
+        "total_redundant_bytes": 153,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "02263dbfde5626d7",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/catalog/record.rs",
+            "language": "rust",
+            "start_line": 152,
+            "end_line": 153,
+            "unit_name": "serial_type"
+          },
+          {
+            "path": "crates/kernel/src/catalog/stats/wire.rs",
+            "language": "rust",
+            "start_line": 162,
+            "end_line": 163,
+            "unit_name": "write_opt_value"
+          },
+          {
+            "path": "crates/kernel/src/catalog/stats/wire.rs",
+            "language": "rust",
+            "start_line": 173,
+            "end_line": 174,
+            "unit_name": "write_value"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 390,
+            "end_line": 391,
+            "unit_name": "redline_value_literal"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 487,
+            "end_line": 488,
+            "unit_name": "any_value_from_redline"
+          },
+          {
+            "path": "crates/redlinedb/src/value_conv.rs",
+            "language": "rust",
+            "start_line": 261,
+            "end_line": 262,
+            "unit_name": "parse_timezone_offset_seconds"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/coerce/binary.rs",
+            "language": "rust",
+            "start_line": 329,
+            "end_line": 330,
+            "unit_name": "sql_false_result"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/coerce/binary.rs",
+            "language": "rust",
+            "start_line": 336,
+            "end_line": 337,
+            "unit_name": "sql_false_result_not"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/coerce/binary.rs",
+            "language": "rust",
+            "start_line": 445,
+            "end_line": 446,
+            "unit_name": "decimal_from_value"
+          },
+          {
+            "path": "crates/sql/src/exec/json_tv.rs",
+            "language": "rust",
+            "start_line": 241,
+            "end_line": 242,
+            "unit_name": "emit_each"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-0a76d27a920f262f",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 2,
+        "duplicate_bytes": 20,
+        "instance_count": 8,
+        "total_redundant_lines": 7,
+        "total_redundant_tokens": 14,
+        "total_redundant_bytes": 140,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "6d9a338ba3ea1603",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb/src/value.rs",
+            "language": "rust",
+            "start_line": 43,
+            "end_line": 44,
+            "unit_name": "as_ref"
+          },
+          {
+            "path": "crates/redlinedb/src/value.rs",
+            "language": "rust",
+            "start_line": 57,
+            "end_line": 58,
+            "unit_name": "as_integer"
+          },
+          {
+            "path": "crates/redlinedb/src/value.rs",
+            "language": "rust",
+            "start_line": 64,
+            "end_line": 65,
+            "unit_name": "as_real"
+          },
+          {
+            "path": "crates/redlinedb/src/value.rs",
+            "language": "rust",
+            "start_line": 71,
+            "end_line": 72,
+            "unit_name": "as_text"
+          },
+          {
+            "path": "crates/redlinedb/src/value.rs",
+            "language": "rust",
+            "start_line": 78,
+            "end_line": 79,
+            "unit_name": "as_blob"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/model.rs",
+            "language": "rust",
+            "start_line": 64,
+            "end_line": 65,
+            "unit_name": "to_owned_row"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/model.rs",
+            "language": "rust",
+            "start_line": 77,
+            "end_line": 78,
+            "unit_name": "context"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/model.rs",
+            "language": "rust",
+            "start_line": 87,
+            "end_line": 88,
+            "unit_name": "values"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-b8007b4dbe573c8a",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "prefetch_next",
+        "duplicate_lines": 7,
+        "duplicate_tokens": 12,
+        "duplicate_bytes": 172,
+        "instance_count": 2,
+        "total_redundant_lines": 7,
+        "total_redundant_tokens": 12,
+        "total_redundant_bytes": 172,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "44e21322cfc83038",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/kernel/src/engine/page_heap/policy.rs",
+            "language": "rust",
+            "start_line": 78,
+            "end_line": 85,
+            "unit_name": "prefetch_next"
+          },
+          {
+            "path": "crates/kernel/src/engine/page_heap/policy.rs",
+            "language": "rust",
+            "start_line": 108,
+            "end_line": 115,
+            "unit_name": "prefetch_next"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-43d996be9a64c501",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 44,
+        "instance_count": 7,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 36,
+        "total_redundant_bytes": 264,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b9b43835fe0149b2",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
+            "language": "rust",
+            "start_line": 223,
+            "end_line": 224,
+            "unit_name": "ping"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 52,
+            "end_line": 53,
+            "unit_name": "ping"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 57,
+            "end_line": 58,
+            "unit_name": "begin"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 81,
+            "end_line": 82,
+            "unit_name": "commit"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 96,
+            "end_line": 97,
+            "unit_name": "rollback"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 111,
+            "end_line": 112,
+            "unit_name": "start_rollback"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 201,
+            "end_line": 202,
+            "unit_name": "describe"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-c1ca9d1165d83e2d",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 3,
+        "duplicate_tokens": 16,
+        "duplicate_bytes": 121,
+        "instance_count": 3,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 32,
+        "total_redundant_bytes": 242,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "a595cc7de55ed60d",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/expr/json_dispatch.rs",
+            "language": "rust",
+            "start_line": 729,
+            "end_line": 732,
+            "unit_name": "timediff_function"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/value.rs",
+            "language": "rust",
+            "start_line": 556,
+            "end_line": 559,
+            "unit_name": "pg_date_trunc"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/value.rs",
+            "language": "rust",
+            "start_line": 710,
+            "end_line": 713,
+            "unit_name": "pg_array_set_op"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-97e7f29fa03574a9",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "select_item_contains_aggregate",
+        "duplicate_lines": 6,
+        "duplicate_tokens": 20,
+        "duplicate_bytes": 257,
+        "instance_count": 2,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 20,
+        "total_redundant_bytes": 257,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b1b224ee599ed2f1",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/agg/select.rs",
+            "language": "rust",
+            "start_line": 9,
+            "end_line": 15,
+            "unit_name": "select_item_contains_aggregate"
+          },
+          {
+            "path": "crates/sql/src/planner/access/projection.rs",
+            "language": "rust",
+            "start_line": 94,
+            "end_line": 100,
+            "unit_name": "select_item_contains_aggregate"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-dce20c3f2037350a",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "materialize_rows",
+        "duplicate_lines": 6,
+        "duplicate_tokens": 12,
+        "duplicate_bytes": 153,
+        "instance_count": 2,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 12,
+        "total_redundant_bytes": 153,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "2c5063cd88cda730",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/policy.rs",
+            "language": "rust",
+            "start_line": 32,
+            "end_line": 38,
+            "unit_name": "materialize_rows"
+          },
+          {
+            "path": "crates/sql/src/exec/policy.rs",
+            "language": "rust",
+            "start_line": 57,
+            "end_line": 63,
+            "unit_name": "materialize_rows"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-e3b0c44298fc1c14",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 0,
+        "duplicate_bytes": 0,
+        "instance_count": 7,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 0,
+        "total_redundant_bytes": 0,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "c6766a5112f93fce",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/catalog/ddl.rs",
+            "language": "rust",
+            "start_line": 311,
+            "end_line": 311,
+            "unit_name": "_keep_type_use"
+          },
+          {
+            "path": "crates/kernel/src/failpoints/mod.rs",
+            "language": "rust",
+            "start_line": 41,
+            "end_line": 42,
+            "unit_name": "init"
+          },
+          {
+            "path": "crates/kernel/src/integrity/equivalence.rs",
+            "language": "rust",
+            "start_line": 214,
+            "end_line": 214,
+            "unit_name": "_force_error_visibility"
+          },
+          {
+            "path": "crates/kernel/src/integrity/page_csum.rs",
+            "language": "rust",
+            "start_line": 107,
+            "end_line": 107,
+            "unit_name": "_force_use"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
+            "language": "rust",
+            "start_line": 253,
+            "end_line": 254,
+            "unit_name": "shrink_buffers"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 127,
+            "end_line": 128,
+            "unit_name": "shrink_buffers"
+          },
+          {
+            "path": "crates/sql/src/exec/merge.rs",
+            "language": "rust",
+            "start_line": 272,
+            "end_line": 272,
+            "unit_name": "_silence_rowid"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-39f51bfba53487ca",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 41,
+        "instance_count": 6,
+        "total_redundant_lines": 5,
+        "total_redundant_tokens": 20,
+        "total_redundant_bytes": 205,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "2cdac3dbeece40b0",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1080,
+            "end_line": 1081,
+            "unit_name": "extract_named_window_spec"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1103,
+            "end_line": 1104,
+            "unit_name": "strip_window_clause"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 2758,
+            "end_line": 2759,
+            "unit_name": "rewrite_array_length_function"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 2822,
+            "end_line": 2823,
+            "unit_name": "rewrite_array_agg_function"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 3182,
+            "end_line": 3183,
+            "unit_name": "strip_registered_pg_schema_prefixes"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 3278,
+            "end_line": 3279,
+            "unit_name": "rewrite_pg_catalog_query"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-ce971d3e603f01c8",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "function_is_single_arg_aggregate",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 13,
+        "duplicate_bytes": 113,
+        "instance_count": 2,
+        "total_redundant_lines": 5,
+        "total_redundant_tokens": 13,
+        "total_redundant_bytes": 113,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "634f447a75d1cb97",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/agg/select.rs",
+            "language": "rust",
+            "start_line": 103,
+            "end_line": 108,
+            "unit_name": "function_is_single_arg_aggregate"
+          },
+          {
+            "path": "crates/sql/src/planner/access/projection.rs",
+            "language": "rust",
+            "start_line": 171,
+            "end_line": 176,
+            "unit_name": "function_is_single_arg_aggregate"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-9025dc7adfd22694",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 12,
+        "duplicate_bytes": 114,
+        "instance_count": 2,
+        "total_redundant_lines": 5,
+        "total_redundant_tokens": 12,
+        "total_redundant_bytes": 114,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "969a03d5c5559459",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 979,
+            "end_line": 984,
+            "unit_name": "write_tabs_value_ref"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 1003,
+            "end_line": 1008,
+            "unit_name": "write_text_value_ref"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-3fbc32cc3ebfef30",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 10,
+        "duplicate_bytes": 114,
+        "instance_count": 2,
+        "total_redundant_lines": 5,
+        "total_redundant_tokens": 10,
+        "total_redundant_bytes": 114,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "969a03d5c5559459",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 459,
+            "end_line": 464,
+            "unit_name": "align_cell"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 549,
+            "end_line": 554,
+            "unit_name": "cell_chunks"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-d38ffff3c586fd30",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "drop",
+        "duplicate_lines": 4,
+        "duplicate_tokens": 13,
+        "duplicate_bytes": 102,
+        "instance_count": 2,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 13,
+        "total_redundant_bytes": 102,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "972efee395dfaf3d",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/kernel/src/index/locks.rs",
+            "language": "rust",
+            "start_line": 200,
+            "end_line": 204,
+            "unit_name": "drop"
+          },
+          {
+            "path": "crates/sql/src/session.rs",
+            "language": "rust",
+            "start_line": 439,
+            "end_line": 443,
+            "unit_name": "drop"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-5be5063ba6e59bf3",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 4,
+        "duplicate_tokens": 12,
+        "duplicate_bytes": 121,
+        "instance_count": 2,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 12,
+        "total_redundant_bytes": 121,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b1e01b2b1eaaff40",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/expr/json_dispatch.rs",
+            "language": "rust",
+            "start_line": 62,
+            "end_line": 66,
+            "unit_name": "eval_function"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/json_dispatch.rs",
+            "language": "rust",
+            "start_line": 768,
+            "end_line": 772,
+            "unit_name": "eval_highlight_function"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-3e0c527faf5c76f4",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 52,
+        "instance_count": 3,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 10,
+        "total_redundant_bytes": 104,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "9942395e030bf367",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/format/bytes.rs",
+            "language": "rust",
+            "start_line": 44,
+            "end_line": 46,
+            "unit_name": "write_u16"
+          },
+          {
+            "path": "crates/kernel/src/format/bytes.rs",
+            "language": "rust",
+            "start_line": 49,
+            "end_line": 51,
+            "unit_name": "write_u32"
+          },
+          {
+            "path": "crates/kernel/src/format/bytes.rs",
+            "language": "rust",
+            "start_line": 54,
+            "end_line": 56,
+            "unit_name": "write_u64"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-d228f55623ca68a4",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 4,
+        "duplicate_tokens": 9,
+        "duplicate_bytes": 86,
+        "instance_count": 2,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 9,
+        "total_redundant_bytes": 86,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b0e374cbf5bf8732",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+            "language": "rust",
+            "start_line": 61,
+            "end_line": 65,
+            "unit_name": "lookup_qualified_column_local"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+            "language": "rust",
+            "start_line": 122,
+            "end_line": 126,
+            "unit_name": "lookup_qualified_column"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-8bd94ae20fc58e41",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 3,
+        "duplicate_bytes": 53,
+        "instance_count": 3,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 106,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "4de30d347dca0c79",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/format/page.rs",
+            "language": "rust",
+            "start_line": 102,
+            "end_line": 104,
+            "unit_name": "checksum_page_bytes"
+          },
+          {
+            "path": "crates/kernel/src/storage/control.rs",
+            "language": "rust",
+            "start_line": 147,
+            "end_line": 149,
+            "unit_name": "checksum_control_bytes"
+          },
+          {
+            "path": "crates/kernel/src/storage/tx_status_checkpoint.rs",
+            "language": "rust",
+            "start_line": 147,
+            "end_line": 149,
+            "unit_name": "checksum_tx_status_bytes"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-58d6f1319b7cf124",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 4,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 54,
+        "instance_count": 2,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 5,
+        "total_redundant_bytes": 54,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "91da52fd1dadf685",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 112,
+            "end_line": 116,
+            "unit_name": "query_row"
+          },
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 127,
+            "end_line": 131,
+            "unit_name": "query_row_opt"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-dc1683e0676e5adb",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 12,
+        "instance_count": 3,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 2,
+        "total_redundant_bytes": 24,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "7bd8692eb227375a",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/failpoints/mod.rs",
+            "language": "rust",
+            "start_line": 65,
+            "end_line": 67,
+            "unit_name": "cfg"
+          },
+          {
+            "path": "crates/kernel/src/failpoints/mod.rs",
+            "language": "rust",
+            "start_line": 109,
+            "end_line": 111,
+            "unit_name": "cfg_skip_then_panic"
+          },
+          {
+            "path": "crates/kernel/src/storage/numa.rs",
+            "language": "rust",
+            "start_line": 47,
+            "end_line": 49,
+            "unit_name": "pin_current_thread_to_node"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-8cb899fa75109257",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 3,
+        "duplicate_tokens": 7,
+        "duplicate_bytes": 75,
+        "instance_count": 2,
+        "total_redundant_lines": 3,
+        "total_redundant_tokens": 7,
+        "total_redundant_bytes": 75,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "ce57f012a51f1fb0",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/expr/scalar/value.rs",
+            "language": "rust",
+            "start_line": 321,
+            "end_line": 324,
+            "unit_name": "sqlite_ltrim_function"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/value.rs",
+            "language": "rust",
+            "start_line": 369,
+            "end_line": 372,
+            "unit_name": "sqlite_rtrim_function"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-cd10103ea94b3200",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 3,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 77,
+        "instance_count": 2,
+        "total_redundant_lines": 3,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 77,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "fed4366220e407ed",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1145,
+            "end_line": 1148,
+            "unit_name": "parse_detach_template"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1173,
+            "end_line": 1176,
+            "unit_name": "parse_attach_template"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-7b7555bc73bd00fc",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "partial_cmp",
+        "duplicate_lines": 3,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 37,
+        "instance_count": 2,
+        "total_redundant_lines": 3,
+        "total_redundant_tokens": 4,
+        "total_redundant_bytes": 37,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "816eec9f8bcc346a",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/kernel/src/vector/flat.rs",
+            "language": "rust",
+            "start_line": 57,
+            "end_line": 60,
+            "unit_name": "partial_cmp"
+          },
+          {
+            "path": "crates/kernel/src/vector/hnsw/searcher.rs",
+            "language": "rust",
+            "start_line": 47,
+            "end_line": 50,
+            "unit_name": "partial_cmp"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-f833924643090700",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 44,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 12,
+        "total_redundant_bytes": 88,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "225d9882e71d762e",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb-sqlx/src/driver.rs",
+            "language": "rust",
+            "start_line": 399,
+            "end_line": 400,
+            "unit_name": "commit"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/driver.rs",
+            "language": "rust",
+            "start_line": 414,
+            "end_line": 415,
+            "unit_name": "rollback"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/driver.rs",
+            "language": "rust",
+            "start_line": 429,
+            "end_line": 430,
+            "unit_name": "start_rollback"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-b7b29d332b4ef4b7",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 42,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 10,
+        "total_redundant_bytes": 84,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b9612b45043f095e",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 410,
+            "end_line": 411,
+            "unit_name": "center_pad"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 430,
+            "end_line": 431,
+            "unit_name": "left_pad"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 444,
+            "end_line": 445,
+            "unit_name": "right_pad"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-7b5f9a768c847f2c",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 36,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 10,
+        "total_redundant_bytes": 72,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "b9612b45043f095e",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 641,
+            "end_line": 642,
+            "unit_name": "write_table_row_ascii"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 766,
+            "end_line": 767,
+            "unit_name": "write_markdown_row"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 777,
+            "end_line": 778,
+            "unit_name": "write_markdown_separator"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-f63aca9d97d3002c",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 34,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 8,
+        "total_redundant_bytes": 68,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "5d60c7c0314f97a6",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
+            "language": "rust",
+            "start_line": 249,
+            "end_line": 250,
+            "unit_name": "clear_cached_statements"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
+            "language": "rust",
+            "start_line": 255,
+            "end_line": 256,
+            "unit_name": "flush"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 129,
+            "end_line": 130,
+            "unit_name": "flush"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-799befce78daf466",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 3,
+        "duplicate_bytes": 28,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 56,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "d39446edce7b8575",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 250,
+            "end_line": 251,
+            "unit_name": "commit"
+          },
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 259,
+            "end_line": 260,
+            "unit_name": "rollback"
+          },
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 269,
+            "end_line": 270,
+            "unit_name": "drop"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-1a163c5fc7d1a227",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 44,
+        "instance_count": 2,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 5,
+        "total_redundant_bytes": 44,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "410a3a5979cfbcfb",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/json/path_bytecode.rs",
+            "language": "rust",
+            "start_line": 138,
+            "end_line": 140,
+            "unit_name": "is_ident"
+          },
+          {
+            "path": "crates/sql/src/json/jsonb.rs",
+            "language": "rust",
+            "start_line": 1059,
+            "end_line": 1061,
+            "unit_name": "is_jsonpath_member_byte"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-ea2a7bb6e53a78a5",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 2,
+        "duplicate_bytes": 32,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 4,
+        "total_redundant_bytes": 64,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "d39446edce7b8575",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 52,
+            "end_line": 53,
+            "unit_name": "prepare_owned"
+          },
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 140,
+            "end_line": 141,
+            "unit_name": "begin"
+          },
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 146,
+            "end_line": 147,
+            "unit_name": "commit"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-7a67ae468de85b94",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "max_connections",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 3,
+        "duplicate_bytes": 40,
+        "instance_count": 2,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 3,
+        "total_redundant_bytes": 40,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "7e71cc9f9373344c",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/redlinedb-tokio/src/lib.rs",
+            "language": "rust",
+            "start_line": 268,
+            "end_line": 270,
+            "unit_name": "max_connections"
+          },
+          {
+            "path": "crates/redlinedb/src/pool.rs",
+            "language": "rust",
+            "start_line": 199,
+            "end_line": 201,
+            "unit_name": "max_connections"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-6235a00891938bda",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "database",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 3,
+        "duplicate_bytes": 28,
+        "instance_count": 2,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 3,
+        "total_redundant_bytes": 28,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "7e71cc9f9373344c",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/redlinedb-tokio/src/lib.rs",
+            "language": "rust",
+            "start_line": 263,
+            "end_line": 265,
+            "unit_name": "database"
+          },
+          {
+            "path": "crates/redlinedb/src/pool.rs",
+            "language": "rust",
+            "start_line": 204,
+            "end_line": 206,
+            "unit_name": "database"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-ab80b0029566ed53",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 9,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 2,
+        "total_redundant_bytes": 18,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "75a6814c640e7ff4",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/bench/src/sqlite_parity/report_gen/io.rs",
+            "language": "rust",
+            "start_line": 209,
+            "end_line": 210,
+            "unit_name": "normalize_git_sha"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 558,
+            "end_line": 559,
+            "unit_name": "escape"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 1108,
+            "end_line": 1109,
+            "unit_name": "escape_html"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-07a9f35c10c8af0c",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 11,
+        "instance_count": 2,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 1,
+        "total_redundant_bytes": 11,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "8dfc6ea7da0abb1d",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/bench/src/certify/scheduler/dispatch.rs",
+            "language": "rust",
+            "start_line": 196,
+            "end_line": 198,
+            "unit_name": "which_strace"
+          },
+          {
+            "path": "crates/kernel/src/engine/runtime/commit.rs",
+            "language": "rust",
+            "start_line": 30,
+            "end_line": 32,
+            "unit_name": "commit_failure_armed_for_thread"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-24f8efaac31485cc",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 8,
+        "duplicate_bytes": 57,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 8,
+        "total_redundant_bytes": 57,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "2cc64be244ffa9ff",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 868,
+            "end_line": 869,
+            "unit_name": "tcl_quote"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 1117,
+            "end_line": 1118,
+            "unit_name": "quote_string"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-1e2437835390b18a",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 7,
+        "duplicate_bytes": 70,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 7,
+        "total_redundant_bytes": 70,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "03841e8500759e3b",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+            "language": "rust",
+            "start_line": 160,
+            "end_line": 161,
+            "unit_name": "row_matches_qualifier"
+          },
+          {
+            "path": "crates/sql/src/exec/expr/scalar/row/lookup.rs",
+            "language": "rust",
+            "start_line": 164,
+            "end_line": 165,
+            "unit_name": "row_matches_joined_qualifier"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-6e0528ce706c9c6d",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 7,
+        "duplicate_bytes": 61,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 7,
+        "total_redundant_bytes": 61,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "f23e5e105d7ea78a",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/connection/database.rs",
+            "language": "rust",
+            "start_line": 550,
+            "end_line": 551,
+            "unit_name": "explicit_volatile_root_remains_in_options"
+          },
+          {
+            "path": "crates/sql/src/connection/database.rs",
+            "language": "rust",
+            "start_line": 564,
+            "end_line": 565,
+            "unit_name": "unusable_shared_memory_candidate_uses_process_scratch"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-541c41c28f3a453e",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 7,
+        "duplicate_bytes": 56,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 7,
+        "total_redundant_bytes": 56,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "9a063511c239b933",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb/src/value_conv.rs",
+            "language": "rust",
+            "start_line": 245,
+            "end_line": 246,
+            "unit_name": "parse_fixed_i32"
+          },
+          {
+            "path": "crates/redlinedb/src/value_conv.rs",
+            "language": "rust",
+            "start_line": 253,
+            "end_line": 254,
+            "unit_name": "parse_fixed_u32"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-d6b6add24b030e70",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 7,
+        "duplicate_bytes": 53,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 7,
+        "total_redundant_bytes": 53,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "e016140b566f2592",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/dot/mod.rs",
+            "language": "rust",
+            "start_line": 456,
+            "end_line": 457,
+            "unit_name": "unescape_dq"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 1036,
+            "end_line": 1037,
+            "unit_name": "escape_symbolic"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-d582831451024967",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 59,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 59,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "71c084f8fa5c0d1b",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/redlinedb/src/connection.rs",
+            "language": "rust",
+            "start_line": 233,
+            "end_line": 234,
+            "unit_name": "check_interrupt"
+          },
+          {
+            "path": "crates/redlinedb/src/statement.rs",
+            "language": "rust",
+            "start_line": 204,
+            "end_line": 205,
+            "unit_name": "step"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-d8107ae215c9f4ca",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "is_null",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 54,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 54,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "c3f85d96ae6d36e4",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/redlinedb-sqlx/src/driver.rs",
+            "language": "rust",
+            "start_line": 159,
+            "end_line": 160,
+            "unit_name": "is_null"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/driver.rs",
+            "language": "rust",
+            "start_line": 187,
+            "end_line": 188,
+            "unit_name": "is_null"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-6c6d29aa8a1fe1d4",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 53,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 53,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "7da57f895334f96b",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/bench/src/sqlite_parity/report_gen/tests.rs",
+            "language": "rust",
+            "start_line": 533,
+            "end_line": 534,
+            "unit_name": "provenance_rejects_raw_hash_mismatch"
+          },
+          {
+            "path": "crates/bench/src/sqlite_parity/report_gen/tests.rs",
+            "language": "rust",
+            "start_line": 559,
+            "end_line": 560,
+            "unit_name": "provenance_rejects_release_binary_mismatch"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-4a87fba4f8fb9fa5",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "ping",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 44,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 44,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "d447399aeca0a654",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/options.rs",
+            "language": "rust",
+            "start_line": 223,
+            "end_line": 224,
+            "unit_name": "ping"
+          },
+          {
+            "path": "crates/redlinedb-sqlx/src/bridge/runtime.rs",
+            "language": "rust",
+            "start_line": 52,
+            "end_line": 53,
+            "unit_name": "ping"
+          }
+        ]
+      }
+    ],
+    "notes": [
+      "hard classes are limited to exact active-source file matches and substantial exact same-name units",
+      "warning classes include same-body different-name units and token/block duplication",
+      "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
+      "showing the top 50 classes and omitting 40 lower-ranked classes"
+    ]
   },
   "profile_structure": {
-    "applicable_count": 1,
-    "canonical_count": 0,
-    "noncanonical_count": 1,
-    "guidance_missing_count": 1,
+    "applicable_count": 8,
+    "canonical_count": 8,
+    "noncanonical_count": 0,
+    "guidance_missing_count": 0,
     "cells": [
       {
         "id": "web",
@@ -1103,116 +3389,130 @@
       },
       {
         "id": "api",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "canonical",
         "canonical_path": "apps/api/",
-        "detected_paths": [],
+        "detected_paths": [
+          "apps/api"
+        ],
         "aliases": [
           "api/",
           "server/",
           "backend/"
         ],
-        "guidance_status": "not_required",
+        "guidance_status": "present",
         "owner": "apps/api",
         "proof_lane": "edge handler / contract tests",
-        "agent_fix": "no action"
+        "agent_fix": "keep `apps/api/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       },
       {
         "id": "domain",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "canonical",
         "canonical_path": "crates/domain/",
-        "detected_paths": [],
+        "detected_paths": [
+          "crates/domain"
+        ],
         "aliases": [
           "domain/",
           "core/"
         ],
-        "guidance_status": "not_required",
+        "guidance_status": "present",
         "owner": "crates/domain",
         "proof_lane": "unit / property tests",
-        "agent_fix": "no action"
+        "agent_fix": "keep `crates/domain/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       },
       {
         "id": "application",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "canonical",
         "canonical_path": "crates/application/",
-        "detected_paths": [],
+        "detected_paths": [
+          "crates/application"
+        ],
         "aliases": [
           "application/",
           "usecases/",
           "use-cases/"
         ],
-        "guidance_status": "not_required",
+        "guidance_status": "present",
         "owner": "crates/application",
         "proof_lane": "use-case / authz tests",
-        "agent_fix": "no action"
+        "agent_fix": "keep `crates/application/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       },
       {
         "id": "adapters",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "canonical",
         "canonical_path": "crates/adapters/",
-        "detected_paths": [],
+        "detected_paths": [
+          "crates/adapters"
+        ],
         "aliases": [
           "adapters/",
           "infra/",
           "integrations/"
         ],
-        "guidance_status": "not_required",
+        "guidance_status": "present",
         "owner": "crates/adapters",
         "proof_lane": "adapter integration tests",
-        "agent_fix": "no action"
+        "agent_fix": "keep `crates/adapters/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       },
       {
         "id": "workers",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "canonical",
         "canonical_path": "crates/workers/",
-        "detected_paths": [],
+        "detected_paths": [
+          "crates/workers"
+        ],
         "aliases": [
           "workers/",
           "jobs/",
           "scheduler/",
           "queue/"
         ],
-        "guidance_status": "not_required",
+        "guidance_status": "present",
         "owner": "crates/workers",
         "proof_lane": "workflow / replay tests",
-        "agent_fix": "no action"
+        "agent_fix": "keep `crates/workers/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       },
       {
         "id": "contracts",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "canonical",
         "canonical_path": "contracts/",
-        "detected_paths": [],
+        "detected_paths": [
+          "contracts"
+        ],
         "aliases": [
           "openapi/",
           "protobuf/",
           "json-schema/",
           "generated/"
         ],
-        "guidance_status": "not_required",
+        "guidance_status": "present",
         "owner": "contracts",
         "proof_lane": "generation / drift checks",
-        "agent_fix": "no action"
+        "agent_fix": "keep `contracts/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       },
       {
         "id": "db",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "canonical",
         "canonical_path": "db/",
-        "detected_paths": [],
+        "detected_paths": [
+          "db"
+        ],
         "aliases": [
           "migrations/",
           "constraints/",
           "sql/"
         ],
-        "guidance_status": "not_required",
+        "guidance_status": "present",
         "owner": "db",
         "proof_lane": "migration / constraint tests",
-        "agent_fix": "no action"
+        "agent_fix": "keep `db/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       },
       {
         "id": "python-ai",
@@ -1235,11 +3535,12 @@
       {
         "id": "ops",
         "applicable": true,
-        "status": "noncanonical",
+        "status": "canonical",
         "canonical_path": "ops/",
         "detected_paths": [
           ".github",
-          ".github/workflows"
+          ".github/workflows",
+          "ops"
         ],
         "aliases": [
           ".github/",
@@ -1249,29 +3550,93 @@
           "observability/",
           "security/"
         ],
-        "guidance_status": "missing",
+        "guidance_status": "present",
         "owner": "ops",
         "proof_lane": "security lane / workflow lint",
-        "agent_fix": "migrate the detected ops surface to `ops/` or document an alternate profile with owner, proof lane, expiry, and migration plan"
+        "agent_fix": "keep `ops/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       }
     ],
     "evidence": {
-      "applicable_count": 1,
-      "canonical_count": 0,
+      "applicable_count": 8,
+      "canonical_count": 8,
       "detected_cells": [
+        {
+          "canonical_path": "apps/api/",
+          "detected_paths": [
+            "apps/api"
+          ],
+          "guidance_status": "present",
+          "id": "api",
+          "status": "canonical"
+        },
+        {
+          "canonical_path": "crates/domain/",
+          "detected_paths": [
+            "crates/domain"
+          ],
+          "guidance_status": "present",
+          "id": "domain",
+          "status": "canonical"
+        },
+        {
+          "canonical_path": "crates/application/",
+          "detected_paths": [
+            "crates/application"
+          ],
+          "guidance_status": "present",
+          "id": "application",
+          "status": "canonical"
+        },
+        {
+          "canonical_path": "crates/adapters/",
+          "detected_paths": [
+            "crates/adapters"
+          ],
+          "guidance_status": "present",
+          "id": "adapters",
+          "status": "canonical"
+        },
+        {
+          "canonical_path": "crates/workers/",
+          "detected_paths": [
+            "crates/workers"
+          ],
+          "guidance_status": "present",
+          "id": "workers",
+          "status": "canonical"
+        },
+        {
+          "canonical_path": "contracts/",
+          "detected_paths": [
+            "contracts"
+          ],
+          "guidance_status": "present",
+          "id": "contracts",
+          "status": "canonical"
+        },
+        {
+          "canonical_path": "db/",
+          "detected_paths": [
+            "db"
+          ],
+          "guidance_status": "present",
+          "id": "db",
+          "status": "canonical"
+        },
         {
           "canonical_path": "ops/",
           "detected_paths": [
             ".github",
-            ".github/workflows"
+            ".github/workflows",
+            "ops"
           ],
-          "guidance_status": "missing",
+          "guidance_status": "present",
           "id": "ops",
-          "status": "noncanonical"
+          "status": "canonical"
         }
       ],
-      "guidance_missing_count": 1,
-      "noncanonical_count": 1
+      "guidance_missing_count": 0,
+      "noncanonical_count": 0
     }
   },
   "findings": [
@@ -1279,20 +3644,20 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 35 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 45 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/cli/src/lib.rs (1130 LOC)",
+        "largest authored code file: crates/sql/src/parser.rs (4564 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
-        "rust bad-behavior advisory signals: 19"
+        "most code files stay under 300 LOC"
       ],
       "check_id": "HLT-001-DEAD-MARKER:shape",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:7e8b4f1c26d4c0f41411477f4305e284de61c535221228eb9874da6a7cf211c1",
+      "fingerprint": "sha256:9430c418d2f11bfaea6c3a001a5f4907600830d154570f769fef69e0b5ac2c20",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -1300,403 +3665,10 @@
       "owner": "tools"
     },
     {
-      "severity": "high",
-      "category": "proof",
-      "path": ".",
-      "problem": "no one-command setup or validation lane was detected",
-      "agent_fix": "add a canonical `setup`, `check`, `test`, or `verify` lane in one root command file",
-      "evidence": [
-        "no root setup/check/test/verify target surfaced"
-      ],
-      "check_id": "HLT-000-SCORE-DIMENSION:proof",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:7010147691f443ae19d3d8603c11ec84958d455885b09e09eca0b9fa91933bde",
-      "tlr": "Verification",
-      "lane": "fast"
-    },
-    {
-      "severity": "medium",
-      "category": "context",
-      "path": ".github",
-      "problem": "reference-profile cell `ops` is detected at a noncanonical path",
-      "agent_fix": "migrate the detected ops surface to `ops/` or document an alternate profile with owner, proof lane, expiry, and migration plan",
-      "evidence": [
-        "canonical_path=ops/",
-        "detected_paths=.github, .github/workflows",
-        "aliases=.github/, .github/workflows/, ci/, release/, observability/, security/",
-        "guidance_status=missing",
-        "owner=ops",
-        "proof_lane=security lane / workflow lint"
-      ],
-      "check_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP:context",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:12a7cb3de44727e5607afe0a2df603f1f07be2916aa0ede17340426bdc33d1f7",
-      "rule_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#required-shape",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "security",
-      "path": ".github/workflows",
-      "problem": "high-risk repo has no explicit security lane",
-      "agent_fix": "add a dedicated security lane with secret scanning, dependency review, and workflow linting",
-      "evidence": [
-        "no security lane markers found"
-      ],
-      "check_id": "HLT-009-GENERATED-SECURITY:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:c249be982d975721833fe396cdfff422f53a2d61819df881968fba63fdd6b9bf",
-      "rule_id": "HLT-009-GENERATED-SECURITY",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "ops"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "ops/ci/lib.sh is missing",
-      "agent_fix": "add ops/ci/lib.sh defining shared helpers and tool version pins",
-      "evidence": [
-        "detector=ci.local-parity.lib-missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:1991b318cb68e7d158d2872f47f6e4698eb2aca6768d4d912c31d6f943f74454",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.lib-missing",
-      "reason": "ops/ci/lib.sh is the shared helper module (artifact assertions, tool pins) every lane sources"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "ops/git-hooks/pre-push is missing",
-      "agent_fix": "add ops/git-hooks/pre-push that runs `bash ops/ci/quality-gates.sh` and wire it via `git config core.hooksPath ops/git-hooks`",
-      "evidence": [
-        "detector=ci.local-parity.pre-push-hook-missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:6bfbb5bdddc89654f88ac6c8ee166a84a0f6c585adeb94ab8f1e90a0ced148b7",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.pre-push-hook-missing",
-      "reason": "without a mandatory pre-push gate, broken code can be pushed and CI is the first place a failure shows up"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "rust-toolchain.toml is missing",
-      "agent_fix": "add rust-toolchain.toml pinning the channel and required components",
-      "evidence": [
-        "detector=ci.local-parity.toolchain-not-pinned",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:74a357e809d6139da803756394fac01291989a8f4b2b140ca8e27a91e29c46ca",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.toolchain-not-pinned",
-      "reason": "without a pinned toolchain, local and CI Rust versions can drift silently"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "scripts/ci-doctor.sh is missing",
-      "agent_fix": "add scripts/ci-doctor.sh listing every tool the ops/ci scripts depend on",
-      "evidence": [
-        "detector=ci.local-parity.doctor-missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:beef8b01b8447985b9c3fb008eb50af0e8f2e58cf64fd1be36c44d4eeb46d602",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.doctor-missing",
-      "reason": "without a doctor script, developers cannot confirm their local environment matches CI"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "scripts/ci-local.sh is missing",
-      "agent_fix": "add scripts/ci-local.sh exposing each CI lane locally",
-      "evidence": [
-        "detector=ci.local-parity.runner-missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:65427f2c3aa76a8a34f7a609ea37d0405490203f08708acc06c9374be0e492d9",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.runner-missing",
-      "reason": "scripts/ci-local.sh is the local entry point that delegates to the same ops/ci scripts the workflows call"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/ci.yml",
-      "problem": "workflow references missing script `ops/ci/fast.sh`",
-      "agent_fix": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "evidence": [
-        "detector=ci.local-parity.script-missing",
-        "path=.github/workflows/ci.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: ci"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:6fd989baadfed487d1f5858af58297b91cfa03225a7016fe053a02e62e5d90ca",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.script-missing",
-      "reason": "missing scripts mean the local runner cannot reproduce the CI step"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/jankurai-tools.yml",
-      "problem": "workflow references missing script `ops/ci/jankurai-tools.sh`",
-      "agent_fix": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "evidence": [
-        "detector=ci.local-parity.script-missing",
-        "path=.github/workflows/jankurai-tools.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: jankurai-tools"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:6e2f06d88000364d6f14d3c2bba6673a6d677049ea02fbfb850f3811ee546f5d",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.script-missing",
-      "reason": "missing scripts mean the local runner cannot reproduce the CI step"
-    },
-    {
-      "severity": "medium",
-      "category": "security",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "`Security and supply-chain posture` scored 66 below the standard floor of 85",
-      "agent_fix": "wire secret, dependency, provenance, and workflow scans into an operational CI lane",
-      "evidence": [
-        "lockfile present",
-        "secret or dependency scan tooling found",
-        "provenance/SBOM tooling found",
-        "workflow linting tooling found"
-      ],
-      "check_id": "HLT-016-SUPPLY-CHAIN-DRIFT:security",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:cf6eec501e2ed8d1b1b665664eb7b0bd8b854b31207a11a36c3a699e972a0086",
-      "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "ops"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/jankurai.yml",
-      "problem": "workflow references missing script `ops/ci/dependency-review.sh`",
-      "agent_fix": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "evidence": [
-        "detector=ci.local-parity.script-missing",
-        "path=.github/workflows/jankurai.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: jankurai"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:9d1efc3c6547e854d812122da68fe084f4fd645d7ff6368e15787b5946fcd78d",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.script-missing",
-      "reason": "missing scripts mean the local runner cannot reproduce the CI step"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/release-build.yml",
-      "problem": "workflow references missing script `ops/ci/release-build.sh`",
-      "agent_fix": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "evidence": [
-        "detector=ci.local-parity.script-missing",
-        "path=.github/workflows/release-build.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: release-build"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:b790943aaff8144a344d3277fc015c48ebe71af808e63a4f1eb6006c456763d4",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.script-missing",
-      "reason": "missing scripts mean the local runner cannot reproduce the CI step"
-    },
-    {
-      "severity": "high",
-      "category": "ci",
-      "path": ".github/workflows/sqlite-parity-report.yml",
-      "problem": "workflow references missing script `ops/ci/sqlite-parity-report.sh`",
-      "agent_fix": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "evidence": [
-        "detector=ci.local-parity.script-missing",
-        "path=.github/workflows/sqlite-parity-report.yml",
-        "line=1",
-        "proof_window=None",
-        "snippet=name: redline-testing-report"
-      ],
-      "check_id": "HLT-042-CI-LOCAL-PARITY:ci",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:7aaa615018d4c0d9cf01c97f73deed15b1c663ad47923711d07e0fec3068133f",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/ci-local.md",
-      "owner": "ops",
-      "line": 1,
-      "matched_term": "ci.local-parity.script-missing",
-      "reason": "missing scripts mean the local runner cannot reproduce the CI step"
-    },
-    {
-      "severity": "medium",
-      "category": "context",
-      "path": "AGENTS.md",
-      "problem": "`Context economy and agent instructions` scored 45 below the standard floor of 85",
-      "agent_fix": "keep root guidance short and route durable detail through agent-readable manifests and docs",
-      "evidence": [
-        "root `AGENTS.md` present",
-        "root `AGENTS.md` stays short",
-        "thin IDE/agent adapters are present",
-        "missing agent-readable docs: README.md, docs/architecture.md or docs/boundaries.md, docs/testing.md"
-      ],
-      "check_id": "HLT-015-CONTEXT-SETUP-GAP:context",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:53596b312fab41002aaff5de11560e6ff0df9c1bc50139e11140dae0299fd45c",
-      "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "docs/agent-native-standard.md",
-      "owner": "agent"
-    },
-    {
       "severity": "medium",
       "category": "proof",
       "path": "Justfile",
-      "problem": "`Build speed signals` scored 60 below the standard floor of 85",
+      "problem": "`Build speed signals` scored 80 below the standard floor of 85",
       "agent_fix": "add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration",
       "evidence": [
         "build acceleration markers found",
@@ -1709,413 +3681,15 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:938f4ac0d852cab12cdb5c2c7cdac775db884de8ede5176d149a8b50d60d45ae",
+      "fingerprint": "sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2",
       "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
       "tlr": "Verification",
       "lane": "fast",
       "docs_url": "docs/testing.md",
       "owner": "workspace"
-    },
-    {
-      "severity": "medium",
-      "category": "boundary",
-      "path": "agent/boundaries.toml",
-      "problem": "`Contract and boundary integrity` scored 43 below the standard floor of 85",
-      "agent_fix": "add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams",
-      "evidence": [
-        "Rust typed boundary helpers found"
-      ],
-      "check_id": "HLT-007-HANDWRITTEN-CONTRACT:boundary",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "contract-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:77d2f8c428fc49a7e10198dc4b2aad5b6690c0dfa6dcd49708fa6214375d5a9a",
-      "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "docs_url": "docs/audit-rubric.md#known-vibe-coding-insults",
-      "owner": "agent"
-    },
-    {
-      "severity": "medium",
-      "category": "context",
-      "path": "agent/owner-map.json",
-      "problem": "`Ownership and navigation surface` scored 44 below the standard floor of 85",
-      "agent_fix": "tighten owner/test maps and root routing until agents can localize ownership without inference",
-      "evidence": [
-        "root `AGENTS.md` present",
-        "owner map covers audited paths",
-        "test map covers audited paths",
-        "authored code file exceeds 500 LOC"
-      ],
-      "check_id": "HLT-003-OWNERLESS-PATH:context",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:c0747472b33e97b5a4286f439aa5e63e16e12094f916f6d6cded0aa78571fd90",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#ownership-boundaries",
-      "owner": "agent"
-    },
-    {
-      "severity": "medium",
-      "category": "proof",
-      "path": "agent/test-map.json",
-      "problem": "`Proof lanes and test routing` scored 65 below the standard floor of 85",
-      "agent_fix": "route each owned path to a deterministic proof command and make the lane executable in CI",
-      "evidence": [
-        "deterministic fast lane found",
-        "test runner present in automation surface",
-        "GitHub workflow files present",
-        "jankurai audit lane found in CI"
-      ],
-      "check_id": "HLT-004-UNMAPPED-PROOF:proof",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:f1b063f8c12a90d80fac1ab40e8463c565d474d78dc43853c566271b71a512bb",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "agent/JANKURAI_STANDARD.md#proof-lanes",
-      "owner": "agent"
-    },
-    {
-      "severity": "high",
-      "category": "test",
-      "path": "crates/",
-      "problem": "Rust surface lacks required property and/or integration tests",
-      "agent_fix": "add `proptest` or equivalent invariant tests plus `tests/` integration coverage routed through `cargo nextest` or `cargo test`",
-      "evidence": [
-        "Rust surface detected"
-      ],
-      "check_id": "HLT-008-FALSE-GREEN-RISK:test",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "test",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:8ece7234070a20910736663e65a530625acd16dac7fa57476cfc7c9a74bd745c",
-      "rule_id": "HLT-008-FALSE-GREEN-RISK",
-      "tlr": "Verification",
-      "lane": "fast",
-      "docs_url": "docs/testing.md",
-      "owner": "tools"
-    },
-    {
-      "severity": "high",
-      "category": "exceptions",
-      "path": "crates/domain",
-      "problem": "no agent-friendly exception/error pattern was detected",
-      "agent_fix": "define a typed exception surface with purpose, reason, common fixes, docs_url, and repair_hint so the next rerun is local",
-      "evidence": [
-        "route repair work to the next agent",
-        "opaque failures slow local debugging and reruns",
-        "add a typed repair hint; name the common fixes; point at the local docs URL",
-        "docs/testing.md"
-      ],
-      "check_id": "HLT-017-OPAQUE-OBSERVABILITY:exceptions",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:538667a01e35d8e91eae100627364816dd225911862fa2fa1578642af63d4af8",
-      "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
-      "tlr": "Repair",
-      "lane": "observability",
-      "docs_url": "agent/JANKURAI_STANDARD.md#repair-receipts",
-      "owner": "tools"
-    },
-    {
-      "severity": "medium",
-      "category": "data",
-      "path": "db/",
-      "problem": "`Data truth and workflow safety` scored 50 below the standard floor of 85",
-      "agent_fix": "move durable truth into migrations, constraints, adapters, and application-owned transactions",
-      "evidence": [
-        "Data truth and workflow safety scored 50"
-      ],
-      "check_id": "HLT-006-DIRECT-DB-WRONG-LAYER:data",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "sql",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:6dc277f838aa42b508c136f6ba666d602ecefe226bc4c238b24388640ee21f82",
-      "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
-      "tlr": "Contracts/data",
-      "lane": "db",
-      "docs_url": "docs/audit-rubric.md#required-shape",
-      "owner": "tools"
-    },
-    {
-      "severity": "medium",
-      "category": "docs",
-      "path": "docs/",
-      "problem": "agent-readable documentation is incomplete",
-      "agent_fix": "add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`",
-      "evidence": [
-        "README.md",
-        "docs/architecture.md or docs/boundaries.md",
-        "docs/testing.md"
-      ],
-      "check_id": "HLT-000-SCORE-DIMENSION:docs",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "documentation",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:7a7bbff17bd45fa833f208a469d73fc717e5fd8687e3d8d20098aa2ce66f2e92",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "standard"
-    },
-    {
-      "severity": "high",
-      "category": "release",
-      "path": "docs/release.md",
-      "problem": "release management structure is incomplete",
-      "agent_fix": "add a release control surface with version source, changelog, release process docs, CI or script evidence, integrity/provenance evidence, and rollback guidance",
-      "evidence": [
-        "release structure missing: changelog, release process doc, rollback guidance"
-      ],
-      "check_id": "HLT-025-RELEASE-READINESS-GAP:release",
-      "hardness": "hard",
-      "confidence": 0.88,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just check",
-      "fingerprint": "sha256:d8ec9f107cf44462f7b5d4065db1938c765752b9912de361a2ae5bdcfc4c0e6c",
-      "rule_id": "HLT-025-RELEASE-READINESS-GAP",
-      "tlr": "Verification",
-      "lane": "release",
-      "docs_url": "docs/testing.md",
-      "owner": "standard",
-      "matched_term": "release structure",
-      "reason": "launch gates need artifact-backed release evidence"
-    },
-    {
-      "severity": "medium",
-      "category": "observability",
-      "path": "docs/testing.md",
-      "problem": "`Observability and repair evidence` scored 23 below the standard floor of 85",
-      "agent_fix": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
-      "evidence": [
-        "repair receipts or raw artifact language found",
-        "no agent-friendly exception pattern found",
-        "free-form logging appears in scope"
-      ],
-      "check_id": "HLT-017-OPAQUE-OBSERVABILITY:observability",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:526e0c991a94e47347e6daa0863998deba126fcca3c278586a4b3bac6a20d7a6",
-      "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
-      "tlr": "Repair",
-      "lane": "observability",
-      "docs_url": "agent/JANKURAI_STANDARD.md#repair-receipts",
-      "owner": "standard"
-    },
-    {
-      "severity": "medium",
-      "category": "release",
-      "path": "docs/testing.md",
-      "problem": "cost or spend-risk surface lacks budget proof",
-      "agent_fix": "add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations",
-      "evidence": [
-        "cost surface found without budget/stop-condition policy"
-      ],
-      "check_id": "HLT-026-COST-BUDGET-GAP:release",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "policy-manifest",
-      "rerun_command": "just check",
-      "fingerprint": "sha256:edd248b7afc24b644107205fa5b84a88103ac4b622009ff9f19b779de8798f59",
-      "rule_id": "HLT-026-COST-BUDGET-GAP",
-      "tlr": "Verification",
-      "lane": "release",
-      "docs_url": "docs/testing.md",
-      "owner": "standard",
-      "matched_term": "budget",
-      "reason": "unbounded paid work needs budgets and stop conditions"
-    },
-    {
-      "severity": "medium",
-      "category": "context",
-      "path": "ops/",
-      "problem": "reference-profile cell `ops` lacks local AGENTS.md guidance",
-      "agent_fix": "add `ops/AGENTS.md` with owns / forbidden / proof lane guidance",
-      "evidence": [
-        "canonical_path=ops/",
-        "detected_paths=.github, .github/workflows",
-        "guidance_status=missing",
-        "owner=ops",
-        "proof_lane=security lane / workflow lint"
-      ],
-      "check_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP:context",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:afd6d62dcc0304f7e4872a9edce56c957a74d6c2101cdf6218dce16b4297ba55",
-      "rule_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "docs_url": "docs/audit-rubric.md#required-shape",
-      "owner": "agent"
     }
   ],
   "agent_fix_queue": [
-    {
-      "path": "agent/boundaries.toml",
-      "priority": "medium",
-      "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "owner": "agent",
-      "task": "add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams",
-      "why": "`Contract and boundary integrity` scored 43 below the standard floor of 85"
-    },
-    {
-      "path": "db/",
-      "priority": "medium",
-      "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
-      "tlr": "Contracts/data",
-      "lane": "db",
-      "owner": "tools",
-      "task": "move durable truth into migrations, constraints, adapters, and application-owned transactions",
-      "why": "`Data truth and workflow safety` scored 50 below the standard floor of 85"
-    },
-    {
-      "path": ".",
-      "priority": "high",
-      "tlr": "Verification",
-      "lane": "fast",
-      "task": "add a canonical `setup`, `check`, `test`, or `verify` lane in one root command file",
-      "why": "no one-command setup or validation lane was detected"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "add ops/ci/lib.sh defining shared helpers and tool version pins",
-      "why": "ops/ci/lib.sh is missing"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "add ops/git-hooks/pre-push that runs `bash ops/ci/quality-gates.sh` and wire it via `git config core.hooksPath ops/git-hooks`",
-      "why": "ops/git-hooks/pre-push is missing"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "add rust-toolchain.toml pinning the channel and required components",
-      "why": "rust-toolchain.toml is missing"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "add scripts/ci-doctor.sh listing every tool the ops/ci scripts depend on",
-      "why": "scripts/ci-doctor.sh is missing"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "add scripts/ci-local.sh exposing each CI lane locally",
-      "why": "scripts/ci-local.sh is missing"
-    },
-    {
-      "path": ".github/workflows/ci.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "why": "workflow references missing script `ops/ci/fast.sh`"
-    },
-    {
-      "path": ".github/workflows/jankurai-tools.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "why": "workflow references missing script `ops/ci/jankurai-tools.sh`"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "why": "workflow references missing script `ops/ci/dependency-review.sh`"
-    },
-    {
-      "path": ".github/workflows/release-build.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "why": "workflow references missing script `ops/ci/release-build.sh`"
-    },
-    {
-      "path": ".github/workflows/sqlite-parity-report.yml",
-      "priority": "high",
-      "rule_id": "HLT-042-CI-LOCAL-PARITY",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "ops",
-      "task": "create the referenced ops/ci script with the same commands the workflow used to run",
-      "why": "workflow references missing script `ops/ci/sqlite-parity-report.sh`"
-    },
-    {
-      "path": "crates/",
-      "priority": "high",
-      "rule_id": "HLT-008-FALSE-GREEN-RISK",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "tools",
-      "task": "add `proptest` or equivalent invariant tests plus `tests/` integration coverage routed through `cargo nextest` or `cargo test`",
-      "why": "Rust surface lacks required property and/or integration tests"
-    },
-    {
-      "path": "docs/release.md",
-      "priority": "high",
-      "rule_id": "HLT-025-RELEASE-READINESS-GAP",
-      "tlr": "Verification",
-      "lane": "release",
-      "owner": "standard",
-      "task": "add a release control surface with version source, changelog, release process docs, CI or script evidence, integrity/provenance evidence, and rollback guidance",
-      "why": "release management structure is incomplete"
-    },
     {
       "path": "Justfile",
       "priority": "medium",
@@ -2124,106 +3698,7 @@
       "lane": "fast",
       "owner": "workspace",
       "task": "add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration",
-      "why": "`Build speed signals` scored 60 below the standard floor of 85"
-    },
-    {
-      "path": "agent/test-map.json",
-      "priority": "medium",
-      "rule_id": "HLT-004-UNMAPPED-PROOF",
-      "tlr": "Verification",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "route each owned path to a deterministic proof command and make the lane executable in CI",
-      "why": "`Proof lanes and test routing` scored 65 below the standard floor of 85"
-    },
-    {
-      "path": "docs/testing.md",
-      "priority": "medium",
-      "rule_id": "HLT-026-COST-BUDGET-GAP",
-      "tlr": "Verification",
-      "lane": "release",
-      "owner": "standard",
-      "task": "add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations",
-      "why": "cost or spend-risk surface lacks budget proof"
-    },
-    {
-      "path": "crates/domain",
-      "priority": "high",
-      "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
-      "tlr": "Repair",
-      "lane": "observability",
-      "owner": "tools",
-      "task": "define a typed exception surface with purpose, reason, common fixes, docs_url, and repair_hint so the next rerun is local",
-      "why": "no agent-friendly exception/error pattern was detected"
-    },
-    {
-      "path": "docs/testing.md",
-      "priority": "medium",
-      "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
-      "tlr": "Repair",
-      "lane": "observability",
-      "owner": "standard",
-      "task": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
-      "why": "`Observability and repair evidence` scored 23 below the standard floor of 85"
-    },
-    {
-      "path": ".github",
-      "priority": "medium",
-      "rule_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "migrate the detected ops surface to `ops/` or document an alternate profile with owner, proof lane, expiry, and migration plan",
-      "why": "reference-profile cell `ops` is detected at a noncanonical path"
-    },
-    {
-      "path": "AGENTS.md",
-      "priority": "medium",
-      "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "keep root guidance short and route durable detail through agent-readable manifests and docs",
-      "why": "`Context economy and agent instructions` scored 45 below the standard floor of 85"
-    },
-    {
-      "path": "agent/owner-map.json",
-      "priority": "medium",
-      "rule_id": "HLT-003-OWNERLESS-PATH",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "tighten owner/test maps and root routing until agents can localize ownership without inference",
-      "why": "`Ownership and navigation surface` scored 44 below the standard floor of 85"
-    },
-    {
-      "path": "docs/",
-      "priority": "medium",
-      "tlr": "Context/setup",
-      "lane": "audit",
-      "owner": "standard",
-      "task": "add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`",
-      "why": "agent-readable documentation is incomplete"
-    },
-    {
-      "path": "ops/",
-      "priority": "medium",
-      "rule_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
-      "tlr": "Context/setup",
-      "lane": "fast",
-      "owner": "agent",
-      "task": "add `ops/AGENTS.md` with owns / forbidden / proof lane guidance",
-      "why": "reference-profile cell `ops` lacks local AGENTS.md guidance"
-    },
-    {
-      "path": ".github/workflows",
-      "priority": "high",
-      "rule_id": "HLT-009-GENERATED-SECURITY",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "add a dedicated security lane with secret scanning, dependency review, and workflow linting",
-      "why": "high-risk repo has no explicit security lane"
+      "why": "`Build speed signals` scored 80 below the standard floor of 85"
     },
     {
       "path": ".",
@@ -2233,17 +3708,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 35 below the standard floor of 85"
-    },
-    {
-      "path": ".github/workflows/jankurai.yml",
-      "priority": "medium",
-      "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "wire secret, dependency, provenance, and workflow scans into an operational CI lane",
-      "why": "`Security and supply-chain posture` scored 66 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 45 below the standard floor of 85"
     }
   ]
 }
