@@ -569,6 +569,14 @@ dependency-review:
 # detection. The benchmark job is for measurement, not gating.
 benchmark:
   stage: benchmark
+  # Default to the docker [build] pool. For maximum-fidelity bare-metal
+  # benchmarks, the operator should register a shell runner tagged
+  # [bench-native] (see scripts/ci/register-bench-runner.sh) and bump
+  # this `tags:` line to [bench-native, build] so jobs prefer the shell
+  # runner. Docker's overhead is ~2-5% on syscall-heavy workloads vs
+  # bare-metal; the JSONL evidence is comparable across runs on the
+  # same runner class, but only a shell runner gives numbers directly
+  # comparable to local hand-runs.
   tags: [build]
   needs: []
   timeout: 240 minutes
@@ -609,12 +617,19 @@ benchmark:
     - bash scripts/sqlite/build-reference.sh
     - export SQLITE_REF_BIN="$(pwd)/target/sqlite-reference/3.53.1/bin/sqlite3"
     - "$SQLITE_REF_BIN --version"
-    # 3. Compile RedlineDB release with native CPU targeting. The
-    #    .cargo/config.toml default is x86-64-v3 (portable); override
-    #    locally to native so we use every microarch feature the runner
-    #    container exposes. cargo build emits to target/release/redlinedb
-    #    via the [[bin]] entry in crates/cli/Cargo.toml.
-    - 'RUSTFLAGS="-C link-arg=-fuse-ld=mold -C target-cpu=native" cargo build --release --locked -p redlinedb-cli --bin redlinedb'
+    # 3. Compile RedlineDB release with explicit microarch targeting.
+    #    The .cargo/config.toml default is x86-64-v3 (portable). For the
+    #    benchmark we want the FULL Zen 2 microarch (the host is an AMD
+    #    Ryzen Threadripper PRO 3995WX), so set target-cpu=znver2 instead
+    #    of `native`. Reason: in docker, `target-cpu=native` reads the
+    #    container's /proc/cpuinfo — which is host-visible by default but
+    #    can be stripped by some kernel configs. Pinning to `znver2`
+    #    deterministically captures all 18 Zen 2 microarch ISA hints
+    #    (avx2/bmi2/fma/pclmul/sse4a/etc.) regardless of cpuid masking.
+    #    When the operator switches to a shell runner (see
+    #    scripts/ci/register-bench-runner.sh), `znver2` still applies;
+    #    on a non-Zen-2 host the operator should change this line.
+    - 'RUSTFLAGS="-C link-arg=-fuse-ld=mold -C target-cpu=znver2" cargo build --release --locked -p redlinedb-cli --bin redlinedb'
     - 'sha256sum target/release/redlinedb | tee target/perf-native-binary.sha256.txt || true'
     # 4. Run the full perf corpus (1127 cases × 3 reps + 1 warmup × 10 workers).
     #    ~2-3 hours wall time. PERF_TASKSET_DISABLE=1 lets workers span cores.
