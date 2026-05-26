@@ -257,7 +257,10 @@ jankurai-audit:
 jankurai-security:
   stage: jankurai
   needs: []
-  tags: [default]
+  # Probe runner 3 (jeryu-untrusted, tags [mr, sandbox, untrusted]) —
+  # libssl3 was just installed on the host; if runner 3 picks this up
+  # successfully, expand [mr] to dependency-review + branch-freshness.
+  tags: [mr]
   timeout: 20 minutes
   script:
     - cargo install cargo-audit --locked
