@@ -200,12 +200,17 @@ impl TransactionIsolationLevel {
 /// prefix lets `Statement::step` short-circuit even if the caller resets and
 /// re-steps it.
 pub(crate) const SAVEPOINT_MARKER_SQL_PREFIX: &str = "\u{0}__redline_savepoint_marker__:";
+pub(crate) const RQL_MARKER_SQL_PREFIX: &str = "\u{0}__redline_rql__:";
 
 /// True if `template` was produced by `Connection::prepare_v2` for a
 /// savepoint command. We tag it via a SQL prefix because `PreparedKind` is a
 /// closed enum that we cannot extend (lane SQL-A owns `exec.rs`).
 pub(crate) fn is_savepoint_marker_template(template: &PreparedTemplate) -> bool {
     template.sql.starts_with(SAVEPOINT_MARKER_SQL_PREFIX)
+}
+
+pub(crate) fn is_rql_template(template: &PreparedTemplate) -> bool {
+    template.sql.starts_with(RQL_MARKER_SQL_PREFIX)
 }
 
 #[derive(Debug, Clone)]
@@ -802,6 +807,9 @@ impl Statement {
                     || self.template.stats_epoch != self.conn.stats_epoch().0
                     || self.template.optimizer_hash != self.conn.optimizer_hash()
                 {
+                    if is_rql_template(&self.template) {
+                        return Err(Error::SchemaChanged);
+                    }
                     let new_template = self.conn.prepare_cached(self.template.sql.as_ref())?;
                     let mut new_bindings =
                         Vec::with_capacity(new_template.param_layout.count() + 1);
@@ -851,6 +859,9 @@ impl Statement {
 
     fn maybe_journal(&self) {
         if self.template.readonly {
+            return;
+        }
+        if is_rql_template(&self.template) {
             return;
         }
         // Skip kernel transaction-control statements — they are tracked by

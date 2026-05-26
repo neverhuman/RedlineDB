@@ -1835,6 +1835,7 @@ dependencies = [
  "redlinedb-kernel",
  "regex",
  "rusqlite",
+ "serde",
  "serde_json",
  "smallvec",
  "sqlparser",
