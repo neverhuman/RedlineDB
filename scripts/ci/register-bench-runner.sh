@@ -55,6 +55,18 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 log() { printf '[bench-runner-setup] %s\n' "$*" >&2; }
 
+# ── 0. /etc/hosts entry for gitlab.local (shell runner needs DNS) ───────
+# Docker-executor runners resolve gitlab.local via the docker network's
+# extra_hosts. The shell runner inherits the host's /etc/hosts, which
+# doesn't include gitlab.local by default. Add a 127.0.0.1 mapping so
+# `git fetch CI_REPOSITORY_URL` (which uses http://gitlab.local:8929/...)
+# resolves.
+if ! grep -qE '^[^#]*\bgitlab\.local\b' /etc/hosts 2>/dev/null; then
+    log "Adding 127.0.0.1 gitlab.local to /etc/hosts ..."
+    printf '\n# Added by RedlineDB bench-native runner setup\n127.0.0.1\tgitlab.local\n' \
+        >> /etc/hosts
+fi
+
 # ── 1. Install gitlab-runner ─────────────────────────────────────────────
 if ! command -v gitlab-runner >/dev/null 2>&1; then
     log "Installing gitlab-runner from packages.gitlab.com ..."
