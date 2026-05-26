@@ -593,9 +593,14 @@ benchmark:
     - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
+    # ci_install_redline_testing verifies the GitHub artifact attestation
+    # via `gh attestation verify`, which needs gh CLI even when
+    # CI_REDLINE_TESTING_URL bypasses the release-lookup. Install gh from
+    # the public release. Anonymous use is enough for the verify call.
+    - 'curl -fsSL https://github.com/cli/cli/releases/download/v2.69.0/gh_2.69.0_linux_amd64.tar.gz | tar -xz -C /usr/local --strip-components=1 gh_2.69.0_linux_amd64/bin/gh'
+    - gh --version
   script:
-    # 1. Resolve + install the redline-testing binary via lib.sh (uses
-    #    CI_REDLINE_TESTING_URL bypass — no gh CLI needed).
+    # 1. Resolve + install the redline-testing binary via lib.sh.
     - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_redline_testing'
     - export REDLINE_TESTING_BIN="$(ci_redline_testing_installed_path)"
     - "$REDLINE_TESTING_BIN version"
