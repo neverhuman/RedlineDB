@@ -36,6 +36,12 @@ default:
     - rustup component add rustfmt clippy
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-/usr/local/cargo}/bin"'
+    # The runner pre_build_script exports CARGO_TARGET_DIR=/cache/cargo-targets/...
+    # but ops/ci/release-build.sh hardcodes `target/${TARGET}/release/redlinedb-cli`
+    # for its cp step. Unset so cargo writes to the project-relative ./target
+    # and the cp finds what it built. Cache benefit deferred to cargo registry
+    # cache (still mounted at /cache/cargo-home) and incremental rebuilds.
+    - unset CARGO_TARGET_DIR JERYU_CARGO_TARGET_ROOT
 
 stages:
   - preflight
