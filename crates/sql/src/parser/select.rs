@@ -209,6 +209,7 @@ fn apply_query_tail(
         order_by,
         limit,
         offset,
+        table_hint: plan.table_hint,
     });
     Ok(template)
 }
@@ -385,6 +386,9 @@ pub(crate) fn bind_simple_select_query(
             order_by,
             limit,
             offset,
+            // Phase 5 WS-A2e: lift the single-table `INDEXED BY` /
+            // `NOT INDEXED` hint that the FROM binder stashed.
+            table_hint: crate::parser::prepare::take_single_table_hint(),
         }),
     })
 }
@@ -555,6 +559,7 @@ pub(crate) fn bind_union_all_query(
             order_by,
             limit,
             offset,
+            table_hint: None,
         }),
     })
 }
@@ -672,6 +677,7 @@ fn bind_values_query(
             order_by,
             limit,
             offset,
+            table_hint: None,
         }),
     })
 }

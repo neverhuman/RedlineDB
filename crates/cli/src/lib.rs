@@ -10,6 +10,7 @@ use redlinedb::{Database, OpenOptions, OwnedStep};
 mod dot;
 mod maintenance;
 mod render;
+mod shellzero;
 
 use dot::{CliState, DotOutcome, OutputMode, OutputTarget};
 use maintenance::run_maintenance;
@@ -176,6 +177,9 @@ struct Cli {
     #[arg(long = "unsafe-testing")]
     unsafe_testing: bool,
 
+    #[arg(long = "shellzero")]
+    shellzero: bool,
+
     #[arg(long)]
     escape: Option<String>,
 
@@ -305,6 +309,29 @@ pub fn run() {
         Some(explicit) => explicit,
         None => mode.headers_by_default(),
     };
+
+    // WS-C8: ShellZero pre-open fast path. Default-off; only attempted when
+    // the user explicitly passes `--shellzero`. Returning `None` means the
+    // input isn't on the audited surface and we fall through to the regular
+    // path with no behavior change.
+    if cli.shellzero
+        && (filename == ":memory:" || filename.is_empty())
+        && cli.init.is_none()
+        && !cli.echo
+        && !cli.bail
+        && !cli.stats
+    {
+        let args = shellzero::ShellZeroArgs {
+            sql: &cli.sql,
+            cmd: &cli.cmd,
+            separator: &separator,
+            row_separator: flag_state.row_separator.as_deref().unwrap_or("\n"),
+            null_value: flag_state.null_value.as_deref().unwrap_or(""),
+        };
+        if let Some(code) = shellzero::try_handle_pre_open(&args, preloaded_stdin.as_deref()) {
+            exit(code);
+        }
+    }
 
     // `:memory:` and `""` open a fresh per-process ephemeral database, matching
     // the SQLite shell semantics where in-memory state never spills to a real
@@ -666,9 +693,27 @@ fn sqlite_shell_error_text(err: &str) -> String {
 
 /// Execute `.read FILE` by streaming the file through [`run_input`].
 fn run_script_file(state: &mut CliState, path: &std::path::Path) -> Result<(), String> {
-    let contents = fs::read_to_string(path)
+    let file = fs::File::open(path)
         .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?;
-    run_input(state, &contents)
+    let len = file
+        .metadata()
+        .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?
+        .len();
+    if len == 0 {
+        return run_input(state, "");
+    }
+    // SAFETY: mmap is unsafe because concurrent mutation of the backing file
+    // by another process would race; `.read` accepts that risk like SQLite.
+    let mmap = unsafe { memmap2::Mmap::map(&file) }
+        .map_err(|err| format!("Error: cannot read {}: {err}", path.display()))?;
+    let contents = std::str::from_utf8(&mmap).map_err(|err| {
+        format!(
+            "Error: {} is not valid UTF-8 at byte {}",
+            path.display(),
+            err.valid_up_to()
+        )
+    })?;
+    run_input(state, contents)
 }
 
 fn readonly_sidecar_path(db_path: &std::path::Path) -> PathBuf {
@@ -684,13 +729,8 @@ fn write_readonly_sidecar(state: &mut CliState) -> Result<(), String> {
     let sidecar = readonly_sidecar_path(&state.db_path);
     let writer = std::fs::File::create(&sidecar)
         .map_err(|err| format!("Error: cannot open {}: {err}", sidecar.display()))?;
-    let previous = std::mem::replace(
-        &mut state.output,
-        OutputTarget::File {
-            path: sidecar,
-            writer,
-        },
-    );
+    // Phase 5 WS-C5c: BufWriter wrap to match the .output FILE fix.
+    let previous = std::mem::replace(&mut state.output, OutputTarget::file(sidecar, writer));
     let result = dot::io_cmd::dump(state, &[]);
     let flush_result = state.output.flush().map_err(|err| err.to_string());
     state.output = previous;

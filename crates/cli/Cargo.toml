@@ -1,9 +1,17 @@
 [package]
 name = "redlinedb-cli"
-version = "3.0.1"
+version = "4.0.1"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+
+[features]
+default = ["alloc-mimalloc"]
+# WS-B4: mutually-exclusive global allocator selection. Exactly one of these
+# must be active; main.rs / bin/redlinedb-cli.rs enforce this via compile_error!.
+alloc-mimalloc = ["dep:mimalloc"]
+alloc-jemalloc = ["dep:tikv-jemallocator"]
+alloc-snmalloc = ["dep:snmalloc-rs"]
 
 [dependencies]
 redlinedb = { path = "../redlinedb" }
@@ -13,7 +21,14 @@ rustyline = "14.0.0"
 csv = "1.3.0"
 crossterm = "0.27.0"
 itoa = "1"
-mimalloc = { version = "0.1", default-features = false }
+memchr = "2"
+memmap2 = "0.9"
+mimalloc = { version = "0.1", default-features = false, optional = true }
+tikv-jemallocator = { version = "0.6", optional = true }
+# snmalloc-rs requires a working `cmake` and a C++17 toolchain at build time.
+# It is opt-in via the `alloc-snmalloc` feature so default builds (mimalloc) do
+# not regress on hosts without cmake.
+snmalloc-rs = { version = "0.3", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2"

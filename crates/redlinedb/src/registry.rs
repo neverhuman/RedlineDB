@@ -24,6 +24,7 @@ pub(crate) struct OpenFingerprint {
     pub statement_cache_capacity: usize,
     pub process_owner_lock: bool,
     pub temp_dir: Option<PathBuf>,
+    pub lean_ephemeral: bool,
 }
 
 impl OpenFingerprint {
@@ -38,6 +39,7 @@ impl OpenFingerprint {
             statement_cache_capacity: options.statement_cache_capacity,
             process_owner_lock: options.process_owner_lock,
             temp_dir: options.temp_dir.clone(),
+            lean_ephemeral: options.lean_ephemeral,
         }
     }
 
@@ -50,6 +52,7 @@ impl OpenFingerprint {
             && self.statement_cache_capacity == other.statement_cache_capacity
             && self.process_owner_lock == other.process_owner_lock
             && self.temp_dir == other.temp_dir
+            && self.lean_ephemeral == other.lean_ephemeral
     }
 }
 
@@ -79,6 +82,12 @@ pub(crate) struct DatabaseEntry {
     pub path: PathBuf,
     pub interrupt: Arc<AtomicBool>,
     pub busy_timeout: Mutex<Duration>,
+    /// Per-database Rayon pool for future intra-query parallel operators.
+    /// `None` when the caller opted out (`rayon_threads = Some(0|1)`) so
+    /// operators take the serial path. The pool is built with `.build()`
+    /// (non-global): embedding `redlinedb` never installs a global Rayon
+    /// pool that would pollute the host process's existing parallelism.
+    pub rayon_pool: Option<Arc<rayon::ThreadPool>>,
 }
 
 #[derive(Default)]
@@ -121,6 +130,40 @@ fn open_lock_for_path(registry: &mut Registry, path: &Path) -> Arc<Mutex<()>> {
         .open_locks
         .insert(path.to_path_buf(), Arc::downgrade(&lock));
     lock
+}
+
+/// Build the per-database Rayon pool, honouring `OpenOptions::rayon_threads`.
+///
+/// **Default policy (Phase 5 hot-fix)**: `None` => NO pool (serial path).
+/// Spawning 8 worker threads at every Database::open paid a ~1.5 ms startup
+/// tax for ZERO benefit until intra-query parallel operators are wired
+/// (Phase 6 Morsel/Vector). The parity harness spawns ~1127 fresh processes,
+/// so the cost was ~1.7 seconds spread across the corpus and inflated the
+/// median latency ratio by ~40%.
+///
+/// `Some(0|1)` => no pool (serial path; same as default).
+/// `Some(n)` for n >= 2 => `n`-thread non-global pool. The build is
+/// non-global: it must never call `build_global`, otherwise hosts that
+/// already own a Rayon pool (axum, sqlx, an embedder's own analytics stack)
+/// would see their pool pre-empted by `redlinedb`.
+fn build_rayon_pool(options: &OpenOptions) -> Result<Option<Arc<rayon::ThreadPool>>> {
+    let Some(n) = options.rayon_threads else {
+        return Ok(None);
+    };
+    if n <= 1 {
+        return Ok(None);
+    }
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(n)
+        .thread_name(|i| format!("redlinedb-rayon-{i}"))
+        .build()
+        .map_err(|err| {
+            Error::new(
+                ErrorCode::Internal,
+                format!("rayon pool build failed: {err}"),
+            )
+        })?;
+    Ok(Some(Arc::new(pool)))
 }
 
 fn validate_existing_entry(
@@ -198,6 +241,7 @@ fn create_ephemeral_database_inner(
         None
     };
 
+    let rayon_pool = build_rayon_pool(options)?;
     let entry = Arc::new(DatabaseEntry {
         db,
         fingerprint,
@@ -206,6 +250,7 @@ fn create_ephemeral_database_inner(
         path: path.clone(),
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
+        rayon_pool,
     });
     let mut registry = registry().lock().expect("registry poisoned");
     registry.entries.insert(path, Arc::downgrade(&entry));
@@ -295,6 +340,7 @@ fn open_database_at(
         None
     };
 
+    let rayon_pool = build_rayon_pool(options)?;
     let entry = Arc::new(DatabaseEntry {
         db,
         fingerprint,
@@ -303,6 +349,7 @@ fn open_database_at(
         path: path.clone(),
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
+        rayon_pool,
     });
     let mut registry = registry().lock().expect("registry poisoned");
     registry.entries.insert(path, Arc::downgrade(&entry));

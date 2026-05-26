@@ -279,6 +279,7 @@ pub enum PragmaPlan {
     SetThreads(i64),
     SetTrustedSchema(bool),
     SetWritableSchema(bool),
+    SetRedlineBulkImport(bool),
 }
 
 /// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the
@@ -431,10 +432,29 @@ pub enum CompoundSetOp {
     Except,
 }
 
+/// Phase 5 WS-A2e/A2g: SQLite-parity table-access hint attached to a FROM
+/// item via `INDEXED BY <name>` or `NOT INDEXED`. The planner consults
+/// the hint inside `index_access::try_match_index_access`:
+///   - `NotIndexed`        → never advertise an index path (TableScan).
+///   - `IndexedBy(name)`   → only match when the chosen index name (case-
+///                           insensitively) equals `name`; otherwise fall
+///                           through to TableScan (permissive: SQLite does
+///                           the same when the named index does not apply).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TableAccessHint {
+    NotIndexed,
+    IndexedBy(Arc<str>),
+}
+
 #[derive(Debug, Clone)]
 pub struct BoundTable {
     pub table: Arc<TableDef>,
     pub alias: Option<Arc<str>>,
+    /// Phase 5 WS-A2e: SQLite-parity table-access hint (`INDEXED BY` /
+    /// `NOT INDEXED`) captured during parse; `None` when no hint is
+    /// supplied. Consumed by the planner via
+    /// `index_access::try_match_index_access`.
+    pub index_hint: Option<TableAccessHint>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -474,6 +494,12 @@ pub struct SelectPlan {
     pub order_by: Vec<OrderByExpr>,
     pub limit: Option<Expr>,
     pub offset: Option<Expr>,
+    /// Phase 5 WS-A2e: hint for the single-table source. Mirrors the
+    /// `index_hint` carried on the `BoundTable` of joined sources so the
+    /// planner can resolve hints whether the source is
+    /// `SelectSource::Table(Arc<TableDef>)` or `SelectSource::Tables(..)`.
+    /// `None` when no hint is attached.
+    pub table_hint: Option<TableAccessHint>,
 }
 
 #[derive(Debug, Clone)]
@@ -500,6 +526,17 @@ pub struct UpdatePlan {
     pub assignments: Vec<(usize, DmlValue)>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
+    /// Phase 5 WS-A2f: optional `ORDER BY` keys to deterministically pick
+    /// which rows participate when `limit` is set. sqlparser 0.61 does NOT
+    /// parse `UPDATE ... ORDER BY` in SQLite dialect, so this stays empty
+    /// today; populated only if a future parser pre-rewrite teaches it.
+    pub order_by: Vec<OrderByExpr>,
+    /// Phase 5 WS-A2f: optional `LIMIT n`. When `Some`, at most `n` rows
+    /// are updated (after applying `order_by` and `offset`).
+    pub limit: Option<Expr>,
+    /// Phase 5 WS-A2f: optional `OFFSET n`. sqlparser does not emit OFFSET
+    /// for UPDATE; kept for symmetry with `DeletePlan`.
+    pub offset: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -507,6 +544,14 @@ pub struct DeletePlan {
     pub table: Arc<TableDef>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
+    /// Phase 5 WS-A2f: optional `ORDER BY` keys. Empty when DELETE has no
+    /// ORDER BY clause; existing fast paths remain unchanged in that case.
+    pub order_by: Vec<OrderByExpr>,
+    /// Phase 5 WS-A2f: optional `LIMIT n`.
+    pub limit: Option<Expr>,
+    /// Phase 5 WS-A2f: optional `OFFSET n`. sqlparser 0.61 does not parse
+    /// OFFSET on DELETE; reserved for a future parser pre-rewrite.
+    pub offset: Option<Expr>,
 }
 
 /// Track K — Lowered plan for SQL:2003 `MERGE INTO target USING source ON ...`.

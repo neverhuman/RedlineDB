@@ -63,20 +63,21 @@ fn delete_using_is_unsupported() {
 
 #[test]
 fn delete_limit_is_unsupported() {
+    // WS-A2f rolled back at parser layer to match the SQLite autoconf
+    // amalgamation (which rejects the syntax regardless of the
+    // -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT compile flag). Users can do
+    // `DELETE FROM t WHERE rowid IN (SELECT rowid FROM t LIMIT n)`.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
-    c.execute("INSERT INTO t VALUES (1),(2),(3)")
-        .expect("insert");
     let res = c.execute("DELETE FROM t LIMIT 1");
-    assert_unsupported(res, "not supported");
+    assert_errors(res);
 }
 
 #[test]
 fn delete_order_by_is_unsupported() {
+    // WS-A2f rolled back at parser layer (see above).
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
-    c.execute("INSERT INTO t VALUES (1),(2),(3)")
-        .expect("insert");
     let res = c.execute("DELETE FROM t ORDER BY id");
     assert_errors(res);
 }

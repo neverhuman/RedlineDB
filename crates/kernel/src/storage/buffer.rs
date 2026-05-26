@@ -1,23 +1,66 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
-use std::thread;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, Weak};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use crossbeam_queue::ArrayQueue;
+use crossbeam_utils::CachePadded;
 
 use crate::format::{Lsn, Page, PageId, PageKind, RelId};
 use crate::storage::PageFile;
+use crate::storage::numa;
 use crate::storage::policy::{ActiveBufferPolicy, BufferPolicy};
 use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
 
 pub const DEFAULT_CHECKPOINT_BATCH_PAGES: usize = 64;
 
+/// Minimum capacity of the prefetch worker queue. The queue size
+/// otherwise scales with the pool (`capacity / 4`), but a tiny pool
+/// would otherwise yield a single-slot queue that drops nearly every
+/// hint.
+const PREFETCH_QUEUE_MIN: usize = 32;
+/// How long the worker parks when the queue drains. Park-timeout is
+/// woken eagerly on every `try_prefetch` push, so the timeout only
+/// matters for shutdown latency and for the (rare) case where an
+/// unpark notification is lost.
+const PREFETCH_PARK: Duration = Duration::from_micros(200);
+
+/// Buffer pool with a background prefetch worker.
+///
+/// The previous design ran the prefetch cold load synchronously on the
+/// caller's thread, which blocked SQL workers on disk I/O. WS-C4 moves
+/// the cold load to a dedicated worker thread fed by a bounded
+/// `ArrayQueue`. `try_prefetch` (and `prefetch`) push onto the queue
+/// and return immediately; if the queue is full the hint is dropped
+/// and `Phase11Counters::prefetch_dropped` is bumped.
+///
+/// # Drop ordering invariant
+///
+/// The worker thread MUST NOT hold a strong `Arc<BufferPool>` (or any
+/// strong `Arc` into the same cycle), otherwise `Drop for BufferPool`
+/// would never run. All pool state lives behind `Arc<Inner>` and the
+/// worker upgrades a `Weak<Inner>` per pop. When the last external
+/// strong ref drops, `Drop` flips the shutdown flag, unparks the
+/// worker, and joins — the worker's next `weak.upgrade()` returns
+/// `None` and the loop exits.
 #[derive(Debug)]
 pub struct BufferPool {
+    inner: Arc<Inner>,
+    prefetch_queue: Arc<ArrayQueue<PageId>>,
+    shutdown: Arc<AtomicBool>,
+    worker: Mutex<Option<JoinHandle<()>>>,
+}
+
+#[derive(Debug)]
+struct Inner {
     page_file: Arc<PageFile>,
     capacity: usize,
     shards: Vec<Mutex<HashMap<PageId, Arc<FrameEntry>>>>,
     next_page_id: AtomicU64,
-    resident: AtomicUsize,
+    // Phase 5 WS-B5: avoid false-sharing with adjacent counters.
+    resident: CachePadded<AtomicUsize>,
     clock_hand: AtomicUsize,
     eviction: Mutex<()>,
     stats: BufferPoolStatsInner,
@@ -32,12 +75,13 @@ pub struct BufferPoolStats {
     pub checkpoint_flushes: u64,
 }
 
+// Phase 5 WS-B5: avoid false-sharing with adjacent counters.
 #[derive(Debug, Default)]
 struct BufferPoolStatsInner {
-    reads: AtomicU64,
-    writes: AtomicU64,
-    evictions: AtomicU64,
-    checkpoint_flushes: AtomicU64,
+    reads: CachePadded<AtomicU64>,
+    writes: CachePadded<AtomicU64>,
+    evictions: CachePadded<AtomicU64>,
+    checkpoint_flushes: CachePadded<AtomicU64>,
 }
 
 #[derive(Debug)]
@@ -76,25 +120,231 @@ impl BufferPool {
         let parallelism = thread::available_parallelism()
             .map(|value| value.get())
             .unwrap_or(4);
-        let shard_count = capacity.min((parallelism * 4).max(16)).max(1);
+        let base_shard_count = capacity.min((parallelism * 4).max(16)).max(1);
+        // Phase 5 WS-B6: with `--features numa` round the shard count up
+        // to a multiple of the host's NUMA node count so each node owns
+        // a disjoint slab of shards (`shard_idx % nodes == node_id`).
+        // Without the feature `numa_node_count()` returns 1 and the
+        // round-up is a no-op, so the off-feature build keeps the
+        // pre-B6 shard layout byte-identical.
+        let nodes = numa::numa_node_count().max(1);
+        let shard_count = base_shard_count
+            .div_ceil(nodes)
+            .saturating_mul(nodes)
+            .max(1);
         let mut shards = Vec::with_capacity(shard_count);
         for _ in 0..shard_count {
             shards.push(Mutex::new(HashMap::new()));
         }
         let next_page_id = page_file.page_count()?.saturating_add(1);
-        Ok(Self {
+        let inner = Arc::new(Inner {
             page_file,
             capacity,
             shards,
             next_page_id: AtomicU64::new(next_page_id),
-            resident: AtomicUsize::new(0),
+            resident: CachePadded::new(AtomicUsize::new(0)),
             clock_hand: AtomicUsize::new(0),
             eviction: Mutex::new(()),
             stats: BufferPoolStatsInner::default(),
+        });
+
+        let queue_capacity = (capacity / 4).max(PREFETCH_QUEUE_MIN);
+        let prefetch_queue = Arc::new(ArrayQueue::<PageId>::new(queue_capacity));
+        let shutdown = Arc::new(AtomicBool::new(false));
+
+        // Phase 5 hot-fix: prefetch worker is LAZY — spawned on first
+        // try_prefetch call instead of at construction. Workloads that
+        // never prefetch (in-memory DBs, short-lived CLI scripts) skip
+        // the thread-spawn cost entirely (was ~0.2 ms per Database::new
+        // × 1127 parity processes = ~225 ms aggregate noise).
+        Ok(Self {
+            inner,
+            prefetch_queue,
+            shutdown,
+            worker: Mutex::new(None),
         })
     }
 
+    /// Ensure the prefetch worker is spawned. No-op if already spawned.
+    fn ensure_prefetch_worker(&self) {
+        let mut guard = match self.worker.lock() {
+            Ok(g) => g,
+            Err(_) => return, // poisoned — skip; worker is best-effort
+        };
+        if guard.is_some() {
+            return;
+        }
+        let weak_inner: Weak<Inner> = Arc::downgrade(&self.inner);
+        let worker_queue = Arc::clone(&self.prefetch_queue);
+        let worker_shutdown = Arc::clone(&self.shutdown);
+        if let Ok(handle) = thread::Builder::new()
+            .name("redlinedb-prefetch".to_string())
+            .spawn(move || prefetch_worker(weak_inner, worker_queue, worker_shutdown))
+        {
+            *guard = Some(handle);
+        }
+        // On spawn failure we silently leave the worker unset; future
+        // try_prefetch calls will simply enqueue with no consumer — the
+        // queue overflows and prefetch_dropped fires. Acceptable since
+        // prefetch is advisory.
+    }
+
     pub fn allocate(&self, kind: PageKind, rel_id: RelId) -> Result<PageGuard> {
+        self.inner.allocate(kind, rel_id)
+    }
+
+    pub fn pin(&self, page_id: PageId) -> Result<PageGuard> {
+        self.inner.pin(page_id)
+    }
+
+    /// Push `page_id` onto the prefetch worker queue. Returns
+    /// immediately. If the queue is full the hint is dropped and
+    /// `Phase11Counters::prefetch_dropped` is bumped. The worker is
+    /// unparked on a successful push so latency is bounded by one
+    /// thread wake-up, not by the park timeout.
+    pub fn try_prefetch(&self, page_id: PageId, counters: &Phase11Counters) {
+        // Lazy worker: spawn on first prefetch hint. Subsequent calls
+        // hit the fast path (already-Some lock check + unpark).
+        self.ensure_prefetch_worker();
+        match self.prefetch_queue.push(page_id) {
+            Ok(()) => {
+                if let Ok(guard) = self.worker.lock()
+                    && let Some(handle) = guard.as_ref()
+                {
+                    handle.thread().unpark();
+                }
+            }
+            Err(_) => {
+                counters.prefetch_dropped.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// Phase 11 W1-B advisory prefetch hint.
+    ///
+    /// Resident-hit fast path stays synchronous (a try_lock probe).
+    /// Cold cases enqueue onto the worker queue via [`Self::try_prefetch`]
+    /// rather than blocking the caller on disk I/O. Counter semantics
+    /// for `prefetch_hits`/`prefetch_misses` are unchanged; the new
+    /// `prefetch_dropped` counter fires only on queue overflow.
+    pub fn prefetch(&self, page_id: PageId, counters: &Phase11Counters) {
+        let shard_idx = self.inner.shard_idx(page_id);
+        let resident = match self.inner.shards[shard_idx].try_lock() {
+            Ok(shard) => shard.contains_key(&page_id),
+            Err(_) => {
+                // Contended shard: drop the hint as a miss without
+                // attempting a cold load.
+                counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+        };
+        if resident {
+            counters.prefetch_hits.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
+        if !ActiveBufferPolicy::prefetch_cold_load(self.inner.resident_pages(), self.inner.capacity)
+        {
+            return;
+        }
+        // Hand the cold load off to the worker; never block the
+        // caller on disk I/O here.
+        self.try_prefetch(page_id, counters);
+    }
+
+    pub fn flush_page(&self, page_id: PageId, durable_lsn: Lsn) -> Result<()> {
+        self.inner.flush_page(page_id, durable_lsn)
+    }
+
+    pub fn flush_all(&self, durable_lsn: Lsn) -> Result<()> {
+        self.inner.flush_all(durable_lsn)
+    }
+
+    pub fn write_page_direct(&self, page: &Page) -> Result<()> {
+        self.inner.write_page_direct(page)
+    }
+
+    pub fn flush_dirty_batch(&self, durable_lsn: Lsn, max_pages: usize) -> Result<FlushStats> {
+        self.inner.flush_dirty_batch(durable_lsn, max_pages)
+    }
+
+    pub fn flush_dirty_batches(&self, durable_lsn: Lsn, batch_pages: usize) -> Result<FlushStats> {
+        self.inner.flush_dirty_batches(durable_lsn, batch_pages)
+    }
+
+    pub fn resident_pages(&self) -> usize {
+        self.inner.resident_pages()
+    }
+
+    pub fn stats(&self) -> BufferPoolStats {
+        self.inner.stats()
+    }
+
+    pub fn page_count(&self) -> Result<u64> {
+        self.inner.page_count()
+    }
+
+    /// Lane INT: raw-bytes read used by the integrity checker to recompute
+    /// CRC32 numbers when [`pin`] returns [`Error::InvalidChecksum`]. The
+    /// regular `pin` path runs `Page::from_bytes`, which validates the
+    /// checksum and refuses to surface bytes for a corrupt page.
+    pub fn read_page_bytes_unchecked(&self, page_id: PageId) -> Result<Vec<u8>> {
+        self.inner.read_page_bytes_unchecked(page_id)
+    }
+}
+
+impl Drop for BufferPool {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Release);
+        let handle = self.worker.lock().ok().and_then(|mut guard| guard.take());
+        if let Some(handle) = handle {
+            handle.thread().unpark();
+            let _ = handle.join();
+        }
+    }
+}
+
+fn prefetch_worker(
+    weak_inner: Weak<Inner>,
+    queue: Arc<ArrayQueue<PageId>>,
+    shutdown: Arc<AtomicBool>,
+) {
+    loop {
+        if shutdown.load(Ordering::Acquire) {
+            return;
+        }
+        // Drain whatever is queued in a tight loop; only park when
+        // the queue is empty. Re-check shutdown each iteration so a
+        // shutdown raised while we were draining is honoured before
+        // the next park.
+        let mut drained_any = false;
+        while let Some(page_id) = queue.pop() {
+            drained_any = true;
+            let Some(inner) = weak_inner.upgrade() else {
+                return;
+            };
+            // pin() errors are swallowed by design — prefetch is
+            // advisory and a failed cold load just leaves the page
+            // not-warmed.
+            let _ = inner.pin(page_id);
+            drop(inner);
+            if shutdown.load(Ordering::Acquire) {
+                return;
+            }
+        }
+        if shutdown.load(Ordering::Acquire) {
+            return;
+        }
+        if !drained_any {
+            // Park with a small timeout so a missed unpark eventually
+            // wakes us up (defensive — the producer always unparks).
+            thread::park_timeout(PREFETCH_PARK);
+        }
+    }
+}
+
+impl Inner {
+    fn allocate(&self, kind: PageKind, rel_id: RelId) -> Result<PageGuard> {
         self.ensure_capacity(Lsn::ZERO)?;
         let page_id = PageId(self.next_page_id.fetch_add(1, Ordering::Relaxed));
         let page = Page::new(self.page_file.page_size(), kind, page_id, rel_id)?;
@@ -113,7 +363,7 @@ impl BufferPool {
         Ok(PageGuard { page_id, frame })
     }
 
-    pub fn pin(&self, page_id: PageId) -> Result<PageGuard> {
+    fn pin(&self, page_id: PageId) -> Result<PageGuard> {
         loop {
             if let Some(frame) = self.lookup_frame(page_id)? {
                 let mut state = frame
@@ -170,62 +420,7 @@ impl BufferPool {
         }
     }
 
-    /// Phase 11 W1-B advisory prefetch hint.
-    ///
-    /// Best-effort attempt to warm `page_id` in the buffer pool. The
-    /// call is purely advisory and follows three invariants:
-    ///
-    /// * **Never propagates errors** — a synchronous cold-load is
-    ///   attempted via [`Self::pin`] when the probe says the page is
-    ///   not resident, but any pin error (I/O failure, eviction race,
-    ///   etc.) is swallowed. The caller never observes a `Result`.
-    /// * **Never waits for a contended residency probe** — the shard
-    ///   check uses [`Mutex::try_lock`]. If the shard is contended we
-    ///   drop the hint silently and bump `prefetch_misses`.
-    /// * **Never depends on the warm side effect** — a cold load may
-    ///   block briefly on disk I/O, but the caller must remain correct
-    ///   if the page is not warmed.
-    ///
-    /// Counter semantics (matches the W1-B design note: "miss" means
-    /// the page was *not* resident at probe time, regardless of
-    /// whether the subsequent load actually proceeded — this is the
-    /// metric W1-B verification cares about):
-    ///
-    /// * `prefetch_hits` — page was already resident at probe time.
-    /// * `prefetch_misses` — page was not resident, *or* the shard
-    ///   was contended (hint dropped). The cold-load attempt is
-    ///   best-effort; the miss counter is bumped regardless.
-    pub fn prefetch(&self, page_id: PageId, counters: &Phase11Counters) {
-        let shard_idx = self.shard_idx(page_id);
-        let resident = match self.shards[shard_idx].try_lock() {
-            Ok(shard) => shard.contains_key(&page_id),
-            Err(_) => {
-                // Contended shard: drop the hint as a miss without
-                // attempting a cold load.
-                counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
-        };
-        if resident {
-            counters.prefetch_hits.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
-        // Page was not resident at probe time — count it as a miss
-        // up-front, then attempt a synchronous cold load. The pin
-        // path may briefly block on disk I/O; a future iteration
-        // can defer this to an existing thread pool. Errors are
-        // swallowed by design — prefetch is purely advisory.
-        counters.prefetch_misses.fetch_add(1, Ordering::Relaxed);
-        if !ActiveBufferPolicy::prefetch_cold_load(self.resident_pages(), self.capacity) {
-            return;
-        }
-        if let Ok(_guard) = self.pin(page_id) {
-            // Drop the guard immediately; the goal is just to warm
-            // the buffer pool, not to keep the page pinned.
-        }
-    }
-
-    pub fn flush_page(&self, page_id: PageId, durable_lsn: Lsn) -> Result<()> {
+    fn flush_page(&self, page_id: PageId, durable_lsn: Lsn) -> Result<()> {
         let Some(frame) = self.lookup_frame(page_id)? else {
             return Ok(());
         };
@@ -238,14 +433,14 @@ impl BufferPool {
         })
     }
 
-    pub fn flush_all(&self, durable_lsn: Lsn) -> Result<()> {
+    fn flush_all(&self, durable_lsn: Lsn) -> Result<()> {
         for (_, frame) in self.all_frames()? {
             self.flush_frame(&frame, durable_lsn)?;
         }
         self.page_file.sync_data()
     }
 
-    pub fn write_page_direct(&self, page: &Page) -> Result<()> {
+    fn write_page_direct(&self, page: &Page) -> Result<()> {
         self.page_file.write_page(page)?;
         let page_id = page.header()?.page_id;
         let next = page_id.0.saturating_add(1);
@@ -264,7 +459,7 @@ impl BufferPool {
         Ok(())
     }
 
-    pub fn flush_dirty_batch(&self, durable_lsn: Lsn, max_pages: usize) -> Result<FlushStats> {
+    fn flush_dirty_batch(&self, durable_lsn: Lsn, max_pages: usize) -> Result<FlushStats> {
         let stats = self.flush_dirty_batch_inner(durable_lsn, max_pages)?;
         if stats.flushed_pages > 0 {
             self.page_file.sync_data()?;
@@ -272,7 +467,7 @@ impl BufferPool {
         Ok(stats)
     }
 
-    pub fn flush_dirty_batches(&self, durable_lsn: Lsn, batch_pages: usize) -> Result<FlushStats> {
+    fn flush_dirty_batches(&self, durable_lsn: Lsn, batch_pages: usize) -> Result<FlushStats> {
         let batch_pages = batch_pages.max(1);
         let mut flushed_pages = 0_usize;
         let mut batches = 0_usize;
@@ -321,11 +516,11 @@ impl BufferPool {
         })
     }
 
-    pub fn resident_pages(&self) -> usize {
+    fn resident_pages(&self) -> usize {
         self.resident.load(Ordering::Relaxed)
     }
 
-    pub fn stats(&self) -> BufferPoolStats {
+    fn stats(&self) -> BufferPoolStats {
         BufferPoolStats {
             resident_pages: self.resident_pages(),
             reads: self.stats.reads.load(Ordering::Relaxed),
@@ -335,15 +530,11 @@ impl BufferPool {
         }
     }
 
-    pub fn page_count(&self) -> Result<u64> {
+    fn page_count(&self) -> Result<u64> {
         self.page_file.page_count()
     }
 
-    /// Lane INT: raw-bytes read used by the integrity checker to recompute
-    /// CRC32 numbers when [`pin`] returns [`Error::InvalidChecksum`]. The
-    /// regular `pin` path runs `Page::from_bytes`, which validates the
-    /// checksum and refuses to surface bytes for a corrupt page.
-    pub fn read_page_bytes_unchecked(&self, page_id: PageId) -> Result<Vec<u8>> {
+    fn read_page_bytes_unchecked(&self, page_id: PageId) -> Result<Vec<u8>> {
         self.page_file.read_page_bytes_unchecked(page_id)
     }
 

@@ -153,11 +153,27 @@ fn bind_select_from_after_tvf(
         }
     }
 
+    // Phase 5 WS-A2e: when the source collapses to the single-table
+    // fast path the bound table's `index_hint` would otherwise be lost
+    // (the `Table(Arc<TableDef>)` variant deliberately does not carry
+    // the BoundTable wrapper). Stash the hint on a per-prepare
+    // thread-local that `crate::parser::select::bind_query` lifts into
+    // `SelectPlan::table_hint`. Captured BEFORE we move `tables` into
+    // `SelectSource::Tables`.
+    let collapse_to_single_table =
+        tables.len() == 1 && tables[0].alias.is_none() && selection.is_none();
+    if collapse_to_single_table
+        && let Some(first) = tables.first()
+        && first.index_hint.is_some()
+    {
+        crate::parser::prepare::stash_single_table_hint(first.index_hint.clone());
+    }
+
     let source = if saw_sqlite_temp_schema && tables.is_empty() {
         SelectSource::SqliteTempSchema
     } else if saw_sqlite_schema && tables.is_empty() {
         SelectSource::SqliteSchema
-    } else if tables.len() == 1 && tables[0].alias.is_none() && selection.is_none() {
+    } else if collapse_to_single_table {
         SelectSource::Table(Arc::clone(&tables[0].table))
     } else {
         SelectSource::Tables(tables)
@@ -306,9 +322,23 @@ pub(crate) fn bind_select_table_factor(
             )? {
                 return Ok(bound);
             }
+            // Phase 5 WS-A2e: pull any `INDEXED BY` / `NOT INDEXED` hint
+            // captured during the `prepare` strip pass. Hints are keyed
+            // by the lexically preceding identifier (alias if present,
+            // else table name) so the lookup mirrors what the user typed.
+            let alias_key = alias.as_ref().map(|a| a.name.value.clone());
+            let name_key = name
+                .0
+                .last()
+                .and_then(|p| object_name_part_to_string(p).ok());
+            let index_hint = crate::parser::prepare::take_table_index_hint(
+                alias_key.as_deref(),
+                name_key.as_deref(),
+            );
             Ok(BoundTable {
                 table: bind_table_name(schema, &name)?,
                 alias: alias.map(|alias| Arc::from(alias.name.value)),
+                index_hint,
             })
         }
         TableFactor::Derived {
@@ -367,6 +397,7 @@ fn bind_derived_table(
     Ok(BoundTable {
         table,
         alias: alias.map(|alias| Arc::from(alias.name.value)),
+        index_hint: None,
     })
 }
 
@@ -690,6 +721,7 @@ fn try_resolve_zero_arg_pragma_tvf(
     Ok(Some(BoundTable {
         table: table_def,
         alias: alias.cloned(),
+        index_hint: None,
     }))
 }
 

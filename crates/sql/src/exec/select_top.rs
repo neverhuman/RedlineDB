@@ -115,10 +115,21 @@ fn build_select_runtime(
         && plan.order_by.is_empty()
         && plan.having.is_none()
         && is_count_star_only_projection(&plan.projection)
-        && let Some(matched) =
-            index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+        && let Some(matched) = index_access::try_match_index_access_hinted(
+            conn.engine(),
+            table,
+            &plan.selection,
+            bindings,
+            plan.table_hint.as_ref(),
+        )
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
         && index_access::open_handle(conn.engine(), &matched.index).is_some()
+        // Phase 5 WS-A1: the count fast path skips per-row predicate
+        // recheck, so any residual conjunct would be silently dropped
+        // (e.g. WHERE k BETWEEN ? AND ? AND status='active' would
+        // return the BETWEEN-range count instead of the AND-filtered
+        // count). Bail to the heap-scan path when residuals exist.
+        && matched.consumed_full_predicate()
     {
         let tx_ref = tx.as_mut().expect("tx present");
         let count = index_access::execute_index_count_range(
@@ -141,13 +152,23 @@ fn build_select_runtime(
         && plan.distinct_on.is_empty()
         && !select_requires_aggregation(plan)
         && plan.having.is_none()
-        && let Some(matched) =
-            index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+        && let Some(matched) = index_access::try_match_index_access_hinted(
+            conn.engine(),
+            table,
+            &plan.selection,
+            bindings,
+            plan.table_hint.as_ref(),
+        )
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
         && index_access::open_handle(conn.engine(), &matched.index).is_some()
         && let Some(out_columns) =
             covering_projection_for_index(table, &matched.index, &plan.projection)
-        && covering_order_satisfies(&matched.index, table, &plan.order_by)
+        && order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by)
+        // Phase 5 WS-A1: covering scan returns the index leaf bytes
+        // directly without re-loading the heap or re-checking the
+        // predicate. Residual conjuncts would be silently dropped,
+        // producing wrong rows.
+        && matched.consumed_full_predicate()
     {
         let tx_ref = tx.as_mut().expect("tx present");
         let cover_limit = if plan.order_by.is_empty() {
@@ -260,15 +281,25 @@ fn build_select_runtime(
                     //      `selection_rowid_eq` / RowIdGet).
                     //   2. physical-index probe (point or range).
                     //   3. default path: full heap scan.
-                    let rowids = if let Some(rowid) =
+                    // Phase 5 WS-A2e: `NOT INDEXED` disables the rowid-PK
+                    // alias short-circuit too (SQLite parity: rowid is
+                    // index-driven).
+                    let rowid_candidate = if matches!(
+                        plan.table_hint,
+                        Some(crate::statement::TableAccessHint::NotIndexed)
+                    ) {
+                        None
+                    } else {
                         selection_rowid_eq(table, &plan.selection, bindings)?
-                    {
+                    };
+                    let rowids = if let Some(rowid) = rowid_candidate {
                         vec![rowid]
-                    } else if let Some(matched) = index_access::try_match_index_access(
+                    } else if let Some(matched) = index_access::try_match_index_access_hinted(
                         conn.engine(),
                         table,
                         &plan.selection,
                         bindings,
+                        plan.table_hint.as_ref(),
                     ) {
                         let tx = tx.as_mut().expect("tx present");
                         // Conservatism: if the kernel can't honor
@@ -1112,40 +1143,94 @@ fn covering_projection_for_index(
     Some(out)
 }
 
-/// Phase 11 W1-E: for the covering path, the cursor already emits in
-/// the index leading-column order. `ORDER BY k` (or no ORDER BY)
-/// matches; anything else needs a downstream sort and falls through.
-fn covering_order_satisfies(
-    index: &redlinedb_kernel::catalog::IndexDef,
+/// Phase 5 WS-A2: prefix-aware ORDER BY satisfaction check.
+///
+/// The cursor walks the index in key order. When the leading key
+/// positions are pinned to constants by equality (e.g. `WHERE tenant=?`
+/// on `INDEX(tenant, k)`), the cursor effectively walks in `k`-order
+/// over the slice where `tenant` is constant. So `ORDER BY k` IS
+/// satisfied by the index walk even though `k` is not the leading
+/// column of the index itself.
+///
+/// Strip `equality_prefix_len` leading key positions; then ORDER BY
+/// columns must align one-for-one with the next unpinned key positions.
+/// Empty ORDER BY is always satisfied. DESC ORDER BY currently disqual-
+/// ifies (caller routes DESC through `order_reverse_satisfied_by_index`).
+fn order_satisfied_by_index_with_prefix(
+    matched: &index_access::IndexAccessMatch,
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
     order_by: &[OrderByExpr],
 ) -> bool {
     if order_by.is_empty() {
         return true;
     }
-    if order_by.len() != 1 {
+    let remaining = matched
+        .index
+        .keys
+        .get(matched.equality_prefix_len..)
+        .unwrap_or(&[]);
+    if order_by.len() > remaining.len() {
         return false;
     }
-    let item = &order_by[0];
-    if matches!(item.options.asc, Some(false)) {
-        // Desc ORDER BY does not match an Asc index; the cursor walks
-        // left-to-right and does not currently support reverse
-        // iteration. Use the sort path instead.
+    for (item, key) in order_by.iter().zip(remaining.iter()) {
+        if matches!(item.options.asc, Some(false)) {
+            return false;
+        }
+        let Expr::Identifier(ident) = &item.expr else {
+            return false;
+        };
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = key.source else {
+            return false;
+        };
+        let Some(col) = table.columns.get(attnum as usize) else {
+            return false;
+        };
+        if !col.folded.as_ref().eq_ignore_ascii_case(&ident.value) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Phase 5 WS-A2c: reverse-walk variant of
+/// `order_satisfied_by_index_with_prefix`. Returns true iff every ORDER
+/// BY item is `DESC` and otherwise aligns with the equality-prefix-shifted
+/// key positions. ASC items disqualify (the caller routes those through
+/// the forward-walk check instead).
+fn order_reverse_satisfied_by_index(
+    matched: &index_access::IndexAccessMatch,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    order_by: &[OrderByExpr],
+) -> bool {
+    if order_by.is_empty() {
         return false;
     }
-    let Expr::Identifier(ident) = &item.expr else {
+    let remaining = matched
+        .index
+        .keys
+        .get(matched.equality_prefix_len..)
+        .unwrap_or(&[]);
+    if order_by.len() > remaining.len() {
         return false;
-    };
-    let Some(first_key) = index.keys.first() else {
-        return false;
-    };
-    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source else {
-        return false;
-    };
-    table
-        .columns
-        .get(attnum as usize)
-        .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(&ident.value))
+    }
+    for (item, key) in order_by.iter().zip(remaining.iter()) {
+        if !matches!(item.options.asc, Some(false)) {
+            return false;
+        }
+        let Expr::Identifier(ident) = &item.expr else {
+            return false;
+        };
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = key.source else {
+            return false;
+        };
+        let Some(col) = table.columns.get(attnum as usize) else {
+            return false;
+        };
+        if !col.folded.as_ref().eq_ignore_ascii_case(&ident.value) {
+            return false;
+        }
+    }
+    true
 }
 
 fn order_by_rowid_alias(
@@ -1188,9 +1273,13 @@ fn try_ordered_index_limit_path(
     if plan.order_by.is_empty() || limit == usize::MAX {
         return Ok(None);
     }
-    let Some(matched) =
-        index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
-    else {
+    let Some(matched) = index_access::try_match_index_access_hinted(
+        conn.engine(),
+        table,
+        &plan.selection,
+        bindings,
+        plan.table_hint.as_ref(),
+    ) else {
         return Ok(None);
     };
     if matched.index.keys.len() == 1
@@ -1214,21 +1303,35 @@ fn try_ordered_index_limit_path(
     if !matches!(matched.probe, index_access::IndexProbe::Range { .. }) {
         return Ok(None);
     }
-    if !covering_order_satisfies(&matched.index, table, &plan.order_by) {
+    let order_asc = order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by);
+    let order_desc =
+        !order_asc && order_reverse_satisfied_by_index(&matched, table, &plan.order_by);
+    if !order_asc && !order_desc {
         return Ok(None);
     }
     if index_access::open_handle(conn.engine(), &matched.index).is_none() {
         return Ok(None);
     }
     let take = limit.saturating_add(offset);
-    let rowids = index_access::execute_index_probe_with_limit(
-        conn.engine(),
-        tx,
-        table,
-        &matched.index,
-        &matched.probe,
-        Some(take),
-    )?;
+    let rowids = if order_desc {
+        index_access::execute_index_probe_with_limit_desc(
+            conn.engine(),
+            tx,
+            table,
+            &matched.index,
+            &matched.probe,
+            Some(take),
+        )?
+    } else {
+        index_access::execute_index_probe_with_limit(
+            conn.engine(),
+            tx,
+            table,
+            &matched.index,
+            &matched.probe,
+            Some(take),
+        )?
+    };
     Ok(Some(rowids))
 }
 

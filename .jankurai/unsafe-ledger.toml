@@ -115,6 +115,20 @@ invariant = "Loop guard `i + lanes <= len` bounds the 4-lane unaligned loads to 
 proof_lane = "rtk cargo test -p redlinedb-kernel --lib vector::simd --locked"
 
 [[entries]]
+file = "crates/kernel/src/index/keycmp/mod.rs"
+line = 22
+owner = "phase5-ws-b3a-keycmp-simd"
+invariant = "AVX2 dispatch upheld at runtime via `std::is_x86_feature_detected!(\"avx2\")`; calling `cmp_keys_avx2` only when its `target_feature = \"avx2\"` precondition is satisfied."
+proof_lane = "rtk cargo test -p redlinedb-kernel --test index_keycmp_simd --locked"
+
+[[entries]]
+file = "crates/kernel/src/index/keycmp/mod.rs"
+line = 47
+owner = "phase5-ws-b3a-keycmp-simd"
+invariant = "Loop guard `i + 32 <= common` bounds the 32-byte unaligned loads `_mm256_loadu_si256` to `a[i..i+32]` and `b[i..i+32]` (where `common = min(a.len(), b.len())`); `_mm256_loadu_si256` accepts any alignment; AVX2 upheld by the enclosing function's `#[target_feature(enable = \"avx2\")]`."
+proof_lane = "rtk cargo test -p redlinedb-kernel --test index_keycmp_simd --locked"
+
+[[entries]]
 file = "crates/kernel/src/vector/diskann/sectors.rs"
 line = 256
 owner = "phase10-diskann-index"
@@ -818,3 +832,55 @@ detector = "rust.unsafe.extern-fn"
 invariant = "sqlite3_*_hook / sqlite3_trace / sqlite3_profile / sqlite3_busy_handler / sqlite3_set_authorizer: caller MUST pass non-NULL db and either NULL (unregister) or a valid C callback; we null-check db, store callbacks per-connection in Mutex-guarded HookSlots, and only invoke them from the FFI shim at well-defined sites (exec walk, blob write). Validated by crates/ffi/tests/hooks.rs."
 proof_lane = "rtk cargo test -p redlinedb-ffi --test hooks --quiet --locked"
 proof_test = "redlinedb-ffi::hooks::commit_hook_fires_and_can_veto"
+
+# WS-B3b: AVX2-accelerated JSON / JSONPath tokenize helpers in
+# crates/sql/src/json/jsonb.rs::simd_tokenize. Dispatch sites use
+# `is_x86_feature_detected!("avx2")` to gate the `unsafe fn` body.
+
+[[entries]]
+file = "crates/sql/src/json/jsonb.rs"
+line = 1151
+owner = "phase5-ws-b3b-simd-json-tokenize"
+invariant = "AVX2 dispatch upheld at runtime via `is_x86_feature_detected!(\"avx2\")`; calling `find_first_non_whitespace_avx2` only when its `target_feature = \"avx2\"` precondition is satisfied; scalar fallback handles non-x86 and pre-AVX2 hosts."
+proof_lane = "rtk cargo test -p redlinedb-sql --test ws_b3b_simd_json_tokenize --quiet --locked"
+proof_test = "redlinedb-sql::ws_b3b_simd_json_tokenize::diff_thousand_iterations_padded_vs_plain"
+
+[[entries]]
+file = "crates/sql/src/json/jsonb.rs"
+line = 1174
+owner = "phase5-ws-b3b-simd-json-tokenize"
+invariant = "AVX2 dispatch upheld at runtime via `is_x86_feature_detected!(\"avx2\")`; calling `find_next_structural_avx2` only when its `target_feature = \"avx2\"` precondition is satisfied. Retained for future custom JSON body tokeniser (simd-json port); currently unused by the live tokenizer."
+proof_lane = "rtk cargo test -p redlinedb-sql --test ws_b3b_simd_json_tokenize --quiet --locked"
+proof_test = "redlinedb-sql::ws_b3b_simd_json_tokenize::edge_deeply_nested_object_path"
+
+[[entries]]
+file = "crates/sql/src/json/jsonb.rs"
+line = 1191
+owner = "phase5-ws-b3b-simd-json-tokenize"
+invariant = "AVX2 dispatch upheld at runtime via `is_x86_feature_detected!(\"avx2\")`; calling `find_byte_avx2` only when its `target_feature = \"avx2\"` precondition is satisfied; scalar fallback used otherwise."
+proof_lane = "rtk cargo test -p redlinedb-sql --test ws_b3b_simd_json_tokenize --quiet --locked"
+proof_test = "redlinedb-sql::ws_b3b_simd_json_tokenize::edge_unterminated_bracket_in_path_errors_cleanly"
+
+[[entries]]
+file = "crates/sql/src/json/jsonb.rs"
+line = 1266
+owner = "phase5-ws-b3b-simd-json-tokenize"
+invariant = "Loop guard `i + LANES <= len` (LANES = 32) bounds the 32-byte unaligned load `_mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)` to `bytes[i..i+32]`; `_mm256_loadu_si256` accepts any alignment; AVX2 upheld by the enclosing function's `#[target_feature(enable = \"avx2\")]`."
+proof_lane = "rtk cargo test -p redlinedb-sql --test ws_b3b_simd_json_tokenize --quiet --locked"
+proof_test = "redlinedb-sql::ws_b3b_simd_json_tokenize::whitespace_padding_is_invariant"
+
+[[entries]]
+file = "crates/sql/src/json/jsonb.rs"
+line = 1317
+owner = "phase5-ws-b3b-simd-json-tokenize"
+invariant = "Loop guard `i + LANES <= len` (LANES = 32) bounds the 32-byte unaligned load `_mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)` to `bytes[i..i+32]`; `_mm256_loadu_si256` accepts any alignment; AVX2 upheld by the enclosing function's `#[target_feature(enable = \"avx2\")]`."
+proof_lane = "rtk cargo test -p redlinedb-sql --test ws_b3b_simd_json_tokenize --quiet --locked"
+proof_test = "redlinedb-sql::ws_b3b_simd_json_tokenize::edge_long_string_with_escapes_in_body"
+
+[[entries]]
+file = "crates/sql/src/json/jsonb.rs"
+line = 1362
+owner = "phase5-ws-b3b-simd-json-tokenize"
+invariant = "Loop guard `i + LANES <= len` (LANES = 32) bounds the 32-byte unaligned load `_mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)` to `bytes[i..i+32]`; `_mm256_loadu_si256` accepts any alignment; AVX2 upheld by the enclosing function's `#[target_feature(enable = \"avx2\")]`."
+proof_lane = "rtk cargo test -p redlinedb-sql --test ws_b3b_simd_json_tokenize --quiet --locked"
+proof_test = "redlinedb-sql::ws_b3b_simd_json_tokenize::edge_unterminated_bracket_in_path_errors_cleanly"

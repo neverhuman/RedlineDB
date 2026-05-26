@@ -199,6 +199,12 @@ pub(crate) fn bind_update(
             "UPDATE ... FROM is not supported".to_owned(),
         ));
     }
+    // Phase 5 WS-A2f rolled back at parser layer: SQLite's autoconf
+    // amalgamation parser rejects `UPDATE ... LIMIT n` regardless of the
+    // `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT` compile flag, so accepting it
+    // in RedlineDB makes the official parity gate diverge from reference.
+    // Users who want this can do `UPDATE t SET ... WHERE rowid IN
+    // (SELECT rowid FROM t ORDER BY x LIMIT n)` instead.
     if update.limit.is_some() {
         return Err(Error::UnsupportedSql(
             "UPDATE LIMIT is not supported".to_owned(),
@@ -246,6 +252,14 @@ pub(crate) fn bind_update(
         Some(items) => Some(normalize_select_projection(items, &mut params)?),
         None => None,
     };
+    // Phase 5 WS-A2f: sqlparser 0.61's SQLite dialect parses `UPDATE ...
+    // LIMIT n` but does NOT accept `UPDATE ... ORDER BY ...`, so the
+    // `order_by` field on `UpdatePlan` always starts empty here. A
+    // pre-parse rewrite in `parser.rs` is needed to teach UPDATE ORDER BY.
+    let limit = match update.limit {
+        Some(expr) => Some(normalize_expr(expr, &mut params)?),
+        None => None,
+    };
     let output_columns = match returning
         .as_ref()
         .map(|items| returning_output_columns(&table, items))
@@ -269,6 +283,9 @@ pub(crate) fn bind_update(
             assignments,
             selection,
             returning,
+            order_by: Vec::new(),
+            limit,
+            offset: None,
         }),
     })
 }
@@ -284,6 +301,12 @@ pub(crate) fn bind_delete(
             "DELETE ... USING is not supported".to_owned(),
         ));
     }
+    // Phase 5 WS-A2f rolled back at parser layer: SQLite's autoconf
+    // amalgamation parser rejects `DELETE ... ORDER BY ... LIMIT n`
+    // regardless of the `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT` compile
+    // flag, so accepting it makes the parity gate diverge. Users can do
+    // `DELETE FROM t WHERE rowid IN (SELECT rowid FROM t ORDER BY x
+    // LIMIT n)` for equivalent semantics.
     if !delete.order_by.is_empty() {
         return Err(Error::UnsupportedSql(
             "DELETE ORDER BY is not supported".to_owned(),
@@ -321,6 +344,28 @@ pub(crate) fn bind_delete(
         Some(items) => Some(normalize_select_projection(items, &mut params)?),
         None => None,
     };
+    // Phase 5 WS-A2f: normalize ORDER BY exprs / LIMIT bind values so
+    // `execute_delete` can evaluate them per row. sqlparser 0.61 does
+    // accept `DELETE FROM t [WHERE ...] [ORDER BY ...] [LIMIT n]` in
+    // SQLite dialect; OFFSET on DELETE is not parsed and stays `None`.
+    let order_by = delete
+        .order_by
+        .into_iter()
+        .map(|expr| {
+            let options = expr.options;
+            let with_fill = expr.with_fill;
+            let expr = normalize_expr(expr.expr, &mut params)?;
+            Ok(sqlparser::ast::OrderByExpr {
+                expr,
+                options,
+                with_fill,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let limit = match delete.limit {
+        Some(expr) => Some(normalize_expr(expr, &mut params)?),
+        None => None,
+    };
     let output_columns = match returning
         .as_ref()
         .map(|items| returning_output_columns(&table, items))
@@ -340,6 +385,9 @@ pub(crate) fn bind_delete(
             table,
             selection,
             returning,
+            order_by,
+            limit,
+            offset: None,
         }),
     })
 }

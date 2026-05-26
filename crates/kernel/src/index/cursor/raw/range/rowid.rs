@@ -6,7 +6,11 @@ use super::super::super::super::cells::LeafCell;
 use super::super::super::super::{BtreeIndex, IndexRowRef};
 use super::super::super::CursorYield;
 use super::super::shared::{self, BatchKind};
-use super::RawIndexCursor;
+use super::{Direction, RawIndexCursor};
+
+/// Phase 5 WS-A2c: sentinel `entry_idx` value meaning "freshly-opened
+/// reverse cursor — position at slot_count - 1 on the first leaf visit".
+pub(super) const REVERSE_INIT_ENTRY_IDX: usize = usize::MAX;
 
 impl<'idx> RawIndexCursor<'idx> {
     /// Yield rowids in raw leaf order without cloning logical keys.
@@ -14,6 +18,17 @@ impl<'idx> RawIndexCursor<'idx> {
     /// heap load for projection but do not need key bytes in the
     /// executor.
     pub fn next_rowid_batch(
+        &mut self,
+        out: &mut Vec<IndexRowRef>,
+        max_batch: usize,
+    ) -> Result<CursorYield> {
+        match self.direction() {
+            Direction::Forward => self.next_rowid_batch_forward(out, max_batch),
+            Direction::Reverse => self.next_rowid_batch_reverse(out, max_batch),
+        }
+    }
+
+    fn next_rowid_batch_forward(
         &mut self,
         out: &mut Vec<IndexRowRef>,
         max_batch: usize,
@@ -97,6 +112,133 @@ impl<'idx> RawIndexCursor<'idx> {
                     self.exhausted = true;
                     break;
                 }
+            }
+        }
+        let pushed = out.len().saturating_sub(start_len);
+        if pushed == 0 {
+            Ok(CursorYield::End)
+        } else {
+            shared::finish_batch(self.counters, BatchKind::Range, pushed)
+        }
+    }
+
+    /// Phase 5 WS-A2c: right-to-left mirror of the forward walk. The
+    /// visibility cache + bound checks are identical; only the slot
+    /// iteration direction and the leaf-chain hop link differ.
+    fn next_rowid_batch_reverse(
+        &mut self,
+        out: &mut Vec<IndexRowRef>,
+        max_batch: usize,
+    ) -> Result<CursorYield> {
+        if self.exhausted {
+            return Ok(CursorYield::End);
+        }
+        let start_len = out.len();
+        let target = start_len.saturating_add(max_batch);
+        let mut visibility_cache = Vec::new();
+        loop {
+            if out.len() >= target {
+                return shared::finish_batch(
+                    self.counters,
+                    BatchKind::Range,
+                    out.len().saturating_sub(start_len),
+                );
+            }
+            let Some(leaf_id) = self.current_leaf else {
+                self.exhausted = true;
+                break;
+            };
+            let leaf_latch = self.index.inner.latches.get(leaf_id);
+            let _leaf_read = leaf_latch.read();
+            let guard = self.index.inner.buffer.pin(leaf_id)?;
+            self.index
+                .inner
+                .range_scan_leaves_visited
+                .fetch_add(1, AtomicOrdering::Relaxed);
+            if let Some(c) = self.counters {
+                c.leaf_visits.fetch_add(1, AtomicOrdering::Relaxed);
+            }
+            let mut prev_leaf = None;
+            // `usize::MAX` means "exhausted this leaf" (stepped past
+            // slot 0); a finite value is the next slot to visit.
+            let mut next_entry_idx = self.entry_idx;
+            let mut stop_at_start_bound = false;
+            let mut leaf_drained = false;
+            let batch_result = guard.with_page(|page| {
+                let header = BtreeIndex::read_page_header(page)?;
+                prev_leaf = header.left;
+                let slot_count = usize::from(page.slot_count()?);
+                if slot_count == 0 {
+                    leaf_drained = true;
+                    return Ok(());
+                }
+                let mut slot: usize =
+                    if self.entry_idx == REVERSE_INIT_ENTRY_IDX || self.entry_idx >= slot_count {
+                        slot_count - 1
+                    } else {
+                        self.entry_idx
+                    };
+                loop {
+                    if out.len() >= target {
+                        next_entry_idx = slot;
+                        return Ok(());
+                    }
+                    let entry = LeafCell::decode_ref(page.cell(slot as u16)?)?;
+                    if self.at_or_before_start(entry.logical_key) {
+                        stop_at_start_bound = true;
+                        break;
+                    }
+                    if self.upper_bound_allows(entry.logical_key)
+                        && shared::matches_ref_cached(self.view, &entry, &mut visibility_cache)
+                    {
+                        out.push(entry.row);
+                    }
+                    if slot == 0 {
+                        leaf_drained = true;
+                        break;
+                    }
+                    slot -= 1;
+                }
+                if !leaf_drained && !stop_at_start_bound {
+                    next_entry_idx = slot;
+                }
+                Ok(())
+            });
+            batch_result?;
+            self.next_leaf = prev_leaf;
+            self.last_logical_key = None;
+            if stop_at_start_bound {
+                self.exhausted = true;
+                break;
+            }
+            if out.len() >= target && !leaf_drained {
+                self.entry_idx = next_entry_idx;
+                return shared::finish_batch(
+                    self.counters,
+                    BatchKind::Range,
+                    out.len().saturating_sub(start_len),
+                );
+            }
+            if leaf_drained {
+                match self.next_leaf {
+                    Some(prev_id) => {
+                        self.current_leaf = Some(prev_id);
+                        self.entry_idx = REVERSE_INIT_ENTRY_IDX;
+                    }
+                    None => {
+                        self.exhausted = true;
+                        break;
+                    }
+                }
+            } else {
+                self.entry_idx = next_entry_idx;
+            }
+            if out.len() >= target {
+                return shared::finish_batch(
+                    self.counters,
+                    BatchKind::Range,
+                    out.len().saturating_sub(start_len),
+                );
             }
         }
         let pushed = out.len().saturating_sub(start_len);

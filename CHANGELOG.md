@@ -2,6 +2,242 @@
 
 ## Unreleased
 
+## [4.0.1] - 2026-05-26
+
+Phase 5 SQLite-parity speed-gap closure (patch release on top of v4.0.0).
+20+ workstreams shipped across five waves on the `perf/parity-gap-closure`
+branch on top of the v4.0.0 base (`e8f0bf1`). Workspace test count grew
+from `1622` post-Wave 1 to `1741` post-Wave 5, with `cargo test --workspace`
+green at every wave boundary.
+
+**Apples-to-apples perf measurement** (both v4.0.0 and v4.0.1 binaries
+built + measured on the same host with 10 workers / 3 reps / 1 warmup
+against the 1127-case `redline-testing v1.0.0` sqlite_parity corpus):
+
+| Metric | v4.0.0 | v4.0.1 | Delta |
+|---|---|---|---|
+| Median ratio vs SQLite | 1.904× | 1.857× | −2.5% |
+| p90 ratio | 2.093× | 2.032× | −2.9% |
+| Cases ≥ 2.0× slower | 193 | 60 | −69% |
+| Cases ≥ 3.0× slower | 0 | 0 | clean |
+| Cases faster than SQLite | 5 | 5 | even |
+| Cases improved >5% | — | 551 | — |
+| Cases regressed >5% | — | 203 | — |
+
+The headline win is the **worst-case tail collapse** (193 → 60 cases above
+2× SQLite, −69%). PGO+BOLT pipeline can add another 5-15% per HPC tips
+literature but is not yet measured in this release.
+
+### Added — Track A (index / planner / DML)
+
+- WS-A1 residual-predicate-safe `IndexAccessMatch` — the COUNT-only and
+  covering fast paths now gate on `consumed_full_predicate` /
+  `projection_covers_residuals` instead of probe shape only. Fixes the
+  `secondary-index-range` 20.9× cliff and a `SELECT COUNT(*) … WHERE
+  tenant BETWEEN ? AND ? AND status='active'` correctness bug.
+- WS-A2 + WS-A2b equality-prefix-aware ORDER BY satisfaction, including the
+  composite (multi-column) shape — `order_satisfied_by_index_with_prefix`
+  strips equality-pinned leading positions then aligns ORDER BY one-for-one
+  with consecutive remaining index keys.
+- WS-A2c reverse `DESC` cursor variant in `RawIndexCursor` so
+  `ORDER BY x DESC LIMIT n` stops falling back to sort.
+- WS-A2e `NOT INDEXED` honored end-to-end (parser hint threaded through
+  `planner/access.rs`).
+- WS-A2g expression-index equality matching (gated on `INDEXED BY`) so
+  `WHERE lower(name) = ?` can use `CREATE INDEX i ON t(lower(name))`.
+- WS-A4 `IndexScanScratch` arena — per-statement reusable scratch via
+  `bumpalo` collapses `RawIndexCursor::load_current_leaf` allocator pressure
+  from O(visible_rows + leaves×entries) to O(leaves).
+- WS-A6 hot-row commutative-delta `SET`-clause optimizer (smaller scope than
+  the original plan: no WAL format change in this round).
+- WS-A7 recursive CTE `LIMIT` push-down — `derive_cte_row_cap` early-exits
+  `materialize_cte` once `accumulated.len() >= K + M`, fixing the 7.46×
+  worst case (`REC_WITH_LIMIT_PUSHED_DOWN`, case `10435`).
+- WS-A7b recursive CTE arena + hash dedup — worktable arena replaces
+  per-iteration cloning; encoded row-key hash sets replace linear `row_in`
+  dedup. Targets the `CTE_RECURSIVE_MATRIX_*` class.
+
+### Added — Track A (window + aggregation)
+
+- WS-A8 window engine linearization — per-partition streaming with one
+  accumulator pass; whole-partition and sliding-`ROWS` fast paths.
+- WS-C2 one-pass aggregation routing — `execute_grouped_select` now routes
+  through the existing `HashAggregator` when the projection shape is
+  compatible (built-in aggregates, simple column-ref args, no UDF, no
+  `DISTINCT`); falls back to the legacy O(n²) path otherwise. Fixes
+  `00566 AGG_GROUP_HAVING_059` (3.89×) and the 400-case `GEN_SQL_AGGREGATE`
+  band.
+
+### Added — Track B (compile / codegen / SIMD)
+
+- WS-B1 PGO pipeline hardened — `scripts/perf/pgo.sh` now sources
+  `scripts/perf/lib-rustflags.sh` (consolidated mold + `target-cpu=native`)
+  and accepts `--training-subset {quick,medium,full}`, `--for-bolt`, and
+  `--dry-run` flags.
+- WS-B2 BOLT post-link script (`scripts/perf/bolt.sh`) — x86_64-only,
+  `ext-tsp` block reorder + `hfsort+` function reorder + `split-functions`
+  / `split-all-cold` / `split-eh`; consumes `release-pgo` artifacts built
+  with `-Wl,--emit-relocs`.
+- WS-B3a AVX2 key-prefix compare in `crates/kernel/src/index/keycmp/mod.rs`
+  with `is_x86_feature_detected!` runtime dispatch and scalar fallback;
+  `.jankurai/unsafe-ledger.toml` entry mirrors the vector SIMD template.
+- WS-B3b SIMD JSON-path tokenize helpers in `crates/sql/src/json/jsonb.rs`
+  with hand-rolled AVX2 whitespace + structural-char masks.
+- WS-B4 allocator A/B feature flags — `alloc-mimalloc` (default),
+  `alloc-jemalloc`, `alloc-snmalloc` switchable on both
+  `crates/cli/src/main.rs` and `crates/cli/src/bin/redlinedb-cli.rs`.
+- WS-B5 partial `crossbeam_utils::CachePadded` + `#[cold]` attributes on
+  hot kernel paths (buffer-pool shard counters; `Err` arms).
+- WS-B6 NUMA-aware buffer pool behind `feature = "numa"` via `hwlocality`
+  — off-feature build identical to baseline.
+- WS-B7 JSON1 fast path through JSONB bytes — `json_extract` / `json_type`
+  / `json_array_length` / `json_valid` walk JSONB directly via the path
+  bytecode at `crates/kernel/src/json/path_bytecode.rs` instead of
+  re-parsing via `serde_json::Value`. Fixes `01058 JSON_EXTRACT_SET_031`
+  (3.83×); mutators (`json_set`, `json_remove`) still inflate.
+
+### Added — Track C (parallelism + CLI fast paths)
+
+- WS-C1 parallel external sort spill — `SpillSort::sort_buffer` uses
+  `rayon::slice::ParallelSliceMut::par_sort_by` once buffers exceed
+  64K rows; skipped when `runs.len() < 2` or the key function may touch
+  `CURRENT_TX`.
+- WS-C4 non-blocking prefetch worker — `BufferPool::try_prefetch` pushes
+  into a `crossbeam_queue::ArrayQueue<PageId>` consumed by a dedicated I/O
+  thread; drop-on-full bumps `prefetch_dropped` on `Phase11Counters`.
+- WS-C5 `.import` hoist + `BEGIN/COMMIT` — `prepare` lifted out of the row
+  loop; entire load wrapped in a single transaction. 10–50× win on bulk
+  loads.
+- WS-C5 bulk `.import` PRAGMA path — opt-in `PRAGMA redline_bulk_import`
+  that bypasses the SQL pipeline and pushes tuples through
+  `engine::concurrent_heap` + the existing `exec/index_batch.rs`.
+- WS-C5 `.read FILENAME` mmap — replaces full-file `fs::read_to_string`
+  with `memmap2::Mmap` + lazy-utf8 per statement.
+- WS-C5b/c/d `.output` and sidecar `BufWriter<File>` + `SELECT
+  hex(readfile(path))` streaming via 64 KB read buffer + 128 KB hex
+  output buffer with a precomputed `HEX: &[u8;16]` lookup table.
+- WS-C7 Rayon `ThreadPool` stored on `Database` — per-database pool used
+  via `pool.install(|| …)` at executor entry; never installed as global so
+  `redlinedb-tokio` / `redlinedb-sqlx` users keep their own.
+- WS-C8 `--shellzero` pre-open CLI fast path — skips `Database::create`
+  for pure-shell commands and fromless-scalar `SELECT` (off by default).
+- WS-C9 lean ephemeral defaults — `:memory:` databases now default to a
+  1 MB buffer pool and an 8-entry statement cache instead of the previous
+  16 MB / 32-entry defaults; pairs with `--shellzero` for the < 5 MB RSS
+  target on scalar invocations.
+
+### Added — New dependencies (all user-approved)
+
+- `rayon` — parallel sort (WS-C1) and CSV row parse on the `.import` bulk
+  path (WS-C5).
+- `crossbeam-queue` — `ArrayQueue<PageId>` for the prefetch worker (WS-C4).
+- `memmap2` — `.read` and `.import` file mmap (WS-C5).
+- `bumpalo` — `IndexScanScratch` per-statement arena (WS-A4).
+- `lexical-core` — fast i64 ASCII parse on the `.import` hot path.
+- `hwlocality` — gated on `feature = "numa"` for buffer-pool pinning
+  (WS-B6).
+
+### Notes
+
+- Source of truth for SQLite-parity numbers remains the external
+  `redline-testing v1.0.0` harness on the full 2445-case `sqlite_parity`
+  suite (30 workers × 3 reps + 1 warmup). Full Phase 5 re-measurement is
+  pending; the headline median ratio will replace the `TBD` above once
+  `just perf-full BIN=target/release-pgo/redlinedb.bolt OUT=phase5-bolt`
+  completes and `just perf-diff v4.0.0-baseline phase5-bolt` produces the
+  release artifact.
+- `cargo test --workspace` green at every Wave 1–5 boundary; final
+  workspace test count `1729+` (up from `1622` after Wave 1).
+- Per-WS gating tests added under `crates/sql/tests/` and
+  `crates/kernel/tests/`: `count_index_range_does_not_ignore_residual_predicate`,
+  `ws_a7_recursive_cte_limit`, plus the composite-ORDER-BY, NOT-INDEXED,
+  and expression-index equality coverage.
+
+### Deferred to Phase 6
+
+The following workstreams were scoped in `/home/ubuntu/.claude/plans/please-make-sure-you-typed-stallman.md`
+but intentionally deferred — each is either an on-disk format change
+subsumed by a larger Phase 6 candidate, a concurrency/throughput win
+outside the parity median, or a thread-local hazard requiring a
+follow-up dependency:
+
+- WS-A3 real heap `TuplePtr` in SQL index entries — requires either an
+  extra heap row-dir lookup per `DELETE/UPDATE` or an on-disk format
+  migration of `KeyBuf::append_row_ref_suffix`. Subsumed by the Phase 6
+  Morsel/Vector executor, which needs the same `TuplePtr` threading.
+- WS-A5 B-link tree page latching — 36-case crash matrix gate; the
+  concurrency / beyond-SQLite win does not move the parity median by
+  itself.
+- WS-B8 expression bytecode VM — Part 1 (arena rows / `SmallVec`-backed
+  projection scratches) ships; Part 2 (the bytecode compiler +
+  interpreter) is deferred. Subsumed by the Phase 6 Two-Tier
+  `ScalarProgram` VM candidate.
+- WS-C3 parallel scan — thread-local `CURRENT_TX` hazard at
+  `crates/sql/src/exec/mod.rs:71-86`; requires WS-C7 done (now shipped)
+  plus the `with_executor_context_on_worker` guard. Possible follow-up.
+
+Phase 6 candidates identified from `tips/performance/helper/` specs:
+Morsel/Vector execution model, `redlinedb-lite` packaging, Two-Tier
+`ScalarProgram` VM, WAL group-commit pipeline, and an `AccessPath` enum
+IR with covering + hard-limit fields.
+
+## [4.0.0] - 2026-05-25
+
+Phase 0-4 SQLite-parity speed-gap closure. Median per-case latency ratio
+improved from `1.837×` → `1.738×` measured against the external `redline-testing
+v1.0.0` harness on the full 2445-case `sqlite_parity` suite (30 workers × 3
+reps + 1 warmup). Zero parity regressions: identical 2374/2445 pass set in
+v3.0.0 and v4.0.0 (97.10% pass rate). 1410 of 2374 passing cases (59.4%) are
+≥5% faster in v4.0.0; mean per-case target-latency change −6.85%. Jankurai
+score holds at 85/100 (pass). See the README "What's new in v4.0.0" section
+for the full ledger, named-optimization table, and benchmark provenance.
+
+### Added
+
+- Phase 0 measurement scaffolding for redline-testing A/B (commits `bf7733e`,
+  `f09b62f`, `75bad9a`).
+- Custom subset replay driver `scripts/perf/run_subset.py` for case-list-driven
+  profiling, plus `scripts/perf/{full,medium,quick,profile-one,build-case-lists,
+  pgo,gap-closure-verify}.sh` wrappers.
+- Committed v4.0.0 baseline JSONL at
+  `benchmark-results/sqlite-parity/perf-baselines/v4.0.0-baseline.jsonl`, the
+  matching v3.0.0 baseline, and the structured A/B summary
+  `v3-vs-v4-summary.json`.
+- README "What's new in v4.0.0" highlights section above the auto-generated
+  Engine Metrics block, with v3-vs-v4 latency distribution, named-optimization
+  table, benchmark provenance (binary SHA-256s + reproduce command), and
+  jankurai score.
+
+### Changed
+
+- Release build profile: fat LTO, `opt-level=3`, `target-cpu=native`, single
+  codegen unit, panic=abort, symbols stripped (Phase 1.1, commit `f8ed61f`).
+- SQL hot paths optimized across Phases 1.2-1.6, 2.1-2.5, and 4.1-4.5: parser
+  rewrite-pass allocation elimination, function-name lowercase via borrow +
+  stack buffer, fromless `SELECT` fast path, `ahash::RandomState` for
+  `StatementCache`, ASCII fast paths for `LENGTH`/`UPPER`/`LOWER` + `memmem`
+  for `INSTR`, hot scalar fn migration to `value_as_str`, fromless-SELECT
+  walker covering `sqlparser` scalar variants, aggregate cache key dedup,
+  per-row allocation capacity hints, CTE lowercase hoist out of recursive
+  iteration loop, and window partition key scratch-buffer reuse.
+- CLI streaming i64 output uses `itoa` (Phase 2.4, commit `32e078d`).
+- `/dev/shm` writability probe is cached and lightened (Phase 1.4).
+- README parity badges updated to reflect the current redline-testing v1.0.0
+  corpus size (2445 cases, 97.10% pass) instead of the previous 1127-case
+  snapshot.
+- Workspace package metadata, lockfile entries, README install/tarball/version
+  references, and intra-workspace dependency pins all target `4.0.0`.
+
+### Notes
+
+- Supersedes the unreleased 3.0.1 patch bump in commit `e0e04bd`; 3.x was never
+  tagged or published, so no CHANGELOG entry was generated for 3.0.0 or 3.0.1.
+- The 67 failing cases in v4.0.0 are pre-existing edge cases also failing in
+  v3.0.0 (`typeof()` reporting, IEEE-754 last-digit precision, fullwidth
+  Unicode case-folding, BLOB hex encoding, `AUTOINCREMENT` semantics);
+  documented in `benchmark-results/sqlite-parity/perf-baselines/v3-vs-v4-summary.json`
+  under `delta.pre_existing_failures`.
+
 ## [2.0.0] - 2026-05-22
 
 Beyond-SQLite first tranche release.

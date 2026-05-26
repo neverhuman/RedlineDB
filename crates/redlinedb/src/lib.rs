@@ -41,8 +41,9 @@ pub use machine::{
 pub use options::{
     AnalyzeOptions, BackupOptions, BackupStats, BenchmarkStats, BufferStats, CheckpointBenchStats,
     CheckpointStats, CommitStats, ConnectionStats, DatabaseStats, Durability, ExecuteSummary,
-    FunctionArity, FunctionFlags, MemoryOptions, OpenOptions, OptimizerOptions, QueryMemoryOptions,
-    TxBenchStats, VacuumStats, WalBenchStats,
+    FunctionArity, FunctionFlags, LEAN_BUFFER_POOL_PAGES, LEAN_STATEMENT_CACHE_CAPACITY,
+    MemoryOptions, OpenOptions, OptimizerOptions, QueryMemoryOptions, TxBenchStats, VacuumStats,
+    WalBenchStats,
 };
 pub use params::Params;
 pub use phase8::{

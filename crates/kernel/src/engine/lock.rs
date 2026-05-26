@@ -101,7 +101,7 @@ impl RowLockManager {
             if now >= deadline {
                 self.dequeue_waiter(&mut rows, key, &my_cv);
                 self.record_lock_wait_us(wait_started.elapsed());
-                return Err(Error::LockTimeout);
+                return Err(lock_timeout_err());
             }
             let wait = deadline.saturating_duration_since(now);
             let (next_rows, timed_out) = my_cv
@@ -112,7 +112,7 @@ impl RowLockManager {
             if timed_out {
                 self.dequeue_waiter(&mut rows, key, &my_cv);
                 self.record_lock_wait_us(wait_started.elapsed());
-                return Err(Error::LockTimeout);
+                return Err(lock_timeout_err());
             }
             // Re-check ownership. Since unlock only wakes the front
             // waiter, getting a wake-up almost always means the lock is
@@ -215,6 +215,15 @@ impl RowLockManager {
         key.hash(&mut hasher);
         &self.shards[hasher.finish() as usize % self.shards.len()]
     }
+}
+
+/// Phase 5 WS-B5: hoist the cold timeout-error construction out of the
+/// hot acquire loop so LLVM pushes it to a separate code section and
+/// keeps the success path tighter in the icache.
+#[cold]
+#[inline(never)]
+fn lock_timeout_err() -> Error {
+    Error::LockTimeout
 }
 
 #[cfg(test)]

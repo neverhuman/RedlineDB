@@ -181,6 +181,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     let sql_for_parser = prepare::strip_alter_add_column_if_not_exists_hint(
         &prepare::strip_cte_materialized_hints(&compat_sql),
     );
+    // Phase 5 WS-A2e: clear any leftover table-index-hint state from a
+    // previous (possibly errored) prepare before scanning the new SQL.
+    prepare::reset_table_index_hints();
     let mut statements = match Parser::parse_sql(&dialect, &sql_for_parser) {
         Ok(statements) => statements,
         Err(first_err) => {

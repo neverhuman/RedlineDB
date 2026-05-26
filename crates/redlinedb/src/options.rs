@@ -46,7 +46,30 @@ pub struct OpenOptions {
     pub busy_timeout: Duration,
     pub process_owner_lock: bool,
     pub temp_dir: Option<std::path::PathBuf>,
+    /// Size of the per-`Database` Rayon thread pool used by future
+    /// intra-query parallel operators. `None` (default) picks
+    /// `min(num_cpus, 8)`. `Some(0)` or `Some(1)` opts out of the pool —
+    /// operators fall back to their serial path. `Some(n)` builds an
+    /// `n`-thread non-global pool dedicated to this database.
+    pub rayon_threads: Option<usize>,
+    /// WS-C9: opt-in lean defaults for short-lived ephemeral databases
+    /// (`:memory:`, CLI one-shots, smoke tests). When `true`:
+    ///   * buffer pool capacity is forced to `LEAN_BUFFER_POOL_PAGES`
+    ///     (256 pages = 1 MB at 4 KB) instead of the larger calculation
+    ///     from `memory.cache_bytes`.
+    ///   * statement cache capacity is forced to
+    ///     `LEAN_STATEMENT_CACHE_CAPACITY` (8) instead of the user's
+    ///     setting.
+    /// Long-lived servers keep `false` so steady-state throughput is
+    /// unchanged.
+    pub lean_ephemeral: bool,
 }
+
+/// Buffer pool capacity, in pages, when `lean_ephemeral = true`.
+/// 256 pages × 4 KB = 1 MB.
+pub const LEAN_BUFFER_POOL_PAGES: usize = 256;
+/// Statement cache capacity when `lean_ephemeral = true`.
+pub const LEAN_STATEMENT_CACHE_CAPACITY: usize = 8;
 
 impl Default for OpenOptions {
     fn default() -> Self {
@@ -62,6 +85,8 @@ impl Default for OpenOptions {
             busy_timeout: Duration::from_secs(5),
             process_owner_lock: true,
             temp_dir: None,
+            rayon_threads: None,
+            lean_ephemeral: false,
         }
     }
 }
@@ -109,6 +134,20 @@ impl OpenOptions {
     #[must_use]
     pub fn with_temp_dir(mut self, temp_dir: impl Into<std::path::PathBuf>) -> Self {
         self.temp_dir = Some(temp_dir.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_rayon_threads(mut self, threads: Option<usize>) -> Self {
+        self.rayon_threads = threads;
+        self
+    }
+
+    /// WS-C9: opt into lean ephemeral defaults. See
+    /// [`OpenOptions::lean_ephemeral`].
+    #[must_use]
+    pub fn with_lean_ephemeral(mut self, lean: bool) -> Self {
+        self.lean_ephemeral = lean;
         self
     }
 }

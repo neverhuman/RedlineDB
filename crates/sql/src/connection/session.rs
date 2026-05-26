@@ -775,6 +775,20 @@ impl Connection {
             .legacy_alter_table = value;
     }
 
+    pub(crate) fn redline_bulk_import(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .redline_bulk_import
+    }
+
+    pub(crate) fn set_redline_bulk_import(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .redline_bulk_import = value;
+    }
+
     pub(crate) fn user_version(&self) -> i64 {
         self.db.user_version()
     }
