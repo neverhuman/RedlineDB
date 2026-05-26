@@ -1794,6 +1794,7 @@ dependencies = [
  "arc-swap",
  "bumpalo",
  "crc32fast",
+ "crossbeam-channel",
  "crossbeam-queue",
  "crossbeam-utils",
  "fail",

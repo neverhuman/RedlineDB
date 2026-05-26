@@ -4,6 +4,8 @@ pub mod combiner;
 pub mod lanes;
 pub mod manager;
 pub mod payload;
+#[cfg(feature = "wal_pipeline")]
+pub mod pipeline;
 pub(crate) mod policy;
 pub mod record;
 pub mod segment;
