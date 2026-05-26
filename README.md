@@ -95,6 +95,58 @@ Updated SQLite-parity-corpus numbers will appear in the auto-generated `## Engin
     scripts/perf/full.sh target/release/redlinedb v4.0.0-final
   ```
 
+### RQL phase-1 local benchmark
+
+RQL is an additive, default-off typed IR path: SQL remains the compatibility
+frontend, and the existing SQLite/Postgres benchmark suites still run SQL. The
+`rql_phase1` suite in `redline-testing` rewrites the phase-1 SQL cases to RQL
+for the RedlineDB target while keeping SQLite on the original SQL reference.
+
+Measured locally on 2026-05-26 with `redline-testing v1.0.0`,
+`redlinedb v4.0.1`, `sqlite3 3.45.1`, release binaries, 1 warmup + 3 measured
+repetitions, `--workers 1`:
+
+| Comparison | Scope | Result |
+|---|---:|---:|
+| RQL phase-1 parity | 1,385 candidates | 1,129 passed, 256 skipped, 0 failed |
+| RedlineDB SQL median target latency | 1,129 shared passed cases | 3.596 ms |
+| RedlineDB RQL median target latency | 1,129 shared passed cases | 3.419 ms |
+| RQL / RedlineDB SQL median target ratio | 1,129 shared passed cases | **0.937×** |
+| RQL / RedlineDB SQL aggregate target ratio | 3,387 measured samples | **0.894×** |
+| Case movement vs RedlineDB SQL | 1,129 shared passed cases | 620 ≥5% faster, 298 within ±5%, 211 ≥5% slower |
+| P0 RQL / RedlineDB SQL median target ratio | 577 shared P0 cases | **0.925×** |
+| RQL / SQLite SQL median ratio | 1,129 RQL-passed cases | 1.822× |
+
+Read this as an early viability signal, not an upper bound. RQL already saves
+about **6.3% median target latency** versus RedlineDB's SQL frontend on the same
+phase-1 passed cases, even though v0.1 still lowers most relational work into
+the existing executor and inherits the same CLI process-per-case benchmark
+overhead. The next RQL performance work should focus on widening the direct
+lowering path and removing compatibility-only planner work that RQL no longer
+needs.
+
+Reproduce the local comparison:
+
+```bash
+cargo build --release -p redlinedb-cli
+redline-testing run --suite rql_phase1 \
+  --target-bin target/release/redlinedb \
+  --sqlite-bin sqlite3 \
+  --output target/rql-phase1-bench/rql_phase1.raw.jsonl \
+  --tmp-root /tmp/rql-phase1-bench \
+  --workers 1 --repetitions 3 --warmup 1 --progress never
+
+# Same target binary, SQL compatibility path, filtered afterward to the
+# rql_phase1 case IDs that passed both runs. This full-suite SQL command may
+# exit non-zero if unrelated sqlite_parity cases fail in the local environment.
+redline-testing run --suite sqlite_parity \
+  --target-bin target/release/redlinedb \
+  --sqlite-bin sqlite3 \
+  --output target/rql-phase1-bench/sqlite_parity.raw.jsonl \
+  --tmp-root /tmp/rql-phase1-sql-bench \
+  --workers 1 --repetitions 3 --warmup 1 --progress never
+```
+
 ### Jankurai code-health score (v4.0.0)
 
 **85 / 100 — `pass` (advisory)** — unchanged from main; Phase 0-4 perf work introduced no code-health regressions. Full report at [`.jankurai/repo-score.md`](.jankurai/repo-score.md). Top dimensions: Ownership & navigation (100), Proof lanes & test routing (98), Contract & boundary integrity (88), Security & supply-chain posture (86).

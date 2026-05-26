@@ -1,0 +1,1444 @@
+diff --git a/crates/kernel/src/lib.rs b/crates/kernel/src/lib.rs
+--- a/crates/kernel/src/lib.rs
++++ b/crates/kernel/src/lib.rs
+@@ -14,6 +14,7 @@
+ pub mod integrity;
+ pub mod io;
+ pub mod json;
++pub mod stages;
+ pub mod storage;
+ pub mod telemetry;
+ pub mod txn;
+diff --git a/crates/kernel/src/stages/mod.rs b/crates/kernel/src/stages/mod.rs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/crates/kernel/src/stages/mod.rs
++//! Engineered-intelligence stage contracts.
++//!
++//! This module standardizes the narrow decision surfaces that are safe to
++//! evolve independently from the correctness-critical kernel. A stage receives
++//! an immutable input envelope and returns a bounded decision. Callers remain
++//! responsible for enforcing invariants such as commit durability, MVCC
++//! visibility, page/WAL checksums, and catalog publication order.
++//!
++//! The contracts are intentionally additive. Default stages mirror today's
++//! behavior; later patches can route existing WAL, storage, heap, index,
++//! vector, and JSON call sites through these traits one at a time.
++
++use crate::format::{Csn, Lsn, PageId, RelId, RowId, TxId};
++use crate::wal::{WalPayload, WalRecordKind};
++use crate::Result;
++
++/// Stable identifier for a stage implementation within a genome.
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
++pub struct StageId(pub &'static str);
++
++/// Coarse class of an engineered-intelligence stage.
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
++pub enum StageKind {
++    WalSchedule,
++    WalCombine,
++    CommitBarrier,
++    RecoveryReplay,
++    BufferResidency,
++    CheckpointBatch,
++    Prefetch,
++    HeapPlacement,
++    Visibility,
++    LockAdmission,
++    IndexAccess,
++    IndexMutation,
++    CatalogSnapshot,
++    VectorDistance,
++    VectorTopK,
++    JsonPath,
++}
++
++/// How much side-effect authority a stage has.
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
++pub enum StagePurity {
++    /// Pure function: identical input should produce identical output.
++    Pure,
++    /// Advisory hint: correctness must not depend on the output.
++    Advisory,
++    /// Guarded transform: caller validates output before use.
++    GuardedTransform,
++    /// Ordered side-effect planner: returns the side effect the kernel must run.
++    OrderedSideEffect,
++}
++
++/// Metadata every stage exposes to the genome registry and audit harness.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct StageDescriptor {
++    pub id: StageId,
++    pub kind: StageKind,
++    pub version: u16,
++    pub purity: StagePurity,
++    pub deterministic: bool,
++    pub notes: &'static str,
++}
++
++/// Standard stage contract. Implementations must be panic-free for all valid
++/// inputs of their stage-specific envelope.
++pub trait Stage<I, O>: Send + Sync + 'static {
++    fn descriptor(&self) -> StageDescriptor;
++    fn evaluate(&self, input: I) -> Result<O>;
++}
++
++/// WAL writer scheduling facts.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
++pub struct WalScheduleInput {
++    pub pending_bytes: usize,
++    pub pending_records: usize,
++    pub flush_gap_bytes: u64,
++    pub configured_write_batch_bytes: usize,
++    pub configured_delay_us: u64,
++    pub configured_max_group_bytes: u64,
++}
++
++/// WAL writer scheduling decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct WalScheduleDecision {
++    pub write_batch_bytes: usize,
++    pub group_commit_delay_us: u64,
++    pub resample_flush_target: bool,
++    pub drain_batch_bytes: usize,
++}
++
++/// Behavior-preserving default for the current WAL scheduling policy.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultWalScheduleStage;
++
++impl Stage<WalScheduleInput, WalScheduleDecision> for DefaultWalScheduleStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.wal_schedule"),
++            kind: StageKind::WalSchedule,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Mirrors the current default WAL write-batch and group-commit scheduling.",
++        }
++    }
++
++    fn evaluate(&self, input: WalScheduleInput) -> Result<WalScheduleDecision> {
++        let write_batch_bytes = input.configured_write_batch_bytes.max(1);
++        let delay = if input.flush_gap_bytes >= input.configured_max_group_bytes {
++            0
++        } else {
++            input.configured_delay_us
++        };
++        Ok(WalScheduleDecision {
++            write_batch_bytes,
++            group_commit_delay_us: delay,
++            resample_flush_target: true,
++            drain_batch_bytes: write_batch_bytes,
++        })
++    }
++}
++
++/// Ordered WAL payload sequence offered to a combiner.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub struct WalCombineInput {
++    pub record_kind: WalRecordKind,
++    pub tx_id: TxId,
++    pub payloads: Vec<WalPayload>,
++}
++
++/// Replacement WAL payload sequence.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub struct WalCombineDecision {
++    pub payloads: Vec<WalPayload>,
++}
++
++/// No-op WAL combiner used as the default safety baseline.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultWalCombineStage;
++
++impl Stage<WalCombineInput, WalCombineDecision> for DefaultWalCombineStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.wal_combine"),
++            kind: StageKind::WalCombine,
++            version: 1,
++            purity: StagePurity::GuardedTransform,
++            deterministic: true,
++            notes: "Preserves WAL payload order and contents.",
++        }
++    }
++
++    fn evaluate(&self, input: WalCombineInput) -> Result<WalCombineDecision> {
++        Ok(WalCombineDecision {
++            payloads: input.payloads,
++        })
++    }
++}
++
++/// Durability mode visible to the commit barrier stage.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum DurabilityMode {
++    Strict,
++    Normal,
++    UnsafeDev,
++    Volatile,
++}
++
++/// Commit barrier facts after a commit record has been reserved.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct CommitBarrierInput {
++    pub durability: DurabilityMode,
++    pub end_lsn: Lsn,
++    pub written_lsn: Lsn,
++    pub durable_lsn: Lsn,
++}
++
++/// Side effect the kernel must execute before acknowledging commit success.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum CommitBarrierRequirement {
++    FlushUntil(Lsn),
++    WriteUntil(Lsn),
++    AcknowledgeVolatile,
++}
++
++/// Commit barrier stage output.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct CommitBarrierDecision {
++    pub requirement: CommitBarrierRequirement,
++}
++
++/// Behavior-preserving commit barrier planner.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultCommitBarrierStage;
++
++impl Stage<CommitBarrierInput, CommitBarrierDecision> for DefaultCommitBarrierStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.commit_barrier"),
++            kind: StageKind::CommitBarrier,
++            version: 1,
++            purity: StagePurity::OrderedSideEffect,
++            deterministic: true,
++            notes: "Strict flushes, normal writes, unsafe-dev and volatile acknowledge without a barrier.",
++        }
++    }
++
++    fn evaluate(&self, input: CommitBarrierInput) -> Result<CommitBarrierDecision> {
++        let requirement = match input.durability {
++            DurabilityMode::Strict => CommitBarrierRequirement::FlushUntil(input.end_lsn),
++            DurabilityMode::Normal => CommitBarrierRequirement::WriteUntil(input.end_lsn),
++            DurabilityMode::UnsafeDev | DurabilityMode::Volatile => {
++                CommitBarrierRequirement::AcknowledgeVolatile
++            }
++        };
++        Ok(CommitBarrierDecision { requirement })
++    }
++}
++
++/// Recovery target envelope independent of `engine::RecoveryTarget`.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum ReplayTarget {
++    Latest,
++    Lsn(Lsn),
++    Csn(Csn),
++}
++
++/// WAL recovery planning facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct RecoveryReplayInput {
++    pub checkpoint_lsn: Lsn,
++    pub valid_end_lsn: Lsn,
++    pub target: ReplayTarget,
++    pub torn_tail: bool,
++    pub scanned_records: usize,
++}
++
++/// WAL recovery plan. The recovery engine still validates every record/page.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct RecoveryReplayDecision {
++    pub replay_from_lsn: Lsn,
++    pub stop_lsn: Option<Lsn>,
++    pub stop_csn: Option<Csn>,
++    pub allow_torn_tail: bool,
++}
++
++/// Default recovery planner: replay from checkpoint to the requested target.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultRecoveryReplayStage;
++
++impl Stage<RecoveryReplayInput, RecoveryReplayDecision> for DefaultRecoveryReplayStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.recovery_replay"),
++            kind: StageKind::RecoveryReplay,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Replays the checksum-valid WAL prefix from the checkpoint LSN.",
++        }
++    }
++
++    fn evaluate(&self, input: RecoveryReplayInput) -> Result<RecoveryReplayDecision> {
++        let (stop_lsn, stop_csn) = match input.target {
++            ReplayTarget::Latest => (None, None),
++            ReplayTarget::Lsn(lsn) => (Some(lsn), None),
++            ReplayTarget::Csn(csn) => (None, Some(csn)),
++        };
++        Ok(RecoveryReplayDecision {
++            replay_from_lsn: input.checkpoint_lsn,
++            stop_lsn,
++            stop_csn,
++            allow_torn_tail: input.torn_tail,
++        })
++    }
++}
++
++/// Buffer-frame facts for residency and eviction.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct BufferResidencyInput {
++    pub page_id: PageId,
++    pub pin_count: usize,
++    pub dirty: bool,
++    pub usage_count: u8,
++    pub page_lsn: Lsn,
++    pub durable_lsn: Lsn,
++    pub resident_pages: usize,
++    pub capacity_pages: usize,
++}
++
++/// Residency decision. Callers must still reject eviction for pinned frames and
++/// dirty frames newer than the durable LSN.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct BufferResidencyDecision {
++    pub evictable: bool,
++    pub victim_score: Option<u32>,
++    pub allow_prefetch_cold_load: bool,
++}
++
++/// CLOCK-like default residency policy.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultBufferResidencyStage;
++
++impl Stage<BufferResidencyInput, BufferResidencyDecision> for DefaultBufferResidencyStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.buffer_residency"),
++            kind: StageKind::BufferResidency,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Evicts only unpinned frames with no usage count and durable dirty state.",
++        }
++    }
++
++    fn evaluate(&self, input: BufferResidencyInput) -> Result<BufferResidencyDecision> {
++        let evictable = input.pin_count == 0
++            && input.usage_count == 0
++            && (!input.dirty || input.page_lsn <= input.durable_lsn);
++        Ok(BufferResidencyDecision {
++            evictable,
++            victim_score: evictable.then_some(if input.dirty { 10 } else { 0 }),
++            allow_prefetch_cold_load: true,
++        })
++    }
++}
++
++/// Dirty checkpoint ordering strategy.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum DirtySortKey {
++    PreserveDiscovery,
++    PageId,
++    PageLsnThenPageId,
++}
++
++/// Checkpoint batch facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct CheckpointBatchInput {
++    pub resident_pages: usize,
++    pub dirty_pages: usize,
++    pub durable_lsn: Lsn,
++}
++
++/// Checkpoint batch decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct CheckpointBatchDecision {
++    pub max_pages: usize,
++    pub sort_key: DirtySortKey,
++}
++
++/// Default checkpoint stage flushes the discovered dirty set in current order.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultCheckpointBatchStage;
++
++impl Stage<CheckpointBatchInput, CheckpointBatchDecision> for DefaultCheckpointBatchStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.checkpoint_batch"),
++            kind: StageKind::CheckpointBatch,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Flushes all discovered durable dirty pages without reordering.",
++        }
++    }
++
++    fn evaluate(&self, input: CheckpointBatchInput) -> Result<CheckpointBatchDecision> {
++        Ok(CheckpointBatchDecision {
++            max_pages: input.dirty_pages.max(1),
++            sort_key: DirtySortKey::PreserveDiscovery,
++        })
++    }
++}
++
++/// Prefetch hint facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct PrefetchInput {
++    pub page_id: PageId,
++    pub already_resident: bool,
++    pub shard_contended: bool,
++    pub resident_pages: usize,
++    pub capacity_pages: usize,
++}
++
++/// Prefetch action.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum PrefetchAction {
++    CountHit,
++    CountMissAndDrop,
++    CountMissAndColdLoad,
++}
++
++/// Prefetch decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct PrefetchDecision {
++    pub action: PrefetchAction,
++}
++
++/// Default advisory prefetch behavior.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultPrefetchStage;
++
++impl Stage<PrefetchInput, PrefetchDecision> for DefaultPrefetchStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.prefetch"),
++            kind: StageKind::Prefetch,
++            version: 1,
++            purity: StagePurity::Advisory,
++            deterministic: true,
++            notes: "Counts resident pages as hits, drops contended hints, cold-loads other misses.",
++        }
++    }
++
++    fn evaluate(&self, input: PrefetchInput) -> Result<PrefetchDecision> {
++        let action = if input.already_resident {
++            PrefetchAction::CountHit
++        } else if input.shard_contended {
++            PrefetchAction::CountMissAndDrop
++        } else {
++            PrefetchAction::CountMissAndColdLoad
++        };
++        Ok(PrefetchDecision { action })
++    }
++}
++
++/// Heap append placement facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct HeapPlacementInput {
++    pub rel_id: RelId,
++    pub row_id_hint: Option<RowId>,
++    pub payload_len: usize,
++    pub lane_count: usize,
++    pub writer_id: u64,
++}
++
++/// Heap placement decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct HeapPlacementDecision {
++    pub lane: usize,
++    pub row_id_hint: Option<RowId>,
++}
++
++/// Default heap placement: writer ID modulo lane count.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultHeapPlacementStage;
++
++impl Stage<HeapPlacementInput, HeapPlacementDecision> for DefaultHeapPlacementStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.heap_placement"),
++            kind: StageKind::HeapPlacement,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Spreads writers across heap lanes by writer-id modulo lane count.",
++        }
++    }
++
++    fn evaluate(&self, input: HeapPlacementInput) -> Result<HeapPlacementDecision> {
++        let lanes = input.lane_count.max(1);
++        Ok(HeapPlacementDecision {
++            lane: (input.writer_id as usize) % lanes,
++            row_id_hint: input.row_id_hint,
++        })
++    }
++}
++
++/// Minimal tuple visibility facts exposed to a pure visibility stage.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct VisibilityInput {
++    pub reader_tx: TxId,
++    pub creator_tx: TxId,
++    pub deleter_tx: Option<TxId>,
++    pub creator_csn: Option<Csn>,
++    pub deleter_csn: Option<Csn>,
++    pub snapshot_csn: Csn,
++}
++
++/// Visibility decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct VisibilityDecision {
++    pub visible: bool,
++}
++
++/// Default MVCC visibility fast path for committed creator/deleter facts.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultVisibilityStage;
++
++impl Stage<VisibilityInput, VisibilityDecision> for DefaultVisibilityStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.visibility"),
++            kind: StageKind::Visibility,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Visible to own writer or committed before snapshot and not deleted before snapshot.",
++        }
++    }
++
++    fn evaluate(&self, input: VisibilityInput) -> Result<VisibilityDecision> {
++        let creator_visible = input.creator_tx == input.reader_tx
++            || input
++                .creator_csn
++                .map(|csn| csn <= input.snapshot_csn)
++                .unwrap_or(false);
++        let deleted_visible = input
++            .deleter_csn
++            .map(|csn| csn <= input.snapshot_csn)
++            .unwrap_or(false);
++        Ok(VisibilityDecision {
++            visible: creator_visible && !deleted_visible,
++        })
++    }
++}
++
++/// Lock-admission facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct LockAdmissionInput {
++    pub rel_id: RelId,
++    pub row_id: RowId,
++    pub requester_tx: TxId,
++    pub holder_tx: Option<TxId>,
++    pub waiter_count: usize,
++    pub timeout_ms: u64,
++}
++
++/// Lock-admission action.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum LockAdmissionAction {
++    Grant,
++    Enqueue,
++    Spin,
++    Timeout,
++}
++
++/// Lock-admission decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct LockAdmissionDecision {
++    pub action: LockAdmissionAction,
++}
++
++/// Default lock admission preserves FIFO-style queueing.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultLockAdmissionStage;
++
++impl Stage<LockAdmissionInput, LockAdmissionDecision> for DefaultLockAdmissionStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.lock_admission"),
++            kind: StageKind::LockAdmission,
++            version: 1,
++            purity: StagePurity::OrderedSideEffect,
++            deterministic: true,
++            notes: "Grants unlocked rows and queues contended rows.",
++        }
++    }
++
++    fn evaluate(&self, input: LockAdmissionInput) -> Result<LockAdmissionDecision> {
++        let action = if input.holder_tx.is_none() {
++            LockAdmissionAction::Grant
++        } else if input.timeout_ms == 0 {
++            LockAdmissionAction::Timeout
++        } else {
++            LockAdmissionAction::Enqueue
++        };
++        Ok(LockAdmissionDecision { action })
++    }
++}
++
++/// Planner/index-access facts that can cross the SQL/kernel boundary without
++/// exposing SQL AST internals.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct IndexAccessInput {
++    pub equality_terms: usize,
++    pub range_terms: usize,
++    pub required_order: bool,
++    pub estimated_rows: u64,
++    pub covering_index: bool,
++}
++
++/// Access path selected by an index stage. Executors still recheck predicates.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum IndexAccessKind {
++    TableScan,
++    PointLookup,
++    RangeScan,
++    CoveringRangeScan,
++}
++
++/// Index access decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct IndexAccessDecision {
++    pub access: IndexAccessKind,
++}
++
++/// Conservative default access selector.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultIndexAccessStage;
++
++impl Stage<IndexAccessInput, IndexAccessDecision> for DefaultIndexAccessStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.index_access"),
++            kind: StageKind::IndexAccess,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Uses point lookup for equality predicates and range scan for range/order predicates.",
++        }
++    }
++
++    fn evaluate(&self, input: IndexAccessInput) -> Result<IndexAccessDecision> {
++        let access = if input.equality_terms > 0 && input.range_terms == 0 {
++            IndexAccessKind::PointLookup
++        } else if input.range_terms > 0 || input.required_order {
++            if input.covering_index {
++                IndexAccessKind::CoveringRangeScan
++            } else {
++                IndexAccessKind::RangeScan
++            }
++        } else {
++            IndexAccessKind::TableScan
++        };
++        Ok(IndexAccessDecision { access })
++    }
++}
++
++/// B-tree mutation facts for split and uniqueness heuristics.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct IndexMutationInput {
++    pub page_fill_bytes: usize,
++    pub page_capacity_bytes: usize,
++    pub incoming_cell_bytes: usize,
++    pub is_unique: bool,
++    pub duplicate_found: bool,
++}
++
++/// B-tree mutation decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct IndexMutationDecision {
++    pub split_before_insert: bool,
++    pub reject_duplicate: bool,
++}
++
++/// Default index mutation stage.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultIndexMutationStage;
++
++impl Stage<IndexMutationInput, IndexMutationDecision> for DefaultIndexMutationStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.index_mutation"),
++            kind: StageKind::IndexMutation,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Splits when the incoming cell would exceed capacity and rejects observed unique duplicates.",
++        }
++    }
++
++    fn evaluate(&self, input: IndexMutationInput) -> Result<IndexMutationDecision> {
++        Ok(IndexMutationDecision {
++            split_before_insert: input
++                .page_fill_bytes
++                .saturating_add(input.incoming_cell_bytes)
++                > input.page_capacity_bytes,
++            reject_duplicate: input.is_unique && input.duplicate_found,
++        })
++    }
++}
++
++/// Catalog snapshot facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct CatalogSnapshotInput {
++    pub schema_epoch: u64,
++    pub serialized_bytes: usize,
++    pub volatile: bool,
++}
++
++/// Catalog snapshot decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct CatalogSnapshotDecision {
++    pub persist_atomic: bool,
++    pub publish_after_commit: bool,
++}
++
++/// Default catalog stage: persist durable catalogs, always publish after commit.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultCatalogSnapshotStage;
++
++impl Stage<CatalogSnapshotInput, CatalogSnapshotDecision> for DefaultCatalogSnapshotStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.catalog_snapshot"),
++            kind: StageKind::CatalogSnapshot,
++            version: 1,
++            purity: StagePurity::OrderedSideEffect,
++            deterministic: true,
++            notes: "Persists non-volatile catalog snapshots and publishes only after commit.",
++        }
++    }
++
++    fn evaluate(&self, input: CatalogSnapshotInput) -> Result<CatalogSnapshotDecision> {
++        Ok(CatalogSnapshotDecision {
++            persist_atomic: !input.volatile,
++            publish_after_commit: true,
++        })
++    }
++}
++
++/// Vector metric independent of the vector module's implementation details.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum StageVectorMetric {
++    L2,
++    Cosine,
++    InnerProduct,
++}
++
++/// Vector distance dispatch facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct VectorDistanceInput {
++    pub dimensions: usize,
++    pub metric: StageVectorMetric,
++    pub simd_available: bool,
++}
++
++/// Vector distance kernel selection.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum VectorDistanceKernel {
++    Scalar,
++    Simd,
++}
++
++/// Vector distance decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct VectorDistanceDecision {
++    pub kernel: VectorDistanceKernel,
++}
++
++/// Default vector distance dispatch.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultVectorDistanceStage;
++
++impl Stage<VectorDistanceInput, VectorDistanceDecision> for DefaultVectorDistanceStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.vector_distance"),
++            kind: StageKind::VectorDistance,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Uses SIMD when available for non-empty vectors, otherwise scalar.",
++        }
++    }
++
++    fn evaluate(&self, input: VectorDistanceInput) -> Result<VectorDistanceDecision> {
++        Ok(VectorDistanceDecision {
++            kernel: if input.simd_available && input.dimensions > 0 {
++                VectorDistanceKernel::Simd
++            } else {
++                VectorDistanceKernel::Scalar
++            },
++        })
++    }
++}
++
++/// Top-K vector search facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct VectorTopKInput {
++    pub candidates: usize,
++    pub k: usize,
++    pub heap_budget: usize,
++}
++
++/// Top-K algorithm choice.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum VectorTopKAlgorithm {
++    FixedHeap,
++    PartialSort,
++    FullSort,
++}
++
++/// Top-K decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct VectorTopKDecision {
++    pub algorithm: VectorTopKAlgorithm,
++}
++
++/// Default top-K choice.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultVectorTopKStage;
++
++impl Stage<VectorTopKInput, VectorTopKDecision> for DefaultVectorTopKStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.vector_top_k"),
++            kind: StageKind::VectorTopK,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Uses a fixed heap when K fits the budget, partial sort otherwise, full sort for degenerate K.",
++        }
++    }
++
++    fn evaluate(&self, input: VectorTopKInput) -> Result<VectorTopKDecision> {
++        let algorithm = if input.k == 0 || input.k >= input.candidates {
++            VectorTopKAlgorithm::FullSort
++        } else if input.k <= input.heap_budget {
++            VectorTopKAlgorithm::FixedHeap
++        } else {
++            VectorTopKAlgorithm::PartialSort
++        };
++        Ok(VectorTopKDecision { algorithm })
++    }
++}
++
++/// JSON path dispatch facts.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct JsonPathInput {
++    pub document_bytes: usize,
++    pub path_bytes: usize,
++    pub repeated_extractions: usize,
++}
++
++/// JSON path dispatch mode.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum JsonPathMode {
++    Interpret,
++    CompilePath,
++    CachedPath,
++}
++
++/// JSON path decision.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct JsonPathDecision {
++    pub mode: JsonPathMode,
++}
++
++/// Default JSON path stage.
++#[derive(Clone, Copy, Debug, Default)]
++pub struct DefaultJsonPathStage;
++
++impl Stage<JsonPathInput, JsonPathDecision> for DefaultJsonPathStage {
++    fn descriptor(&self) -> StageDescriptor {
++        StageDescriptor {
++            id: StageId("kernel.default.json_path"),
++            kind: StageKind::JsonPath,
++            version: 1,
++            purity: StagePurity::Pure,
++            deterministic: true,
++            notes: "Interprets one-off paths, compiles long paths, and caches repeated paths.",
++        }
++    }
++
++    fn evaluate(&self, input: JsonPathInput) -> Result<JsonPathDecision> {
++        let mode = if input.repeated_extractions > 1 {
++            JsonPathMode::CachedPath
++        } else if input.path_bytes > 32 || input.document_bytes > 4096 {
++            JsonPathMode::CompilePath
++        } else {
++            JsonPathMode::Interpret
++        };
++        Ok(JsonPathDecision { mode })
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn assert_descriptor<D, I, O>(stage: D, kind: StageKind)
++    where
++        D: Stage<I, O>,
++    {
++        let descriptor = stage.descriptor();
++        assert_eq!(descriptor.kind, kind);
++        assert_eq!(descriptor.version, 1);
++        assert!(!descriptor.id.0.is_empty());
++    }
++
++    #[test]
++    fn default_stage_descriptors_are_stable() {
++        assert_descriptor(DefaultWalScheduleStage, StageKind::WalSchedule);
++        assert_descriptor(DefaultWalCombineStage, StageKind::WalCombine);
++        assert_descriptor(DefaultCommitBarrierStage, StageKind::CommitBarrier);
++        assert_descriptor(DefaultRecoveryReplayStage, StageKind::RecoveryReplay);
++        assert_descriptor(DefaultBufferResidencyStage, StageKind::BufferResidency);
++        assert_descriptor(DefaultCheckpointBatchStage, StageKind::CheckpointBatch);
++        assert_descriptor(DefaultPrefetchStage, StageKind::Prefetch);
++        assert_descriptor(DefaultHeapPlacementStage, StageKind::HeapPlacement);
++        assert_descriptor(DefaultVisibilityStage, StageKind::Visibility);
++        assert_descriptor(DefaultLockAdmissionStage, StageKind::LockAdmission);
++        assert_descriptor(DefaultIndexAccessStage, StageKind::IndexAccess);
++        assert_descriptor(DefaultIndexMutationStage, StageKind::IndexMutation);
++        assert_descriptor(DefaultCatalogSnapshotStage, StageKind::CatalogSnapshot);
++        assert_descriptor(DefaultVectorDistanceStage, StageKind::VectorDistance);
++        assert_descriptor(DefaultVectorTopKStage, StageKind::VectorTopK);
++        assert_descriptor(DefaultJsonPathStage, StageKind::JsonPath);
++    }
++
++    #[test]
++    fn wal_schedule_default_is_bounded() {
++        let decision = DefaultWalScheduleStage
++            .evaluate(WalScheduleInput {
++                configured_write_batch_bytes: 0,
++                configured_delay_us: 200,
++                configured_max_group_bytes: 1024,
++                flush_gap_bytes: 2048,
++                ..WalScheduleInput::default()
++            })
++            .unwrap();
++
++        assert_eq!(decision.write_batch_bytes, 1);
++        assert_eq!(decision.drain_batch_bytes, 1);
++        assert_eq!(decision.group_commit_delay_us, 0);
++        assert!(decision.resample_flush_target);
++    }
++
++    #[test]
++    fn buffer_residency_default_never_evicts_pinned_or_undurable_dirty_pages() {
++        let pinned = DefaultBufferResidencyStage
++            .evaluate(BufferResidencyInput {
++                page_id: PageId(1),
++                pin_count: 1,
++                dirty: false,
++                usage_count: 0,
++                page_lsn: Lsn(1),
++                durable_lsn: Lsn(1),
++                resident_pages: 1,
++                capacity_pages: 1,
++            })
++            .unwrap();
++        assert!(!pinned.evictable);
++
++        let dirty_newer_than_durable = DefaultBufferResidencyStage
++            .evaluate(BufferResidencyInput {
++                page_id: PageId(1),
++                pin_count: 0,
++                dirty: true,
++                usage_count: 0,
++                page_lsn: Lsn(2),
++                durable_lsn: Lsn(1),
++                resident_pages: 1,
++                capacity_pages: 1,
++            })
++            .unwrap();
++        assert!(!dirty_newer_than_durable.evictable);
++    }
++
++    #[test]
++    fn commit_barrier_default_never_downgrades_strict() {
++        let decision = DefaultCommitBarrierStage
++            .evaluate(CommitBarrierInput {
++                durability: DurabilityMode::Strict,
++                end_lsn: Lsn(9),
++                written_lsn: Lsn(0),
++                durable_lsn: Lsn(0),
++            })
++            .unwrap();
++
++        assert_eq!(
++            decision.requirement,
++            CommitBarrierRequirement::FlushUntil(Lsn(9))
++        );
++    }
++
++    #[test]
++    fn placement_and_topk_defaults_clamp_degenerate_inputs() {
++        let placement = DefaultHeapPlacementStage
++            .evaluate(HeapPlacementInput {
++                rel_id: RelId(1),
++                row_id_hint: None,
++                payload_len: 8,
++                lane_count: 0,
++                writer_id: 99,
++            })
++            .unwrap();
++        assert_eq!(placement.lane, 0);
++
++        let topk = DefaultVectorTopKStage
++            .evaluate(VectorTopKInput {
++                candidates: 3,
++                k: 8,
++                heap_budget: 2,
++            })
++            .unwrap();
++        assert_eq!(topk.algorithm, VectorTopKAlgorithm::FullSort);
++    }
++}
+diff --git a/docs/architecture/ENGINEERED_INTELLIGENCE_STAGES.md b/docs/architecture/ENGINEERED_INTELLIGENCE_STAGES.md
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/docs/architecture/ENGINEERED_INTELLIGENCE_STAGES.md
++# RedlineDB Engineered-Intelligence Stage Surface Specification
++
++**Target repository:** `neverhuman/RedlineDB`  
++**Spec status:** implementation-ready proposal with a conservative additive patch  
++**Primary objective:** expose the maximum practical number of high-leverage database-kernel decision surfaces as standardized, swappable stages without allowing arbitrary stage combinations to corrupt correctness, durability, or SQL compatibility.
++
++---
++
++## 1. Executive summary
++
++RedlineDB already has the right shape for engineered intelligence. The repository is not a monolith: the storage kernel is separated from SQL and adapters, and the kernel itself is decomposed into `catalog`, `engine`, `format`, `heap`, `index`, `storage`, `txn`, `wal`, `vector`, `json`, `integrity`, and `telemetry`. The most promising evolutionary unit is therefore not a replacement for the entire engine. It is a replacement for narrow decision functions that sit beside correctness-critical code.
++
++The maximum safe stage count I would standardize now is **16 stages**:
++
++1. `WalSchedule`
++2. `WalCombine`
++3. `CommitBarrier`
++4. `RecoveryReplay`
++5. `BufferResidency`
++6. `CheckpointBatch`
++7. `Prefetch`
++8. `HeapPlacement`
++9. `Visibility`
++10. `LockAdmission`
++11. `IndexAccess`
++12. `IndexMutation`
++13. `CatalogSnapshot`
++14. `VectorDistance`
++15. `VectorTopK`
++16. `JsonPath`
++
++That number is deliberately not much larger. There are more interesting functions in the codebase, but many are not safe evolutionary surfaces because they own durable facts, byte-level compatibility, commit publication order, or page-format invariants. Those should be protected by guards and tests, not opened as free-form genes.
++
++The attached diff implements the first safe slice: it adds `redlinedb-kernel::stages`, a standardized stage contract module, and a detailed repository-local design document. It does **not** change runtime behavior yet. This is intentional. The first merge should create stable interfaces and default decisions, then later patches can route existing `wal::policy`, `storage::policy`, planner, heap, index, vector, and JSON call sites through the stage contracts one at a time.
++
++---
++
++## 2. Design principle: maximize replaceability, minimize stillbirth
++
++A stage is valid only when all of these are true:
++
++1. **The input is a bounded snapshot.** A stage receives facts, not mutable engine ownership.
++2. **The output is a decision, transform, ranking, or hint.** It does not directly write pages, publish commits, mutate the catalog, or acknowledge durability.
++3. **The kernel remains the guard.** The caller clamps batch sizes, validates visibility, verifies page/WAL checksums, enforces unique constraints, and preserves commit ordering.
++4. **The default implementation is behavior-preserving.** A genome containing only defaults should be semantically identical to current behavior.
++5. **The failure mode is safe.** A bad stage should be rejected, clamped, or degraded to default rather than producing a corrupt database.
++
++This gives agents room to invent stage implementations while keeping the database alive across arbitrary valid stage combinations.
++
++---
++
++## 3. Why these 16 stages are the practical maximum
++
++### 3.1 Stage candidates accepted now
++
++| # | Stage | Existing area | Why it is safe | Why it is high-leverage |
++|---|---|---|---|---|
++| 1 | `WalSchedule` | `crates/kernel/src/wal/policy.rs`, WAL writer loop | Bounded scheduling decision; does not change record bytes or durability semantics | Controls group-commit fan-in, latency, write batching, and fsync cadence |
++| 2 | `WalCombine` | `wal/combiner.rs` placeholder, logical WAL payload stream | Pure/guarded transform; kernel can re-encode and checksum results | Can reduce WAL volume and replay cost |
++| 3 | `CommitBarrier` | `engine/runtime/commit.rs` | Returns required barrier only; kernel still executes `flush_until`/`write_until` | Lets evolution explore strict/normal latency tradeoffs without weakening strict mode |
++| 4 | `RecoveryReplay` | `engine/recovery.rs`, WAL scan reports | Produces replay plan; recovery still validates WAL/page images | Can reduce startup time by choosing replay windows and checkpoints |
++| 5 | `BufferResidency` | `storage/buffer.rs`, `storage/policy.rs` | Victim selection can be clamped to unpinned/durable frames | Directly impacts read hot-set behavior and write amplification |
++| 6 | `CheckpointBatch` | dirty-frame batching in `storage/buffer.rs` and engine checkpointing | Chooses batch size/order; kernel still persists pages and control file safely | Large effect on checkpoint stalls and cache churn |
++| 7 | `Prefetch` | buffer prefetch advisory path | Pure hint; correctness must not depend on it | Can improve index scans, sequential scans, and vector search locality |
++| 8 | `HeapPlacement` | page-backed heap lanes and row allocation | Chooses lane/hint; heap still owns row ID allocation and tuple layout | Impacts multi-writer append contention |
++| 9 | `Visibility` | MVCC snapshot checks | Must be guarded by invariant tests; returns boolean only | Central read-path cost in every query |
++| 10 | `LockAdmission` | row lock FIFO queues and timeout behavior | Does not unlock/commit; only grants, queues, spins, or times out under lock manager guard | Impacts write concurrency and tail latency |
++| 11 | `IndexAccess` | index cursor selection, range scans, row fetch paths | Chooses access path; executor still validates predicates | Large query latency impact |
++| 12 | `IndexMutation` | B-tree insert/delete/split/vacuum policy | Chooses split/vacuum heuristics, not cell encoding | Impacts write path and index shape |
++| 13 | `CatalogSnapshot` | catalog persistence and DDL publication | Chooses when/how to persist/publish after commit; kernel validates schema epoch and commit state | DDL-heavy and startup paths benefit |
++| 14 | `VectorDistance` | scalar/SIMD vector distance dispatch | Pure numeric kernel; result can be compared against scalar oracle | High performance gain potential |
++| 15 | `VectorTopK` | flat top-k, HNSW/DiskANN candidate ranking | Pure ranking; correctness can be bounded by exact fallback tests | Search latency and memory profile |
++| 16 | `JsonPath` | JSONB extraction and path dispatch | Pure extraction strategy; output verified against reference path semantics | Important for JSON-heavy generated parity cases |
++
++### 3.2 Candidates rejected for now
++
++These are tempting but too dangerous as evolutionary genes in the first generation:
++
++| Rejected surface | Reason |
++|---|---|
++| Raw page header/page tuple binary encoding | Must remain byte-compatible with persisted data; wrong output corrupts files |
++| WAL record header encoding/checksum | A gene here can destroy recovery globally |
++| `publish_commit` ordering | Commit visibility and durability ordering are correctness-critical |
++| Control-file A/B generation swap | A wrong policy can make recovery choose stale state |
++| Catalog type coercion and affinity semantics | Exposed to SQLite parity; better handled by isolated expression/codec stages later |
++| FFI ABI behavior | External contract, not kernel performance policy |
++| SQL parser syntax acceptance | Compatibility surface; stage after parsed/bound representation is safer |
++| Arbitrary transaction isolation semantics | Serializable/read-committed rules should be kernel-level invariants |
++
++---
++
++## 4. Standard interface
++
++Every stage implements the same conceptual interface:
++
++```rust
++pub trait Stage<I, O>: Send + Sync + 'static {
++    fn descriptor(&self) -> StageDescriptor;
++    fn evaluate(&self, input: I) -> Result<O>;
++}
++```
++
++A stage also provides:
++
++- `StageDescriptor`: identity, version, kind, purity, determinism, and notes.
++- Input struct: immutable, serializable-friendly facts.
++- Output struct: a decision or transform.
++- Guard rules: caller-side clamping and invariant enforcement.
++- Default implementation: current behavior.
++
++This gives agents one uniform pattern while allowing each database surface to expose domain-specific inputs and outputs.
++
++---
++
++## 5. Genome model
++
++A genome is a map from `StageKind` to one implementation:
++
++```text
++Genome {
++  WalSchedule      -> wal_tail_latency_v7
++  WalCombine       -> wal_noop_default
++  CommitBarrier    -> strict_default
++  RecoveryReplay   -> checkpoint_window_v3
++  BufferResidency  -> hot_scan_clock_v12
++  ...
++}
++```
++
++A genome is valid when:
++
++1. It has exactly one implementation for every required stage.
++2. Every implementation advertises the expected `StageKind`.
++3. Every implementation passes its local stage audit.
++4. The composed genome passes smoke tests, crash tests, and SQL parity tests.
++5. The stage set does not request forbidden capabilities.
++
++The current patch only defines the contract layer. A future patch should add `StageGenome` and `EngineConfig::stages` once two or more call sites have been routed through the interface.
++
++---
++
++## 6. Stage-by-stage engineering contracts
++
++### 6.1 `WalSchedule`
++
++**Input:** pending bytes, pending records, flush gap, configured write batch, configured group delay, max group bytes.  
++**Output:** write batch bytes, group commit delay, whether to resample flush target, drain batch bytes.  
++**Guard:** minimum batch size is `1`; delay cannot exceed configured delay; strict durability still flushes before acknowledgment.
++
++**Evolution ideas:**
++
++- Tail-latency mode that disables delay for single commits.
++- Fan-in adaptive mode for high-concurrency workloads.
++- Checkpoint-friendly mode that widens groups during checkpoint pressure.
++- IO-depth-aware mode using recent sync counters.
++
++### 6.2 `WalCombine`
++
++**Input:** ordered logical WAL payloads for a transaction or drain batch.  
++**Output:** replacement payload sequence.  
++**Guard:** output must preserve transaction ID, commit semantics, record ordering constraints, and WAL decodeability.
++
++**Evolution ideas:**
++
++- Collapse update chains on the same row before commit.
++- Remove insert/delete pairs for aborted or internally canceled mutations.
++- Combine adjacent logical events into coarser redo payloads.
++
++### 6.3 `CommitBarrier`
++
++**Input:** durability mode, end LSN, written LSN, durable LSN.  
++**Output:** required barrier: flush, write, or volatile acknowledgment.  
++**Guard:** strict mode cannot be downgraded below `FlushUntil(end_lsn)`.
++
++**Evolution ideas:**
++
++- Allow normal mode to switch between write and flush based on group state.
++- Add optional budget-aware barriers for bulk import.
++
++### 6.4 `RecoveryReplay`
++
++**Input:** valid WAL end, checkpoint LSN, target LSN/CSN, torn-tail bit, scanned record count.  
++**Output:** replay-from LSN, stop condition, whether torn tail is acceptable.  
++**Guard:** replay cannot start after checkpoint if required pages are absent; torn tail acceptance requires checksum-valid prefix.
++
++**Evolution ideas:**
++
++- Faster point-in-time recovery target selection.
++- Skip replay records provably dominated by later page images.
++- Parallel redo chunk selection.
++
++### 6.5 `BufferResidency`
++
++**Input:** frame pin count, dirty bit, usage count, page LSN, durable LSN, residency pressure.  
++**Output:** evictable, victim score, whether cold prefetch load is allowed.  
++**Guard:** pinned frames and dirty pages newer than durable LSN are never evictable.
++
++**Evolution ideas:**
++
++- Scan-resistant CLOCK variants.
++- Dirty-page-aware eviction during WAL backlog.
++- Workload-adaptive hot read policy.
++
++### 6.6 `CheckpointBatch`
++
++**Input:** resident pages, dirty pages, durable LSN.  
++**Output:** page limit and ordering key.  
++**Guard:** page limit is clamped to available dirty pages; only durable pages can be flushed.
++
++**Evolution ideas:**
++
++- Sort by page LSN for sequential WAL/checkpoint behavior.
++- Sort by page ID for fewer disk seeks.
++- Smaller batches during latency-sensitive reads.
++
++### 6.7 `Prefetch`
++
++**Input:** residency probe result, contention state, resident pages, capacity pages.  
++**Output:** drop hint, count hit, or cold-load.  
++**Guard:** prefetch is advisory and never returns an error to the caller.
++
++**Evolution ideas:**
++
++- Disable cold-load under high residency pressure.
++- Aggressive prefetch for range scans and vector search.
++- Conservative prefetch for random point lookups.
++
++### 6.8 `HeapPlacement`
++
++**Input:** relation ID, optional row ID hint, payload length, lane count, writer ID.  
++**Output:** target lane and optional accepted row ID hint.  
++**Guard:** lane is modulo-clamped; heap remains source of truth for row IDs.
++
++**Evolution ideas:**
++
++- Payload-size-aware lane assignment.
++- Relation-hotness-aware lane spreading.
++- Bulk-import append-lane selection.
++
++### 6.9 `Visibility`
++
++**Input:** snapshot CSN, current transaction, tuple creator/deleter metadata.  
++**Output:** visible/not visible.  
++**Guard:** invariant tests compare against existing MVCC implementation across transaction state tables.
++
++**Evolution ideas:**
++
++- Branch-minimized fast path for committed visible tuples.
++- Read-committed refresh specialization.
++- SIMD/batch visibility for scans.
++
++### 6.10 `LockAdmission`
++
++**Input:** row key, requester, optional holder, waiter count, timeout.  
++**Output:** grant, enqueue, spin, or timeout.  
++**Guard:** lock manager retains exclusive ownership of holder state and unlock behavior.
++
++**Evolution ideas:**
++
++- Adaptive spin for very short lock holds.
++- Writer convoy avoidance.
++- Fairness tuning for mixed point updates and scans.
++
++### 6.11 `IndexAccess`
++
++**Input:** equality terms, range terms, ordering need, row estimate, covering index availability.  
++**Output:** table scan, point lookup, range scan, covering range scan, or skip.  
++**Guard:** executor rechecks predicates; planner never trusts a stage to prove correctness alone.
++
++**Evolution ideas:**
++
++- Better ORDER BY/LIMIT decisions.
++- Covering index preference.
++- Selectivity-driven fallback to table scan.
++
++### 6.12 `IndexMutation`
++
++**Input:** page fill, page capacity, incoming cell size, uniqueness facts.  
++**Output:** split-before-insert and duplicate rejection hint.  
++**Guard:** uniqueness is enforced by existing lock/table checks; page format remains owned by B-tree code.
++
++**Evolution ideas:**
++
++- Fill-factor tuning.
++- Right-growth split avoidance.
++- Bulk-load split policy.
++
++### 6.13 `CatalogSnapshot`
++
++**Input:** schema epoch, serialized size, volatile/in-memory flag.  
++**Output:** persist atomically and publish after commit flags.  
++**Guard:** schema publication occurs only after transaction commit.
++
++**Evolution ideas:**
++
++- Avoid redundant saves when schema epoch did not change.
++- Batch DDL catalog snapshots.
++- Faster cold-start metadata path.
++
++### 6.14 `VectorDistance`
++
++**Input:** dimensions, metric, SIMD availability.  
++**Output:** scalar, SIMD, or approximate kernel choice.  
++**Guard:** numeric tests compare against scalar oracle within tolerance.
++
++**Evolution ideas:**
++
++- Dimension thresholds for SIMD dispatch.
++- Metric-specific approximations with exact fallback.
++- CPU-feature-aware vector lanes.
++
++### 6.15 `VectorTopK`
++
++**Input:** candidate count, K, heap budget.  
++**Output:** fixed heap, partial sort, full sort, or approximate.  
++**Guard:** exact mode must match sorted oracle; approximate mode must be explicitly benchmarked separately.
++
++**Evolution ideas:**
++
++- Small-K fixed heap.
++- Large-K partial sort.
++- Budget-aware approximate ranking.
++
++### 6.16 `JsonPath`
++
++**Input:** JSON document length, path length, extraction count.  
++**Output:** interpreter, compiled path, or cached path.  
++**Guard:** output is compared against existing JSON-path semantics.
++
++**Evolution ideas:**
++
++- Cache repeated JSON paths.
++- Compile long paths.
++- Short-circuit scalar extraction.
++
++---
++
++## 7. Integration plan
++
++### Phase 0 — Add contracts only
++
++Included in the diff:
++
++- Add `crates/kernel/src/stages/mod.rs`.
++- Export `pub mod stages;` from `crates/kernel/src/lib.rs`.
++- Add this stage-surface spec under `docs/architecture/`.
++- Add lightweight invariant tests for default stage outputs.
++
++No runtime behavior changes.
++
++### Phase 1 — Wire existing policy surfaces
++
++Recommended next patch:
++
++1. Make `wal::policy::WalSchedulePolicy` an adapter around `stages::WalSchedule`.
++2. Make `storage::policy::BufferPolicy` an adapter around `stages::BufferResidency`, `CheckpointBatch`, and `Prefetch`.
++3. Add `EngineConfig::stage_registry: StageRegistry` only after the first two call sites are behavior-preserving.
++4. Keep defaults monomorphized where possible to avoid dyn-dispatch overhead in hot paths.
++
++### Phase 2 — Add genome loading
++
++Add a `StageGenome` manifest:
++
++```toml
++[stages.wal_schedule]
++name = "wal_tail_latency_v7"
++abi = "kernel-stage-v1"
++sha256 = "..."
++
++[stages.buffer_residency]
++name = "scan_resistant_clock_v3"
++abi = "kernel-stage-v1"
++sha256 = "..."
++```
++
++For Rust-native experiments, this can first be compile-time feature selection. For agent-generated experiments, prefer build-time codegen into a temporary crate over dynamic loading; this keeps Rust type checking and avoids unsafe plugin boundaries.
++
++### Phase 3 — Evolution harness
++
++Every genome run should produce:
++
++- Build result.
++- Unit tests.
++- Stage audit results.
++- Crash/failpoint matrix result.
++- SQLite parity result.
++- Microbenchmarks per stage.
++- End-to-end DB benchmark.
++- Genome manifest and git SHA.
++- Reproducibility seed.
++
++A genome should be eligible for mutation only if it passes all correctness gates. Performance-only ranking starts after correctness.
++
++---
++
++## 8. Stage guard checklist
++
++Each stage implementation must pass:
++
++1. **Panic safety:** no panic on valid input.
++2. **Bounded output:** no zero batch sizes unless allowed; no lane out of range; no unsafe durability downgrade.
++3. **Determinism declaration:** deterministic stages must produce same output for same input.
++4. **Metamorphic tests:** monotonic input changes must not break obvious invariants.
++5. **Default equivalence:** default stage equals current behavior.
++6. **Composition tests:** random valid combinations must complete smoke SQL workload.
++7. **Crash safety:** no lost acknowledged commits under failpoints.
++8. **Parity:** generated SQLite corpus still passes.
++9. **Regression budget:** performance can be worse in exploration, but correctness cannot.
++
++---
++
++## 9. Why the initial diff is additive
++
++It is important that the first stage patch not change commit behavior, WAL flush behavior, or buffer eviction behavior. This repository already claims crash recovery, SQLite parity, and a failpoint matrix. Those are precious invariants.
++
++The additive patch creates an architectural ratchet: future agents have a stable target, and future refactors can move one call site at a time behind the contract. That is the safest way to reach many stages without producing stillborn genomes.
++
++---
++
++## 10. Recommended immediate next PR after this diff
++
++After merging the contract layer, I would do the following small PR:
++
++1. Change `wal::policy::ActiveWalSchedulePolicy` to call `DefaultWalScheduleStage`.
++2. Add a golden test that current `WalScheduleDefault` equals `DefaultWalScheduleStage` for a matrix of contexts.
++3. Add two experimental scheduler implementations behind tests only.
++4. Benchmark `sqlite-parity` and WAL-heavy write workloads.
++5. Only then expose a genome selector.
++
++This gives the evolution system its first real gene while protecting commit durability.
