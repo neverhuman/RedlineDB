@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::catalog::IndexId as CatalogIndexId;
-use crate::engine::page_heap::{PageBackedHeap, VacuumStats};
+use crate::engine::page_heap::{HeapScanRow, PageBackedHeap, ParallelScanDiagnostics, VacuumStats};
 use crate::format::{Csn, PageId, RelId, RowId, TuplePtr, TxId};
 use crate::index::BtreeIndex;
 use crate::storage::{
@@ -12,6 +12,7 @@ use crate::storage::{
     TxStatusCheckpoint,
 };
 use crate::telemetry::{Phase11Counters, Phase11CountersSnapshot};
+use crate::txn::Snapshot;
 use crate::txn::TxState;
 use crate::{Error, Result};
 
@@ -115,6 +116,45 @@ impl Engine {
 
     pub fn relation_rowids(&self, rel_id: RelId) -> Result<Vec<RowId>> {
         self.heap.relation_rowids(rel_id)
+    }
+
+    /// WS-C3 R3: number of heap pages currently allocated in the
+    /// page-backed heap. Surfaces the bound the SQL layer needs to
+    /// drive [`Engine::parallel_scan_page_range`] without touching the
+    /// private `heap` field. Counts every heap page including pages
+    /// belonging to other relations; the scan itself filters by
+    /// `rel_id`.
+    pub fn heap_page_count(&self) -> Result<u64> {
+        self.heap.page_count()
+    }
+
+    /// WS-C3 R3: thin Engine-level wrapper around
+    /// [`PageBackedHeap::parallel_scan_page_range`]. R2-B shipped the
+    /// scan API on the heap but did not expose an Engine accessor;
+    /// R3-C (this commit) plumbs the access so the SQL covering-scan
+    /// gate can actually dispatch when a per-database Rayon pool is
+    /// installed and the downstream operator is HashAggregator or
+    /// SpillSort. The wrapper performs no policy decisions — the SQL
+    /// layer is expected to wrap this call in `pool.install(|| ...)`
+    /// so workers run inside the dedicated pool's context.
+    pub fn parallel_scan_page_range(
+        &self,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        page_range: std::ops::Range<PageId>,
+        rel_filter: Option<RelId>,
+        workers: usize,
+        diagnostics: Option<&mut ParallelScanDiagnostics>,
+    ) -> Result<Vec<HeapScanRow>> {
+        self.heap.parallel_scan_page_range(
+            &self.txs,
+            snapshot,
+            owner,
+            page_range,
+            rel_filter,
+            workers,
+            diagnostics,
+        )
     }
 
     pub fn relation_entries(&self, rel_id: RelId) -> Result<Vec<(RowId, TuplePtr)>> {

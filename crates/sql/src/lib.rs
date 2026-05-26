@@ -26,9 +26,11 @@ pub use statement::{
 };
 pub use value::{SqlValue, SqlValueRef};
 
-/// WS-C3 R2 test surface. Exposes the parallel covering-scan gate's
-/// most recent decision and the worker-context invariant helper so
-/// `crates/sql/tests/ws_c3_parallel_scan_safety.rs` can assert per-
+/// WS-C3 R2/R3 test surface. Exposes the parallel covering-scan
+/// gate's most recent decision, the worker-context invariant helper,
+/// and the per-thread Rayon pool installer so
+/// `crates/sql/tests/ws_c3_parallel_scan_safety.rs` and
+/// `crates/sql/tests/ws_c3_parallel_scan_dispatch.rs` can assert per-
 /// condition branching without reaching into private modules. Not
 /// stable — callers outside the test suite should treat the surface
 /// as internal.
@@ -38,7 +40,8 @@ pub mod ws_c3_testing {
         ParallelCoveringDecision, take_last_parallel_covering_decision,
     };
     pub use crate::exec::{
-        WorkerSnapshotCarrier, outer_row_stack_is_empty, with_executor_context_on_worker,
+        WorkerSnapshotCarrier, current_rayon_pool, outer_row_stack_is_empty,
+        with_current_rayon_pool, with_executor_context_on_worker,
     };
 }
 
