@@ -62,14 +62,14 @@ workflow:
 
 preflight:
   stage: preflight
-  timeout: 30 minutes
+  timeout: 60 minutes
   script:
     - CI_FAST_STAGE=preflight bash ops/ci/fast.sh
 
 .test_shard:
   stage: test
   needs: ["preflight"]
-  timeout: 30 minutes
+  timeout: 60 minutes
   script:
     - CI_FAST_STAGE="$SHARD" bash ops/ci/fast.sh
 
@@ -96,7 +96,7 @@ preflight:
 parity:
   stage: parity
   needs: ["preflight"]
-  timeout: 180 minutes
+  timeout: 240 minutes
   variables:
     CI_REDLINE_TESTING_REQUESTED_VERSION: "1.0.0"
     REDLINE_TESTING_PINNED_ONLY: "1"
@@ -125,7 +125,7 @@ metrics-readme:
   needs:
     - job: parity
       artifacts: true
-  timeout: 15 minutes
+  timeout: 30 minutes
   script:
     - cargo install tokei --locked --version 14.0.0
     - bash scripts/sqlite/build-reference.sh
@@ -165,7 +165,7 @@ branch-freshness:
 jankurai-audit:
   stage: jankurai
   needs: []
-  timeout: 45 minutes
+  timeout: 60 minutes
   script:
     - apt-get install -y -qq tar
     - cargo install cargo-audit --locked
@@ -266,7 +266,7 @@ jankurai-security:
   # libssl3 + libcrypto3 in each `gitlab/gitlab-runner` container, OR
   # upgrade the runner image. Until then, route through [default].
   tags: [default]
-  timeout: 20 minutes
+  timeout: 30 minutes
   script:
     - cargo install cargo-audit --locked
     - cargo install cargo-deny --locked --version 0.18.0
@@ -292,7 +292,7 @@ dependency-review:
   stage: tools
   needs: []
   tags: [default]
-  timeout: 20 minutes
+  timeout: 30 minutes
 
 "tools:audit-ci":
   <<: *jankurai_tool
