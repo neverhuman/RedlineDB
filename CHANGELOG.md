@@ -2,6 +2,182 @@
 
 ## Unreleased
 
+## [4.0.7] - 2026-05-26
+
+Phase 6 R4-B — WAL group-commit pipeline scaffolding (Candidate 4).
+Workspace test count: 1953 → 1942 baseline + 11 feature-gated kernel tests.
+
+### Added
+
+- New `crates/kernel/src/wal/pipeline.rs` (904 lines): `WalPipelineWriter`
+  with a dedicated `std::thread` worker, `crossbeam::channel::bounded(N)`
+  intake, `writev`-batched append, vectorized CRC32 via `crc32fast`, and
+  a sorted dirty-page queue. Feature-gated `wal_pipeline = ["dep:crossbeam-channel"]`.
+- New `crates/kernel/tests/wal_pipeline.rs` (683 lines): 11 tests
+  (9 always-on + 2 `#[cfg(feature = "failpoints")]`) covering single-record
+  + 64-record batch round-trip, 1 MB batch size cap, crash-at-writev and
+  crash-at-fdatasync recovery, checksum mismatch rejection, 8-thread
+  concurrent intake, and feature-off byte-identical-to-lanes invariant.
+  Plus a release-mode-only `#[ignore]` smoke benchmark.
+
+### Performance
+
+Release-mode smoke (10,000 × 256-byte records, single producer):
+- batched-datasync (64rec/1MiB cap): 0.41s, 24,444 rec/s, **40 writev calls + 40 fdatasync**
+- per-record-datasync (cap=1): 79.45s, 126 rec/s, 10,000 writev + 10,000 fdatasync
+- batched-kernel-flush (no fsync): 0.019s, **518,701 rec/s / ~158 MB/s**, 40 writev
+
+**194× wall-clock speedup** and **250× syscall reduction** going from per-record
+append to batched `writev`. Confirms the Candidate-4 thesis: WAL group commit
+dominates write-heavy throughput.
+
+### Deferred
+
+- SQL/planner/executor wiring: the pipeline writer is exposed as a standalone
+  module that Phase 7 will wire into `Database` once recovery semantics are
+  pinned end-to-end. Feature OFF makes the build byte-identical to v4.0.6.
+- Partial-`writev` slow-path falls back to sequential `write_all` instead of
+  slicing the iovec (`IoSlice::advance_slices` unstable in Rust 1.95).
+
+## [4.0.6] - 2026-05-26
+
+Phase 6 R3-C (SQL-side parallel scan dispatch on PageBackedHeap) +
+Phase 6 R4-A (Morsel M4 hash-aggregator). Workspace tests: 1953 → 1974 (+21).
+
+### Added — Phase 6 R3-C
+
+- `Engine::heap_page_count` + `Engine::parallel_scan_page_range` wrappers
+  around the existing `PageBackedHeap` API so the SQL crate can drive the
+  scan without touching the private `engine.heap` field.
+- `OpenOptions::parallel_executor(num_threads)` builder on the `Database`
+  handle; promotes `Database::rayon_pool()` to `pub` for the SQL test surface.
+- `dispatch_parallel_covering_scan` in `crates/sql/src/exec/select_top.rs`:
+  reads the per-thread Rayon pool, computes a page-range bound, calls
+  `engine.parallel_scan_page_range` inside `pool.install(...)`, decodes
+  payloads, applies `selection_passes`, projects via `project_row`. A
+  match-arm safety net falls through to the index path when the pool slot
+  empties between gate decision and dispatch.
+- 7 new tests (`crates/sql/tests/ws_c3_parallel_scan_dispatch.rs`) covering
+  all 6 R2-B-brief safety cases plus an env-gated 1M-row perf smoke.
+
+### Added — Phase 6 R4-A (Morsel M4)
+
+- `crates/sql/src/exec/morsel/hash_agg.rs` (555 lines): `MorselHashAggregator<'arena>`
+  with `new(group_specs, agg_specs, arena)`, `observe_morsel(&Morsel<'arena>)`,
+  `finalize() -> impl Iterator<Item=(Vec<SqlValue>, Vec<SqlValue>)>`. Built-in
+  aggregates: COUNT(*), COUNT(col), SUM (i64+f64 with auto-promotion), MIN, MAX,
+  AVG (sum/count split). Validity bitmap honoured — invalidated rows skipped.
+- AVX2 `_mm256_add_epi64` 4-lane reduction for the ungrouped-SUM(i64)-over-
+  fully-valid-morsel fast path; scalar tail folds remaining lanes. Runtime-gated
+  via `std::is_x86_feature_detected!("avx2")`.
+- 9 new tests (`crates/sql/tests/morsel_hash_agg.rs`) including differential
+  against `vec::hash_agg::HashAggregator`, NULL handling, validity-mask correctness,
+  and 1024-row SIMD-eq-scalar.
+
+### Performance
+
+- Morsel hash-agg SUM(i64) 1024-row morsel, opt-level=3, target-cpu=native:
+  scalar 983 ns/call → SIMD 68 ns/call = **14.4× speedup**.
+- Parallel scan dispatch wall-time on a 1M-row covering scan: gate currently
+  admits only ORDER BY plans (where index-leaf is already fast); broadening
+  the gate to admit SeqScan+HashAgg/SpillSort plans is the follow-up.
+
+## [4.0.5] - 2026-05-26
+
+Phase 6 R3-B — per-PreparedStatement ScalarProgram VM compile cache.
+Workspace tests: 1942 → 1953 (+11).
+
+### Added
+
+- `ProgramCache` in `crates/sql/src/exec/expr/program.rs` keyed by
+  `ExprFingerprint` (hash of `Expr` Display), holding `Arc<ScalarProgram>`
+  entries with `get_or_compile(expr, ctx) -> Result<Option<Arc<ScalarProgram>>>`.
+- Telemetry counters: `program_cache_hits_total`, `program_cache_misses_total`
+  (atomic `u64`).
+- Thread-local scope guard `with_program_cache_scope(...)` wired into
+  `execute_prepared` so each statement starts with a clean cache and stays
+  clean across `step()` calls within the same statement.
+- 7 new tests (`crates/sql/tests/scalar_program_vm_cache.rs`): cache-hit,
+  cache-miss-on-different-expr, reset, thread-local isolation, compile-failure
+  not cached, per-statement scope boundary.
+
+### Honest deferral
+
+- No `PreparedStatement` struct exists in the crate; the `Statement` wrapper
+  uses `Arc<PreparedTemplate>`. Used a thread-local pattern (matches the
+  existing `predicate.rs` subquery cache, `cross_db.rs`, `intern.rs`,
+  `agg_eval.rs`, `view.rs` etc) instead of threading `&mut ProgramCache`
+  through `eval_scalar`.
+
+## [4.0.4] - 2026-05-26
+
+Phase 6 R2 — wire R1-C/R1-D/R1-F into the executor + planner. Three work-streams
+landing on top of v4.0.3. Workspace tests: 1887 → 1942 (+55).
+
+### Added — R2-A: ScalarProgram VM wired into eval_scalar
+
+- `crates/sql/src/exec/expr/program.rs` (+48 lines): `AtomicBool` opt-in toggle
+  (`set_vm_dispatch_enabled`, `is_vm_dispatch_enabled`) + `AtomicU64` telemetry
+  counter (`vm_compile_failed_total`, `reset_vm_compile_failed_total`,
+  `record_compile_failure`).
+- `crates/sql/src/exec/expr/scalar/vm_dispatch.rs` (NEW, 131 lines):
+  `try_eval_scalar_via_vm(expr, row, bindings) -> Option<Result<SqlValue>>`
+  shim that builds a `CompileCtx` from `RowContext::{Table, Joined, Upsert, Empty}`,
+  compiles via Tier-0, evaluates against a flattened row, returns `None` for
+  any unsupported shape so the AST walker stays the fallback.
+- `eval_scalar` now calls `try_eval_scalar_via_vm` first; when it returns
+  `Some`, that result is used; otherwise the existing AST walker runs unchanged.
+- 31 new differential tests (`crates/sql/tests/scalar_program_vm.rs`):
+  integer arith, real arith, NULL propagation, CASE WHEN, string concat,
+  boolean ops, all six comparisons, abs/length, IS NULL/IS NOT NULL.
+
+### Added — R2-B: parallel scan API on PageBackedHeap
+
+- `crates/kernel/src/engine/page_heap/scan.rs` (NEW):
+  `PageBackedHeap::parallel_scan_page_range(tx_status, snapshot, owner,
+  page_range, rel_filter, workers, diagnostics)` partitioning disjoint pages
+  across `std::thread::scope` workers; rows feed `mpsc::sync_channel(workers * 16)`
+  for backpressure. Kernel uses `std::thread::scope`, NOT Rayon (kernel stays
+  rayon-free; SQL side will wrap in `pool.install(|| ...)` when wiring lands).
+- `serial_scan_page_range` companion for parity testing.
+- SQL gate `decide_parallel_covering_scan` in `select_top.rs` returns
+  `ParallelCoveringDecision::{Dispatch, FallbackLimitPresent, FallbackOuterRowStack,
+  FallbackNoPool, FallbackDownstreamNotAggregator}` with debug-assert that
+  `OUTER_ROW_STACK` is empty on dispatch.
+- `with_executor_context_on_worker(WorkerSnapshotCarrier, f)` snapshot-only
+  worker context with a debug-only assert that `CURRENT_TX` is null on the
+  worker thread.
+- 6 safety tests (`crates/sql/tests/ws_c3_parallel_scan_safety.rs`).
+
+### Added — R2-C: AccessPath IR wired into planner
+
+- IR accessors on `AccessPath` (`crates/sql/src/planner/access_path.rs`):
+  `order_satisfies(&[OrderByExpr]) -> bool`, `hard_limit() -> Option<usize>`
+  (enforces residual-empty safety), `covering_map()`, `index_ref()`,
+  `predicates_render()`, `kind_label()`, `lower_to_legacy(&AccessPath)` bridge.
+- `infer_order_satisfies` now resolves column names against the table (closes
+  the scaffolding wave's name-resolution gap).
+- PRAGMA gate `redline_planner_use_access_path` implemented as a thread-local
+  `Cell<Option<bool>>` with env-var fallback (`REDLINEDB_PLANNER_USE_ACCESS_PATH=1`).
+- `access::choose_access_path` routes through `choose_access_path_ir` +
+  `lower_to_legacy` when the PRAGMA is ON; default-OFF path is byte-for-byte v4.0.3.
+- `optimize::wrap_limit` consults `AccessPath::hard_limit()` via a new
+  `wrap_limit_with_conn` adapter when the PRAGMA is ON.
+- 18 new tests (`crates/sql/tests/access_path_ir.rs` integration + unit tests
+  in `access_path.rs`'s `mod tests`).
+
+### Honest deferrals
+
+- PRAGMA parser/session intercept for both R2-A and R2-C toggles is out of
+  the R2 boundary (would touch `parser.rs`, `session.rs`, etc). Toggles are
+  flippable today via `program::set_vm_dispatch_enabled(bool)` and
+  `access_path::set_planner_use_access_path(bool)` plus env-var fallback.
+- ORDER-BY pushdown through `helpers::satisfies_ordering` still uses the
+  legacy column-only check; surfacing the IR's `order_satisfies()` into the
+  legacy `output_order` field requires touching `build.rs` / `helpers.rs`.
+- Parallel scan SQL-side dispatch defers to R3-C (FallbackNoPool branch fires
+  because `Database` doesn't yet install a Rayon pool by default).
+
 ## [4.0.3] - 2026-05-26
 
 Phase 6 Round 1 — five parallel R1 work-streams shipped on top of v4.0.2
