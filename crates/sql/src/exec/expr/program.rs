@@ -23,6 +23,7 @@
 
 use std::cmp::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 
 use smallvec::SmallVec;
 use sqlparser::ast::{
@@ -32,6 +33,53 @@ use sqlparser::ast::{
 
 use crate::error::{Error, Result};
 use crate::value::SqlValue;
+
+// ── Phase 6 R2-A: opt-in dispatch toggle + telemetry ──────────────────────
+//
+// `VM_DISPATCH_ENABLED` is the process-wide opt-in flag. PRAGMA
+// `redline_scalar_vm = ON` (wired in a follow-up round that touches the
+// pragma/session surface) calls `set_vm_dispatch_enabled(true)`. Tests
+// flip it around individual workloads. The executor's `eval_scalar`
+// consults `is_vm_dispatch_enabled` via the `scalar::vm_dispatch`
+// helper before attempting compile + evaluate. Default OFF so the
+// AST walker remains the production path until the corpus diff is
+// observed.
+//
+// `VM_COMPILE_FAILED_TOTAL` counts every Tier-0 compile that returned
+// `Ok(None)` (or an error) while dispatch was enabled. A high count on
+// a corpus run signals shapes we expected to handle that aren't being
+// compiled (silent AST fallback).
+
+static VM_DISPATCH_ENABLED: AtomicBool = AtomicBool::new(false);
+static VM_COMPILE_FAILED_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Flip the process-wide opt-in. Defaults OFF.
+pub fn set_vm_dispatch_enabled(value: bool) {
+    VM_DISPATCH_ENABLED.store(value, AtomicOrdering::Relaxed);
+}
+
+/// Read the current opt-in state.
+pub fn is_vm_dispatch_enabled() -> bool {
+    VM_DISPATCH_ENABLED.load(AtomicOrdering::Relaxed)
+}
+
+/// Snapshot of the running count of Tier-0 compile failures recorded
+/// while dispatch was enabled. Monotonic across the process.
+pub fn vm_compile_failed_total() -> u64 {
+    VM_COMPILE_FAILED_TOTAL.load(AtomicOrdering::Relaxed)
+}
+
+/// Reset the failure counter. Used by integration tests; production
+/// code should treat the counter as monotonic.
+pub fn reset_vm_compile_failed_total() {
+    VM_COMPILE_FAILED_TOTAL.store(0, AtomicOrdering::Relaxed);
+}
+
+/// Public hook called by `scalar::vm_dispatch` whenever Tier-0 compile
+/// returns `Ok(None)` (or an error) while dispatch is enabled.
+pub(crate) fn record_compile_failure() {
+    VM_COMPILE_FAILED_TOTAL.fetch_add(1, AtomicOrdering::Relaxed);
+}
 
 /// Hard cap on the evaluation stack depth. Programs whose maximum stack
 /// height exceeds this are rejected at compile time; the interpreter
