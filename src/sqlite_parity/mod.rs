@@ -4,6 +4,7 @@ mod engine;
 mod memory;
 mod normalize;
 mod report;
+mod rql_phase1;
 mod runner;
 mod text;
 
@@ -12,6 +13,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 pub use catalog::all_cases;
+pub use rql_phase1::{RunConfig as RqlPhase1RunConfig, rql_phase1_cases};
 pub use runner::RunSummary;
 
 pub struct RunConfig {
@@ -57,4 +59,8 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         config.progress,
         config.memory_samples,
     )
+}
+
+pub fn run_rql_phase1(config: RqlPhase1RunConfig) -> Result<RunSummary> {
+    rql_phase1::run(config)
 }
