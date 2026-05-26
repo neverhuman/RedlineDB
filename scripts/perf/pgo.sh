@@ -147,7 +147,7 @@ print_workload_cmd() {
     --target-bin "$INSTR_BIN" \\
     --sqlite-bin "$SQLITE_REF_BIN" \\
     --suite sqlite_parity \\
-    --workers auto \\
+    --workers "\${PERF_WORKERS:-10}" \\
     --tmp-root /dev/shm/redline-testing-pgo \\
     --repetitions 1 --warmup 0 \\
     --output target/redline-testing-pgo/training.jsonl
@@ -203,7 +203,7 @@ if [ "$TRAINING_SUBSET" = "full" ]; then
         --target-bin "$INSTR_BIN" \
         --sqlite-bin "$SQLITE_REF_BIN" \
         --suite sqlite_parity \
-        --workers auto \
+        --workers "${PERF_WORKERS:-10}" \
         --tmp-root /dev/shm/redline-testing-pgo \
         --repetitions 1 --warmup 0 \
         --output target/redline-testing-pgo/training.jsonl

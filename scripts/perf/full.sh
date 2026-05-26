@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Full 1127-case parity corpus × 3 reps + 1 warmup × auto workers.
+# Full 1127-case parity corpus × 3 reps + 1 warmup × 10 workers.
 # Mirrors the official CI parity gate. ~3 hours on a 16-core box.
+# Project convention: full-corpus runs use 10 workers (variance/parallelism
+# trade-off settled by project policy). Override via `PERF_WORKERS=N`.
 #
 # Usage: scripts/perf/full.sh <target-binary> <output-name>
 
@@ -16,9 +18,9 @@ perf_require_bins "$target_bin"
 
 out="$PERF_ROOT/${out_name}.jsonl"
 printf '==> full.sh: %s -> %s\n' "$target_bin" "$out"
-# Full-corpus run uses --workers auto + no taskset (workers will span
-# all cores). Disable taskset by default for this lane.
-PERF_WORKERS="${PERF_WORKERS:-auto}" PERF_TASKSET_DISABLE=1 perf_run_jsonl \
+# Full-corpus run uses 10 workers (project convention) + no taskset
+# (workers will span cores). Disable taskset by default for this lane.
+PERF_WORKERS="${PERF_WORKERS:-10}" PERF_TASKSET_DISABLE=1 perf_run_jsonl \
   "$target_bin" "" 3 1 "$out" "full-${out_name}"
 
 printf '\n== summary ==\n'

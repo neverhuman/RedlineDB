@@ -43,7 +43,7 @@ echo ">>> Running SQLite-parity suite (1,127 pinned + 1,318 generated = 2,445 ca
     --target-bin "$BIN" \
     --sqlite-bin "$SQLITE_REF_BIN" \
     --suite sqlite_parity \
-    --workers auto \
+    --workers "${PERF_WORKERS:-10}" \
     --tmp-root /dev/shm/redline-testing-gap-closure \
     --repetitions 3 --warmup 1 \
     --output "$OUT_DIR/sqlite-parity.jsonl" 2>&1 | tail -5

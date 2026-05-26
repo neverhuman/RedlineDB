@@ -106,7 +106,7 @@ perf record \
         --target-bin "$INPUT_BIN" \
         --sqlite-bin "$SQLITE_REF_BIN" \
         --suite sqlite_parity \
-        --workers auto \
+        --workers "${PERF_WORKERS:-10}" \
         --tmp-root /dev/shm/redline-testing-bolt \
         --repetitions 1 \
         --warmup 0 \
