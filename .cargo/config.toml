@@ -1,20 +1,31 @@
 [build]
 jobs = 50
 
-# Per-CPU-class specialization is the project policy: published binaries
-# are not portable across CPUs (users compile from source for their host).
-# This unlocks AVX2/AVX-512/BMI2 in scalar/vector kernels without
-# runtime dispatch overhead.
+# Default to a portable modern microarchitecture (x86-64-v3 = SSE4.2 +
+# AVX2 + BMI2 + FMA, ~2013 Haswell+; aarch64 stays at the toolchain
+# default). Avoids SIGILL in CI when binaries built on one runner's CPU
+# class are reused on a runner with fewer features (sccache cross-host),
+# and avoids surprising end users who consume published binaries on a
+# different CPU class. Hot SIMD lanes still use runtime `is_x86_feature_
+# detected!` dispatch (vector kernels, key-compare, JSON tokenize) so
+# AVX-512 / etc. above v3 still light up when present.
+#
+# Local devs who want full per-host optimization (and accept that the
+# resulting binary is not portable to other CPUs in their fleet) can
+# opt in via:
+#   RUSTFLAGS="-C link-arg=-fuse-ld=mold -C target-cpu=native" cargo ...
+# or the `release-native` cargo profile (defined in workspace Cargo.toml)
+# which inherits this base + relies on env-supplied RUSTFLAGS for the
+# CPU upgrade.
 [target.x86_64-unknown-linux-gnu]
 linker = "clang"
 rustflags = [
     "-C", "link-arg=-fuse-ld=mold",
-    "-C", "target-cpu=native",
+    "-C", "target-cpu=x86-64-v3",
 ]
 
 [target.aarch64-unknown-linux-gnu]
 linker = "clang"
 rustflags = [
     "-C", "link-arg=-fuse-ld=mold",
-    "-C", "target-cpu=native",
 ]

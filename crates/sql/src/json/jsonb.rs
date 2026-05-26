@@ -1255,10 +1255,7 @@ pub(super) mod simd_tokenize {
         let lf = _mm256_set1_epi8(b'\n' as i8);
         let cr = _mm256_set1_epi8(b'\r' as i8);
         while i + LANES <= len {
-            // SAFETY: loop guard `i + LANES <= len` bounds the 32-byte
-            // unaligned load to `bytes[i..i+32]`; `_mm256_loadu_si256`
-            // accepts any alignment; AVX2 upheld by the outer
-            // `#[target_feature(enable = "avx2")]`.
+            // SAFETY: loop guard `i + LANES <= len` bounds the 32-byte load.
             let chunk = unsafe { _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i) };
             let eq_space = _mm256_cmpeq_epi8(chunk, space);
             let eq_tab = _mm256_cmpeq_epi8(chunk, tab);

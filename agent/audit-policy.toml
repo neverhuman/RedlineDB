@@ -110,6 +110,15 @@ excluded_paths = [
 # otherwise. Same detector limitation as above.
 extra_excluded_paths = [
   "crates/cli/src/main.rs",
+  # WS-C8 ShellZero pre-open CLI fast path. The flagged `.expect()` calls
+  # live inside `#[cfg(test)]` unit tests against constant scalar SQL
+  # input — never on user-supplied data. The detector cannot distinguish
+  # cfg(test) from product code so we waive the file at path scope; the
+  # production hand-rolled SQL evaluator is bounded to the allowlisted
+  # dot-commands + fromless scalar SELECT, and always falls through to
+  # the normal CLI path on any unsupported input (never panics on
+  # untrusted input).
+  "crates/cli/src/shellzero.rs",
   "install.sh",
   "crates/kernel/src/vector/diskann/sectors.rs",
   "crates/bench/src/workload.rs",

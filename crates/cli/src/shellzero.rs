@@ -752,7 +752,7 @@ mod tests {
 
     #[test]
     fn select_one_plus_one() {
-        let v = eval_fromless_select("SELECT 1+1").unwrap();
+        let v = eval_fromless_select("SELECT 1+1").expect("constant scalar SQL parses");
         assert_eq!(v.len(), 1);
         assert!(matches!(v[0], Value::Int(2)));
     }
