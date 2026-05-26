@@ -20,6 +20,7 @@ pub(crate) fn build_select_plan(
             &plan.order_by,
             bindings,
             &optimizer,
+            plan.table_hint.as_ref(),
         ),
         SelectSource::Tables(tables) => {
             build_join_plan(conn, tables, &plan.selection, bindings, &optimizer)
@@ -133,6 +134,7 @@ pub(crate) fn build_table_scan_plan(
     order_by: &[OrderByExpr],
     bindings: &[Option<SqlValue>],
     optimizer: &OptimizerConfig,
+    table_hint: Option<&crate::statement::TableAccessHint>,
 ) -> PhysicalPlan {
     let stats = conn.stats_snapshot();
     let table_stats = stats.tables.get(&table.table_id);
@@ -151,6 +153,7 @@ pub(crate) fn build_table_scan_plan(
         bindings,
         table_stats,
         optimizer,
+        table_hint,
     );
     let is_covering = matches!(&access, AccessPath::CoveringIndexScan { .. });
     let ordering_satisfied = satisfies_ordering(table, &access, order_by);

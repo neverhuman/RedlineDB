@@ -18,6 +18,7 @@ pub(crate) fn choose_access_path(
     bindings: &[Option<SqlValue>],
     _table_stats: Option<&TableStats>,
     _optimizer: &OptimizerConfig,
+    table_hint: Option<&crate::statement::TableAccessHint>,
 ) -> AccessPath {
     // Order matters and mirrors the executor in `exec.rs`:
     //   1. The integer-PK rowid alias (if the predicate is `id = ?` on
@@ -28,12 +29,18 @@ pub(crate) fn choose_access_path(
     //      ONLY advertises an index path when the executor will
     //      actually consume one, so EXPLAIN never lies about the
     //      physical plan.
-    if let Some(rowid) = rowid {
+    if let Some(rowid) = rowid
+        && !matches!(table_hint, Some(crate::statement::TableAccessHint::NotIndexed))
+    {
         return AccessPath::RowIdGet { rowid };
     }
-    if let Some(matched) =
-        crate::exec::index_access::try_match_index_access(conn.engine(), table, selection, bindings)
-    {
+    if let Some(matched) = crate::exec::index_access::try_match_index_access_hinted(
+        conn.engine(),
+        table,
+        selection,
+        bindings,
+        table_hint,
+    ) {
         return match matched.kind {
             crate::exec::index_access::IndexProbeKind::PointLookup => {
                 AccessPath::IndexPointLookup {

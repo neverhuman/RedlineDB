@@ -353,6 +353,7 @@ pub(crate) fn try_resolve_cte_bound_table(
     Some(BoundTable {
         table,
         alias: alias.cloned(),
+        index_hint: None,
     })
 }
 
@@ -393,6 +394,7 @@ pub(crate) fn from_static(
         order_by: Vec::new(),
         limit: None,
         offset: None,
+        table_hint: None,
     }
 }
 
@@ -422,6 +424,7 @@ pub(crate) fn template_from_static(
             order_by: Vec::new(),
             limit: None,
             offset: None,
+            table_hint: None,
         }),
     }
 }

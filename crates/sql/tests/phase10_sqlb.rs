@@ -195,7 +195,11 @@ fn rollback_transaction_synonym_rewinds() {
 }
 
 #[test]
-fn sqlite_index_table_hints_are_noops() {
+fn sqlite_index_table_hints_round_trip_results() {
+    // Phase 5 WS-A2e: index hints are now ENFORCED by the planner (see
+    // `ws_a2eg_index_hints_and_expr_index` for plan-level assertions);
+    // this test continues to assert that result rows still come back
+    // correctly regardless of which access path the planner chose.
     let (_dir, conn) = open_database();
     conn.execute("CREATE TABLE t(a INT, b INT)")
         .expect("create");

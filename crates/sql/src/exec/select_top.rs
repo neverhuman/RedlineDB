@@ -115,8 +115,13 @@ fn build_select_runtime(
         && plan.order_by.is_empty()
         && plan.having.is_none()
         && is_count_star_only_projection(&plan.projection)
-        && let Some(matched) =
-            index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+        && let Some(matched) = index_access::try_match_index_access_hinted(
+            conn.engine(),
+            table,
+            &plan.selection,
+            bindings,
+            plan.table_hint.as_ref(),
+        )
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
         && index_access::open_handle(conn.engine(), &matched.index).is_some()
         // Phase 5 WS-A1: the count fast path skips per-row predicate
@@ -147,8 +152,13 @@ fn build_select_runtime(
         && plan.distinct_on.is_empty()
         && !select_requires_aggregation(plan)
         && plan.having.is_none()
-        && let Some(matched) =
-            index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+        && let Some(matched) = index_access::try_match_index_access_hinted(
+            conn.engine(),
+            table,
+            &plan.selection,
+            bindings,
+            plan.table_hint.as_ref(),
+        )
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
         && index_access::open_handle(conn.engine(), &matched.index).is_some()
         && let Some(out_columns) =
@@ -271,15 +281,25 @@ fn build_select_runtime(
                     //      `selection_rowid_eq` / RowIdGet).
                     //   2. physical-index probe (point or range).
                     //   3. default path: full heap scan.
-                    let rowids = if let Some(rowid) =
+                    // Phase 5 WS-A2e: `NOT INDEXED` disables the rowid-PK
+                    // alias short-circuit too (SQLite parity: rowid is
+                    // index-driven).
+                    let rowid_candidate = if matches!(
+                        plan.table_hint,
+                        Some(crate::statement::TableAccessHint::NotIndexed)
+                    ) {
+                        None
+                    } else {
                         selection_rowid_eq(table, &plan.selection, bindings)?
-                    {
+                    };
+                    let rowids = if let Some(rowid) = rowid_candidate {
                         vec![rowid]
-                    } else if let Some(matched) = index_access::try_match_index_access(
+                    } else if let Some(matched) = index_access::try_match_index_access_hinted(
                         conn.engine(),
                         table,
                         &plan.selection,
                         bindings,
+                        plan.table_hint.as_ref(),
                     ) {
                         let tx = tx.as_mut().expect("tx present");
                         // Conservatism: if the kernel can't honor
@@ -1212,9 +1232,13 @@ fn try_ordered_index_limit_path(
     if plan.order_by.is_empty() || limit == usize::MAX {
         return Ok(None);
     }
-    let Some(matched) =
-        index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
-    else {
+    let Some(matched) = index_access::try_match_index_access_hinted(
+        conn.engine(),
+        table,
+        &plan.selection,
+        bindings,
+        plan.table_hint.as_ref(),
+    ) else {
         return Ok(None);
     };
     if matched.index.keys.len() == 1

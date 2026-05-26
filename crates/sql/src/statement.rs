@@ -432,10 +432,29 @@ pub enum CompoundSetOp {
     Except,
 }
 
+/// Phase 5 WS-A2e/A2g: SQLite-parity table-access hint attached to a FROM
+/// item via `INDEXED BY <name>` or `NOT INDEXED`. The planner consults
+/// the hint inside `index_access::try_match_index_access`:
+///   - `NotIndexed`        → never advertise an index path (TableScan).
+///   - `IndexedBy(name)`   → only match when the chosen index name (case-
+///                           insensitively) equals `name`; otherwise fall
+///                           through to TableScan (permissive: SQLite does
+///                           the same when the named index does not apply).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TableAccessHint {
+    NotIndexed,
+    IndexedBy(Arc<str>),
+}
+
 #[derive(Debug, Clone)]
 pub struct BoundTable {
     pub table: Arc<TableDef>,
     pub alias: Option<Arc<str>>,
+    /// Phase 5 WS-A2e: SQLite-parity table-access hint (`INDEXED BY` /
+    /// `NOT INDEXED`) captured during parse; `None` when no hint is
+    /// supplied. Consumed by the planner via
+    /// `index_access::try_match_index_access`.
+    pub index_hint: Option<TableAccessHint>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -475,6 +494,12 @@ pub struct SelectPlan {
     pub order_by: Vec<OrderByExpr>,
     pub limit: Option<Expr>,
     pub offset: Option<Expr>,
+    /// Phase 5 WS-A2e: hint for the single-table source. Mirrors the
+    /// `index_hint` carried on the `BoundTable` of joined sources so the
+    /// planner can resolve hints whether the source is
+    /// `SelectSource::Table(Arc<TableDef>)` or `SelectSource::Tables(..)`.
+    /// `None` when no hint is attached.
+    pub table_hint: Option<TableAccessHint>,
 }
 
 #[derive(Debug, Clone)]

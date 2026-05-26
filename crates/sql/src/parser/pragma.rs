@@ -1152,6 +1152,7 @@ fn pragma_static_select(
             order_by: Vec::new(),
             limit: None,
             offset: None,
+            table_hint: None,
         }),
     }
 }

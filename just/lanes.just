@@ -166,3 +166,19 @@ perf-profile-one CASE:
 
 perf-case-lists:
   ./scripts/perf/build-case-lists.sh
+
+# Phase 5 WS-B perf lanes — PGO + BOLT post-link.
+# perf-pgo:  ~20-30 min on the medium subset (~300 cases). Produces
+#            target/release-pgo/redlinedb. Override the subset by
+#            invoking the script directly:
+#              bash scripts/perf/pgo.sh --training-subset {quick,medium,full}
+#            Pass --for-bolt to emit relocations needed by perf-bolt.
+# perf-bolt: requires perf-pgo to have run first WITH --for-bolt so
+#            the input binary has --emit-relocs sections; samples the
+#            PGO'd binary under the parity workload via `perf record`
+#            and rewrites it with llvm-bolt. x86_64 only.
+perf-pgo:
+  bash scripts/perf/pgo.sh --training-subset medium
+
+perf-bolt:
+  bash scripts/perf/bolt.sh

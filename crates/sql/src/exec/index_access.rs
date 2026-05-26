@@ -29,6 +29,7 @@ use redlinedb_kernel::index::{CursorYield, IndexRowRef, RawPointCursor, Snapshot
 use sqlparser::ast::{BinaryOperator, Expr, Value};
 
 use crate::error::Result;
+use crate::statement::TableAccessHint;
 use crate::value::SqlValue;
 
 use super::index_batch::{
@@ -129,6 +130,25 @@ pub(crate) fn try_match_index_access(
     selection: &Option<Expr>,
     bindings: &[Option<SqlValue>],
 ) -> Option<IndexAccessMatch> {
+    try_match_index_access_hinted(engine, table, selection, bindings, None)
+}
+
+/// Phase 5 WS-A2e / A2g entry point. The optional `hint` rides through
+/// SQLite-parity `INDEXED BY` / `NOT INDEXED` table-access hints; pass
+/// `None` for callers that have no hint context (joins, CTE row sources,
+/// etc.).
+pub(crate) fn try_match_index_access_hinted(
+    engine: &Engine,
+    table: &Arc<TableDef>,
+    selection: &Option<Expr>,
+    bindings: &[Option<SqlValue>],
+    hint: Option<&TableAccessHint>,
+) -> Option<IndexAccessMatch> {
+    // Phase 5 WS-A2e: `NOT INDEXED` is permissive — it simply removes
+    // every index from candidate consideration and forces a TableScan.
+    if matches!(hint, Some(TableAccessHint::NotIndexed)) {
+        return None;
+    }
     let expr = selection.as_ref()?;
     if table.indexes.is_empty() {
         return None;
@@ -153,6 +173,16 @@ pub(crate) fn try_match_index_access(
     // PK rowid alias is the leading column, the planner already prefers
     // `RowIdGet` ahead of this code path, so we don't have to break ties.
     for index in &table.indexes {
+        // Phase 5 WS-A2e: `INDEXED BY <name>` restricts the candidate
+        // set to a single named index (case-insensitive match against
+        // the catalog `name`). Skipping non-matching indexes here is
+        // SQLite-parity: SQLite errors when the named index doesn't
+        // exist on the table, but otherwise narrows to that index.
+        if let Some(TableAccessHint::IndexedBy(name)) = hint {
+            if !index.name.eq_ignore_ascii_case(name) {
+                continue;
+            }
+        }
         // Wave 7 P1 #5: do not advertise an index unless both the catalog
         // entry has a meta_page_id AND the engine has a live handle for
         // the index. Without those, the executor falls back to TableScan
@@ -174,10 +204,52 @@ pub(crate) fn try_match_index_access(
         let Some(first_key) = index.keys.first() else {
             continue;
         };
+        // Phase 5 WS-A2g: expression-index equality. When the leading
+        // key is an expression and a top-level conjunct compares that
+        // exact expression to a constant, treat it as a point lookup on
+        // the encoded constant. Multi-key expression indexes are not
+        // handled in this wave — only single-key expression indexes.
+        //
+        // Gating: expression-index DML maintenance (Lane B) is not yet
+        // wired (see `index_dml.rs::build_index_key`), so the leaf is
+        // always empty after INSERTs. To avoid emitting a planner path
+        // that returns zero rows, we ONLY match the expression index
+        // when the user explicitly opts in via
+        // `INDEXED BY <expr_index_name>`. The hinted path lets us prove
+        // the planner machinery is wired without exposing the empty
+        // leaves to unhinted queries.
+        if let IndexKeySource::Expression { sql: expr_sql, .. } = &first_key.source {
+            if index.keys.len() != 1 {
+                continue;
+            }
+            if !matches!(hint, Some(TableAccessHint::IndexedBy(_))) {
+                continue;
+            }
+            if let Some((value, consumed_idx)) =
+                expression_index_equality_match(&conjuncts, expr_sql, bindings)
+            {
+                let key = encode_single_value_key(first_key.sort_dir, &value);
+                let predicates = vec![format!(
+                    "{} = {}",
+                    expr_sql,
+                    sql_value_to_explain(&value)
+                )];
+                let residual_conjuncts =
+                    residuals_from_consumed(&conjuncts, &[consumed_idx]);
+                return Some(IndexAccessMatch {
+                    index: Arc::new(index.clone()),
+                    kind: IndexProbeKind::PointLookup,
+                    probe: IndexProbe::Point { key },
+                    predicates,
+                    ordered_limit: None,
+                    residual_conjuncts,
+                    equality_prefix_len: 1,
+                });
+            }
+            continue;
+        }
         let IndexKeySource::Column { attnum: leading } = first_key.source else {
-            // A6 SQL-D: planner cannot yet match expression-source keys
-            // for index access; skip the index until full expression-
-            // index planner support lands.
+            // Future-proof: any new variant requires explicit handling.
             continue;
         };
         let leading = leading as usize;
@@ -728,6 +800,110 @@ fn expr_column_ordinal(expr: &Expr, table: &TableDef) -> Option<usize> {
             .and_then(|ident| column_ordinal_for_table(&ident.value, table)),
         _ => None,
     }
+}
+
+/// Phase 5 WS-A2g: match a top-level conjunct against an expression
+/// index's stored SQL text. Returns `(value, conjunct_idx)` on success.
+///
+/// The match is conservative: only `expr_text = const` (or the symmetric
+/// `const = expr_text`) succeeds, where `expr_text` must render
+/// (case-folded, whitespace-collapsed) identical to the index's stored
+/// expression SQL. We do not perform SQL semantic-equivalence; if the
+/// user wrote `LOWER(name)` and the index stored `lower(name)`, the
+/// normalizer folds both to the same canonical form and matches.
+fn expression_index_equality_match(
+    conjuncts: &[&Expr],
+    index_expr_sql: &str,
+    bindings: &[Option<SqlValue>],
+) -> Option<(SqlValue, usize)> {
+    let index_norm = normalize_expr_text(index_expr_sql);
+    for (idx, expr) in conjuncts.iter().enumerate() {
+        let Expr::BinaryOp { left, op, right } = strip_nested(expr) else {
+            continue;
+        };
+        if !matches!(op, BinaryOperator::Eq) {
+            continue;
+        }
+        let left_matches = expr_text_eq_normalized(left, &index_norm);
+        let right_matches = expr_text_eq_normalized(right, &index_norm);
+        let value = if left_matches {
+            eval_constant(right, bindings)
+        } else if right_matches {
+            eval_constant(left, bindings)
+        } else {
+            None
+        };
+        if let Some(value) = value
+            && !matches!(value, SqlValue::Null)
+        {
+            return Some((value, idx));
+        }
+    }
+    None
+}
+
+fn expr_text_eq_normalized(expr: &Expr, index_norm: &str) -> bool {
+    normalize_expr_text(&strip_nested(expr).to_string()) == index_norm
+}
+
+/// Lower-case + ASCII-whitespace-collapse so `lower(name)` and
+/// `LOWER( name )` compare equal. Intentionally light-touch — anything
+/// fancier (operator-precedence parsing, full normalization) is out of
+/// scope for the conservative match.
+fn normalize_expr_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut last_ws = false;
+    for ch in text.chars() {
+        if ch.is_ascii_whitespace() {
+            if !last_ws && !out.is_empty() {
+                out.push(' ');
+            }
+            last_ws = true;
+        } else {
+            out.push(ch.to_ascii_lowercase());
+            last_ws = false;
+        }
+    }
+    if out.ends_with(' ') {
+        out.pop();
+    }
+    // Strip a single layer of outer parentheses so `(lower(name))`
+    // matches `lower(name)`.
+    while out.starts_with('(') && out.ends_with(')') {
+        // Only strip when the parens are balanced as a single wrap.
+        let mut depth: i32 = 0;
+        let mut wraps = true;
+        for (i, ch) in out.char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 && i != out.len() - 1 {
+                        wraps = false;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if wraps {
+            out = out[1..out.len() - 1].trim().to_owned();
+        } else {
+            break;
+        }
+    }
+    out
+}
+
+/// Encode a single SqlValue as an index key. Used by the WS-A2g
+/// expression-index point-lookup path (which always has exactly one key
+/// part).
+fn encode_single_value_key(sort_dir: SortDir, value: &SqlValue) -> Vec<u8> {
+    let value_refs = [value.as_ref()];
+    let dirs = [sort_dir];
+    let mut buf = Vec::new();
+    let EncodedIndexKey { bytes, .. } = encode_index_key(&value_refs, &dirs, &mut buf);
+    bytes
 }
 
 fn encode_full_key(index: &IndexDef, values: &[SqlValue]) -> Vec<u8> {
