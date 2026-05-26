@@ -157,11 +157,7 @@ fn one_pass_order_by_aggregate_alias_preserves_order() {
 fn one_pass_min_max_per_group_matches_sqlite() {
     let (_dir, conn) = open();
     seed_t(&conn);
-    assert_matches_sqlite(
-        &conn,
-        SETUP_T,
-        "SELECT k, MIN(v), MAX(v) FROM t GROUP BY k",
-    );
+    assert_matches_sqlite(&conn, SETUP_T, "SELECT k, MIN(v), MAX(v) FROM t GROUP BY k");
 }
 
 #[test]

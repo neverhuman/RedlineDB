@@ -477,13 +477,10 @@ fn derive_cte_row_cap(body_query: &Query, cte_name: &str) -> Option<usize> {
     // Confirm the single FROM source is exactly the recursive CTE.
     let factor = &select.from[0].relation;
     let from_name = match factor {
-        TableFactor::Table { name, .. } => name
-            .0
-            .last()
-            .and_then(|part| match part {
-                sqlparser::ast::ObjectNamePart::Identifier(ident) => Some(&ident.value),
-                _ => None,
-            })?,
+        TableFactor::Table { name, .. } => name.0.last().and_then(|part| match part {
+            sqlparser::ast::ObjectNamePart::Identifier(ident) => Some(&ident.value),
+            _ => None,
+        })?,
         _ => return None,
     };
     if !from_name.eq_ignore_ascii_case(cte_name) {

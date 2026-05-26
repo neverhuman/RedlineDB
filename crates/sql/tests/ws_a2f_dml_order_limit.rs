@@ -48,10 +48,8 @@ fn seed_ten(conn: &Arc<Connection>) {
         // x = 11 - id so id=1 has the largest x (10), id=10 the smallest (1).
         let x = 11 - id;
         let v = id * 10;
-        conn.execute(&format!(
-            "INSERT INTO t(id, x, v) VALUES ({id}, {x}, {v})"
-        ))
-        .expect("insert");
+        conn.execute(&format!("INSERT INTO t(id, x, v) VALUES ({id}, {x}, {v})"))
+            .expect("insert");
     }
 }
 

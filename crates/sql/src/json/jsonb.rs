@@ -1131,10 +1131,7 @@ pub(super) mod simd_tokenize {
     /// JSON structural bytes (`{ } [ ] : , "`).
     #[inline]
     const fn is_structural(b: u8) -> bool {
-        matches!(
-            b,
-            b'{' | b'}' | b'[' | b']' | b':' | b',' | b'"'
-        )
+        matches!(b, b'{' | b'}' | b'[' | b']' | b':' | b',' | b'"')
     }
 
     /// Return the first index `>= start` whose byte is NOT JSON whitespace,
@@ -1262,9 +1259,7 @@ pub(super) mod simd_tokenize {
             // unaligned load to `bytes[i..i+32]`; `_mm256_loadu_si256`
             // accepts any alignment; AVX2 upheld by the outer
             // `#[target_feature(enable = "avx2")]`.
-            let chunk = unsafe {
-                _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)
-            };
+            let chunk = unsafe { _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i) };
             let eq_space = _mm256_cmpeq_epi8(chunk, space);
             let eq_tab = _mm256_cmpeq_epi8(chunk, tab);
             let eq_lf = _mm256_cmpeq_epi8(chunk, lf);
@@ -1313,9 +1308,7 @@ pub(super) mod simd_tokenize {
         let quote = _mm256_set1_epi8(b'"' as i8);
         while i + LANES <= len {
             // SAFETY: loop guard `i + LANES <= len` bounds the 32-byte load.
-            let chunk = unsafe {
-                _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)
-            };
+            let chunk = unsafe { _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i) };
             let m1 = _mm256_cmpeq_epi8(chunk, lcurly);
             let m2 = _mm256_cmpeq_epi8(chunk, rcurly);
             let m3 = _mm256_cmpeq_epi8(chunk, lsquare);
@@ -1358,9 +1351,7 @@ pub(super) mod simd_tokenize {
         let needle = _mm256_set1_epi8(target as i8);
         while i + LANES <= len {
             // SAFETY: loop guard `i + LANES <= len` bounds the 32-byte load.
-            let chunk = unsafe {
-                _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i)
-            };
+            let chunk = unsafe { _mm256_loadu_si256(bytes.as_ptr().add(i) as *const __m256i) };
             let eq = _mm256_cmpeq_epi8(chunk, needle);
             let mask = _mm256_movemask_epi8(eq) as u32;
             if mask != 0 {

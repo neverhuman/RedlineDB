@@ -30,7 +30,10 @@ pub(crate) fn choose_access_path(
     //      actually consume one, so EXPLAIN never lies about the
     //      physical plan.
     if let Some(rowid) = rowid
-        && !matches!(table_hint, Some(crate::statement::TableAccessHint::NotIndexed))
+        && !matches!(
+            table_hint,
+            Some(crate::statement::TableAccessHint::NotIndexed)
+        )
     {
         return AccessPath::RowIdGet { rowid };
     }

@@ -35,7 +35,10 @@ impl Db {
     /// Run a single-row query and return the first column of the first
     /// row, or `Err(<diagnostic>)` if preparation/step fails.
     fn query_one(&self, sql: &str) -> Result<SqlValue, String> {
-        let mut stmt = self.conn.prepare(sql).map_err(|e| format!("prepare: {e}"))?;
+        let mut stmt = self
+            .conn
+            .prepare(sql)
+            .map_err(|e| format!("prepare: {e}"))?;
         match stmt.step().map_err(|e| format!("step: {e}"))? {
             Step::Row => Ok(stmt
                 .column_value(0)
@@ -263,13 +266,7 @@ fn diff_thousand_iterations_padded_vs_plain() {
         let r = (next_rand(&mut rng) as usize) % 81;
         let tpl = templates[t_idx];
         let (head, tail) = tpl.split_at(1);
-        let path_padded = format!(
-            "{}{}{}{}",
-            head,
-            " ".repeat(m),
-            tail,
-            " ".repeat(r)
-        );
+        let path_padded = format!("{}{}{}{}", head, " ".repeat(m), tail, " ".repeat(r));
 
         let padded = path_query_first(&db, doc, &path_padded);
         let plain = path_query_first(&db, doc, tpl);

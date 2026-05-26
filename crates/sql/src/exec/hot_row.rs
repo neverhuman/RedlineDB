@@ -255,7 +255,9 @@ pub(crate) fn structurally_eligible(plan: &UpdatePlan) -> bool {
                         return false;
                     }
                 }
-                IndexKeySource::Expression { referenced_cols, .. } => {
+                IndexKeySource::Expression {
+                    referenced_cols, ..
+                } => {
                     if referenced_cols
                         .iter()
                         .any(|c| touched.get(*c as usize).copied().unwrap_or(false))
@@ -294,9 +296,11 @@ pub(crate) fn apply_plans(plans: &[AssignmentPlan], values: &mut [SqlValue]) -> 
                     SqlValue::Real(r) => SqlValue::Real(*r + (*delta as f64)),
                     // Text/Blob: SQLite would coerce to a number then add. For
                     // safety, bail out of the fast path on this row.
-                    _ => return Err(crate::error::Error::UnsupportedSql(
-                        "hot_row delta on non-numeric value".to_string(),
-                    )),
+                    _ => {
+                        return Err(crate::error::Error::UnsupportedSql(
+                            "hot_row delta on non-numeric value".to_string(),
+                        ));
+                    }
                 };
                 values[*col] = new_val;
             }

@@ -1,9 +1,9 @@
 use super::super::agg_eval::{
     eval_group_scalar_with_ctx, project_group_row, with_group_eval_cache,
 };
+use super::super::vec::hash_agg::{AggKind, HashAggregator, encode_group_key_bytes};
 use super::super::*;
 use super::order::{eval_group_key, sort_groups_by_order_by, sort_projected_rows_by_order_by};
-use super::super::vec::hash_agg::{AggKind, HashAggregator, encode_group_key_bytes};
 
 pub(crate) fn execute_grouped_select(
     plan: &crate::statement::SelectPlan,
@@ -24,9 +24,7 @@ pub(crate) fn execute_grouped_select(
     // shape is compatible (GROUP BY + bare built-in aggregates, no DISTINCT,
     // no exotic aggregates). Falls back to the materialised group path on
     // None.
-    if let Some(routed) =
-        try_one_pass_grouped(plan, &filtered, bindings, limit, offset, memory)?
-    {
+    if let Some(routed) = try_one_pass_grouped(plan, &filtered, bindings, limit, offset, memory)? {
         return Ok(routed);
     }
 
@@ -337,7 +335,12 @@ fn try_one_pass_grouped(
             let ctx = first_row.context();
             let mut tup = Vec::with_capacity(order_specs.len());
             for (spec, _) in &order_specs {
-                tup.push(eval_projection_item(spec, agg_values_for_row, &ctx, bindings)?);
+                tup.push(eval_projection_item(
+                    spec,
+                    agg_values_for_row,
+                    &ctx,
+                    bindings,
+                )?);
             }
             order_keys.push(tup);
         }
@@ -461,7 +464,10 @@ fn classify_as_aggregate(expr: &Expr, slots: &mut Vec<AggSlot>) -> Result<Option
             if !is_bare_column_ref(arg) {
                 return Ok(None);
             }
-            (kind_hint.expect("non-count kind resolved"), Some(arg.clone()))
+            (
+                kind_hint.expect("non-count kind resolved"),
+                Some(arg.clone()),
+            )
         }
     };
 

@@ -106,8 +106,7 @@ pub(crate) fn execute_update(
     // OFFSET are present — the SQLite contract requires evaluating the
     // ORDER BY against the pre-image and applying writes only to the
     // selected window. The fast path skips that step.
-    let order_or_limit =
-        !plan.order_by.is_empty() || plan.limit.is_some() || plan.offset.is_some();
+    let order_or_limit = !plan.order_by.is_empty() || plan.limit.is_some() || plan.offset.is_some();
     let fast_plans = if !order_or_limit && crate::exec::hot_row::structurally_eligible(plan) {
         match crate::exec::hot_row::classify_assignments(plan, bindings)? {
             crate::exec::hot_row::ClassifyResult::Supported(plans) => Some(plans),

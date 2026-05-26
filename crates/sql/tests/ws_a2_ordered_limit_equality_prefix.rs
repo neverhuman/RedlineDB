@@ -40,12 +40,16 @@ fn order_by_secondary_column_with_equality_leading_uses_index() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, tenant INTEGER, k INTEGER, v TEXT)")
         .expect("ddl");
-    conn.execute("CREATE INDEX kv_tk ON kv(tenant, k)").expect("idx");
+    conn.execute("CREATE INDEX kv_tk ON kv(tenant, k)")
+        .expect("idx");
     // Two tenants, k values interleaved out-of-order
     for (tenant, k, v) in [
-        (1, 30, "a"), (1, 10, "b"), (1, 20, "c"),
-        (2, 50, "d"), (2, 40, "e"),
-        (1, 5,  "f"),
+        (1, 30, "a"),
+        (1, 10, "b"),
+        (1, 20, "c"),
+        (2, 50, "d"),
+        (2, 40, "e"),
+        (1, 5, "f"),
     ] {
         conn.execute(&format!(
             "INSERT INTO kv(tenant, k, v) VALUES ({tenant}, {k}, '{v}')"
@@ -59,7 +63,11 @@ fn order_by_secondary_column_with_equality_leading_uses_index() {
         "SELECT k FROM kv WHERE tenant = 1 ORDER BY k LIMIT 1",
         0,
     );
-    assert_eq!(one, vec![5], "ORDER BY secondary index column over equality-pinned leading");
+    assert_eq!(
+        one,
+        vec![5],
+        "ORDER BY secondary index column over equality-pinned leading"
+    );
 
     // ORDER BY k LIMIT 3 → smallest 3 k values for tenant=1.
     let three = collect_int_col(
@@ -70,11 +78,7 @@ fn order_by_secondary_column_with_equality_leading_uses_index() {
     assert_eq!(three, vec![5, 10, 20]);
 
     // Without LIMIT, the order must still be correct.
-    let all = collect_int_col(
-        &conn,
-        "SELECT k FROM kv WHERE tenant = 1 ORDER BY k",
-        0,
-    );
+    let all = collect_int_col(&conn, "SELECT k FROM kv WHERE tenant = 1 ORDER BY k", 0);
     assert_eq!(all, vec![5, 10, 20, 30]);
 }
 
@@ -88,11 +92,17 @@ fn order_by_multi_column_composite_satisfied_by_index() {
         "CREATE TABLE kv (id INTEGER PRIMARY KEY, tenant INTEGER, k1 INTEGER, k2 INTEGER)",
     )
     .expect("ddl");
-    conn.execute("CREATE INDEX kv_tkk ON kv(tenant, k1, k2)").expect("idx");
+    conn.execute("CREATE INDEX kv_tkk ON kv(tenant, k1, k2)")
+        .expect("idx");
     for (tenant, k1, k2) in [
-        (1, 2, 30), (1, 2, 10), (1, 1, 50),
-        (1, 1, 20), (1, 3, 5),  (1, 1, 10),
-        (2, 1, 1),  (2, 1, 2),
+        (1, 2, 30),
+        (1, 2, 10),
+        (1, 1, 50),
+        (1, 1, 20),
+        (1, 3, 5),
+        (1, 1, 10),
+        (2, 1, 1),
+        (2, 1, 2),
     ] {
         conn.execute(&format!(
             "INSERT INTO kv(tenant, k1, k2) VALUES ({tenant}, {k1}, {k2})"
@@ -101,9 +111,7 @@ fn order_by_multi_column_composite_satisfied_by_index() {
     }
     // tenant=1 rows in (k1,k2) order: (1,10),(1,20),(1,50),(2,10),(2,30),(3,5)
     let mut stmt = conn
-        .prepare(
-            "SELECT k1, k2 FROM kv WHERE tenant = 1 ORDER BY k1, k2",
-        )
+        .prepare("SELECT k1, k2 FROM kv WHERE tenant = 1 ORDER BY k1, k2")
         .expect("prepare");
     let mut out = Vec::new();
     while let Step::Row = stmt.step().expect("step") {
@@ -131,7 +139,8 @@ fn order_by_non_aligned_falls_back() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, tenant INTEGER, k INTEGER, v INTEGER)")
         .expect("ddl");
-    conn.execute("CREATE INDEX kv_tk ON kv(tenant, k)").expect("idx");
+    conn.execute("CREATE INDEX kv_tk ON kv(tenant, k)")
+        .expect("idx");
     for (tenant, k, v) in [(1, 10, 99), (1, 20, 50), (1, 30, 75)] {
         conn.execute(&format!(
             "INSERT INTO kv(tenant, k, v) VALUES ({tenant}, {k}, {v})"
@@ -140,10 +149,6 @@ fn order_by_non_aligned_falls_back() {
     }
     // ORDER BY v is NOT satisfiable by INDEX(tenant, k) — must sort.
     // Result must still be correct: v ascending => 50, 75, 99.
-    let by_v = collect_int_col(
-        &conn,
-        "SELECT v FROM kv WHERE tenant = 1 ORDER BY v",
-        0,
-    );
+    let by_v = collect_int_col(&conn, "SELECT v FROM kv WHERE tenant = 1 ORDER BY v", 0);
     assert_eq!(by_v, vec![50, 75, 99]);
 }

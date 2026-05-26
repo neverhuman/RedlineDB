@@ -1304,8 +1304,8 @@ fn try_ordered_index_limit_path(
         return Ok(None);
     }
     let order_asc = order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by);
-    let order_desc = !order_asc
-        && order_reverse_satisfied_by_index(&matched, table, &plan.order_by);
+    let order_desc =
+        !order_asc && order_reverse_satisfied_by_index(&matched, table, &plan.order_by);
     if !order_asc && !order_desc {
         return Ok(None);
     }

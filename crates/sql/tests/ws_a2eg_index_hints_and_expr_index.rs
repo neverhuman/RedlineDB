@@ -122,7 +122,10 @@ fn indexed_by_restricts_to_named_index() {
     conn.execute("INSERT INTO t VALUES (1,1,10),(1,2,20),(2,1,30)")
         .expect("insert");
 
-    let plan = explain_text(&conn, "SELECT c FROM t INDEXED BY t_b WHERE a = 1 AND b = 1");
+    let plan = explain_text(
+        &conn,
+        "SELECT c FROM t INDEXED BY t_b WHERE a = 1 AND b = 1",
+    );
     assert!(
         plan.contains("USING INDEX t_b"),
         "INDEXED BY t_b expected USING INDEX t_b, got:\n{plan}"
@@ -133,7 +136,10 @@ fn indexed_by_restricts_to_named_index() {
     );
 
     // Result correctness: predicate semantics are unchanged.
-    let rows = collect_ints(&conn, "SELECT c FROM t INDEXED BY t_b WHERE a = 1 AND b = 1");
+    let rows = collect_ints(
+        &conn,
+        "SELECT c FROM t INDEXED BY t_b WHERE a = 1 AND b = 1",
+    );
     assert_eq!(rows, vec![10]);
 }
 
@@ -268,7 +274,10 @@ fn not_indexed_overrides_expression_index() {
     conn.execute("INSERT INTO t VALUES (1, 'Foo')")
         .expect("insert");
 
-    let plan = explain_text(&conn, "SELECT id FROM t NOT INDEXED WHERE lower(name) = 'foo'");
+    let plan = explain_text(
+        &conn,
+        "SELECT id FROM t NOT INDEXED WHERE lower(name) = 'foo'",
+    );
     assert!(
         plan.contains("SCAN TABLE t"),
         "NOT INDEXED + expression-index expected SCAN TABLE, got:\n{plan}"
@@ -277,6 +286,9 @@ fn not_indexed_overrides_expression_index() {
     // Heap scan re-evaluates the expression against every row, so the
     // row IS returned even though the expression-index leaf is empty
     // (NOT INDEXED forces the scan path, sidestepping the empty index).
-    let rows = collect_ints(&conn, "SELECT id FROM t NOT INDEXED WHERE lower(name) = 'foo'");
+    let rows = collect_ints(
+        &conn,
+        "SELECT id FROM t NOT INDEXED WHERE lower(name) = 'foo'",
+    );
     assert_eq!(rows, vec![1]);
 }

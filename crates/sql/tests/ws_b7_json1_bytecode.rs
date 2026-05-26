@@ -152,7 +152,12 @@ fn json_valid_on_jsonb_blob() {
         vec![SqlValue::Integer(1)]
     );
     // Malformed: preamble looks like JSONB but the node is truncated.
-    let bad = vec![redlinedb_kernel::json::MAGIC, redlinedb_kernel::json::FORMAT_VERSION, 0x07, 0x99];
+    let bad = vec![
+        redlinedb_kernel::json::MAGIC,
+        redlinedb_kernel::json::FORMAT_VERSION,
+        0x07,
+        0x99,
+    ];
     assert_eq!(
         run_one(&conn, "SELECT json_valid(?)", &bad),
         vec![SqlValue::Integer(0)]
@@ -184,9 +189,6 @@ fn columnar_blob_round_trip_extracts_correctly() {
     }
     assert_eq!(
         got,
-        vec![vec![
-            SqlValue::Integer(99),
-            SqlValue::Text(Arc::from("b"))
-        ]]
+        vec![vec![SqlValue::Integer(99), SqlValue::Text(Arc::from("b"))]]
     );
 }

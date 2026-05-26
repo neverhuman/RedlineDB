@@ -31,7 +31,10 @@ fn row_at_inline_capacity_does_not_spill() {
         row.push(SqlValue::Integer(i));
     }
     assert_eq!(row.len(), 8);
-    assert!(!row.spilled(), "8-column row (= inline capacity) must not spill");
+    assert!(
+        !row.spilled(),
+        "8-column row (= inline capacity) must not spill"
+    );
 }
 
 #[test]

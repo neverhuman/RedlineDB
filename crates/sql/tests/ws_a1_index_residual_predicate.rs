@@ -39,7 +39,8 @@ fn count_index_range_does_not_ignore_residual_predicate() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, tenant INTEGER, status TEXT)")
         .expect("ddl");
-    conn.execute("CREATE INDEX kv_tenant ON kv(tenant)").expect("idx");
+    conn.execute("CREATE INDEX kv_tenant ON kv(tenant)")
+        .expect("idx");
     // 10 rows: tenant 1..=10, status alternating active/idle.
     for i in 1..=10 {
         let status = if i % 2 == 0 { "active" } else { "idle" };
@@ -80,7 +81,8 @@ fn covering_scan_does_not_ignore_residual_predicate() {
         .expect("ddl");
     // Covering index on (tenant, status) so the covering fast path
     // can fire on SELECT tenant FROM kv WHERE tenant = ? AND ...
-    conn.execute("CREATE INDEX kv_ts ON kv(tenant, status)").expect("idx");
+    conn.execute("CREATE INDEX kv_ts ON kv(tenant, status)")
+        .expect("idx");
     for i in 1..=5 {
         conn.execute(&format!(
             "INSERT INTO kv(tenant, status) VALUES (1, 'active')"

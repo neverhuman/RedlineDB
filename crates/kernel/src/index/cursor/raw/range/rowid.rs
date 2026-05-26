@@ -172,13 +172,12 @@ impl<'idx> RawIndexCursor<'idx> {
                     leaf_drained = true;
                     return Ok(());
                 }
-                let mut slot: usize = if self.entry_idx == REVERSE_INIT_ENTRY_IDX
-                    || self.entry_idx >= slot_count
-                {
-                    slot_count - 1
-                } else {
-                    self.entry_idx
-                };
+                let mut slot: usize =
+                    if self.entry_idx == REVERSE_INIT_ENTRY_IDX || self.entry_idx >= slot_count {
+                        slot_count - 1
+                    } else {
+                        self.entry_idx
+                    };
                 loop {
                     if out.len() >= target {
                         next_entry_idx = slot;

@@ -140,9 +140,7 @@ fn whole_partition_count_star() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(grp TEXT, v INTEGER)");
     lab.execute("INSERT INTO t VALUES ('A',1),('A',2),('A',3),('B',10),('B',20)");
-    lab.assert_match(
-        "SELECT grp, v, COUNT(*) OVER (PARTITION BY grp) AS c FROM t ORDER BY grp, v",
-    );
+    lab.assert_match("SELECT grp, v, COUNT(*) OVER (PARTITION BY grp) AS c FROM t ORDER BY grp, v");
 }
 
 #[test]

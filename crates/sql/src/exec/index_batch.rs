@@ -184,12 +184,8 @@ pub(super) fn execute_index_range_scan_ordered_desc(
     let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
     {
         let view = SnapshotView::visible(tx_status, &snapshot, owner);
-        let mut cursor = RawIndexCursor::open_reverse_with_counters(
-            &handle,
-            range,
-            view,
-            Some(&*counters),
-        )?;
+        let mut cursor =
+            RawIndexCursor::open_reverse_with_counters(&handle, range, view, Some(&*counters))?;
         loop {
             let remaining = limit.saturating_sub(out.len());
             if remaining == 0 {

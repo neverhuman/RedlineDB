@@ -514,9 +514,10 @@ impl<'idx> IndexCursor<'idx> {
     fn in_range(&self, logical_key: &[u8]) -> bool {
         use std::cmp::Ordering;
         let lower_ok = match &self.start {
-            Bound::Included(b) => {
-                !matches!(crate::index::keycmp::cmp_keys(logical_key, b), Ordering::Less)
-            }
+            Bound::Included(b) => !matches!(
+                crate::index::keycmp::cmp_keys(logical_key, b),
+                Ordering::Less
+            ),
             Bound::Excluded(b) => {
                 matches!(
                     crate::index::keycmp::cmp_keys(logical_key, b),
@@ -534,7 +535,10 @@ impl<'idx> IndexCursor<'idx> {
                 Ordering::Greater
             ),
             Bound::Excluded(b) => {
-                matches!(crate::index::keycmp::cmp_keys(logical_key, b), Ordering::Less)
+                matches!(
+                    crate::index::keycmp::cmp_keys(logical_key, b),
+                    Ordering::Less
+                )
             }
             Bound::Unbounded => true,
         }

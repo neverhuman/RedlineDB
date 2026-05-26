@@ -216,7 +216,8 @@ pub(crate) fn strip_sqlite_table_index_hints(sql: &str) -> Result<String> {
                 let word_end_idx = word_end(bytes, i);
                 let word = &sql[i..word_end_idx];
                 if word.eq_ignore_ascii_case("indexed")
-                    && let Some((end, index_name)) = indexed_by_hint_end_with_name(sql, word_end_idx)
+                    && let Some((end, index_name)) =
+                        indexed_by_hint_end_with_name(sql, word_end_idx)
                 {
                     if let Some(target) = last_ident.take() {
                         register_table_index_hint(

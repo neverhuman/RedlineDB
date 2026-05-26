@@ -30,8 +30,8 @@ fn unbounded_recursive_cte_with_outer_limit() {
     // No WHERE in the recursive arm. Without LIMIT pushdown this
     // would hit RECURSIVE_CTE_ITERATION_LIMIT (10_000) and error.
     let dir = tempdir().expect("temp dir");
-    let db = Database::create(&dir.path().join("ws_a7.db"), DbOptions::default())
-        .expect("create db");
+    let db =
+        Database::create(&dir.path().join("ws_a7.db"), DbOptions::default()).expect("create db");
     let conn = db.connect();
     let sql = "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c) \
                SELECT n FROM c LIMIT 10";

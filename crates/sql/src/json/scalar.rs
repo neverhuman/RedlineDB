@@ -701,8 +701,7 @@ mod tests {
         // SqlValue::Blob carrying the JSONB preamble must walk byte-image
         // rather than reparsing.
         let blob = redlinedb_kernel::json::encode(&serde_json::json!({"a": 42}));
-        let v =
-            json_extract(&[SqlValue::Blob(Arc::from(blob.as_slice())), t("$.a")]).unwrap();
+        let v = json_extract(&[SqlValue::Blob(Arc::from(blob.as_slice())), t("$.a")]).unwrap();
         assert_eq!(v, SqlValue::Integer(42));
     }
 

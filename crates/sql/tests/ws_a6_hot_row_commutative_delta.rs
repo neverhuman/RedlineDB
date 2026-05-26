@@ -52,7 +52,8 @@ fn pure_integer_delta_accumulates_correctly() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, counter INTEGER)")
         .expect("ddl");
-    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 0)").expect("seed");
+    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 0)")
+        .expect("seed");
 
     for _ in 0..1000 {
         conn.execute("UPDATE kv SET counter = counter + 1 WHERE id = 1")
@@ -92,7 +93,8 @@ fn delta_minus_decrements() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, counter INTEGER)")
         .expect("ddl");
-    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 500)").expect("seed");
+    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 500)")
+        .expect("seed");
     for _ in 0..100 {
         conn.execute("UPDATE kv SET counter = counter - 3 WHERE id = 1")
             .expect("update");
@@ -108,7 +110,8 @@ fn fast_path_disabled_when_returning_clause_present() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, counter INTEGER)")
         .expect("ddl");
-    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 0)").expect("seed");
+    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 0)")
+        .expect("seed");
 
     let mut stmt = conn
         .prepare("UPDATE kv SET counter = counter + 7 WHERE id = 1 RETURNING counter")
@@ -126,8 +129,10 @@ fn fast_path_disabled_when_trigger_present() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, counter INTEGER)")
         .expect("ddl");
-    conn.execute("CREATE TABLE audit (n INTEGER)").expect("ddl audit");
-    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 0)").expect("seed");
+    conn.execute("CREATE TABLE audit (n INTEGER)")
+        .expect("ddl audit");
+    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 0)")
+        .expect("seed");
 
     // BEFORE trigger that mirrors the new counter into audit. If the
     // fast path ran without firing this, audit would stay empty.
@@ -155,8 +160,10 @@ fn fast_path_disabled_when_set_column_is_indexed() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, score INTEGER)")
         .expect("ddl");
-    conn.execute("CREATE INDEX kv_score ON kv(score)").expect("idx");
-    conn.execute("INSERT INTO kv(id, score) VALUES (1, 100)").expect("seed");
+    conn.execute("CREATE INDEX kv_score ON kv(score)")
+        .expect("idx");
+    conn.execute("INSERT INTO kv(id, score) VALUES (1, 100)")
+        .expect("seed");
     for _ in 0..10 {
         conn.execute("UPDATE kv SET score = score + 1 WHERE id = 1")
             .expect("update");
@@ -175,7 +182,8 @@ fn unsupported_expr_shape_falls_back_cleanly() {
     let conn = open();
     conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, counter INTEGER)")
         .expect("ddl");
-    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 3)").expect("seed");
+    conn.execute("INSERT INTO kv(id, counter) VALUES (1, 3)")
+        .expect("seed");
     for _ in 0..5 {
         conn.execute("UPDATE kv SET counter = counter * 2 WHERE id = 1")
             .expect("update");

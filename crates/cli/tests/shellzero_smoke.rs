@@ -39,10 +39,7 @@ fn shellzero_help_exits_zero() {
 
 #[test]
 fn shellzero_select_one_plus_one() {
-    let (out, err, code) = run(
-        &["--shellzero", "-batch", ":memory:", "SELECT 1+1;"],
-        None,
-    );
+    let (out, err, code) = run(&["--shellzero", "-batch", ":memory:", "SELECT 1+1;"], None);
     assert_eq!(code, 0, "stderr={err}");
     assert_eq!(out.trim_end(), "2", "stdout={out:?}");
 }

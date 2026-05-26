@@ -35,9 +35,7 @@ pub fn cmp_keys(a: &[u8], b: &[u8]) -> Ordering {
 /// The dispatcher in [`cmp_keys`] enforces that by checking
 /// `is_x86_feature_detected!("avx2")` first.
 unsafe fn cmp_keys_avx2(a: &[u8], b: &[u8]) -> Ordering {
-    use std::arch::x86_64::{
-        __m256i, _mm256_cmpeq_epi8, _mm256_loadu_si256, _mm256_movemask_epi8,
-    };
+    use std::arch::x86_64::{__m256i, _mm256_cmpeq_epi8, _mm256_loadu_si256, _mm256_movemask_epi8};
 
     let common = a.len().min(b.len());
     let mut i = 0;

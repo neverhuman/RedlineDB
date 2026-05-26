@@ -138,11 +138,8 @@ fn limit_pushdown_still_applies_with_arena() {
     // to confirm WS-A7's LIMIT push-down still short-circuits over the
     // new frontier-range representation.
     let dir = tempdir().expect("temp dir");
-    let db = Database::create(
-        &dir.path().join("ws_a7b_limit.db"),
-        DbOptions::default(),
-    )
-    .expect("create db");
+    let db = Database::create(&dir.path().join("ws_a7b_limit.db"), DbOptions::default())
+        .expect("create db");
     let conn = db.connect();
 
     let sql = "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c) \

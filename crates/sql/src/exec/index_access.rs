@@ -230,13 +230,8 @@ pub(crate) fn try_match_index_access_hinted(
                 expression_index_equality_match(&conjuncts, expr_sql, bindings)
             {
                 let key = encode_single_value_key(first_key.sort_dir, &value);
-                let predicates = vec![format!(
-                    "{} = {}",
-                    expr_sql,
-                    sql_value_to_explain(&value)
-                )];
-                let residual_conjuncts =
-                    residuals_from_consumed(&conjuncts, &[consumed_idx]);
+                let predicates = vec![format!("{} = {}", expr_sql, sql_value_to_explain(&value))];
+                let residual_conjuncts = residuals_from_consumed(&conjuncts, &[consumed_idx]);
                 return Some(IndexAccessMatch {
                     index: Arc::new(index.clone()),
                     kind: IndexProbeKind::PointLookup,
@@ -297,8 +292,7 @@ pub(crate) fn try_match_index_access_hinted(
                     table.columns[leading].name,
                     sql_value_to_explain(&full_key[0])
                 )];
-                let residual_conjuncts =
-                    residuals_from_consumed(&conjuncts, &consumed_idx);
+                let residual_conjuncts = residuals_from_consumed(&conjuncts, &consumed_idx);
                 return Some(IndexAccessMatch {
                     index: Arc::new(index.clone()),
                     kind: IndexProbeKind::PointLookup,
@@ -321,8 +315,7 @@ pub(crate) fn try_match_index_access_hinted(
                 table.columns[leading].name,
                 sql_value_to_explain(&leading_value)
             )];
-            let residual_conjuncts =
-                residuals_from_consumed(&conjuncts, &[leading_idx]);
+            let residual_conjuncts = residuals_from_consumed(&conjuncts, &[leading_idx]);
             return Some(IndexAccessMatch {
                 index: Arc::new(index.clone()),
                 kind: IndexProbeKind::RangeScan,
@@ -356,8 +349,7 @@ pub(crate) fn try_match_index_access_hinted(
                 }
                 None => max_key_for(index),
             };
-            let residual_conjuncts =
-                residuals_from_consumed(&conjuncts, &consumed_idx);
+            let residual_conjuncts = residuals_from_consumed(&conjuncts, &consumed_idx);
             return Some(IndexAccessMatch {
                 index: Arc::new(index.clone()),
                 kind: IndexProbeKind::RangeScan,

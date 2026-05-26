@@ -2,17 +2,31 @@
 
 ## Unreleased
 
-## [5.0.0] - 2026-05-26
+## [4.0.1] - 2026-05-26
 
-Phase 5 SQLite-parity speed-gap closure. 15+ workstreams shipped across five
-waves on the `perf/parity-gap-closure` branch on top of the v4.0.0 base
-(`e8f0bf1`). Workspace test count grew from `1622` post-Wave 1 to `1729+`
-post-Wave 5 (Track B3b / B6 additions), with `cargo test --workspace` green
-at every wave boundary. v4.0.0 baseline median per-case latency ratio was
-`1.738×` against the external `redline-testing v1.0.0` `sqlite_parity` suite;
-Phase 5 target is `≤ 1.10×` pending full re-measurement on the rebased HEAD
-(the canonical `phase5-bolt` headline number replaces this `TBD` once
-`just perf-full` finishes on the PGO+BOLT artifact).
+Phase 5 SQLite-parity speed-gap closure (patch release on top of v4.0.0).
+20+ workstreams shipped across five waves on the `perf/parity-gap-closure`
+branch on top of the v4.0.0 base (`e8f0bf1`). Workspace test count grew
+from `1622` post-Wave 1 to `1741` post-Wave 5, with `cargo test --workspace`
+green at every wave boundary.
+
+**Apples-to-apples perf measurement** (both v4.0.0 and v4.0.1 binaries
+built + measured on the same host with 10 workers / 3 reps / 1 warmup
+against the 1127-case `redline-testing v1.0.0` sqlite_parity corpus):
+
+| Metric | v4.0.0 | v4.0.1 | Delta |
+|---|---|---|---|
+| Median ratio vs SQLite | 1.904× | 1.857× | −2.5% |
+| p90 ratio | 2.093× | 2.032× | −2.9% |
+| Cases ≥ 2.0× slower | 193 | 60 | −69% |
+| Cases ≥ 3.0× slower | 0 | 0 | clean |
+| Cases faster than SQLite | 5 | 5 | even |
+| Cases improved >5% | — | 551 | — |
+| Cases regressed >5% | — | 203 | — |
+
+The headline win is the **worst-case tail collapse** (193 → 60 cases above
+2× SQLite, −69%). PGO+BOLT pipeline can add another 5-15% per HPC tips
+literature but is not yet measured in this release.
 
 ### Added — Track A (index / planner / DML)
 

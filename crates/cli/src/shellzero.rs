@@ -64,7 +64,13 @@ pub fn try_handle_pre_open(args: &ShellZeroArgs<'_>, stdin_input: Option<&str>) 
                 Some(v) => v,
                 None => return None,
             };
-            render_row(&values, args.separator, args.row_separator, args.null_value, &mut out);
+            render_row(
+                &values,
+                args.separator,
+                args.row_separator,
+                args.null_value,
+                &mut out,
+            );
         }
     }
 
@@ -260,8 +266,17 @@ fn eval_fromless_select(stmt: &str) -> Option<Vec<Value>> {
     let body_lower = body.to_ascii_lowercase();
     // Reject anything that looks like a clause we don't handle.
     for keyword in [
-        " from ", " where ", " group ", " order ", " limit ", " having ", " union ",
-        " intersect ", " except ", " window ", " with ",
+        " from ",
+        " where ",
+        " group ",
+        " order ",
+        " limit ",
+        " having ",
+        " union ",
+        " intersect ",
+        " except ",
+        " window ",
+        " with ",
     ] {
         if body_lower.contains(keyword) {
             return None;
@@ -423,9 +438,7 @@ fn tokenize(input: &str) -> Option<Vec<Token>> {
             }
             _ if c.is_ascii_alphabetic() || c == b'_' => {
                 let start = i;
-                while i < bytes.len()
-                    && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_')
-                {
+                while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
                     i += 1;
                 }
                 let word = &input[start..i];

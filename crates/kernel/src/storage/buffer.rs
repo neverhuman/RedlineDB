@@ -208,10 +208,10 @@ impl BufferPool {
         self.ensure_prefetch_worker();
         match self.prefetch_queue.push(page_id) {
             Ok(()) => {
-                if let Ok(guard) = self.worker.lock() {
-                    if let Some(handle) = guard.as_ref() {
-                        handle.thread().unpark();
-                    }
+                if let Ok(guard) = self.worker.lock()
+                    && let Some(handle) = guard.as_ref()
+                {
+                    handle.thread().unpark();
                 }
             }
             Err(_) => {

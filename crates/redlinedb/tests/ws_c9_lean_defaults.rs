@@ -9,9 +9,7 @@
 //! Default behaviour MUST remain unchanged — only the opt-in flavor
 //! observes the smaller numbers.
 
-use redlinedb::{
-    Database, LEAN_BUFFER_POOL_PAGES, LEAN_STATEMENT_CACHE_CAPACITY, OpenOptions,
-};
+use redlinedb::{Database, LEAN_BUFFER_POOL_PAGES, LEAN_STATEMENT_CACHE_CAPACITY, OpenOptions};
 
 #[test]
 fn default_open_keeps_historical_buffer_pool_size() {

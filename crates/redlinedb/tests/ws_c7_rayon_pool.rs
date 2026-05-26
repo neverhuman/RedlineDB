@@ -60,10 +60,8 @@ fn pool_is_not_installed_as_rayon_global() {
     let before = rayon::current_num_threads();
 
     let _db1 = Database::create_in_memory(OpenOptions::default()).expect("db 1");
-    let _db2 = Database::create_in_memory(
-        OpenOptions::default().with_rayon_threads(Some(2)),
-    )
-    .expect("db 2");
+    let _db2 = Database::create_in_memory(OpenOptions::default().with_rayon_threads(Some(2)))
+        .expect("db 2");
 
     let after = rayon::current_num_threads();
     assert_eq!(

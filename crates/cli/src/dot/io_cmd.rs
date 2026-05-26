@@ -328,7 +328,10 @@ fn import_rows_batched(
             continue;
         }
         if columns.is_none() {
-            let n = header.as_ref().map(|h| h.len()).unwrap_or_else(|| record.len());
+            let n = header
+                .as_ref()
+                .map(|h| h.len())
+                .unwrap_or_else(|| record.len());
             columns = Some(n);
         }
         buffer.push(record);

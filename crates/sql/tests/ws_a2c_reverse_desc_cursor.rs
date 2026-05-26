@@ -67,8 +67,11 @@ fn order_by_desc_limit_with_equality_prefix_uses_reverse_index_cursor() {
             .expect("insert");
         // sprinkle a second tenant so the reverse walk has to honor the
         // equality-prefix bound and not bleed into a neighbor's slice.
-        conn.execute(&format!("INSERT INTO t(tenant, k) VALUES (2, {})", 10_000 + k))
-            .expect("insert");
+        conn.execute(&format!(
+            "INSERT INTO t(tenant, k) VALUES (2, {})",
+            10_000 + k
+        ))
+        .expect("insert");
     }
     conn.execute("COMMIT").expect("commit");
 
