@@ -7,26 +7,24 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779668764`
-- Started at: `1779668764`
-- Elapsed: `330` ms
-- Scope: `changed-fast`
-- Changed: `.jankurai/repo-score.json, .jankurai/repo-score.md, crates/cli/src/lib.rs`
-- Advisory: `changed-fast scans only changed files plus required control files; run the full audit before merge or release.`
-- Raw score: `52`
-- Final score: `52`
-- Decision: `fail`
+- Run ID: `1779770964`
+- Started at: `1779770964`
+- Elapsed: `11483` ms
+- Scope: `full`
+- Raw score: `85`
+- Final score: `85`
+- Decision: `advisory`
 - Minimum score: `85`
-- Caps applied: `no-one-command-setup-or-validation, no-security-lane-on-high-risk-repo, release-readiness-gap, missing-rust-property-or-integration-tests, no-agent-friendly-exception-pattern, missing-agent-readable-docs, ci-local-parity`
+- Caps applied: `none`
 
 ## Hard Rule Caps
 
 | Rule | Max Score | Applied |
 | --- | ---: | --- |
 | `no-root-agent-instructions` | 75 | no |
-| `no-one-command-setup-or-validation` | 70 | yes |
+| `no-one-command-setup-or-validation` | 70 | no |
 | `no-deterministic-fast-lane` | 65 | no |
-| `no-security-lane-on-high-risk-repo` | 60 | yes |
+| `no-security-lane-on-high-risk-repo` | 60 | no |
 | `generated-contracts-or-public-api-drift-untested` | 80 | no |
 | `python-direct-product-truth-or-db-ownership` | 72 | no |
 | `no-secret-or-dependency-scanning-in-ci` | 78 | no |
@@ -51,10 +49,10 @@
 | `authz-or-data-isolation-gap` | 78 | no |
 | `input-boundary-gap` | 78 | no |
 | `agent-tool-supply-chain-gap` | 78 | no |
-| `release-readiness-gap` | 80 | yes |
-| `missing-rust-property-or-integration-tests` | 82 | yes |
-| `no-agent-friendly-exception-pattern` | 76 | yes |
-| `missing-agent-readable-docs` | 80 | yes |
+| `release-readiness-gap` | 80 | no |
+| `missing-rust-property-or-integration-tests` | 82 | no |
+| `no-agent-friendly-exception-pattern` | 76 | no |
+| `missing-agent-readable-docs` | 80 | no |
 | `streaming-runtime-drift` | 78 | no |
 | `rust-bad-behavior` | 72 | no |
 | `sql-bad-behavior` | 72 | no |
@@ -68,46 +66,105 @@
 | `web-security-bad-behavior` | 68 | no |
 | `repo-rot-bad-behavior` | 88 | no |
 | `comment-hygiene-dangerous-residue` | 72 | no |
-| `ci-local-parity` | 70 | yes |
+| `ci-local-parity` | 70 | no |
 
 ## Copy-Code Redundancy
 
-- Status: `skipped` hard=`0` warning=`0` files=`0`
+- Status: `review` hard=`0` warning=`90` files=`336`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`0` tokens=`0` bytes=`0`
+- Duplicate volume: lines=`197` tokens=`581` bytes=`5496`
+
+- Notes:
+  - hard classes are limited to exact active-source file matches and substantial exact same-name units
+  - warning classes include same-body different-name units and token/block duplication
+  - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
+  - showing the top 50 classes and omitting 40 lower-ranked classes
+
+| Kind | Severity | Language | Lines | Tokens | Instances | Reason |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/json_tv.rs:228-233, crates/sql/src/exec/json_tv.rs:283-288, crates/sql/src/exec/json_tv.rs:399-404, crates/sql/src/exec/json_tv.rs:433-438, crates/sql/src/exec/json_tv.rs:467-472, crates/sql/src/exec/json_tv.rs:504-509, crates/sql/src/exec/json_tv.rs:541-546, crates/sql/src/exec/json_tv.rs:578-583, crates/sql/src/exec/json_tv.rs:616-621, crates/sql/src/exec/pragma_tv.rs:220-225, crates/sql/src/exec/pragma_tv.rs:243-248, crates/sql/src/exec/pragma_tv.rs:282-287, crates/sql/src/exec/pragma_tv.rs:370-375, crates/sql/src/exec/table_valued.rs:77-82` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 13 | 42 | `crates/sql/src/exec/cross_db.rs:203-216, crates/sql/src/exec/cte.rs:181-194, crates/sql/src/exec/view.rs:180-193` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/pragma_tv.rs:76-81, crates/sql/src/exec/pragma_tv.rs:108-113, crates/sql/src/exec/pragma_tv.rs:134-139, crates/sql/src/exec/pragma_tv.rs:429-434, crates/sql/src/exec/pragma_tv.rs:463-468, crates/sql/src/exec/pragma_tv.rs:496-501` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 7 | 16 | `crates/cli/src/render.rs:472-479, crates/cli/src/render.rs:591-598, crates/cli/src/render.rs:652-659, crates/cli/src/render.rs:726-733` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 16 | 37 | `crates/sql/src/exec/agg/select.rs:85-101, crates/sql/src/planner/access/projection.rs:153-169` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/cli/src/dot/control.rs:112-114, crates/cli/src/dot/control.rs:116-118, crates/cli/src/dot/control.rs:120-122, crates/cli/src/dot/control.rs:124-126, crates/cli/src/dot/control.rs:137-139, crates/cli/src/dot/control.rs:291-293, crates/cli/src/dot/control.rs:374-376` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 11 | 57 | `crates/sql/src/datetime/format.rs:75-86, crates/sql/src/datetime/modifiers.rs:192-203` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:1629-1630, crates/sql/src/parser.rs:1734-1735, crates/sql/src/parser.rs:1833-1834, crates/sql/src/parser.rs:2204-2205, crates/sql/src/parser.rs:2356-2357, crates/sql/src/parser.rs:2399-2400, crates/sql/src/parser.rs:2544-2545, crates/sql/src/parser.rs:2854-2855, crates/sql/src/parser.rs:2902-2903, crates/sql/src/parser.rs:3132-3133, crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:162-163` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174, crates/redlinedb-sqlx/src/bridge/runtime.rs:390-391, crates/redlinedb-sqlx/src/bridge/runtime.rs:487-488, crates/redlinedb/src/value_conv.rs:261-262, crates/sql/src/exec/expr/coerce/binary.rs:329-330, crates/sql/src/exec/expr/coerce/binary.rs:336-337, crates/sql/src/exec/expr/coerce/binary.rs:445-446, crates/sql/src/exec/json_tv.rs:241-242` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/value.rs:43-44, crates/redlinedb/src/value.rs:57-58, crates/redlinedb/src/value.rs:64-65, crates/redlinedb/src/value.rs:71-72, crates/redlinedb/src/value.rs:78-79, crates/sql/src/exec/expr/scalar/row/model.rs:64-65, crates/sql/src/exec/expr/scalar/row/model.rs:77-78, crates/sql/src/exec/expr/scalar/row/model.rs:87-88` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 7 | 12 | `crates/kernel/src/engine/page_heap/policy.rs:78-85, crates/kernel/src/engine/page_heap/policy.rs:108-115` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/bridge/options.rs:223-224, crates/redlinedb-sqlx/src/bridge/runtime.rs:52-53, crates/redlinedb-sqlx/src/bridge/runtime.rs:57-58, crates/redlinedb-sqlx/src/bridge/runtime.rs:81-82, crates/redlinedb-sqlx/src/bridge/runtime.rs:96-97, crates/redlinedb-sqlx/src/bridge/runtime.rs:111-112, crates/redlinedb-sqlx/src/bridge/runtime.rs:201-202` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 16 | `crates/sql/src/exec/expr/json_dispatch.rs:729-732, crates/sql/src/exec/expr/scalar/value.rs:556-559, crates/sql/src/exec/expr/scalar/value.rs:710-713` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 6 | 12 | `crates/sql/src/exec/policy.rs:32-38, crates/sql/src/exec/policy.rs:57-63` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:311-311, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:214-214, crates/kernel/src/integrity/page_csum.rs:107-107, crates/redlinedb-sqlx/src/bridge/options.rs:253-254, crates/redlinedb-sqlx/src/bridge/runtime.rs:127-128, crates/sql/src/exec/merge.rs:272-272` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:1080-1081, crates/sql/src/parser.rs:1103-1104, crates/sql/src/parser.rs:2758-2759, crates/sql/src/parser.rs:2822-2823, crates/sql/src/parser.rs:3182-3183, crates/sql/src/parser.rs:3278-3279` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 5 | 13 | `crates/sql/src/exec/agg/select.rs:103-108, crates/sql/src/planner/access/projection.rs:171-176` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 12 | `crates/cli/src/render.rs:979-984, crates/cli/src/render.rs:1003-1008` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 10 | `crates/cli/src/render.rs:459-464, crates/cli/src/render.rs:549-554` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:439-443` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 12 | `crates/sql/src/exec/expr/json_dispatch.rs:62-66, crates/sql/src/exec/expr/json_dispatch.rs:768-772` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/format/bytes.rs:44-46, crates/kernel/src/format/bytes.rs:49-51, crates/kernel/src/format/bytes.rs:54-56` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 9 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:61-65, crates/sql/src/exec/expr/scalar/row/lookup.rs:122-126` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:147-149, crates/kernel/src/storage/tx_status_checkpoint.rs:147-149` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 5 | `crates/redlinedb/src/connection.rs:112-116, crates/redlinedb/src/connection.rs:127-131` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111, crates/kernel/src/storage/numa.rs:47-49` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 7 | `crates/sql/src/exec/expr/scalar/value.rs:321-324, crates/sql/src/exec/expr/scalar/value.rs:369-372` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 6 | `crates/sql/src/parser.rs:1145-1148, crates/sql/src/parser.rs:1173-1176` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/driver.rs:399-400, crates/redlinedb-sqlx/src/driver.rs:414-415, crates/redlinedb-sqlx/src/driver.rs:429-430` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/cli/src/render.rs:410-411, crates/cli/src/render.rs:430-431, crates/cli/src/render.rs:444-445` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/cli/src/render.rs:641-642, crates/cli/src/render.rs:766-767, crates/cli/src/render.rs:777-778` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb-sqlx/src/bridge/options.rs:249-250, crates/redlinedb-sqlx/src/bridge/options.rs:255-256, crates/redlinedb-sqlx/src/bridge/runtime.rs:129-130` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/connection.rs:250-251, crates/redlinedb/src/connection.rs:259-260, crates/redlinedb/src/connection.rs:269-270` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/json/path_bytecode.rs:138-140, crates/sql/src/json/jsonb.rs:1059-1061` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/connection.rs:52-53, crates/redlinedb/src/connection.rs:140-141, crates/redlinedb/src/connection.rs:146-147` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:268-270, crates/redlinedb/src/pool.rs:199-201` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:263-265, crates/redlinedb/src/pool.rs:204-206` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/sqlite_parity/report_gen/io.rs:209-210, crates/cli/src/dot/control.rs:558-559, crates/cli/src/render.rs:1108-1109` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/certify/scheduler/dispatch.rs:196-198, crates/kernel/src/engine/runtime/commit.rs:30-32` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 8 | `crates/cli/src/render.rs:868-869, crates/cli/src/render.rs:1117-1118` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:160-161, crates/sql/src/exec/expr/scalar/row/lookup.rs:164-165` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/connection/database.rs:550-551, crates/sql/src/connection/database.rs:564-565` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/redlinedb/src/value_conv.rs:245-246, crates/redlinedb/src/value_conv.rs:253-254` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/cli/src/dot/mod.rs:456-457, crates/cli/src/render.rs:1036-1037` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb/src/connection.rs:233-234, crates/redlinedb/src/statement.rs:204-205` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/driver.rs:159-160, crates/redlinedb-sqlx/src/driver.rs:187-188` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/bench/src/sqlite_parity/report_gen/tests.rs:533-534, crates/bench/src/sqlite_parity/report_gen/tests.rs:559-560` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/bridge/options.rs:223-224, crates/redlinedb-sqlx/src/bridge/runtime.rs:52-53` | `same-name semantic unit copied across multiple files` |
 
 ## Dimensions
 
 | Dimension | Weight | Score | Weighted | Evidence |
 | --- | ---: | ---: | ---: | --- |
-| Ownership and navigation surface | 13 | 44 | 5.72 | root `AGENTS.md` present; owner map covers audited paths |
-| Contract and boundary integrity | 13 | 43 | 5.59 | Rust typed boundary helpers found |
-| Proof lanes and test routing | 12 | 65 | 7.80 | deterministic fast lane found; test runner present in automation surface |
-| Security and supply-chain posture | 12 | 66 | 7.92 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 35 | 4.20 | largest authored code file: crates/cli/src/lib.rs (1130 LOC); code file exceeds 500 LOC |
-| Data truth and workflow safety | 8 | 50 | 4.00 |  |
-| Observability and repair evidence | 8 | 23 | 1.84 | repair receipts or raw artifact language found |
-| Context economy and agent instructions | 7 | 45 | 3.15 | root `AGENTS.md` present; root `AGENTS.md` stays short |
-| Jankurai tool adoption and CI replacement | 7 | 80 | 5.60 | control-plane files present; applicable=14 |
+| Ownership and navigation surface | 13 | 100 | 13.00 | root `AGENTS.md` present; `CODEOWNERS` present |
+| Contract and boundary integrity | 13 | 88 | 11.44 | contract surface found; generated contract artifacts found |
+| Proof lanes and test routing | 12 | 98 | 11.76 | one-command setup/validation lane found; deterministic fast lane found |
+| Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
+| Code shape and semantic surface | 12 | 45 | 5.40 | largest authored code file: crates/sql/src/parser.rs (4564 LOC); code file exceeds 500 LOC |
+| Data truth and workflow safety | 8 | 85 | 6.80 | database surface present; migration directory present |
+| Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
+| Context economy and agent instructions | 7 | 91 | 6.37 | root `AGENTS.md` present; root `AGENTS.md` stays short |
+| Jankurai tool adoption and CI replacement | 7 | 80 | 5.60 | control-plane files present; applicable=16 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
-| Build speed signals | 4 | 60 | 2.40 | build acceleration markers found; targeted test/build commands found |
+| Build speed signals | 4 | 80 | 3.20 | build acceleration markers found; targeted test/build commands found |
 
 ## Reference Profile Structure
 
-- Applicable cells: `1` canonical=`0` noncanonical=`1` guidance missing=`1`
+- Applicable cells: `8` canonical=`8` noncanonical=`0` guidance missing=`0`
 
 | Cell | Status | Canonical | Detected | Aliases | Guidance | Owner | Proof lane | Agent fix |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `web` | `not_applicable` | `apps/web/` | `-` | `frontend/, ui/, packages/web/, packages/ui/` | `not_required` | `apps/web` | `rendered UX / Playwright` | `no action` |
-| `api` | `not_applicable` | `apps/api/` | `-` | `api/, server/, backend/` | `not_required` | `apps/api` | `edge handler / contract tests` | `no action` |
-| `domain` | `not_applicable` | `crates/domain/` | `-` | `domain/, core/` | `not_required` | `crates/domain` | `unit / property tests` | `no action` |
-| `application` | `not_applicable` | `crates/application/` | `-` | `application/, usecases/, use-cases/` | `not_required` | `crates/application` | `use-case / authz tests` | `no action` |
-| `adapters` | `not_applicable` | `crates/adapters/` | `-` | `adapters/, infra/, integrations/` | `not_required` | `crates/adapters` | `adapter integration tests` | `no action` |
-| `workers` | `not_applicable` | `crates/workers/` | `-` | `workers/, jobs/, scheduler/, queue/` | `not_required` | `crates/workers` | `workflow / replay tests` | `no action` |
-| `contracts` | `not_applicable` | `contracts/` | `-` | `openapi/, protobuf/, json-schema/, generated/` | `not_required` | `contracts` | `generation / drift checks` | `no action` |
-| `db` | `not_applicable` | `db/` | `-` | `migrations/, constraints/, sql/` | `not_required` | `db` | `migration / constraint tests` | `no action` |
+| `api` | `canonical` | `apps/api/` | `apps/api` | `api/, server/, backend/` | `present` | `apps/api` | `edge handler / contract tests` | `keep `apps/api/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `domain` | `canonical` | `crates/domain/` | `crates/domain` | `domain/, core/` | `present` | `crates/domain` | `unit / property tests` | `keep `crates/domain/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `application` | `canonical` | `crates/application/` | `crates/application` | `application/, usecases/, use-cases/` | `present` | `crates/application` | `use-case / authz tests` | `keep `crates/application/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `adapters` | `canonical` | `crates/adapters/` | `crates/adapters` | `adapters/, infra/, integrations/` | `present` | `crates/adapters` | `adapter integration tests` | `keep `crates/adapters/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `workers` | `canonical` | `crates/workers/` | `crates/workers` | `workers/, jobs/, scheduler/, queue/` | `present` | `crates/workers` | `workflow / replay tests` | `keep `crates/workers/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `contracts` | `canonical` | `contracts/` | `contracts` | `openapi/, protobuf/, json-schema/, generated/` | `present` | `contracts` | `generation / drift checks` | `keep `contracts/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
+| `db` | `canonical` | `db/` | `db` | `migrations/, constraints/, sql/` | `present` | `db` | `migration / constraint tests` | `keep `db/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 | `python-ai` | `not_applicable` | `python/ai-service/` | `-` | `python/, ai-service/, evals/, embeddings/, model/` | `not_required` | `python/ai-service` | `eval / contract tests` | `no action` |
-| `ops` | `noncanonical` | `ops/` | `.github, .github/workflows` | `.github/, .github/workflows/, ci/, release/, observability/, security/` | `missing` | `ops` | `security lane / workflow lint` | `migrate the detected ops surface to `ops/` or document an alternate profile with owner, proof lane, expiry, and migration plan` |
+| `ops` | `canonical` | `ops/` | `.github, .github/workflows, ops` | `.github/, .github/workflows/, ci/, release/, observability/, security/` | `present` | `ops` | `security lane / workflow lint` | `keep `ops/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 
 ## Rendered UX QA
 
@@ -118,11 +175,11 @@
 ## Tool Adoption
 
 - Control plane present: `true`
-- Applicable tools: `14`
+- Applicable tools: `16`
 - Configured: `0`
-- CI evidence: `14`
-- Artifact verified: `14`
-- Replaced count: `14`
+- CI evidence: `16`
+- Artifact verified: `16`
+- Replaced count: `16`
 - Missing CI evidence: `none`
 
 | Tool | Category | Mode | Status | Replaced | Artifacts |
@@ -138,23 +195,15 @@
 | `release-bad-behavior` | `release` | `auto` | `artifact_verified` | `manual release checklist, ad hoc tag and artifact review, manual provenance review` | `target/jankurai/language-bad-behavior.log` |
 | `ux-qa` | `ux` | `auto` | `not_applicable` | `playwright, axe-core, visual baselines` | `target/jankurai/ux-qa.json` |
 | `db-migration-analyze` | `db` | `auto` | `not_applicable` | `manual migration review` | `target/jankurai/migration-report.json` |
-| `contract-drift` | `contract` | `auto` | `not_applicable` | `handwritten contract drift checks, openapi diff` | `agent/repo-score.json, agent/repo-score.md` |
+| `contract-drift` | `contract` | `auto` | `artifact_verified` | `handwritten contract drift checks, openapi diff` | `agent/repo-score.json, agent/repo-score.md` |
 | `rust-witness` | `rust` | `auto` | `artifact_verified` | `manual witness graphing` | `target/jankurai/rust/witness-graph.json` |
 | `vibe-coverage` | `audit` | `auto` | `not_applicable` | `manual vibe-coding coverage spreadsheet` | `target/jankurai/vibe-coverage.json, target/jankurai/vibe-coverage.md` |
 | `coverage-evidence` | `proof` | `auto` | `not_applicable` | `manual coverage report review, ad hoc mutation survivor review` | `target/jankurai/coverage/coverage-audit.json, target/jankurai/coverage/coverage-audit.md` |
 | `authz-matrix` | `security` | `auto` | `artifact_verified` | `manual authz matrix review` | `agent/repo-score.json, agent/repo-score.md` |
-| `input-boundary` | `security` | `auto` | `not_applicable` | `manual unsafe sink review` | `agent/repo-score.json, agent/repo-score.md` |
+| `input-boundary` | `security` | `auto` | `artifact_verified` | `manual unsafe sink review` | `agent/repo-score.json, agent/repo-score.md` |
 | `agent-tool-supply` | `security` | `auto` | `artifact_verified` | `manual MCP/tool trust review` | `agent/repo-score.json, agent/repo-score.md` |
 | `release-readiness` | `release` | `auto` | `artifact_verified` | `manual launch checklist` | `agent/repo-score.json, agent/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `artifact_verified` | `manual spend review` | `agent/repo-score.json, agent/repo-score.md` |
-
-## Security evidence (ingested)
-
-- Source: `target/jankurai/security/evidence.json`
-- Envelope exit code: `0` · elapsed: `53839` ms · strict: `false`
-- Commands — ran: `1`, skipped: `0`, failed: `0`
-- Generated at: `1779631279`
-- Git HEAD (envelope): `37342ced9d7a1b9dd18891e12f2a28b6963cae53`
 
 ## Boundary Reclassifications
 
@@ -167,289 +216,21 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
    Route: TLR `Entropy`, lane `fast`, owner `tools`
    Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 35 below the standard floor of 85
+   Reason: `Code shape and semantic surface` scored 45 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:7e8b4f1c26d4c0f41411477f4305e284de61c535221228eb9874da6a7cf211c1`
-   Evidence: largest authored code file: crates/cli/src/lib.rs (1130 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, rust bad-behavior advisory signals: 19
-2. `high` `proof` `.`
-   Check: `HLT-000-SCORE-DIMENSION:proof` `hard` confidence `0.88`
-   Route: TLR `Verification`, lane `fast`, owner `unmapped`
-   Reason: no one-command setup or validation lane was detected
-   Fix: add a canonical `setup`, `check`, `test`, or `verify` lane in one root command file
-   Rerun: `just fast`
-   Fingerprint: `sha256:7010147691f443ae19d3d8603c11ec84958d455885b09e09eca0b9fa91933bde`
-   Evidence: no root setup/check/test/verify target surfaced
-3. `medium` `context` `.github`
-   Rule: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP`
-   Check: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP:context` `soft` confidence `0.88`
-   Route: TLR `Context/setup`, lane `fast`, owner `agent`
-   Docs: `docs/audit-rubric.md#required-shape`
-   Reason: reference-profile cell `ops` is detected at a noncanonical path
-   Fix: migrate the detected ops surface to `ops/` or document an alternate profile with owner, proof lane, expiry, and migration plan
-   Rerun: `just fast`
-   Fingerprint: `sha256:12a7cb3de44727e5607afe0a2df603f1f07be2916aa0ede17340426bdc33d1f7`
-   Evidence: canonical_path=ops/, detected_paths=.github, .github/workflows, aliases=.github/, .github/workflows/, ci/, release/, observability/, security/, guidance_status=missing, owner=ops, proof_lane=security lane / workflow lint
-4. `high` `security` `.github/workflows`
-   Rule: `HLT-009-GENERATED-SECURITY`
-   Check: `HLT-009-GENERATED-SECURITY:security` `hard` confidence `0.95`
-   Route: TLR `Security, secrets, agency`, lane `security`, owner `ops`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Reason: high-risk repo has no explicit security lane
-   Fix: add a dedicated security lane with secret scanning, dependency review, and workflow linting
-   Rerun: `just security`
-   Fingerprint: `sha256:c249be982d975721833fe396cdfff422f53a2d61819df881968fba63fdd6b9bf`
-   Evidence: no security lane markers found
-5. `high` `ci` `.github/workflows/ci.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.lib-missing`
-   Reason: ops/ci/lib.sh is the shared helper module (artifact assertions, tool pins) every lane sources
-   Fix: add ops/ci/lib.sh defining shared helpers and tool version pins
-   Rerun: `just fast`
-   Fingerprint: `sha256:1991b318cb68e7d158d2872f47f6e4698eb2aca6768d4d912c31d6f943f74454`
-   Evidence: detector=ci.local-parity.lib-missing, path=.github/workflows/ci.yml, line=1, proof_window=None, snippet=name: ci
-6. `high` `ci` `.github/workflows/ci.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.pre-push-hook-missing`
-   Reason: without a mandatory pre-push gate, broken code can be pushed and CI is the first place a failure shows up
-   Fix: add ops/git-hooks/pre-push that runs `bash ops/ci/quality-gates.sh` and wire it via `git config core.hooksPath ops/git-hooks`
-   Rerun: `just fast`
-   Fingerprint: `sha256:6bfbb5bdddc89654f88ac6c8ee166a84a0f6c585adeb94ab8f1e90a0ced148b7`
-   Evidence: detector=ci.local-parity.pre-push-hook-missing, path=.github/workflows/ci.yml, line=1, proof_window=None, snippet=name: ci
-7. `high` `ci` `.github/workflows/ci.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.toolchain-not-pinned`
-   Reason: without a pinned toolchain, local and CI Rust versions can drift silently
-   Fix: add rust-toolchain.toml pinning the channel and required components
-   Rerun: `just fast`
-   Fingerprint: `sha256:74a357e809d6139da803756394fac01291989a8f4b2b140ca8e27a91e29c46ca`
-   Evidence: detector=ci.local-parity.toolchain-not-pinned, path=.github/workflows/ci.yml, line=1, proof_window=None, snippet=name: ci
-8. `high` `ci` `.github/workflows/ci.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.doctor-missing`
-   Reason: without a doctor script, developers cannot confirm their local environment matches CI
-   Fix: add scripts/ci-doctor.sh listing every tool the ops/ci scripts depend on
-   Rerun: `just fast`
-   Fingerprint: `sha256:beef8b01b8447985b9c3fb008eb50af0e8f2e58cf64fd1be36c44d4eeb46d602`
-   Evidence: detector=ci.local-parity.doctor-missing, path=.github/workflows/ci.yml, line=1, proof_window=None, snippet=name: ci
-9. `high` `ci` `.github/workflows/ci.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.runner-missing`
-   Reason: scripts/ci-local.sh is the local entry point that delegates to the same ops/ci scripts the workflows call
-   Fix: add scripts/ci-local.sh exposing each CI lane locally
-   Rerun: `just fast`
-   Fingerprint: `sha256:65427f2c3aa76a8a34f7a609ea37d0405490203f08708acc06c9374be0e492d9`
-   Evidence: detector=ci.local-parity.runner-missing, path=.github/workflows/ci.yml, line=1, proof_window=None, snippet=name: ci
-10. `high` `ci` `.github/workflows/ci.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.script-missing`
-   Reason: missing scripts mean the local runner cannot reproduce the CI step
-   Fix: create the referenced ops/ci script with the same commands the workflow used to run
-   Rerun: `just fast`
-   Fingerprint: `sha256:6fd989baadfed487d1f5858af58297b91cfa03225a7016fe053a02e62e5d90ca`
-   Evidence: detector=ci.local-parity.script-missing, path=.github/workflows/ci.yml, line=1, proof_window=None, snippet=name: ci
-11. `high` `ci` `.github/workflows/jankurai-tools.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.script-missing`
-   Reason: missing scripts mean the local runner cannot reproduce the CI step
-   Fix: create the referenced ops/ci script with the same commands the workflow used to run
-   Rerun: `just fast`
-   Fingerprint: `sha256:6e2f06d88000364d6f14d3c2bba6673a6d677049ea02fbfb850f3811ee546f5d`
-   Evidence: detector=ci.local-parity.script-missing, path=.github/workflows/jankurai-tools.yml, line=1, proof_window=None, snippet=name: jankurai-tools
-12. `medium` `security` `.github/workflows/jankurai.yml`
-   Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
-   Check: `HLT-016-SUPPLY-CHAIN-DRIFT:security` `soft` confidence `0.76`
-   Route: TLR `Security, secrets, agency`, lane `security`, owner `ops`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Reason: `Security and supply-chain posture` scored 66 below the standard floor of 85
-   Fix: wire secret, dependency, provenance, and workflow scans into an operational CI lane
-   Rerun: `just security`
-   Fingerprint: `sha256:cf6eec501e2ed8d1b1b665664eb7b0bd8b854b31207a11a36c3a699e972a0086`
-   Evidence: lockfile present, secret or dependency scan tooling found, provenance/SBOM tooling found, workflow linting tooling found
-13. `high` `ci` `.github/workflows/jankurai.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.script-missing`
-   Reason: missing scripts mean the local runner cannot reproduce the CI step
-   Fix: create the referenced ops/ci script with the same commands the workflow used to run
-   Rerun: `just fast`
-   Fingerprint: `sha256:9d1efc3c6547e854d812122da68fe084f4fd645d7ff6368e15787b5946fcd78d`
-   Evidence: detector=ci.local-parity.script-missing, path=.github/workflows/jankurai.yml, line=1, proof_window=None, snippet=name: jankurai
-14. `high` `ci` `.github/workflows/release-build.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.script-missing`
-   Reason: missing scripts mean the local runner cannot reproduce the CI step
-   Fix: create the referenced ops/ci script with the same commands the workflow used to run
-   Rerun: `just fast`
-   Fingerprint: `sha256:b790943aaff8144a344d3277fc015c48ebe71af808e63a4f1eb6006c456763d4`
-   Evidence: detector=ci.local-parity.script-missing, path=.github/workflows/release-build.yml, line=1, proof_window=None, snippet=name: release-build
-15. `high` `ci` `.github/workflows/sqlite-parity-report.yml:1`
-   Rule: `HLT-042-CI-LOCAL-PARITY`
-   Check: `HLT-042-CI-LOCAL-PARITY:ci` `hard` confidence `0.95`
-   Route: TLR `Verification`, lane `fast`, owner `ops`
-   Docs: `docs/ci-local.md`
-   Matched term: `ci.local-parity.script-missing`
-   Reason: missing scripts mean the local runner cannot reproduce the CI step
-   Fix: create the referenced ops/ci script with the same commands the workflow used to run
-   Rerun: `just fast`
-   Fingerprint: `sha256:7aaa615018d4c0d9cf01c97f73deed15b1c663ad47923711d07e0fec3068133f`
-   Evidence: detector=ci.local-parity.script-missing, path=.github/workflows/sqlite-parity-report.yml, line=1, proof_window=None, snippet=name: redline-testing-report
-16. `medium` `context` `AGENTS.md`
-   Rule: `HLT-015-CONTEXT-SETUP-GAP`
-   Check: `HLT-015-CONTEXT-SETUP-GAP:context` `soft` confidence `0.76`
-   Route: TLR `Context/setup`, lane `fast`, owner `agent`
-   Docs: `docs/agent-native-standard.md`
-   Reason: `Context economy and agent instructions` scored 45 below the standard floor of 85
-   Fix: keep root guidance short and route durable detail through agent-readable manifests and docs
-   Rerun: `just fast`
-   Fingerprint: `sha256:53596b312fab41002aaff5de11560e6ff0df9c1bc50139e11140dae0299fd45c`
-   Evidence: root `AGENTS.md` present, root `AGENTS.md` stays short, thin IDE/agent adapters are present, missing agent-readable docs: README.md, docs/architecture.md or docs/boundaries.md, docs/testing.md
-17. `medium` `proof` `Justfile`
+   Fingerprint: `sha256:9430c418d2f11bfaea6c3a001a5f4907600830d154570f769fef69e0b5ac2c20`
+   Evidence: largest authored code file: crates/sql/src/parser.rs (4564 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
+2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `fast`, owner `workspace`
    Docs: `docs/testing.md`
-   Reason: `Build speed signals` scored 60 below the standard floor of 85
+   Reason: `Build speed signals` scored 80 below the standard floor of 85
    Fix: add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Rerun: `just fast`
-   Fingerprint: `sha256:938f4ac0d852cab12cdb5c2c7cdac775db884de8ede5176d149a8b50d60d45ae`
+   Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-18. `medium` `boundary` `agent/boundaries.toml`
-   Rule: `HLT-007-HANDWRITTEN-CONTRACT`
-   Check: `HLT-007-HANDWRITTEN-CONTRACT:boundary` `soft` confidence `0.76`
-   Route: TLR `Contracts/data`, lane `contract`, owner `agent`
-   Docs: `docs/audit-rubric.md#known-vibe-coding-insults`
-   Reason: `Contract and boundary integrity` scored 43 below the standard floor of 85
-   Fix: add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams
-   Rerun: `just fast`
-   Fingerprint: `sha256:77d2f8c428fc49a7e10198dc4b2aad5b6690c0dfa6dcd49708fa6214375d5a9a`
-   Evidence: Rust typed boundary helpers found
-19. `medium` `context` `agent/owner-map.json`
-   Rule: `HLT-003-OWNERLESS-PATH`
-   Check: `HLT-003-OWNERLESS-PATH:context` `soft` confidence `0.76`
-   Route: TLR `Context/setup`, lane `fast`, owner `agent`
-   Docs: `agent/JANKURAI_STANDARD.md#ownership-boundaries`
-   Reason: `Ownership and navigation surface` scored 44 below the standard floor of 85
-   Fix: tighten owner/test maps and root routing until agents can localize ownership without inference
-   Rerun: `just fast`
-   Fingerprint: `sha256:c0747472b33e97b5a4286f439aa5e63e16e12094f916f6d6cded0aa78571fd90`
-   Evidence: root `AGENTS.md` present, owner map covers audited paths, test map covers audited paths, authored code file exceeds 500 LOC
-20. `medium` `proof` `agent/test-map.json`
-   Rule: `HLT-004-UNMAPPED-PROOF`
-   Check: `HLT-004-UNMAPPED-PROOF:proof` `soft` confidence `0.76`
-   Route: TLR `Verification`, lane `fast`, owner `agent`
-   Docs: `agent/JANKURAI_STANDARD.md#proof-lanes`
-   Reason: `Proof lanes and test routing` scored 65 below the standard floor of 85
-   Fix: route each owned path to a deterministic proof command and make the lane executable in CI
-   Rerun: `just fast`
-   Fingerprint: `sha256:f1b063f8c12a90d80fac1ab40e8463c565d474d78dc43853c566271b71a512bb`
-   Evidence: deterministic fast lane found, test runner present in automation surface, GitHub workflow files present, jankurai audit lane found in CI
-21. `high` `test` `crates/`
-   Rule: `HLT-008-FALSE-GREEN-RISK`
-   Check: `HLT-008-FALSE-GREEN-RISK:test` `hard` confidence `0.88`
-   Route: TLR `Verification`, lane `fast`, owner `tools`
-   Docs: `docs/testing.md`
-   Reason: Rust surface lacks required property and/or integration tests
-   Fix: add `proptest` or equivalent invariant tests plus `tests/` integration coverage routed through `cargo nextest` or `cargo test`
-   Rerun: `just fast`
-   Fingerprint: `sha256:8ece7234070a20910736663e65a530625acd16dac7fa57476cfc7c9a74bd745c`
-   Evidence: Rust surface detected
-22. `high` `exceptions` `crates/domain`
-   Rule: `HLT-017-OPAQUE-OBSERVABILITY`
-   Check: `HLT-017-OPAQUE-OBSERVABILITY:exceptions` `hard` confidence `0.88`
-   Route: TLR `Repair`, lane `observability`, owner `tools`
-   Docs: `agent/JANKURAI_STANDARD.md#repair-receipts`
-   Reason: no agent-friendly exception/error pattern was detected
-   Fix: define a typed exception surface with purpose, reason, common fixes, docs_url, and repair_hint so the next rerun is local
-   Rerun: `just score`
-   Fingerprint: `sha256:538667a01e35d8e91eae100627364816dd225911862fa2fa1578642af63d4af8`
-   Evidence: route repair work to the next agent, opaque failures slow local debugging and reruns, add a typed repair hint; name the common fixes; point at the local docs URL, docs/testing.md
-23. `medium` `data` `db/`
-   Rule: `HLT-006-DIRECT-DB-WRONG-LAYER`
-   Check: `HLT-006-DIRECT-DB-WRONG-LAYER:data` `soft` confidence `0.76`
-   Route: TLR `Contracts/data`, lane `db`, owner `tools`
-   Docs: `docs/audit-rubric.md#required-shape`
-   Reason: `Data truth and workflow safety` scored 50 below the standard floor of 85
-   Fix: move durable truth into migrations, constraints, adapters, and application-owned transactions
-   Rerun: `just fast`
-   Fingerprint: `sha256:6dc277f838aa42b508c136f6ba666d602ecefe226bc4c238b24388640ee21f82`
-   Evidence: Data truth and workflow safety scored 50
-24. `medium` `docs` `docs/`
-   Check: `HLT-000-SCORE-DIMENSION:docs` `soft` confidence `0.76`
-   Route: TLR `Context/setup`, lane `audit`, owner `standard`
-   Reason: agent-readable documentation is incomplete
-   Fix: add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`
-   Rerun: `just score`
-   Fingerprint: `sha256:7a7bbff17bd45fa833f208a469d73fc717e5fd8687e3d8d20098aa2ce66f2e92`
-   Evidence: README.md, docs/architecture.md or docs/boundaries.md, docs/testing.md
-25. `high` `release` `docs/release.md`
-   Rule: `HLT-025-RELEASE-READINESS-GAP`
-   Check: `HLT-025-RELEASE-READINESS-GAP:release` `hard` confidence `0.88`
-   Route: TLR `Verification`, lane `release`, owner `standard`
-   Docs: `docs/testing.md`
-   Matched term: `release structure`
-   Reason: launch gates need artifact-backed release evidence
-   Fix: add a release control surface with version source, changelog, release process docs, CI or script evidence, integrity/provenance evidence, and rollback guidance
-   Rerun: `just check`
-   Fingerprint: `sha256:d8ec9f107cf44462f7b5d4065db1938c765752b9912de361a2ae5bdcfc4c0e6c`
-   Evidence: release structure missing: changelog, release process doc, rollback guidance
-26. `medium` `observability` `docs/testing.md`
-   Rule: `HLT-017-OPAQUE-OBSERVABILITY`
-   Check: `HLT-017-OPAQUE-OBSERVABILITY:observability` `soft` confidence `0.76`
-   Route: TLR `Repair`, lane `observability`, owner `standard`
-   Docs: `agent/JANKURAI_STANDARD.md#repair-receipts`
-   Reason: `Observability and repair evidence` scored 23 below the standard floor of 85
-   Fix: add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof
-   Rerun: `just score`
-   Fingerprint: `sha256:526e0c991a94e47347e6daa0863998deba126fcca3c278586a4b3bac6a20d7a6`
-   Evidence: repair receipts or raw artifact language found, no agent-friendly exception pattern found, free-form logging appears in scope
-27. `medium` `release` `docs/testing.md`
-   Rule: `HLT-026-COST-BUDGET-GAP`
-   Check: `HLT-026-COST-BUDGET-GAP:release` `soft` confidence `0.88`
-   Route: TLR `Verification`, lane `release`, owner `standard`
-   Docs: `docs/testing.md`
-   Matched term: `budget`
-   Reason: unbounded paid work needs budgets and stop conditions
-   Fix: add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
-   Rerun: `just check`
-   Fingerprint: `sha256:edd248b7afc24b644107205fa5b84a88103ac4b622009ff9f19b779de8798f59`
-   Evidence: cost surface found without budget/stop-condition policy
-28. `medium` `context` `ops/`
-   Rule: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP`
-   Check: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP:context` `soft` confidence `0.88`
-   Route: TLR `Context/setup`, lane `fast`, owner `agent`
-   Docs: `docs/audit-rubric.md#required-shape`
-   Reason: reference-profile cell `ops` lacks local AGENTS.md guidance
-   Fix: add `ops/AGENTS.md` with owns / forbidden / proof lane guidance
-   Rerun: `just fast`
-   Fingerprint: `sha256:afd6d62dcc0304f7e4872a9edce56c957a74d6c2101cdf6218dce16b4297ba55`
-   Evidence: canonical_path=ops/, detected_paths=.github, .github/workflows, guidance_status=missing, owner=ops, proof_lane=security lane / workflow lint
 
 ## Policy
 
@@ -459,59 +240,7 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `medium` `HLT-007-HANDWRITTEN-CONTRACT` `agent/boundaries.toml` - add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams
-   Route: `Contracts/data`/`contract`
-2. `medium` `HLT-006-DIRECT-DB-WRONG-LAYER` `db/` - move durable truth into migrations, constraints, adapters, and application-owned transactions
-   Route: `Contracts/data`/`db`
-3. `high` `.` - add a canonical `setup`, `check`, `test`, or `verify` lane in one root command file
+1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-4. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/ci.yml` - add ops/ci/lib.sh defining shared helpers and tool version pins
-   Route: `Verification`/`fast`
-5. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/ci.yml` - add ops/git-hooks/pre-push that runs `bash ops/ci/quality-gates.sh` and wire it via `git config core.hooksPath ops/git-hooks`
-   Route: `Verification`/`fast`
-6. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/ci.yml` - add rust-toolchain.toml pinning the channel and required components
-   Route: `Verification`/`fast`
-7. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/ci.yml` - add scripts/ci-doctor.sh listing every tool the ops/ci scripts depend on
-   Route: `Verification`/`fast`
-8. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/ci.yml` - add scripts/ci-local.sh exposing each CI lane locally
-   Route: `Verification`/`fast`
-9. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/ci.yml` - create the referenced ops/ci script with the same commands the workflow used to run
-   Route: `Verification`/`fast`
-10. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/jankurai-tools.yml` - create the referenced ops/ci script with the same commands the workflow used to run
-   Route: `Verification`/`fast`
-11. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/jankurai.yml` - create the referenced ops/ci script with the same commands the workflow used to run
-   Route: `Verification`/`fast`
-12. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/release-build.yml` - create the referenced ops/ci script with the same commands the workflow used to run
-   Route: `Verification`/`fast`
-13. `high` `HLT-042-CI-LOCAL-PARITY` `.github/workflows/sqlite-parity-report.yml` - create the referenced ops/ci script with the same commands the workflow used to run
-   Route: `Verification`/`fast`
-14. `high` `HLT-008-FALSE-GREEN-RISK` `crates/` - add `proptest` or equivalent invariant tests plus `tests/` integration coverage routed through `cargo nextest` or `cargo test`
-   Route: `Verification`/`fast`
-15. `high` `HLT-025-RELEASE-READINESS-GAP` `docs/release.md` - add a release control surface with version source, changelog, release process docs, CI or script evidence, integrity/provenance evidence, and rollback guidance
-   Route: `Verification`/`release`
-16. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
-   Route: `Verification`/`fast`
-17. `medium` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - route each owned path to a deterministic proof command and make the lane executable in CI
-   Route: `Verification`/`fast`
-18. `medium` `HLT-026-COST-BUDGET-GAP` `docs/testing.md` - add explicit budgets, quotas, stop conditions, and kill-switch evidence for paid or unbounded operations
-   Route: `Verification`/`release`
-19. `high` `HLT-017-OPAQUE-OBSERVABILITY` `crates/domain` - define a typed exception surface with purpose, reason, common fixes, docs_url, and repair_hint so the next rerun is local
-   Route: `Repair`/`observability`
-20. `medium` `HLT-017-OPAQUE-OBSERVABILITY` `docs/testing.md` - add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof
-   Route: `Repair`/`observability`
-21. `medium` `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP` `.github` - migrate the detected ops surface to `ops/` or document an alternate profile with owner, proof lane, expiry, and migration plan
-   Route: `Context/setup`/`fast`
-22. `medium` `HLT-015-CONTEXT-SETUP-GAP` `AGENTS.md` - keep root guidance short and route durable detail through agent-readable manifests and docs
-   Route: `Context/setup`/`fast`
-23. `medium` `HLT-003-OWNERLESS-PATH` `agent/owner-map.json` - tighten owner/test maps and root routing until agents can localize ownership without inference
-   Route: `Context/setup`/`fast`
-24. `medium` `docs/` - add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`
-   Route: `Context/setup`/`audit`
-25. `medium` `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP` `ops/` - add `ops/AGENTS.md` with owns / forbidden / proof lane guidance
-   Route: `Context/setup`/`fast`
-26. `high` `HLT-009-GENERATED-SECURITY` `.github/workflows` - add a dedicated security lane with secret scanning, dependency review, and workflow linting
-   Route: `Security, secrets, agency`/`security`
-27. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+2. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
-28. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
-   Route: `Security, secrets, agency`/`security`

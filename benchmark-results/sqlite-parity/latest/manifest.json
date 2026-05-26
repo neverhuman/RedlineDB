@@ -2,7 +2,7 @@
   "schema_version": "redline-testing-manifest-v1",
   "suite": "sqlite_parity",
   "command_line": [
-    "/home/ubuntu/redlineDB/target/ci/redline-testing/0.1.3-redline-testing-0.1.3-linux-x86_64/bin/redline-testing",
+    "/home/ubuntu/redtemp/RedlineDB/target/ci/redline-testing/1.0.0-redline-testing-1.0.0-linux-x86_64/bin/redline-testing",
     "report",
     "--suite",
     "sqlite_parity",
@@ -28,11 +28,11 @@
     "--jankurai-score",
     ".jankurai/repo-score.json",
     "--updated-date",
-    "2026-05-24",
+    "2026-05-26",
     "--expected-repetitions",
     "3",
     "--expected-warmup",
-    "1",
+    "0",
     "--official-evidence",
     "benchmark-results/sqlite-parity/latest/official-evidence.processed.json",
     "--jankurai-comparison",
@@ -45,7 +45,7 @@
     "assets/sqlite-code-shape.svg"
   ],
   "repetitions": 3,
-  "warmup": 1,
+  "warmup": 0,
   "output_files": {
     "ksloc": "benchmark-results/sqlite-parity/latest/ksloc.csv",
     "provenance": "benchmark-results/sqlite-parity/latest/provenance.json",
