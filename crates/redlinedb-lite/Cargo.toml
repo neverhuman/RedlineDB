@@ -1,0 +1,31 @@
+[package]
+name = "redlinedb-lite"
+version = "4.0.1"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# Phase 6 Candidate 2: a stripped pre-filter binary that handles the
+# audited "safe shell surface" (a tiny set of dot-commands and fromless
+# scalar SELECTs) without opening the engine. Anything outside that
+# surface is execve-handed to the full `redlinedb` binary so behavior
+# stays identical.
+#
+# Dependency policy: std only. No clap, no rustyline, no engine crates.
+# Adding deps here defeats the entire point of the crate.
+
+[dependencies]
+
+[dev-dependencies]
+assert_cmd = "2"
+
+[[bin]]
+name = "redlinedb-lite"
+path = "src/main.rs"
+
+# Profile override would live here but Cargo ignores [profile.*] tables in
+# non-workspace-root manifests (warning W0024). The workspace root
+# `[profile.release]` is already lto=fat, codegen-units=1, panic=abort,
+# strip=symbols. The remaining size win (opt-level "z" vs "3") is a few
+# percent compared to the order-of-magnitude saving from dropping the
+# engine + clap + rustyline + mimalloc dependency chain.

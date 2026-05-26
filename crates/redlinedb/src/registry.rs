@@ -39,7 +39,12 @@ impl OpenFingerprint {
             statement_cache_capacity: options.statement_cache_capacity,
             process_owner_lock: options.process_owner_lock,
             temp_dir: options.temp_dir.clone(),
-            lean_ephemeral: options.lean_ephemeral,
+            // Wave-6b: by the time we land here, `volatile_open_options`
+            // has already promoted `None` to `Some(true)` for in-memory /
+            // ephemeral opens, so `effective_lean_ephemeral(false)` returns
+            // the right value for both the file-backed and the volatile
+            // paths.
+            lean_ephemeral: options.effective_lean_ephemeral(false),
         }
     }
 

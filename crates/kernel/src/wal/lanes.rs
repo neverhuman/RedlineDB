@@ -30,6 +30,7 @@
 //! recover-matrix and failpoint-matrix proof lanes stay green.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::format::{Csn, Lsn, TxId};
 use crate::wal::manager::{
@@ -42,6 +43,9 @@ mod report;
 
 pub use report::{LaneRoundRobin, WalLaneRecoveryReport};
 
+#[cfg(feature = "wal_cross_lane_coalescer")]
+use crate::wal::coalescer::{DEFAULT_MAX_BATCH_US, WalCoalescer};
+
 /// Lane GC: opt-in multi-lane WAL coordinator. With `lane_count = 1`
 /// (the default constructor input) this is a thin wrapper around a
 /// single [`WalCoordinator`] and is byte-for-byte equivalent to the
@@ -49,10 +53,17 @@ pub use report::{LaneRoundRobin, WalLaneRecoveryReport};
 /// coordinators and partitions writers by `(thread_id % n)`.
 #[derive(Debug)]
 pub struct WalLaneCoordinator {
-    lanes: Vec<WalCoordinator>,
+    lanes: Vec<Arc<WalCoordinator>>,
     /// Lane GC: kept so multi-lane recovery can reproduce the same
     /// segment-bytes layout the writer used.
     config: WalConfig,
+    /// WS-C6: optional cross-lane flush coalescer. `None` keeps the
+    /// historical per-lane direct-flush path (bit-for-bit identical
+    /// to pre-WS-C6 behaviour). When `Some`, the `flush_until_*`
+    /// methods route through the coalescer which batches fsyncs
+    /// across lanes within a small time window.
+    #[cfg(feature = "wal_cross_lane_coalescer")]
+    coalescer: Option<Arc<WalCoalescer>>,
 }
 
 impl WalLaneCoordinator {
@@ -68,9 +79,9 @@ impl WalLaneCoordinator {
             let lane_dir = lane_dir_for(&path, idx, lane_count);
             std::fs::create_dir_all(&lane_dir)?;
             let coordinator = WalCoordinator::create(&lane_dir, config.clone())?;
-            lanes.push(coordinator);
+            lanes.push(Arc::new(coordinator));
         }
-        Ok(Self { lanes, config })
+        Ok(Self::assemble(lanes, config))
     }
 
     /// Lane GC: re-open an existing lane set. Refuses to open if
@@ -85,9 +96,48 @@ impl WalLaneCoordinator {
             let lane_dir = lane_dir_for(&path, idx, lane_count);
             std::fs::create_dir_all(&lane_dir)?;
             let coordinator = WalCoordinator::open(&lane_dir, config.clone())?;
-            lanes.push(coordinator);
+            lanes.push(Arc::new(coordinator));
         }
-        Ok(Self { lanes, config })
+        Ok(Self::assemble(lanes, config))
+    }
+
+    /// WS-C6: shared constructor used by `create`/`open`. Without the
+    /// `wal_cross_lane_coalescer` feature this is a trivial assignment
+    /// and the historical layout is preserved exactly. With the
+    /// feature, the cross-lane coalescer is spawned automatically
+    /// when `lane_count > 1`.
+    fn assemble(lanes: Vec<Arc<WalCoordinator>>, config: WalConfig) -> Self {
+        #[cfg(feature = "wal_cross_lane_coalescer")]
+        let coalescer = if lanes.len() > 1 {
+            Some(Arc::new(WalCoalescer::new(
+                lanes.iter().map(Arc::clone).collect(),
+                DEFAULT_MAX_BATCH_US,
+            )))
+        } else {
+            None
+        };
+        Self {
+            lanes,
+            config,
+            #[cfg(feature = "wal_cross_lane_coalescer")]
+            coalescer,
+        }
+    }
+
+    /// WS-C6 test seam: expose whether the cross-lane coalescer is
+    /// active. Available only with the feature flag.
+    #[cfg(feature = "wal_cross_lane_coalescer")]
+    pub fn coalescer_active(&self) -> bool {
+        self.coalescer.is_some()
+    }
+
+    /// WS-C6 test seam: shut down the coalescer worker so subsequent
+    /// flushes hit the fallback path.
+    #[cfg(feature = "wal_cross_lane_coalescer")]
+    pub fn shutdown_coalescer_for_test(&self) {
+        if let Some(c) = &self.coalescer {
+            c.shutdown();
+        }
     }
 
     /// Lane GC: number of lanes provisioned. Always `>= 1`.
@@ -156,7 +206,7 @@ impl WalLaneCoordinator {
     /// (i.e. the value returned by [`Self::append`]).
     pub fn flush_until_lane_for_thread(&self, target_lsn: Lsn) -> Result<Lsn> {
         let lane = self.lane_for_current_thread();
-        self.lanes[lane].flush_until(target_lsn)
+        self.flush_until_on_lane(lane, target_lsn)
     }
 
     /// Lane GC: flush a specific lane.
@@ -165,6 +215,14 @@ impl WalLaneCoordinator {
             .lanes
             .get(lane)
             .ok_or(Error::CorruptWal("lane index out of range"))?;
+        #[cfg(feature = "wal_cross_lane_coalescer")]
+        {
+            if let Some(c) = &self.coalescer
+                && !c.is_panicked()
+            {
+                return c.flush_until(lane, target_lsn);
+            }
+        }
         coord.flush_until(target_lsn)
     }
 

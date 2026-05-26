@@ -52,17 +52,22 @@ pub struct OpenOptions {
     /// operators fall back to their serial path. `Some(n)` builds an
     /// `n`-thread non-global pool dedicated to this database.
     pub rayon_threads: Option<usize>,
-    /// WS-C9: opt-in lean defaults for short-lived ephemeral databases
-    /// (`:memory:`, CLI one-shots, smoke tests). When `true`:
+    /// WS-C9 / Wave-6b: lean defaults for short-lived ephemeral
+    /// databases (`:memory:`, CLI one-shots, smoke tests). When the
+    /// effective value resolves to `true`:
     ///   * buffer pool capacity is forced to `LEAN_BUFFER_POOL_PAGES`
     ///     (256 pages = 1 MB at 4 KB) instead of the larger calculation
     ///     from `memory.cache_bytes`.
     ///   * statement cache capacity is forced to
     ///     `LEAN_STATEMENT_CACHE_CAPACITY` (8) instead of the user's
     ///     setting.
-    /// Long-lived servers keep `false` so steady-state throughput is
-    /// unchanged.
-    pub lean_ephemeral: bool,
+    ///
+    /// `None` (default) lets the open path pick the right value:
+    /// `Database::create_in_memory` / `Database::create_ephemeral`
+    /// auto-enable, on-disk opens stay off. `Some(true)` / `Some(false)`
+    /// pin the value regardless of the open flavour, preserving the
+    /// historical opt-in surface.
+    pub lean_ephemeral: Option<bool>,
 }
 
 /// Buffer pool capacity, in pages, when `lean_ephemeral = true`.
@@ -86,8 +91,18 @@ impl Default for OpenOptions {
             process_owner_lock: true,
             temp_dir: None,
             rayon_threads: None,
-            lean_ephemeral: false,
+            lean_ephemeral: None,
         }
+    }
+}
+
+impl OpenOptions {
+    /// Resolve [`OpenOptions::lean_ephemeral`] for a concrete open. When the
+    /// caller never touched the field (`None`), `volatile` decides:
+    /// `:memory:` / `create_ephemeral` opens enable lean mode by default,
+    /// on-disk opens stay off. An explicit `Some(_)` from the caller wins.
+    pub(crate) fn effective_lean_ephemeral(&self, volatile: bool) -> bool {
+        self.lean_ephemeral.unwrap_or(volatile)
     }
 }
 
@@ -143,11 +158,13 @@ impl OpenOptions {
         self
     }
 
-    /// WS-C9: opt into lean ephemeral defaults. See
-    /// [`OpenOptions::lean_ephemeral`].
+    /// WS-C9: pin the lean ephemeral defaults explicitly. See
+    /// [`OpenOptions::lean_ephemeral`]. Callers that want to override the
+    /// Wave-6b auto-default for in-memory / ephemeral opens should pass
+    /// `false` here.
     #[must_use]
     pub fn with_lean_ephemeral(mut self, lean: bool) -> Self {
-        self.lean_ephemeral = lean;
+        self.lean_ephemeral = Some(lean);
         self
     }
 }
