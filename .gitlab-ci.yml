@@ -48,8 +48,11 @@ default:
           curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C /usr/local/bin cargo-nextest
         fi
       else
-        # bare-metal shell runner — verify host has the deps the docker
-        # path would install. Fail fast if anything is missing.
+        # bare-metal shell runner — rustup install lands under ~/.cargo/bin
+        # which isn't on PATH by default in a non-login shell. Export it
+        # FIRST, then verify host has the deps the docker path would
+        # install. Fail fast if anything is missing.
+        export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
         for tool in cargo rustc clang mold sqlite3 jq curl git; do
           command -v "$tool" >/dev/null 2>&1 || { echo "shell-runner host missing $tool"; exit 1; }
         done
@@ -60,7 +63,6 @@ default:
           curl -LsSf https://get.nexte.st/0.9.133/linux \
             | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin" cargo-nextest
         fi
-        export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
       fi
     # Runner pre_build_script may export CARGO_TARGET_DIR=/cache/cargo-targets/...
     # but ops/ci/release-build.sh hardcodes `target/${TARGET}/...` for its cp.
