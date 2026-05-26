@@ -35,7 +35,10 @@ default:
     - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
     - rustup component add rustfmt clippy
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
-    - 'curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-/usr/local/cargo}/bin"'
+    # nextest installs as `cargo-nextest` — cargo finds subcommands via PATH.
+    # Runner sets CARGO_HOME=/cache/cargo-home which isn't on the default PATH,
+    # so install into /usr/local/bin to guarantee reachability.
+    - 'curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C /usr/local/bin cargo-nextest'
     # Runner pre_build_script exports CARGO_TARGET_DIR=/cache/cargo-targets/...
     # but ops/ci/release-build.sh hardcodes `target/${TARGET}/...` for its cp.
     # Symlink ./target → $CARGO_TARGET_DIR so cargo keeps writing to the
