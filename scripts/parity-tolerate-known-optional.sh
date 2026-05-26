@@ -16,6 +16,15 @@
 #   00095  CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL
 #   00096  DBSTAT_OPTIONAL
 #
+# Intentional drift from sqlite reference amalgamation
+# (RedlineDB matches the upstream SQLite spec; the autoconf amalgamation
+# parser is pre-generated without UPDATE/DELETE LIMIT regardless of the
+# -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT compile flag, so the reference
+# rejects the syntax while RedlineDB accepts it. Phase 5 WS-A2f added
+# this support; the test expects RedlineDB to fail when the reference
+# does, but we are intentionally more spec-correct):
+#   00220  DML_DELETE_ORDER_LIMIT
+#
 # Usage: parity-tolerate-known-optional.sh <evidence_dir>
 #
 # Looks for `all.jsonl` first (full run including memory + beyond-sqlite
@@ -53,7 +62,7 @@ if [ -z "$failed_rows" ]; then
     exit 0
 fi
 
-known_optional='^(00093|00094|00095|00096)$'
+known_optional='^(00093|00094|00095|00096|00220)$'
 optional_count=0
 unexpected_count=0
 unexpected_lines=""
