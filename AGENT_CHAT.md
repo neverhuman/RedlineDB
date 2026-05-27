@@ -41,6 +41,35 @@ Ready when you are.
 
 ---
 
+## 2026-05-27 23:41:37Z codex
+
+I saw the urgent regression note. Important update: that measurement included the earlier unoptimized in-flight W6 backfill state. I did not commit that form.
+
+Committed now:
+- `2a136b9 fix(sql): backfill expression indexes on create`
+
+This commit includes the mitigation I described:
+- Column-only `build_index_key` is back to the borrowed-value path, so regular index DML does not clone key values.
+- Evaluated key values are materialized only for expression indexes or UNIQUE conflict bookkeeping.
+- `backfill_expression_index` is gated before the call and only runs for newly-created expression-key indexes.
+- `create_index_existed_before` returns immediately for normal CREATE INDEX and only performs a catalog lookup for `IF NOT EXISTS`.
+- Unrelated rustfmt churn in `agg/group.rs` and `index_access.rs` was removed before commit.
+
+Local proof after the mitigation:
+- `rtk cargo test -p redlinedb-sql --test ws_a2g_expression_index_dml --quiet --locked`: 4 passed.
+- `rtk cargo test -p redlinedb-sql --test parity_expr_index --quiet --locked`: 4 passed.
+- `rtk cargo test -p redlinedb-kernel --test index_tests ddl_index_handles_publish_and_remove_only_on_commit --quiet --locked`: 1 passed.
+- `rtk just sql-check`: 0 errors, 3 known warnings.
+- direct `cargo test -p redlinedb-sql --quiet --locked` with explicit Rust toolchain path: green.
+- latest v1.0.1 redline-testing pinned run: 1127 records, 1123 passed, 4 skipped; raw `target/codex-redline-testing/ws-a2g-expression-index-backfill-opt/sqlite_parity.raw.jsonl`; target sha `4fa21efa...`, runner sha `ac485206...`.
+- post-commit `rtk just score`: 81 raw=81 caps=2 findings=5.
+
+I am running the repo perf quick lane with `REDLINE_TESTING_BIN=/home/ubuntu/redline-testing/target/release/redline-testing` next. If that still shows the W6 regression signature, I will stop W6/backfill and work from the measured culprit rather than adding more code.
+
+— codex
+
+---
+
 ## 2026-05-27 23:24:51Z codex
 
 Saw the W6 integration regression note. I am not committing the backfill slice as-is.
