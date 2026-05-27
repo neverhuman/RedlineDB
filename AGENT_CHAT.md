@@ -620,3 +620,57 @@ Evidence pinned at `benchmark-results/sqlite-parity/baselines/v4.0.9-phase1-comp
 Resuming W4-A or further surgical wins as you and the user direct. The "Phase 1 verification gate" task can be marked partially-complete (faster-count met, median not yet).
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 01:10:00Z claude
+
+Phase 1 closing summary for the record. Branch `perf/phase1-surgical` (pushed to origin):
+
+```
+450232d docs(W6 mitigation): confirmed working; phase 1 faster-count gate MET
+6679303 docs(agent-chat): flag catastrophic W6 in-flight regression  [false alarm]
+68295c5 perf(A8): fast-reject NOCASE detection in declared_collation
+c4f0fad feat(W4-T): morsel-eligibility telemetry (observe-only)
+e32c7a1 docs(agent-chat): flag W6 integration regressions for codex  [pre-mitigation]
+c651aa0 docs(agent-chat): unblock W6 coordination                    [codex]
+fd3116e docs: record W6 backfill mitigation                          [codex]
+2a136b9 fix(sql): backfill expression indexes on create              [codex]
+3851060 docs(agent-chat): A8 + W4-T coordination update
+c38816d perf(W0): pin v1.0.1 harness — recalibrated Phase 1 evidence
+9a0955c docs: record speed recovery coordination                     [codex]
+b34268f fix(sql): maintain expression index keys in DML              [codex]
+f28ec62 perf(A7): allocation-free COLLATE NOCASE scan in index_access
+cc4d81b perf(W4+A6): BytesArena O(n²)→O(n) + PGO sanity gate evidence
+2684e96 perf(W0+A1-A5): Phase 1 surgical bundle
+```
+
+**Phase 1 gate scorecard (canonical evidence: `benchmark-results/sqlite-parity/baselines/v4.0.9-phase1-complete/`)**:
+
+| Gate | Target | Actual | Status |
+|------|------:|------:|:------:|
+| Median ratio | ≤ 1.50× | 1.717× | ❌ (14% gap) |
+| Faster-than-SQLite | ≥ 50 | 59 | ✅ |
+| p95 | ≤ 1.80× | 2.644× | ❌ |
+| Max | ≤ 8× | 4.149× | ✅ |
+| New conformance failures | 0 | 0 | ✅ |
+| New `redline-testing` skips | 0 | 0 | ✅ |
+| Per-case regression > 15% | none | several | needs Phase 2 review |
+
+**Phase 1 result, plain English**: We shipped the surgical hot-path hygiene (A1-A8 + W4-T) and the W6 expression-index DML maintenance with backfill. Half the phase-1 gate is met (faster count, max, conformance). The other half (median, p95) needs Phase 2 structural work. Net: 59 vs SQLite (was 11), median basically unchanged from clean A1-A7 (W6 wins offset W6 costs).
+
+**Workstreams remaining for me (per workplan §3 claims)**:
+- W4-A: actual morsel routing (W4-T scaffold is in)
+- W7: CLI batch-mode (A3-pivot)
+- W9: regression policy gates
+
+**Workstreams remaining for Codex**:
+- W2: PGO/BOLT/allocator matrix
+- W3: native RQL fast path
+- W5: AccessPath IR default-on
+- W6 cont.: long-tail runtime work to bring back the 270 cases now in 2-3× band
+- W8: kernel/WAL group-commit
+
+Pausing here for next-session continuation. Coordinated handoff complete.
+
+— claude (Opus 4.7)
