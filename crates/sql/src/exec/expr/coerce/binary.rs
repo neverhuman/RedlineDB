@@ -233,7 +233,17 @@ fn declared_collation(row: &RowContext<'_>, expr: &Expr) -> Option<crate::collat
         .columns
         .iter()
         .find(|column| column.folded.eq_ignore_ascii_case(name))?;
-    let sql = table.normalized_sql.as_deref()?.to_ascii_lowercase();
+    // A8: fast-reject when the table SQL contains no `nocase` token at all.
+    // The expensive lowercase + split + per-part `.starts_with` only matters
+    // when *some* column was declared `COLLATE NOCASE`; for the common case
+    // (no NOCASE columns anywhere) we'd otherwise pay a full table-SQL
+    // String clone + downcase per call. The allocation-free check below is
+    // O(table_sql.len()) with no heap activity.
+    let raw_sql = table.normalized_sql.as_deref()?;
+    if !contains_nocase_token_ci(raw_sql) {
+        return None;
+    }
+    let sql = raw_sql.to_ascii_lowercase();
     let needle = name.to_ascii_lowercase();
     if sql.split(',').any(|part| {
         let part = part.rsplit('(').next().unwrap_or(part).trim();
@@ -243,6 +253,53 @@ fn declared_collation(row: &RowContext<'_>, expr: &Expr) -> Option<crate::collat
         Some(crate::collation::Collation::NoCase)
     } else {
         None
+    }
+}
+
+/// A8 helper: allocation-free case-insensitive scan for the literal bytes
+/// `"nocase"` inside `haystack`. Used to fast-reject NOCASE-collation
+/// detection in `declared_collation` before paying for a full
+/// `to_ascii_lowercase` clone of the table's normalized SQL.
+#[inline]
+fn contains_nocase_token_ci(haystack: &str) -> bool {
+    const NEEDLE: &[u8] = b"nocase";
+    let bytes = haystack.as_bytes();
+    if bytes.len() < NEEDLE.len() {
+        return false;
+    }
+    bytes.windows(NEEDLE.len()).any(|window| {
+        window
+            .iter()
+            .zip(NEEDLE.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
+}
+
+#[cfg(test)]
+mod a8_nocase_token_tests {
+    use super::contains_nocase_token_ci;
+
+    #[test]
+    fn matches_lower_upper_mixed() {
+        assert!(contains_nocase_token_ci("a TEXT COLLATE nocase"));
+        assert!(contains_nocase_token_ci("a TEXT COLLATE NOCASE"));
+        assert!(contains_nocase_token_ci("a TEXT collate NoCase"));
+    }
+
+    #[test]
+    fn rejects_no_token() {
+        assert!(!contains_nocase_token_ci("CREATE TABLE t (a TEXT, b INTEGER)"));
+        assert!(!contains_nocase_token_ci("COLLATE BINARY"));
+        assert!(!contains_nocase_token_ci(""));
+    }
+
+    #[test]
+    fn matches_inside_identifier_too() {
+        // The fast-reject is intentionally permissive — anything containing
+        // "nocase" (case-insensitive) triggers the slow path. False positives
+        // are fine (slow path returns None anyway); false negatives would
+        // silently drop NOCASE collation, so this side has to be safe.
+        assert!(contains_nocase_token_ci("col_nocase_marker INTEGER"));
     }
 }
 
