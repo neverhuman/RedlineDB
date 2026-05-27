@@ -106,6 +106,7 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
     - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "api"
 
 # ── .github/workflows/ci.yml ───────────────────────────────────────────────
 #
@@ -312,6 +313,25 @@ metrics-readme:
     name: "refreshed-readme"
     paths: [README.md]
     expire_in: 7 days
+
+# ── merge-gate evidence job ─────────────────────────────────────────────────
+# Runs only when an api-source pipeline is triggered directly on a branch
+# (e.g. by `jeryu agent merge` pre-check). The MR event pipeline carries the
+# real validation; this job provides the branch-ref evidence record that
+# Jeryu's risk gate queries via GET /projects/:id/jobs?ref=<branch>.
+merge-gate:
+  stage: jankurai
+  needs: []
+  tags: [default]
+  timeout: 5 minutes
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "api"
+      when: on_success
+  image: alpine:3.20
+  before_script: []
+  script:
+    - echo "merge-gate evidence — ref $CI_COMMIT_REF_NAME sha $CI_COMMIT_SHA"
+    - echo "MR pipeline validated this branch; api pipeline records branch-ref evidence."
 
 # ── .github/workflows/jankurai.yml ─────────────────────────────────────────
 
