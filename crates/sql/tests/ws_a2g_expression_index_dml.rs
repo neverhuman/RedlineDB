@@ -65,6 +65,25 @@ fn expression_index_leaf_stays_live_across_insert_update_delete() {
 }
 
 #[test]
+fn expression_index_backfills_existing_rows() {
+    let (_dir, conn) = open_db();
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
+        .expect("create table");
+    conn.execute("INSERT INTO t VALUES (1, 'Foo'), (2, 'BAR'), (3, 'foo')")
+        .expect("insert before index");
+    conn.execute("CREATE INDEX t_lname ON t(lower(name))")
+        .expect("create expression index");
+
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_lname WHERE lower(name) = 'foo' ORDER BY id"
+        ),
+        vec![1, 3]
+    );
+}
+
+#[test]
 fn unique_expression_index_checks_evaluated_key() {
     let (_dir, conn) = open_db();
     conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
@@ -85,5 +104,20 @@ fn unique_expression_index_checks_evaluated_key() {
             "SELECT id FROM t INDEXED BY t_lname_unique WHERE lower(name) = 'foo'"
         ),
         vec![1]
+    );
+}
+
+#[test]
+fn unique_expression_index_backfill_rejects_duplicates() {
+    let (_dir, conn) = open_db();
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
+        .expect("create table");
+    conn.execute("INSERT INTO t VALUES (1, 'Foo'), (2, 'foo')")
+        .expect("insert duplicates before index");
+
+    let duplicate = conn.execute("CREATE UNIQUE INDEX t_lname_unique ON t(lower(name))");
+    assert!(
+        duplicate.is_err(),
+        "backfill should reject duplicate evaluated lower(name) keys"
     );
 }

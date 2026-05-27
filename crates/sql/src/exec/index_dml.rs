@@ -31,10 +31,21 @@ use crate::value::SqlValue;
 /// SQLite's NULL-in-unique-key parity rule (NULL parts disable the unique
 /// conflict check) without re-walking `index.keys`.
 pub(crate) struct BuiltIndexKey {
-    pub values: Vec<SqlValue>,
     pub bytes: Vec<u8>,
     #[allow(dead_code)] // reserved for upcoming Lane C planner integration
     pub contains_null: bool,
+}
+
+pub(crate) struct BuiltIndexKeyWithValues {
+    pub key: BuiltIndexKey,
+    pub values: Vec<SqlValue>,
+}
+
+pub(crate) fn has_expression_key(index: &IndexDef) -> bool {
+    index
+        .keys
+        .iter()
+        .any(|key| matches!(&key.source, IndexKeySource::Expression { .. }))
 }
 
 /// Build the encoded index key bytes for `index` from a row's column values.
@@ -46,6 +57,27 @@ pub(crate) fn build_index_key(
     index: &IndexDef,
     values: &[SqlValue],
 ) -> Result<BuiltIndexKey> {
+    if has_expression_key(index) {
+        return Ok(build_index_key_with_values(table, index, values)?.key);
+    }
+    let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
+    let mut value_refs = Vec::with_capacity(index.keys.len());
+    let null_value = SqlValue::Null;
+    for key in &index.keys {
+        let IndexKeySource::Column { attnum } = key.source else {
+            unreachable!("expression keys are handled by build_index_key_with_values");
+        };
+        value_refs.push(values.get(attnum as usize).unwrap_or(&null_value).as_ref());
+        dirs.push(key.sort_dir);
+    }
+    Ok(encode_built_index_key(&value_refs, &dirs))
+}
+
+pub(crate) fn build_index_key_with_values(
+    table: &TableDef,
+    index: &IndexDef,
+    values: &[SqlValue],
+) -> Result<BuiltIndexKeyWithValues> {
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
     let mut key_values: Vec<SqlValue> = Vec::with_capacity(index.keys.len());
     for key in &index.keys {
@@ -62,24 +94,37 @@ pub(crate) fn build_index_key(
         dirs.push(key.sort_dir);
     }
     let value_refs: Vec<_> = key_values.iter().map(|v| v.as_ref()).collect();
+    let key = encode_built_index_key(&value_refs, &dirs);
+    Ok(BuiltIndexKeyWithValues {
+        key,
+        values: key_values,
+    })
+}
+
+fn encode_built_index_key(
+    value_refs: &[redlinedb_kernel::catalog::ValueRef<'_>],
+    dirs: &[SortDir],
+) -> BuiltIndexKey {
     let mut buf = Vec::new();
     let EncodedIndexKey {
         bytes,
         contains_null,
     } = encode_index_key(&value_refs, &dirs, &mut buf);
-    Ok(BuiltIndexKey {
-        values: key_values,
+    BuiltIndexKey {
         bytes,
         contains_null,
-    })
+    }
 }
 
-/// Returns the live `BtreeIndex` handle for `index` if Lane A allocated one.
-/// Pre-Lane-A indexes (no `meta_page_id`) return `None`; callers should fall
-/// back to the heap-scan path used before Lane A in that case.
-pub(crate) fn open_index_handle(engine: &Engine, index: &IndexDef) -> Option<Arc<BtreeIndex>> {
+/// Returns the index handle visible inside `tx`, including a handle created
+/// by CREATE INDEX in the same transaction but not published at COMMIT yet.
+pub(crate) fn open_index_handle_for_tx(
+    engine: &Engine,
+    tx: &Txn,
+    index: &IndexDef,
+) -> Option<Arc<BtreeIndex>> {
     index.meta_page_id?;
-    engine.index_handle(index.index_id)
+    engine.index_handle_for_tx(tx, index.index_id)
 }
 
 /// Build an `IndexRowRef` that the BtreeIndex stores alongside the logical
@@ -137,7 +182,7 @@ pub(crate) fn maintain_indexes_on_insert(
     rowid: RowId,
 ) -> Result<()> {
     for index in &table.indexes {
-        let Some(handle) = open_index_handle(engine, index) else {
+        let Some(handle) = open_index_handle_for_tx(engine, tx, index) else {
             continue;
         };
         // A6 SQL-D: partial indexes only contain rows whose WHERE
@@ -168,7 +213,7 @@ pub(crate) fn maintain_indexes_on_delete(
     rowid: RowId,
 ) -> Result<()> {
     for index in &table.indexes {
-        let Some(handle) = open_index_handle(engine, index) else {
+        let Some(handle) = open_index_handle_for_tx(engine, tx, index) else {
             continue;
         };
         // A6 SQL-D: don't delete-mark partial-index keys for rows that
@@ -206,7 +251,7 @@ pub(crate) fn maintain_indexes_on_update(
     new_rowid: RowId,
 ) -> Result<()> {
     for index in &table.indexes {
-        let Some(handle) = open_index_handle(engine, index) else {
+        let Some(handle) = open_index_handle_for_tx(engine, tx, index) else {
             continue;
         };
         let old_key = build_index_key(table, index, old_values)?;

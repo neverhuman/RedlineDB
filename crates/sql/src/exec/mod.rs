@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use redlinedb_kernel::catalog::{
-    ColumnStats, ConstraintKind, EvalScratch, HistogramBucket, IndexStats, MostCommonValue,
-    OwnedValue, RecordRef, RecordScratch, RowValueSource, SchemaSnapshot, SqliteSchemaRow,
-    StatsEpoch, StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity, encode_record,
-    eval_expr,
+    ColumnStats, ConstraintKind, EvalScratch, HistogramBucket, IndexDef, IndexStats,
+    MostCommonValue, OwnedValue, RecordRef, RecordScratch, RowValueSource, SchemaSnapshot,
+    SqliteSchemaRow, StatsEpoch, StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity,
+    encode_record, eval_expr,
 };
 use redlinedb_kernel::engine::{CommitDurability, CommitOutcome, Engine, Txn};
 use redlinedb_kernel::format::RowId;
@@ -470,7 +470,11 @@ pub fn execute_prepared(
         }
         PreparedKind::CreateIndex(spec) => {
             with_write_tx(conn, |session, tx| {
-                conn.engine().create_index(tx, spec.clone())?;
+                let existed_before = create_index_existed_before(conn, tx, spec)?;
+                let index = conn.engine().create_index(tx, spec.clone())?;
+                if !existed_before && index_dml::has_expression_key(&index) {
+                    backfill_expression_index(conn, tx, &index)?;
+                }
                 session.changes += 1;
                 session.total_changes += 1;
                 Ok(())
@@ -1004,6 +1008,54 @@ fn execute_create_table_as_select(
         runtime: RuntimeState::Done,
         affected_rows: inserted,
     })
+}
+
+fn create_index_existed_before(
+    conn: &Connection,
+    tx: &Txn,
+    spec: &redlinedb_kernel::catalog::CreateIndexSpec,
+) -> Result<bool> {
+    if !spec.if_not_exists {
+        return Ok(false);
+    }
+    let snapshot = conn.engine().schema_snapshot_for_tx(tx);
+    let schema_id = redlinedb_kernel::catalog::resolve_schema_id(&snapshot, spec.schema.as_ref())?;
+    Ok(snapshot
+        .lookup_index(schema_id, spec.name.folded())
+        .is_some())
+}
+
+fn backfill_expression_index(conn: &Connection, tx: &mut Txn, index: &Arc<IndexDef>) -> Result<()> {
+    let Some(handle) = index_dml::open_index_handle_for_tx(conn.engine(), tx, index) else {
+        return Ok(());
+    };
+    let snapshot = conn.engine().schema_snapshot_for_tx(tx);
+    let table = snapshot
+        .table_by_id(index.table_id)
+        .ok_or(redlinedb_kernel::Error::ObjectNotFound)?;
+    for row in collect_table_rows(conn.engine(), tx, &table)? {
+        if let Some(pred_sql) = index.predicate_sql.as_deref()
+            && !index_predicate::eval_index_predicate(&table, pred_sql, &row.values)?
+        {
+            continue;
+        }
+        let key = index_dml::build_index_key(&table, index, &row.values)?;
+        let _unique_guard = if index.unique && !key.contains_null {
+            let (guard, hit) =
+                index_dml::probe_unique_for_conflict(conn.engine(), &handle, tx, None, &key)?;
+            if hit.is_some() {
+                return Err(Error::ConstraintViolation(format!(
+                    "UNIQUE constraint failed: {}",
+                    table.name
+                )));
+            }
+            Some(guard)
+        } else {
+            None
+        };
+        handle.insert_tx(tx.id(), &key.bytes, index_dml::synthetic_row_ref(row.rowid))?;
+    }
+    Ok(())
 }
 
 /// Returns `Some(value)` when the given PRAGMA SET plan must echo a row

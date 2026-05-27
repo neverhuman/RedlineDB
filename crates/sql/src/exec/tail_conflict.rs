@@ -65,17 +65,19 @@ fn collect_unique_conflicts(
         // disables the conflict check entirely. Build through the same
         // SQL-side key adapter used by DML maintenance so expression-source
         // indexes evaluate their stored key SQL before conflict probing.
-        let key = crate::exec::index_dml::build_index_key(table, index, values)?;
-        if key.contains_null {
+        let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
+        if built.key.contains_null {
             continue;
         }
-        if let Some(handle) = crate::exec::index_dml::open_index_handle(conn.engine(), index) {
+        if let Some(handle) =
+            crate::exec::index_dml::open_index_handle_for_tx(conn.engine(), tx, index)
+        {
             let (kernel_guard, hit) = crate::exec::index_dml::probe_unique_for_conflict(
                 conn.engine(),
                 &handle,
                 tx,
                 skip_rowid,
-                &key,
+                &built.key,
             )?;
             if let Some(rowid) = hit {
                 conflicts.push(UniqueConflict {
@@ -96,7 +98,7 @@ fn collect_unique_conflicts(
             // `unique_locks()` continue to serialize against this key. The
             // dual locking is harmless and matches the default path below;
             // the SQL guard is also released on commit/rollback.
-            let sql_lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &key.values)?;
+            let sql_lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &built.values)?;
             let sql_guard = conn.unique_locks().lock(sql_lock_key, tx.id().0)?;
             session.unique_guards.push(sql_guard);
             continue;
@@ -110,19 +112,20 @@ fn collect_unique_conflicts(
     }
     let rows = collect_table_rows(conn.engine(), tx, table)?;
     for index in pending_indexes {
-        let key = crate::exec::index_dml::build_index_key(table, index, values)?;
-        if key.contains_null {
+        let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
+        if built.key.contains_null {
             continue;
         }
-        let lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &key.values)?;
+        let lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &built.values)?;
         let guard = conn.unique_locks().lock(lock_key, tx.id().0)?;
         session.unique_guards.push(guard);
         for row in &rows {
             if skip_rowid == Some(row.rowid) {
                 continue;
             }
-            let other = crate::exec::index_dml::build_index_key(table, index, &row.values)?;
-            if key_values_equal(&key.values, &other.values) {
+            let other =
+                crate::exec::index_dml::build_index_key_with_values(table, index, &row.values)?;
+            if key_values_equal(&built.values, &other.values) {
                 let constraint_name = match table
                     .constraints
                     .iter()

@@ -114,6 +114,25 @@ impl Engine {
             .and_then(|handles| handles.get(&index_id).cloned())
     }
 
+    /// Returns the live index handle visible to `tx`, including handles
+    /// created by DDL in the same transaction but not published yet.
+    pub fn index_handle_for_tx(
+        &self,
+        tx: &Txn,
+        index_id: CatalogIndexId,
+    ) -> Option<Arc<BtreeIndex>> {
+        for action in tx.pending_index_handles().iter().rev() {
+            match action {
+                PendingIndexHandle::Install(candidate, handle) if *candidate == index_id => {
+                    return Some(Arc::clone(handle));
+                }
+                PendingIndexHandle::Remove(candidate) if *candidate == index_id => return None,
+                _ => {}
+            }
+        }
+        self.index_handle(index_id)
+    }
+
     pub(crate) fn rehydrate_index_handles(self: &Arc<Self>) -> Result<()> {
         let snapshot = self.catalog.current();
         let mut rebuilt = Vec::new();
