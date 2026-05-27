@@ -62,6 +62,32 @@ impl Connection {
         })
     }
 
+    pub fn prepare_rql<'c>(
+        &'c mut self,
+        statement: &redlinedb_sql::RqlStatement,
+    ) -> Result<Statement<'c>> {
+        Ok(Statement {
+            inner: self.prepare_rql_owned(statement)?,
+            _conn: std::marker::PhantomData,
+        })
+    }
+
+    pub fn prepare_rql_owned(
+        &mut self,
+        statement: &redlinedb_sql::RqlStatement,
+    ) -> Result<OwnedStatement> {
+        self.check_interrupt()?;
+        let stmt = self.inner.prepare_rql(statement)?;
+        if self.read_only && !stmt.is_readonly() {
+            return Err(Error::new(ErrorCode::ReadOnly, "connection is read-only"));
+        }
+        Ok(OwnedStatement {
+            inner: stmt,
+            interrupted: Arc::clone(&self.interrupted),
+            _marker: Rc::new(()),
+        })
+    }
+
     pub fn prepare_v2<'sql>(
         &mut self,
         sql: &'sql str,
@@ -104,6 +130,22 @@ impl Connection {
         Ok(ExecuteSummary {
             rows_affected: stmt.affected_rows() as u64,
             rows_returned: rows,
+        })
+    }
+
+    pub fn execute_rql(&mut self, program: &redlinedb_sql::RqlProgram) -> Result<ExecuteSummary> {
+        let mut rows_affected = 0_u64;
+        let mut rows_returned = 0_u64;
+        for statement in &program.statements {
+            let mut stmt = self.prepare_rql(statement)?;
+            while let Step::Row(_) = stmt.step()? {
+                rows_returned += 1;
+            }
+            rows_affected += stmt.affected_rows() as u64;
+        }
+        Ok(ExecuteSummary {
+            rows_affected,
+            rows_returned,
         })
     }
 
@@ -243,8 +285,19 @@ impl<'conn> Transaction<'conn> {
         self.conn.execute(sql, params)
     }
 
+    pub fn execute_rql(&mut self, program: &redlinedb_sql::RqlProgram) -> Result<ExecuteSummary> {
+        self.conn.execute_rql(program)
+    }
+
     pub fn prepare<'a>(&'a mut self, sql: &str) -> Result<Statement<'a>> {
         self.conn.prepare(sql)
+    }
+
+    pub fn prepare_rql<'a>(
+        &'a mut self,
+        statement: &redlinedb_sql::RqlStatement,
+    ) -> Result<Statement<'a>> {
+        self.conn.prepare_rql(statement)
     }
 
     pub fn commit(&mut self) -> Result<()> {

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::exit;
 
 use clap::Parser;
-use redlinedb::{Database, OpenOptions, OwnedStep};
+use redlinedb::{Database, OpenOptions, OwnedStep, RqlProgram, RqlStatement};
 
 mod dot;
 mod maintenance;
@@ -184,6 +184,9 @@ struct Cli {
     no_shellzero: bool,
 
     #[arg(long)]
+    rql: bool,
+
+    #[arg(long)]
     escape: Option<String>,
 
     #[arg(name = "FILENAME")]
@@ -242,6 +245,13 @@ pub fn run() {
     if cli.version {
         println!("{REDLINEDB_VERSION_LINE}");
         return;
+    }
+
+    if cli.rql && (!cli.sql.is_empty() || !cli.cmd.is_empty()) {
+        eprintln!(
+            "Error: --rql reads RQL JSON from stdin and cannot be combined with --cmd or SQL arguments"
+        );
+        exit(1);
     }
 
     let filename = match cli.filename {
@@ -451,6 +461,28 @@ pub fn run() {
             eprintln!("{e}");
             exit(1);
         }
+    }
+
+    if cli.rql {
+        let input = match preloaded_stdin {
+            Some(input) => input,
+            None => {
+                let mut input = String::new();
+                io::stdin().read_to_string(&mut input).unwrap_or_default();
+                input
+            }
+        };
+        if let Err(e) = run_rql_input(&mut state, &input) {
+            flush_output_or_exit(&mut state);
+            eprintln!("{e}");
+            exit(1);
+        }
+        if state.had_error {
+            flush_output_or_exit(&mut state);
+            exit(1);
+        }
+        flush_output_or_exit(&mut state);
+        return;
     }
 
     for cmd in &cli.cmd {
@@ -915,6 +947,7 @@ fn print_sqlite_help() {
     println!("   -nofollow            do not follow symlinks when opening");
     println!("   -pagecache N M       set page cache configuration");
     println!("   -readonly            open the database read-only");
+    println!("   -rql                 read Redline Query Language JSON from stdin");
     println!("   -stats               show shell stats");
     println!("   -separator SEP       set output column separator. Default: '|'");
     println!("   -unsafe-testing      enable unsafe testing helpers");
@@ -976,6 +1009,81 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
         let result = run_query_writer(
             &mut state.conn,
             sql,
+            &mut state.output,
+            &query_options,
+            &mut local_total,
+        );
+        if !state.defer_output_flush {
+            state.output.flush().map_err(|err| err.to_string())?;
+        }
+        state.total_changes = local_total;
+        result
+    }
+}
+
+fn run_rql_input(state: &mut CliState, input: &str) -> Result<(), String> {
+    if input.trim().is_empty() {
+        return Ok(());
+    }
+    let program = parse_rql_program(input)?;
+    match run_rql_program_with_state(state, &program) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            state.had_error = true;
+            Err(format!("Error: {}", sqlite_shell_error_text(&err)))
+        }
+    }
+}
+
+fn parse_rql_program(input: &str) -> Result<RqlProgram, String> {
+    match serde_json::from_str::<RqlProgram>(input) {
+        Ok(program) => Ok(program),
+        Err(program_err) => match serde_json::from_str::<Vec<RqlStatement>>(input) {
+            Ok(statements) => Ok(RqlProgram { statements }),
+            Err(_) => Err(format!("invalid RQL JSON: {program_err}")),
+        },
+    }
+}
+
+fn run_rql_program_with_state(state: &mut CliState, program: &RqlProgram) -> Result<(), String> {
+    let query_options = QueryOptions {
+        mode: state.mode,
+        insert_table_name: state.insert_table_name.clone(),
+        separator: state.separator.clone(),
+        row_separator: state.row_separator.clone(),
+        show_header: state.show_header,
+        null_value: state.null_value.clone(),
+        changes: state.changes,
+        trace_stdout: state.trace_stdout,
+        eqp: state.eqp,
+        explain: state.explain,
+        stats: state.stats,
+        expert: state.expert,
+        escape_symbol: state.escape_symbol,
+        widths: state.widths.clone(),
+        params: Vec::new(),
+    };
+    let total_changes_before = state.total_changes;
+    if let Some(path) = state.once.take() {
+        let file = std::fs::File::create(&path)
+            .map_err(|err| format!("Error: cannot open {}: {err}", path.display()))?;
+        let mut writer = io::BufWriter::new(file);
+        let mut local_total = total_changes_before;
+        let result = run_rql_writer(
+            &mut state.conn,
+            program,
+            &mut writer,
+            &query_options,
+            &mut local_total,
+        );
+        writer.flush().map_err(|err| err.to_string())?;
+        state.total_changes = local_total;
+        result
+    } else {
+        let mut local_total = total_changes_before;
+        let result = run_rql_writer(
+            &mut state.conn,
+            program,
             &mut state.output,
             &query_options,
             &mut local_total,
@@ -1137,6 +1245,109 @@ fn run_query_writer<W: Write>(
     }
 
     Ok(())
+}
+
+fn run_rql_writer<W: Write>(
+    conn: &mut redlinedb::Connection,
+    program: &RqlProgram,
+    out: &mut W,
+    options: &QueryOptions,
+    total_changes: &mut i64,
+) -> Result<(), String> {
+    for statement in &program.statements {
+        let mut stmt = conn
+            .prepare_rql_owned(statement)
+            .map_err(|err| err.to_string())?;
+        let column_count = stmt.column_count();
+        if is_streaming_delimited_mode(options.mode) {
+            let row_terminator = if matches!(options.mode, OutputMode::Csv) {
+                "\r\n".to_owned()
+            } else {
+                options.row_separator.clone()
+            };
+            let mut wrote_anything = false;
+            if options.show_header && column_count > 0 {
+                write_delimited_row(
+                    out,
+                    (0..column_count).map(|index| stmt.column_name(index)),
+                    options.mode,
+                    &options.separator,
+                    false,
+                )?;
+                wrote_anything = true;
+            }
+            while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
+                if wrote_anything {
+                    write_row_separator(out, &row_terminator)?;
+                }
+                for index in 0..column_count {
+                    if index > 0 {
+                        out.write_all(options.separator.as_bytes())
+                            .map_err(|err| err.to_string())?;
+                    }
+                    write_stream_delimited_value(
+                        out,
+                        options.mode,
+                        &options.separator,
+                        &options.null_value,
+                        options.escape_symbol,
+                        stmt.column_ref(index).map_err(|err| err.to_string())?,
+                    )?;
+                }
+                wrote_anything = true;
+            }
+            if wrote_anything {
+                write_row_separator(out, &row_terminator)?;
+            }
+        } else {
+            let column_names: Vec<String> = (0..column_count)
+                .map(|index| stmt.column_name(index).to_owned())
+                .collect();
+            let mut rows: Vec<Vec<Cell>> = Vec::new();
+
+            while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
+                let mut row = Vec::with_capacity(column_count);
+                for index in 0..column_count {
+                    row.push(Cell::from_value_ref(
+                        stmt.column_ref(index).map_err(|err| err.to_string())?,
+                    ));
+                }
+                rows.push(row);
+            }
+            render_query(
+                out,
+                options.mode,
+                &options.separator,
+                options.show_header,
+                &options.null_value,
+                &options.insert_table_name,
+                &options.widths,
+                &column_names,
+                &rows,
+            )?;
+        }
+        if options.changes {
+            let n = if rql_statement_changes_rows(statement) {
+                stmt.affected_rows() as i64
+            } else {
+                0
+            };
+            *total_changes += n;
+            writeln!(out, "changes: {n}   total_changes: {total_changes}")
+                .map_err(|err| err.to_string())?;
+        }
+        if options.stats {
+            writeln!(out, "Memory Used: 0 (max 0) bytes").map_err(|err| err.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn rql_statement_changes_rows(statement: &RqlStatement) -> bool {
+    matches!(
+        statement,
+        RqlStatement::Insert(_) | RqlStatement::Update(_) | RqlStatement::Delete(_)
+    )
 }
 
 fn write_row_separator<W: Write>(out: &mut W, separator: &str) -> Result<(), String> {
