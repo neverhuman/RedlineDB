@@ -58,7 +58,7 @@ REQUIRED_TOP_LEVEL_FIELDS = {
     "generated_at_unix_ms",
     "output_file_hashes",
 }
-REQUIRED_SUITE_NAMES = ("sqlite_parity", "memory", "beyond_sqlite")
+REQUIRED_SUITE_NAMES = ("sqlite_parity", "memory", "rql_phase1", "beyond_sqlite")
 ROOT_REQUIRED_PATHS = (
     "all.jsonl",
     "all-manifest.json",
@@ -329,6 +329,15 @@ for suite_name in REQUIRED_SUITE_NAMES:
                 f"suite {suite_name} expected 1127 with at most {max_skips} "
                 f"target-capability skips, got total={total} passed={passed} "
                 f"skipped={skipped}"
+            )
+    elif suite_name == "rql_phase1":
+        # The release package ships the post-gate rql_phase1 corpus, not the
+        # raw generation corpus. As of redline-testing v1.0.1 that shipped set
+        # contains 594 runnable cases after ship-gate cuts.
+        if total != 594 or passed + skipped != 594:
+            fail(
+                f"suite {suite_name} expected 594 runnable cases, got "
+                f"total={total} passed={passed} skipped={skipped}"
             )
     else:
         if passed + skipped != total:

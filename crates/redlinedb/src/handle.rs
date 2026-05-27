@@ -112,6 +112,18 @@ impl Database {
         })
     }
 
+    pub fn prepare_rql(&self, statement: &redlinedb_sql::RqlStatement) -> Result<Prepared> {
+        let conn = self.connect()?;
+        let template = conn.inner.prepare_rql_template(statement)?;
+        if conn.read_only && !template.readonly {
+            return Err(crate::Error::new(
+                crate::ErrorCode::ReadOnly,
+                "connection is read-only",
+            ));
+        }
+        Ok(Prepared { template })
+    }
+
     pub fn checkpoint(&self) -> Result<CheckpointStats> {
         let checkpoint = self.inner.db.checkpoint()?;
         let _ = phase8::update_retention(self);
@@ -280,16 +292,11 @@ impl Database {
             .unwrap_or(0)
     }
 
-    /// WS-C3 R3: accessor for the database's Rayon pool. `None` when
-    /// the pool is disabled (the `parallel_executor` /
-    /// `with_rayon_threads` builder was never called or was called
-    /// with `0`/`1`). Intra-query parallel operators (parallel
-    /// covering-scan, parallel sort, parallel hash aggregation) call
-    /// `pool.install(|| ...)` instead of polluting the global Rayon
-    /// pool. Now `pub` because the SQL crate's parallel-scan
-    /// dispatch test installs the pool onto the executor's per-
-    /// thread slot directly via `redlinedb_sql::ws_c3_testing`.
-    pub fn rayon_pool(&self) -> Option<Arc<rayon::ThreadPool>> {
+    /// Internal accessor for the database's Rayon pool. `None` when the
+    /// pool is disabled. Future intra-query parallel operators will call
+    /// `pool.install(|| ...)` instead of polluting the global Rayon pool.
+    #[allow(dead_code)]
+    pub(crate) fn rayon_pool(&self) -> Option<Arc<rayon::ThreadPool>> {
         self.inner.rayon_pool.as_ref().map(Arc::clone)
     }
 

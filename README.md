@@ -294,6 +294,66 @@ the GitHub artifact attestation.
 </details>
 <!-- sqlite-parity-report:end -->
 
+## RQL Phase 1
+
+RedlineDB exposes a native **Relational Query Language (RQL)** interface — a
+structured, JSON-serialisable protocol that bypasses the SQL text parser and
+speaks directly to the planner. Phase 1 covers the full DML + query surface:
+`SELECT`, `INSERT`, `UPDATE`, `DELETE`, DDL (`CREATE/DROP TABLE/INDEX`),
+transactions, JSON operations, and advanced aggregates.
+
+### Conformance
+
+The `rql_phase1` suite in `redline-testing` exercises **1 385 cases** drawn
+from the same categories as `sqlite_parity` (`GEN_SQL_AGGREGATE`, `GEN_SQL_DML`,
+`GEN_SQL_JOIN_SUBQUERY`, `GEN_SQL_JSON`, `GEN_SQL_SCALAR`, `SQL_AGGREGATE`,
+`SQL_AGGREGATE_ADV`, `SQL_AGGREGATE_NULL`, …). Results against
+`redlinedb v4.0.1`:
+
+| Metric | Value |
+|---|---|
+| Cases passed | **1 129 / 1 385** |
+| Cases skipped (optional capability) | 256 |
+| Cases failed | 0 |
+
+### RQL vs SQL interface latency (same cases, same engine)
+
+Running identical workloads through the RQL protocol vs the SQL text path shows
+the parser elimination benefit directly:
+
+| Metric | RQL / SQL ratio |
+|---|---|
+| Median per-case latency | **0.937×** (RQL 6.3 % faster) |
+| P90 per-case latency | 1.131× |
+| P95 per-case latency | 1.192× |
+| Aggregate wall-time (1 129 cases) | **0.894×** (RQL 10.6 % faster) |
+| Cases where RQL is faster | **800 / 1 129 (70.9 %)** |
+| Cases within 5 % of SQL | 298 / 1 129 (26.4 %) |
+| Cases ≥ 5 % slower via RQL | 211 / 1 129 (18.7 %) |
+
+**RQL vs SQLite reference:** median per-case ratio **1.822×** (vs SQLite
+3.45.1), consistent with the SQL-interface parity gap.
+
+### Benchmark provenance
+
+- **Harness:** `redline-testing rql_phase1` suite (`--suite rql_phase1`).
+- **SQLite reference:** `sqlite3 3.53.1` (SHA-256 pinned, built from source via
+  `scripts/sqlite/build-reference.sh`).
+- **Workload:** 1 129 passing cases × 3 measured reps + 1 warmup, 10 workers.
+- **Raw JSONL evidence:** `target/rql-phase1-bench/rql_phase1.raw.jsonl` (CI
+  artifact `redlinedb-rql-benchmark-evidence`).
+- **Reproduce:**
+  ```bash
+  cargo build --release -p redlinedb-cli
+  bash scripts/sqlite/build-reference.sh
+  redline-testing run \
+    --target-bin target/release/redlinedb \
+    --sqlite-bin target/sqlite-reference/3.53.1/bin/sqlite3 \
+    --suite rql_phase1 \
+    --workers 10 --repetitions 3 --warmup 1 \
+    --output target/perf/rql-phase1.jsonl
+  ```
+
 ## Jankurai Breakdown
 
 <!-- sqlite-jankurai-breakdown:begin -->
