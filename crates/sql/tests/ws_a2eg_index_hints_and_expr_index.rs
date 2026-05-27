@@ -180,14 +180,12 @@ fn expression_index_lower_equality_uses_index() {
     // `CREATE INDEX i ON t(lower(name))` exists and the WHERE contains
     // `lower(name) = ?`, the planner CAN pick the expression index.
     //
-    // GATING: expression-index DML maintenance (Lane B) is not wired in
-    // this wave (`crates/sql/src/exec/index_dml.rs::build_index_key`
-    // skips expression keys), so the leaf is empty after inserts.
-    // Unhinted queries must NOT silently switch to the empty index —
-    // they would return zero rows where a TableScan returns the
-    // correct rows. WS-A2g therefore gates the match on
-    // `INDEXED BY <name>` so users opt in explicitly while the planner
-    // wiring is exercised end-to-end.
+    // GATING: expression-index DML maintenance is wired, but CREATE
+    // INDEX backfill and expression canonicalization still need broader
+    // proof before unhinted queries can default to this path. WS-A2g
+    // therefore keeps the planner match behind `INDEXED BY <name>` so
+    // users opt in explicitly while the planner wiring is exercised
+    // end-to-end.
     let (_dir, conn) = open_db();
     conn.execute("CREATE TABLE t(id INTEGER, name TEXT)")
         .expect("create");
@@ -217,7 +215,8 @@ fn expression_index_lower_equality_uses_index() {
 #[test]
 fn expression_index_only_matches_normalized_text() {
     // Plan-only with `INDEXED BY` opt-in (see the note on
-    // `expression_index_lower_equality_uses_index` for the DML gap).
+    // `expression_index_lower_equality_uses_index` for the default-on
+    // gating).
     // The textual match folds case and collapses whitespace, so
     // `LOWER(name)`, `lower(name)`, and `lower( name )` all bind. A
     // structurally different predicate (`lower(name || '')` etc.) must
@@ -284,8 +283,7 @@ fn not_indexed_overrides_expression_index() {
     );
 
     // Heap scan re-evaluates the expression against every row, so the
-    // row IS returned even though the expression-index leaf is empty
-    // (NOT INDEXED forces the scan path, sidestepping the empty index).
+    // row is returned without consulting the expression-index leaf.
     let rows = collect_ints(
         &conn,
         "SELECT id FROM t NOT INDEXED WHERE lower(name) = 'foo'",

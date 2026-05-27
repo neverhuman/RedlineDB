@@ -31,6 +31,7 @@ use crate::value::SqlValue;
 /// SQLite's NULL-in-unique-key parity rule (NULL parts disable the unique
 /// conflict check) without re-walking `index.keys`.
 pub(crate) struct BuiltIndexKey {
+    pub values: Vec<SqlValue>,
     pub bytes: Vec<u8>,
     #[allow(dead_code)] // reserved for upcoming Lane C planner integration
     pub contains_null: bool,
@@ -40,30 +41,37 @@ pub(crate) struct BuiltIndexKey {
 ///
 /// Mirrors the kernel-side encoding used by Lane A's CREATE INDEX backfill,
 /// so SQL DML and DDL agree byte-for-byte on key shape.
-pub(crate) fn build_index_key(index: &IndexDef, values: &[SqlValue]) -> BuiltIndexKey {
+pub(crate) fn build_index_key(
+    table: &TableDef,
+    index: &IndexDef,
+    values: &[SqlValue],
+) -> Result<BuiltIndexKey> {
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
-    let mut owned_refs: Vec<&SqlValue> = Vec::with_capacity(index.keys.len());
+    let mut key_values: Vec<SqlValue> = Vec::with_capacity(index.keys.len());
     for key in &index.keys {
-        let IndexKeySource::Column { attnum } = key.source else {
-            // A6 SQL-D: expression index key — full per-expression
-            // build path not wired in this adapter. Skip the key;
-            // upper layer should detect expression indexes and route
-            // through the dedicated expression-aware build.
-            continue;
+        let value = match &key.source {
+            IndexKeySource::Column { attnum } => values
+                .get(*attnum as usize)
+                .cloned()
+                .unwrap_or(SqlValue::Null),
+            IndexKeySource::Expression { sql, .. } => {
+                crate::exec::index_predicate::eval_index_value_expr(table, sql, values)?
+            }
         };
-        owned_refs.push(values.get(attnum as usize).unwrap_or(&SqlValue::Null));
+        key_values.push(value);
         dirs.push(key.sort_dir);
     }
-    let value_refs: Vec<_> = owned_refs.iter().map(|v| v.as_ref()).collect();
+    let value_refs: Vec<_> = key_values.iter().map(|v| v.as_ref()).collect();
     let mut buf = Vec::new();
     let EncodedIndexKey {
         bytes,
         contains_null,
     } = encode_index_key(&value_refs, &dirs, &mut buf);
-    BuiltIndexKey {
+    Ok(BuiltIndexKey {
+        values: key_values,
         bytes,
         contains_null,
-    }
+    })
 }
 
 /// Returns the live `BtreeIndex` handle for `index` if Lane A allocated one.
@@ -141,7 +149,7 @@ pub(crate) fn maintain_indexes_on_insert(
         {
             continue;
         }
-        let key = build_index_key(index, values);
+        let key = build_index_key(table, index, values)?;
         let row_ref = synthetic_row_ref(rowid);
         // SQLite NULL parity for unique indexes: NULL key parts are not
         // duplicates, so we still insert them but never block on conflict.
@@ -170,7 +178,7 @@ pub(crate) fn maintain_indexes_on_delete(
         {
             continue;
         }
-        let key = build_index_key(index, old_values);
+        let key = build_index_key(table, index, old_values)?;
         let row_ref = synthetic_row_ref(rowid);
         handle.delete_mark_tx_visible(
             engine.tx_status(),
@@ -201,8 +209,8 @@ pub(crate) fn maintain_indexes_on_update(
         let Some(handle) = open_index_handle(engine, index) else {
             continue;
         };
-        let old_key = build_index_key(index, old_values);
-        let new_key = build_index_key(index, new_values);
+        let old_key = build_index_key(table, index, old_values)?;
+        let new_key = build_index_key(table, index, new_values)?;
         // The IndexRowRef carries the rowid into the physical entry, so a
         // rowid move always triggers a delete+insert even when key bytes
         // are byte-equal.
