@@ -134,6 +134,25 @@ pub(crate) fn try_match_index_access(
     try_match_index_access_hinted(engine, table, selection, bindings, None)
 }
 
+/// Allocation-free case-insensitive substring scan for the literal
+/// `"collate nocase"`. Used by `try_match_index_access_hinted` to bail out
+/// of index-probe matching when the table's `normalized_sql` declares a
+/// NOCASE collation (which the current index machinery doesn't honour).
+#[inline]
+fn contains_collate_nocase_ci(haystack: &str) -> bool {
+    const NEEDLE: &[u8] = b"collate nocase";
+    let bytes = haystack.as_bytes();
+    if bytes.len() < NEEDLE.len() {
+        return false;
+    }
+    bytes.windows(NEEDLE.len()).any(|window| {
+        window
+            .iter()
+            .zip(NEEDLE.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
+}
+
 /// Phase 5 WS-A2e / A2g entry point. The optional `hint` rides through
 /// SQLite-parity `INDEXED BY` / `NOT INDEXED` table-access hints; pass
 /// `None` for callers that have no hint context (joins, CTE row sources,
@@ -154,10 +173,14 @@ pub(crate) fn try_match_index_access_hinted(
     if table.indexes.is_empty() {
         return None;
     }
+    // A7: avoid the per-SELECT `to_ascii_lowercase()` allocation. Each call
+    // here previously copied the entire normalized_sql into a fresh String
+    // just to do a case-insensitive substring check. Common case: no COLLATE
+    // NOCASE present, so the allocation was pure waste.
     if table
         .normalized_sql
         .as_deref()
-        .is_some_and(|sql| sql.to_ascii_lowercase().contains("collate nocase"))
+        .is_some_and(contains_collate_nocase_ci)
     {
         return None;
     }
@@ -1080,5 +1103,47 @@ fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue>
             }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod a7_collate_scan_tests {
+    use super::contains_collate_nocase_ci;
+
+    #[test]
+    fn matches_lowercase() {
+        assert!(contains_collate_nocase_ci("CREATE TABLE t (a TEXT collate nocase)"));
+    }
+
+    #[test]
+    fn matches_uppercase() {
+        assert!(contains_collate_nocase_ci("CREATE TABLE t (a TEXT COLLATE NOCASE)"));
+    }
+
+    #[test]
+    fn matches_mixed_case() {
+        assert!(contains_collate_nocase_ci(
+            "CREATE TABLE t (a TEXT Collate NoCase)"
+        ));
+    }
+
+    #[test]
+    fn rejects_unrelated_text() {
+        assert!(!contains_collate_nocase_ci(
+            "CREATE TABLE t (a INTEGER PRIMARY KEY)"
+        ));
+    }
+
+    #[test]
+    fn rejects_partial_match() {
+        // 'collate' alone or 'nocase' alone must not trigger.
+        assert!(!contains_collate_nocase_ci("a TEXT COLLATE BINARY"));
+        assert!(!contains_collate_nocase_ci("nocase_column TEXT"));
+    }
+
+    #[test]
+    fn rejects_shorter_than_needle() {
+        assert!(!contains_collate_nocase_ci("short"));
+        assert!(!contains_collate_nocase_ci(""));
     }
 }
