@@ -8,6 +8,7 @@ mod json;
 mod parser;
 mod planner;
 mod regexp;
+mod rql;
 mod session;
 mod statement;
 pub mod udf;
@@ -19,6 +20,12 @@ pub use connection::{
 pub use error::{Error, Result};
 pub use parser::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};
 pub use redlinedb_kernel::engine::{Engine, RecoveryTarget};
+pub use rql::{
+    RqlBeginMode, RqlBinaryOp, RqlColumnDef, RqlColumnRef, RqlCreateIndex, RqlCreateTable,
+    RqlDelete, RqlDropIndex, RqlDropTable, RqlExpr, RqlIndexColumn, RqlInsert, RqlJoin,
+    RqlJoinKind, RqlLiteral, RqlName, RqlOrder, RqlProgram, RqlSelect, RqlSelectItem, RqlStatement,
+    RqlTableRef, RqlUnaryOp, RqlUpdate, RqlUpdateAssignment,
+};
 pub use session::BeginMode;
 pub use statement::{
     AnalyzePlan, ExplainFormat, ExplainPlan, PreparedTemplate, SelectPlan, SelectSource, Statement,

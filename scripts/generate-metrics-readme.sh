@@ -59,13 +59,15 @@ begin_marker='<!-- sqlite-parity-metrics:begin -->'
 end_marker='<!-- sqlite-parity-metrics:end -->'
 
 # Pick the richest input we have. Priority order:
-#   1. target/perf/*.jsonl — CI native-compile benchmark output. These
-#      numbers come from the `benchmark` stage in .gitlab-ci.yml which
-#      compiles redlinedb-cli with RUSTFLAGS="-C target-cpu=znver2" and
-#      runs the full redline-testing v1.0.0 corpus × 3 reps × 10 workers.
-#      This is the canonical "ultra-fast" measurement the README should
-#      reflect. Lands as the `redlinedb-native-benchmark-evidence`
-#      artifact (target/perf/<name>.jsonl).
+#   1. target/perf/*.jsonl — CI native-compile benchmark output for the
+#      SQLite-parity/full-corpus lane. These numbers come from the
+#      `benchmark` stage in .gitlab-ci.yml which compiles redlinedb-cli
+#      with RUSTFLAGS="-C target-cpu=znver2" and runs the full
+#      redline-testing v1.0.0 corpus × 3 reps × 10 workers. This is the
+#      canonical "ultra-fast" measurement the README should reflect.
+#      Lands as the `redlinedb-native-benchmark-evidence` artifact
+#      (target/perf/<name>.jsonl). RQL benchmark outputs are ignored here
+#      so they cannot be mislabeled as SQLite parity metrics.
 #   2. target/redline-testing/sqlite_parity.raw.jsonl — parity job output
 #      (verifies pre-built evidence; numbers may reflect a non-native
 #      compile depending on how the parity job built the target binary).
@@ -74,11 +76,18 @@ parity_input=""
 # Prefer the most recent benchmark JSONL if any exist.
 perf_dir="${repo_root}/target/perf"
 if [ -d "$perf_dir" ]; then
-    bench_input="$(ls -1t "$perf_dir"/*.jsonl 2>/dev/null | head -n 1)"
-    if [ -n "$bench_input" ] && [ -s "$bench_input" ]; then
-        parity_input="$bench_input"
-        printf 'generate-metrics: using native-benchmark evidence %s\n' "$bench_input" >&2
-    fi
+    while IFS= read -r bench_input; do
+        case "$(basename "$bench_input")" in
+            *rql*|*phase1*)
+                continue
+                ;;
+        esac
+        if [ -n "$bench_input" ] && [ -s "$bench_input" ]; then
+            parity_input="$bench_input"
+            printf 'generate-metrics: using native-benchmark evidence %s\n' "$bench_input" >&2
+            break
+        fi
+    done < <(ls -1t "$perf_dir"/*.jsonl 2>/dev/null || true)
 fi
 if [ -z "$parity_input" ]; then
     for candidate in "$sqlite_raw" "$all_jsonl"; do
@@ -140,6 +149,9 @@ def load_jsonl(path_env: str):
                 continue
             out.append(json.loads(line))
     return out
+
+def filter_profile(records, profile: str):
+    return [r for r in records if str(r.get("profile", "")).strip() == profile]
 
 def load_json(path_env: str):
     path_str = os.environ.get(path_env, "")
@@ -206,9 +218,9 @@ def safe(x, default=""):
 
 # ---------- data ----------
 
-parity_records = load_jsonl("PARITY_INPUT")
-beyond_records = load_jsonl("BEYOND_INPUT")
-memory_records = load_jsonl("MEMORY_INPUT")
+parity_records = filter_profile(load_jsonl("PARITY_INPUT"), "sqlite_parity")
+beyond_records = filter_profile(load_jsonl("BEYOND_INPUT"), "beyond_sqlite")
+memory_records = filter_profile(load_jsonl("MEMORY_INPUT"), "memory")
 jankurai = load_json("JANKURAI_JSON")
 redlinedb_loc = load_json("REDLINEDB_LOC_JSON")
 sqlite_loc = load_json("SQLITE_LOC_JSON")
