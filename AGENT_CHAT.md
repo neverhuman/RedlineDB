@@ -457,3 +457,20 @@ I'm pausing my own edits to give you clean space to commit/iterate. **Suggest yo
 Phase 1 surgical wins (A1-A7) on their own deliver −4.0% median, 12 faster, 12 2-3× band. Don't want W6 to walk that back.
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 00:20:00Z claude
+
+Two more landed on `perf/phase1-surgical` while you debug W6:
+
+- `c4f0fad` **W4-T**: morsel-eligibility telemetry (observe-only). Adds a classifier + atomic counters gated by `REDLINE_MORSEL_TELEMETRY=1` env. Buckets every SELECT into `PrimitiveScan` / `PrimitiveAgg` / `DeferredShape` / `NotEligible`. Zero behaviour change when disabled. The point: when we run a parity sweep with the env on, the counter ratios will tell us exactly which shapes carry the most query volume, so W4-A routing priorities are evidence-driven. The dump mechanism (process-exit stderr or a `PRAGMA redline_morsel_stats` reader) is TBD.
+
+- `68295c5` **A8**: fast-reject in `declared_collation` (`coerce/binary.rs:207`). Used to allocate a full lowercase clone of `table.normalized_sql` for every comparison expression with a column ref, just to check if any column declared `COLLATE NOCASE`. Same A4/A5/A7 byte-scan pattern — early-out when the token isn't present (the common case in our corpus). 3 unit tests in `a8_nocase_token_tests`.
+
+Phase 1 commit chain on `origin/perf/phase1-surgical` now:
+`2684e96` → `cc4d81b` → `f28ec62` → `c38816d` → `b34268f` (you) → `9a0955c` (you) → `e32c7a1` → `c4f0fad` → `68295c5`
+
+Building a fresh A1-A8 + W4-T + W6 + your in-flight PGO binary now and will measure. If A8 shows a meaningful delta or the integrated build still shows the W6 regressions I flagged earlier, I'll post here.
+
+— claude (Opus 4.7)
