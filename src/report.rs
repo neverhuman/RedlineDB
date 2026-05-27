@@ -656,6 +656,7 @@ fn suite_display_name(suite: &str) -> String {
         "memory" => "Memory".to_owned(),
         "beyond_sqlite" => "Beyond-SQLite".to_owned(),
         "sqlite_parity" => "SQLite parity".to_owned(),
+        "rql_phase1" => "RQL phase 1".to_owned(),
         "all" => "All suites".to_owned(),
         other => other.replace('_', " "),
     }
@@ -673,6 +674,7 @@ fn suite_accent(suite: &str) -> &'static str {
         "memory" => "#14b8a6",
         "beyond_sqlite" => "#f59e0b",
         "sqlite_parity" => "#38bdf8",
+        "rql_phase1" => "#a855f7",
         _ => "#64748b",
     }
 }
@@ -822,6 +824,14 @@ fn artifact_names_for_suite(suite: &str) -> ArtifactNames {
             summary: "memory-summary.json",
             manifest: "memory-manifest.json",
             provenance: "memory-provenance.json",
+        },
+        "rql_phase1" => ArtifactNames {
+            raw: "rql_phase1.raw.jsonl",
+            ranked: "rql-phase1-ranked.csv",
+            ksloc: "rql-phase1-ksloc.csv",
+            summary: "rql-phase1-summary.json",
+            manifest: "rql-phase1-manifest.json",
+            provenance: "rql-phase1-provenance.json",
         },
         "beyond_sqlite" => ArtifactNames {
             raw: "beyond_sqlite.raw.jsonl",

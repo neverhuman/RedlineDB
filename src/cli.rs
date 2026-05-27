@@ -251,6 +251,7 @@ fn run_all_suites(
     fs::create_dir_all(output_dir).with_context(|| format!("create {}", output_dir.display()))?;
     let sqlite_output = output_dir.join("sqlite_parity.raw.jsonl");
     let memory_output = output_dir.join("memory.raw.jsonl");
+    let rql_output = output_dir.join("rql_phase1.raw.jsonl");
     let beyond_output = output_dir.join("beyond_sqlite.raw.jsonl");
 
     prepare_output(&sqlite_output)?;
@@ -271,11 +272,20 @@ fn run_all_suites(
         tmp_root.clone(),
         sqlite_bin.clone(),
     )?;
+    prepare_output(&rql_output)?;
+    let rql_summary = run_sqlite_like_suite(
+        args,
+        Suite::RqlPhase1,
+        rql_output.clone(),
+        workers,
+        tmp_root.clone(),
+        sqlite_bin.clone(),
+    )?;
     prepare_output(&beyond_output)?;
     let beyond_summary = run_beyond_sqlite_suite(args, beyond_output.clone())?;
 
     let mut combined = String::new();
-    for path in [&sqlite_output, &memory_output, &beyond_output] {
+    for path in [&sqlite_output, &memory_output, &rql_output, &beyond_output] {
         combined.push_str(
             &fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?,
         );
@@ -292,6 +302,7 @@ fn run_all_suites(
                 sqlite_summary.clone(),
             ),
             ("memory", memory_output.as_path(), memory_summary.clone()),
+            ("rql_phase1", rql_output.as_path(), rql_summary.clone()),
             (
                 "beyond_sqlite",
                 beyond_output.as_path(),
@@ -330,6 +341,15 @@ fn run_all_suites(
                 evidence::suite_artifact_path(output_dir, "memory", "manifest.json"),
                 evidence::suite_artifact_path(output_dir, "memory", "provenance.json"),
                 &memory_summary,
+            ),
+            OfficialSuiteEvidence::new(
+                "rql_phase1",
+                rql_output,
+                evidence::suite_artifact_path(output_dir, "rql_phase1", "summary.json"),
+                evidence::suite_artifact_path(output_dir, "rql_phase1", "ranked.csv"),
+                evidence::suite_artifact_path(output_dir, "rql_phase1", "manifest.json"),
+                evidence::suite_artifact_path(output_dir, "rql_phase1", "provenance.json"),
+                &rql_summary,
             ),
             OfficialSuiteEvidence::new(
                 "beyond_sqlite",

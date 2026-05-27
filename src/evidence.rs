@@ -338,6 +338,7 @@ pub fn suite_artifact_path(output_dir: &Path, suite: &str, base: &str) -> PathBu
 fn suite_artifact_name(suite: &str, base: &str) -> String {
     match suite {
         "sqlite_parity" | "all" => base.to_owned(),
+        "rql_phase1" => format!("rql-phase1-{base}"),
         "memory" => format!("memory-{base}"),
         other => format!("{}-{base}", other.replace('_', "-")),
     }

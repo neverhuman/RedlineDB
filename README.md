@@ -16,8 +16,9 @@ Suites:
 |---|---|---|---|
 | `sqlite_parity` | SQL + CLI conformance vs SQLite reference | 2,445 | No |
 | `memory` | Same corpus with Linux `/proc` RSS sampling | 2,445 | No |
+| `rql_phase1` | Redline Query Language phase 1 conformance | 1,385 | No |
 | `beyond_sqlite` | PostgreSQL-class features, oracle-validated | 265 | Optional |
-| `all` | All suites + `official-evidence.json` hash bundle | 2,710+ | Optional |
+| `all` | All suites + `official-evidence.json` hash bundle | 4,095+ | Optional |
 
 ---
 
@@ -70,7 +71,7 @@ It writes JSONL records on stdout/file and exits non-zero if any case fails.
 
 ```bash
 redline-testing run \
-  --suite sqlite_parity \     # sqlite_parity | memory | beyond_sqlite | all
+  --suite sqlite_parity \     # sqlite_parity | memory | rql_phase1 | beyond_sqlite | all
   --target-bin /path/to/db \
   --sqlite-bin /path/to/sqlite3 \
   --workers auto \            # accepted; execution is serial in this release
@@ -128,6 +129,13 @@ Same parity corpus with Linux `/proc` RSS sampling enabled. Writes:
 `memory.raw.jsonl`, `memory-summary.json`, `memory-ranked.csv`,
 `memory-manifest.json`, `memory-provenance.json`.
 Falls back gracefully if `/proc` is unavailable (`memory_status: unavailable`).
+
+### `rql_phase1`
+
+Redline Query Language phase 1 corpus, exercised against the SQLite reference
+CLI and the target binary. Writes:
+`rql_phase1.raw.jsonl`, `rql-phase1-summary.json`, `rql-phase1-ranked.csv`,
+`rql-phase1-manifest.json`, `rql-phase1-provenance.json`.
 
 ### `beyond_sqlite`
 
