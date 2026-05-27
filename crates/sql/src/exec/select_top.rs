@@ -18,6 +18,13 @@ pub(super) fn execute_select(
     plan: &crate::statement::SelectPlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<SelectRuntime> {
+    // W4-T: morsel-eligibility telemetry. Observe-only; no behaviour
+    // change. Activated by `REDLINE_MORSEL_TELEMETRY=1`. See
+    // `crates/sql/src/exec/morsel/mod.rs` for the classifier and counters.
+    super::morsel::record_morsel_eligibility(
+        super::morsel::classify_select_plan_eligibility(plan),
+    );
+
     // SQLite authorizer contract: consult before any access. We check
     // every table referenced by the top-level source so DENY surfaces as
     // the standard "not authorized" error before any rows are read.

@@ -7,7 +7,17 @@
 //! for this scaffolding wave — the consumers arrive in M2 (scan) and M3
 //! (filter kernels); without the allow, the entire module trips
 //! `unused_*` until those land.
+//!
+//! W4-T: observe-only morsel-eligibility telemetry. Activated by
+//! `REDLINE_MORSEL_TELEMETRY=1`. The classifier in
+//! [`classify_select_plan_eligibility`] runs at `execute_select` entry
+//! (`crates/sql/src/exec/select_top.rs`) and increments the static counters
+//! below. NEVER changes execution path — purely diagnostic so future W4
+//! routing decisions are evidence-driven.
 #![allow(dead_code)]
+
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use smallvec::SmallVec;
 
@@ -39,6 +49,129 @@ pub use scan::{MorselScan, RowRef, ScanSource};
 /// Hard upper bound on rows per morsel. Matches the inline-storage budget
 /// of `Bitmap` (16 × u64 = 1024 bits).
 pub const MAX_BATCH_ROWS: usize = 1024;
+
+// W4-T: morsel-eligibility classifier + counters. Observe-only; never
+// changes execution. Increments fire only when `REDLINE_MORSEL_TELEMETRY=1`.
+
+/// Classification of a SELECT plan's morsel-routing potential.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MorselEligibility {
+    /// Single-table scan, no aggregates, no DISTINCT, no HAVING.
+    PrimitiveScan,
+    /// Numeric aggregate on a single table, ungrouped or single-key GROUP BY.
+    PrimitiveAgg,
+    /// Single-table scan with shape extensions deferred from initial routing
+    /// (DISTINCT, multi-key GROUP BY, HAVING).
+    DeferredShape,
+    /// Joins / CTEs / subqueries / windows — stays on tuple path indefinitely.
+    NotEligible,
+}
+
+pub static MORSEL_QUERIES_PRIMITIVE_SCAN: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_QUERIES_PRIMITIVE_AGG: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_QUERIES_DEFERRED_SHAPE: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_QUERIES_NOT_ELIGIBLE: AtomicU64 = AtomicU64::new(0);
+
+/// True when `REDLINE_MORSEL_TELEMETRY=1` is set. Cached on first call.
+pub fn morsel_telemetry_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var_os("REDLINE_MORSEL_TELEMETRY")
+            .map(|v| v != "0" && !v.is_empty())
+            .unwrap_or(false)
+    })
+}
+
+/// Increment the matching counter when telemetry is enabled. No-op otherwise.
+#[inline]
+pub fn record_morsel_eligibility(kind: MorselEligibility) {
+    if !morsel_telemetry_enabled() {
+        return;
+    }
+    match kind {
+        MorselEligibility::PrimitiveScan => {
+            MORSEL_QUERIES_PRIMITIVE_SCAN.fetch_add(1, Ordering::Relaxed);
+        }
+        MorselEligibility::PrimitiveAgg => {
+            MORSEL_QUERIES_PRIMITIVE_AGG.fetch_add(1, Ordering::Relaxed);
+        }
+        MorselEligibility::DeferredShape => {
+            MORSEL_QUERIES_DEFERRED_SHAPE.fetch_add(1, Ordering::Relaxed);
+        }
+        MorselEligibility::NotEligible => {
+            MORSEL_QUERIES_NOT_ELIGIBLE.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Snapshot of the four counters, for end-of-run dumps.
+pub fn snapshot_morsel_eligibility() -> [(MorselEligibility, u64); 4] {
+    [
+        (
+            MorselEligibility::PrimitiveScan,
+            MORSEL_QUERIES_PRIMITIVE_SCAN.load(Ordering::Relaxed),
+        ),
+        (
+            MorselEligibility::PrimitiveAgg,
+            MORSEL_QUERIES_PRIMITIVE_AGG.load(Ordering::Relaxed),
+        ),
+        (
+            MorselEligibility::DeferredShape,
+            MORSEL_QUERIES_DEFERRED_SHAPE.load(Ordering::Relaxed),
+        ),
+        (
+            MorselEligibility::NotEligible,
+            MORSEL_QUERIES_NOT_ELIGIBLE.load(Ordering::Relaxed),
+        ),
+    ]
+}
+
+/// Classify a `SelectPlan` for morsel-routing eligibility. Pure; no execution.
+pub fn classify_select_plan_eligibility(
+    plan: &crate::statement::SelectPlan,
+) -> MorselEligibility {
+    use crate::statement::SelectSource;
+    if !matches!(plan.source, SelectSource::Table(_)) {
+        return MorselEligibility::NotEligible;
+    }
+    if plan.distinct || !plan.distinct_on.is_empty() {
+        return MorselEligibility::DeferredShape;
+    }
+    if plan.having.is_some() {
+        return MorselEligibility::DeferredShape;
+    }
+    if super::agg::select_requires_aggregation(plan) {
+        return if plan.group_by.len() <= 1 {
+            MorselEligibility::PrimitiveAgg
+        } else {
+            MorselEligibility::DeferredShape
+        };
+    }
+    MorselEligibility::PrimitiveScan
+}
+
+#[cfg(test)]
+mod w4_telemetry_tests {
+    use super::*;
+
+    #[test]
+    fn record_does_not_panic_when_disabled() {
+        record_morsel_eligibility(MorselEligibility::PrimitiveScan);
+        record_morsel_eligibility(MorselEligibility::PrimitiveAgg);
+        record_morsel_eligibility(MorselEligibility::DeferredShape);
+        record_morsel_eligibility(MorselEligibility::NotEligible);
+    }
+
+    #[test]
+    fn snapshot_returns_all_four_categories() {
+        let snap = snapshot_morsel_eligibility();
+        let kinds: Vec<MorselEligibility> = snap.iter().map(|(k, _)| *k).collect();
+        assert!(kinds.contains(&MorselEligibility::PrimitiveScan));
+        assert!(kinds.contains(&MorselEligibility::PrimitiveAgg));
+        assert!(kinds.contains(&MorselEligibility::DeferredShape));
+        assert!(kinds.contains(&MorselEligibility::NotEligible));
+    }
+}
 
 #[derive(Debug)]
 pub struct Morsel<'a> {
