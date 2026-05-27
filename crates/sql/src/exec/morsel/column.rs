@@ -35,7 +35,7 @@ impl<'a> ColumnBatch<'a> {
         self.len() == 0
     }
 
-    pub fn get(&self, i: usize) -> Option<ValueRef<'a>> {
+    pub fn get(&self, i: usize) -> Option<ValueRef<'_>> {
         match self {
             Self::I64(v) => v.get(i).copied().map(ValueRef::Integer),
             Self::F64(v) => v.get(i).copied().map(ValueRef::Real),
