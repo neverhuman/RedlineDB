@@ -10,6 +10,7 @@ mod runtime;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -118,6 +119,30 @@ pub enum CommitDurability {
     UnsafeDev,
 }
 
+impl CommitDurability {
+    const STRICT_U8: u8 = 0;
+    const NORMAL_U8: u8 = 1;
+    const UNSAFE_DEV_U8: u8 = 2;
+
+    #[inline]
+    fn to_u8(self) -> u8 {
+        match self {
+            Self::Strict => Self::STRICT_U8,
+            Self::Normal => Self::NORMAL_U8,
+            Self::UnsafeDev => Self::UNSAFE_DEV_U8,
+        }
+    }
+
+    #[inline]
+    fn from_u8(value: u8) -> Self {
+        match value {
+            Self::NORMAL_U8 => Self::Normal,
+            Self::UNSAFE_DEV_U8 => Self::UnsafeDev,
+            _ => Self::Strict, // safest default for unknown
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CommitOutcome {
     Committed(Csn),
@@ -147,6 +172,11 @@ impl Default for EngineConfig {
 #[derive(Debug)]
 pub struct Engine {
     config: EngineConfig,
+    /// Runtime-mutable commit durability. Init from `config.commit_durability`
+    /// at open; updatable via `set_commit_durability` so `PRAGMA synchronous`
+    /// propagates from SQL into the commit hot path. Read at every commit via
+    /// `Engine::commit_durability()` (atomic load, ~free).
+    commit_durability_live: AtomicU8,
     volatile: bool,
     data_path: PathBuf,
     wal_dir: PathBuf,
@@ -182,5 +212,22 @@ impl Engine {
         } else {
             Some(Arc::clone(&self.wal))
         }
+    }
+
+    /// Current commit durability. Read on the commit hot path; reflects any
+    /// runtime change made via `set_commit_durability`.
+    #[inline]
+    pub fn commit_durability(&self) -> CommitDurability {
+        CommitDurability::from_u8(self.commit_durability_live.load(Ordering::Relaxed))
+    }
+
+    /// Update commit durability live. In-flight commits observe the new value
+    /// at their next durability decision. Used by SQL `PRAGMA synchronous`
+    /// propagation; never changes the open-time `EngineConfig.commit_durability`
+    /// snapshot (that stays the open-time intent).
+    #[inline]
+    pub fn set_commit_durability(&self, durability: CommitDurability) {
+        self.commit_durability_live
+            .store(durability.to_u8(), Ordering::Relaxed);
     }
 }

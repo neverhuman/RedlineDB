@@ -184,12 +184,26 @@ fn build_select_runtime(
         // index-leaf serial covering path. Result-set parity vs
         // the serial path is enforced by
         // `tests/ws_c3_parallel_scan_dispatch.rs`.
-        let parallel_decision = decide_parallel_covering_scan(plan, limit);
-        debug_assert!(
-            !parallel_decision.would_dispatch() || super::outer_row_stack_is_empty(),
-            "WS-C3 R2: parallel covering-scan gate fired with non-empty OUTER_ROW_STACK"
-        );
-        record_parallel_covering_decision(parallel_decision);
+        // A5: skip the gate when no Rayon pool is installed. By default
+        // `OpenOptions::rayon_threads = None`, so `current_rayon_pool()`
+        // returns `None` and the gate would walk the eligibility checks
+        // only to return `FallbackNoPool`. Hoist that decision up so every
+        // covering-eligible SELECT in default (no-pool) mode pays only an
+        // atomic-load + branch, not the full per-condition evaluation +
+        // `record_parallel_covering_decision` thread-local update.
+        // Pool-installed tests (`ws_c3_parallel_scan_dispatch.rs`) still
+        // exercise the gate because they install a pool first.
+        let parallel_decision = if super::current_rayon_pool().is_none() {
+            ParallelCoveringDecision::FallbackNoPool
+        } else {
+            let decision = decide_parallel_covering_scan(plan, limit);
+            debug_assert!(
+                !decision.would_dispatch() || super::outer_row_stack_is_empty(),
+                "WS-C3 R2: parallel covering-scan gate fired with non-empty OUTER_ROW_STACK"
+            );
+            record_parallel_covering_decision(decision);
+            decision
+        };
 
         let tx_ref = tx.as_mut().expect("tx present");
         let cover_limit = if plan.order_by.is_empty() {

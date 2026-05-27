@@ -331,6 +331,13 @@ impl Database {
         self.engine.config().clone()
     }
 
+    /// Current commit durability for this database. Reflects runtime mutations
+    /// made by `PRAGMA synchronous = …` (A1 wiring); the open-time intent is
+    /// frozen in `engine_config().commit_durability`.
+    pub fn commit_durability(&self) -> CommitDurability {
+        self.engine.commit_durability()
+    }
+
     pub fn path(&self) -> &Path {
         self.path.as_ref()
     }

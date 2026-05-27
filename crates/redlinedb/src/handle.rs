@@ -308,6 +308,17 @@ impl Database {
     pub fn buffer_pool_pages(&self) -> usize {
         self.inner.db.engine_config().buffer_pool_pages
     }
+
+    /// A1: current commit durability, including any runtime mutation from
+    /// `PRAGMA synchronous = …` on a connection of this database. Equivalent
+    /// to the `Durability` value set at open until a connection issues a
+    /// `PRAGMA synchronous`, at which point this reflects the live engine
+    /// state. The open-time `OpenOptions::durability` is recoverable via the
+    /// engine config but is no longer authoritative once PRAGMA propagation
+    /// has fired.
+    pub fn commit_durability(&self) -> redlinedb_kernel::engine::CommitDurability {
+        self.inner.db.commit_durability()
+    }
 }
 
 fn volatile_open_options(mut options: OpenOptions) -> OpenOptions {

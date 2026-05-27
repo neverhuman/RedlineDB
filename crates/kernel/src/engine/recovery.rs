@@ -82,8 +82,11 @@ impl Engine {
         } else {
             Some(Arc::clone(&wal))
         };
+        let commit_durability_live =
+            std::sync::atomic::AtomicU8::new(commit_durability_initial_u8(config.commit_durability));
         Ok(Arc::new(Self {
             config: config.clone(),
+            commit_durability_live,
             volatile,
             data_path,
             wal_dir,
@@ -221,8 +224,11 @@ impl Engine {
         // Wave 1A-F: same telemetry pipe on the open path.
         locks.set_phase11_counters(Arc::clone(&phase11_counters));
         wal.set_phase11_counters(Arc::clone(&phase11_counters));
+        let commit_durability_live =
+            std::sync::atomic::AtomicU8::new(commit_durability_initial_u8(config.commit_durability));
         let engine = Arc::new(Self {
             config: config.clone(),
+            commit_durability_live,
             volatile: false,
             data_path: page_path,
             wal_dir,
@@ -263,6 +269,18 @@ fn catalog_sync_policy(config: &EngineConfig) -> CatalogSyncPolicy {
 
 fn flush_wal_on_shutdown(commit_durability: CommitDurability) -> bool {
     !matches!(commit_durability, CommitDurability::UnsafeDev)
+}
+
+/// Encode the open-time `CommitDurability` to the u8 representation used by
+/// `Engine::commit_durability_live`. Kept private to the kernel so the
+/// `Engine::commit_durability` / `set_commit_durability` accessors are the
+/// only public surface.
+fn commit_durability_initial_u8(durability: CommitDurability) -> u8 {
+    match durability {
+        CommitDurability::Strict => 0,
+        CommitDurability::Normal => 1,
+        CommitDurability::UnsafeDev => 2,
+    }
 }
 
 fn recover_heap(

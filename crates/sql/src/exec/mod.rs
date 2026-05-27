@@ -12,7 +12,7 @@ use redlinedb_kernel::catalog::{
     StatsEpoch, StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity, encode_record,
     eval_expr,
 };
-use redlinedb_kernel::engine::{CommitOutcome, Engine, Txn};
+use redlinedb_kernel::engine::{CommitDurability, CommitOutcome, Engine, Txn};
 use redlinedb_kernel::format::RowId;
 use redlinedb_kernel::txn::Isolation;
 use sqlparser::ast::{
@@ -30,7 +30,7 @@ use crate::session::SessionState;
 use crate::statement::{
     AnalyzePlan, CreateTableAsSelectSpec, DmlValue, ExecutionResult, ExplainPlan, PragmaPlan,
     PreparedKind, PreparedTemplate, RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource,
-    SelectRuntimeTx, SelectSource,
+    SelectRuntimeTx, SelectSource, SynchronousLevel,
 };
 use crate::value::{SqlValue, canonicalize, compare_values, is_truthy};
 
@@ -1040,6 +1040,19 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
         }
         PragmaPlan::SetSynchronous(value) => {
             conn.set_synchronous(*value);
+            // A1: propagate the SQLite-compatible PRAGMA level into the kernel
+            // commit-durability hot path. Without this, `PRAGMA synchronous`
+            // was a silent no-op — the engine kept fsync-per-statement
+            // regardless of OFF/NORMAL requests. Mapping matches SQLite intent:
+            //   OFF | NORMAL  → CommitDurability::Normal  (buffered writes)
+            //   FULL | EXTRA  → CommitDurability::Strict  (fsync each commit)
+            // UnsafeDev is intentionally NOT reachable via PRAGMA — set via
+            // open-time options / REDLINEDB_DEFAULT_DURABILITY env (A2) only.
+            let durability = match *value {
+                SynchronousLevel::Off | SynchronousLevel::Normal => CommitDurability::Normal,
+                SynchronousLevel::Full | SynchronousLevel::Extra => CommitDurability::Strict,
+            };
+            conn.engine().set_commit_durability(durability);
             Ok(())
         }
         PragmaPlan::SetTempStore(value) => {

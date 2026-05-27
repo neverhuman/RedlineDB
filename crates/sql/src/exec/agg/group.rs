@@ -5,6 +5,14 @@ use super::super::vec::hash_agg::{AggKind, HashAggregator, encode_group_key_byte
 use super::super::*;
 use super::order::{eval_group_key, sort_groups_by_order_by, sort_projected_rows_by_order_by};
 
+/// A4: minimum filtered-row count to attempt the WS-C2 one-pass HashAggregator
+/// route. Below this threshold the projection-classification cost outweighs
+/// the win and the legacy materialised group path is faster. Tune via the
+/// micro-bench in W9; correctness is path-independent (one-pass and
+/// materialised paths produce byte-identical output, asserted by the
+/// differential test).
+pub(crate) const ONE_PASS_GROUP_THRESHOLD: usize = 16;
+
 pub(crate) fn execute_grouped_select(
     plan: &crate::statement::SelectPlan,
     rows: Vec<SqlRow>,
@@ -24,7 +32,19 @@ pub(crate) fn execute_grouped_select(
     // shape is compatible (GROUP BY + bare built-in aggregates, no DISTINCT,
     // no exotic aggregates). Falls back to the materialised group path on
     // None.
-    if let Some(routed) = try_one_pass_grouped(plan, &filtered, bindings, limit, offset, memory)? {
+    //
+    // A4: only attempt the one-pass routing for inputs large enough to amortise
+    // the projection classification + HashAggregator setup. Below the
+    // threshold the legacy materialised group path is faster, so the routing
+    // attempt is pure overhead on tiny benchmark queries. The cutoff was
+    // picked from W0 ranked-CSV evidence: cases with ≤ ONE_PASS_GROUP_THRESHOLD
+    // post-filter rows make up most of the per-statement overhead tax in the
+    // parity corpus. Both code paths produce byte-identical output (one-pass
+    // is a fast-path, not a different algorithm) — guarded by the differential
+    // test in `crates/sql/tests/agg_group_one_pass_threshold.rs`.
+    if filtered.len() >= ONE_PASS_GROUP_THRESHOLD
+        && let Some(routed) = try_one_pass_grouped(plan, &filtered, bindings, limit, offset, memory)?
+    {
         return Ok(routed);
     }
 

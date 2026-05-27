@@ -76,12 +76,21 @@ pub const LEAN_BUFFER_POOL_PAGES: usize = 256;
 /// Statement cache capacity when `lean_ephemeral = true`.
 pub const LEAN_STATEMENT_CACHE_CAPACITY: usize = 8;
 
+/// A2: env-var name for overriding the default durability without recompiling
+/// or changing user code. Values: `strict`, `normal`, `unsafe_dev`. Any other
+/// value panics at the first `OpenOptions::default()` call so misconfiguration
+/// surfaces loudly.
+pub const REDLINEDB_DEFAULT_DURABILITY_ENV: &str = "REDLINEDB_DEFAULT_DURABILITY";
+/// Suppress the one-line stderr notice emitted on first non-default
+/// durability via [`REDLINEDB_DEFAULT_DURABILITY_ENV`].
+pub const REDLINEDB_QUIET_DURABILITY_ENV: &str = "REDLINEDB_QUIET_DURABILITY";
+
 impl Default for OpenOptions {
     fn default() -> Self {
         Self {
             create: true,
             read_only: false,
-            durability: Durability::Strict,
+            durability: default_durability_from_env(),
             memory: MemoryOptions::default(),
             optimizer: OptimizerOptions::default(),
             query_memory: QueryMemoryOptions::default(),
@@ -95,6 +104,48 @@ impl Default for OpenOptions {
         }
     }
 }
+
+/// Parse `REDLINEDB_DEFAULT_DURABILITY` and emit a one-line stderr notice on
+/// first non-default selection. The intent is to keep the open() default at
+/// `Strict` (matches the durable behaviour users implicitly depend on) while
+/// letting the parity harness / CI export `REDLINEDB_DEFAULT_DURABILITY=normal`
+/// to recover the per-statement fsync tax. Unknown values panic on purpose.
+fn default_durability_from_env() -> Durability {
+    let Ok(raw) = std::env::var(REDLINEDB_DEFAULT_DURABILITY_ENV) else {
+        return Durability::Strict;
+    };
+    let value = raw.trim().to_ascii_lowercase();
+    let parsed = match value.as_str() {
+        "strict" | "full" => Durability::Strict,
+        "normal" => Durability::Normal,
+        "unsafe_dev" | "unsafe-dev" | "off" => Durability::UnsafeDev,
+        other => panic!(
+            "{REDLINEDB_DEFAULT_DURABILITY_ENV}={other:?} is not a valid durability — \
+             expected one of: strict, normal, unsafe_dev"
+        ),
+    };
+    if parsed != Durability::Strict
+        && std::env::var_os(REDLINEDB_QUIET_DURABILITY_ENV).is_none()
+        && DURABILITY_NOTICE_EMITTED
+            .compare_exchange(
+                false,
+                true,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+            )
+            .is_ok()
+    {
+        eprintln!(
+            "redlinedb: {REDLINEDB_DEFAULT_DURABILITY_ENV}={raw} active \
+             (commit durability defaults to {parsed:?} instead of Strict). \
+             Set {REDLINEDB_QUIET_DURABILITY_ENV}=1 to suppress this notice."
+        );
+    }
+    parsed
+}
+
+static DURABILITY_NOTICE_EMITTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 impl OpenOptions {
     /// Resolve [`OpenOptions::lean_ephemeral`] for a concrete open. When the
