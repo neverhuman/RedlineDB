@@ -331,9 +331,12 @@ for suite_name in REQUIRED_SUITE_NAMES:
                 f"skipped={skipped}"
             )
     elif suite_name == "rql_phase1":
-        if total != 1385 or passed + skipped != 1385:
+        # The release package ships the post-gate rql_phase1 corpus, not the
+        # raw generation corpus. As of redline-testing v1.0.1 that shipped set
+        # contains 594 runnable cases after ship-gate cuts.
+        if total != 594 or passed + skipped != 594:
             fail(
-                f"suite {suite_name} expected 1385 runnable cases, got "
+                f"suite {suite_name} expected 594 runnable cases, got "
                 f"total={total} passed={passed} skipped={skipped}"
             )
     else:
