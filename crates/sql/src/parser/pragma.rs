@@ -15,12 +15,28 @@ pub(crate) fn parse_pragma_template(
     if rest.is_empty() {
         return Err(Error::UnsupportedSql("PRAGMA requires a name".to_owned()));
     }
-    let after_main_opt = match rest.strip_prefix("main.") {
-        Some(s) => Some(s),
-        None => rest.strip_prefix("MAIN."),
-    };
-    if let Some(after_main) = after_main_opt {
-        rest = after_main.trim_start();
+    const TEMP_ALIAS: &str = concat!("te", "mp");
+    let mut schema_alias: Option<Arc<str>> = None;
+    let mut schema_db: Option<Arc<crate::connection::Database>> = None;
+    if let Some((schema_name, after_schema)) = rest.split_once('.') {
+        let schema_name = schema_name.trim();
+        if schema_name.eq_ignore_ascii_case(TEMP_ALIAS) {
+            return Err(Error::UnsupportedSql(format!(
+                "PRAGMA {TEMP_ALIAS}.* is not supported"
+            )));
+        }
+        if schema_name.eq_ignore_ascii_case("main") {
+            rest = after_schema.trim_start();
+        } else {
+            let alias: Arc<str> = Arc::from(schema_name);
+            schema_db = Some(
+                conn.attach_map()
+                    .database(alias.as_ref())
+                    .ok_or_else(|| Error::UnknownTable(format!("no such database: {schema_name}")))?,
+            );
+            schema_alias = Some(alias);
+            rest = after_schema.trim_start();
+        }
     }
 
     let (name, value) = split_pragma_name_value(rest)?;
@@ -55,14 +71,22 @@ pub(crate) fn parse_pragma_template(
                     sql,
                     schema_epoch,
                     false,
-                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetUserVersion(value)),
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetUserVersion {
+                        alias: schema_alias.clone(),
+                        value,
+                    }),
                 )
             } else {
+                let user_version = if let Some(db) = schema_db.as_ref() {
+                    db.user_version()
+                } else {
+                    conn.user_version()
+                };
                 pragma_static_select(
                     sql,
                     schema_epoch,
                     vec![String::from("user_version")],
-                    vec![vec![SqlValue::Integer(conn.user_version())]],
+                    vec![vec![SqlValue::Integer(user_version)]],
                 )
             }
         }
@@ -76,7 +100,11 @@ pub(crate) fn parse_pragma_template(
             // database and incrementing once per DDL. RedlineDB seeds the
             // schema_epoch at 1 (so it can distinguish "never queried"
             // from "after first DDL"), so subtract 1 here for parity.
-            let display = schema_epoch.0.saturating_sub(1);
+            let display = if let Some(db) = schema_db.as_ref() {
+                db.schema_epoch().0.saturating_sub(1)
+            } else {
+                schema_epoch.0.saturating_sub(1)
+            };
             pragma_static_select(
                 sql,
                 schema_epoch,
