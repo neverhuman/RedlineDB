@@ -34,7 +34,15 @@ impl Engine {
     }
 
     fn create_inner(path: &Path, config: EngineConfig, volatile: bool) -> Result<Arc<Self>> {
-        std::fs::create_dir_all(path)?;
+        // For persistent databases, ensure the directory exists.
+        // For volatile (in-memory) databases the caller (EphemeralRoot or
+        // OwnedTempRoot) always creates the directory just before this call,
+        // so skipping create_dir_all saves 3–4 extra syscalls (mkdir EEXIST +
+        // statx × path depth) per process startup — meaningful when the parity
+        // harness launches 1127 fresh processes back-to-back.
+        if !volatile {
+            std::fs::create_dir_all(path)?;
+        }
         let data_path = path.join(&config.data_file_name);
         let wal_dir = path.join("wal");
         let page_file = Arc::new(PageFile::create(&data_path, config.page_size)?);
@@ -48,8 +56,20 @@ impl Engine {
                 flush_wal_on_shutdown(config.commit_durability),
             )?)
         };
-        let control = ControlStore::new(path)?;
-        let tx_status_store = TxStatusStore::new(path)?;
+        // Use the volatile constructors for in-memory engines: they skip
+        // create_dir_all (already done by the caller) saving another 4–6
+        // syscalls per process start.  Persistent engines use the regular
+        // constructors which also guarantee the subdirectory exists.
+        let control = if volatile {
+            ControlStore::new_volatile(path)
+        } else {
+            ControlStore::new(path)?
+        };
+        let tx_status_store = if volatile {
+            TxStatusStore::new_volatile(path)
+        } else {
+            TxStatusStore::new(path)?
+        };
         let checkpoint = if volatile {
             None
         } else {
