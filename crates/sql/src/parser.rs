@@ -3223,8 +3223,12 @@ fn rewrite_at_time_zone(sql: &str) -> String {
 ///
 /// Returns `None` if no rewrite is needed, so the caller can short-circuit.
 fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) -> Option<String> {
-    let lower = sql.to_ascii_lowercase();
-    if !lower.contains('.') {
+    // A20: fast-reject without allocating the lowercase clone. `.` is
+    // case-invariant so checking the raw SQL directly is equivalent to
+    // checking the lowercased one. Most parity-corpus statements have no
+    // schema-qualified identifier, so this bails before paying the clone
+    // OR the session-mutex round-trip.
+    if !sql.contains('.') {
         return None;
     }
     // Use the re-entrant session accessor so trigger-body parses, which
@@ -3234,6 +3238,7 @@ fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) -> Option<S
     if schemas.is_empty() {
         return None;
     }
+    let lower = sql.to_ascii_lowercase();
     // Built-in `main` / `temp` aliases are handled elsewhere; the `public`
     // / `pg_catalog` entries are seeded in the session so the rewrite
     // covers them. We exclude the bare `main` / temp aliases because the
