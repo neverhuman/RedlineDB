@@ -54,9 +54,15 @@ fn parse_dt_args(values: &[SqlValue]) -> Result<crate::datetime::DateTime> {
     if values.len() <= 1 {
         return Ok(dt);
     }
+    // A35: pass the owned-String vec directly. `apply_modifiers` is now
+    // generic over `&[impl AsRef<str>]` so the intermediate `Vec<&str>`
+    // adapter is gone — one heap allocation per `datetime()` /
+    // `strftime()` call instead of two. Targets the SQL_DATETIME
+    // worst-tail cluster (DATETIME_DATETIME_Y2K_*,
+    // DATETIME_STRFTIME_ISO_DATE_*) where multi-modifier shapes
+    // dominate the call cost.
     let mods: Vec<String> = values[1..].iter().map(value_to_string).collect();
-    let refs: Vec<&str> = mods.iter().map(String::as_str).collect();
-    crate::datetime::apply_modifiers(dt, &refs)
+    crate::datetime::apply_modifiers(dt, &mods)
 }
 
 /// SQLite-compatible `printf`/`format` implementation.
