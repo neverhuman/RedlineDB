@@ -3459,6 +3459,13 @@ fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
 /// identifier strings (e.g. `'mig_t'::regclass`); RedlineDB has no need
 /// to evaluate them. Returns None when no cast is present.
 fn strip_pg_cast_suffixes(sql: &str) -> Option<String> {
+    // A19 fast-reject: bytewise case-insensitive scan for the shared
+    // "::reg" prefix all four suffixes start with. Avoids the
+    // `to_ascii_lowercase()` clone for the vast majority of queries that
+    // have no PG cast suffix at all. Same A7/A8/A9 hygiene pattern.
+    if !contains_token_ci_bytes(sql.as_bytes(), b"::reg") {
+        return None;
+    }
     let lower = sql.to_ascii_lowercase();
     let suffixes = ["::regclass", "::regproc", "::regtype", "::regnamespace"];
     if !suffixes.iter().any(|s| lower.contains(s)) {
@@ -3475,6 +3482,22 @@ fn strip_pg_cast_suffixes(sql: &str) -> Option<String> {
         }
     }
     if out == sql { None } else { Some(out) }
+}
+
+/// A19 helper: allocation-free case-insensitive substring scan over
+/// bytes. Shared with future parser-hygiene fixes; mirrors the
+/// `contains_token_ci` byte-scans in `exec::index_access` / `coerce::cast`.
+#[inline]
+fn contains_token_ci_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    if haystack.len() < needle.len() {
+        return false;
+    }
+    haystack.windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
 }
 
 /// Case-insensitive replacement of a bare table identifier (surrounded by
