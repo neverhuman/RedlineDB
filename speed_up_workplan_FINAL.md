@@ -535,7 +535,9 @@ Surfaced via `redlinedb-cli stats rql` and `PRAGMA redline_rql_stats`.
 
 ### C.1 BytesArena growth pattern fix (pre-requisite)
 
-`crates/sql/src/exec/morsel/arena.rs` — current `push_bytes` likely re-allocates without amortisation on each push (verify before fixing). Replace with amortised-growth pattern:
+**STATUS (2026-05-28): DONE.** `crates/sql/src/exec/morsel/arena.rs` already uses `bumpalo::collections::Vec::extend_from_slice` which provides amortised O(1) capacity-doubling growth. Test `amortised_growth_handles_many_pushes` at line 104 validates O(N) total cost for 4096 pushes. No fix needed; this prerequisite was completed during the W4 scaffolding wave.
+
+The originally-suggested explicit `push_bytes` capacity-doubling block (kept below for historical context) is not needed because the bumpalo-backed Vec already does it:
 
 ```rust
 pub fn push_bytes(&mut self, bytes: &[u8]) -> ArenaSlice {
@@ -852,6 +854,9 @@ Update inline when a decision lands. Each row: date / who / decision / rationale
 | TBD | TBD | Whether to broaden W3 native RQL to JOIN shapes before Phase 2 close | Depends on RQL median delta after simple-shape work | W3 |
 | TBD | TBD | Default `try_one_pass_grouped` threshold (start 16, tune in W9) | Micro-bench evidence | A4/W9 |
 | TBD | TBD | Whether to make `track-*` branch recovery a pre-Phase-2 hard gate | Depends on W1 audit outcomes | W1 |
+| 2026-05-28 | claude (audit) | §14 C.3 `effective_batch_rows` — defer until W4-A4 SIMD batching has a caller. `MAX_BATCH_ROWS=1024` stays static for the current row-at-a-time W4-A2b path; shipping the dynamic helper without a caller would be dead code. Re-evaluate when columnar batching lands. | W4 / W4-A4 |
+| 2026-05-28 | claude (audit) | W9-R RSS-regression diff script — **blocked on harness**: `target_peak_rss_kb` field is defined in the harness output spec but not yet populated by the redline-testing binary itself (verified by spot-check of multiple `target/perf/*.jsonl` files). W9-R can ship once the harness emits the field. | W9 |
+| 2026-05-28 | claude (audit) | §14 C.1 BytesArena growth pattern — **DONE** during the W4 scaffolding wave. `arena.rs::push` uses `bumpalo::collections::Vec::extend_from_slice` which is amortised O(1); test `amortised_growth_handles_many_pushes` validates. The originally-described explicit capacity-doubling block is unnecessary. | W4 |
 
 ---
 
