@@ -9,7 +9,7 @@
 mod common;
 
 use common::open_database;
-use redlinedb_sql::{BeginMode, Step};
+use redlinedb_sql::{BeginMode, SqlValue, Step};
 
 #[test]
 fn create_insert_select_round_trip() {
@@ -61,6 +61,31 @@ fn nested_select_reuses_enclosing_transaction_snapshot() {
     drop(stmt);
 
     conn.rollback().expect("rollback");
+}
+
+#[test]
+fn scalar_subquery_uses_first_row_and_empty_returns_null() {
+    let (_dir, conn) = open_database();
+
+    conn.execute("CREATE TABLE t(v INTEGER)")
+        .expect("create table");
+    conn.execute("INSERT INTO t VALUES (3), (1), (2)")
+        .expect("insert rows");
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT \
+                (SELECT v FROM t ORDER BY v), \
+                (SELECT v FROM t WHERE v > 10)",
+        )
+        .expect("prepare scalar subquery");
+    assert_eq!(stmt.step().expect("row"), Step::Row);
+    assert_eq!(stmt.column_i64(0).expect("first row"), 1);
+    assert_eq!(
+        stmt.column_value(1).expect("empty subquery"),
+        &SqlValue::Null
+    );
+    assert_eq!(stmt.step().expect("done"), Step::Done);
 }
 
 #[test]

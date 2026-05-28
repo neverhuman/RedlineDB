@@ -77,7 +77,7 @@ pub(crate) fn eval_subquery_value(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    let rows = evaluate_subquery_rows(subquery, row, bindings)?;
+    let rows = evaluate_subquery_rows_limited(subquery, row, bindings, Some(1))?;
     // SQLite scalar-subquery semantics
     // (https://sqlite.org/lang_expr.html#subqueries): a multi-row
     // subquery returns the value of the first row (in projection
@@ -127,10 +127,11 @@ fn subquery_cache_key(conn: &Connection, subquery: &sqlparser::ast::Query) -> Su
 /// stack so qualified references (`outer.col`) resolve through
 /// `lookup_correlated`. The row snapshot is dropped automatically once
 /// the subquery returns.
-pub(crate) fn evaluate_subquery_rows(
+fn evaluate_subquery_rows_limited(
     subquery: &sqlparser::ast::Query,
     outer_row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
+    max_rows: Option<usize>,
 ) -> Result<Vec<Vec<SqlValue>>> {
     let Some(conn) = current_connection() else {
         return Err(Error::TransactionState(
@@ -140,7 +141,7 @@ pub(crate) fn evaluate_subquery_rows(
     let template = bind_subquery(conn, subquery)?;
     let owned = outer_row.to_owned_row();
     crate::exec::with_outer_row(owned, || {
-        materialize_prepared_rows(conn, &template, bindings)
+        materialize_prepared_rows_limited(conn, &template, bindings, max_rows)
     })
 }
 
@@ -149,16 +150,7 @@ pub(crate) fn evaluate_subquery_exists(
     outer_row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<bool> {
-    let Some(conn) = current_connection() else {
-        return Err(Error::TransactionState(
-            "subquery evaluation requires an active connection",
-        ));
-    };
-    let template = bind_subquery(conn, subquery)?;
-    let owned = outer_row.to_owned_row();
-    let rows = crate::exec::with_outer_row(owned, || {
-        materialize_prepared_rows_limited(conn, &template, bindings, Some(1))
-    })?;
+    let rows = evaluate_subquery_rows_limited(subquery, outer_row, bindings, Some(1))?;
     Ok(!rows.is_empty())
 }
 
