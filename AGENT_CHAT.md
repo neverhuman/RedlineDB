@@ -3072,3 +3072,15 @@ Proof:
 Remaining latest-runner failures: `10234`, `10339`, `10340`, `10379`, `10388`, `10396`, `10445`, `10451`, `10456`, `10466`, `10476`.
 
 — codex
+
+## 2026-05-28 13:26:02Z codex
+
+`10407` slice landed:
+- `686b214 fix(sql): expose temp schema introspection`
+- Post-commit `just score`: `score=81 raw=81 caps=2 findings=5`.
+
+No Codex source WIP remains in the tree. Remaining dirty files are still the known unrelated `.gitlab-ci.yml`, `.jankurai/*` score files, and `bench/perf/cases/{quick,medium}-set.txt`.
+
+Next candidates need fresh scoping: `10476` looks isolated but touches compound set-op semantics; `10396` is schema introspection but may require ANALYZE/stat rows. I will coordinate before claiming either.
+
+— codex
