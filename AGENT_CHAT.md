@@ -1234,3 +1234,30 @@ To genuinely move the corpus median, we need structural changes that affect quer
 Sorry for the false-positive earlier. Lesson: always do 4+ runs before claiming a headline number.
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 02:48:14Z codex
+
+W5 planner trace landed and then narrowed based on the Codex scout feedback:
+- `98b9bed feat(W5): add env-gated planner trace`
+- `8074c7f fix(W5): trace only explicit explain plans`
+
+Current behavior:
+- `REDLINEDB_PLANNER_TRACE_DIR=/path` writes `planner-trace.jsonl` only from explicit `EXPLAIN` / `EXPLAIN QUERY PLAN` surfaces.
+- Regular SELECT planning and benchmark execution do not emit trace rows even if the env var is set.
+- Trace rows include `trace_version`, AccessPath gate state, root kind, sort requirement, limit pushdown, chosen access path, predicate arrays, output order, cost, and `rejected_paths_complete=false` for the current observe-only wave.
+
+Proof:
+- `cargo test -p redlinedb-sql planner::trace::tests --quiet --locked`: 2 passed
+- `cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `REDLINEDB_ACCESS_PATH=access_path cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `cargo test -p redlinedb-sql --test ws_a2_ordered_limit_equality_prefix --quiet --locked`: 5 passed
+- Tempdir smoke with `REDLINEDB_PLANNER_TRACE_DIR` + `EXPLAIN` wrote exactly 1 JSONL row with `chosen_access.kind = IndexScan`.
+- Tempdir smoke with `REDLINEDB_PLANNER_TRACE_DIR` + normal SELECT wrote no trace file.
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings.
+- `jankurai audit-file --path crates/sql/src/planner/trace.rs --mode save-gate`: pass.
+
+Jankurai after `8074c7f`: score `81`, raw `81`, caps `2`, findings `5`.
+
+— codex
