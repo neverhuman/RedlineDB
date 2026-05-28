@@ -71,6 +71,35 @@ impl OwnedTempRoot {
         fs::create_dir_all(&path)?;
         Ok(Self { path })
     }
+
+    /// A24 fast-path: when the caller has guaranteed the parent directory
+    /// already exists (e.g. `:memory:` opens, where the parent is
+    /// `standard_volatile_root()` cached process-wide on first use), a
+    /// single-level `fs::create_dir(path)` is enough. `create_dir_all`
+    /// walks every path component with a separate statx — 3-4 syscalls on
+    /// `/dev/shm/redlinedb-ephemeral/redlinedb-ephemeral-…/`. Skipping
+    /// those is worth a noticeable chunk of process-startup time when
+    /// multiplied by 1127 fresh subprocesses in the parity corpus.
+    ///
+    /// Falls back to `create_dir_all` on `NotFound` so caller-supplied
+    /// `temp_dir` paths that haven't been seeded still work.
+    fn new_with_seeded_parent(path: PathBuf) -> Result<Self> {
+        match fs::create_dir(&path) {
+            Ok(()) => Ok(Self { path }),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir_all(&path)?;
+                Ok(Self { path })
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Defensive: a previous session with the same counter-derived
+                // name wasn't cleaned up. Fall back to the slow path which
+                // tolerates pre-existing dirs.
+                fs::create_dir_all(&path)?;
+                Ok(Self { path })
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
 }
 
 impl Drop for OwnedTempRoot {
@@ -228,10 +257,21 @@ fn create_ephemeral_database_inner(
         }
     }
 
-    if path.exists() {
-        fs::remove_dir_all(&path)?;
-    }
-    let temp_root = OwnedTempRoot::new(path.clone())?;
+    // A24: skip the pre-existence statx for `:memory:` opens. Their session
+    // names are counter-derived (`memory-{pid}-{id}`) so they can never
+    // collide with a prior session in the same process, and the inner
+    // `OwnedTempRoot::new_with_seeded_parent` falls back gracefully if a
+    // stale dir from a crashed prior process is still there. Named
+    // ephemeral sessions keep the cleanup behaviour because they CAN
+    // collide (e.g. a previous run of the same harness).
+    let temp_root = if private_memory {
+        OwnedTempRoot::new_with_seeded_parent(path.clone())?
+    } else {
+        if path.exists() {
+            fs::remove_dir_all(&path)?;
+        }
+        OwnedTempRoot::new(path.clone())?
+    };
     let db = if private_memory {
         redlinedb_sql::Database::create_private_in_memory_at(
             &path,
