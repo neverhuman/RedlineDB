@@ -57,7 +57,8 @@ pub(crate) fn bind_query_with_params(
         };
         return crate::exec::cte::bind_with_query(conn, schema, schema_epoch, sql, with, trailing);
     }
-    match *body {
+    let body = sqlite_left_associate_compound(*body);
+    match body {
         SetExpr::Query(query) => {
             let mut template =
                 bind_query_with_params(conn, schema, schema_epoch, sql, *query, params)?;
@@ -130,6 +131,47 @@ pub(crate) fn bind_query_with_params(
         _ => Err(Error::UnsupportedSql(
             "only simple SELECT and UNION ALL queries are supported".to_owned(),
         )),
+    }
+}
+
+fn sqlite_left_associate_compound(expr: SetExpr) -> SetExpr {
+    match expr {
+        SetExpr::SetOperation {
+            op,
+            set_quantifier,
+            left,
+            right,
+        } => {
+            let left = Box::new(sqlite_left_associate_compound(*left));
+            match *right {
+                SetExpr::SetOperation {
+                    op: right_op,
+                    set_quantifier: right_set_quantifier,
+                    left: right_left,
+                    right: right_right,
+                } => {
+                    let rotated_left = SetExpr::SetOperation {
+                        op,
+                        set_quantifier,
+                        left,
+                        right: right_left,
+                    };
+                    sqlite_left_associate_compound(SetExpr::SetOperation {
+                        op: right_op,
+                        set_quantifier: right_set_quantifier,
+                        left: Box::new(rotated_left),
+                        right: right_right,
+                    })
+                }
+                other => SetExpr::SetOperation {
+                    op,
+                    set_quantifier,
+                    left,
+                    right: Box::new(sqlite_left_associate_compound(other)),
+                },
+            }
+        }
+        other => other,
     }
 }
 

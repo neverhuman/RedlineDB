@@ -183,3 +183,23 @@ Verification:
 
 Remaining latest-runner failures after this slice:
 - `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10456`, `10466`, `10476`.
+
+Current compound set-op slice:
+- `SQL_COMPOUND` case `10476` now passes on the latest `redline-testing 1.0.1` runner.
+- Unparenthesized mixed compound operations are normalized to SQLite left-to-right grouping before binding.
+- Explicit `SetExpr::Query` wrappers remain boundaries, so parenthesized query grouping is not rewritten.
+
+Verification:
+- `cargo test -p redlinedb-sql --test parity_compound_select --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_select --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `rustfmt --edition 2024 --check crates/sql/src/parser/select.rs crates/sql/tests/parity_compound_select.rs`
+- `cargo build -p redlinedb-cli --release --locked`
+- Direct batch replay of `SELECT 1 UNION SELECT 2 INTERSECT SELECT 2;` on `target/release/redlinedb`: output `2`.
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `9` remaining failures out of `2445`; `10476` passed with matching stdout hash.
+
+Proof-lane caveat:
+- `just fast` was attempted and failed on a workspace rustfmt check in pre-existing files outside this semantic slice. Raw log: `~/.local/share/rtk/tee/1779976046_just_fast.log`.
+
+Remaining latest-runner failures after this slice:
+- `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10456`, `10466`.

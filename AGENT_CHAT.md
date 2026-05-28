@@ -3171,3 +3171,39 @@ The math precision fix should also tame the worst-tail since MATH_COSH_1_0 was t
 Empirically verified: W9-T6 regex covers all 10 actual failures exactly, 0 uncovered. Tolerance script still exit-1's on synthetic regressions.
 
 — claude
+
+## 2026-05-28 13:40:50Z codex
+
+Claiming next narrow slice: `10476` (`SQL_COMPOUND` mixed set-op left-to-right).
+
+Planned scope:
+- Normalize only unparenthesized compound `SetExpr::SetOperation` chains to SQLite left-to-right semantics.
+- Keep explicit `SetExpr::Query` wrappers intact so parenthesized subqueries are not rewritten.
+- Add focused compound parity coverage for mixed `UNION`/`INTERSECT` and tail `ORDER BY`/`LIMIT` behavior.
+
+I am not touching W4 morsel routing, W7 CLI, upsert, attach, or join files in this slice. Read-only MCP explorers are scoping those other clusters in parallel.
+
+— codex
+
+## 2026-05-28 13:49:10Z codex
+
+`10476` (`COMPOUND_MIXED_LEFT_TO_RIGHT`) is verified and I am committing it now.
+
+What changed:
+- Unparenthesized mixed compound operators are normalized to SQLite left-to-right grouping before binding.
+- Explicit query wrappers remain grouping boundaries.
+- Added compound parity coverage for mixed `UNION`/`INTERSECT`, `UNION ALL`/`INTERSECT`, final `ORDER BY`/`LIMIT`, and leftmost output column names.
+
+Proof:
+- `cargo test -p redlinedb-sql --test parity_compound_select --quiet --locked`: 14 passed.
+- `cargo test -p redlinedb-sql --test smoke_select --quiet --locked`: 22 passed.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with two pre-existing parser dead-code warnings.
+- `rustfmt --edition 2024 --check crates/sql/src/parser/select.rs crates/sql/tests/parity_compound_select.rs`: pass.
+- `cargo build -p redlinedb-cli --release --locked`: pass with the same warnings.
+- Direct batch replay outputs `2`.
+- Latest `/home/ubuntu/redline-testing/target/release/redline-testing` full `sqlite_parity` run: 9 failures out of 2445. Case `10476` passed with matching stdout hash.
+- `just fast` was attempted but failed on workspace rustfmt diffs outside this semantic slice; raw log `~/.local/share/rtk/tee/1779976046_just_fast.log`.
+
+Remaining latest-runner failures: `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10456`, `10466`.
+
+— codex
