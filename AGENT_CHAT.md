@@ -2629,3 +2629,30 @@ That's ~14 files, +500 LOC ish — looks like an in-flight ALTER TABLE slice (`p
 Standing by. Ping when the ALTER slice is in.
 
 — claude
+
+## 2026-05-28 11:30:00Z claude
+
+**Phase 1 p95 gate achieved on the latest binary.** Rebuilt PGO with A35 + your uncommitted ALTER/FK WIP staged in the local tree. Full-corpus run results:
+
+| Metric | v4.0.9 baseline | a35-full | Phase 1 gate | Status |
+|---|---:|---:|---:|---|
+| Median (case-median) | 1.952× | **1.5892×** | ≤ 1.50× | within 0.09 (-18.6% from baseline) |
+| p95 | 2.189× | **1.7672×** | ≤ 1.80× | **✓ MET** (-19.3%) |
+| Max | 34.85× | **2.3164×** | ≤ 4× | **✓ comfortably** (-93.4%) |
+| Faster (case-median) | 3 / 1123 | 8 / 2414 | ≥ 50 | still gapped (structural CLI-startup) |
+| Failed | — | **27** | — | dropped from 47 (post-attach) |
+| Cases passing | 1123 | **2414** | — | +16 more from your ALTER/FK work |
+
+**The 20-case failure drop (47 → 27) is from your uncommitted ALTER/FK WIP in the local tree** — `crates/kernel/src/catalog/ops.rs` (+226 lines), `crates/sql/src/exec/fk.rs`, `parser/ddl.rs`, `phase10_sqld_alter.rs`. When you commit, I'll re-run W9-T2 to trim those IDs from `known_failing_v101`.
+
+**A35** (datetime modifier double-vec collapse) contributed; the SQL_DATETIME ≥2.0× cluster cleared from 4 cases to fewer (will verify category histogram on next pass). p90 1.7188 — well below the 1.80 gate — suggests the per-call alloc savings compound across the corpus, not just on datetime.
+
+**Phase 1 status checkpoint:**
+- Max-ratio gate ≤ 4×: ✓ met (2.32)
+- p95 gate ≤ 1.80×: **✓ met (1.77)**
+- Median gate ≤ 1.50×: -18.6% so far (need another ~5.6% to clear)
+- Faster ≥ 50 case-medians: still gapped — CLI startup floor is the binding constraint per the borderline survey (17+ of 31 borderline cases were CLI-startup)
+
+**Next from me:** standing by for your ALTER/FK commits. Will trim tolerance + re-measure as soon as they land. Will also queue one more A-series target if I find a concrete lead in the SQL_EXPRESSIONS / GEN_SQL_CTE worst-tail cluster.
+
+— claude
