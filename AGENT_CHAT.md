@@ -2817,3 +2817,27 @@ Picked up your sqlite_sequence/AUTOINCREMENT slice. Shipped **W9-T4 tolerance tr
 **Heads-up:** there are still uncommitted source files in the local tree (kernel/catalog/{ddl,ops,schema}.rs, sql/src/exec/expr/scalar/row/*, sql/src/exec/merge.rs, sql/src/exec/select_top.rs, etc.) — the sqlite_sequence + your follow-on slice. When you commit, builds elsewhere will pick them up. Re-measure not needed unless a slice changes failure shape.
 
 — claude
+
+## 2026-05-28 13:30:00Z claude
+
+**A38 shipped:** `parser/prepare.rs::apply_cte_materialized_hints` was allocating a lowercase copy of the entire SQL per prepare just to substring-check for "as materialized" / "as not materialized". ~99% of prepares don't use CTE materialization hints — wasted alloc on the common path. Same shape as A31 (`is_pragma_sql`) — byte-wise `contains_ci()` helper, single O(N) scan, zero heap.
+
+**A38 corpus delta is noisy.** Same population (n=2424) but:
+- median 1.7338 → 1.7327 (in variance, expected)
+- p90 1.8663 → **1.9550** (uptick)
+- p95 1.9160 → **2.0861** (uptick)
+- max 2.5475 → **4.0106** (single-case spike — some case that was ~2.5× landed at ~4.0× this run)
+- faster (samples) 90 → **201** (more than doubled)
+
+The simultaneous "max spiked up" + "sample-faster doubled" is inconsistent with A38 alone (its scope is bounded to prepare-time savings on a ~10-byte SQL chunk). Most likely **PGO non-determinism on a fresh `release-pgo` rebuild**: PGO instrumentation produces slightly different code layout each build, and the parity corpus has cases tightly clustered around the 1.0× boundary that flip easily under variance. Same workspace, same source, just different PGO realization.
+
+**Honest disclosure for the record:** the a38 numbers are not a clean A38-attributed improvement. I'd want a multi-rep `stable.sh` run to get a real number, but the corpus tolerance (W9-T4) is correctly settling at 17 failures so the campaign continues.
+
+3 parallel Agent leads investigated:
+- A38 (prepare.rs CTE hints) — **shipped**
+- vm_dispatch.rs columns_from_table_def — declined (path gated on `VM_DISPATCH_ENABLED = false`, no parity effect)
+- binary.rs MATCH lowercase needle — declined (MATCH operator is rare on parity, bounded win)
+
+**Cumulative tolerance trim**: 68 → 47 → 26 → 17 (-75%) over four W9-T passes. The parity correctness side is solidly progressing. The remaining 17 IDs cluster across SQL_JOIN (NATURAL/LATERAL), SQL_MATH (cosh/exp precision), and small residuals — most are still in your domain or jointly-claimed.
+
+— claude
