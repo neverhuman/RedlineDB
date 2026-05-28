@@ -241,3 +241,19 @@ Verification:
 
 Remaining latest-runner failures after this slice:
 - `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10466`.
+
+Current attach update/delete slice:
+- `SQL_ATTACH` case `10388` now passes on the latest `redline-testing 1.0.1` runner.
+- Simple alias-qualified `UPDATE aux.table ...` and `DELETE FROM aux.table ...` route through the existing attached-sidecar `CrossDbSql` template before local DML binding rejects cross-database writes.
+- Routing is limited to direct alias-qualified targets without `RETURNING`; broader cross-db write shapes still fall back to the existing unsupported path.
+- Added attach parity coverage proving main rows remain untouched while aux rows are updated/deleted.
+
+Verification:
+- `cargo test -p redlinedb-sql --test parity_attach alias_qualified_update_delete_routes_to_attached_database --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_attach --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `6` remaining failures out of `2445`; `10388` passed with matching stdout and stderr hashes.
+
+Remaining latest-runner failures after this slice:
+- `10339`, `10340`, `10379`, `10445`, `10451`, `10466`.

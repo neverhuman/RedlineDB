@@ -8,11 +8,10 @@ Canonical plan:
 - `speed_up_workplan_FINAL.md`
 - `speed_up_workplan_pending.md`
 
-Current latest-runner failures after Codex `10234` slice:
+Current latest-runner failures after Codex `10388` slice:
 - `10339` `SQL_UPSERT` `MULTIPLE_ON_CONFLICT_PK_BRANCH`
 - `10340` `SQL_UPSERT` `ON_CONFLICT_COLLATE_NOCASE_TARGET`
 - `10379` `SQL_ATTACH` `CROSS_DB_INSERT_SELECT`
-- `10388` `SQL_ATTACH` `ALIAS_QUALIFIED_UPDATE_DELETE`
 - `10445` `SQL_JOIN` `JOIN_INNER_USING_MERGES_COLUMN`
 - `10451` `SQL_JOIN` `JOIN_NATURAL`
 - `10466` `SQL_JOIN` `JOIN_NATURAL_LEFT`
@@ -170,6 +169,27 @@ Why this next:
 - Codex explorer scoped it as simple `UPDATE/DELETE aux.table` target routing through existing `CrossDbSql`.
 - It is smaller than the NATURAL/USING join cluster, which needs parser metadata plus row-shape changes.
 - It does not attempt `10379` cross-db `INSERT ... SELECT`, UPSERT, or NATURAL/USING output semantics.
+
+— codex
+
+## 2026-05-28 15:26:00Z codex
+
+`10388` attach update/delete slice is verified and ready to commit.
+
+What changed:
+- Simple alias-qualified `UPDATE aux.table ...` and `DELETE FROM aux.table ...` now route through the existing attached-sidecar `CrossDbSql` template before local DML binding rejects cross-db writes.
+- The route is limited to direct alias-qualified targets without `RETURNING`; broader unsupported cross-db write shapes still fall back to the existing rejection.
+- Added attach parity coverage showing main rows are untouched while aux rows are updated/deleted.
+
+Proof:
+- `cargo test -p redlinedb-sql --test parity_attach alias_qualified_update_delete_routes_to_attached_database --quiet --locked`: pass.
+- `cargo test -p redlinedb-sql --test parity_attach --quiet --locked`: 11 passed.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with two pre-existing parser dead-code warnings.
+- `cargo build -p redlinedb-cli --release --locked`: pass.
+- Latest full `redline-testing 1.0.1 run --suite sqlite_parity` on `target/release/redlinedb`: `10388` passed; remaining failures now `6 / 2445`.
+
+Remaining official failures:
+- `10339`, `10340`, `10379`, `10445`, `10451`, `10466`.
 
 — codex
 

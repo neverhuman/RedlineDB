@@ -47,8 +47,24 @@ pub(crate) fn bind_statement(
             }
             bind_insert(conn, schema, schema_epoch, sql, insert)
         }
-        SqlStatement::Update(update) => bind_update(schema, schema_epoch, sql, update),
-        SqlStatement::Delete(delete) => bind_delete(schema, schema_epoch, sql, delete),
+        SqlStatement::Update(update) => {
+            if update.returning.is_none()
+                && let TableFactor::Table { name, .. } = &update.table.relation
+                && let Some(template) = bind_cross_db_sql(sql, schema_epoch, name)?
+            {
+                return Ok(template);
+            }
+            bind_update(schema, schema_epoch, sql, update)
+        }
+        SqlStatement::Delete(delete) => {
+            if delete.returning.is_none()
+                && let Some(name) = single_delete_table_name(&delete)
+                && let Some(template) = bind_cross_db_sql(sql, schema_epoch, name)?
+            {
+                return Ok(template);
+            }
+            bind_delete(schema, schema_epoch, sql, delete)
+        }
         SqlStatement::CreateTable(create_table) => {
             if let Some(template) = bind_cross_db_sql(sql, schema_epoch, &create_table.name)? {
                 return Ok(template);
@@ -448,6 +464,22 @@ fn two_part_name(name: &ObjectName) -> Option<(String, String)> {
             ObjectNamePart::Identifier(schema),
             ObjectNamePart::Identifier(table),
         ] => Some((schema.value.clone(), table.value.clone())),
+        _ => None,
+    }
+}
+
+fn single_delete_table_name(delete: &sqlparser::ast::Delete) -> Option<&ObjectName> {
+    let from = match &delete.from {
+        sqlparser::ast::FromTable::WithFromKeyword(from)
+        | sqlparser::ast::FromTable::WithoutKeyword(from) => from,
+    };
+    let [table] = from.as_slice() else {
+        return None;
+    };
+    match &table.relation {
+        TableFactor::Table { name, args, .. } if args.is_none() && table.joins.is_empty() => {
+            Some(name)
+        }
         _ => None,
     }
 }

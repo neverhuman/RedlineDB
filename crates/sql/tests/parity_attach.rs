@@ -249,3 +249,47 @@ fn cross_db_write_routes_to_attached_database() {
     let rows = collect_rows(&main_conn, "SELECT id FROM aux.t");
     assert_eq!(rows, vec![vec![SqlValue::Integer(1)]]);
 }
+
+#[test]
+fn alias_qualified_update_delete_routes_to_attached_database() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let aux_path = dir.path().join("aux.db");
+    let main_db =
+        Database::create(dir.path().join("main.db"), DbOptions::default()).expect("create main");
+    let main_conn = main_db.connect();
+    let attach_sql = format!("ATTACH DATABASE '{}' AS aux", aux_path.display());
+    main_conn.execute(&attach_sql).expect("attach");
+
+    main_conn
+        .execute("CREATE TABLE t(label TEXT, x INTEGER)")
+        .expect("create main table");
+    main_conn
+        .execute("INSERT INTO t VALUES ('main', 1), ('main', 2)")
+        .expect("insert main rows");
+    main_conn
+        .execute("CREATE TABLE aux.t(label TEXT, x INTEGER)")
+        .expect("create aux table");
+    main_conn
+        .execute("INSERT INTO aux.t VALUES ('aux', 10), ('aux', 20)")
+        .expect("insert aux rows");
+
+    main_conn
+        .execute("UPDATE aux.t SET x=x+1 WHERE x=10")
+        .expect("update aux");
+    main_conn
+        .execute("DELETE FROM aux.t WHERE x=20")
+        .expect("delete aux");
+
+    let rows = collect_rows(
+        &main_conn,
+        "SELECT label, x FROM t UNION ALL SELECT label, x FROM aux.t ORDER BY label DESC, x",
+    );
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::Text(Arc::from("main")), SqlValue::Integer(1)],
+            vec![SqlValue::Text(Arc::from("main")), SqlValue::Integer(2)],
+            vec![SqlValue::Text(Arc::from("aux")), SqlValue::Integer(11)],
+        ]
+    );
+}
