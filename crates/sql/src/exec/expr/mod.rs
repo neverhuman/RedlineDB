@@ -317,7 +317,7 @@ pub(crate) fn eval_scalar(
             }
             let value = eval_scalar(expr, row, bindings)?;
             let pattern = eval_scalar(pattern, row, bindings)?;
-            ilike_result(value, pattern, *negated, escape_char.clone())?
+            ilike_result(&value, &pattern, *negated, escape_char.clone())?
         }
         // `SIMILAR TO` (https://www.postgresql.org/docs/16/functions-matching.html
         // #FUNCTIONS-SIMILARTO-REGEXP) is the SQL-standard regex flavour

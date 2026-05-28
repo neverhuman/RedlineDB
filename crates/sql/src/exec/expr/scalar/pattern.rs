@@ -61,17 +61,21 @@ pub(crate) fn like_result(
     Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
 }
 
+// A13b: take args by reference. ILIKE's per-row `.to_lowercase()` is still
+// per-call but at least the outer `SqlValue` clones at the call sites are
+// gone. A future commit could push case-folding into `unicode_like_match`
+// itself to drop the lowercase clones too — that's a larger refactor.
 pub(crate) fn ilike_result(
-    value: SqlValue,
-    pattern: SqlValue,
+    value: &SqlValue,
+    pattern: &SqlValue,
     negated: bool,
     escape_char: Option<Value>,
 ) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null) || matches!(pattern, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let text = value_to_string(&value).to_lowercase();
-    let pattern = value_to_string(&pattern).to_lowercase();
+    let text = value_to_string(value).to_lowercase();
+    let pattern = value_to_string(pattern).to_lowercase();
     let escape = match escape_char {
         Some(Value::SingleQuotedString(s)) if s.chars().count() == 1 => {
             Some(s.chars().next().unwrap())
