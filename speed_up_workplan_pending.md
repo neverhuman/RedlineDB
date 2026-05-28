@@ -223,3 +223,21 @@ Verification:
 
 Remaining latest-runner failures after this slice:
 - `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10466`.
+
+Current CLI deserialize slice:
+- `CLI_OPTION` case `10234` now passes on the latest `redline-testing 1.0.1` runner.
+- `redlinedb -deserialize :memory:` now mirrors SQLite's legacy `Error: out of memory` stderr while still executing successfully.
+- The compatibility warning is limited to explicit `:memory:` deserialize mode; `-deserialize ''` remains quiet, matching SQLite.
+- Added CLI subprocess coverage for the official shape.
+
+Verification:
+- `cargo test -p redlinedb-cli --test dot_commands deserialize_memory_mode_emits_sqlite_oom_warning_and_continues --quiet --locked`
+- `cargo test -p redlinedb-cli --test dot_commands --quiet --locked`
+- `cargo check -p redlinedb-cli --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- Direct release-binary replay for `-deserialize :memory:`: stdout `1`, stderr `Error: out of memory`, exit `0`.
+- Direct release-binary replay for `-deserialize ''`: stdout `1`, empty stderr, exit `0`.
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `7` remaining failures out of `2445`; `10234` passed with matching stdout and stderr hashes.
+
+Remaining latest-runner failures after this slice:
+- `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10466`.

@@ -136,6 +136,14 @@ fn batch_bail_memory_mode_is_cwd_clean_and_output_exact() {
 }
 
 #[test]
+fn deserialize_memory_mode_emits_sqlite_oom_warning_and_continues() {
+    let (out, err, code) = run_script_with_args(&["-deserialize", "-list"], None, "SELECT 1;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "1\n");
+    assert_eq!(err, "Error: out of memory\n");
+}
+
+#[test]
 fn batch_autoincrement_exposes_sqlite_sequence() {
     let (out, err, code) = run_script(
         None,

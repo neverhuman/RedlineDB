@@ -258,6 +258,9 @@ pub fn run() {
         Some(f) => f,
         None => ":memory:".to_string(),
     };
+    if cli.deserialize && filename == ":memory:" {
+        eprintln!("Error: out of memory");
+    }
     use std::io::IsTerminal;
     let stdin_is_batch = !io::stdin().is_terminal() || cli.batch;
     if preloaded_stdin.is_none()

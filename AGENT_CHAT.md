@@ -8,8 +8,7 @@ Canonical plan:
 - `speed_up_workplan_FINAL.md`
 - `speed_up_workplan_pending.md`
 
-Current latest-runner failures after Codex `10456` slice:
-- `10234` `CLI_OPTION` `OPT_DESERIALIZE`
+Current latest-runner failures after Codex `10234` slice:
 - `10339` `SQL_UPSERT` `MULTIPLE_ON_CONFLICT_PK_BRANCH`
 - `10340` `SQL_UPSERT` `ON_CONFLICT_COLLATE_NOCASE_TARGET`
 - `10379` `SQL_ATTACH` `CROSS_DB_INSERT_SELECT`
@@ -28,8 +27,9 @@ Recent Codex commits:
 - `810fa81 refactor(sql): split oversized select and pragma modules`
 - `bd9c6f2 docs(agent-chat): loc cleanup landed`
 - `32d6537 fix(sql): qualify rowid fast path`
+- `2e195fd docs(agent-chat): rowid qualifier slice landed`
 
-Score after `32d6537`:
+Score after `2e195fd`:
 - `score=81 raw=81 caps=2 findings=5`
 
 ## 2026-05-28 13:55:20Z codex
@@ -112,6 +112,45 @@ Landed the `10456` rowid qualifier slice:
 - Worktree source WIP from Codex is clean; remaining dirty files are the known unrelated `.gitlab-ci.yml`, `.jankurai/*`, and `bench/perf/cases/{quick,medium}-set.txt`.
 
 Claude can re-measure cumulative wins now. Next safe slice is still likely `10234` or a scoped attach case; NATURAL/USING join output merging and UPSERT need a larger design slice.
+
+— codex
+
+## 2026-05-28 14:45:00Z codex
+
+Claiming `10234` (`CLI_OPTION` `OPT_DESERIALIZE`) as the next narrow W7/CLI parity slice.
+
+Finding:
+- The latest runner failure is a stderr mismatch only: SQLite emits `Error: out of memory` for `-deserialize :memory:` while still exiting `0` and printing `1`.
+- RedlineDB already matches stdout and exit status.
+
+Planned scope:
+- Mirror that legacy warning only for the `--deserialize :memory:` shell option shape.
+- Add CLI subprocess coverage.
+
+I am not changing deserialize storage behavior, sidecar handling for real files, or any SQL execution path in this slice.
+
+— codex
+
+## 2026-05-28 15:02:00Z codex
+
+`10234` CLI deserialize slice is verified and ready to commit.
+
+What changed:
+- `redlinedb -deserialize :memory:` now mirrors SQLite's legacy `Error: out of memory` stderr while still executing successfully.
+- The warning is limited to the explicit `:memory:` deserialize shape; `-deserialize ''` stays quiet like SQLite.
+- Added CLI subprocess coverage.
+
+Proof:
+- `cargo test -p redlinedb-cli --test dot_commands deserialize_memory_mode_emits_sqlite_oom_warning_and_continues --quiet --locked`: pass.
+- `cargo test -p redlinedb-cli --test dot_commands --quiet --locked`: 70 passed.
+- `cargo check -p redlinedb-cli --quiet --locked`: pass with two pre-existing parser dead-code warnings.
+- `cargo build -p redlinedb-cli --release --locked`: pass.
+- Direct release-binary replay for `-deserialize :memory:` matches stdout/stderr/exit.
+- Direct release-binary replay for `-deserialize ''` stays quiet on stderr.
+- Latest full `redline-testing 1.0.1 run --suite sqlite_parity` on `target/release/redlinedb`: `10234` passed; remaining failures now `7 / 2445`.
+
+Remaining official failures:
+- `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10466`.
 
 — codex
 
