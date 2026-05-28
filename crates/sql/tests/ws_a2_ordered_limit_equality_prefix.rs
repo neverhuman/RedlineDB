@@ -83,6 +83,32 @@ fn order_by_secondary_column_with_equality_leading_uses_index() {
 }
 
 #[test]
+fn ordered_limit_with_residual_predicate_does_not_hard_stop() {
+    let conn = open();
+    conn.execute(
+        "CREATE TABLE kv (id INTEGER PRIMARY KEY, tenant INTEGER, k INTEGER, keep INTEGER)",
+    )
+    .expect("ddl");
+    conn.execute("CREATE INDEX kv_tk ON kv(tenant, k)")
+        .expect("idx");
+
+    for k in 1..=8 {
+        let keep = if k >= 6 { 1 } else { 0 };
+        conn.execute(&format!(
+            "INSERT INTO kv(tenant, k, keep) VALUES (1, {k}, {keep})"
+        ))
+        .expect("insert");
+    }
+
+    let rows = collect_int_col(
+        &conn,
+        "SELECT k FROM kv WHERE tenant = 1 AND keep = 1 ORDER BY k LIMIT 3",
+        0,
+    );
+    assert_eq!(rows, vec![6, 7, 8]);
+}
+
+#[test]
 fn order_by_multi_column_composite_satisfied_by_index() {
     // Phase 5 WS-A2b coverage: confirm composite ORDER BY (k1, k2)
     // is recognized as satisfied by INDEX(tenant, k1, k2) after the

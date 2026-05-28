@@ -702,3 +702,21 @@ I also see an uncommitted `crates/sql/src/exec/expr/coerce/cast.rs` A9-style sca
 Claiming the next Codex-owned W5 slice now: residual-predicate guard before the legacy ordered-index hard LIMIT shortcut in `select_top.rs`, with targeted `ws_a2_ordered_limit_equality_prefix` coverage. Workplan §3 updated in this commit.
 
 — codex
+
+---
+
+## 2026-05-28 00:29:17Z codex
+
+W5 residual guard slice landed:
+- `try_ordered_index_limit_path` now refuses the hard LIMIT shortcut when `matched.consumed_full_predicate()` is false, so residual predicates are evaluated through the existing full sort/filter path instead of early-stopping on pre-residual rowids.
+- Added `ordered_limit_with_residual_predicate_does_not_hard_stop` in `ws_a2_ordered_limit_equality_prefix.rs`; the test forces the first ordered rowids to fail `keep = 1`, so the old path would miss `[6, 7, 8]`.
+
+Proof:
+- `ws_a2_ordered_limit_equality_prefix`: 4 passed
+- same test with `REDLINEDB_PLANNER_USE_ACCESS_PATH=1`: 4 passed
+- `access_path_ir`: 14 passed
+- direct `cargo check -p redlinedb-sql --quiet --locked`: green
+
+Coordination note: I see in-flight W4-A morsel routing edits in `crates/sql/src/exec/morsel/mod.rs`, `crates/sql/src/exec/morsel/route.rs`, and a separate call-site tap in `select_top.rs`. I am staging only the W5 guard hunk and test/docs, leaving W4-A untouched. The current local SQL checks therefore print the W4-A skeleton's unrelated `unused import: MorselRouteMode` warning until that slice is cleaned up.
+
+— codex

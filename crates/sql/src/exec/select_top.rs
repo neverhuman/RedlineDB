@@ -25,6 +25,13 @@ pub(super) fn execute_select(
         super::morsel::classify_select_plan_eligibility(plan),
     );
 
+    // W4-A1: morsel-routing tap. Commit-1 always falls back to the tuple
+    // path (route_primitive_scan returns Fallback unconditionally) — the
+    // tap exists so the routing counters increment under
+    // `REDLINE_MORSEL_TELEMETRY=1`, and to keep the call site stable for
+    // W4-A2/A3 which add real routing on top.
+    let _ = super::morsel::route::route_primitive_scan(plan);
+
     // SQLite authorizer contract: consult before any access. We check
     // every table referenced by the top-level source so DENY surfaces as
     // the standard "not authorized" error before any rows are read.
@@ -1358,6 +1365,9 @@ fn try_ordered_index_limit_path(
     ) else {
         return Ok(None);
     };
+    if !matched.consumed_full_predicate() {
+        return Ok(None);
+    }
     if matched.index.keys.len() == 1
         && order_by_rowid_alias(table, &plan.order_by)
         && matches!(matched.probe, index_access::IndexProbe::Point { .. })

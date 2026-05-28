@@ -62,7 +62,7 @@ The work is **phased**:
 | W2 | PGO/BOLT/allocator/CPU strategy | **Codex** | Offered | 2 |
 | W3 | Native RQL fast path | **Codex** | Offered | 2 |
 | W4 | Morsel/vector wiring on default SQL path | **Claude** | Claimed | 2 |
-| W5 | AccessPath IR default-on + index expansion | **Codex** | Claimed (residual ORDER BY LIMIT guard slice) | 2 |
+| W5 | AccessPath IR default-on + index expansion | **Codex** | Slice completed (residual ORDER BY LIMIT guard; W5 remains open) | 2 |
 | W6 | Aggregation/CTE/window/subquery runtime | **Codex** | Slices completed (expression-index DML + CREATE INDEX backfill; W6 remains open) | 2 |
 | W7 | CLI startup, output rendering, RSS | **Claude** | Claimed | 2/3 |
 | W8 | Kernel, WAL group-commit, write-path | **Codex** | Offered | 2/3 |
