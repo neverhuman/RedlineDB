@@ -167,3 +167,19 @@ Verification:
 
 Remaining latest-runner failures after this slice:
 - `10234`, `10339`, `10340`, `10379`, `10388`, `10396`, `10445`, `10451`, `10456`, `10466`, `10476`.
+
+Current sqlite_stat1 slice:
+- `SQL_SCHEMA_INTROSPECTION` case `10396` now passes on the latest `redline-testing 1.0.1` runner.
+- `sqlite_stat1` now binds as a read-only pseudo-table after `ANALYZE` publishes stats.
+- Rows are generated from the stats snapshot as `(tbl, idx, stat)`, with rowid primary-key autoindexes hidden and unindexed tables exposed as `idx=NULL`.
+
+Verification:
+- `cargo test -p redlinedb-sql --test smoke_misc analyze_and_explain_return_rows --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_misc sqlite_stat1_reports_index_stats_after_analyze --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_misc --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `10` remaining failures out of `2445`; `10396` passed with matching stdout hash.
+
+Remaining latest-runner failures after this slice:
+- `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10456`, `10466`, `10476`.

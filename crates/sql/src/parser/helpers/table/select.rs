@@ -9,6 +9,7 @@ use sqlparser::ast::{
 
 use crate::error::{Error, Result};
 use crate::statement::{BoundTable, JoinKind, JoinSource, JoinStep, ParamLayout, SelectSource};
+use crate::value::SqlValue;
 
 use super::bind::{bind_table_name, object_name_part_to_string};
 
@@ -48,6 +49,9 @@ pub(crate) fn bind_select_from(
             && schema.tables.iter().any(|table| table.is_autoincrement())
         {
             return Ok((SelectSource::SqliteSequence { alias: alias_arc }, None));
+        }
+        if is_sqlite_stat1_name(name) && !conn.stats_snapshot().tables.is_empty() {
+            return Ok((sqlite_stat1_source(conn, schema, alias_arc), None));
         }
     }
 
@@ -592,6 +596,99 @@ pub(crate) fn is_sqlite_temp_schema_name(name: &ObjectName) -> bool {
         }
         _ => false,
     }
+}
+
+fn is_sqlite_stat1_name(name: &ObjectName) -> bool {
+    match name.0.as_slice() {
+        [part] => object_name_part_to_string(part)
+            .map(|s| s.eq_ignore_ascii_case("sqlite_stat1"))
+            .unwrap_or(false),
+        [schema, table] => {
+            let schema = object_name_part_to_string(schema).ok();
+            let table = object_name_part_to_string(table).ok();
+            matches!(
+                (schema.as_deref(), table.as_deref()),
+                (Some("main"), Some("sqlite_stat1"))
+            )
+        }
+        _ => false,
+    }
+}
+
+fn sqlite_stat1_source(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+    alias: Option<Arc<str>>,
+) -> SelectSource {
+    SelectSource::Cte {
+        name: Arc::from("sqlite_stat1"),
+        alias,
+        columns: Arc::<[String]>::from(vec![
+            "tbl".to_owned(),
+            "idx".to_owned(),
+            "stat".to_owned(),
+        ]),
+        rows: Arc::from(sqlite_stat1_rows(conn, schema)),
+    }
+}
+
+fn sqlite_stat1_rows(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+) -> Vec<Vec<SqlValue>> {
+    let stats = conn.stats_snapshot();
+    let mut rows = Vec::new();
+    for table in &schema.tables {
+        let Some(table_stats) = stats.tables.get(&table.table_id) else {
+            continue;
+        };
+        let mut added_index_row = false;
+        for index in &table.indexes {
+            if index.primary
+                && matches!(
+                    index.origin,
+                    redlinedb_kernel::catalog::IndexOrigin::PrimaryKey
+                )
+                && table.rowid_alias_column.is_some()
+            {
+                continue;
+            }
+            let Some(index_stats) = stats.indexes.get(&index.index_id) else {
+                continue;
+            };
+            added_index_row = true;
+            rows.push(vec![
+                SqlValue::Text(Arc::from(table.name.as_ref())),
+                SqlValue::Text(Arc::from(index.name.as_ref())),
+                SqlValue::Text(Arc::from(sqlite_stat1_index_stat(
+                    index_stats.entries,
+                    &index_stats.distinct_prefix_counts,
+                ))),
+            ]);
+        }
+        if !added_index_row {
+            rows.push(vec![
+                SqlValue::Text(Arc::from(table.name.as_ref())),
+                SqlValue::Null,
+                SqlValue::Text(Arc::from(table_stats.row_count.to_string())),
+            ]);
+        }
+    }
+    rows
+}
+
+fn sqlite_stat1_index_stat(entries: u64, distinct_prefix_counts: &[f64]) -> String {
+    let mut parts = Vec::with_capacity(distinct_prefix_counts.len() + 1);
+    parts.push(entries.to_string());
+    for distinct in distinct_prefix_counts {
+        let avg = if entries == 0 || *distinct <= 0.0 {
+            0
+        } else {
+            (entries as f64 / *distinct).ceil() as u64
+        };
+        parts.push(avg.to_string());
+    }
+    parts.join(" ")
 }
 
 /// Pre-pass for [`bind_select_from`]: walk the FROM list, materialise
