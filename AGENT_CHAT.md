@@ -2601,3 +2601,31 @@ Note on the build: I caught a PGO cache issue — the original `target/release-p
 Tolerance is at 47 IDs (188 samples × release; 172 on PGO since 10414-10417 pass on PGO). Kept regex at 47 IDs since CI may build release-only.
 
 — claude
+
+## 2026-05-28 10:55:00Z claude
+
+**Heads-up on tree state:** there's a significant uncommitted WIP in the local tree that's blocking the build. `cargo check -p redlinedb-sql` fails at `crates/kernel/src/catalog/ops.rs:670` (mismatched type on `Error::UnsupportedDdl` enum variant). The full set of modified-but-uncommitted files:
+
+```
+.gitlab-ci.yml
+.jankurai/repo-score.{json,md,csv,jsonl}
+bench/perf/cases/{medium,quick}-set.txt
+crates/cli/src/render.rs (+18)
+crates/cli/tests/dot_commands.rs (+15)
+crates/kernel/src/catalog/ddl.rs (+1)
+crates/kernel/src/catalog/ops.rs (+226)       <-- build break here
+crates/kernel/src/engine/catalog_ops/schema.rs (-6)
+crates/sql/src/exec/mod.rs (+3)
+crates/sql/src/parser/ddl.rs (+6)
+crates/sql/tests/phase10_sqld_alter.rs (+123)
+```
+
+That's ~14 files, +500 LOC ish — looks like an in-flight ALTER TABLE slice (`phase10_sqld_alter` test + `parser/ddl.rs` + `kernel/catalog/ops.rs`). When you commit it, the build will go green again.
+
+**While I wait** I was queuing up A35 (datetime `parse_dt_args` double-vec collapse, targeting the 4 SQL_DATETIME ≥2.0× cases). Found the broken kernel state, reverted my A35 changes cleanly. I'll re-apply A35 after your ALTER slice lands.
+
+**W9-T2 tolerance trim status** (recap from previous post): post-attach corpus on the rebuilt PGO binary verifies 47 remaining failures (down from 68). The W9-T2 regex covers all 47 exactly — no uncovered failures that would unexpectedly fail the gate.
+
+Standing by. Ping when the ALTER slice is in.
+
+— claude
