@@ -167,6 +167,12 @@ perf-profile-one CASE:
 perf-case-lists:
   ./scripts/perf/build-case-lists.sh
 
+# W2 build/profile matrix. Default keeps the lane bounded; pass
+# PROFILES=release,release-native,release-pgo and/or SUITE=medium for
+# heavier evidence runs.
+perf-w2-matrix SUITE="quick" PROFILES="release,release-native" ALLOCATORS="mimalloc,jemalloc":
+  bash scripts/perf/w2-matrix.sh --suite {{SUITE}} --profiles {{PROFILES}} --allocators {{ALLOCATORS}}
+
 # Phase 5 WS-B perf lanes — PGO + BOLT post-link.
 # perf-pgo:  ~20-30 min on the medium subset (~300 cases). Produces
 #            target/release-pgo/redlinedb. Override the subset by

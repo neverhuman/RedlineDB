@@ -15,6 +15,11 @@
 # Usage:
 #   scripts/perf/pgo.sh [--training-subset {quick,medium,full}] [--for-bolt] [--dry-run]
 #
+# Environment:
+#   REDLINE_CARGO_FEATURE_ARGS   optional cargo feature args appended to
+#                                both cargo builds, e.g.
+#                                "--no-default-features --features alloc-jemalloc"
+#
 # Training subsets (default: medium):
 #   quick   ~40 curated cases via scripts/perf/run_subset.py (fast smoke).
 #   medium  ~300 curated cases via scripts/perf/run_subset.py (default;
@@ -86,6 +91,13 @@ REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-/home/ubuntu/redline-testing/target/
 SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3")}"
 PERF_CASES_DIR="${PERF_CASES_DIR:-bench/perf/cases}"
 PERF_ROOT="${PERF_ROOT:-target/perf}"
+REDLINE_CARGO_FEATURE_ARGS="${REDLINE_CARGO_FEATURE_ARGS:-}"
+REDLINE_CARGO_FEATURE_ARGV=()
+if [ -n "$REDLINE_CARGO_FEATURE_ARGS" ]; then
+    # Intentional shell-word split for cargo flags supplied by trusted local
+    # perf orchestration scripts.
+    read -r -a REDLINE_CARGO_FEATURE_ARGV <<< "$REDLINE_CARGO_FEATURE_ARGS"
+fi
 
 # Resolve subset-specific case list. `build_case_lists.py` is the
 # canonical generator (see scripts/perf/build-case-lists.sh); the
@@ -176,6 +188,7 @@ if [ "$DRY_RUN" = "1" ]; then
         echo "case list:       <full corpus via redline-testing run>"
     fi
     echo "for-bolt:        $FOR_BOLT"
+    echo "cargo features:  ${REDLINE_CARGO_FEATURE_ARGS:-<default>}"
     echo "final RUSTFLAGS: ${REDLINE_BASE_RUSTFLAGS}${FINAL_LINK_EXTRA} -Cprofile-use=$PGO_PROFILE_DIR/merged.profdata -Cllvm-args=-pgo-warn-missing-function"
     echo
     echo "would run workload:"
@@ -189,7 +202,7 @@ mkdir -p "$PGO_DATA_DIR" "$PGO_PROFILE_DIR"
 
 echo ">>> [2/3] Building instrumented binary"
 RUSTFLAGS="${REDLINE_BASE_RUSTFLAGS} -Cprofile-generate=$PGO_DATA_DIR" \
-    cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked
+    cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked "${REDLINE_CARGO_FEATURE_ARGV[@]}"
 
 if [ ! -x "$INSTR_BIN" ]; then
     echo "Instrumented binary not found at $INSTR_BIN" >&2
@@ -199,6 +212,7 @@ fi
 echo ">>> [3a/3] Running training workload (subset=$TRAINING_SUBSET) to gather profile data"
 mkdir -p target/redline-testing-pgo
 if [ "$TRAINING_SUBSET" = "full" ]; then
+    REDLINEDB_DEFAULT_DURABILITY=normal \
     "$REDLINE_TESTING_BIN" run \
         --target-bin "$INSTR_BIN" \
         --sqlite-bin "$SQLITE_REF_BIN" \
@@ -218,6 +232,7 @@ else
         "$REDLINE_TESTING_BIN" list --suite sqlite_parity --format json > "$SNAPSHOT"
     fi
     mkdir -p /dev/shm/redline-testing-pgo
+    REDLINEDB_DEFAULT_DURABILITY=normal \
     python3 scripts/perf/run_subset.py \
         --case-list   "$CASE_LIST" \
         --target-bin  "$INSTR_BIN" \
@@ -234,13 +249,16 @@ echo ">>> [3b/3] Merging .profraw files"
 
 echo ">>> [3c/3] Building final PGO-optimized binary"
 RUSTFLAGS="${REDLINE_BASE_RUSTFLAGS}${FINAL_LINK_EXTRA} -Cprofile-use=$PGO_PROFILE_DIR/merged.profdata -Cllvm-args=-pgo-warn-missing-function" \
-    cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked
+    cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked "${REDLINE_CARGO_FEATURE_ARGV[@]}"
 
 echo ""
 echo "Done."
 echo "Final PGO-optimized binary: target/release-pgo/redlinedb"
 echo "Profile data: $PGO_PROFILE_DIR/merged.profdata"
 echo "Training subset: $TRAINING_SUBSET"
+if [ -n "$REDLINE_CARGO_FEATURE_ARGS" ]; then
+    echo "Cargo feature args: $REDLINE_CARGO_FEATURE_ARGS"
+fi
 if [ "$FOR_BOLT" = "1" ]; then
     echo "Linked with --emit-relocs for BOLT post-processing (scripts/perf/bolt.sh)."
 fi

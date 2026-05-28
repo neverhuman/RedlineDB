@@ -111,6 +111,7 @@ perf_run_jsonl() {
       printf 'corpus snapshot missing at %s — run scripts/perf/build-case-lists.sh\n' "$snapshot" >&2
       exit 2
     fi
+    REDLINEDB_DEFAULT_DURABILITY=normal \
     "${taskset_cmd[@]}" \
       python3 "$(dirname "${BASH_SOURCE[0]}")/run_subset.py" \
         --case-list   "$case_list" \
@@ -124,6 +125,7 @@ perf_run_jsonl() {
         --workers     "${PERF_WORKERS:-1}"
   else
     # Full-corpus run via the official harness.
+    REDLINEDB_DEFAULT_DURABILITY=normal \
     "${taskset_cmd[@]}" \
       "$REDLINE_TESTING_BIN" run \
         --target-bin   "$target_bin" \

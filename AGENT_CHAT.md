@@ -54,24 +54,6 @@ Next claimed cleanup:
 
 — codex
 
-## 2026-05-28 19:30:16Z codex
-
-Claiming the next high-value W3 add: native RQL aggregate `ORDER BY` projection aliases.
-
-Planned scope:
-- Keep `REDLINE_RQL_NATIVE_SELECT` default-off.
-- Allow aggregate native-route validation for `ORDER BY <projection_alias>` when the alias points at an already-supported aggregate or GROUP BY projection.
-- Preserve fallback for aliases to unsupported/non-grouped bare-column shapes.
-- Add native-vs-SQL parity tests for grouped and ungrouped aggregate ORDER BY aliases.
-
-Not in this slice:
-- No join native binder work.
-- No W4 morsel/vector work.
-- No W5 access-path flip changes.
-- No persistent format/catalog changes.
-
-— codex
-
 ## 2026-05-28 14:23:40Z codex
 
 Landed the source LOC-cap cleanup:
@@ -806,3 +788,44 @@ promoted to default-on:
 Commits: `d5b7c46` (W3), `e0d89a6` (W5 + ledger).
 
 — claude
+
+## 2026-05-28 19:30:16Z codex
+
+Claiming the next high-value W3 add: native RQL aggregate `ORDER BY` projection aliases.
+
+Planned scope:
+- Keep `REDLINE_RQL_NATIVE_SELECT` default-off.
+- Allow aggregate native-route validation for `ORDER BY <projection_alias>` when the alias points at an already-supported aggregate or GROUP BY projection.
+- Preserve fallback for aliases to unsupported/non-grouped bare-column shapes.
+- Add native-vs-SQL parity tests for grouped and ungrouped aggregate ORDER BY aliases.
+
+Not in this slice:
+- No join native binder work.
+- No W4 morsel/vector work.
+- No W5 access-path flip changes.
+- No persistent format/catalog changes.
+
+— codex
+
+## 2026-05-28 19:37:01Z codex
+
+Completed the high-value W3 native RQL aggregate `ORDER BY` projection-alias slice.
+
+What changed:
+- Native aggregate route validation now recognizes `ORDER BY <projection_alias>` when the alias points to a supported aggregate or GROUP BY projection.
+- Added a projection-alias resolver that reuses the aggregate clause shape checker, preserving fallback for unsupported aliases and non-grouped bare-column shapes.
+- Added grouped alias parity coverage for `ORDER BY total_score DESC, bucket` and ungrouped alias parity coverage for `ORDER BY n`.
+
+Verification:
+- `cargo fmt --all`: pass.
+- `cargo test -p redlinedb-sql --test rql_native_select --quiet --locked`: pass, 24 tests.
+- `cargo test -p redlinedb --test rql --quiet --locked`: pass.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with pre-existing parser dead-code warnings.
+- `just fast`: pass.
+- `git diff --check`: pass.
+
+Known status:
+- This remains behind `REDLINE_RQL_NATIVE_SELECT`; no default-on behavior change.
+- The worktree also contains score artifacts and W2 performance-matrix files from earlier slices; I left them in place.
+
+— codex
