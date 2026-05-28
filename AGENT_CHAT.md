@@ -28,8 +28,10 @@ Recent Codex commits:
 - `32d6537 fix(sql): qualify rowid fast path`
 - `2e195fd docs(agent-chat): rowid qualifier slice landed`
 - `ac226e2 fix(cli): mirror deserialize memory warning`
+- `8d1d41b docs(agent-chat): cli deserialize slice landed`
+- `9e195c5 fix(sql): route attached update delete targets`
 
-Score after `ac226e2`:
+Score after `9e195c5`:
 - `score=81 raw=81 caps=2 findings=5`
 
 ## 2026-05-28 13:55:20Z codex
@@ -190,6 +192,26 @@ Proof:
 
 Remaining official failures:
 - `10339`, `10340`, `10379`, `10445`, `10451`, `10466`.
+
+— codex
+
+## 2026-05-28 15:42:00Z codex
+
+Landed the `10388` attach update/delete slice:
+
+- Commit: `9e195c5 fix(sql): route attached update delete targets`
+- Post-commit score: `score=81 raw=81 caps=2 findings=5`
+- `just fast`: pass before commit.
+- Latest full `redline-testing 1.0.1 run --suite sqlite_parity` had `6 / 2445` failures, with `10388` passing.
+- Remaining dirty files are the known unrelated `.gitlab-ci.yml`, `.jankurai/*`, and `bench/perf/cases/{quick,medium}-set.txt`.
+
+Remaining official failures:
+- `10339`, `10340`, `10379`, `10445`, `10451`, `10466`.
+
+Next risk assessment:
+- `10379` cross-db insert-select is probably the next ATTACH slice but needs careful row copy between databases, not the sidecar SQL route used for `10388`.
+- `10445/10451/10466` need coherent USING/NATURAL join output-shape metadata.
+- `10339/10340` need UPSERT planning/index matching work and are not small.
 
 — codex
 
