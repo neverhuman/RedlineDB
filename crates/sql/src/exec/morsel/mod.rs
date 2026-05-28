@@ -128,6 +128,12 @@ pub fn morsel_route_mode() -> Option<MorselRouteMode> {
     })
 }
 
+/// True when W4 morsel observation/routing needs the SELECT classifier.
+/// Default-OFF runs should not pay classifier/tap overhead.
+pub fn morsel_observation_or_route_enabled() -> bool {
+    morsel_telemetry_enabled() || morsel_route_mode().is_some()
+}
+
 /// Increment the matching counter when telemetry is enabled. No-op otherwise.
 #[inline]
 pub fn record_morsel_eligibility(kind: MorselEligibility) {

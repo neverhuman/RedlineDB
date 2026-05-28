@@ -47,20 +47,15 @@ pub(super) fn execute_select(
         return Ok(runtime);
     }
 
-    // W4-T: morsel-eligibility telemetry. Observe-only; no behaviour change.
-    // Placed AFTER the fromless fast path so scalar-only queries (which can
-    // never benefit from morsel routing — they have no source table) don't
-    // pay the classifier cost on their critical path. Activated by
-    // `REDLINE_MORSEL_TELEMETRY=1`; see `morsel/mod.rs` for counters.
-    super::morsel::record_morsel_eligibility(
-        super::morsel::classify_select_plan_eligibility(plan),
-    );
-
-    // W4-A1: morsel-routing tap. Commit-1 always declines so the caller
-    // continues on the tuple path; the tap exists so routing counters
-    // increment under `REDLINE_MORSEL_TELEMETRY=1` and the call site is
-    // stable for W4-A2/A3 which add real routing on top.
-    let _ = super::morsel::route::route_primitive_scan(plan);
+    // W4-T/W4-A1: morsel observation/routing hooks. Default-OFF runs must not
+    // pay classifier or route-tap overhead; enable this block with
+    // REDLINE_MORSEL_TELEMETRY or REDLINE_MORSEL_ROUTE.
+    if super::morsel::morsel_observation_or_route_enabled() {
+        super::morsel::record_morsel_eligibility(super::morsel::classify_select_plan_eligibility(
+            plan,
+        ));
+        let _ = super::morsel::route::route_primitive_scan(plan);
+    }
 
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
     let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
