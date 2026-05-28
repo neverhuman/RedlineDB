@@ -132,6 +132,22 @@ fn is_native_select(conn: &Arc<Connection>, statement: &RqlStatement) -> bool {
 
 fn snapshot(conn: &Arc<Connection>, statement: &RqlStatement) -> (Vec<String>, Vec<Vec<SqlValue>>) {
     let mut stmt = conn.prepare_rql(statement).expect("prepare rql");
+    collect_snapshot(&mut stmt)
+}
+
+fn snapshot_with_i64_binds(
+    conn: &Arc<Connection>,
+    statement: &RqlStatement,
+    binds: &[(usize, i64)],
+) -> (Vec<String>, Vec<Vec<SqlValue>>) {
+    let mut stmt = conn.prepare_rql(statement).expect("prepare rql");
+    for (index, value) in binds {
+        stmt.bind_i64(*index, *value).expect("bind i64");
+    }
+    collect_snapshot(&mut stmt)
+}
+
+fn collect_snapshot(stmt: &mut redlinedb_sql::Statement) -> (Vec<String>, Vec<Vec<SqlValue>>) {
     let names = (0..stmt.column_count())
         .map(|idx| stmt.column_name(idx).to_owned())
         .collect::<Vec<_>>();
@@ -583,6 +599,139 @@ fn native_select_no_from_filter_order_limit_matches_sql_route() {
     let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
     assert!(is_native_select(&conn, &statement));
     assert_eq!(snapshot(&conn, &statement), expected);
+}
+
+#[test]
+fn native_select_no_from_params_offset_matches_sql_route() {
+    let conn = memory_conn();
+    let mut select = match select_no_from(vec![RqlSelectItem::Expr {
+        expr: RqlExpr::Binary {
+            left: Box::new(RqlExpr::Param { index: 2 }),
+            op: RqlBinaryOp::Add,
+            right: Box::new(RqlExpr::Integer { value: 5 }),
+        },
+        alias: Some("value".to_owned()),
+    }]) {
+        RqlStatement::Select(select) => select,
+        _ => unreachable!(),
+    };
+    select.filter = Some(RqlExpr::Binary {
+        left: Box::new(RqlExpr::Param { index: 1 }),
+        op: RqlBinaryOp::Eq,
+        right: Box::new(RqlExpr::Integer { value: 1 }),
+    });
+    select.limit = Some(1);
+    select.offset = Some(0);
+    let statement = RqlStatement::Select(select);
+    let binds = [(1, 1), (2, 37)];
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot_with_i64_binds(&conn, &statement, &binds);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    let stmt = conn.prepare_rql(&statement).expect("prepare native");
+    assert!(stmt.template().sql.as_ref().ends_with("select_native"));
+    assert_eq!(stmt.parameter_count(), 2);
+    drop(stmt);
+    assert_eq!(snapshot_with_i64_binds(&conn, &statement, &binds), expected);
+}
+
+#[test]
+fn native_select_no_from_cache_is_gate_separated() {
+    let conn = memory_conn();
+    let statement = select_no_from(vec![RqlSelectItem::Expr {
+        expr: RqlExpr::Integer { value: 1 },
+        alias: Some("one".to_owned()),
+    }]);
+
+    let _sql_route = EnvGuard::set_many(&[
+        ("REDLINE_RQL_TEMPLATE_CACHE", Some("1")),
+        ("REDLINE_RQL_NATIVE_SELECT", None),
+    ]);
+    let sql_template = conn.prepare_rql(&statement).expect("sql route").template();
+    assert!(sql_template.sql.as_ref().ends_with("select"));
+    assert!(!sql_template.sql.as_ref().ends_with("select_native"));
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[
+        ("REDLINE_RQL_TEMPLATE_CACHE", Some("1")),
+        ("REDLINE_RQL_NATIVE_SELECT", Some("1")),
+    ]);
+    let native_template = conn
+        .prepare_rql(&statement)
+        .expect("native route")
+        .template();
+    assert!(native_template.sql.as_ref().ends_with("select_native"));
+    assert!(!Arc::ptr_eq(&sql_template, &native_template));
+}
+
+#[test]
+fn native_select_no_from_keeps_unsupported_shapes_on_sql_route() {
+    let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    let conn = memory_conn();
+
+    for projection in [
+        vec![RqlSelectItem::Expr {
+            expr: RqlExpr::CountStar,
+            alias: None,
+        }],
+        vec![RqlSelectItem::Expr {
+            expr: RqlExpr::Function {
+                name: "sum".to_owned(),
+                args: vec![RqlExpr::Integer { value: 1 }],
+                distinct: false,
+            },
+            alias: None,
+        }],
+        vec![RqlSelectItem::Expr {
+            expr: RqlExpr::Column {
+                column: RqlColumnRef {
+                    table: None,
+                    name: "missing".to_owned(),
+                },
+            },
+            alias: None,
+        }],
+    ] {
+        let statement = select_no_from(projection);
+        let template = conn
+            .prepare_rql(&statement)
+            .expect("fallback prepare")
+            .template();
+        assert!(template.sql.as_ref().ends_with("select"));
+        assert!(!template.sql.as_ref().ends_with("select_native"));
+    }
+
+    let mut distinct = match select_no_from(vec![RqlSelectItem::Expr {
+        expr: RqlExpr::Integer { value: 1 },
+        alias: None,
+    }]) {
+        RqlStatement::Select(select) => select,
+        _ => unreachable!(),
+    };
+    distinct.distinct = true;
+    let template = conn
+        .prepare_rql(&RqlStatement::Select(distinct))
+        .expect("distinct fallback")
+        .template();
+    assert!(template.sql.as_ref().ends_with("select"));
+    assert!(!template.sql.as_ref().ends_with("select_native"));
+
+    let mut group_by = match select_no_from(vec![RqlSelectItem::Expr {
+        expr: RqlExpr::Integer { value: 1 },
+        alias: None,
+    }]) {
+        RqlStatement::Select(select) => select,
+        _ => unreachable!(),
+    };
+    group_by.group_by.push(RqlExpr::Integer { value: 1 });
+    let template = conn
+        .prepare_rql(&RqlStatement::Select(group_by))
+        .expect("group-by fallback")
+        .template();
+    assert!(template.sql.as_ref().ends_with("select"));
+    assert!(!template.sql.as_ref().ends_with("select_native"));
 }
 
 #[test]
