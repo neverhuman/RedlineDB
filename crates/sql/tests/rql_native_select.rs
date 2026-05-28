@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use redlinedb_sql::{
-    Connection, Database, DbOptions, RqlColumnRef, RqlExpr, RqlName, RqlOrder, RqlSelect,
-    RqlSelectItem, RqlStatement, RqlTableRef, SqlValue, Step,
+    Connection, Database, DbOptions, RqlBinaryOp, RqlColumnRef, RqlExpr, RqlName, RqlOrder,
+    RqlSelect, RqlSelectItem, RqlStatement, RqlTableRef, SqlValue, Step,
 };
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -335,4 +335,80 @@ fn native_select_rejects_hidden_table_qualifier_when_alias_is_present() {
         err.to_string().contains("items.name"),
         "unexpected error: {err:?}"
     );
+}
+
+#[test]
+fn native_select_supports_scalar_functions_but_falls_back_for_aggregates() {
+    let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    let conn = memory_conn();
+    create_items(&conn);
+
+    let scalar = RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection: vec![
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "upper".to_owned(),
+                    args: vec![column("name")],
+                    distinct: false,
+                },
+                alias: Some("up".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "min".to_owned(),
+                    args: vec![column("score"), RqlExpr::Integer { value: 25 }],
+                    distinct: false,
+                },
+                alias: Some("capped".to_owned()),
+            },
+        ],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: Some(RqlExpr::Binary {
+            left: Box::new(RqlExpr::Function {
+                name: "lower".to_owned(),
+                args: vec![column("name")],
+                distinct: false,
+            }),
+            op: RqlBinaryOp::Eq,
+            right: Box::new(RqlExpr::Text {
+                value: "ada".to_owned(),
+            }),
+        }),
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    });
+    let mut stmt = conn.prepare_rql(&scalar).expect("scalar function select");
+    assert!(stmt.template().sql.as_ref().ends_with("select_native"));
+    assert!(matches!(stmt.step().expect("row"), Step::Row));
+    assert_eq!(stmt.column_text(0).expect("upper name"), "ADA");
+    assert_eq!(stmt.column_i64(1).expect("capped score"), 20);
+
+    let aggregate = RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection: vec![RqlSelectItem::Expr {
+            expr: RqlExpr::Function {
+                name: "sum".to_owned(),
+                args: vec![column("score")],
+                distinct: false,
+            },
+            alias: None,
+        }],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: None,
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    });
+    let mut stmt = conn.prepare_rql(&aggregate).expect("aggregate fallback");
+    assert!(!stmt.template().sql.as_ref().ends_with("select_native"));
+    assert!(matches!(stmt.step().expect("aggregate row"), Step::Row));
+    assert_eq!(stmt.column_i64(0).expect("sum"), 60);
 }

@@ -857,12 +857,42 @@ fn native_select_expr_supported(from: &RqlTableRef, expr: &RqlExpr) -> bool {
                     .iter()
                     .all(|item| native_select_expr_supported(from, item))
         }
-        RqlExpr::Function { .. }
-        | RqlExpr::CountStar
+        RqlExpr::Function {
+            name,
+            args,
+            distinct,
+        } => {
+            !*distinct
+                && !native_select_function_is_aggregate(name, args.len())
+                && args
+                    .iter()
+                    .all(|arg| native_select_expr_supported(from, arg))
+        }
+        RqlExpr::CountStar
         | RqlExpr::InSubquery { .. }
         | RqlExpr::Subquery { .. }
         | RqlExpr::Exists { .. } => false,
     }
+}
+
+fn native_select_function_is_aggregate(name: &str, arity: usize) -> bool {
+    let lower = name.rsplit('.').next().unwrap_or(name).to_ascii_lowercase();
+    if matches!(lower.as_str(), "min" | "max") {
+        return arity == 1;
+    }
+    matches!(
+        lower.as_str(),
+        "avg"
+            | "count"
+            | "group_concat"
+            | "json_group_array"
+            | "json_group_object"
+            | "median"
+            | "percentile_cont"
+            | "string_agg"
+            | "sum"
+            | "total"
+    )
 }
 
 fn native_select_projection(
