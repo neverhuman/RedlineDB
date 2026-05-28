@@ -1,5 +1,25 @@
 use super::super::*;
 
+/// A9 helper: allocation-free case-insensitive substring scan. Used in
+/// `cast_value` to drop the per-row `to_ascii_lowercase()` clone of the
+/// data-type display string. The sqlparser `Display` for `DataType` already
+/// allocates a String per call (no way around that without walking the enum);
+/// this avoids a second allocation on top.
+#[inline]
+fn type_name_contains_ci(haystack: &str, needle: &str) -> bool {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if h.len() < n.len() {
+        return false;
+    }
+    h.windows(n.len()).any(|window| {
+        window
+            .iter()
+            .zip(n.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
+}
+
 pub(crate) fn cast_value(
     value: SqlValue,
     data_type: &sqlparser::ast::DataType,
@@ -7,9 +27,14 @@ pub(crate) fn cast_value(
     if matches!(value, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let type_name = data_type.to_string().to_ascii_lowercase();
+    // A9: drop the per-row `.to_ascii_lowercase()` allocation. `data_type
+    // .to_string()` is still an unavoidable allocation (sqlparser API), but
+    // the lowercase clone on top was pure waste — substring checks below
+    // now use `type_name_contains_ci`, and exact matches use
+    // `.eq_ignore_ascii_case(...)`.
+    let type_name = data_type.to_string();
 
-    if type_name.contains("blob") {
+    if type_name_contains_ci(&type_name, "blob") {
         return Ok(match value {
             SqlValue::Blob(_) => value,
             SqlValue::Text(s) => SqlValue::Blob(Arc::from(s.as_bytes())),
@@ -17,7 +42,10 @@ pub(crate) fn cast_value(
         });
     }
 
-    if type_name.contains("text") || type_name.contains("char") || type_name.contains("clob") {
+    if type_name_contains_ci(&type_name, "text")
+        || type_name_contains_ci(&type_name, "char")
+        || type_name_contains_ci(&type_name, "clob")
+    {
         return Ok(match value {
             SqlValue::Text(_) => value,
             SqlValue::Integer(v) => SqlValue::Text(Arc::from(v.to_string())),
@@ -31,15 +59,18 @@ pub(crate) fn cast_value(
         });
     }
 
-    if type_name.contains("real") || type_name.contains("floa") || type_name.contains("doub") {
+    if type_name_contains_ci(&type_name, "real")
+        || type_name_contains_ci(&type_name, "floa")
+        || type_name_contains_ci(&type_name, "doub")
+    {
         return Ok(SqlValue::Real(cast_to_real(&value)));
     }
 
-    if type_name.contains("int") {
+    if type_name_contains_ci(&type_name, "int") {
         return Ok(SqlValue::Integer(cast_to_integer(&value)));
     }
 
-    if type_name.contains("numeric") {
+    if type_name_contains_ci(&type_name, "numeric") {
         // Track H — PG-style: keep NUMERIC values as TEXT so subsequent
         // arithmetic can preserve full precision (PG's `0.1 + 0.2 = 0.3`
         // semantics) rather than being rounded into a Rust f64. The binary
@@ -71,7 +102,7 @@ pub(crate) fn cast_value(
     // (NULLs propagate; arithmetic still works); the beyond_sqlite oracle's
     // `BooleanTfToInt` normalizer collapses PG's `t/f` back to `1/0` for the
     // byte-exact compare.
-    if type_name == "bool" || type_name == "boolean" {
+    if type_name.eq_ignore_ascii_case("bool") || type_name.eq_ignore_ascii_case("boolean") {
         return Ok(cast_to_boolean(&value));
     }
 
@@ -80,7 +111,7 @@ pub(crate) fn cast_value(
     // hyphens) or the curly-brace form `{xxxx...}` and store as TEXT in
     // canonical lowercase. Invalid inputs propagate the original value
     // unchanged so a downstream operator can raise a more specific error.
-    if type_name == "uuid" {
+    if type_name.eq_ignore_ascii_case("uuid") {
         return Ok(cast_to_uuid(&value));
     }
 
@@ -89,13 +120,13 @@ pub(crate) fn cast_value(
     // by stripping a trailing `+HH[:MM]` / `Z` offset from any text input.
     // The result remains text-shaped so downstream `datetime()`-style
     // functions see a plain UTC literal.
-    if type_name == "timestamp with time zone"
-        || type_name == "timestamptz"
-        || type_name == "timestamp"
-        || type_name == "time with time zone"
-        || type_name == "timetz"
-        || type_name == "time"
-        || type_name == "date"
+    if type_name.eq_ignore_ascii_case("timestamp with time zone")
+        || type_name.eq_ignore_ascii_case("timestamptz")
+        || type_name.eq_ignore_ascii_case("timestamp")
+        || type_name.eq_ignore_ascii_case("time with time zone")
+        || type_name.eq_ignore_ascii_case("timetz")
+        || type_name.eq_ignore_ascii_case("time")
+        || type_name.eq_ignore_ascii_case("date")
     {
         return Ok(cast_to_timestamp_text(&value));
     }
