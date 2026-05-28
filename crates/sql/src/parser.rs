@@ -76,11 +76,25 @@ pub use split::{first_statement_complete, is_blank_sql, split_first_statement, s
 pub(crate) use templates::{bind_statement, template};
 
 pub(crate) fn is_pragma_sql(sql: &str) -> bool {
-    sql.trim_start()
+    // A31: byte-wise case-insensitive prefix check. The previous
+    // implementation called `to_ascii_lowercase()` which heap-allocates
+    // the entire trimmed SQL just to call `.starts_with("pragma")`. This
+    // is invoked once per `prepare_cached_inner` (i.e. per statement
+    // preparation), so the alloc is on the hot path for every prepared
+    // template — wasted on the non-PRAGMA majority.
+    const PRAGMA: &[u8] = b"pragma";
+    let bytes = sql
+        .trim_start()
         .trim_end_matches(';')
         .trim_start()
-        .to_ascii_lowercase()
-        .starts_with("pragma")
+        .as_bytes();
+    if bytes.len() < PRAGMA.len() {
+        return false;
+    }
+    bytes[..PRAGMA.len()]
+        .iter()
+        .zip(PRAGMA.iter())
+        .all(|(a, b)| a.eq_ignore_ascii_case(b))
 }
 
 pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
