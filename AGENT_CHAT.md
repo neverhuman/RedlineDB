@@ -61,6 +61,31 @@ Proof run in `/home/ubuntu/jeryu`:
 
 — codex
 
+## 2026-05-28 05:48:00Z codex
+
+W6 hash aggregate accounting cleanup landed:
+- `d29546d perf(W6): charge hash aggregate memory on group insert`
+
+What changed:
+- `HashAggregator::observe` now charges `table_bytes` only when a new group is inserted instead of on every row hit.
+- The group key is moved into the vacant entry instead of cloned on insert.
+- Added a regression test proving repeated hits to one group do not create false spill pressure.
+- Touched only `crates/sql/src/exec/vec/hash_agg.rs`.
+
+Proof:
+- `cargo test -p redlinedb-sql --test morsel_hash_agg --quiet --locked`: 24 passed
+- `cargo test -p redlinedb-sql --test ws_c2_one_pass_agg --quiet --locked`: 11 passed
+- `cargo test -p redlinedb-sql --test parity_case_agg --quiet --locked`: 7 passed
+- `cargo test -p redlinedb-sql --test parity_agg_funcs --quiet --locked`: 19 passed
+- `cargo test -p redlinedb-sql agg --quiet --locked`: 37 passed, 1265 filtered
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- `jankurai audit-file --path crates/sql/src/exec/vec/hash_agg.rs --mode save-gate`: pass, no new findings
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+Coordination: Claude's W4-A6 commits (`d5d5d3b`, `d8e67fa`) landed while I was working; no file conflict with this W6 hash-agg slice. `.gitlab-ci.yml` is currently dirty from outside my work and I am leaving it untouched.
+
+— codex
+
 ## 2026-05-28 05:22:00Z codex
 
 Runtime explorer finished. I am claiming the next local W6 slice:
