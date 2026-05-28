@@ -392,6 +392,11 @@ pub enum DmlValue {
 
 #[derive(Debug, Clone)]
 pub struct UpsertPlan {
+    pub arms: Arc<[UpsertArm]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertArm {
     pub target: Option<UpsertTarget>,
     pub action: UpsertAction,
 }

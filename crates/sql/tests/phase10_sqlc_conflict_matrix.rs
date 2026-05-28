@@ -533,4 +533,227 @@ mod phase10_sqlc_conflict_matrix {
         assert_eq!(stmt.step().expect("step"), Step::Row);
         assert_eq!(stmt.column_text(0).expect("b"), "untouched");
     }
+
+    #[test]
+    fn on_conflict_text_literal_is_not_rewritten_as_upsert() {
+        let (_dir, conn) = open_database();
+        let mut stmt = conn
+            .prepare("SELECT 'literal on conflict text', 'escaped ''on conflict'' text'")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(
+            stmt.column_text(0).expect("literal"),
+            "literal on conflict text"
+        );
+        assert_eq!(
+            stmt.column_text(1).expect("escaped"),
+            "escaped 'on conflict' text"
+        );
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_update_matching_unique_branch() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100)")
+            .expect("first");
+
+        conn.execute(
+            "INSERT INTO t VALUES (2, 100) \
+             ON CONFLICT(a) DO NOTHING \
+             ON CONFLICT(b) DO UPDATE SET b = b + 1",
+        )
+        .expect("upsert");
+
+        let mut stmt = conn
+            .prepare("SELECT a, b FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 101);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_do_nothing_matching_pk_branch() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100)")
+            .expect("first");
+
+        conn.execute(
+            "INSERT INTO t VALUES (1, 200) \
+             ON CONFLICT(a) DO NOTHING \
+             ON CONFLICT(b) DO UPDATE SET b = b + 1",
+        )
+        .expect("upsert");
+
+        let mut stmt = conn
+            .prepare("SELECT a, b FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 100);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_keep_sql_parameter_order() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE, c INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100, 0)")
+            .expect("first");
+
+        let mut stmt = conn
+            .prepare(
+                "INSERT INTO t VALUES (?, ?, ?) \
+                 ON CONFLICT(a) DO NOTHING \
+                 ON CONFLICT(b) DO UPDATE SET c = ? + excluded.a WHERE ? = ?",
+            )
+            .expect("prepare");
+        assert_eq!(stmt.parameter_count(), 6);
+        stmt.bind_i64(1, 2).expect("bind a");
+        stmt.bind_i64(2, 100).expect("bind b");
+        stmt.bind_i64(3, 7).expect("bind c");
+        stmt.bind_i64(4, 30).expect("bind update");
+        stmt.bind_i64(5, 9).expect("bind where left");
+        stmt.bind_i64(6, 9).expect("bind where right");
+        assert_eq!(stmt.step().expect("step"), Step::Done);
+
+        let mut stmt = conn
+            .prepare("SELECT a, b, c FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 100);
+        assert_eq!(stmt.column_i64(2).expect("c"), 32);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_reserve_params_in_skipped_update_arm() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE, c INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100, 0)")
+            .expect("first");
+
+        let mut stmt = conn
+            .prepare(
+                "INSERT INTO t VALUES (?, ?, ?) \
+                 ON CONFLICT(a) DO UPDATE SET c = ? \
+                 ON CONFLICT(b) DO UPDATE SET c = ? + excluded.a WHERE ? = ?",
+            )
+            .expect("prepare");
+        assert_eq!(stmt.parameter_count(), 7);
+        stmt.bind_i64(1, 2).expect("bind a");
+        stmt.bind_i64(2, 100).expect("bind b");
+        stmt.bind_i64(3, 7).expect("bind c");
+        stmt.bind_i64(4, 111).expect("bind skipped update");
+        stmt.bind_i64(5, 30).expect("bind matching update");
+        stmt.bind_i64(6, 9).expect("bind where left");
+        stmt.bind_i64(7, 9).expect("bind where right");
+        assert_eq!(stmt.step().expect("step"), Step::Done);
+
+        let mut stmt = conn
+            .prepare("SELECT c FROM t WHERE a = 1")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("c"), 32);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_accept_trivia_between_arms() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100)")
+            .expect("first");
+
+        conn.execute(
+            "INSERT INTO t VALUES (2, 100)
+ON CONFLICT(a) DO NOTHING
+	/* second arm */ ON CONFLICT(b) DO UPDATE SET b = b + 1",
+        )
+        .expect("upsert");
+
+        let mut stmt = conn
+            .prepare("SELECT a, b FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 101);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_allow_targetless_final_arm() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE, c INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100, 0)")
+            .expect("first");
+
+        conn.execute(
+            "INSERT INTO t VALUES (2, 100, 0) \
+             ON CONFLICT(a) DO NOTHING \
+             ON CONFLICT DO UPDATE SET c = 33",
+        )
+        .expect("upsert");
+
+        let mut stmt = conn
+            .prepare("SELECT a, b, c FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 100);
+        assert_eq!(stmt.column_i64(2).expect("c"), 33);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_reject_targetless_nonfinal_arm() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE)")
+            .expect("create");
+
+        let err = conn
+            .prepare(
+                "INSERT INTO t VALUES (1, 100) \
+                 ON CONFLICT DO NOTHING \
+                 ON CONFLICT(b) DO UPDATE SET b = b + 1",
+            )
+            .expect_err("targetless ON CONFLICT arm must be final");
+        assert!(
+            err_msg(&err).contains("without target must be last"),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_preserve_returning_after_newline() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE, c INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100, 0)")
+            .expect("first");
+
+        let mut stmt = conn
+            .prepare(
+                "INSERT INTO t VALUES (2, 100, 0) \
+                 ON CONFLICT(b) DO UPDATE SET c = 10 \
+                 ON CONFLICT(a) DO UPDATE SET c = 20\nRETURNING a, b, c",
+            )
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 100);
+        assert_eq!(stmt.column_i64(2).expect("c"), 10);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
 }

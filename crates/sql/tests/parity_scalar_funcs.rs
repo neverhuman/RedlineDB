@@ -329,6 +329,13 @@ fn unicode_multi_char_returns_first() {
 }
 
 #[test]
+fn unicode_multibyte_literal_returns_first_codepoint() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT unicode('á')");
+    assert_eq!(v, SqlValue::Integer(225));
+}
+
+#[test]
 fn unicode_null_propagates() {
     let (_d, c) = open();
     assert_eq!(q1(&c, "SELECT unicode(NULL)"), SqlValue::Null);

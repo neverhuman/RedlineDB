@@ -276,3 +276,31 @@ Verification:
 
 Remaining latest-runner failures after this slice:
 - `10339`, `10340`, `10445`, `10451`, `10466`.
+
+Current UPSERT ordered-arm slice:
+- `SQL_UPSERT` case `10339` now passes on the latest `redline-testing 1.0.1` runner.
+- Chained `ON CONFLICT` arms are preserved in source order and executor dispatch applies the first arm whose target matches the actual unique conflict.
+- Targetless `ON CONFLICT` arms are rejected unless final; final targetless arms still catch otherwise-unmatched unique conflicts.
+- Anonymous parameter slots stay in SQL text order across VALUES/source, skipped arms, matching arms, arm WHERE predicates, and RETURNING.
+- The ON CONFLICT pre-parser scanner is now whitespace/comment tolerant, ignores quoted/commented `on conflict` text, and is byte-safe for non-ASCII SQL literals.
+
+Verification:
+- `cargo fmt --all --check`
+- `cargo test -p redlinedb-sql --test phase10_sqlc_conflict_matrix multiple_on_conflict_clauses --quiet --locked`
+- `cargo test -p redlinedb-sql --test phase10_sqlc_conflict_matrix --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_scalar_funcs --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_dml upsert_and_conflict_algorithms_work --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_select --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- `just fast`
+- `jankurai audit-file` save-gates on all touched source/test files
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `4` remaining failures out of `2445`; `10339` passed.
+- Raw result: `target/redline-testing/upsert-ordered-arms-v6/sqlite_parity.raw.jsonl`, sha256 `4d2de4e4d46bbedca8bba9a02927b2b96ce14beefd5dafa729851c13766522be`.
+
+Remaining latest-runner failures after this slice:
+- `10340`, `10445`, `10451`, `10466`.
+
+Next safe slice:
+- NATURAL/USING join merged-column output and bare-name lookup for `10445`, `10451`, and `10466`.
+- Defer `10340` until a dedicated collated UNIQUE index key slice; it is not safe as an UPSERT-only patch.

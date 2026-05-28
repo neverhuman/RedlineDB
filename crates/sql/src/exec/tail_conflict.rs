@@ -529,34 +529,37 @@ fn apply_upsert_branch(
     upsert: &crate::statement::UpsertPlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<InsertOutcome> {
-    let hit = if let Some(target) = &upsert.target {
-        conflicts
-            .iter()
-            .find(|conflict| unique_conflict_matches_target(conflict, target))
-    } else {
-        conflicts.first()
-    };
-    let Some(hit) = hit else {
-        return Err(Error::ConstraintViolation(format!(
-            "UNIQUE constraint failed: {}",
-            table.name
-        )));
-    };
-    match &upsert.action {
-        crate::statement::UpsertAction::DoNothing => Ok(InsertOutcome::Ignored),
-        crate::statement::UpsertAction::DoUpdate(update) => apply_upsert_update(
-            UpsertUpdateContext {
-                conn,
-                session,
-                tx,
-                table,
-                excluded: values,
-                conflict: hit,
-                bindings,
-            },
-            update,
-        ),
+    for arm in upsert.arms.iter() {
+        let hit = if let Some(target) = &arm.target {
+            conflicts
+                .iter()
+                .find(|conflict| unique_conflict_matches_target(conflict, target))
+        } else {
+            conflicts.first()
+        };
+        let Some(hit) = hit else {
+            continue;
+        };
+        return match &arm.action {
+            crate::statement::UpsertAction::DoNothing => Ok(InsertOutcome::Ignored),
+            crate::statement::UpsertAction::DoUpdate(update) => apply_upsert_update(
+                UpsertUpdateContext {
+                    conn,
+                    session,
+                    tx,
+                    table,
+                    excluded: values,
+                    conflict: hit,
+                    bindings,
+                },
+                update,
+            ),
+        };
     }
+    Err(Error::ConstraintViolation(format!(
+        "UNIQUE constraint failed: {}",
+        table.name
+    )))
 }
 
 pub(crate) fn ensure_unique_constraints(
