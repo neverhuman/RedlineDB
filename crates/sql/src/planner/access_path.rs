@@ -39,11 +39,12 @@ use crate::value::SqlValue;
 // Phase 6 R2-C: opt-in PRAGMA gate.
 //
 // `PRAGMA redline_planner_use_access_path = ON` flips a thread-local
-// flag. When OFF (the default), the planner runs the legacy
-// `access::choose_access_path` dispatch and emits exactly the same
-// `LogicalPlan` it did in v4.0.3. When ON, the planner routes
-// index/scan selection AND LIMIT pushdown through the `AccessPath` IR
-// defined in this file.
+// flag. `PRAGMA redline_access_path = legacy|access_path` is the
+// release-facing alias used by the W5 rollout plan. When OFF/legacy
+// (the default), the planner runs the legacy `access::choose_access_path`
+// dispatch and emits exactly the same `LogicalPlan` it did in v4.0.3.
+// When ON/access_path, the planner routes index/scan selection AND
+// LIMIT pushdown through the `AccessPath` IR defined in this file.
 //
 // The flag is intentionally thread-local: matches the existing
 // `dml_order_limit_rewrite_enabled` knob's lifecycle, makes the test
@@ -52,20 +53,11 @@ use crate::value::SqlValue;
 // touching `connection/options.rs`, outside this round's file-disjoint
 // boundary).
 //
-// Test/CI escape hatch: the cell seeds from the
-// `REDLINEDB_PLANNER_USE_ACCESS_PATH` env var on first read so the
-// integration-test binary at `tests/access_path_ir.rs` (which cannot
-// reach the `pub(crate)` setter through the private `mod planner`
-// boundary) can opt the whole process in by setting the env var.
-//
-// Wiring note: the PRAGMA-parser intercept that would translate
-// `PRAGMA redline_planner_use_access_path = ON` into a call to
-// `set_planner_use_access_path(true)` would naturally live in
-// `parser.rs` alongside the analogous DML-rewrite intercept. That file
-// is outside this round's edit set, so for now callers (including the
-// integration tests below) flip the gate via the setter or env var.
-// The runtime behaviour is fully wired; only the user-facing SQL
-// surface is a follow-up wave.
+// Test/CI escape hatch: the cell seeds from the release-facing
+// `REDLINEDB_ACCESS_PATH` env var first, then the older boolean
+// `REDLINEDB_PLANNER_USE_ACCESS_PATH` env var. The former accepts
+// `legacy` for emergency rollback and `access_path` / `ir` for opt-in.
+// The latter stays for existing tests and scripts.
 // ---------------------------------------------------------------------------
 
 thread_local! {
@@ -73,6 +65,12 @@ thread_local! {
 }
 
 fn env_default_planner_use_access_path() -> bool {
+    if let Ok(mode) = std::env::var("REDLINEDB_ACCESS_PATH") {
+        return matches!(
+            mode.as_str(),
+            "access_path" | "ACCESS_PATH" | "ir" | "IR" | "1" | "on" | "ON" | "true" | "TRUE"
+        );
+    }
     matches!(
         std::env::var("REDLINEDB_PLANNER_USE_ACCESS_PATH")
             .ok()
@@ -85,8 +83,9 @@ fn env_default_planner_use_access_path() -> bool {
 /// through the `AccessPath` IR. Defaults to false unless either:
 ///   * `set_planner_use_access_path(true)` was called on this thread,
 ///     or
-///   * the `REDLINEDB_PLANNER_USE_ACCESS_PATH` env var is set to a
-///     truthy value (`1` / `on` / `true`).
+///   * `REDLINEDB_ACCESS_PATH=access_path|ir` is set, or
+///   * the legacy `REDLINEDB_PLANNER_USE_ACCESS_PATH` env var is set
+///     to a truthy value (`1` / `on` / `true`).
 pub(crate) fn planner_use_access_path() -> bool {
     PLANNER_USE_ACCESS_PATH.with(|c| match c.get() {
         Some(v) => v,
@@ -98,9 +97,7 @@ pub(crate) fn planner_use_access_path() -> bool {
     })
 }
 
-/// Programmatic setter for the PRAGMA toggle. Used by tests today; a
-/// future parser-side intercept will call this on
-/// `PRAGMA redline_planner_use_access_path = ON|OFF`.
+/// Programmatic setter for the PRAGMA toggles.
 pub(crate) fn set_planner_use_access_path(value: bool) {
     PLANNER_USE_ACCESS_PATH.with(|c| c.set(Some(value)));
 }

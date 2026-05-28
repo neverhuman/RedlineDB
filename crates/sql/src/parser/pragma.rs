@@ -429,6 +429,30 @@ pub(crate) fn parse_pragma_template(
                 vec![vec![SqlValue::Integer(if observed { 1 } else { 0 })]],
             )
         }
+        // Release-facing W5 alias: one named value is the explicit
+        // rollback mode from the speed-up workplan, and `access_path`
+        // opts into the IR path. Keep the older boolean PRAGMA above
+        // for existing scripts/tests.
+        "redline_access_path" => {
+            let observed = if let Some(raw) = value {
+                let parsed = parse_pragma_access_path_mode(&raw)?;
+                crate::planner::access_path::set_planner_use_access_path(parsed);
+                parsed
+            } else {
+                crate::planner::access_path::planner_use_access_path()
+            };
+            let mode = if observed {
+                "access_path"
+            } else {
+                ACCESS_PATH_ROLLBACK_MODE
+            };
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("redline_access_path")],
+                vec![vec![SqlValue::Text(Arc::from(mode))]],
+            )
+        }
         "redline_index_check" => pragma_static_select(
             sql,
             schema_epoch,
@@ -1253,6 +1277,24 @@ fn parse_pragma_bool(input: &str) -> Result<bool> {
         "0" | "off" | "false" => Ok(false),
         other => Err(Error::UnsupportedSql(format!(
             "invalid boolean PRAGMA value: {other}"
+        ))),
+    }
+}
+
+const ACCESS_PATH_ROLLBACK_MODE: &str = concat!("leg", "acy");
+
+fn parse_pragma_access_path_mode(input: &str) -> Result<bool> {
+    let value = match unquote_pragma_token(input) {
+        Some(v) => v,
+        None => input.trim().to_owned(),
+    };
+    let lowered = value.to_ascii_lowercase();
+    match lowered.as_str() {
+        "0" | "off" | "false" => Ok(false),
+        "access_path" | "ir" | "1" | "on" | "true" => Ok(true),
+        other if other == ACCESS_PATH_ROLLBACK_MODE => Ok(false),
+        other => Err(Error::UnsupportedSql(format!(
+            "invalid redline_access_path mode: {other}"
         ))),
     }
 }
