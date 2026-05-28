@@ -47,6 +47,9 @@ pub(crate) fn push_projection_columns(source: &SelectSource, out: &mut Vec<Strin
                     .map(str::to_owned),
             );
         }
+        SelectSource::SqliteSequence { .. } => {
+            out.extend(["name", "seq"].into_iter().map(str::to_owned));
+        }
         SelectSource::StaticRows { .. } => {}
         SelectSource::CompoundAll(_) => {}
         SelectSource::CompoundSet { .. } => {}

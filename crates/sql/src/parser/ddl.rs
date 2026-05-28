@@ -249,6 +249,7 @@ fn build_ctas_columns(select: &SelectPlan) -> Result<Vec<ColumnSpec>> {
             constraints: Vec::new(),
             collation: None,
             default_value: None,
+            autoincrement: false,
             generated: None,
         });
     }
@@ -376,6 +377,7 @@ fn source_output_names(source: &SelectSource) -> Vec<String> {
             "sql".to_owned(),
         ]
         .into(),
+        SelectSource::SqliteSequence { .. } => ["name".to_owned(), "seq".to_owned()].into(),
         SelectSource::Empty => Vec::new(),
     }
 }
@@ -424,6 +426,10 @@ fn source_output_affinities(source: &SelectSource) -> Vec<redlinedb_kernel::cata
             redlinedb_kernel::catalog::Affinity::Text,
             redlinedb_kernel::catalog::Affinity::Integer,
             redlinedb_kernel::catalog::Affinity::Text,
+        ],
+        SelectSource::SqliteSequence { .. } => vec![
+            redlinedb_kernel::catalog::Affinity::Text,
+            redlinedb_kernel::catalog::Affinity::Integer,
         ],
         SelectSource::Empty => Vec::new(),
     }

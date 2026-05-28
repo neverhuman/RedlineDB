@@ -157,6 +157,17 @@ pub struct SessionState {
     /// current lightweight implementation stores their rows in the same
     /// engine but exposes them through sqlite_temp_schema.
     pub temp_tables: Vec<String>,
+    /// SQLite AUTOINCREMENT state keyed by folded table name. Backed by the
+    /// `sqlite_sequence` pseudo-table on the SQL surface.
+    pub sqlite_sequences: std::collections::BTreeMap<String, i64>,
+    /// Snapshot of `sqlite_sequences` captured when the current write
+    /// transaction began. Used to restore AUTOINCREMENT state on rollback
+    /// and savepoint rewind.
+    pub sqlite_sequences_tx_snapshot: Option<std::collections::BTreeMap<String, i64>>,
+    /// AUTOINCREMENT tables mutated in the current transaction/statement.
+    /// Commit publishing merges only these keys so an older transaction
+    /// cannot overwrite a sibling connection's unrelated sequence entries.
+    pub sqlite_sequences_dirty: std::collections::BTreeSet<String>,
     pub last_insert_rowid: Option<i64>,
     pub unique_guards: Vec<UniqueKeyGuard>,
     /// Kernel-level unique-key reservations held until end-of-transaction.
@@ -259,6 +270,9 @@ impl Default for SessionState {
             legacy_alter_table: false,
             redline_bulk_import: false,
             temp_tables: Vec::new(),
+            sqlite_sequences: std::collections::BTreeMap::new(),
+            sqlite_sequences_tx_snapshot: None,
+            sqlite_sequences_dirty: std::collections::BTreeSet::new(),
             last_insert_rowid: None,
             unique_guards: Vec::new(),
             kernel_unique_guards: Vec::new(),
@@ -317,6 +331,9 @@ impl SessionState {
         self.legacy_alter_table = false;
         self.redline_bulk_import = false;
         self.temp_tables.clear();
+        self.sqlite_sequences.clear();
+        self.sqlite_sequences_tx_snapshot = None;
+        self.sqlite_sequences_dirty.clear();
         self.last_insert_rowid = None;
         self.unique_guards.clear();
         self.kernel_unique_guards.clear();
@@ -328,6 +345,9 @@ impl SessionState {
         self.pg_schemas.insert("public".to_owned());
         self.pg_schemas.insert("pg_catalog".to_owned());
         self.pg_sequences.clear();
+        self.sqlite_sequences.clear();
+        self.sqlite_sequences_tx_snapshot = None;
+        self.sqlite_sequences_dirty.clear();
         self.transaction_isolation = crate::statement::TransactionIsolationLevel::ReadCommitted;
     }
 

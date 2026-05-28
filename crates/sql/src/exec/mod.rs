@@ -67,6 +67,7 @@ pub(crate) mod json_tv;
 pub(crate) mod merge;
 pub(crate) mod pragma_tv;
 pub(crate) mod set_ops;
+mod sqlite_sequence;
 pub(crate) mod table_valued;
 pub(crate) mod trigger;
 pub(crate) mod view;
@@ -502,6 +503,12 @@ pub fn execute_prepared(
         }
         PreparedKind::DropTable(spec) => {
             with_write_tx(conn, |session, tx| {
+                session
+                    .sqlite_sequences
+                    .remove(&spec.name.name.folded().to_owned());
+                session
+                    .sqlite_sequences_dirty
+                    .insert(spec.name.name.folded().to_owned());
                 conn.engine().drop_table(tx, spec.clone())?;
                 session.changes += 1;
                 session.total_changes += 1;
@@ -1341,6 +1348,8 @@ fn with_write_tx<T>(
         if session.tx.is_some() {
             let mut tx = session.tx.take().expect("checked some");
             let tx_ptr: *mut Txn = &mut tx;
+            let sqlite_sequence_snapshot = session.sqlite_sequences.clone();
+            let sqlite_sequence_dirty_snapshot = session.sqlite_sequences_dirty.clone();
             let result = with_current_session(session_ptr, || {
                 with_current_tx(tx_ptr, || {
                     // SAFETY: `tx_ptr` points at the `tx` local above for the
@@ -1353,10 +1362,15 @@ fn with_write_tx<T>(
             session.tx = Some(tx);
             if result.is_err() {
                 session.failed = true;
+                session.sqlite_sequences = sqlite_sequence_snapshot;
+                session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot;
             }
             result
         } else {
             let mut attempts = 0_usize;
+            session.sqlite_sequences = conn.committed_sqlite_sequences();
+            let sqlite_sequence_snapshot = session.sqlite_sequences.clone();
+            let sqlite_sequence_dirty_snapshot = session.sqlite_sequences_dirty.clone();
             loop {
                 let mut tx = conn.engine().begin(Isolation::ReadCommitted)?;
                 let tx_ptr: *mut Txn = &mut tx;
@@ -1383,27 +1397,49 @@ fn with_write_tx<T>(
                             let _ = conn.engine().rollback(tx);
                             session.kernel_unique_guards.clear();
                             session.unique_guards.clear();
+                            session.sqlite_sequences_tx_snapshot = None;
+                            session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                            session.sqlite_sequences_dirty =
+                                sqlite_sequence_dirty_snapshot.clone();
                             return Err(err);
                         }
                         match conn.engine().commit(tx) {
                             Ok(CommitOutcome::Committed(_)) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
+                                session.sqlite_sequences_tx_snapshot = None;
+                                conn.publish_sqlite_sequence_entries(
+                                    &session.sqlite_sequences,
+                                    &session.sqlite_sequences_dirty,
+                                );
+                                session.sqlite_sequences_dirty.clear();
                                 return Ok(value);
                             }
                             Ok(CommitOutcome::MaybeCommitted) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
+                                session.sqlite_sequences_tx_snapshot = None;
+                                session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                                session.sqlite_sequences_dirty =
+                                    sqlite_sequence_dirty_snapshot.clone();
                                 return Err(Error::CommitMaybeCommitted);
                             }
                             Ok(CommitOutcome::RolledBack) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
+                                session.sqlite_sequences_tx_snapshot = None;
+                                session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                                session.sqlite_sequences_dirty =
+                                    sqlite_sequence_dirty_snapshot.clone();
                                 return Err(Error::TransactionState("transaction rolled back"));
                             }
                             Err(err) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
+                                session.sqlite_sequences_tx_snapshot = None;
+                                session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                                session.sqlite_sequences_dirty =
+                                    sqlite_sequence_dirty_snapshot.clone();
                                 return Err(err.into());
                             }
                         }
@@ -1416,6 +1452,9 @@ fn with_write_tx<T>(
                         let _ = conn.engine().rollback(tx);
                         session.kernel_unique_guards.clear();
                         session.unique_guards.clear();
+                        session.sqlite_sequences_tx_snapshot = None;
+                        session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                        session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot.clone();
                         std::thread::yield_now();
                         continue;
                     }
@@ -1423,6 +1462,9 @@ fn with_write_tx<T>(
                         let _ = conn.engine().rollback(tx);
                         session.kernel_unique_guards.clear();
                         session.unique_guards.clear();
+                        session.sqlite_sequences_tx_snapshot = None;
+                        session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                        session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot.clone();
                         return Err(err);
                     }
                 }
@@ -1519,6 +1561,30 @@ fn step_select_runtime_inner(
         SelectRuntimeSource::SqliteSchema { rows, cursor } => {
             while *cursor < rows.len() {
                 let row = SqlRow::SqliteSchema(rows[*cursor].clone());
+                *cursor += 1;
+                if !selection_passes(&runtime.selection, &row, bindings)? {
+                    continue;
+                }
+                runtime.seen += 1;
+                if runtime.seen <= runtime.offset {
+                    continue;
+                }
+                if runtime.yielded >= runtime.limit {
+                    finish_select_runtime(conn, runtime)?;
+                    *current_row = None;
+                    return Ok(true);
+                }
+                *current_row = Some(project_row(&runtime.projection, &row, bindings)?);
+                runtime.yielded += 1;
+                return Ok(false);
+            }
+            finish_select_runtime(conn, runtime)?;
+            *current_row = None;
+            Ok(true)
+        }
+        SelectRuntimeSource::SqliteSequence { rows, cursor } => {
+            while *cursor < rows.len() {
+                let row = SqlRow::SqliteSequence(rows[*cursor].clone());
                 *cursor += 1;
                 if !selection_passes(&runtime.selection, &row, bindings)? {
                     continue;

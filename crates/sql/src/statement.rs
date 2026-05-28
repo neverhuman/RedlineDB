@@ -16,6 +16,13 @@ use crate::exec::execute_prepared;
 use crate::session::BeginMode;
 use crate::value::SqlValue;
 
+#[derive(Debug, Clone)]
+pub(crate) struct SqliteSequenceRow {
+    pub(crate) name: Arc<str>,
+    pub(crate) seq: i64,
+    pub(crate) alias: Option<Arc<str>>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ParamLayout {
     pub(crate) slots: Vec<Option<String>>,
@@ -254,10 +261,7 @@ pub struct ExplainPlan {
 #[derive(Debug, Clone)]
 pub enum PragmaPlan {
     SetForeignKeys(bool),
-    SetUserVersion {
-        alias: Option<Arc<str>>,
-        value: i64,
-    },
+    SetUserVersion { alias: Option<Arc<str>>, value: i64 },
     SetRecursiveTriggers(bool),
     SetJournalMode(JournalMode),
     SetSynchronous(SynchronousLevel),
@@ -414,6 +418,9 @@ pub enum SelectSource {
         branches: Vec<SelectPlan>,
     },
     SqliteSchema,
+    SqliteSequence {
+        alias: Option<Arc<str>>,
+    },
     SqliteTempSchema,
     StaticRows {
         rows: Arc<[Vec<crate::value::SqlValue>]>,
@@ -677,6 +684,10 @@ pub(crate) enum SelectRuntimeSource {
     },
     SqliteSchema {
         rows: Vec<SqliteSchemaRow>,
+        cursor: usize,
+    },
+    SqliteSequence {
+        rows: Vec<SqliteSequenceRow>,
         cursor: usize,
     },
     StaticRows {

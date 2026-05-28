@@ -44,6 +44,11 @@ pub(crate) fn bind_select_from(
         {
             return Ok((source, None));
         }
+        if is_sqlite_sequence_name(name)
+            && schema.tables.iter().any(|table| table.is_autoincrement())
+        {
+            return Ok((SelectSource::SqliteSequence { alias: alias_arc }, None));
+        }
     }
 
     // Table-valued function fast path. `pragma_table_info(t)` and friends
@@ -118,6 +123,11 @@ fn bind_select_from_after_tvf(
 
     for table in from {
         match &table.relation {
+            TableFactor::Table { name, .. } if is_sqlite_sequence_name(name) => {
+                return Err(Error::UnsupportedSql(
+                    "sqlite_sequence cannot participate in joins".to_owned(),
+                ));
+            }
             TableFactor::Table { name, .. } if is_sqlite_temp_schema_name(name) => {
                 if !table.joins.is_empty() {
                     return Err(Error::UnsupportedSql(
@@ -180,6 +190,24 @@ fn bind_select_from_after_tvf(
     };
 
     Ok((source, selection))
+}
+
+pub(crate) fn is_sqlite_sequence_name(name: &ObjectName) -> bool {
+    match name.0.as_slice() {
+        [part] => object_name_part_to_string(part)
+            .map(|s| s.eq_ignore_ascii_case("sqlite_sequence"))
+            .unwrap_or(false),
+        [schema, table] => match (
+            object_name_part_to_string(schema).ok(),
+            object_name_part_to_string(table).ok(),
+        ) {
+            (Some(schema), Some(table)) => {
+                schema.eq_ignore_ascii_case("main") && table.eq_ignore_ascii_case("sqlite_sequence")
+            }
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 pub(crate) fn bind_select_join_source(

@@ -170,6 +170,7 @@ pub(crate) fn convert_column_def(
         constraints,
         collation,
         default_value,
+        autoincrement: has_autoincrement,
         generated,
     })
 }

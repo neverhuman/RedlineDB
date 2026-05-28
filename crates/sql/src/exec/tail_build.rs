@@ -206,12 +206,7 @@ fn column_default_value(
         }
         None => false,
     };
-    eval_expr(
-        default_expr,
-        &EmptyDefaultRow,
-        scratch,
-        case_sensitive_like,
-    )
+    eval_expr(default_expr, &EmptyDefaultRow, scratch, case_sensitive_like)
         .map(Some)
         .map_err(|err| Error::UnsupportedSql(format!("invalid default expression: {err}")))
 }
@@ -449,9 +444,10 @@ pub(crate) fn apply_constraints(table: &TableDef, values: &[SqlValue]) -> Result
     }
     for check in &table.checks {
         let row = TableRowSource { values };
-        let result = eval_expr(&check.expr, &row, &mut scratch, case_sensitive_like).map_err(|_| {
-            Error::ConstraintViolation(format!("CHECK constraint failed: {}", table.name))
-        })?;
+        let result =
+            eval_expr(&check.expr, &row, &mut scratch, case_sensitive_like).map_err(|_| {
+                Error::ConstraintViolation(format!("CHECK constraint failed: {}", table.name))
+            })?;
         if matches!(result, SqlValue::Null) || is_truthy(&result) {
             continue;
         }
@@ -464,20 +460,34 @@ pub(crate) fn apply_constraints(table: &TableDef, values: &[SqlValue]) -> Result
 }
 
 pub(crate) fn choose_rowid_for_insert(
+    session: &mut SessionState,
     engine: &Engine,
-    table: &TableDef,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
     values: &mut [SqlValue],
 ) -> Result<RowId> {
     if let Some(alias) = table.rowid_alias_column {
         let slot = alias as usize;
         match values.get(slot).cloned().unwrap_or(SqlValue::Null) {
             SqlValue::Null => {
-                let rowid = engine.reserve_row_id();
+                let rowid = if table.is_autoincrement() {
+                    sqlite_sequence_next_rowid(session, engine, tx, table)?
+                } else {
+                    engine.reserve_row_id()
+                };
                 values[slot] = SqlValue::Integer(rowid.0 as i64);
                 Ok(rowid)
             }
-            SqlValue::Integer(v) if v >= 0 => Ok(RowId::new(v as u64)),
-            SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => Ok(RowId::new(v as u64)),
+            SqlValue::Integer(v) if v >= 0 => {
+                let rowid = RowId::new(v as u64);
+                record_sqlite_sequence_rowid(session, table, rowid);
+                Ok(rowid)
+            }
+            SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => {
+                let rowid = RowId::new(v as u64);
+                record_sqlite_sequence_rowid(session, table, rowid);
+                Ok(rowid)
+            }
             SqlValue::Integer(_) | SqlValue::Real(_) => Err(Error::DatatypeMismatch),
             _ => Err(Error::DatatypeMismatch),
         }
@@ -507,4 +517,55 @@ pub(crate) fn choose_rowid_for_update(
     } else {
         Ok(current_rowid)
     }
+}
+
+pub(crate) fn record_sqlite_sequence_rowid(
+    session: &mut SessionState,
+    table: &TableDef,
+    rowid: RowId,
+) {
+    if !table.is_autoincrement() {
+        return;
+    }
+    let key = table.folded.as_ref().to_owned();
+    let entry = session.sqlite_sequences.entry(key).or_insert(0);
+    let rowid = rowid.0.min(i64::MAX as u64) as i64;
+    if rowid > *entry {
+        *entry = rowid;
+        session
+            .sqlite_sequences_dirty
+            .insert(table.folded.as_ref().to_owned());
+    }
+}
+
+fn sqlite_sequence_next_rowid(
+    session: &mut SessionState,
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+) -> Result<RowId> {
+    let key = table.folded.as_ref();
+    let current = session.sqlite_sequences.get(key).copied().unwrap_or(0);
+    let max_live_rowid = collect_table_rowids(engine, tx, table)?
+        .into_iter()
+        .map(|rowid| rowid.0)
+        .max()
+        .unwrap_or(0);
+    if max_live_rowid > i64::MAX as u64 {
+        return Err(Error::ConstraintViolation(
+            "database or disk is full".to_owned(),
+        ));
+    }
+    let base = current.max(max_live_rowid as i64);
+    let next = base
+        .checked_add(1)
+        .ok_or_else(|| Error::ConstraintViolation("database or disk is full".to_owned()))?;
+    if next > i64::MAX {
+        return Err(Error::ConstraintViolation(
+            "database or disk is full".to_owned(),
+        ));
+    }
+    session.sqlite_sequences.insert(key.to_owned(), next as i64);
+    session.sqlite_sequences_dirty.insert(key.to_owned());
+    Ok(RowId::new(next as u64))
 }

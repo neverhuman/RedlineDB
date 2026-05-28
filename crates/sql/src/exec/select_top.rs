@@ -574,6 +574,16 @@ fn build_select_runtime(
                     SelectRuntimeSource::SqliteSchema { rows, cursor: 0 }
                 }
             }
+            SelectSource::SqliteSequence { alias } => super::sqlite_sequence::build_runtime(
+                conn,
+                alias.as_ref(),
+                plan,
+                bindings,
+                limit,
+                offset,
+                temp_dir.clone(),
+                &mut memory,
+            )?,
             SelectSource::StaticRows { rows } => SelectRuntimeSource::StaticRows {
                 rows: Arc::clone(rows),
                 cursor: 0,
@@ -718,6 +728,7 @@ fn build_select_runtime(
     let (selection, projection) = match &source {
         SelectRuntimeSource::Table { .. }
         | SelectRuntimeSource::SqliteSchema { .. }
+        | SelectRuntimeSource::SqliteSequence { .. }
         | SelectRuntimeSource::Empty => (plan.selection.clone(), plan.projection.clone()),
         SelectRuntimeSource::Batched { .. } | SelectRuntimeSource::StaticRows { .. } => {
             (None, Vec::new())
@@ -741,6 +752,24 @@ fn build_select_runtime(
 
 fn sqlite_schema_rows(conn: &Connection) -> Vec<SqliteSchemaRow> {
     let mut rows = conn.engine().sqlite_schema();
+    if conn
+        .engine()
+        .schema_snapshot()
+        .tables
+        .iter()
+        .any(|table| table.is_autoincrement())
+        && !rows
+            .iter()
+            .any(|row| row.name.as_ref() == "sqlite_sequence")
+    {
+        rows.push(SqliteSchemaRow {
+            type_name: "table".into(),
+            name: "sqlite_sequence".into(),
+            tbl_name: "sqlite_sequence".into(),
+            rootpage: 0,
+            sql: "CREATE TABLE sqlite_sequence(name,seq)".into(),
+        });
+    }
     if !conn.stats_snapshot().tables.is_empty()
         && !rows.iter().any(|row| row.name.as_ref() == "sqlite_stat1")
     {
@@ -1082,6 +1111,9 @@ pub(super) fn collect_select_rows(
             .into_iter()
             .map(SqlRow::SqliteSchema)
             .collect()),
+        SelectSource::SqliteSequence { alias } => {
+            Ok(super::sqlite_sequence::collect_rows(conn, alias.as_ref()))
+        }
         SelectSource::SqliteTempSchema => Ok(temp_schema_rows(conn)
             .into_iter()
             .map(SqlRow::SqliteSchema)
@@ -1507,6 +1539,7 @@ fn authorize_select_source(source: &SelectSource) -> Option<crate::udf::Authoriz
         }
         SelectSource::SqliteSchema
         | SelectSource::SqliteTempSchema
+        | SelectSource::SqliteSequence { .. }
         | SelectSource::StaticRows { .. }
         | SelectSource::Empty
         | SelectSource::CompoundSet { .. }

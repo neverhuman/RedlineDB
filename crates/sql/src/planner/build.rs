@@ -44,6 +44,16 @@ pub(crate) fn build_select_plan(
             ];
             node
         }
+        SelectSource::SqliteSequence { .. } => {
+            let mut node =
+                PhysicalPlan::leaf(PhysicalKind::TableScan, Some("sqlite_sequence".to_owned()));
+            node.estimated_rows = conn
+                .with_session(|session| Ok(session.sqlite_sequences.len() as f64))
+                .unwrap_or(0.0);
+            node.cost = estimate_scan_cost(node.estimated_rows, 2.0);
+            node.projected_columns = vec!["name".into(), "seq".into()];
+            node
+        }
         SelectSource::StaticRows { rows } => {
             let mut node =
                 PhysicalPlan::leaf(PhysicalKind::Constant, Some("static rows".to_owned()));

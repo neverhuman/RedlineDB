@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -39,6 +39,7 @@ pub struct Database {
     pub(super) temp_dir: Option<PathBuf>,
     pub(super) optimizer: OptimizerConfig,
     pub(super) user_version: Mutex<i64>,
+    sqlite_sequences: Mutex<BTreeMap<String, i64>>,
     metadata_sync_policy: MetadataSyncPolicy,
     _ephemeral_root: Option<Arc<EphemeralRoot>>,
     /// True for `:memory:` / private-memory databases. SQLite-parity
@@ -177,6 +178,7 @@ impl Database {
             } else {
                 load_user_version(base)?
             }),
+            sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
             _ephemeral_root: ephemeral_root,
             private_memory,
@@ -208,6 +210,7 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
+            sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
             _ephemeral_root: None,
             private_memory: false,
@@ -243,6 +246,7 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
+            sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
             _ephemeral_root: None,
             private_memory: false,
@@ -250,12 +254,42 @@ impl Database {
     }
 
     pub fn connect(self: &Arc<Self>) -> Arc<Connection> {
+        let mut session = SessionState::default();
+        session.sqlite_sequences = self.sqlite_sequence_snapshot();
         Arc::new(Connection {
             db: Arc::clone(self),
-            session: Mutex::new(SessionState::default()),
+            session: Mutex::new(session),
             local_cache: StatementCache::with_capacity(self.stmt_cache.capacity()),
             attach_map: crate::exec::attach::AttachMap::new(),
         })
+    }
+
+    pub(crate) fn sqlite_sequence_snapshot(&self) -> BTreeMap<String, i64> {
+        self.sqlite_sequences
+            .lock()
+            .expect("sqlite_sequence lock poisoned")
+            .clone()
+    }
+
+    pub(crate) fn publish_sqlite_sequence_entries(
+        &self,
+        sequences: &BTreeMap<String, i64>,
+        dirty: &std::collections::BTreeSet<String>,
+    ) {
+        let mut committed = self
+            .sqlite_sequences
+            .lock()
+            .expect("sqlite_sequence lock poisoned");
+        for name in dirty {
+            match sequences.get(name) {
+                Some(seq) => {
+                    committed.insert(name.clone(), *seq);
+                }
+                None => {
+                    committed.remove(name);
+                }
+            }
+        }
     }
 
     pub(crate) fn stats_epoch(&self) -> StatsEpoch {

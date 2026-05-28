@@ -39,6 +39,13 @@ fn lookup_column_local(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
             "sql" => Ok(SqlValue::Text(Arc::from(row.sql.as_ref()))),
             _ => Err(Error::UnknownColumn(name.to_owned())),
         },
+        RowContext::SqliteSequence(row) => match name.to_ascii_lowercase().as_str() {
+            "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.name.as_ref(),
+            ))),
+            "seq" => Ok(SqlValue::Integer(row.seq)),
+            _ => Err(Error::UnknownColumn(name.to_owned())),
+        },
         RowContext::Cte(row) => lookup_cte_column(row, name),
         RowContext::Empty => Err(Error::UnknownColumn(name.to_owned())),
     }
@@ -102,6 +109,13 @@ fn lookup_qualified_column_local(
             "sqlite_schema" | "sqlite_master" | "redline_master" => lookup_schema_column(row, name),
             _ => Err(Error::UnknownColumn(format!("{qualifier}.{name}"))),
         },
+        RowContext::SqliteSequence(row) => {
+            if sqlite_sequence_matches_qualifier(row, qualifier) {
+                lookup_sequence_column(row, name)
+            } else {
+                Err(Error::UnknownColumn(format!("{qualifier}.{name}")))
+            }
+        }
         RowContext::Cte(row) => {
             let matches = row
                 .alias
@@ -179,6 +193,29 @@ fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
         "rootpage" => Ok(SqlValue::Integer(row.rootpage as i64)),
         "sql" => Ok(SqlValue::Text(Arc::from(row.sql.as_ref()))),
         _ => Err(Error::UnknownColumn(name.to_owned())),
+    }
+}
+
+fn lookup_sequence_column(
+    row: &crate::statement::SqliteSequenceRow,
+    name: &str,
+) -> Result<SqlValue> {
+    match name.to_ascii_lowercase().as_str() {
+        "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.name.as_ref(),
+        ))),
+        "seq" => Ok(SqlValue::Integer(row.seq)),
+        _ => Err(Error::UnknownColumn(name.to_owned())),
+    }
+}
+
+fn sqlite_sequence_matches_qualifier(
+    row: &crate::statement::SqliteSequenceRow,
+    qualifier: &str,
+) -> bool {
+    match row.alias.as_deref() {
+        Some(alias) => alias.eq_ignore_ascii_case(qualifier),
+        None => qualifier.eq_ignore_ascii_case("sqlite_sequence"),
     }
 }
 

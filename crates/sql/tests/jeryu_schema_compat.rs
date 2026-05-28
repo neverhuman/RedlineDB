@@ -47,11 +47,199 @@ fn autoincrement_populates_sqlite_sequence_and_keeps_it_monotonic() {
     conn.execute("INSERT INTO t(name) VALUES ('two')")
         .expect("insert second row");
     let second_seq = scalar_i64(&conn, "SELECT seq FROM sqlite_sequence");
-    assert!(second_seq > first_seq, "sequence must not rewind after delete");
+    assert!(
+        second_seq > first_seq,
+        "sequence must not rewind after delete"
+    );
 
     conn.execute("INSERT INTO t(id, name) VALUES (42, 'explicit')")
         .expect("explicit rowid bumps sequence");
     assert_eq!(scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"), 42);
+}
+
+#[test]
+fn autoincrement_sequence_rewinds_on_rollback_boundaries() {
+    let (_dir, conn) = open_database();
+
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
+        .expect("create table");
+    conn.execute("INSERT INTO t(name) VALUES ('kept')")
+        .expect("insert kept row");
+    let kept_seq = scalar_i64(&conn, "SELECT seq FROM sqlite_sequence");
+
+    conn.execute("BEGIN").expect("begin");
+    conn.execute("INSERT INTO t(name) VALUES ('rolled-back')")
+        .expect("insert rolled-back row");
+    assert_eq!(
+        scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"),
+        kept_seq + 1
+    );
+    conn.execute("ROLLBACK").expect("rollback");
+
+    assert_eq!(
+        scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"),
+        kept_seq
+    );
+    conn.execute("INSERT INTO t(name) VALUES ('after-rollback')")
+        .expect("insert after rollback");
+    assert_eq!(
+        scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"),
+        kept_seq + 1
+    );
+}
+
+#[test]
+fn autoincrement_sequence_rewinds_to_savepoint_prefix() {
+    let (_dir, conn) = open_database();
+
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
+        .expect("create table");
+    conn.execute("BEGIN").expect("begin");
+    conn.execute("INSERT INTO t(name) VALUES ('kept')")
+        .expect("insert kept row");
+    let kept_seq = scalar_i64(&conn, "SELECT seq FROM sqlite_sequence");
+
+    conn.execute("SAVEPOINT s").expect("savepoint");
+    conn.execute("INSERT INTO t(name) VALUES ('rewound')")
+        .expect("insert rewound row");
+    assert_eq!(
+        scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"),
+        kept_seq + 1
+    );
+    conn.execute("ROLLBACK TO s")
+        .expect("rollback to savepoint");
+    conn.execute("RELEASE s").expect("release savepoint");
+    conn.execute("COMMIT").expect("commit");
+
+    assert_eq!(
+        scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"),
+        kept_seq
+    );
+    assert_eq!(scalar_i64(&conn, "SELECT count(*) FROM t"), 1);
+}
+
+#[test]
+fn autoincrement_sqlite_sequence_has_schema_row_and_aliases() {
+    let (_dir, conn) = open_database();
+
+    assert!(
+        conn.prepare("SELECT * FROM sqlite_sequence").is_err(),
+        "sqlite_sequence should not exist before an AUTOINCREMENT table"
+    );
+
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
+        .expect("create table");
+    assert_eq!(
+        scalar_text(
+            &conn,
+            "SELECT sql FROM sqlite_schema WHERE name = 'sqlite_sequence'"
+        ),
+        "CREATE TABLE sqlite_sequence(name,seq)"
+    );
+
+    conn.execute("INSERT INTO t(name) VALUES ('one')")
+        .expect("insert row");
+    assert_eq!(
+        scalar_i64(
+            &conn,
+            "SELECT s.seq FROM sqlite_sequence AS s WHERE s.name = 't'",
+        ),
+        1
+    );
+}
+
+#[test]
+fn autoincrement_sequence_uses_live_rowid_after_update_without_visible_bump() {
+    let (_dir, conn) = open_database();
+
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
+        .expect("create table");
+    conn.execute("INSERT INTO t(name) VALUES ('one')")
+        .expect("insert row");
+    assert_eq!(scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"), 1);
+
+    conn.execute("UPDATE t SET id = 99 WHERE name = 'one'")
+        .expect("update rowid");
+    assert_eq!(
+        scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"),
+        1,
+        "SQLite does not visibly bump sqlite_sequence on UPDATE"
+    );
+
+    conn.execute("INSERT INTO t(name) VALUES ('two')")
+        .expect("insert after rowid update");
+    assert_eq!(
+        scalar_i64(&conn, "SELECT id FROM t WHERE name = 'two'"),
+        100
+    );
+    assert_eq!(scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"), 100);
+}
+
+#[test]
+fn autoincrement_sequence_follows_conflict_resolution_and_failed_statement_rewind() {
+    let (_dir, conn) = open_database();
+
+    conn.execute(
+        "CREATE TABLE t(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE
+        )",
+    )
+    .expect("create table");
+    conn.execute("INSERT INTO t(name) VALUES ('one')")
+        .expect("insert row");
+    assert_eq!(scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"), 1);
+
+    conn.execute("INSERT OR IGNORE INTO t(id, name) VALUES (99, 'one')")
+        .expect("ignored insert");
+    assert_eq!(
+        scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"),
+        99,
+        "SQLite advances sqlite_sequence for ignored AUTOINCREMENT inserts"
+    );
+
+    let err = conn
+        .execute("INSERT INTO t(id, name) VALUES (150, 'one')")
+        .expect_err("duplicate insert must fail");
+    assert!(
+        err.to_string().contains("UNIQUE") || err.to_string().contains("unique"),
+        "unexpected duplicate insert error: {err:?}"
+    );
+    assert_eq!(
+        scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"),
+        99,
+        "failed ABORT statement must not leak a sequence bump"
+    );
+
+    conn.execute("BEGIN").expect("begin");
+    let err = conn
+        .execute("INSERT INTO t(id, name) VALUES (175, 'one')")
+        .expect_err("duplicate insert in transaction must fail");
+    assert!(
+        err.to_string().contains("UNIQUE") || err.to_string().contains("unique"),
+        "unexpected duplicate insert error: {err:?}"
+    );
+    conn.execute("ROLLBACK")
+        .expect("rollback failed transaction");
+    assert_eq!(scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"), 99);
+}
+
+#[test]
+fn autoincrement_sequence_is_database_scoped_across_connections() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let db =
+        Database::create(dir.path().join("sequence.db"), DbOptions::default()).expect("database");
+    let writer = db.connect();
+    let reader = db.connect();
+
+    writer
+        .execute("CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
+        .expect("create table");
+    writer
+        .execute("INSERT INTO t(name) VALUES ('one')")
+        .expect("insert row");
+
+    assert_eq!(scalar_i64(&reader, "SELECT seq FROM sqlite_sequence"), 1);
 }
 
 #[test]

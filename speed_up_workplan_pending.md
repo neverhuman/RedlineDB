@@ -84,3 +84,21 @@ Verification:
 Open follow-up after this slice:
 - `SQL_MATH` `cosh`/`exp` precision cases still remain.
 - The main unresolved plan lanes are still W4, W6, W7, and W2, plus the remaining attach/DML and AUTOINCREMENT gaps in the parity corpus.
+
+Current sqlite_sequence source slice:
+- AUTOINCREMENT source WIP is commit-ready after MCP audit fixes.
+- `sqlite_sequence` is database-scoped across sibling connections, transaction-local for rollback/savepoint reads, visible in `sqlite_schema`, and supports aliases.
+- Failed statements inside explicit transactions restore sequence state.
+- Rowid UPDATE no longer visibly bumps `sqlite_sequence`; the next omitted AUTOINCREMENT insert still considers the live max rowid.
+
+Verification:
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo test -p redlinedb-kernel --tests --quiet --locked`
+- `cargo test -p redlinedb-sql --test jeryu_schema_compat --quiet --locked`
+- `cargo test -p redlinedb-sql --test phase10_sqlb --quiet --locked`
+- `cargo test -p redlinedb-sql --test phase10_sqlc_conflict_matrix integer_pk_reuses_deleted_max_rowid --quiet --locked`
+- `cargo test -p redlinedb-cli --test dot_commands batch_autoincrement_exposes_sqlite_sequence --quiet --locked`
+- `git diff --check` on the intended source/test set
+
+Next safe slice:
+- `SQL_AUTOINCREMENT` case `10070` (`changes()` / `total_changes()`), isolated to scalar dispatch and `smoke_misc` coverage.

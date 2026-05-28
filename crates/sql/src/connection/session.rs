@@ -29,6 +29,18 @@ pub struct Connection {
 }
 
 impl Connection {
+    pub(crate) fn committed_sqlite_sequences(&self) -> std::collections::BTreeMap<String, i64> {
+        self.db.sqlite_sequence_snapshot()
+    }
+
+    pub(crate) fn publish_sqlite_sequence_entries(
+        &self,
+        sequences: &std::collections::BTreeMap<String, i64>,
+        dirty: &std::collections::BTreeSet<String>,
+    ) {
+        self.db.publish_sqlite_sequence_entries(sequences, dirty);
+    }
+
     /// Prepare a single SQL statement, ignoring any trailing statements.
     ///
     /// Most callers want this for backward compatibility — the returned
@@ -244,11 +256,17 @@ impl Connection {
     /// implicit deferred transaction first (matching SQLite, where SAVEPOINT
     /// outside a tx works as if BEGIN had been called).
     pub fn savepoint(&self, name: &str) -> Result<()> {
+        let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         let implicit_tx = if session.tx.is_none() {
             let tx = self.db.engine.begin(Isolation::Snapshot)?;
+            session.sqlite_sequences = committed_sqlite_sequences;
             session.tx = Some(tx);
             session.failed = false;
+            session.sqlite_sequences_dirty.clear();
+            if session.sqlite_sequences_tx_snapshot.is_none() {
+                session.sqlite_sequences_tx_snapshot = Some(session.sqlite_sequences.clone());
+            }
             true
         } else {
             false
@@ -329,6 +347,10 @@ impl Connection {
             session.changes = 0;
             session.total_changes = 0;
             session.last_insert_rowid = None;
+            if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.as_ref() {
+                session.sqlite_sequences = snapshot.clone();
+            }
+            session.sqlite_sequences_dirty.clear();
             (
                 journal_prefix,
                 frame.changes,
@@ -374,6 +396,7 @@ impl Connection {
     }
 
     pub fn begin(&self, mode: BeginMode) -> Result<()> {
+        let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         if session.tx.is_some() {
             return Err(Error::TransactionState("transaction already active"));
@@ -386,6 +409,9 @@ impl Connection {
         if matches!(mode, BeginMode::Immediate | BeginMode::Exclusive) {
             self.db.engine.reserve_begin_lock(&mut tx)?;
         }
+        session.sqlite_sequences = committed_sqlite_sequences;
+        session.sqlite_sequences_tx_snapshot = Some(session.sqlite_sequences.clone());
+        session.sqlite_sequences_dirty.clear();
         session.tx = Some(tx);
         session.failed = false;
         // A fresh tx can never replay — drop any leftover journal/savepoint
@@ -442,6 +468,9 @@ impl Connection {
                 session.unique_guards.clear();
                 session.failed = false;
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
                 return Err(err);
             }
             session.tx = Some(tx);
@@ -455,6 +484,12 @@ impl Connection {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                session.sqlite_sequences_tx_snapshot = None;
+                self.db.publish_sqlite_sequence_entries(
+                    &session.sqlite_sequences,
+                    &session.sqlite_sequences_dirty,
+                );
+                session.sqlite_sequences_dirty.clear();
                 // SQLite parity: `PRAGMA defer_foreign_keys` is a
                 // single-transaction flag — it auto-clears at COMMIT
                 // (and at ROLLBACK below) so the next tx starts with
@@ -466,18 +501,28 @@ impl Connection {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                session.sqlite_sequences_tx_snapshot = None;
+                session.sqlite_sequences_dirty.clear();
                 Err(Error::CommitMaybeCommitted)
             }
             Ok(CommitOutcome::RolledBack) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
+                session.sqlite_sequences_dirty.clear();
                 Err(Error::TransactionState("transaction rolled back"))
             }
             Err(err) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
+                session.sqlite_sequences_dirty.clear();
                 Err(err.into())
             }
         }
@@ -495,6 +540,10 @@ impl Connection {
         // A6 SQLite parity: ROLLBACK discards every pending deferred FK
         // check; the rolled-back rows never made it to the durable state.
         crate::exec::fk::clear_deferred_fk_checks(&mut session);
+        if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+            session.sqlite_sequences = snapshot;
+        }
+        session.sqlite_sequences_dirty.clear();
         // SQLite parity: `PRAGMA defer_foreign_keys` is auto-cleared
         // at the next transaction boundary.
         session.defer_foreign_keys = false;

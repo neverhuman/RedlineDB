@@ -13,7 +13,8 @@ use super::key::{IndexKeyDef, IndexKeySource, NullOrder};
 use super::names::{DbName, QualifiedName};
 use super::schema::{
     CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef, SchemaEpoch,
-    SchemaSnapshot, TABLE_FLAG_STRICT, TABLE_FLAG_WITHOUT_ROWID, TableDef, TriggerDef, ViewDef,
+    SchemaSnapshot, TABLE_FLAG_AUTOINCREMENT, TABLE_FLAG_STRICT, TABLE_FLAG_WITHOUT_ROWID,
+    TableDef, TriggerDef, ViewDef,
 };
 use crate::format::{PageId, RelId};
 use crate::{Error, Result};
@@ -345,6 +346,9 @@ pub fn apply_create_table(
     if spec.without_rowid {
         flags |= TABLE_FLAG_WITHOUT_ROWID;
     }
+    if spec.columns.iter().any(|column| column.autoincrement) {
+        flags |= TABLE_FLAG_AUTOINCREMENT;
+    }
 
     let table = Arc::new(TableDef {
         table_id,
@@ -620,6 +624,11 @@ pub fn apply_alter_table(
             }) {
                 return Err(Error::UnsupportedDdl(
                     "ALTER TABLE ADD COLUMN supports NOT NULL and DEFAULT only",
+                ));
+            }
+            if column.autoincrement {
+                return Err(Error::UnsupportedDdl(
+                    "ALTER TABLE ADD COLUMN does not support AUTOINCREMENT",
                 ));
             }
             let not_null = column

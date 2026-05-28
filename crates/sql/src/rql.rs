@@ -521,6 +521,7 @@ fn lower_create_table(
                 constraints,
                 collation: None,
                 default_value,
+                autoincrement: false,
                 generated: None,
             })
         })

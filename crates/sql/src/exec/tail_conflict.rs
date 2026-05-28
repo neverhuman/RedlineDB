@@ -354,7 +354,7 @@ pub(in crate::exec) fn insert_row_with_resolution(
     // (idempotent if already computed by a build_row* path) before any
     // constraint validation or unique-conflict checks observe the row.
     *values = compute_stored_generated_columns(table, std::mem::take(values))?;
-    let rowid = choose_rowid_for_insert(conn.engine(), table, values)?;
+    let rowid = choose_rowid_for_insert(session, conn.engine(), tx, table, values)?;
 
     let action = conflict_action_for(conflict);
     if apply_constraints_with_action(table, values, action)? {
@@ -385,6 +385,7 @@ pub(in crate::exec) fn insert_row_with_resolution(
         // Deferred constraints are queued for COMMIT; immediate ones must
         // resolve right now.
         crate::exec::fk::enforce_fk_on_insert(conn, session, tx, table, values, rowid)?;
+        super::record_sqlite_sequence_rowid(session, table, rowid);
         session.last_insert_rowid = Some(rowid.0 as i64);
         return Ok(InsertOutcome::Inserted {
             rowid,
@@ -500,6 +501,7 @@ fn apply_unique_conflict_resolution(
                 )?;
                 crate::exec::fk::enforce_fk_on_insert(conn, session, tx, table, values, rowid)?;
             }
+            super::record_sqlite_sequence_rowid(session, table, rowid);
             session.last_insert_rowid = Some(rowid.0 as i64);
             Ok(InsertOutcome::Inserted {
                 rowid,
