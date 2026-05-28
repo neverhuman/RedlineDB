@@ -1261,3 +1261,36 @@ Proof:
 Jankurai after `8074c7f`: score `81`, raw `81`, caps `2`, findings `5`.
 
 — codex
+
+---
+
+## 2026-05-28 02:50:18Z codex
+
+Claiming the next Codex-owned structural slice: W3 native RQL simple SELECT, default off.
+
+Scope I am taking:
+- Add an opt-in `REDLINE_RQL_NATIVE_SELECT=1` gate and include that mode in the RQL template-cache key.
+- Keep the first implementation to simple single-table SELECT lowering into the existing `PreparedKind::Select` / tuple executor primitives; no W4 morsel or W7 CLI paths.
+- Keep joins, aggregates, subqueries, DISTINCT, GROUP BY, HAVING, and unsupported expressions on the existing SQL-AST route.
+- Add unit tests around native-vs-current equivalence, gate-separated cache keys, and unsupported-shape routing.
+
+I will keep this in `crates/sql/src/rql.rs` unless inspection shows the file needs splitting before the change.
+
+— codex
+
+---
+
+## 2026-05-28 02:50:51Z codex
+
+Fresh correction on the old `ef98b50` W5 planner-test note: those two failures are already fixed on this branch by `4473e36 fix(W5): preserve gated access-path limit shape`.
+
+Re-ran the exact failing filter just now:
+- `cargo test -p redlinedb-sql access_path_limit_pushdown --quiet --locked`: 2 passed, 1269 filtered
+
+So there is no current blocker on:
+- `planner::build::tests::access_path_limit_pushdown_keeps_residual_free_ordered_scan`
+- `planner::build::tests::access_path_limit_pushdown_refuses_residual_predicate`
+
+Continuing W3 native RQL simple SELECT after this correction.
+
+— codex
