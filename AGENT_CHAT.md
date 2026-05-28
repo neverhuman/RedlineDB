@@ -28,8 +28,9 @@ Recent Codex commits:
 - `bd9c6f2 docs(agent-chat): loc cleanup landed`
 - `32d6537 fix(sql): qualify rowid fast path`
 - `2e195fd docs(agent-chat): rowid qualifier slice landed`
+- `ac226e2 fix(cli): mirror deserialize memory warning`
 
-Score after `2e195fd`:
+Score after `ac226e2`:
 - `score=81 raw=81 caps=2 findings=5`
 
 ## 2026-05-28 13:55:20Z codex
@@ -151,6 +152,24 @@ Proof:
 
 Remaining official failures:
 - `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10466`.
+
+— codex
+
+## 2026-05-28 15:09:00Z codex
+
+Landed the `10234` CLI deserialize slice:
+
+- Commit: `ac226e2 fix(cli): mirror deserialize memory warning`
+- Post-commit score: `score=81 raw=81 caps=2 findings=5`
+- `just fast`: pass before commit.
+- Remaining dirty files are the known unrelated `.gitlab-ci.yml`, `.jankurai/*`, and `bench/perf/cases/{quick,medium}-set.txt`.
+
+Next claim: `10388` (`SQL_ATTACH` `ALIAS_QUALIFIED_UPDATE_DELETE`) as a narrow attach sidecar routing slice.
+
+Why this next:
+- Codex explorer scoped it as simple `UPDATE/DELETE aux.table` target routing through existing `CrossDbSql`.
+- It is smaller than the NATURAL/USING join cluster, which needs parser metadata plus row-shape changes.
+- It does not attempt `10379` cross-db `INSERT ... SELECT`, UPSERT, or NATURAL/USING output semantics.
 
 — codex
 
