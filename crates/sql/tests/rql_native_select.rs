@@ -672,6 +672,97 @@ fn native_select_aggregate_cache_is_gate_separated() {
 }
 
 #[test]
+fn native_select_grouped_aggregate_matches_sql_route() {
+    let conn = memory_conn();
+    create_items(&conn);
+    conn.execute(
+        "INSERT INTO items(id, name, score) VALUES \
+         (4, 'Ada', NULL), (5, 'Ada', 5), (6, 'Bob', 7)",
+    )
+    .expect("seed duplicate groups");
+    let aggregate = RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection: vec![
+            RqlSelectItem::Expr {
+                expr: column("name"),
+                alias: Some("bucket".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "sum".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("total_score".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::CountStar,
+                alias: Some("n".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "count".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("scored".to_owned()),
+            },
+        ],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: None,
+        group_by: vec![column("name")],
+        having: None,
+        order_by: vec![RqlOrder {
+            expr: column("name"),
+            descending: false,
+            nulls_first: None,
+        }],
+        limit: None,
+        offset: None,
+    });
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &aggregate);
+    assert_eq!(
+        expected,
+        (
+            vec![
+                "bucket".to_owned(),
+                "total_score".to_owned(),
+                "n".to_owned(),
+                "scored".to_owned()
+            ],
+            vec![
+                vec![
+                    SqlValue::Text("Ada".into()),
+                    SqlValue::Integer(25),
+                    SqlValue::Integer(3),
+                    SqlValue::Integer(2)
+                ],
+                vec![
+                    SqlValue::Text("Bob".into()),
+                    SqlValue::Integer(17),
+                    SqlValue::Integer(2),
+                    SqlValue::Integer(2)
+                ],
+                vec![
+                    SqlValue::Text("Zoe".into()),
+                    SqlValue::Integer(30),
+                    SqlValue::Integer(1),
+                    SqlValue::Integer(1)
+                ],
+            ],
+        )
+    );
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &aggregate));
+    assert_eq!(snapshot(&conn, &aggregate), expected);
+}
+
+#[test]
 fn native_select_aggregate_keeps_unsupported_shapes_on_sql_route() {
     let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
     let conn = memory_conn();
@@ -751,6 +842,24 @@ fn native_select_aggregate_keeps_unsupported_shapes_on_sql_route() {
             ..base.clone()
         },
         RqlSelect {
+            projection: vec![
+                RqlSelectItem::Expr {
+                    expr: RqlExpr::CountStar,
+                    alias: None,
+                },
+                RqlSelectItem::Expr {
+                    expr: column("score"),
+                    alias: None,
+                },
+            ],
+            group_by: vec![column("name")],
+            ..base.clone()
+        },
+        RqlSelect {
+            projection: vec![RqlSelectItem::Expr {
+                expr: column("name"),
+                alias: None,
+            }],
             group_by: vec![column("name")],
             ..base.clone()
         },

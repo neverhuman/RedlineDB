@@ -756,6 +756,11 @@ fn lower_native_select(
             })
         })
         .collect::<Result<Vec<_>>>()?;
+    let group_by = select
+        .group_by
+        .iter()
+        .map(|expr| normalized_expr(expr, &mut params))
+        .collect::<Result<Vec<_>>>()?;
     let limit = select
         .limit
         .map(|value| normalize_expr(u64_expr(value), &mut params));
@@ -776,7 +781,7 @@ fn lower_native_select(
             distinct_on: Vec::new(),
             projection,
             selection,
-            group_by: Vec::new(),
+            group_by,
             having: None,
             order_by,
             limit: limit.transpose()?,
@@ -787,11 +792,7 @@ fn lower_native_select(
 }
 
 fn native_select_shape_supported(schema: &SchemaSnapshot, select: &RqlSelect) -> bool {
-    if select.distinct
-        || !select.joins.is_empty()
-        || !select.group_by.is_empty()
-        || select.having.is_some()
-    {
+    if select.distinct || !select.joins.is_empty() || select.having.is_some() {
         return false;
     }
     let from = select.from.as_ref();
@@ -799,19 +800,24 @@ fn native_select_shape_supported(schema: &SchemaSnapshot, select: &RqlSelect) ->
         if crate::exec::view::name_is_view(schema, &sql_name(&from.name)) {
             return false;
         }
-    } else if select.projection.is_empty() {
+    } else if select.projection.is_empty() || !select.group_by.is_empty() {
         return false;
     }
     let projection_has_aggregate = select
         .projection
         .iter()
         .any(|item| matches!(item, RqlSelectItem::Expr { expr, .. } if native_select_expr_is_bare_aggregate(expr)));
+    if !select.group_by.is_empty() && !projection_has_aggregate {
+        return false;
+    }
     if projection_has_aggregate
         && (from.is_none()
             || !select.projection.iter().all(|item| match item {
                 RqlSelectItem::Expr { expr, .. } => {
-                    native_select_expr_is_bare_aggregate(expr)
-                        && native_select_projection_expr_supported(from, expr)
+                    (native_select_expr_is_bare_aggregate(expr)
+                        && native_select_projection_expr_supported(from, expr))
+                        || (select.group_by.iter().any(|group| group == expr)
+                            && native_select_expr_supported(from, expr))
                 }
                 _ => false,
             }))
@@ -826,6 +832,10 @@ fn native_select_shape_supported(schema: &SchemaSnapshot, select: &RqlSelect) ->
             .filter
             .as_ref()
             .is_none_or(|expr| native_select_expr_supported(from, expr))
+        && select
+            .group_by
+            .iter()
+            .all(|expr| native_select_expr_supported(from, expr))
         && select.order_by.iter().all(|order| {
             native_select_expr_supported(from, &order.expr)
                 && !matches!(order.expr, RqlExpr::Integer { value } if value > 0)
