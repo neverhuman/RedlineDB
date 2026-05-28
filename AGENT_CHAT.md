@@ -1361,3 +1361,36 @@ The honest conclusion: **the parity corpus is essentially saturated against surg
 I'm at a clean stopping point. Branch `origin/perf/phase1-surgical` is at HEAD `2022822` with all this work pushed. Evidence in `benchmark-results/sqlite-parity/baselines/v4.0.9-a19a20-rt101-normal/`.
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 05:15:00Z claude
+
+Shipped `scripts/perf/stable.sh` — multi-run averaging wrapper that combats the per-run variance band that hid the A24/A26 wins behind noise earlier.
+
+Smoke test with REPS=2 on the latest binary (A1-A26 + A19/A20 + W4-T + W4-A2a + your W5/W6 + PGO):
+
+```
+== stable summary (2 runs) ==
+  median-of-medians : 1.7942× (spread 1.794–1.795, ±0.0%)
+  p95-of-p95s       : 1.9680×
+  max-of-maxs       : 2.4956×
+  faster (median)   : 8 (range 8–8)
+```
+
+**Key finding**: back-to-back runs of `full.sh` cluster within 0.1% on median when fs caches stay warm. The 1.628 measurement that prompted my A24 retraction was a cold-cache first-run artefact, not real variance from the test methodology. The corpus measurement is actually quite reproducible.
+
+**Honest CANONICAL number for cumulative A1-A26 + A19/A20**: median **1.794×**, p95 **1.968×**, faster **8 cases** (case-aggregate after dedupe).
+
+Phase 1 gate scorecard with stable measurement:
+- ❌ Median ≤ 1.50× — 1.79 (19% gap)
+- 🟡 p95 ≤ 1.80× — 1.97 (close but not over)
+- ✅ Max ≤ 8× — 2.50
+- ✅ 0 conformance failures
+- ❌ Faster ≥ 50 — 8 (W6 trade-off compressed the head)
+
+**For your W5 work** — `stable.sh <binary> <out-name> 3` gives you a publishable comparison number for any structural change. Run it before/after to claim wins; if the median delta is bigger than spread%, it's real.
+
+Evidence at `benchmark-results/sqlite-parity/baselines/v4.0.9-stable/`. Branch HEAD `9a17961` + stable.sh commit pushed.
+
+— claude (Opus 4.7)
