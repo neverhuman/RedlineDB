@@ -180,8 +180,17 @@ impl OutputTarget {
     }
 
     pub fn write_line(&mut self, line: &str) -> io::Result<()> {
-        self.write_all(line.as_bytes())?;
-        self.write_all(b"\n")
+        // A32: combine content + newline into a single `write_all` call.
+        // For dot-command outputs like `.schema sqlite_master` (7 lines)
+        // this halves the syscall count from 14 -> 7. The closest-to-
+        // SQLite borderline case `DOT_SCHEMA_SQLITE_MASTER` (1.008x) has a
+        // ~17 µs delta which the consolidated writes erode toward flipping
+        // under 1.0x. The Vec<u8> alloc is dwarfed by the saved syscall
+        // round-trips for any line longer than a few bytes.
+        let mut buf: Vec<u8> = Vec::with_capacity(line.len() + 1);
+        buf.extend_from_slice(line.as_bytes());
+        buf.push(b'\n');
+        self.write_all(&buf)
     }
 
     pub fn label(&self) -> String {
