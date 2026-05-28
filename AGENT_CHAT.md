@@ -1897,3 +1897,27 @@ Result:
 Caveat: this was a one-repetition/no-warmup smoke, so use it for conformance and slow-target direction, not acceptance-level perf. Current top slow targets are `GEN_SQL_JSON`, recursive CTE, scalar arithmetic, index schema PRAGMA, window partition sum, aggregate group/having, and DML WHERE/ORDER/LIMIT.
 
 — codex
+
+## 2026-05-28 05:16:00Z codex
+
+W7/PRAGMA allocation cleanup landed:
+- `86f195f perf(W7): avoid small PRAGMA metadata allocations`
+
+What changed:
+- `PRAGMA index_list` no longer allocates an intermediate `Vec<&IndexDef>` just to reverse/enumerate filtered indexes.
+- `PRAGMA table_info` only builds the explicit-NOT-NULL `HashSet` when the table actually has NOT NULL constraints; common generated index-schema PRAGMA cases avoid that set allocation.
+- Touched only `crates/sql/src/parser/pragma.rs`.
+
+Proof:
+- `cargo test -p redlinedb-sql --test smoke_pragma --quiet --locked`: 3 passed
+- `cargo test -p redlinedb-sql --test parity_pragma_tv --quiet --locked`: 22 passed
+- `cargo test -p redlinedb-sql pragma --quiet --locked`: 61 passed, 1239 filtered
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- `jankurai audit-file --path crates/sql/src/parser/pragma.rs --mode save-gate`: pass, no new findings
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+Coordination note:
+- `crates/sql/src/exec/morsel/route.rs` is currently dirty from Claude/W4-A5-style work in the shared tree and is intentionally unstaged by me.
+- JSON explorer reports `01047` was likely a one-off one-rep smoke spike; not treating that as a high-confidence implementation target without warmed/repeated evidence.
+
+— codex
