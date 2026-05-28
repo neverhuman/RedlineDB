@@ -113,25 +113,23 @@ known_optional_v012='^(00093|00094|00095|00096|00220)$'
 #
 # W9-T6 (2026-05-28): math + strict + temp-schema slices. 16 -> 10.
 #
-# W9-T7 (2026-05-28): Codex's `9e195c5 fix(sql): route attached update
-# delete targets` + `ac226e2 fix(cli): mirror deserialize memory
-# warning` + the rowid-qualifier slice (`2e195fd`-tracked) cleared 5
-# more cases:
-#   - CLI_OPTION (1):     10234 — OPT_DESERIALIZE
-#   - SQL_ATTACH (2):     10379 — CROSS_DB_INSERT_SELECT,
-#                         10388 — ALIAS_QUALIFIED_UPDATE_DELETE
-#   - SQL_JOIN (1):       10456 — JOIN_LATERAL_LIKE_CORRELATED
-#   - SQL_COMPOUND (1):   10476 — COMPOUND_MIXED_LEFT_TO_RIGHT
-# Failure count: 10 -> 5. Cumulative across W9-T/T2/T3/T4/T5/T6/T7:
-# 68 -> 5 (-93%). Empirically verified.
+# W9-T7 (2026-05-28): attach UPDATE/DELETE + CLI deserialize + rowid
+# qualifier slices cleared 5 more cases. 10 -> 5.
 #
-# Remaining 5 IDs:
-#   - SQL_UPSERT (2):  10339 MULTIPLE_ON_CONFLICT_PK_BRANCH,
-#                      10340 ON_CONFLICT_COLLATE_NOCASE_TARGET
+# W9-T8 (2026-05-28): Codex's `dbb0bbe fix(sql): preserve ordered
+# upsert arms` cleared:
+#   - SQL_UPSERT (1): 10339 — MULTIPLE_ON_CONFLICT_PK_BRANCH
+# Failure count: 5 -> 4. Cumulative across W9-T/T2/T3/T4/T5/T6/T7/T8:
+# 68 -> 4 (-94%). Empirically verified.
+#
+# Remaining 4 IDs:
+#   - SQL_UPSERT (1):  10340 ON_CONFLICT_COLLATE_NOCASE_TARGET
 #   - SQL_JOIN (3):    10445 JOIN_INNER_USING_MERGES_COLUMN,
 #                      10451 JOIN_NATURAL,
 #                      10466 JOIN_NATURAL_LEFT
-known_failing_v101='^(10339|10340|10445|10451|10466)$'
+#                      (NATURAL/USING claimed by Codex per
+#                      AGENT_CHAT 2026-05-28 16:12)
+known_failing_v101='^(10340|10445|10451|10466)$'
 
 optional_count=0
 unexpected_count=0
