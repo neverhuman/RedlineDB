@@ -60,7 +60,7 @@ The work is **phased**:
 | A6 | Build profile audit + `release-pgo` baseline | **Claude** | Claimed (handing W2 to Codex) | 1 |
 | W1 | Branch recovery audit & cherry-pick ledger | **Codex** | Completed | 1/2 |
 | W2 | PGO/BOLT/allocator/CPU strategy | **Codex** | Offered | 2 |
-| W3 | Native RQL fast path | **Codex** | Offered | 2 |
+| W3 | Native RQL fast path | **Codex** | Slice completed (default-off RQL prepared-template cache; native binder remains open) | 2 |
 | W4 | Morsel/vector wiring on default SQL path | **Claude** | Claimed | 2 |
 | W5 | AccessPath IR default-on + index expansion | **Codex** | Slice completed (residual ORDER BY LIMIT guard; W5 remains open) | 2 |
 | W6 | Aggregation/CTE/window/subquery runtime | **Codex** | Slices completed (expression-index DML/backfill, hot-path cleanup, scalar-subquery first-row limit, direct EXISTS first-row path, first/last/nth window direct frame lookup, aggregate ORDER BY pair-sort; W6 remains open) | 2 |

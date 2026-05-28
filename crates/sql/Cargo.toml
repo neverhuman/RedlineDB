@@ -8,7 +8,7 @@ rust-version.workspace = true
 [dependencies]
 ahash = "0.8"
 arc-swap = "1.7"
-bumpalo = "3"
+bumpalo = { version = "3", features = ["collections"] }
 libm = "0.2"
 memchr = "2"
 parking_lot = "0.12"

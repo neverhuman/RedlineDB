@@ -128,16 +128,53 @@ impl Connection {
         statement: &crate::RqlStatement,
     ) -> Result<Arc<PreparedTemplate>> {
         crate::exec::with_current_connection(self.as_ref(), || {
-            let template = crate::rql::prepare_template(self.as_ref(), statement)?;
-            if !template.readonly
-                && self.with_session(|session| Ok(!session.savepoints.is_empty()))?
-            {
-                return Err(Error::UnsupportedSql(
-                    "RQL mutations inside SAVEPOINT are not supported".to_owned(),
-                ));
+            if crate::rql::template_cache_enabled() {
+                return self.prepare_rql_template_cached(statement);
             }
-            Ok(Arc::new(template))
+            let template = Arc::new(crate::rql::prepare_template(self.as_ref(), statement)?);
+            self.ensure_rql_template_allowed(&template)?;
+            Ok(template)
         })
+    }
+
+    fn prepare_rql_template_cached(
+        self: &Arc<Self>,
+        statement: &crate::RqlStatement,
+    ) -> Result<Arc<PreparedTemplate>> {
+        let key = StatementCacheKey {
+            schema_epoch: self.schema_epoch().0,
+            stats_epoch: self.stats_epoch().0,
+            optimizer_hash: self.optimizer_hash(),
+            sql: crate::rql::cache_key(statement)?,
+        };
+        if let Some(template) = self.local_cache.get(&key) {
+            self.ensure_rql_template_allowed(&template)?;
+            return Ok(template);
+        }
+        if let Some(template) = self.db.stmt_cache.get(&key) {
+            self.ensure_rql_template_allowed(&template)?;
+            self.local_cache.insert(key, Arc::clone(&template));
+            return Ok(template);
+        }
+
+        let template = Arc::new(crate::rql::prepare_template(self.as_ref(), statement)?);
+        self.ensure_rql_template_allowed(&template)?;
+        if !template_embeds_materialised_rows(&template) {
+            self.db
+                .stmt_cache
+                .insert(key.clone(), Arc::clone(&template));
+            self.local_cache.insert(key, Arc::clone(&template));
+        }
+        Ok(template)
+    }
+
+    fn ensure_rql_template_allowed(&self, template: &PreparedTemplate) -> Result<()> {
+        if !template.readonly && self.with_session(|session| Ok(!session.savepoints.is_empty()))? {
+            return Err(Error::UnsupportedSql(
+                "RQL mutations inside SAVEPOINT are not supported".to_owned(),
+            ));
+        }
+        Ok(())
     }
 
     /// Execute a typed RQL program and return the last statement result count.

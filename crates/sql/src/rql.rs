@@ -429,6 +429,21 @@ pub(crate) fn prepare_template(
     Ok(template)
 }
 
+pub(crate) fn template_cache_enabled() -> bool {
+    std::env::var_os("REDLINE_RQL_TEMPLATE_CACHE")
+        .map(|value| value != "0" && !value.is_empty())
+        .unwrap_or(false)
+}
+
+pub(crate) fn cache_key(statement: &RqlStatement) -> Result<Arc<str>> {
+    let json = serde_json::to_string(statement)
+        .map_err(|err| Error::Bind(format!("failed to build RQL cache key: {err}")))?;
+    Ok(Arc::from(format!(
+        "{}cache:{json}",
+        crate::statement::RQL_MARKER_SQL_PREFIX
+    )))
+}
+
 fn lower_create_table(
     schema_epoch: redlinedb_kernel::catalog::SchemaEpoch,
     create: &RqlCreateTable,
@@ -1131,6 +1146,48 @@ mod tests {
     use super::*;
     use crate::connection::{Database, DbOptions};
     use crate::statement::Step;
+    use std::sync::{Mutex, MutexGuard};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvGuard {
+        name: &'static str,
+        old: Option<std::ffi::OsString>,
+        _guard: MutexGuard<'static, ()>,
+    }
+
+    impl EnvGuard {
+        fn set(name: &'static str, value: Option<&str>) -> Self {
+            let guard = ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let old = std::env::var_os(name);
+            // SAFETY: this test module serializes all mutations to this env var.
+            unsafe {
+                match value {
+                    Some(value) => std::env::set_var(name, value),
+                    None => std::env::remove_var(name),
+                }
+            }
+            Self {
+                name,
+                old,
+                _guard: guard,
+            }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // SAFETY: this test module serializes all mutations to this env var.
+            unsafe {
+                match &self.old {
+                    Some(value) => std::env::set_var(self.name, value),
+                    None => std::env::remove_var(self.name),
+                }
+            }
+        }
+    }
 
     fn memory_conn() -> Arc<Connection> {
         Database::create_in_memory(DbOptions::default())
@@ -1227,5 +1284,121 @@ mod tests {
         assert_eq!(stmt.column_count(), 1);
         assert!(matches!(stmt.step().expect("row"), Step::Row));
         assert_eq!(stmt.column_text(0).expect("text"), "Ada");
+    }
+
+    #[test]
+    fn rql_template_cache_reuses_only_when_enabled() {
+        let conn = memory_conn();
+        let create = RqlStatement::CreateTable(RqlCreateTable {
+            table: RqlName {
+                schema: None,
+                name: "items".to_owned(),
+            },
+            if_not_exists: false,
+            columns: vec![RqlColumnDef {
+                name: "id".to_owned(),
+                declared_type: Some("INTEGER".to_owned()),
+                primary_key: true,
+                not_null: false,
+                unique: false,
+                default: None,
+            }],
+            strict: false,
+            without_rowid: false,
+        });
+        let mut stmt = conn.prepare_rql(&create).expect("create");
+        assert!(matches!(stmt.step().expect("step"), Step::Done));
+
+        let select = RqlStatement::Select(RqlSelect {
+            distinct: false,
+            projection: vec![RqlSelectItem::Expr {
+                expr: RqlExpr::Column {
+                    column: RqlColumnRef {
+                        table: None,
+                        name: "id".to_owned(),
+                    },
+                },
+                alias: None,
+            }],
+            from: Some(RqlTableRef {
+                name: RqlName {
+                    schema: None,
+                    name: "items".to_owned(),
+                },
+                alias: None,
+            }),
+            joins: Vec::new(),
+            filter: None,
+            group_by: Vec::new(),
+            having: None,
+            order_by: Vec::new(),
+            limit: None,
+            offset: None,
+        });
+
+        {
+            let _env = EnvGuard::set("REDLINE_RQL_TEMPLATE_CACHE", None);
+            let first = conn.prepare_rql(&select).expect("first").template();
+            let second = conn.prepare_rql(&select).expect("second").template();
+            assert!(!Arc::ptr_eq(&first, &second));
+        }
+        {
+            let _env = EnvGuard::set("REDLINE_RQL_TEMPLATE_CACHE", Some("1"));
+            let first = conn.prepare_rql(&select).expect("cached first").template();
+            let second = conn.prepare_rql(&select).expect("cached second").template();
+            assert!(Arc::ptr_eq(&first, &second));
+        }
+    }
+
+    #[test]
+    fn rql_template_cache_preserves_savepoint_mutation_rejection() {
+        let _env = EnvGuard::set("REDLINE_RQL_TEMPLATE_CACHE", Some("1"));
+        let conn = memory_conn();
+        let create = RqlStatement::CreateTable(RqlCreateTable {
+            table: RqlName {
+                schema: None,
+                name: "items".to_owned(),
+            },
+            if_not_exists: false,
+            columns: vec![RqlColumnDef {
+                name: "id".to_owned(),
+                declared_type: Some("INTEGER".to_owned()),
+                primary_key: true,
+                not_null: false,
+                unique: false,
+                default: None,
+            }],
+            strict: false,
+            without_rowid: false,
+        });
+        let mut stmt = conn.prepare_rql(&create).expect("create");
+        assert!(matches!(stmt.step().expect("step"), Step::Done));
+
+        let insert = RqlStatement::Insert(RqlInsert {
+            table: RqlName {
+                schema: None,
+                name: "items".to_owned(),
+            },
+            columns: vec!["id".to_owned()],
+            values: vec![vec![RqlExpr::Integer { value: 1 }]],
+            default_values: false,
+        });
+        let cached = conn.prepare_rql(&insert).expect("cache insert").template();
+        assert!(!cached.readonly);
+
+        let mut savepoint = conn.prepare("SAVEPOINT rql_cache").expect("savepoint");
+        assert!(matches!(
+            savepoint.step().expect("savepoint step"),
+            Step::Done
+        ));
+
+        let err = match conn.prepare_rql(&insert) {
+            Ok(_) => panic!("cached RQL mutation inside SAVEPOINT must be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string().contains("SAVEPOINT"),
+            "unexpected error: {err:?}"
+        );
     }
 }

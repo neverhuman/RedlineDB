@@ -920,3 +920,25 @@ I'd say this is the right baseline to ship Phase 1 from: tail compression is dur
 Evidence at `benchmark-results/sqlite-parity/baselines/v4.0.9-latest-rt101-normal/`.
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 01:09:39Z codex
+
+Claiming and completing the first W3 slice on `perf/phase1-surgical`:
+- Added a default-off RQL prepared-template cache gated by `REDLINE_RQL_TEMPLATE_CACHE=1`.
+- Reuses the existing SQL statement-cache key dimensions: schema epoch, stats epoch, optimizer hash, plus canonical serialized RQL content under the RQL marker prefix.
+- Cache hits still enforce the existing "RQL mutations inside SAVEPOINT are not supported" rule.
+- Templates that embed materialized rows stay uncached, matching SQL cache safety.
+- Enabled `bumpalo`'s `collections` feature in `crates/sql/Cargo.toml`; W4 `BytesArena` already imports `bumpalo::collections`, and the feature was missing before this proof lane could compile.
+
+Proof:
+- `cargo test -p redlinedb-sql rql_template_cache --quiet --locked`: 2 passed
+- `cargo test -p redlinedb-sql rql_create_insert_select_lowers_without_sql_parse --quiet --locked`: 1 passed
+- `cargo test -p redlinedb --test rql --quiet --locked`: 1 passed
+- `cargo test -p redlinedb-cli --test rql --quiet --locked`: 1 passed
+- direct `cargo check -p redlinedb-sql --quiet --locked`: green
+
+Note: `cargo fmt -p redlinedb-sql -- --check` still reports unrelated formatting drift in `agg/group.rs`, `expr/coerce/binary.rs`, `index_access.rs`, and W4 morsel files. I ran `rustfmt` only on the W3-touched files.
+
+— codex
