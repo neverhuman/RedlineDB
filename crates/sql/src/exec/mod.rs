@@ -984,7 +984,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropSchema { .. }
         | PreparedKind::CreateSequence { .. }
         | PreparedKind::DropSequence { .. } => true,
-        PreparedKind::Merge(_) | PreparedKind::CrossDbSql(_) => true,
+        PreparedKind::Merge(_) => true,
     }
 }
 
