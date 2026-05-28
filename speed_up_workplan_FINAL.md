@@ -348,6 +348,21 @@ Not allowed without explicit user approval:
 | End of Phase 2 (full structural) | ≤ 1.20× | ≤ 1.00× | ≥ 350 (31%) |
 | Stretch (full tuning + W6 long-tail) | ≤ 1.00× | ≤ 0.70× | ≥ 670 (60%) |
 
+**Live progress checkpoint (2026-05-28, after W4-Flip + Codex's attach slice + A27-A34 + W9-T2):**
+
+| Metric | Baseline | Current | Phase 1 gate | Status |
+|---|---:|---:|---:|---|
+| SQL median (case-median) | 1.952× | **1.7425×** | ≤ 1.50× | -10.7% (gap remaining) |
+| SQL p95 | 2.189× | **1.8938×** | ≤ 1.80× | -13.5% (within striking) |
+| SQL max | **34.85×** | **2.4066×** | ≤ 4× | **-93% — gate ✓ comfortably** |
+| Faster (case-median) | 3 / 1123 | 8 / 2398 | ≥ 50 | gap (still need CLI startup work) |
+| Faster (samples) | n/a | 72 / 7194 | n/a | sample-level approach |
+| No new conformance failures | — | **0** | 0 | ✓ |
+| No new corpus skips | — | **0** | 0 | ✓ |
+| Cases passing | 1123 (v0.1.3) | **2398** (v1.0.1) | — | +21 from Codex's attach slice |
+
+The max-ratio gate is met comfortably (long-tail flattened 93%). p95 is within striking distance of Phase 1. Median and faster-count remain gated by structural CLI-startup work (W7 sub-items beyond the lite path) and broader morsel routing (multi-table joins, aggregates) that haven't been claimed by this cycle.
+
 ## 11. Coordination Protocol
 
 - `AGENT_CHAT.md` is the realtime channel between Claude and Codex. Append-only; each message timestamped, signed `(claude)` or `(codex)`.
@@ -833,7 +848,7 @@ Update inline when a decision lands. Each row: date / who / decision / rationale
 | TBD | TBD | Should `redlinedb-lite` be the permanent parity target? | A3 wins if yes; W7 batch-mode path if no | W7 |
 | TBD | TBD | Flip `OpenOptions::default().durability` to `Normal` in 4.1.0? | Bigger win for all users; CHANGELOG-visible | Future major |
 | TBD | TBD | PGO vs PGO+BOLT as the official benchmark profile | Depends on W2 matrix | W2 |
-| TBD | TBD | Flip-on threshold for W4 morsel (when to switch from default-OFF to default-ON for supported shapes) | Depends on differential harness + benchmark | W4 |
+| 2026-05-28 | claude (W4-Flip) | Flip W4 morsel routing to **default-on** for primitive-scan-eligible shapes; `REDLINE_MORSEL_ROUTE=off` is the rollback hatch | Medium-set differential validated 289/289 cases pass under both modes, 0 new failures; full-corpus run with the flip showed median 1.952× → 1.7425× (-10.7% campaign), max 34.85× → 2.41× (-93%), 0 newly broken IDs. Decline guards (ORDER BY / GROUP BY / DISTINCT / HAVING / mixed-kind) hold semantically risky shapes on the tuple path so the flip is purely additive | W4 (commit `fb5e376`) |
 | TBD | TBD | Whether to broaden W3 native RQL to JOIN shapes before Phase 2 close | Depends on RQL median delta after simple-shape work | W3 |
 | TBD | TBD | Default `try_one_pass_grouped` threshold (start 16, tune in W9) | Micro-bench evidence | A4/W9 |
 | TBD | TBD | Whether to make `track-*` branch recovery a pre-Phase-2 hard gate | Depends on W1 audit outcomes | W1 |
