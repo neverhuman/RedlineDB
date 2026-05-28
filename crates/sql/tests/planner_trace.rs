@@ -86,7 +86,8 @@ fn planner_trace_env_records_explicit_explain_only() {
     assert_eq!(rows.len(), 1);
     let record: serde_json::Value = serde_json::from_str(rows[0]).expect("trace row json");
     assert_eq!(record["trace_version"], 1);
-    assert_eq!(record["planner"]["access_path_gate"], false);
+    // W5 default-on: access_path_gate is now true by default.
+    assert_eq!(record["planner"]["access_path_gate"], true);
     assert_eq!(record["plan"]["root_kind"], "Project");
     assert_eq!(record["chosen_access"]["kind"], "IndexScan");
     assert_eq!(record["chosen_access"]["relation"], "t");

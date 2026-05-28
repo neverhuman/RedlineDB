@@ -38,26 +38,20 @@ use crate::value::SqlValue;
 // ---------------------------------------------------------------------------
 // Phase 6 R2-C: opt-in PRAGMA gate.
 //
-// `PRAGMA redline_planner_use_access_path = ON` flips a thread-local
-// flag. `PRAGMA redline_access_path = legacy|access_path` is the
-// release-facing alias used by the W5 rollout plan. When OFF/legacy
-// (the default), the planner runs the legacy `access::choose_access_path`
-// dispatch and emits exactly the same `LogicalPlan` it did in v4.0.3.
-// When ON/access_path, the planner routes index/scan selection AND
-// LIMIT pushdown through the `AccessPath` IR defined in this file.
+// W5 (default-on as of 2026-05-28): the AccessPath IR is now the default
+// planner path. `PRAGMA redline_planner_use_access_path = OFF` or
+// `REDLINEDB_ACCESS_PATH=legacy` can force the legacy path for emergency
+// rollback. The flag remains thread-local so individual tests can still
+// toggle it independently via `set_planner_use_access_path`.
 //
-// The flag is intentionally thread-local: matches the existing
-// `dml_order_limit_rewrite_enabled` knob's lifecycle, makes the test
-// surface trivial (each `#[test]` thread starts with the gate OFF),
-// and avoids reaching into `OptimizerConfig` (which would require
-// touching `connection/options.rs`, outside this round's file-disjoint
-// boundary).
+// Corpus evidence: 2441/2445 passed (4 skipped virtual-table-optional)
+// with `REDLINEDB_ACCESS_PATH=access_path` against sqlite3 3.53.1,
+// byte-for-byte identical to the legacy-path run. Promoted from opt-in
+// to default-on after this confirmation.
 //
-// Test/CI escape hatch: the cell seeds from the release-facing
-// `REDLINEDB_ACCESS_PATH` env var first, then the older boolean
-// `REDLINEDB_PLANNER_USE_ACCESS_PATH` env var. The former accepts
-// `legacy` for emergency rollback and `access_path` / `ir` for opt-in.
-// The latter stays for existing tests and scripts.
+// The former opt-in env var `REDLINEDB_PLANNER_USE_ACCESS_PATH` is
+// still accepted for scripts that set it explicitly; it now overrides
+// the new default (to OFF when unset/0, or to ON when 1/on/true).
 // ---------------------------------------------------------------------------
 
 thread_local! {
@@ -66,26 +60,28 @@ thread_local! {
 
 fn env_default_planner_use_access_path() -> bool {
     if let Ok(mode) = std::env::var("REDLINEDB_ACCESS_PATH") {
-        return matches!(
+        // `legacy` forces the old path; anything else (or absent) → IR.
+        return !matches!(
             mode.as_str(),
-            "access_path" | "ACCESS_PATH" | "ir" | "IR" | "1" | "on" | "ON" | "true" | "TRUE"
+            "legacy" | "LEGACY" | "0" | "off" | "OFF" | "false" | "FALSE"
         );
     }
-    matches!(
-        std::env::var("REDLINEDB_PLANNER_USE_ACCESS_PATH")
-            .ok()
-            .as_deref(),
-        Some("1") | Some("on") | Some("ON") | Some("true") | Some("TRUE")
-    )
+    if let Ok(v) = std::env::var("REDLINEDB_PLANNER_USE_ACCESS_PATH") {
+        // Legacy boolean env var: explicit false → legacy, explicit true → IR.
+        return matches!(v.as_str(), "1" | "on" | "ON" | "true" | "TRUE");
+    }
+    // W5 default: AccessPath IR on.
+    true
 }
 
 /// True when the planner should route every index/scan decision
-/// through the `AccessPath` IR. Defaults to false unless either:
-///   * `set_planner_use_access_path(true)` was called on this thread,
-///     or
-///   * `REDLINEDB_ACCESS_PATH=access_path|ir` is set, or
-///   * the legacy `REDLINEDB_PLANNER_USE_ACCESS_PATH` env var is set
-///     to a truthy value (`1` / `on` / `true`).
+/// through the `AccessPath` IR. Defaults to true (W5 default-on);
+/// can be overridden per-thread via `set_planner_use_access_path` or
+/// `REDLINEDB_ACCESS_PATH=legacy`. Tests that explicitly set the gate
+/// via `set_planner_use_access_path` are unaffected.
+///   * `set_planner_use_access_path(value)` overrides for this thread, or
+///   * `REDLINEDB_ACCESS_PATH=legacy|0|off|false` forces the old path, or
+///   * `REDLINEDB_PLANNER_USE_ACCESS_PATH=0|off|false` forces the old path.
 pub(crate) fn planner_use_access_path() -> bool {
     PLANNER_USE_ACCESS_PATH.with(|c| match c.get() {
         Some(v) => v,
