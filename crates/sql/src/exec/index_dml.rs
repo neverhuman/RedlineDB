@@ -41,13 +41,6 @@ pub(crate) struct BuiltIndexKeyWithValues {
     pub values: Vec<SqlValue>,
 }
 
-pub(crate) fn has_expression_key(index: &IndexDef) -> bool {
-    index
-        .keys
-        .iter()
-        .any(|key| matches!(&key.source, IndexKeySource::Expression { .. }))
-}
-
 /// Build the encoded index key bytes for `index` from a row's column values.
 ///
 /// Mirrors the kernel-side encoding used by Lane A's CREATE INDEX backfill,
@@ -57,17 +50,18 @@ pub(crate) fn build_index_key(
     index: &IndexDef,
     values: &[SqlValue],
 ) -> Result<BuiltIndexKey> {
-    if has_expression_key(index) {
-        return Ok(build_index_key_with_values(table, index, values)?.key);
-    }
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
     let mut value_refs = Vec::with_capacity(index.keys.len());
     let null_value = SqlValue::Null;
     for key in &index.keys {
-        let IndexKeySource::Column { attnum } = key.source else {
-            unreachable!("expression keys are handled by build_index_key_with_values");
-        };
-        value_refs.push(values.get(attnum as usize).unwrap_or(&null_value).as_ref());
+        match key.source {
+            IndexKeySource::Column { attnum } => {
+                value_refs.push(values.get(attnum as usize).unwrap_or(&null_value).as_ref());
+            }
+            IndexKeySource::Expression { .. } => {
+                return Ok(build_index_key_with_values(table, index, values)?.key);
+            }
+        }
         dirs.push(key.sort_dir);
     }
     Ok(encode_built_index_key(&value_refs, &dirs))

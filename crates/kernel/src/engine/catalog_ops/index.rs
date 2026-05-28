@@ -121,7 +121,11 @@ impl Engine {
         tx: &Txn,
         index_id: CatalogIndexId,
     ) -> Option<Arc<BtreeIndex>> {
-        for action in tx.pending_index_handles().iter().rev() {
+        let pending = tx.pending_index_handles();
+        if pending.is_empty() {
+            return self.index_handle(index_id);
+        }
+        for action in pending.iter().rev() {
             match action {
                 PendingIndexHandle::Install(candidate, handle) if *candidate == index_id => {
                     return Some(Arc::clone(handle));

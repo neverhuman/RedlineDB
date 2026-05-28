@@ -470,9 +470,15 @@ pub fn execute_prepared(
         }
         PreparedKind::CreateIndex(spec) => {
             with_write_tx(conn, |session, tx| {
-                let existed_before = create_index_existed_before(conn, tx, spec)?;
+                let spec_has_expression_key =
+                    spec.columns.iter().any(|column| column.expr_sql.is_some());
+                let existed_before = if spec_has_expression_key {
+                    create_index_existed_before(conn, tx, spec)?
+                } else {
+                    false
+                };
                 let index = conn.engine().create_index(tx, spec.clone())?;
-                if !existed_before && index_dml::has_expression_key(&index) {
+                if spec_has_expression_key && !existed_before {
                     backfill_expression_index(conn, tx, &index)?;
                 }
                 session.changes += 1;

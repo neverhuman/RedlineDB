@@ -84,6 +84,27 @@ fn expression_index_backfills_existing_rows() {
 }
 
 #[test]
+fn expression_index_if_not_exists_does_not_rebackfill_existing_index() {
+    let (_dir, conn) = open_db();
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
+        .expect("create table");
+    conn.execute("INSERT INTO t VALUES (1, 'Foo'), (2, 'foo')")
+        .expect("insert before index");
+    conn.execute("CREATE INDEX t_lname ON t(lower(name))")
+        .expect("create expression index");
+    conn.execute("CREATE INDEX IF NOT EXISTS t_lname ON t(lower(name))")
+        .expect("existing expression index is a no-op");
+
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_lname WHERE lower(name) = 'foo' ORDER BY id"
+        ),
+        vec![1, 2]
+    );
+}
+
+#[test]
 fn unique_expression_index_checks_evaluated_key() {
     let (_dir, conn) = open_db();
     conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
