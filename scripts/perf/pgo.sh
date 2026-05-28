@@ -199,7 +199,12 @@ fi
 echo ">>> [3a/3] Running training workload (subset=$TRAINING_SUBSET) to gather profile data"
 mkdir -p target/redline-testing-pgo
 if [ "$TRAINING_SUBSET" = "full" ]; then
+    # We allow a non-zero exit here (|| true) because the instrumented binary
+    # emits extra stderr (durability notice, LLVM profile warnings) that the
+    # parity harness counts as failures.  The .profraw files are written by
+    # the LLVM runtime regardless, so the profile is still valid.
     REDLINEDB_DEFAULT_DURABILITY=normal \
+    REDLINEDB_QUIET_DURABILITY=1 \
     "$REDLINE_TESTING_BIN" run \
         --target-bin "$INSTR_BIN" \
         --sqlite-bin "$SQLITE_REF_BIN" \
@@ -207,7 +212,8 @@ if [ "$TRAINING_SUBSET" = "full" ]; then
         --workers "${PERF_WORKERS:-10}" \
         --tmp-root /dev/shm/redline-testing-pgo \
         --repetitions 1 --warmup 0 \
-        --output target/redline-testing-pgo/training.jsonl
+        --output target/redline-testing-pgo/training.jsonl \
+    || true
 else
     # Subset path: replay only the curated case-list via run_subset.py.
     # The instrumented binary still writes .profraw to $PGO_DATA_DIR on
