@@ -20,7 +20,6 @@ use crate::connection::Connection;
 use crate::error::{Error, Result};
 use crate::parser::{
     bind_query_with_params, normalize_expr, push_projection_columns, render_expr_name,
-    validate_order_by_positions,
 };
 use crate::session::BeginMode;
 use crate::statement::{
@@ -371,9 +370,23 @@ pub enum RqlLiteral {
     Blob { bytes: Vec<u8> },
 }
 
-pub(crate) fn prepare_template(
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct PrepareOptions {
+    pub(crate) native_select: bool,
+}
+
+impl PrepareOptions {
+    pub(crate) fn from_env() -> Self {
+        Self {
+            native_select: native_select_enabled(),
+        }
+    }
+}
+
+pub(crate) fn prepare_template_with_options(
     conn: &Connection,
     statement: &RqlStatement,
+    options: PrepareOptions,
 ) -> Result<PreparedTemplate> {
     let schema_epoch = conn.schema_epoch();
     let stats_epoch = conn.stats_epoch().0;
@@ -417,7 +430,7 @@ pub(crate) fn prepare_template(
         RqlStatement::Update(update) => lower_update(conn.schema_snapshot(), schema_epoch, update)?,
         RqlStatement::Delete(delete) => lower_delete(conn.schema_snapshot(), schema_epoch, delete)?,
         RqlStatement::Select(select) => {
-            if native_select_enabled()
+            if options.native_select
                 && let Some(template) =
                     lower_native_select(conn.schema_snapshot(), schema_epoch, select)?
             {
@@ -452,16 +465,20 @@ pub(crate) fn native_select_enabled() -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn cache_key(statement: &RqlStatement) -> Result<Arc<str>> {
+pub(crate) fn cache_key(statement: &RqlStatement, options: PrepareOptions) -> Result<Arc<str>> {
     let json = serde_json::to_string(statement)
         .map_err(|err| Error::Bind(format!("failed to build RQL cache key: {err}")))?;
-    let native_select_mode = if native_select_enabled() {
-        "native_select=1"
+    let route = if matches!(statement, RqlStatement::Select(_)) {
+        if options.native_select {
+            "cache:native_select=1"
+        } else {
+            "cache:native_select=0"
+        }
     } else {
-        "native_select=0"
+        "cache"
     };
     Ok(Arc::from(format!(
-        "{}cache:{native_select_mode}:{json}",
+        "{}{route}:{json}",
         crate::statement::RQL_MARKER_SQL_PREFIX
     )))
 }
@@ -708,7 +725,9 @@ fn lower_native_select(
     let Some(from) = &select.from else {
         return Ok(None);
     };
-    let source = native_select_source(&schema, from)?;
+    let Some(source) = native_select_source(&schema, from) else {
+        return Ok(None);
+    };
     let mut params = ParamLayout::default();
     let (projection, output_columns) =
         native_select_projection(&source, from, &select.projection, &mut params)?;
@@ -717,7 +736,7 @@ fn lower_native_select(
         .as_ref()
         .map(|expr| normalized_expr(expr, &mut params))
         .transpose()?;
-    let mut order_by = select
+    let order_by = select
         .order_by
         .iter()
         .map(|order| {
@@ -731,8 +750,6 @@ fn lower_native_select(
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    validate_order_by_positions(&order_by, &output_columns)?;
-    resolve_native_order_by_positions(&mut order_by, &output_columns);
     let limit = select
         .limit
         .map(|value| normalize_expr(u64_expr(value), &mut params));
@@ -901,41 +918,25 @@ fn native_select_projection(
     Ok((items, output_columns))
 }
 
-fn native_select_source(schema: &SchemaSnapshot, from: &RqlTableRef) -> Result<SelectSource> {
-    let table = resolve_table(schema, &from.name)?;
+fn native_select_source(schema: &SchemaSnapshot, from: &RqlTableRef) -> Option<SelectSource> {
+    if from
+        .name
+        .schema
+        .as_ref()
+        .is_some_and(|schema| !schema.eq_ignore_ascii_case("main"))
+    {
+        return None;
+    }
+    let schema_id = schema.lookup_namespace("main")?;
+    let table = schema.lookup_table(schema_id, &from.name.name)?;
     if let Some(alias) = &from.alias {
-        return Ok(SelectSource::Tables(vec![BoundTable {
+        return Some(SelectSource::Tables(vec![BoundTable {
             table,
             alias: Some(Arc::from(alias.as_str())),
             index_hint: None,
         }]));
     }
-    Ok(SelectSource::Table(table))
-}
-
-fn resolve_native_order_by_positions(items: &mut [OrderByExpr], output_columns: &[String]) {
-    for item in items {
-        if let Some(idx) = top_level_positive_int(&item.expr)
-            && let Ok(pos) = usize::try_from(idx)
-            && pos >= 1
-            && pos <= output_columns.len()
-        {
-            let name = output_columns[pos - 1].clone();
-            if name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
-                item.expr = Expr::Identifier(Ident::new(name));
-            }
-        }
-    }
-}
-
-fn top_level_positive_int(expr: &Expr) -> Option<u64> {
-    match expr {
-        Expr::Value(value) => match &value.value {
-            Value::Number(raw, false) => raw.parse::<u64>().ok().filter(|value| *value > 0),
-            _ => None,
-        },
-        _ => None,
-    }
+    Some(SelectSource::Table(table))
 }
 
 fn select_query(select: &RqlSelect) -> Result<Query> {

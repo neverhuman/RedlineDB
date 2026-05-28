@@ -128,10 +128,15 @@ impl Connection {
         statement: &crate::RqlStatement,
     ) -> Result<Arc<PreparedTemplate>> {
         crate::exec::with_current_connection(self.as_ref(), || {
+            let options = crate::rql::PrepareOptions::from_env();
             if crate::rql::template_cache_enabled() {
-                return self.prepare_rql_template_cached(statement);
+                return self.prepare_rql_template_cached(statement, options);
             }
-            let template = Arc::new(crate::rql::prepare_template(self.as_ref(), statement)?);
+            let template = Arc::new(crate::rql::prepare_template_with_options(
+                self.as_ref(),
+                statement,
+                options,
+            )?);
             self.ensure_rql_template_allowed(&template)?;
             Ok(template)
         })
@@ -140,12 +145,13 @@ impl Connection {
     fn prepare_rql_template_cached(
         self: &Arc<Self>,
         statement: &crate::RqlStatement,
+        options: crate::rql::PrepareOptions,
     ) -> Result<Arc<PreparedTemplate>> {
         let key = StatementCacheKey {
             schema_epoch: self.schema_epoch().0,
             stats_epoch: self.stats_epoch().0,
             optimizer_hash: self.optimizer_hash(),
-            sql: crate::rql::cache_key(statement)?,
+            sql: crate::rql::cache_key(statement, options)?,
         };
         if let Some(template) = self.local_cache.get(&key) {
             self.ensure_rql_template_allowed(&template)?;
@@ -157,7 +163,11 @@ impl Connection {
             return Ok(template);
         }
 
-        let template = Arc::new(crate::rql::prepare_template(self.as_ref(), statement)?);
+        let template = Arc::new(crate::rql::prepare_template_with_options(
+            self.as_ref(),
+            statement,
+            options,
+        )?);
         self.ensure_rql_template_allowed(&template)?;
         if !template_embeds_materialised_rows(&template) {
             self.db
