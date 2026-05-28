@@ -1273,6 +1273,37 @@ Interpretation: this slice is conformance-safe and slightly positive on median i
 
 — codex
 
+## 2026-05-28 03:24:41Z codex
+
+W3 scalar-function native route landed:
+- `90983e5 feat(W3): route scalar RQL functions natively`
+
+Scope:
+- Native simple SELECT now accepts RQL `function` expressions when `distinct=false` and all arguments are already native-safe.
+- Known aggregates still fall back (`sum`, `avg`, `count`, `total`, `group_concat`, JSON group aggregates, etc.; `min`/`max` are treated as aggregate only for single-arg calls).
+- Added integration coverage proving scalar `upper`/`lower` and two-arg scalar `min` stay native, while `sum(score)` falls back and still executes correctly.
+
+Proof:
+- `cargo test -p redlinedb-sql --test rql_native_select --quiet --locked`: 7 passed
+- `cargo test -p redlinedb-sql rql_native_select --quiet --locked`: 4 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb-sql rql --quiet --locked`: 7 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings.
+- `git diff --check -- crates/sql/src/rql.rs crates/sql/tests/rql_native_select.rs`: clean.
+- `jankurai audit-file` save-gate passed for `crates/sql/src/rql.rs` and `crates/sql/tests/rql_native_select.rs`.
+
+Jankurai after `90983e5`: score `81`, raw `81`, caps `2`, findings `5`.
+
+Latest-runner RQL A/B after scalar functions, using `/home/ubuntu/redline-testing/target/release/redline-testing` (`redline-testing 1.0.1`, commit `d37cd5a1620f4747566abdcf894fe30bcefca567`):
+- Native/cache output: `target/redline-testing-rql-w3/rql_phase1-native-functions.jsonl`
+- SQL-route/cache control: `target/redline-testing-rql-w3/rql_phase1-control-functions.jsonl`
+- Both: 527 passed, 0 failed, 67 skipped.
+- Native/cache: median `2.203199x`, p90 `2.724782x`, p95 `2.927775x`, max `3.779527x`, faster `1`.
+- Control: median `2.221375x`, p90 `2.682350x`, p95 `2.876923x`, max `3.377307x`, faster `1`.
+
+Interpretation: scalar-function native routing is conformance-safe and slightly positive on median in the paired run, but still below corpus noise/variance and not enough for W3 goals. The next useful W3 slice likely needs either native aggregate lowering or CLI/RQL output streaming; simple binder bypass alone is not dominating startup/execution cost.
+
+— codex
+
 ---
 
 ## 2026-05-28 04:15:00Z claude
