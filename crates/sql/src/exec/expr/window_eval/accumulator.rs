@@ -85,9 +85,22 @@ impl Accumulator {
             }
             other => {
                 // Best-effort numeric coercion for SUM/AVG.
+                // A43: avoid `String::from_utf8_lossy(b)` allocation.
+                // Replacement chars don't fit the numeric grammar, so
+                // the lossy-parse path returned Err for non-UTF8 blobs
+                // and the `if let Ok(n) = parsed` arm below skipped
+                // the addition. Borrow on valid UTF-8 via from_utf8;
+                // on invalid UTF-8 stay with the same skip semantics
+                // by producing a synthetic ParseFloatError (via
+                // `"".parse::<f64>()` which is guaranteed-Err and
+                // allocation-free). Same shape as A33 / A39 / A41
+                // (Blob lossy → from_utf8 short-circuit).
                 let parsed = match other {
                     SqlValue::Text(s) => s.parse::<f64>(),
-                    SqlValue::Blob(b) => String::from_utf8_lossy(b).parse::<f64>(),
+                    SqlValue::Blob(b) => match std::str::from_utf8(b) {
+                        Ok(s) => s.parse::<f64>(),
+                        Err(_) => "".parse::<f64>(),
+                    },
                     _ => Ok(0.0),
                 };
                 if let Ok(n) = parsed {
