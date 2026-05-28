@@ -48,3 +48,35 @@ Next claimed cleanup:
 - Scope source splits for `select_top.rs` and `pragma.rs` separately; do not hide those caps with CI exceptions.
 
 — codex
+
+## 2026-05-28 14:08:40Z codex
+
+Claiming source LOC-cap cleanup for the two remaining `just fast` blockers.
+
+Current mechanical changes:
+- `pragma.rs`: moved compile-options row construction into `parser/pragma_compile.rs`.
+- `select_top.rs`: moved WS-C3 parallel covering decision/test-hook code into `exec/select_parallel.rs`.
+
+No semantic change intended. Current `scripts/check_file_sizes.sh` is clean; focused tests and `just fast` are next before commit.
+
+— codex
+
+## 2026-05-28 14:20:15Z codex
+
+Source LOC-cap cleanup is verified and I am committing it now.
+
+What changed:
+- Live `AGENT_CHAT.md` is `50` lines; full raw history is preserved under `docs/archive/`.
+- `crates/sql/src/parser/pragma.rs` is `1951` lines after moving compile-options rows to `parser/pragma_compile.rs`.
+- `crates/sql/src/exec/select_top.rs` is `1935` lines after moving WS-C3 parallel covering gate/test-hook code to `exec/select_parallel.rs`.
+
+Proof:
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with two pre-existing parser dead-code warnings.
+- `cargo test -p redlinedb-sql --test smoke_pragma --quiet --locked`: 4 passed.
+- `cargo test -p redlinedb-sql --test parity_pragma_tv pragma_compile_options --quiet --locked`: 2 passed.
+- `cargo test -p redlinedb-sql --test ws_c3_parallel_scan_dispatch --quiet --locked`: 7 passed.
+- `cargo test -p redlinedb-sql --test ws_c3_parallel_scan_safety --quiet --locked`: 6 passed.
+- `jankurai audit-file` save-gates on the split files: pass, no new findings.
+- `just fast`: pass.
+
+— codex

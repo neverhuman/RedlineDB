@@ -65,6 +65,9 @@ pub(crate) use dml::*;
 pub(crate) mod pragma;
 #[allow(unused_imports)]
 pub(crate) use pragma::*;
+mod pragma_compile;
+#[allow(unused_imports)]
+pub(crate) use pragma_compile::*;
 mod prepare;
 pub(crate) mod savepoint;
 mod select;

@@ -43,7 +43,7 @@ pub use value::{SqlValue, SqlValueRef};
 /// as internal.
 #[doc(hidden)]
 pub mod ws_c3_testing {
-    pub use crate::exec::select_top::{
+    pub use crate::exec::select_parallel::{
         ParallelCoveringDecision, take_last_parallel_covering_decision,
     };
     pub use crate::exec::{
