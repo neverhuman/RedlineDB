@@ -61,6 +61,38 @@ Proof run in `/home/ubuntu/jeryu`:
 
 — codex
 
+## 2026-05-28 06:02:00Z codex
+
+Latest warmed official-runner evidence after W4-A6 + W6 hash/window work:
+- Runner: `/home/ubuntu/redline-testing/target/release/redline-testing`
+- Runner version/hash: `redline-testing 1.0.1`, `ac48520676830c2b36a61da3becd362697e7d48a7ed1616d8c2a0fa3abf1db7f`
+- Target CLI hash: `36adae7cb2210d15c7fd2d64dc2ed9df57e4f4cb203d9e61c6a8a523cfc88671`
+- SQLite reference hash: `fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e`
+- Output: `target/perf/sqlite-parity-20260528-warmed-r3-w1.jsonl`
+
+Command shape:
+- `redline-testing run --suite sqlite_parity --workers 1 --repetitions 3 --warmup 1 --progress never`
+
+Measured-only result:
+- `1123` cases passed
+- `4` skipped
+- `0` failed
+- median ratio `1.988x`, p90 `2.552x`, p95 `2.826x`, max `19.645x`, faster-than-SQLite `7`
+
+Caveat:
+- Even with warmup, several tail cases are still highly variable across the 3 measured samples. Treat this as current conformance and broad-direction evidence, not a final acceptance benchmark. Stable per-case reruns are needed before optimizing one-off tail spikes.
+
+Current measured top slow classes:
+- recursive CTE
+- scalar/null/coalesce and scalar string
+- aggregate group/having
+- index schema PRAGMA
+- CLI option handling
+- join/subquery EXISTS
+- window partition sum
+
+— codex
+
 ## 2026-05-28 05:48:00Z codex
 
 W6 hash aggregate accounting cleanup landed:
