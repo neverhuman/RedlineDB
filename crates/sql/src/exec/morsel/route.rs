@@ -22,17 +22,22 @@
 //! Off by default. Opt in via `REDLINE_MORSEL_ROUTE=primitive_scan`
 //! (also `all`, `1`, `on`) — see [`super::morsel_route_mode`].
 
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use redlinedb_kernel::catalog::{Affinity, TableDef};
+use redlinedb_kernel::engine::{Engine, Txn};
 use sqlparser::ast::{Expr, SelectItem};
 
 use super::{
-    MORSEL_ROUTE_FALLBACK_DISABLED, MORSEL_ROUTE_FALLBACK_INELIGIBLE,
-    MORSEL_ROUTE_FALLBACK_PREDICATE, MORSEL_ROUTE_FALLBACK_PROJECTION,
-    MORSEL_ROUTE_FALLBACK_SHAPE, MorselEligibility, classify_select_plan_eligibility,
-    morsel_route_mode, morsel_telemetry_enabled,
+    MORSEL_ROUTE_FALLBACK_DISABLED, MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND,
+    MORSEL_ROUTE_FALLBACK_INELIGIBLE, MORSEL_ROUTE_FALLBACK_PREDICATE,
+    MORSEL_ROUTE_FALLBACK_PROJECTION, MORSEL_ROUTE_FALLBACK_SHAPE, MORSEL_ROUTE_USED,
+    MorselEligibility, classify_select_plan_eligibility, morsel_route_mode,
+    morsel_telemetry_enabled,
 };
+use crate::Result;
+use crate::value::SqlValue;
 
 /// Telemetry tap for routing decisions. No-op when telemetry is disabled.
 #[inline]
@@ -50,9 +55,7 @@ fn record_decline(counter: &std::sync::atomic::AtomicU64) {
 /// classifier produces a [`RoutingPlan`] when the shape supports it, and
 /// the decline reason is recorded with the appropriate counter — but the
 /// scan + emit loop is wired in W4-A2b, not here.
-pub fn route_primitive_scan(
-    plan: &crate::statement::SelectPlan,
-) -> Result<RouteDecision, crate::error::Error> {
+pub fn route_primitive_scan(plan: &crate::statement::SelectPlan) -> Result<RouteDecision> {
     use crate::statement::SelectSource;
 
     // 1. Route mode gate. When the env var isn't set we bail immediately so
@@ -135,7 +138,7 @@ pub fn route_primitive_scan(
 pub(crate) fn classify_for_routing(
     plan: &crate::statement::SelectPlan,
     table: &TableDef,
-) -> Result<RoutingPlan, DeclineReason> {
+) -> std::result::Result<RoutingPlan, DeclineReason> {
     // W4-A2a defers WHERE entirely — any selection means tuple path.
     if plan.selection.is_some() {
         return Err(DeclineReason::Predicate);
@@ -216,6 +219,89 @@ pub(crate) struct ColumnRouting {
 pub(crate) enum MorselColumnKind {
     I64,
     F64,
+}
+
+/// W4-A2b: the actual scan-and-emit. Returns `Some(rows)` on a successful
+/// route, `None` if the routing decides at runtime that the tuple path
+/// must handle this query (e.g. a row has a value of the wrong kind for
+/// the column's affinity-classified kind). Records the appropriate
+/// telemetry counter on either outcome.
+///
+/// Initial wave (W4-A2b):
+/// - WHERE must be empty (gated by `classify_for_routing`).
+/// - Projection columns must be Integer/Real affinity bare identifiers.
+/// - Runtime values must match the affinity-derived kind, OR be NULL.
+///   Any other kind (e.g. INTEGER-affinity column holds a TEXT value via
+///   SQLite's loose typing) bails to tuple path so semantics stay
+///   identical.
+///
+/// The scan walks `Engine::scan_rowids` and `load_table_row_by_rowid`
+/// directly, then projects by indexed access into `row.values[ordinal]`.
+/// This skips `eval_projection_item` for the supported shape — which
+/// for a 1000-row table calling `project_row` 1000× saves N expression
+/// evaluations per query. Without morsel batching the work isn't
+/// vectorised yet (W4-A3 adds that), but the work IS routed.
+pub(crate) fn execute_routed_scan(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    plan: &crate::statement::SelectPlan,
+) -> Result<Option<Vec<Vec<SqlValue>>>> {
+    // Re-classify here so the caller doesn't have to thread RoutingPlan
+    // through. The classification is cheap (single projection walk) and
+    // keeps the public surface small.
+    let routing = match classify_for_routing(plan, table.as_ref()) {
+        Ok(r) => r,
+        Err(reason) => {
+            let counter = match reason {
+                DeclineReason::Projection => &MORSEL_ROUTE_FALLBACK_PROJECTION,
+                DeclineReason::Predicate => &MORSEL_ROUTE_FALLBACK_PREDICATE,
+                _ => &MORSEL_ROUTE_FALLBACK_SHAPE,
+            };
+            record_decline(counter);
+            return Ok(None);
+        }
+    };
+
+    let rowids = super::super::collect_table_rowids(engine, tx, table)?;
+    let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(rowids.len());
+
+    for rowid in rowids {
+        let Some(fresh) = super::super::load_table_row_by_rowid(engine, tx, table, rowid)?
+        else {
+            continue;
+        };
+        let mut row_out: Vec<SqlValue> = Vec::with_capacity(routing.projection.len());
+        for col in &routing.projection {
+            let value = fresh
+                .values
+                .get(col.column_ordinal)
+                .cloned()
+                .unwrap_or(SqlValue::Null);
+            // Bail to tuple path if runtime kind doesn't match the
+            // affinity-classified kind. SQLite's loose typing allows
+            // (e.g.) a TEXT value in an INTEGER-affinity column; the
+            // tuple path coerces via `apply_affinity`, but our routed
+            // emit doesn't. Null is universally compatible.
+            match (&value, col.kind) {
+                (SqlValue::Null, _) => {}
+                (SqlValue::Integer(_), MorselColumnKind::I64) => {}
+                (SqlValue::Real(_), MorselColumnKind::F64) => {}
+                _ => {
+                    record_decline(&MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND);
+                    return Ok(None);
+                }
+            }
+            row_out.push(value);
+        }
+        out.push(row_out);
+    }
+
+    // Routed successfully. Telemetry counter fires only when enabled.
+    if morsel_telemetry_enabled() {
+        MORSEL_ROUTE_USED.fetch_add(1, Ordering::Relaxed);
+    }
+    Ok(Some(out))
 }
 
 /// Outcome of [`route_primitive_scan`]. `Routed` is reserved for the future
