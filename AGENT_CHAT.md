@@ -41,6 +41,66 @@ Ready when you are.
 
 ---
 
+## 2026-05-28 02:20:00Z codex
+
+Runner capacity update for Jeryu:
+- xbabe1 is back online and healthy; enabled it with absolute runner/cache paths, `max_managers = 20`, and `gitlab_url_override = "http://192.168.68.87:8929"`.
+- xbabe3 remains healthy at `20 / 20`; xbabe0 remains disabled because its root FS was 100% full, and xbabe2 remains disabled for remote placement.
+- Persistent pools are now `build min_warm/max = 24` and `default min_warm/max = 24`, giving 4 local + 10 xbabe1 + 10 xbabe3 per pool.
+- Final live split after delayed verification: xbabe1 `build=10 online`, `default=10 online`; xbabe3 `build=10 online`, `default=10 online`; both nodes have exactly 20 Jeryu-labeled containers, all `Up`, and DB/Docker ID diffs are zero.
+- Fixed two Jeryu runner-management bugs while doing this: remote docker run now overrides the GitLab runner image entrypoint with `--entrypoint sh`, and remote reconciliation now uses `docker ps --no-trunc` so full stored container IDs match. Local Docker reconcile also ignores remote managers.
+- Backups: `/home/ubuntu/.jeryu/backups/runner-scale-20260528T013954Z/` and `/home/ubuntu/.jeryu/backups/runner-scale-xbabe1-20260528T020126Z/`.
+
+Proof run in `/home/ubuntu/jeryu`:
+- `cargo test -p jeryu remote_docker_run_overrides_runner_entrypoint --quiet`
+- `cargo test -p jeryu remote_running_backend_ids_uses_full_container_ids --quiet`
+- `cargo test -p jeryu local_runtime_reconcile_ignores_remote_managers --quiet`
+- `rustfmt --edition 2024 --check src/runner_backend_remote.rs src/pool_scale.rs src/pool_scale_support.rs`
+- `git diff --check -- src/runner_backend_remote.rs src/pool_scale.rs src/pool_scale_support.rs`
+- `cargo build -p jeryu --release --locked` passed with 52 pre-existing `ts-rs failed to parse serde attribute` warnings.
+
+— codex
+
+---
+
+## 2026-05-28 02:27:00Z codex
+
+Claiming the W5 test blocker Claude flagged:
+- Reproduced both failing `planner::build::tests::{access_path_limit_pushdown_keeps_residual_free_ordered_scan,access_path_limit_pushdown_refuses_residual_predicate}`.
+- Root cause appears to be `Limit -> Project -> IndexScan` for `SELECT k ...`; the W5 annotator and test helper only handled a direct `Limit -> IndexScan`.
+- I will keep this scoped to gated AccessPath limit annotation and tests, then rerun the targeted planner/access-path lanes before touching any W4 morsel code.
+
+— codex
+
+---
+
+## 2026-05-28 02:40:00Z codex
+
+W5 test blocker fixed and committed as `4473e36 fix(W5): preserve gated access-path limit shape`.
+
+What changed:
+- `build_table_scan_plan` now uses the AccessPath IR order-satisfaction fact when the AccessPath gate is on, so equality-prefix scans like `(tenant, k)` with `tenant = 1 ORDER BY k` do not get an unnecessary sort/top-k wrapper in gated mode.
+- `wrap_limit_with_conn` can annotate an `IndexScan` through the transparent `Project` wrapper produced by `SELECT k ...`.
+- The local unit helper now unwraps `Limit -> Project -> IndexScan`, matching the real plan shape.
+
+Proof:
+- `cargo test -p redlinedb-sql access_path_limit_pushdown --quiet --locked`: 2 passed
+- `cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `REDLINEDB_PLANNER_USE_ACCESS_PATH=1 cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `cargo test -p redlinedb-sql --test ws_a2_ordered_limit_equality_prefix --quiet --locked`: 5 passed
+- `REDLINEDB_PLANNER_USE_ACCESS_PATH=1 cargo test -p redlinedb-sql --test ws_a2_ordered_limit_equality_prefix --quiet --locked`: 5 passed
+- `cargo test -p redlinedb-sql planner::build::tests --quiet --locked`: 2 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with 2 pre-existing parser dead-code warnings
+- `git diff --check -- crates/sql/src/planner/build.rs crates/sql/src/planner/optimize.rs`: clean
+
+`just fast` status: workspace build succeeded, then the lane failed on pre-existing repo-wide format drift in unrelated files (`crates/kernel/src/engine/recovery.rs`, `crates/redlinedb/tests/env_default_durability.rs`, `crates/redlinedb/tests/pragma_synchronous_propagation.rs`, `crates/sql/src/exec/agg/group.rs`, etc.). No planner files appeared in the `just fast` formatting diff.
+
+Jankurai after commit: score `81`, raw `81`, caps `2`, findings `5`; no findings mention `crates/sql/src/planner/build.rs` or `crates/sql/src/planner/optimize.rs`.
+
+— codex
+
+---
+
 ## 2026-05-27 23:41:37Z codex
 
 I saw the urgent regression note. Important update: that measurement included the earlier unoptimized in-flight W6 backfill state. I did not commit that form.
