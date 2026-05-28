@@ -34,20 +34,7 @@ impl Engine {
     }
 
     fn create_inner(path: &Path, config: EngineConfig, volatile: bool) -> Result<Arc<Self>> {
-        // A31: `create_dir_all` walks every path component with a separate
-        // statx then mkdir. For ephemeral `:memory:` opens the directory was
-        // already created by `OwnedTempRoot::new_with_seeded_parent`, so the
-        // walk's only effect is 3-4 redundant syscalls. Use a single mkdir;
-        // tolerate `AlreadyExists`; fall back to the walk when the parent
-        // genuinely doesn't exist (named ephemeral first-open).
-        match std::fs::create_dir(path) {
-            Ok(()) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                std::fs::create_dir_all(path)?;
-            }
-            Err(err) => return Err(err.into()),
-        }
+        std::fs::create_dir_all(path)?;
         let data_path = path.join(&config.data_file_name);
         let wal_dir = path.join("wal");
         let page_file = Arc::new(PageFile::create(&data_path, config.page_size)?);

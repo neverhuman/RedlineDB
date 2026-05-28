@@ -29,22 +29,9 @@ pub struct ControlStore {
 
 impl ControlStore {
     pub fn new(dir: impl AsRef<Path>) -> Result<Self> {
-        // A31: mkdir-first to skip the redundant create_dir_all walk for
-        // ephemeral opens where the directory was already created by
-        // `OwnedTempRoot`. See `engine::recovery::create_inner` for the
-        // rationale; same pattern is applied across all startup-path
-        // directory ensures.
-        let dir = dir.as_ref();
-        match fs::create_dir(dir) {
-            Ok(()) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                fs::create_dir_all(dir)?;
-            }
-            Err(err) => return Err(err.into()),
-        }
+        fs::create_dir_all(dir.as_ref())?;
         Ok(Self {
-            dir: dir.to_path_buf(),
+            dir: dir.as_ref().to_path_buf(),
         })
     }
 
