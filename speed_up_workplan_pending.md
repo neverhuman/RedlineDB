@@ -30,3 +30,29 @@ Pending local cleanup:
 Notes:
 - The touched source files are limited to `crates/sql/src/json/scalar.rs`, `crates/sql/src/json/jsonb.rs`, `crates/sql/src/exec/agg_eval.rs`, `crates/sql/src/exec/expr/json_dispatch.rs`, `crates/sql/src/exec/expr/program.rs`, `crates/sql/tests/parity_coverage.rs`, `crates/sql/tests/parity_negative.rs`, and `crates/sql/tests/scalar_program_vm.rs`.
 - The current fix is intentionally narrow: it rejects JSON BLOB inputs at the shared builder helper, keeps lower/upper ASCII-only to match SQLite parity, and splits `NUMERIC` casts by syntax kind so SQLite `CAST` and PG `::` stay separate.
+
+Current slice:
+- `SQL_AUTOINCREMENT` cases `10062` and `10063` now pass on the freshly built `target/release/redlinedb`.
+- The fix is intentionally limited to ordinary `INTEGER PRIMARY KEY` rowid reuse after delete/delete-all; the true `AUTOINCREMENT` keyword path is still part of the remaining plan.
+
+Verification:
+- Targeted `phase10_sqlc_conflict_matrix` lane passed.
+- Latest official `sqlite_parity` run on the fresh CLI binary finished with `50` remaining failures out of `2445` total cases.
+
+Next safe phase:
+- Continue with the remaining SQL parity gaps outside `SQL_AUTOINCREMENT`, with W4/W6/W7/W2 still the dominant open plan lanes.
+
+Current attach slice:
+- `.databases` now lists attached aliases using the same `PRAGMA database_list` data path the shell already trusts.
+- `PRAGMA aux.user_version` and `PRAGMA aux.schema_version` now route to the attached sidecar instead of the main database.
+- Official `sqlite_parity` on the rebuilt CLI binary is down to `47` remaining failures out of `2445`.
+
+Verification:
+- `cargo test -p redlinedb-cli --test dot_commands --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_attach --quiet --locked`
+- Fresh official run on `target/release/redlinedb`:
+  - `10062`, `10063`, `10381`, `10385`, and `10387` are fixed
+  - `10388` (`ALIAS_QUALIFIED_UPDATE_DELETE`) still remains
+
+Remaining attach gap:
+- Alias-qualified UPDATE/DELETE across attached databases is still a larger cross-db DML routing problem and should be claimed separately, not as part of this shell/pragma slice.

@@ -78,6 +78,26 @@ pub(crate) fn restrict_dml_rows(
     Ok(filtered.into_iter().skip(offset_n).take(limit_n).collect())
 }
 
+fn lower_rowid_allocator_after_delete(
+    conn: &Connection,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    deleted_rowid: RowId,
+) -> Result<()> {
+    if table.rowid_alias_column.is_none() {
+        return Ok(());
+    }
+    let next_row = super::collect_table_rowids(conn.engine(), tx, table)?
+        .into_iter()
+        .filter(|rowid| *rowid != deleted_rowid)
+        .map(|rowid| rowid.0)
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    conn.engine().lower_next_row(next_row);
+    Ok(())
+}
+
 pub(crate) fn execute_update(
     conn: &Connection,
     plan: &crate::statement::UpdatePlan,
@@ -524,6 +544,7 @@ pub(crate) fn execute_delete(
             };
             // BEFORE DELETE triggers fire while the before-image row still exists.
             fire_before_delete_triggers(conn, tx, &plan.table, row.rowid, &live)?;
+            lower_rowid_allocator_after_delete(conn, tx, &plan.table, row.rowid)?;
             conn.engine()
                 .delete_for_relation(tx, plan.table.relation_id, row.rowid)?;
             crate::exec::index_dml::maintain_indexes_on_delete(

@@ -3,8 +3,8 @@
 //!
 //! Each row in the SQLite resolution-action table at
 //! <https://sqlite.org/lang_conflict.html> gets dedicated tests for both
-//! the "constraint fails" and the "no conflict" paths, plus AUTOINCREMENT
-//! high-water-mark and UPSERT (`ON CONFLICT(col) DO ...`) variants.
+//! the "constraint fails" and the "no conflict" paths, plus rowid reuse,
+//! AUTOINCREMENT, and UPSERT (`ON CONFLICT(col) DO ...`) variants.
 //!
 //! Documented deviations from SQLite (kept out of `crates/sql/src/exec.rs`
 //! per Lane SQL-C's allowed file list):
@@ -16,11 +16,10 @@
 //!   a future lane that touches `with_write_tx` can lift the collapse
 //!   without reparsing.
 //! - The literal `AUTOINCREMENT` keyword is not yet recognised because
-//!   that requires extending `crates/sql/src/parser/helpers.rs`. The
-//!   engine's `reserve_row_id()` is process-wide monotonic, so an
-//!   `INTEGER PRIMARY KEY` (the rowid alias) already exhibits SQLite's
-//!   AUTOINCREMENT-style high-water-mark behaviour and the tests assert
-//!   that.
+//!   that requires extending `crates/sql/src/parser/helpers.rs`. Separate
+//!   tests below pin ordinary `INTEGER PRIMARY KEY` rowid reuse without
+//!   AUTOINCREMENT and the explicit keyword cases remain covered in the
+//!   official corpus.
 
 #[allow(non_snake_case)]
 mod phase10_sqlc_conflict_matrix {
@@ -237,10 +236,7 @@ mod phase10_sqlc_conflict_matrix {
 
     /// Verify that OR REPLACE on a non-PK UNIQUE keeps the row count at 1
     /// (the conflicting row is deleted before the new one inserts) and
-    /// that the rowid moves: when the conflicting row's rowid is
-    /// engine-allocated (no explicit alias), the replacement gets a new
-    /// monotonic rowid because `engine.reserve_row_id()` is a high-water
-    /// mark.
+    /// that the hidden rowid allocator still advances for the replacement.
     #[test]
     fn replace_unique_non_pk_changes_rowid_but_not_count() {
         let (_dir, conn) = open_database();
@@ -264,11 +260,11 @@ mod phase10_sqlc_conflict_matrix {
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let new_rowid = stmt.column_i64(0).expect("rowid");
         assert_eq!(stmt.column_text(1).expect("b"), "second");
-        // Engine reserve_row_id is monotonic, so the replacement row gets
-        // a strictly larger rowid than the deleted one.
+        // Hidden rowid tables keep advancing their allocator even when the
+        // conflicting row is deleted and immediately replaced.
         assert!(
             new_rowid > original_rowid,
-            "expected new rowid ({new_rowid}) > original ({original_rowid}) — engine high-water mark"
+            "expected new rowid ({new_rowid}) > original ({original_rowid})"
         );
     }
 
@@ -356,20 +352,19 @@ mod phase10_sqlc_conflict_matrix {
     }
 
     // ----------------------------------------------------------------
-    // AUTOINCREMENT / high-water-mark semantics
+    // INTEGER PRIMARY KEY rowid reuse semantics (without AUTOINCREMENT)
     //
     // We do not yet recognise the literal `AUTOINCREMENT` keyword (that
     // requires a parser change in `crates/sql/src/parser/helpers.rs`,
-    // outside Lane SQL-C's allowed file list). However the engine's
-    // `reserve_row_id()` is a process-wide monotonic counter that never
-    // rolls backwards even after deletes, so an `INTEGER PRIMARY KEY`
-    // (the rowid alias) already exhibits SQLite's AUTOINCREMENT-style
-    // high-water-mark behaviour. These tests pin that behaviour so the
-    // future keyword wiring inherits it.
+    // outside Lane SQL-C's allowed file list). SQLite reuses deleted
+    // rowids for ordinary `INTEGER PRIMARY KEY` tables. AUTOINCREMENT is
+    // a separate code path and is covered by the explicit keyword cases in
+    // the official corpus; these tests pin the non-AUTOINCREMENT allocator
+    // semantics for the rowid alias.
     // ----------------------------------------------------------------
 
     #[test]
-    fn integer_pk_high_water_mark_survives_deletes() {
+    fn integer_pk_reuses_deleted_max_rowid() {
         let (_dir, conn) = open_database();
         conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, label TEXT)")
             .expect("create");
@@ -386,10 +381,10 @@ mod phase10_sqlc_conflict_matrix {
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let third_id = stmt.column_i64(0).expect("id");
         drop(stmt);
-        // Delete every row.
-        conn.execute("DELETE FROM t").expect("delete");
-        // Re-insert. The new id must be strictly greater than the
-        // pre-delete max — a high-water-mark engine never reuses ids.
+        // Delete the max rowid and re-insert. SQLite reuses the deleted
+        // max when AUTOINCREMENT is absent.
+        conn.execute("DELETE FROM t WHERE id = 3").expect("delete");
+        // Re-insert. The new id should reuse the deleted max rowid.
         conn.execute("INSERT INTO t(label) VALUES ('d')")
             .expect("d");
         let mut stmt = conn
@@ -397,14 +392,11 @@ mod phase10_sqlc_conflict_matrix {
             .expect("prepare");
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let new_id = stmt.column_i64(0).expect("id");
-        assert!(
-            new_id > third_id,
-            "AUTOINCREMENT semantics broken: new {new_id} <= prior max {third_id}"
-        );
+        assert_eq!(new_id, third_id, "expected deleted max rowid to be reused");
     }
 
     #[test]
-    fn integer_pk_high_water_mark_survives_recovery() {
+    fn integer_pk_reuses_deleted_rowid_after_recovery() {
         let dir = tempdir().expect("temp dir");
         let path = dir.path().join("redlinedb-sql-phase10-sqlc-autoinc.db");
         // Phase 1: insert, capture rowid, drop the database handle so the
@@ -419,9 +411,9 @@ mod phase10_sqlc_conflict_matrix {
                 .expect("first");
             db.checkpoint().expect("checkpoint");
         }
-        // Phase 2: re-open (recovery replays WAL into a fresh engine) and
-        // insert again. The rowid counter must advance past the durable
-        // max even though the engine restarted.
+        // Phase 2: re-open (recovery replays WAL into a fresh engine),
+        // delete the row, and insert again. SQLite reuses the deleted
+        // rowid after restart too.
         let db = Database::open(&path, DbOptions::default()).expect("open database");
         let conn = db.connect();
         let mut stmt = conn
@@ -430,6 +422,7 @@ mod phase10_sqlc_conflict_matrix {
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let first_id = stmt.column_i64(0).expect("id");
         drop(stmt);
+        conn.execute("DELETE FROM t WHERE id = 1").expect("delete");
         conn.execute("INSERT INTO t(payload) VALUES ('second')")
             .expect("second");
         let mut stmt = conn
@@ -437,10 +430,7 @@ mod phase10_sqlc_conflict_matrix {
             .expect("prepare");
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let second_id = stmt.column_i64(0).expect("id");
-        assert!(
-            second_id > first_id,
-            "post-recovery rowid {second_id} did not exceed pre-recovery rowid {first_id}"
-        );
+        assert_eq!(second_id, first_id, "expected deleted rowid to be reused");
     }
 
     // ----------------------------------------------------------------

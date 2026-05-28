@@ -89,6 +89,21 @@ impl PageBackedHeap {
         RowId(self.next_row.fetch_add(1, Ordering::Relaxed))
     }
 
+    pub fn lower_next_row(&self, next_row: u64) {
+        let mut current = self.next_row.load(Ordering::SeqCst);
+        while current > next_row {
+            match self.next_row.compare_exchange(
+                current,
+                next_row,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
+    }
+
     pub fn flush_all(&self, durable_lsn: Lsn) -> Result<()> {
         self.buffer.flush_all(durable_lsn)
     }

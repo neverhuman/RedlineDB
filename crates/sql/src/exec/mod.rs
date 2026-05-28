@@ -1131,7 +1131,16 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             conn.set_foreign_keys(*value);
             Ok(())
         }
-        PragmaPlan::SetUserVersion(value) => conn.set_user_version(*value),
+        PragmaPlan::SetUserVersion { alias, value } => {
+            if let Some(alias) = alias.as_ref() {
+                let Some(db) = conn.attach_map().database(alias.as_ref()) else {
+                    return Err(Error::UnknownTable(format!("no such database: {alias}")));
+                };
+                db.set_user_version(*value)
+            } else {
+                conn.set_user_version(*value)
+            }
+        }
         PragmaPlan::SetRecursiveTriggers(value) => {
             conn.set_recursive_triggers(*value);
             Ok(())

@@ -158,23 +158,25 @@ pub fn indexes(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
     Ok(DotOutcome::Ok)
 }
 
-/// `.databases` — list attached databases (currently just `main`).
+/// `.databases` — list attached databases.
 pub fn databases(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
-    // sqlite3 renders the main database with the syntax
-    //   main: "<path>" r/w
-    // where the path is the empty string for `:memory:` / transient
-    // connections. Mirror that exactly so parity tests see the same line.
-    let display = state.db_path.display().to_string();
-    let path = if display == ":memory:" || display.is_empty() {
-        String::new()
-    } else {
-        display
-    };
-    let line = format!("main: \"{path}\" r/w");
-    state
-        .output
-        .write_line(&line)
+    let mut stmt = state
+        .conn
+        .prepare("PRAGMA database_list")
         .map_err(|err| err.to_string())?;
+    while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
+        let name: String = row.get(1).map_err(|err| err.to_string())?;
+        let path: String = row.get(2).map_err(|err| err.to_string())?;
+        let path = if path == ":memory:" {
+            String::new()
+        } else {
+            path
+        };
+        state
+            .output
+            .write_line(&format!("{name}: \"{path}\" r/w"))
+            .map_err(|err| err.to_string())?;
+    }
     Ok(DotOutcome::Ok)
 }
 

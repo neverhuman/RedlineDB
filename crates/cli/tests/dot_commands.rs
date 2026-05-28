@@ -198,6 +198,23 @@ fn dot_databases_reports_main() {
 }
 
 #[test]
+fn dot_databases_lists_attached_aliases() {
+    let dir = tempdir().expect("tempdir");
+    let main_path = dir.path().join("main.db");
+    let aux_path = dir.path().join("aux.db");
+    let script = format!(
+        "ATTACH DATABASE '{}' AS aux;\n.databases\n",
+        aux_path.display()
+    );
+    let (out, err, code) = run_script(Some(&main_path), &script);
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("main:"), "stdout={out}");
+    assert!(out.contains("aux:"), "stdout={out}");
+    assert!(out.contains("main.db"), "stdout={out}");
+    assert!(out.contains("aux.db"), "stdout={out}");
+}
+
+#[test]
 fn dot_crlf_toggles_row_separator() {
     let (out, err, code) = run_script(
         None,

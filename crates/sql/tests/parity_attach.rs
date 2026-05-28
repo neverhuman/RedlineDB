@@ -104,6 +104,47 @@ fn attach_via_rusqlite_oracle_smoke() {
 }
 
 #[test]
+fn attached_user_version_isolated_from_main() {
+    let (dir, conn) = open_redline();
+    let aux = dir.path().join("aux.db");
+    let aux_str = aux.display().to_string();
+
+    conn.execute("PRAGMA main.user_version=10")
+        .expect("set main user_version");
+    conn.execute(&format!("ATTACH DATABASE '{aux_str}' AS aux"))
+        .expect("attach");
+    conn.execute("PRAGMA aux.user_version=7")
+        .expect("set aux user_version");
+
+    let main = collect_rows(&conn, "PRAGMA main.user_version");
+    let aux = collect_rows(&conn, "PRAGMA aux.user_version");
+    assert_eq!(main, vec![vec![SqlValue::Integer(10)]]);
+    assert_eq!(aux, vec![vec![SqlValue::Integer(7)]]);
+}
+
+#[test]
+fn attached_schema_version_isolated_from_main() {
+    let (dir, conn) = open_redline();
+    let aux = dir.path().join("aux.db");
+    let aux_str = aux.display().to_string();
+
+    conn.execute(&format!("ATTACH DATABASE '{aux_str}' AS aux"))
+        .expect("attach");
+
+    let before_main = collect_rows(&conn, "PRAGMA main.schema_version");
+    let before_aux = collect_rows(&conn, "PRAGMA aux.schema_version");
+    conn.execute("CREATE TABLE main.t(x INTEGER)")
+        .expect("create main table");
+    let after_main = collect_rows(&conn, "PRAGMA main.schema_version");
+    let after_aux = collect_rows(&conn, "PRAGMA aux.schema_version");
+
+    assert_eq!(before_main, vec![vec![SqlValue::Integer(0)]]);
+    assert_eq!(before_aux, vec![vec![SqlValue::Integer(0)]]);
+    assert_eq!(after_main, vec![vec![SqlValue::Integer(1)]]);
+    assert_eq!(after_aux, vec![vec![SqlValue::Integer(0)]]);
+}
+
+#[test]
 fn select_from_attached_alias_returns_rows() {
     // Seed the aux DB by creating + populating it through a separate
     // connection before the main connection attaches it.

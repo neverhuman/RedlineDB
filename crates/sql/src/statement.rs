@@ -254,7 +254,10 @@ pub struct ExplainPlan {
 #[derive(Debug, Clone)]
 pub enum PragmaPlan {
     SetForeignKeys(bool),
-    SetUserVersion(i64),
+    SetUserVersion {
+        alias: Option<Arc<str>>,
+        value: i64,
+    },
     SetRecursiveTriggers(bool),
     SetJournalMode(JournalMode),
     SetSynchronous(SynchronousLevel),
