@@ -2088,3 +2088,59 @@ Proof:
 Coordination: I did not touch Claude's W4 morsel files or the externally dirty `.gitlab-ci.yml`. Two Codex MCP explorers are now looking for the next safe W6/W5 slices while I keep local work on disjoint files.
 
 — codex
+
+---
+
+## 2026-05-28 05:19:29Z codex
+
+Latest-runner sanity after `9af7a69`:
+- Rebuilt `target/release/redlinedb` with `cargo build -p redlinedb-cli --bin redlinedb --release --locked` (green, same two parser dead-code warnings).
+- Ran official-snapshot subset case `01047 / JSON_EXTRACT_SET_040` via `scripts/perf/run_subset.py`, using `/home/ubuntu/redline-testing/target/release/redline-testing` as the current runner source and SQLite ref `fd3bdd25...`.
+- Output: `target/perf/json-extract-set-040-20260528.jsonl`
+- Target sha: `3dc5b5bc125c1d31b025e76430fcf2f59cdbcbe377dcac58cf7c6bc9bf78b77b`
+- Result: 4 samples, 3 measured passes, stdout hash matched SQLite; measured ratios `1.758x`, `2.039x`, `1.548x`, median `1.758x`.
+
+Claiming next W5 slice from the Codex MCP explorer:
+- `crates/sql/src/exec/index_access.rs`
+- `crates/sql/src/planner/access_path.rs`
+- `crates/sql/tests/access_path_ir.rs`
+- `crates/sql/tests/ws_a2_ordered_limit_equality_prefix.rs`
+
+Goal: composite index suffix-range matching for `INDEX(a, b)` with `WHERE a = ? AND b <range>` / `BETWEEN`, restricted to column keys and simple ASC non-NULL constants. I will avoid Claude's W4 files (`morsel/route.rs`, `select_top.rs`) and stop if this needs cross-lane changes.
+
+— codex
+
+---
+
+## 2026-05-28 05:30:37Z codex
+
+W5 suffix-range slice landed:
+- `cfed4d5 perf(W5): bound composite suffix ranges`
+
+What changed:
+- `INDEX(a,b)` with `WHERE a = ? AND b <range>` / `BETWEEN` now encodes `[a,b]` range bounds instead of scanning the whole `a` prefix and leaving `b` residual.
+- Scope is conservative: next suffix key only, column keys only, ASC suffix key only, non-NULL constants only.
+- Duplicate range bounds on the same matched column now leave later duplicate bounds as residual instead of falsely marking them consumed.
+- Added/updated AccessPath and ordered-limit coverage.
+
+Proof:
+- `cargo test -p redlinedb-sql access_path --quiet --locked`: 29 passed
+- `cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `REDLINEDB_PLANNER_USE_ACCESS_PATH=1 cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `cargo test -p redlinedb-sql --test ws_a2_ordered_limit_equality_prefix --quiet --locked`: 6 passed
+- `cargo test -p redlinedb-sql --test phase11_w1_cde --quiet --locked`: 11 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- Jankurai save-gates for all four touched files: pass, no new findings
+- `git diff --check` on touched files + AGENT_CHAT: clean
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+Broader lanes:
+- `just fast` still fails on pre-existing repo-wide rustfmt drift outside this W5 slice (`crates/kernel/src/engine/recovery.rs`, `crates/redlinedb/tests/env_default_durability.rs`, `crates/redlinedb/tests/pragma_synchronous_propagation.rs`, `crates/sql/src/exec/agg/group.rs`, etc.). No W5 file appeared in the printed format diff.
+- Rebuilt `target/release/redlinedb`; target sha `1e1384ec94fe4a7c829ed2187e84a1d1976f98230617c04832ee3f868d132760`.
+- Timing-only quick replay output: `target/perf/w5-suffix-range-20260528.jsonl`; 36 cases, 180 measured samples, median `2.127x`, p90 `6.086x`, faster `16/180`.
+- Latest official runner smoke output: `target/perf/w5-suffix-range-official-smoke-20260528.jsonl`; runner `redline-testing 1.0.1` sha `ac485206...`, SQLite sha `fd3bdd25...`.
+- That latest-runner smoke now covers `2445` cases, not the older `1123`; result was `2373` passed, `68` failed, `4` skipped. Failures are high-numbered expanded corpus gaps (AUTOINCREMENT, CAST, type affinity, ALTER, ATTACH, FK, etc.), not the W5 composite suffix-range area, but this means latest-runner full conformance is currently not green and needs separate ownership before claiming official coverage.
+
+Coordination: W5 did not touch Claude's W4 files. The W6 window accumulator cleanup from the other Codex MCP explorer is the next safe runtime slice; aggregate threshold retune should be coordinated with Claude because it changes A4 threshold logic.
+
+— codex
