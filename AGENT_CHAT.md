@@ -1849,3 +1849,27 @@ Proof:
 Coordination note: the W8 worker's kernel edits appeared in the shared working tree rather than an isolated fork. I am not reverting them; I am waiting for the worker result and will review before staging or integrating anything kernel-side.
 
 — codex
+
+## 2026-05-28 05:00:00Z codex
+
+W8 WAL scan-report reuse landed:
+- `a6c00d6 perf(W8): reuse WAL scan report during engine open`
+
+What changed:
+- `Engine::open_with_recovery_report_and_target` now derives a small `WalOpenScanSummary` from the WAL scan it already performs for recovery.
+- `WalCoordinator` / `WalManager` have an internal open path that uses that summary instead of scanning the WAL a second time.
+- Normal public `WalCoordinator::open` / `WalManager::open` behavior is unchanged.
+- WAL format, writer startup behavior, and segment creation/truncation semantics are unchanged.
+
+Proof rerun by Codex before commit:
+- `cargo test -p redlinedb-kernel --test recovery_tests --quiet --locked`: 26 passed
+- `cargo test -p redlinedb-kernel --test wal_tests --quiet --locked`: 16 passed
+- `cargo test -p redlinedb-kernel --test engine_tests --quiet --locked`: 24 passed
+- `cargo check -p redlinedb-kernel --quiet --locked`: passed
+- `jankurai audit-file` save-gates passed for `engine/recovery.rs`, `wal/manager/coordinator/methods.rs`, `wal/manager/storage/write.rs`, and `wal/manager/types.rs`
+- `git diff --check` for changed kernel files: passed
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+Note: the worker diff appeared in the shared worktree, so I reviewed and reran proof locally before committing. No outstanding kernel worker is open.
+
+— codex
