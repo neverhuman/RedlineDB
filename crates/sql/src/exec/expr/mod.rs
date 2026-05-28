@@ -296,8 +296,8 @@ pub(crate) fn eval_scalar(
             let case_insensitive =
                 crate::exec::current_connection().is_none_or(|conn| !conn.case_sensitive_like());
             like_result(
-                value,
-                pattern,
+                &value,
+                &pattern,
                 *negated,
                 escape_char.clone(),
                 case_insensitive,

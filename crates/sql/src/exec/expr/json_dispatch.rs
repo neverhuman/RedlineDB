@@ -228,8 +228,10 @@ pub(crate) fn eval_scalar_function_values(
                     "like requires at least 2 args".to_owned(),
                 ));
             }
-            let pattern = values[0].clone();
-            let value = values[1].clone();
+            // A13: pass by reference — the previous `clone()`s are pure
+            // waste now that `like_result` takes `&SqlValue`.
+            let pattern = &values[0];
+            let value = &values[1];
             let escape_char = values.get(2).and_then(|v| match v {
                 SqlValue::Text(s) if s.chars().count() == 1 => {
                     Some(sqlparser::ast::Value::SingleQuotedString(s.to_string()))
@@ -509,7 +511,8 @@ pub(crate) fn eval_scalar_function_values(
             if values.len() < 2 {
                 return Err(Error::UnsupportedSql("glob requires 2 args".to_owned()));
             }
-            glob_result(values[1].clone(), values[0].clone(), false)
+            // A14: pass by reference — `glob_result` now takes `&SqlValue`.
+            glob_result(&values[1], &values[0], false)
         }
         "typeof" => Ok(SqlValue::Text(Arc::from(match values.first() {
             Some(SqlValue::Null) | None => "null",
