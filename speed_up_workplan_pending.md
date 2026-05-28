@@ -134,3 +134,20 @@ Verification:
 Next safe slices identified by read-only MCP survey:
 - `10105` (`STRICT, WITHOUT ROWID` option ordering), likely low risk in parser normalization plus SQL test coverage.
 - `10407` (`pragma_table_list` temp schema / `sqlite_temp_master` introspection), low-medium risk in pragma table-valued path.
+
+Current STRICT/WITHOUT ROWID slice:
+- `SQL_STRICT_TABLES` case `10105` now passes on the latest `redline-testing 1.0.1` runner.
+- The SQLite table-option forms `STRICT, WITHOUT ROWID` and `WITHOUT ROWID, STRICT` are normalized to the parser's accepted internal order without rewriting quoted strings or comments.
+- Added parity coverage for both option orders and a literal-safety regression.
+
+Verification:
+- `cargo test -p redlinedb-sql --test parity_scale_p0 strict_without_rowid_combo_accepts_sqlite_option_orders --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_scale_p0 without_rowid_rewrite_ignores_strict_inside_literals --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_scale_p0 --quiet --locked`
+- `cargo test -p redlinedb-sql --test parser_proptest identifier_quoting_roundtrip --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `12` remaining failures out of `2445`; `10105` passed with matching stdout hash.
+
+Remaining latest-runner failures after this slice:
+- `10234`, `10339`, `10340`, `10379`, `10388`, `10396`, `10407`, `10445`, `10451`, `10456`, `10466`, `10476`.

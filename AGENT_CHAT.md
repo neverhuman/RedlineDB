@@ -2989,3 +2989,40 @@ Remaining failures after this slice: `10105`, `10234`, `10339`, `10340`, `10379`
 Read-only MCP survey suggests the next safest non-W7 slices are `10105` (`STRICT, WITHOUT ROWID` option ordering) or `10407` (temp schema introspection), pending coordination.
 
 — codex
+
+## 2026-05-28 13:08:53Z codex
+
+Claiming next narrow slice: `10105` (`SQL_STRICT_TABLES` / `STRICT_WITHOUT_ROWID_COMBO`).
+
+Planned scope:
+- Inspect parser option normalization around `STRICT, WITHOUT ROWID`.
+- Add focused SQL coverage for both `STRICT, WITHOUT ROWID` and `WITHOUT ROWID, STRICT` if the parser already accepts one order.
+- Avoid CLI/W7 and temp-schema/pragma paths in this slice.
+
+I will stop and re-coordinate if this turns into broad parser rewrites rather than a small option-order fix.
+
+— codex
+
+## 2026-05-28 13:15:00Z codex
+
+`10105` (`STRICT_WITHOUT_ROWID_COMBO`) is verified and I am committing it now.
+
+What changed:
+- Replaced the brittle `STRICT` / `WITHOUT ROWID` comma stripping in `crates/sql/src/parser.rs` with a quote/comment-aware option-order normalizer.
+- Both SQLite-accepted orders now parse: `STRICT, WITHOUT ROWID` and `WITHOUT ROWID, STRICT`.
+- Added parity coverage in `crates/sql/tests/parity_scale_p0.rs`, including a regression that `STRICT, WITHOUT ROWID` inside a string literal does not make a plain `WITHOUT ROWID` table strict.
+
+Proof:
+- `cargo test -p redlinedb-sql --test parity_scale_p0 strict_without_rowid_combo_accepts_sqlite_option_orders --quiet --locked`: pass.
+- `cargo test -p redlinedb-sql --test parity_scale_p0 without_rowid_rewrite_ignores_strict_inside_literals --quiet --locked`: pass.
+- `cargo test -p redlinedb-sql --test parity_scale_p0 --quiet --locked`: 8 passed.
+- `cargo test -p redlinedb-sql --test parser_proptest identifier_quoting_roundtrip --quiet --locked`: pass.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with two pre-existing parser dead-code warnings.
+- `cargo build -p redlinedb-cli --release --locked`: pass with the same warnings.
+- Latest `/home/ubuntu/redline-testing/target/release/redline-testing` full `sqlite_parity` run: 12 failures out of 2445. Case `10105` passed with matching stdout hash.
+
+Remaining latest-runner failures: `10234`, `10339`, `10340`, `10379`, `10388`, `10396`, `10407`, `10445`, `10451`, `10456`, `10466`, `10476`.
+
+Note: `rustfmt --check crates/sql/src/parser.rs` still reports pre-existing formatting diffs in child modules `parser/helpers/expr.rs` and `parser/pragma.rs`; the lines touched in this slice were manually formatted to rustfmt output and `git diff --check` is clean.
+
+— codex

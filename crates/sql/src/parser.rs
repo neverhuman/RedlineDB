@@ -2213,20 +2213,125 @@ fn collect_jsonb_rhs(bytes: &[u8], start: usize, is_array: bool) -> Option<(Stri
 }
 
 fn rewrite_strict_without_rowid_combo(sql: &str) -> String {
-    let mut s = sql.to_owned();
-    for pat in [
-        (", STRICT", " STRICT"),
-        (",STRICT", " STRICT"),
-        (", strict", " strict"),
-        (",strict", " strict"),
-        (", WITHOUT ROWID", " WITHOUT ROWID"),
-        (",WITHOUT ROWID", " WITHOUT ROWID"),
-        (", without rowid", " without rowid"),
-        (",without rowid", " without rowid"),
-    ] {
-        s = s.replace(pat.0, pat.1);
+    if !contains_ignore_ascii_case(sql, b"strict")
+        || !contains_ignore_ascii_case(sql, b"without rowid")
+    {
+        return sql.to_owned();
     }
-    s
+
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut last = 0usize;
+    let mut i = 0usize;
+    let mut changed = false;
+
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' | b'"' | b'`' => {
+                i = scan_quoted(bytes, i, bytes[i]);
+                continue;
+            }
+            b'-' if bytes.get(i + 1) == Some(&b'-') => {
+                i += 2;
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                i += 2;
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                i = (i + 2).min(bytes.len());
+                continue;
+            }
+            _ => {}
+        }
+
+        if let Some(end) = parse_strict_without_rowid_options(bytes, i) {
+            out.push_str(&sql[last..i]);
+            out.push_str("WITHOUT ROWID STRICT");
+            last = end;
+            i = end;
+            changed = true;
+            continue;
+        }
+        if let Some(end) = parse_without_rowid_strict_options(bytes, i) {
+            out.push_str(&sql[last..i]);
+            out.push_str("WITHOUT ROWID STRICT");
+            last = end;
+            i = end;
+            changed = true;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    if changed {
+        out.push_str(&sql[last..]);
+        out
+    } else {
+        sql.to_owned()
+    }
+}
+
+fn parse_strict_without_rowid_options(bytes: &[u8], pos: usize) -> Option<usize> {
+    let mut i = parse_strict_option(bytes, pos)?;
+    i = skip_ascii_ws(bytes, i);
+    if bytes.get(i) != Some(&b',') {
+        return None;
+    }
+    i = skip_ascii_ws(bytes, i + 1);
+    parse_without_rowid_option(bytes, i)
+}
+
+fn parse_without_rowid_strict_options(bytes: &[u8], pos: usize) -> Option<usize> {
+    let mut i = parse_without_rowid_option(bytes, pos)?;
+    i = skip_ascii_ws(bytes, i);
+    if bytes.get(i) != Some(&b',') {
+        return None;
+    }
+    i = skip_ascii_ws(bytes, i + 1);
+    parse_strict_option(bytes, i)
+}
+
+fn parse_strict_option(bytes: &[u8], pos: usize) -> Option<usize> {
+    if matches_keyword_ci_bounded(bytes, pos, b"STRICT") {
+        Some(pos + b"STRICT".len())
+    } else {
+        None
+    }
+}
+
+fn parse_without_rowid_option(bytes: &[u8], pos: usize) -> Option<usize> {
+    if !matches_keyword_ci_bounded(bytes, pos, b"WITHOUT") {
+        return None;
+    }
+    let after_without = pos + b"WITHOUT".len();
+    let rowid_pos = skip_ascii_ws(bytes, after_without);
+    if rowid_pos == after_without || !matches_keyword_ci_bounded(bytes, rowid_pos, b"ROWID") {
+        return None;
+    }
+    Some(rowid_pos + b"ROWID".len())
+}
+
+fn matches_keyword_ci_bounded(bytes: &[u8], pos: usize, keyword: &[u8]) -> bool {
+    matches_keyword_ci(bytes, pos, keyword)
+        && pos
+            .checked_sub(1)
+            .is_none_or(|prev| !is_word_char(bytes[prev]))
+        && bytes
+            .get(pos + keyword.len())
+            .is_none_or(|next| !is_word_char(*next))
+}
+
+fn skip_ascii_ws(bytes: &[u8], mut pos: usize) -> usize {
+    while pos < bytes.len() && bytes[pos].is_ascii_whitespace() {
+        pos += 1;
+    }
+    pos
 }
 // ---------------------------------------------------------------------------
 // Track H — beyond-SQLite (Postgres parity) pre-parse rewrites.
