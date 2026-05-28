@@ -136,11 +136,13 @@ fn batch_bail_memory_mode_is_cwd_clean_and_output_exact() {
 }
 
 #[test]
-fn deserialize_memory_mode_emits_sqlite_oom_warning_and_continues() {
+fn deserialize_memory_mode_runs_silently() {
+    // SQLite 3.53.1 no longer emits "Error: out of memory" for
+    // `-deserialize :memory:`; RedlineDB matches that behavior.
     let (out, err, code) = run_script_with_args(&["-deserialize", "-list"], None, "SELECT 1;\n");
     assert_eq!(code, 0, "stderr={err}");
     assert_eq!(out, "1\n");
-    assert_eq!(err, "Error: out of memory\n");
+    assert_eq!(err, "", "expected no OOM message on stderr (3.53.1 parity)");
 }
 
 #[test]

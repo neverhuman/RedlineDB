@@ -276,6 +276,57 @@ fn native_select_wildcard_shapes_match_sql_route() {
 }
 
 #[test]
+fn native_select_distinct_matches_sql_route() {
+    let conn = memory_conn();
+    create_items(&conn);
+    conn.execute("INSERT INTO items(id, name, score) VALUES (4, 'Bob', 40), (5, 'Ada', 50)")
+        .expect("seed duplicates");
+
+    let mut table_distinct = match select_from(
+        table_ref(None, "items", None),
+        vec![RqlSelectItem::Expr {
+            expr: column("name"),
+            alias: Some("name".to_owned()),
+        }],
+    ) {
+        RqlStatement::Select(select) => select,
+        _ => unreachable!(),
+    };
+    table_distinct.distinct = true;
+    table_distinct.order_by.push(RqlOrder {
+        expr: column("name"),
+        descending: false,
+        nulls_first: None,
+    });
+
+    let mut fromless_distinct = match select_no_from(vec![RqlSelectItem::Expr {
+        expr: RqlExpr::Binary {
+            left: Box::new(RqlExpr::Integer { value: 2 }),
+            op: RqlBinaryOp::Add,
+            right: Box::new(RqlExpr::Integer { value: 3 }),
+        },
+        alias: Some("sum".to_owned()),
+    }]) {
+        RqlStatement::Select(select) => select,
+        _ => unreachable!(),
+    };
+    fromless_distinct.distinct = true;
+
+    for statement in [
+        RqlStatement::Select(table_distinct),
+        RqlStatement::Select(fromless_distinct),
+    ] {
+        let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+        let expected = snapshot(&conn, &statement);
+        drop(_sql_route);
+
+        let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+        assert!(is_native_select(&conn, &statement));
+        assert_eq!(snapshot(&conn, &statement), expected);
+    }
+}
+
+#[test]
 fn native_select_falls_back_for_order_by_ordinals() {
     let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
     let conn = memory_conn();
@@ -763,6 +814,86 @@ fn native_select_grouped_aggregate_matches_sql_route() {
 }
 
 #[test]
+fn native_select_aggregate_having_matches_sql_route() {
+    let conn = memory_conn();
+    create_items(&conn);
+    conn.execute(
+        "INSERT INTO items(id, name, score) VALUES \
+         (4, 'Ada', NULL), (5, 'Ada', 5), (6, 'Bob', 7)",
+    )
+    .expect("seed duplicate groups");
+
+    let grouped = RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection: vec![
+            RqlSelectItem::Expr {
+                expr: column("name"),
+                alias: Some("bucket".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::CountStar,
+                alias: Some("n".to_owned()),
+            },
+        ],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: None,
+        group_by: vec![column("name")],
+        having: Some(RqlExpr::Binary {
+            left: Box::new(RqlExpr::Binary {
+                left: Box::new(column("name")),
+                op: RqlBinaryOp::NotEq,
+                right: Box::new(RqlExpr::Text {
+                    value: "Zoe".to_owned(),
+                }),
+            }),
+            op: RqlBinaryOp::And,
+            right: Box::new(RqlExpr::Binary {
+                left: Box::new(RqlExpr::CountStar),
+                op: RqlBinaryOp::Gt,
+                right: Box::new(RqlExpr::Integer { value: 1 }),
+            }),
+        }),
+        order_by: vec![RqlOrder {
+            expr: column("name"),
+            descending: false,
+            nulls_first: None,
+        }],
+        limit: None,
+        offset: None,
+    });
+    let ungrouped = RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection: vec![RqlSelectItem::Expr {
+            expr: RqlExpr::CountStar,
+            alias: Some("n".to_owned()),
+        }],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: None,
+        group_by: Vec::new(),
+        having: Some(RqlExpr::Binary {
+            left: Box::new(RqlExpr::CountStar),
+            op: RqlBinaryOp::Gt,
+            right: Box::new(RqlExpr::Integer { value: 2 }),
+        }),
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    });
+
+    for statement in [grouped, ungrouped] {
+        let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+        let expected = snapshot(&conn, &statement);
+        drop(_sql_route);
+
+        let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+        assert!(is_native_select(&conn, &statement));
+        assert_eq!(snapshot(&conn, &statement), expected);
+    }
+}
+
+#[test]
 fn native_select_aggregate_keeps_unsupported_shapes_on_sql_route() {
     let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
     let conn = memory_conn();
@@ -784,10 +915,6 @@ fn native_select_aggregate_keeps_unsupported_shapes_on_sql_route() {
     };
 
     for select in [
-        RqlSelect {
-            distinct: true,
-            ..base.clone()
-        },
         RqlSelect {
             projection: vec![RqlSelectItem::Expr {
                 expr: RqlExpr::Function {
@@ -865,7 +992,7 @@ fn native_select_aggregate_keeps_unsupported_shapes_on_sql_route() {
         },
         RqlSelect {
             having: Some(RqlExpr::Binary {
-                left: Box::new(RqlExpr::CountStar),
+                left: Box::new(column("score")),
                 op: RqlBinaryOp::Gt,
                 right: Box::new(RqlExpr::Integer { value: 0 }),
             }),
@@ -1140,21 +1267,6 @@ fn native_select_no_from_keeps_unsupported_shapes_on_sql_route() {
         assert!(template.sql.as_ref().ends_with("select"));
         assert!(!template.sql.as_ref().ends_with("select_native"));
     }
-
-    let mut distinct = match select_no_from(vec![RqlSelectItem::Expr {
-        expr: RqlExpr::Integer { value: 1 },
-        alias: None,
-    }]) {
-        RqlStatement::Select(select) => select,
-        _ => unreachable!(),
-    };
-    distinct.distinct = true;
-    let template = conn
-        .prepare_rql(&RqlStatement::Select(distinct))
-        .expect("distinct fallback")
-        .template();
-    assert!(template.sql.as_ref().ends_with("select"));
-    assert!(!template.sql.as_ref().ends_with("select_native"));
 
     let mut group_by = match select_no_from(vec![RqlSelectItem::Expr {
         expr: RqlExpr::Integer { value: 1 },
