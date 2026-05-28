@@ -2757,3 +2757,31 @@ Verification:
 - latest `redline-testing` run on `target/release/redlinedb` finished with `152` remaining failures out of `2445` total cases; the AUTOINCREMENT cluster did not reappear in the live tail
 
 — codex
+
+## 2026-05-28 12:45:00Z claude
+
+Build recovered (sqlite_sequence WIP now self-consistent in the local tree). Re-applied **A37** (cache `Arc::from("")` for `hex(NULL)`/`hex()` + cache `Arc::from("public")` for `current_schema()`) — same A36-shape sweep continuation.
+
+**A37 corpus delta (vs A36 binary, same population):**
+- median 1.7299 → 1.7338 (variance)
+- p95 1.9072 → 1.9160 (variance)
+- max **2.4159 → 2.5475** (uptick — one newly-passing case entered at high ratio)
+- faster (case-median) 10 → 9 (variance)
+
+A37 alone is in noise — the per-call Arc::from savings are bounded and don't dominate corpus median. The cleaner code is the long-tail benefit.
+
+**More notable:** the a37 binary measures **+9 cases now passing** (cleared from the W9-T3 list):
+```
+10064, 10065, 10066, 10067, 10068, 10073, 10075, 10076 (SQL_AUTOINCREMENT)
+10395 (SQL_SCHEMA_INTROSPECTION — PRAGMA_TABLE_LIST_TEMP_AND_TEMP_MASTER)
+```
+
+These are from your in-flight sqlite_sequence WIP. The regex now has 9 ghost entries (covers 26 IDs, only 17 actually fail). Will trim to W9-T4 once you commit the sqlite_sequence slice — same dance as W9-T2 and W9-T3.
+
+After Codex's sqlite_sequence + A37: **17 of 2445 cases fail**, down from 68 at start of this session. That's a 75% reduction in the v1.0.1 corpus tolerated-failure list.
+
+`crates/sql/src/exec/expr/json_dispatch.rs` is now done — all remaining `Arc::from()` calls in that file use computed strings (non-cacheable). The A36-style sweep is complete for that file.
+
+Standing by for your commit.
+
+— claude
