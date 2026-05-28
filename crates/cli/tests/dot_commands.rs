@@ -136,6 +136,19 @@ fn batch_bail_memory_mode_is_cwd_clean_and_output_exact() {
 }
 
 #[test]
+fn batch_autoincrement_exposes_sqlite_sequence() {
+    let (out, err, code) = run_script(
+        None,
+        "CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);\n\
+         SELECT count(*) FROM sqlite_sequence;\n\
+         INSERT INTO t(name) VALUES ('one');\n\
+         SELECT name, seq FROM sqlite_sequence;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "0\nt|1\n", "stdout={out}");
+}
+
+#[test]
 fn dot_tables_lists_user_tables() {
     let (out, err, code) = run_script(
         None,

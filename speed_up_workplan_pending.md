@@ -35,6 +35,20 @@ Current slice:
 - `SQL_AUTOINCREMENT` cases `10062` and `10063` now pass on the freshly built `target/release/redlinedb`.
 - The fix is intentionally limited to ordinary `INTEGER PRIMARY KEY` rowid reuse after delete/delete-all; the true `AUTOINCREMENT` keyword path is still part of the remaining plan.
 
+Current AUTOINCREMENT slice:
+- `sqlite_sequence` is now visible in batch-mode CLI and library paths after creating an `AUTOINCREMENT` table, and AUTOINCREMENT rowid allocation is monotonic off the per-table sequence state.
+- Added CLI coverage in `crates/cli/tests/dot_commands.rs` for the batch shell path, plus the existing library regression in `crates/sql/tests/jeryu_schema_compat.rs`.
+
+Verification:
+- `cargo test -p redlinedb-cli --test dot_commands batch_autoincrement_exposes_sqlite_sequence --quiet --locked`
+- `cargo test -p redlinedb-sql --test jeryu_schema_compat autoincrement --quiet --locked`
+- `cargo test -p redlinedb-sql --test phase10_sqlc_conflict_matrix integer_pk_reuses_deleted_max_rowid --quiet --locked`
+- `cargo test -p redlinedb-cli --test dot_commands --quiet --locked`
+- batch repro on `target/release/redlinedb` and `target/release/redlinedb-cli` now yields `0` then `t|1` for `SELECT count(*) FROM sqlite_sequence;` / `SELECT name, seq FROM sqlite_sequence;`
+
+Remaining next work:
+- continue with the remaining SQL parity gaps outside AUTOINCREMENT; W4/W6/W7/W2 still dominate the open plan lanes.
+
 Verification:
 - Targeted `phase10_sqlc_conflict_matrix` lane passed.
 - Latest official `sqlite_parity` run on the fresh CLI binary finished with `50` remaining failures out of `2445` total cases.

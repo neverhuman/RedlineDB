@@ -15,11 +15,9 @@
 //!   and `tail.rs::conflict_action_for` records the intended action, so
 //!   a future lane that touches `with_write_tx` can lift the collapse
 //!   without reparsing.
-//! - The literal `AUTOINCREMENT` keyword is not yet recognised because
-//!   that requires extending `crates/sql/src/parser/helpers.rs`. Separate
-//!   tests below pin ordinary `INTEGER PRIMARY KEY` rowid reuse without
-//!   AUTOINCREMENT and the explicit keyword cases remain covered in the
-//!   official corpus.
+//! - The literal `AUTOINCREMENT` keyword is recognised; the dedicated
+//!   `jeryu_schema_compat` tests cover the sqlite_sequence contract and
+//!   monotonic rowid allocation behavior.
 
 #[allow(non_snake_case)]
 mod phase10_sqlc_conflict_matrix {
@@ -371,13 +369,8 @@ mod phase10_sqlc_conflict_matrix {
     // ----------------------------------------------------------------
     // INTEGER PRIMARY KEY rowid reuse semantics (without AUTOINCREMENT)
     //
-    // We do not yet recognise the literal `AUTOINCREMENT` keyword (that
-    // requires a parser change in `crates/sql/src/parser/helpers.rs`,
-    // outside Lane SQL-C's allowed file list). SQLite reuses deleted
-    // rowids for ordinary `INTEGER PRIMARY KEY` tables. AUTOINCREMENT is
-    // a separate code path and is covered by the explicit keyword cases in
-    // the official corpus; these tests pin the non-AUTOINCREMENT allocator
-    // semantics for the rowid alias.
+    // AUTOINCREMENT coverage lives in `jeryu_schema_compat`; this lane
+    // keeps the ordinary `INTEGER PRIMARY KEY` allocator fallback pinned.
     // ----------------------------------------------------------------
 
     #[test]

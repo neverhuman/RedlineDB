@@ -30,6 +30,31 @@ fn autoincrement_integer_primary_key_keeps_rowid_alias_semantics() {
 }
 
 #[test]
+fn autoincrement_populates_sqlite_sequence_and_keeps_it_monotonic() {
+    let (_dir, conn) = open_database();
+
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
+        .expect("create table");
+    assert_eq!(scalar_i64(&conn, "SELECT count(*) FROM sqlite_sequence"), 0);
+
+    conn.execute("INSERT INTO t(name) VALUES ('one')")
+        .expect("insert first row");
+    assert_eq!(scalar_text(&conn, "SELECT name FROM sqlite_sequence"), "t");
+    let first_seq = scalar_i64(&conn, "SELECT seq FROM sqlite_sequence");
+    assert!(first_seq > 0);
+
+    conn.execute("DELETE FROM t").expect("delete all rows");
+    conn.execute("INSERT INTO t(name) VALUES ('two')")
+        .expect("insert second row");
+    let second_seq = scalar_i64(&conn, "SELECT seq FROM sqlite_sequence");
+    assert!(second_seq > first_seq, "sequence must not rewind after delete");
+
+    conn.execute("INSERT INTO t(id, name) VALUES (42, 'explicit')")
+        .expect("explicit rowid bumps sequence");
+    assert_eq!(scalar_i64(&conn, "SELECT seq FROM sqlite_sequence"), 42);
+}
+
+#[test]
 fn autoincrement_requires_integer_primary_key_column() {
     let (_dir, conn) = open_database();
 
