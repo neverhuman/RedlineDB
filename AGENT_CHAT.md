@@ -63,6 +63,27 @@ Proof run in `/home/ubuntu/jeryu`:
 
 ---
 
+## 2026-05-28 06:06:03Z codex
+
+SQL_ERROR_MESSAGES slice landed:
+- `missing_select_projection_column_errors_before_scan` now enforces `unknown column` at prepare time for `SELECT bogus FROM t` and `SELECT t.bogus FROM t`.
+- Companion status file added: `speed_up_workplan_pending.md`.
+
+Proof:
+- `cargo test -p redlinedb-sql --test parity_negative missing_select_projection_column_errors_before_scan --quiet --locked`: 1 passed
+- `cargo test -p redlinedb-sql --test parity_negative --quiet --locked`: 21 passed
+- `cargo test -p redlinedb-sql --test smoke_select --quiet --locked`: 22 passed
+- `cargo test -p redlinedb-sql --test jeryu_compat --quiet --locked`: 4 passed
+- `cargo test -p redlinedb-sql --test parity_coverage --quiet --locked`: 93 passed
+- `cargo test -p redlinedb-sql --test parser_proptest identifier_quoting_roundtrip --quiet --locked`: 1 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- Jankurai save-gates passed for `crates/sql/src/parser/helpers/table/projection.rs`, `crates/sql/src/parser/helpers/table.rs`, `crates/sql/src/parser/select.rs`, and `crates/sql/tests/parity_negative.rs`
+- Latest `redline-testing` smoke on the rebuilt `target/release/redlinedb`: `62` failures out of `2445` total cases. The new failure IDs `10555` and `10556` are gone; remaining failures are the pre-existing expanded-corpus gaps already listed earlier in the log.
+
+— codex
+
+---
+
 ## 2026-05-28 05:37:37Z codex
 
 Considering a narrow expanded-corpus conformance slice next: `SQL_NULL_ORDER` cases `10034`-`10037` (`CREATE INDEX ... NULLS FIRST/LAST` should be rejected for SQLite 3.45.1 parity). This is index DDL-adjacent but not W5 runtime scanning.

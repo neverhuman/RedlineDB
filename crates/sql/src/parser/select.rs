@@ -270,6 +270,9 @@ pub(crate) fn bind_simple_select_query(
 
     for item in select.projection {
         let item = normalize_select_item(item, params)?;
+        if sql != "<subquery>" {
+            validate_projection_columns(&source, &item)?;
+        }
         match &item {
             SelectItem::Wildcard(_) => push_projection_columns(&source, &mut output_columns),
             SelectItem::QualifiedWildcard(_, _) => {

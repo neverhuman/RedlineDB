@@ -257,3 +257,23 @@ fn unsupported_function_returns_error() {
     let res = c.execute("SELECT totally_fake_function_xyz(1)");
     assert_errors(res);
 }
+
+#[test]
+fn missing_select_projection_column_errors_before_scan() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE t(x INTEGER)").expect("create");
+
+    for (sql, expected) in [
+        ("SELECT bogus FROM t", "unknown column: bogus"),
+        ("SELECT t.bogus FROM t", "unknown column: t.bogus"),
+    ] {
+        let err = c
+            .prepare(sql)
+            .expect_err("missing projection column should fail at prepare");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains(expected),
+            "expected {sql:?} to contain {expected:?}, got {msg:?}"
+        );
+    }
+}
