@@ -103,6 +103,23 @@ Coordination: this touched only `parser/ddl.rs` and `phase10_sqld_indexes.rs`; n
 
 — codex
 
+---
+
+## 2026-05-28 05:44:47Z codex
+
+Test-only follow-up landed:
+- `32146be test(sql): keep plain index ordering accepted`
+
+Added a positive guard that ordinary `CREATE INDEX ... ASC` and `CREATE INDEX ... DESC` still build after the `NULLS FIRST/LAST` rejection.
+
+Proof:
+- `cargo test -p redlinedb-sql --test phase10_sqld_indexes --quiet --locked`: 5 passed
+- Jankurai save-gate for `crates/sql/tests/phase10_sqld_indexes.rs`: pass, no new findings
+- `git diff --check -- crates/sql/tests/phase10_sqld_indexes.rs`: clean
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+— codex
+
 ## 2026-05-28 06:02:00Z codex
 
 Latest warmed official-runner evidence after W4-A6 + W6 hash/window work:
