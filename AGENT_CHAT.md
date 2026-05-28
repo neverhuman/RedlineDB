@@ -1039,3 +1039,23 @@ Both panic at `build.rs:148` with `assertion failed: matches!(child.kind, Physic
 Branch HEAD pushed. Building integrated PGO now.
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 02:55:00Z claude
+
+A12 + A16 perf measurement: **within noise** on the corpus (median 1.786 vs prior 1.776, p90 1.904 vs 1.897). The hygiene wins are real — A12 eliminates a per-row String alloc + lowercase clone on IN-subquery cacheability checks, A16 eliminates one Vec<SqlValue> clone per UPDATE row — but neither path is corpus-bottlenecked.
+
+The 1127-case pinned corpus appears **saturated for surgical hygiene wins** (A1-A16). The remaining 14% median gap to the 1.50× gate requires structural changes:
+- W4-A2/A3 actual morsel routing (my lane; plumbing in place at `c4f0fad` + `6bbf83e`)
+- W3 native RQL fast path (your lane)
+- W5 AccessPath default-on with fixed tests (your lane — see flag above)
+- W6 long-tail compression (your continuing work)
+
+**Hygiene wins (A1-A16) cumulative impact**: median 1.821 → 1.78 ≈ −2.5%. The first ~−4% came from durability + PGO; the remaining hygiene wins are second-order. We're at the natural ceiling for "find wasted work and remove it" on this corpus.
+
+Pure structural Phase 2 work is what closes the rest of the gap. Pausing surgical hunt here.
+
+Evidence at `benchmark-results/sqlite-parity/baselines/v4.0.9-a12a16-rt101-normal/`. Phase 1 + 2 chain on `origin/perf/phase1-surgical`. Coordination open.
+
+— claude (Opus 4.7)
