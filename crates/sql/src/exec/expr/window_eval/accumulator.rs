@@ -7,7 +7,7 @@ use crate::value::{SqlValue, compare_values};
 
 #[derive(Clone)]
 pub(super) struct Accumulator {
-    kind: String,
+    kind: AccumulatorKind,
     count: i64,
     sum: f64,
     min: Option<SqlValue>,
@@ -18,10 +18,35 @@ pub(super) struct Accumulator {
     int_sum_overflow: bool,
 }
 
+#[derive(Clone, Copy)]
+enum AccumulatorKind {
+    Count,
+    Sum,
+    Total,
+    Avg,
+    Min,
+    Max,
+    Unknown,
+}
+
+impl AccumulatorKind {
+    fn from_name(name: &str) -> Self {
+        match name {
+            "count" => Self::Count,
+            "sum" => Self::Sum,
+            "total" => Self::Total,
+            "avg" => Self::Avg,
+            "min" => Self::Min,
+            "max" => Self::Max,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 impl Accumulator {
     pub(super) fn new(name: &str) -> Self {
         Self {
-            kind: name.to_owned(),
+            kind: AccumulatorKind::from_name(name),
             count: 0,
             sum: 0.0,
             min: None,
@@ -91,9 +116,9 @@ impl Accumulator {
     }
 
     pub(super) fn finalize(self) -> SqlValue {
-        match self.kind.as_str() {
-            "count" => SqlValue::Integer(self.count),
-            "sum" => {
+        match self.kind {
+            AccumulatorKind::Count => SqlValue::Integer(self.count),
+            AccumulatorKind::Sum => {
                 if !self.saw_any {
                     return SqlValue::Null;
                 }
@@ -103,21 +128,44 @@ impl Accumulator {
                     SqlValue::Integer(self.int_sum)
                 }
             }
-            "total" => SqlValue::Real(self.sum),
-            "avg" => {
+            AccumulatorKind::Total => SqlValue::Real(self.sum),
+            AccumulatorKind::Avg => {
                 if self.count == 0 {
                     SqlValue::Null
                 } else {
                     SqlValue::Real(self.sum / self.count as f64)
                 }
             }
-            "min" => self.min.unwrap_or(SqlValue::Null),
-            "max" => self.max.unwrap_or(SqlValue::Null),
-            _ => SqlValue::Null,
+            AccumulatorKind::Min => self.min.unwrap_or(SqlValue::Null),
+            AccumulatorKind::Max => self.max.unwrap_or(SqlValue::Null),
+            AccumulatorKind::Unknown => SqlValue::Null,
         }
     }
 
     pub(super) fn value(&self) -> SqlValue {
-        self.clone().finalize()
+        match self.kind {
+            AccumulatorKind::Count => SqlValue::Integer(self.count),
+            AccumulatorKind::Sum => {
+                if !self.saw_any {
+                    return SqlValue::Null;
+                }
+                if self.is_real || self.int_sum_overflow {
+                    SqlValue::Real(self.sum)
+                } else {
+                    SqlValue::Integer(self.int_sum)
+                }
+            }
+            AccumulatorKind::Total => SqlValue::Real(self.sum),
+            AccumulatorKind::Avg => {
+                if self.count == 0 {
+                    SqlValue::Null
+                } else {
+                    SqlValue::Real(self.sum / self.count as f64)
+                }
+            }
+            AccumulatorKind::Min => self.min.clone().unwrap_or(SqlValue::Null),
+            AccumulatorKind::Max => self.max.clone().unwrap_or(SqlValue::Null),
+            AccumulatorKind::Unknown => SqlValue::Null,
+        }
     }
 }

@@ -222,6 +222,25 @@ fn running_sum_partitioned() {
     );
 }
 
+#[test]
+fn running_min_max_text_prefix() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(part INTEGER, seq INTEGER, label TEXT)");
+    lab.execute(
+        "INSERT INTO t VALUES \
+         (1,1,'delta'),(1,2,'alpha'),(1,3,'charlie'), \
+         (2,1,'bravo'),(2,2,'echo')",
+    );
+    lab.assert_match(
+        "SELECT part, seq, label, \
+            MIN(label) OVER (PARTITION BY part ORDER BY seq \
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), \
+            MAX(label) OVER (PARTITION BY part ORDER BY seq \
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
+         FROM t ORDER BY part, seq",
+    );
+}
+
 // ── Bounded sliding-window path (n PRECEDING AND m FOLLOWING) ───────
 
 #[test]
