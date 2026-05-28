@@ -396,6 +396,17 @@ fn enumerate_frame_positions(
     out
 }
 
+fn frame_positions_without_exclude(bounds: (usize, usize), total: usize) -> Option<(usize, usize)> {
+    if total == 0 || bounds.0 > bounds.1 {
+        return None;
+    }
+    let end = bounds.1.min(total.saturating_sub(1));
+    if bounds.0 > end {
+        return None;
+    }
+    Some((bounds.0, end))
+}
+
 struct WindowLayoutCache<'a> {
     rows: &'a [SqlRow],
     bindings: &'a [Option<SqlValue>],
@@ -527,20 +538,19 @@ fn compute_function_for_row(
             lag_lead_value(func_name, args, rows, order_index_map, sorted_pos, bindings)
         }
         "first_value" => {
-            let bounds = frame_bounds(
-                frame,
-                sorted_pos,
-                peer_ids,
-                peer_ranges,
-                order_index_map.len(),
-            );
-            let positions = enumerate_frame_positions(
-                frame,
-                bounds,
-                sorted_pos,
-                peer_ids,
-                order_index_map.len(),
-            );
+            let total = order_index_map.len();
+            let bounds = frame_bounds(frame, sorted_pos, peer_ids, peer_ranges, total);
+            if frame.exclude == ExcludeMode::NoOthers {
+                let Some((first, _)) = frame_positions_without_exclude(bounds, total) else {
+                    return Ok(SqlValue::Null);
+                };
+                let row_idx = order_index_map[first];
+                return match args.first() {
+                    Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                    None => Ok(SqlValue::Null),
+                };
+            }
+            let positions = enumerate_frame_positions(frame, bounds, sorted_pos, peer_ids, total);
             let Some(first) = positions.first() else {
                 return Ok(SqlValue::Null);
             };
@@ -551,20 +561,19 @@ fn compute_function_for_row(
             }
         }
         "last_value" => {
-            let bounds = frame_bounds(
-                frame,
-                sorted_pos,
-                peer_ids,
-                peer_ranges,
-                order_index_map.len(),
-            );
-            let positions = enumerate_frame_positions(
-                frame,
-                bounds,
-                sorted_pos,
-                peer_ids,
-                order_index_map.len(),
-            );
+            let total = order_index_map.len();
+            let bounds = frame_bounds(frame, sorted_pos, peer_ids, peer_ranges, total);
+            if frame.exclude == ExcludeMode::NoOthers {
+                let Some((_, last)) = frame_positions_without_exclude(bounds, total) else {
+                    return Ok(SqlValue::Null);
+                };
+                let row_idx = order_index_map[last];
+                return match args.first() {
+                    Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                    None => Ok(SqlValue::Null),
+                };
+            }
+            let positions = enumerate_frame_positions(frame, bounds, sorted_pos, peer_ids, total);
             let Some(last) = positions.last() else {
                 return Ok(SqlValue::Null);
             };
@@ -579,20 +588,23 @@ fn compute_function_for_row(
                 Some(v) if v > 0 => v as usize,
                 _ => return Ok(SqlValue::Null),
             };
-            let bounds = frame_bounds(
-                frame,
-                sorted_pos,
-                peer_ids,
-                peer_ranges,
-                order_index_map.len(),
-            );
-            let positions = enumerate_frame_positions(
-                frame,
-                bounds,
-                sorted_pos,
-                peer_ids,
-                order_index_map.len(),
-            );
+            let total = order_index_map.len();
+            let bounds = frame_bounds(frame, sorted_pos, peer_ids, peer_ranges, total);
+            if frame.exclude == ExcludeMode::NoOthers {
+                let Some((first, last)) = frame_positions_without_exclude(bounds, total) else {
+                    return Ok(SqlValue::Null);
+                };
+                let target = first.saturating_add(n - 1);
+                if target > last {
+                    return Ok(SqlValue::Null);
+                }
+                let row_idx = order_index_map[target];
+                return match args.first() {
+                    Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                    None => Ok(SqlValue::Null),
+                };
+            }
+            let positions = enumerate_frame_positions(frame, bounds, sorted_pos, peer_ids, total);
             let Some(target) = positions.get(n - 1) else {
                 return Ok(SqlValue::Null);
             };
