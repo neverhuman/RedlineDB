@@ -1008,7 +1008,7 @@ fn eval_group_function(
                         list.args.first()
                 {
                     let val = eval_scalar(expr, &ctx, bindings)?;
-                    arr.push(sql_to_json_value(&val));
+                    arr.push(sql_to_json_value(&val)?);
                 }
             }
             let json = serde_json::Value::Array(arr);
@@ -1037,7 +1037,7 @@ fn eval_group_function(
                         SqlValue::Null
                     };
                     if !matches!(key, SqlValue::Null) {
-                        obj.insert(value_to_string(&key), sql_to_json_value(&val));
+                        obj.insert(value_to_string(&key), sql_to_json_value(&val)?);
                     }
                 }
             }

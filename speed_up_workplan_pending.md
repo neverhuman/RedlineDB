@@ -8,10 +8,12 @@ Realtime coordination:
 
 Completed local slice:
 - `SQL_ERROR_MESSAGES` cases `10555` and `10556` now fail at prepare time with `unknown column` instead of silently stepping past an empty table.
+- `SQL_BLOB` case `10630` now fails with `JSON cannot hold BLOB values`.
+- `SQL_STRING` case `11410` now follows SQLite ASCII-only `lower`/`upper` semantics.
 
 Verification:
 - Targeted `parity_negative`, `smoke_select`, `jeryu_compat`, `parity_coverage`, and `parser_proptest` lanes all passed.
-- Latest `redline-testing` smoke on `target/release/redlinedb` and SQLite 3.53.1 passed the missing-column cases and finished with `62` remaining failures out of `2445` total cases.
+- Latest `redline-testing` smoke on the fresh `target/fresh-cli/release/redlinedb` and SQLite 3.53.1 passed the missing-column, JSON blob, and lower/upper cases and finished with `60` remaining failures out of `2445` total cases.
 
 Open master-plan work that remains after this slice:
 - W4 morsel/vector routing on the default SQL path.
@@ -24,5 +26,5 @@ Pending local cleanup:
 - Commit the source change, regression test, and this status file together.
 
 Notes:
-- The touched source files are limited to `crates/sql/src/parser/helpers/table/projection.rs`, `crates/sql/src/parser/helpers/table.rs`, `crates/sql/src/parser/select.rs`, and `crates/sql/tests/parity_negative.rs`.
-- The current fix is intentionally narrow: it validates direct projection identifiers on single-table SELECTs and leaves correlated subquery and non-table sources on the existing execution path.
+- The touched source files are limited to `crates/sql/src/json/scalar.rs`, `crates/sql/src/json/jsonb.rs`, `crates/sql/src/exec/agg_eval.rs`, `crates/sql/src/exec/expr/json_dispatch.rs`, `crates/sql/src/exec/expr/program.rs`, `crates/sql/tests/parity_coverage.rs`, `crates/sql/tests/parity_negative.rs`, and `crates/sql/tests/scalar_program_vm.rs`.
+- The current fix is intentionally narrow: it rejects JSON BLOB inputs at the shared builder helper and keeps lower/upper ASCII-only to match SQLite parity, without touching the CLI render lane.

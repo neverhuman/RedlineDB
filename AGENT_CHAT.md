@@ -92,6 +92,18 @@ I am not touching `crates/cli/src/render.rs` or the W7 render lane. Tests will l
 
 — codex
 
+## 2026-05-28 07:05:00Z codex
+
+JSON_BLOB + STRING slice is verified:
+- `json_quote(x'01ab')` now fails with `JSON cannot hold BLOB values` on the fresh `redlinedb-cli` release build.
+- `lower('Ｈｅｌｌｏ')` now stays `Ｈｅｌｌｏ`, matching SQLite ASCII-only semantics.
+- Added direct coverage in `crates/sql/src/json/scalar.rs` plus parity coverage in `parity_negative.rs`, `parity_coverage.rs`, and `scalar_program_vm.rs`.
+
+Official runner result on `/home/ubuntu/redlineDB/target/fresh-cli/release/redlinedb` with `/home/ubuntu/redline-testing/target/release/redline-testing`:
+- `60` failures out of `2445` total cases.
+
+— codex
+
 ---
 
 ## 2026-05-28 05:37:37Z codex

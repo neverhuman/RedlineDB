@@ -207,6 +207,13 @@ fn vector_non_f32_type_is_unsupported() {
     assert_unsupported(res, "not supported");
 }
 
+#[test]
+fn json_quote_rejects_blob_input() {
+    let (_d, c) = open();
+    let res = c.execute("SELECT json_quote(x'01ab')");
+    assert_unsupported(res, "JSON cannot hold BLOB values");
+}
+
 // ── Parse-only features — confirmed boundary ──────────────────────────────────
 
 #[test]

@@ -1075,34 +1075,35 @@ fn pg_array_index_is_one_based() {
 }
 
 #[test]
-fn lower_upper_fold_full_unicode_range() {
+fn lower_upper_are_ascii_only() {
     let (_d, c) = open();
-    // BEYOND-CASE-20047, 20048.
+    assert_eq!(
+        q1(&c, "SELECT lower('Hello')"),
+        SqlValue::Text(Arc::from("hello"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT lower('Ｈｅｌｌｏ')"),
+        SqlValue::Text(Arc::from("Ｈｅｌｌｏ"))
+    );
     assert_eq!(
         q1(&c, "SELECT lower('ÉCOLE')"),
-        SqlValue::Text(Arc::from("école"))
+        SqlValue::Text(Arc::from("École"))
     );
     assert_eq!(
-        q1(&c, "SELECT lower('ÄÖÜ')"),
-        SqlValue::Text(Arc::from("äöü"))
+        q1(&c, "SELECT upper('Hello')"),
+        SqlValue::Text(Arc::from("HELLO"))
     );
     assert_eq!(
-        q1(&c, "SELECT upper('αβγ')"),
-        SqlValue::Text(Arc::from("ΑΒΓ"))
-    );
-    assert_eq!(
-        q1(&c, "SELECT upper('σς')"),
-        SqlValue::Text(Arc::from("ΣΣ"))
+        q1(&c, "SELECT upper('Ｈｅｌｌｏ')"),
+        SqlValue::Text(Arc::from("Ｈｅｌｌｏ"))
     );
 }
 
 #[test]
-fn upper_preserves_codepoints_without_simple_mapping() {
+fn upper_leaves_non_ascii_codepoints() {
     let (_d, c) = open();
-    // Mirrors Postgres' libc-locale `upper()` which uses `wctoupper`'s
-    // 1-to-1 mapping. `ß` has no simple uppercase mapping, so it must
-    // stay as `ß` (not expand to `SS`). Same rule keeps Turkish dotted
-    // `İ` from decomposing under lower().
+    // SQLite `upper()` folds ASCII letters only, leaving non-ASCII code
+    // points untouched. `ß` and `σ` stay as-is.
     assert_eq!(
         q1(&c, "SELECT upper('straße')"),
         SqlValue::Text(Arc::from("STRAßE"))

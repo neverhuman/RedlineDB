@@ -1110,16 +1110,16 @@ fn call_scalar1(f: ScalarFn, v: SqlValue) -> Result<SqlValue> {
         },
         ScalarFn::Lower => match v {
             SqlValue::Null => Ok(SqlValue::Null),
-            SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_lowercase()))),
+            SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_ascii_lowercase()))),
             other => Ok(SqlValue::Text(Arc::from(
-                value_to_string(&other).to_lowercase(),
+                value_to_string(&other).to_ascii_lowercase(),
             ))),
         },
         ScalarFn::Upper => match v {
             SqlValue::Null => Ok(SqlValue::Null),
-            SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_uppercase()))),
+            SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_ascii_uppercase()))),
             other => Ok(SqlValue::Text(Arc::from(
-                value_to_string(&other).to_uppercase(),
+                value_to_string(&other).to_ascii_uppercase(),
             ))),
         },
     }
