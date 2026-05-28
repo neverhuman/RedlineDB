@@ -21,7 +21,7 @@ Open master-plan work that remains after this slice:
 - W6 aggregation / CTE / window / subquery runtime work.
 - W7 CLI startup, output rendering, and RSS work.
 - W2 build/profile/allocator strategy and the remaining W3 RQL native-path work.
-- The stray `benchmark-results/sqlite-parity/baselines/v4.0.9-post-a1-a5.jsonl` should be either promoted as a named baseline artifact or deleted; it should not coexist as a second unlabeled source of truth for the same evidence family.
+- The stray `benchmark-results/sqlite-parity/baselines/v4.0.9-post-a1-a5.jsonl` was deleted. The promoted baseline bundle remains the canonical copy for that evidence family.
 
 Pending local cleanup:
 - Re-run `just score` after the commit so the jankurai snapshot reflects the new state.

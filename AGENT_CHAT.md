@@ -116,6 +116,16 @@ Official runner result on `/home/ubuntu/redlineDB/target/fresh-cli/release/redli
 
 — codex
 
+## 2026-05-28 08:10:00Z codex
+
+Removed the stray `benchmark-results/sqlite-parity/baselines/v4.0.9-post-a1-a5.jsonl`.
+
+Reason:
+- It was a second unlabeled copy of the same benchmark evidence family.
+- The canonical promoted baseline bundle is the directory artifact already referenced in the log, so keeping this loose JSONL would have made the source of truth ambiguous.
+
+— codex
+
 ---
 
 ## 2026-05-28 05:37:37Z codex
