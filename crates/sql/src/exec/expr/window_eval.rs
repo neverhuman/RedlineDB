@@ -249,7 +249,15 @@ fn to_real(value: &SqlValue) -> f64 {
         SqlValue::Integer(n) => *n as f64,
         SqlValue::Real(n) => *n,
         SqlValue::Text(s) => s.parse().unwrap_or(0.0),
-        SqlValue::Blob(b) => String::from_utf8_lossy(b).parse().unwrap_or(0.0),
+        // A41: avoid the `String::from_utf8_lossy` allocation. Non-UTF8
+        // blob bytes can't parse as f64 (replacement chars don't fit
+        // the numeric grammar), so the lossy path always returned 0.0
+        // for them anyway. Short-circuit directly. Same shape as A33
+        // (is_truthy for Blob) and A39 (numeric_value for Blob).
+        SqlValue::Blob(b) => match std::str::from_utf8(b) {
+            Ok(s) => s.parse().unwrap_or(0.0),
+            Err(_) => 0.0,
+        },
         SqlValue::Null => 0.0,
     }
 }
