@@ -365,6 +365,7 @@ fn access_path_satisfies_ordering(
         let ir = choose_access_path_ir(
             conn.engine(),
             table,
+            &[], // covering detection not needed for order-satisfaction check
             selection,
             bindings,
             table_hint,
