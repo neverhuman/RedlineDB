@@ -2,6 +2,8 @@
 
 Mission: keep invariants local, edit the smallest lawful surface, and preserve raw evidence.
 
+Access contract: local agent workspaces use `~/.jeryu/access.toml`, `jeryu access doctor`, and `jeryu access repair --repo . --yes`; do not install/use `glab`, scrape credential stores, or keep HTTP local GitLab origins.
+
 Start here:
 - `.jankurai/owner-map.json`
 - `.jankurai/test-map.json`
