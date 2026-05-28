@@ -165,6 +165,23 @@ mod phase10_sqlc_conflict_matrix {
     }
 
     #[test]
+    fn check_constraint_like_allows_matching_rows() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(x TEXT CHECK(x LIKE 'a%'))")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES ('apple')")
+            .expect("first");
+        conn.execute("INSERT INTO t VALUES ('avocado')")
+            .expect("second");
+        let mut stmt = conn.prepare("SELECT x FROM t ORDER BY x").expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_text(0).expect("x"), "apple");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_text(0).expect("x"), "avocado");
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
     fn ignore_unique_violation_skips_silently() {
         let (_dir, conn) = open_database();
         conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY)")

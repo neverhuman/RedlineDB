@@ -133,9 +133,6 @@ pub(super) fn child_references(
 ) -> Vec<(Arc<TableDef>, usize)> {
     let mut out = Vec::new();
     for child in &schema.tables {
-        if child.table_id == parent.table_id {
-            continue;
-        }
         for (idx, fk) in child.foreign_keys.iter().enumerate() {
             if fk.parent_table.eq_ignore_ascii_case(&parent.folded)
                 || fk.parent_table.eq_ignore_ascii_case(&parent.name)

@@ -215,6 +215,21 @@ fn dot_databases_lists_attached_aliases() {
 }
 
 #[test]
+fn dot_list_renders_blob_text_symbolically() {
+    let (out, err, code) = run_script(None, ".mode list\nSELECT x'01ab';\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("^A"), "stdout={out}");
+    assert!(out.contains('�'), "stdout={out}");
+}
+
+#[test]
+fn dot_list_renders_zeroblob_as_blank() {
+    let (out, err, code) = run_script(None, ".mode list\nSELECT zeroblob(4);\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "\n", "stdout={out}");
+}
+
+#[test]
 fn dot_crlf_toggles_row_separator() {
     let (out, err, code) = run_script(
         None,

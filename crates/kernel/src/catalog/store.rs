@@ -802,6 +802,17 @@ fn encode_expr_op(out: &mut BytesWriter, op: &ExprOp) -> Result<()> {
         ExprOp::Le => out.u8(8),
         ExprOp::Gt => out.u8(9),
         ExprOp::Ge => out.u8(10),
+        ExprOp::Like { negated, escape } => {
+            out.u8(15);
+            out.bool(*negated);
+            match escape {
+                Some(escape) => {
+                    out.bool(true);
+                    out.u32(*escape as u32);
+                }
+                None => out.bool(false),
+            }
+        }
         // Phase-10 Lane V1: `BlobLen` was introduced for vector-dimension
         // CHECK constraints. Older binaries cannot read databases that use
         // it (the unknown-opcode arm in `decode_expr_op` will surface as
@@ -828,6 +839,16 @@ fn decode_expr_op(reader: &mut BytesReader<'_>) -> Result<ExprOp> {
         8 => ExprOp::Le,
         9 => ExprOp::Gt,
         10 => ExprOp::Ge,
+        15 => {
+            let negated = reader.bool()?;
+            let escape = if reader.bool()? {
+                let value = reader.u32()?;
+                Some(char::from_u32(value).ok_or(Error::CatalogCorrupt("invalid expr escape"))?)
+            } else {
+                None
+            };
+            ExprOp::Like { negated, escape }
+        }
         11 => ExprOp::BlobLen,
         _ => return Err(Error::CatalogCorrupt("invalid expr opcode")),
     })

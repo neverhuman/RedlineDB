@@ -721,11 +721,6 @@ pub(crate) fn bind_alter_table(
                 &std::collections::HashMap::new(),
                 &mut alter_constraints,
             )?;
-            if !alter_constraints.is_empty() {
-                return Err(Error::UnsupportedSql(
-                    "ALTER TABLE ADD COLUMN with FOREIGN KEY is not supported".to_owned(),
-                ));
-            }
             if column.constraints.iter().any(|constraint| {
                 !matches!(
                     constraint,
@@ -753,6 +748,7 @@ pub(crate) fn bind_alter_table(
             redlinedb_kernel::catalog::AlterTableOperationSpec::AddColumn {
                 column,
                 if_not_exists,
+                table_constraints: alter_constraints,
             }
         }
         AlterTableOperation::DropColumn {

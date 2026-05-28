@@ -44,12 +44,15 @@ pub(crate) mod index_predicate;
 pub(crate) mod policy;
 mod tail;
 use tail::*;
+pub(crate) use tail::{collect_table_rowids, load_table_row_by_rowid};
 pub(crate) mod vec;
 
 mod agg;
 mod agg_eval;
 pub(crate) mod intern;
 use agg::*;
+mod alter;
+use alter::*;
 mod insert;
 use insert::*;
 pub(crate) mod select_top;
@@ -577,6 +580,7 @@ pub fn execute_prepared(
             let prev_legacy = redlinedb_kernel::catalog::legacy_alter_table_active_for_tests();
             redlinedb_kernel::catalog::set_legacy_alter_table(conn.legacy_alter_table());
             let alter_result = with_write_tx(conn, |session, tx| {
+                rewrite_drop_column_rows(conn, tx, spec)?;
                 conn.engine().alter_table(tx, spec.clone())?;
                 session.changes += 1;
                 session.total_changes += 1;

@@ -21,6 +21,12 @@ pub enum ExprAst {
     Le(Box<ExprAst>, Box<ExprAst>),
     Gt(Box<ExprAst>, Box<ExprAst>),
     Ge(Box<ExprAst>, Box<ExprAst>),
+    Like {
+        negated: bool,
+        value: Box<ExprAst>,
+        pattern: Box<ExprAst>,
+        escape: Option<char>,
+    },
     /// Length of the operand interpreted as a Blob, in bytes.
     ///
     /// Returns `Null` if the operand is not a `Blob`. This is the minimum
@@ -47,6 +53,7 @@ pub enum ExprOp {
     Le,
     Gt,
     Ge,
+    Like { negated: bool, escape: Option<char> },
     BlobLen,
 }
 
@@ -87,6 +94,7 @@ pub fn eval_expr(
     expr: &CompiledExpr,
     row: &dyn RowValueSource,
     scratch: &mut EvalScratch,
+    like_case_sensitive: bool,
 ) -> Result<OwnedValue, ExprError> {
     scratch.stack.clear();
     for op in expr.bytecode.iter() {
@@ -116,6 +124,12 @@ pub fn eval_expr(
             ExprOp::Le => compare_into(&mut scratch.stack, |o| o != Ordering::Greater)?,
             ExprOp::Gt => compare_into(&mut scratch.stack, |o| o == Ordering::Greater)?,
             ExprOp::Ge => compare_into(&mut scratch.stack, |o| o != Ordering::Less)?,
+            ExprOp::Like { negated, escape } => {
+                let pattern = scratch.stack.pop().ok_or(ExprError::StackUnderflow)?;
+                let value = scratch.stack.pop().ok_or(ExprError::StackUnderflow)?;
+                let result = like_result(&value, &pattern, *negated, *escape, like_case_sensitive);
+                scratch.stack.push(result);
+            }
             ExprOp::BlobLen => {
                 let v = scratch.stack.pop().ok_or(ExprError::StackUnderflow)?;
                 let result = match v {
@@ -193,11 +207,116 @@ fn compile_inner(expr: &ExprAst, bytecode: &mut Vec<ExprOp>, cols: &mut Vec<u16>
             compile_inner(right, bytecode, cols);
             bytecode.push(ExprOp::Ge);
         }
+        ExprAst::Like {
+            negated,
+            value,
+            pattern,
+            escape,
+        } => {
+            compile_inner(value, bytecode, cols);
+            compile_inner(pattern, bytecode, cols);
+            bytecode.push(ExprOp::Like {
+                negated: *negated,
+                escape: *escape,
+            });
+        }
         ExprAst::BlobLen(operand) => {
             compile_inner(operand, bytecode, cols);
             bytecode.push(ExprOp::BlobLen);
         }
     }
+}
+
+fn like_result(
+    value: &OwnedValue,
+    pattern: &OwnedValue,
+    negated: bool,
+    escape: Option<char>,
+    case_sensitive: bool,
+) -> OwnedValue {
+    if matches!(value, OwnedValue::Null) || matches!(pattern, OwnedValue::Null) {
+        return OwnedValue::Null;
+    }
+    let text = owned_value_to_like_text(value);
+    let pattern = owned_value_to_like_text(pattern);
+    let matched = like_match(&text, &pattern, escape, case_sensitive);
+    OwnedValue::Integer(if matched ^ negated { 1 } else { 0 })
+}
+
+fn owned_value_to_like_text(value: &OwnedValue) -> String {
+    match value {
+        OwnedValue::Null => String::new(),
+        OwnedValue::Integer(v) => v.to_string(),
+        OwnedValue::Real(v) => v.to_string(),
+        OwnedValue::Text(v) => v.as_ref().to_owned(),
+        OwnedValue::Blob(v) => String::from_utf8_lossy(v.as_ref()).into_owned(),
+    }
+}
+
+fn like_match(text: &str, pattern: &str, escape: Option<char>, case_sensitive: bool) -> bool {
+    let text = if case_sensitive {
+        text.to_owned()
+    } else {
+        text.to_ascii_lowercase()
+    };
+    let pattern = if case_sensitive {
+        pattern.to_owned()
+    } else {
+        pattern.to_ascii_lowercase()
+    };
+    like_match_inner(text.as_bytes(), pattern.as_bytes(), escape.map(|c| if case_sensitive { c } else { c.to_ascii_lowercase() }))
+}
+
+fn like_match_inner(text: &[u8], pattern: &[u8], escape: Option<char>) -> bool {
+    fn inner(text: &[u8], pattern: &[u8], escape: Option<u8>) -> bool {
+        let mut ti = 0usize;
+        let mut pi = 0usize;
+        while pi < pattern.len() {
+            match pattern[pi] {
+                b'%' => {
+                    pi += 1;
+                    if pi == pattern.len() {
+                        return true;
+                    }
+                    while ti <= text.len() {
+                        if inner(&text[ti..], &pattern[pi..], escape) {
+                            return true;
+                        }
+                        if ti == text.len() {
+                            break;
+                        }
+                        ti += 1;
+                    }
+                    return false;
+                }
+                b'_' => {
+                    if ti == text.len() {
+                        return false;
+                    }
+                    ti += 1;
+                    pi += 1;
+                }
+                ch if Some(ch) == escape => {
+                    pi += 1;
+                    if pi >= pattern.len() || ti >= text.len() || pattern[pi] != text[ti] {
+                        return false;
+                    }
+                    ti += 1;
+                    pi += 1;
+                }
+                ch => {
+                    if ti >= text.len() || text[ti] != ch {
+                        return false;
+                    }
+                    ti += 1;
+                    pi += 1;
+                }
+            }
+        }
+        ti == text.len()
+    }
+
+    inner(text, pattern, escape.map(|c| c as u8))
 }
 
 fn binary_bool(

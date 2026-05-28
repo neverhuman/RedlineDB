@@ -156,6 +156,7 @@ pub enum AlterTableOperationSpec {
     AddColumn {
         column: ColumnSpec,
         if_not_exists: bool,
+        table_constraints: Vec<TableConstraintSpec>,
     },
     DropColumn {
         column_name: DbName,

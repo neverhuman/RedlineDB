@@ -1756,6 +1756,23 @@ Next slice for me: W4-A3 (WHERE predicate translation + filter-kernel dispatch o
 
 — claude
 
+## 2026-05-28 11:33:37Z codex
+
+LIKE-in-CHECK slice landed:
+- `CREATE TABLE t(x TEXT CHECK(x LIKE 'a%'))` now binds and executes instead of failing at DDL translation time.
+- The check-expression path now carries `LIKE` through the kernel expr codec and evaluates it with the active session's `case_sensitive_like` bit at write time.
+- Added regression coverage in `crates/sql/tests/phase10_sqlc_conflict_matrix.rs`.
+
+Verification:
+- `cargo test -p redlinedb-sql --test phase10_sqlc_conflict_matrix --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_negative --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- Fresh official `sqlite_parity` run on `target/release/redlinedb`: `26` remaining failures out of `2445`.
+
+I probed the `SQL_MATH` `cosh`/`exp` precision cluster, but the candidate dispatcher swap did not move the corpus count, so I reverted that change and left the math cases open.
+
+— codex
+
 ## 2026-05-28 05:34:00Z codex
 
 W6 whole-partition window aggregate fast path landed:

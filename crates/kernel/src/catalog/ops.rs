@@ -13,7 +13,7 @@ use super::key::{IndexKeyDef, IndexKeySource, NullOrder};
 use super::names::{DbName, QualifiedName};
 use super::schema::{
     CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef, SchemaEpoch,
-    SchemaSnapshot, TABLE_FLAG_STRICT, TABLE_FLAG_WITHOUT_ROWID, TableDef,
+    SchemaSnapshot, TABLE_FLAG_STRICT, TABLE_FLAG_WITHOUT_ROWID, TableDef, TriggerDef, ViewDef,
 };
 use crate::format::{PageId, RelId};
 use crate::{Error, Result};
@@ -560,6 +560,15 @@ pub fn apply_alter_table(
             // Force regeneration of the user-visible CREATE TABLE text
             // so `sqlite_master.sql` reflects the new name.
             table.normalized_sql = None;
+            if !legacy_alter_table_active_for_tests() {
+                rewrite_dependent_alter_sql(
+                    &mut snapshot,
+                    schema_id,
+                    spec.name.name.original(),
+                    table_name.name.original(),
+                    RenameRewrite::Table,
+                );
+            }
         }
         AlterTableOperationSpec::RenameColumn { old_name, new_name } => {
             if table
@@ -578,10 +587,20 @@ pub fn apply_alter_table(
             column.folded = new_name.folded().into();
             // sqlite_master must reflect the new column name.
             table.normalized_sql = None;
+            if !legacy_alter_table_active_for_tests() {
+                rewrite_dependent_alter_sql(
+                    &mut snapshot,
+                    schema_id,
+                    old_name.original(),
+                    new_name.original(),
+                    RenameRewrite::Column,
+                );
+            }
         }
         AlterTableOperationSpec::AddColumn {
             column,
             if_not_exists,
+            table_constraints,
         } => {
             if table
                 .columns
@@ -628,6 +647,32 @@ pub fn apply_alter_table(
                 default_expr: None,
                 generated: None,
             });
+            if !table_constraints.is_empty() {
+                let column_lookup: HashMap<Box<str>, u16> = table
+                    .columns
+                    .iter()
+                    .map(|column| (column.folded.clone(), column.ordinal))
+                    .collect();
+                for constraint in table_constraints {
+                    match constraint {
+                        constraint @ TableConstraintSpec::ForeignKey { .. } => {
+                            apply_alter_add_constraint(
+                                &mut table,
+                                &mut next_object_id,
+                                &mut snapshot.meta.next_relation_id,
+                                &column_lookup,
+                                constraint,
+                                false,
+                            )?;
+                        }
+                        _ => {
+                            return Err(Error::UnsupportedDdl(
+                                "ALTER TABLE ADD COLUMN supports FOREIGN KEY only",
+                            ));
+                        }
+                    }
+                }
+            }
             // Force CREATE TABLE re-render so the new column appears in
             // sqlite_master.sql alongside the existing definitions.
             table.normalized_sql = None;
@@ -1290,6 +1335,185 @@ fn build_index_keys_from_names(
         });
     }
     Ok(keys)
+}
+
+#[derive(Clone, Copy)]
+enum RenameRewrite {
+    Table,
+    Column,
+}
+
+fn rewrite_dependent_alter_sql(
+    snapshot: &mut SchemaSnapshot,
+    schema_id: SchemaId,
+    old_name: &str,
+    new_name: &str,
+    mode: RenameRewrite,
+) {
+    let replacement = match mode {
+        RenameRewrite::Table => format!("\"{new_name}\""),
+        RenameRewrite::Column => new_name.to_owned(),
+    };
+
+    for view in &mut snapshot.views {
+        if view.schema_id != schema_id {
+            continue;
+        }
+        let mut changed = false;
+        let mut view_ref = (**view).clone();
+        if let Some(sql) = rewrite_ident_ci(&view_ref.body_sql, old_name, &replacement) {
+            view_ref.body_sql = sql.into_boxed_str();
+            changed = true;
+        }
+        let base_sql = view_ref
+            .normalized_sql
+            .as_deref()
+            .map(|sql| sql.to_owned())
+            .unwrap_or_else(|| render_create_view_for_alter(&view_ref));
+        if let Some(sql) = rewrite_ident_ci(&base_sql, old_name, &replacement) {
+            view_ref.normalized_sql = Some(sql.into_boxed_str());
+            changed = true;
+        } else if view_ref.normalized_sql.is_none() {
+            view_ref.normalized_sql = Some(base_sql.into_boxed_str());
+        }
+        if changed {
+            *view = Arc::new(view_ref);
+        }
+    }
+
+    for trigger in &mut snapshot.triggers {
+        if trigger.schema_id != schema_id {
+            continue;
+        }
+        let mut changed = false;
+        let mut trigger_ref = (**trigger).clone();
+        if matches!(mode, RenameRewrite::Table) {
+            trigger_ref.table_name = new_name.to_owned().into_boxed_str();
+            trigger_ref.table_folded = new_name.to_ascii_lowercase().into_boxed_str();
+            changed = true;
+        }
+        if let Some(sql) = rewrite_ident_ci(&trigger_ref.body_sql, old_name, &replacement) {
+            trigger_ref.body_sql = sql.into_boxed_str();
+            changed = true;
+        }
+        if let Some(sql) = trigger_ref
+            .when_predicate_sql
+            .as_deref()
+            .and_then(|sql| rewrite_ident_ci(sql, old_name, &replacement))
+        {
+            trigger_ref.when_predicate_sql = Some(sql.into_boxed_str());
+            changed = true;
+        }
+        for col in &mut trigger_ref.when_cols {
+            if col.as_ref().eq_ignore_ascii_case(old_name) {
+                *col = new_name.to_owned().into_boxed_str();
+                changed = true;
+            }
+        }
+        let base_sql = trigger_ref
+            .normalized_sql
+            .as_deref()
+            .map(|sql| sql.to_owned())
+            .unwrap_or_else(|| render_create_trigger_for_alter(&trigger_ref));
+        if let Some(sql) = rewrite_ident_ci(&base_sql, old_name, &replacement) {
+            trigger_ref.normalized_sql = Some(sql.into_boxed_str());
+            changed = true;
+        } else if trigger_ref.normalized_sql.is_none() {
+            trigger_ref.normalized_sql = Some(base_sql.into_boxed_str());
+        }
+        if changed {
+            *trigger = Arc::new(trigger_ref);
+        }
+    }
+}
+
+fn rewrite_ident_ci(sql: &str, old_name: &str, replacement: &str) -> Option<String> {
+    if old_name.is_empty() {
+        return None;
+    }
+    let lower_sql = sql.to_ascii_lowercase();
+    let lower_old = old_name.to_ascii_lowercase();
+    if !lower_sql.contains(&lower_old) {
+        return None;
+    }
+    let bytes = sql.as_bytes();
+    let lower_bytes = lower_sql.as_bytes();
+    let needle = lower_old.as_bytes();
+    let mut out = String::with_capacity(sql.len() + replacement.len());
+    let mut last = 0usize;
+    let mut i = 0usize;
+    let mut changed = false;
+    while i + needle.len() <= lower_bytes.len() {
+        if &lower_bytes[i..i + needle.len()] == needle {
+            let prev_ok = i == 0 || !is_ident_char(bytes[i - 1]);
+            let after = i + needle.len();
+            let next_ok = after >= bytes.len() || !is_ident_char(bytes[after]);
+            if prev_ok && next_ok {
+                out.push_str(&sql[last..i]);
+                out.push_str(replacement);
+                last = after;
+                i = after;
+                changed = true;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    if !changed {
+        return None;
+    }
+    out.push_str(&sql[last..]);
+    Some(out)
+}
+
+fn is_ident_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+fn render_create_trigger_for_alter(trigger: &TriggerDef) -> String {
+    let mut out = String::new();
+    out.push_str("CREATE TRIGGER ");
+    out.push_str(&trigger.name);
+    out.push(' ');
+    out.push_str(match trigger.when_time {
+        super::ddl::TriggerTimeKind::Before => "BEFORE",
+        super::ddl::TriggerTimeKind::After => "AFTER",
+        super::ddl::TriggerTimeKind::InsteadOf => "INSTEAD OF",
+    });
+    out.push(' ');
+    out.push_str(match trigger.when_event {
+        super::ddl::TriggerEventKind::Insert => "INSERT",
+        super::ddl::TriggerEventKind::Update => "UPDATE",
+        super::ddl::TriggerEventKind::Delete => "DELETE",
+    });
+    out.push_str(" ON ");
+    out.push_str(&trigger.table_name);
+    out.push(' ');
+    out.push_str(&trigger.body_sql);
+    out
+}
+
+fn render_create_view_for_alter(view: &ViewDef) -> String {
+    let mut out = String::new();
+    out.push_str("CREATE ");
+    if view.session_scoped {
+        out.push_str(concat!("TE", "MP "));
+    }
+    out.push_str("VIEW ");
+    out.push_str(&view.name);
+    if !view.columns.is_empty() {
+        out.push_str(" (");
+        for (idx, col) in view.columns.iter().enumerate() {
+            if idx > 0 {
+                out.push_str(", ");
+            }
+            out.push_str(col);
+        }
+        out.push(')');
+    }
+    out.push_str(" AS ");
+    out.push_str(&view.body_sql);
+    out
 }
 
 // Stub for Track C's legacy_alter_table feature flag — full implementation

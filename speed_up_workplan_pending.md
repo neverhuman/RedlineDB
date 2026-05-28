@@ -56,3 +56,17 @@ Verification:
 
 Remaining attach gap:
 - Alias-qualified UPDATE/DELETE across attached databases is still a larger cross-db DML routing problem and should be claimed separately, not as part of this shell/pragma slice.
+
+Current DDL pattern slice:
+- `SQL_PATTERN` case `10605` (`LIKE_INSIDE_CHECK_CONSTRAINT`) is now fixed on the fresh release binary.
+- `CHECK(x LIKE 'a%')` compiles through the kernel DDL expression path and validates rows at write time using the active session's `case_sensitive_like` setting.
+
+Verification:
+- `cargo test -p redlinedb-sql --test phase10_sqlc_conflict_matrix --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_negative --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- Fresh official `sqlite_parity` run on `target/release/redlinedb`: `26` remaining failures out of `2445`
+
+Open follow-up after this slice:
+- `SQL_MATH` `cosh`/`exp` precision cases still remain.
+- The main unresolved plan lanes are still W4, W6, W7, and W2, plus the remaining attach/DML and AUTOINCREMENT gaps in the parity corpus.

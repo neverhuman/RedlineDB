@@ -198,7 +198,20 @@ fn column_default_value(
     let Some(default_expr) = &column.default_expr else {
         return Ok(None);
     };
-    eval_expr(default_expr, &EmptyDefaultRow, scratch)
+    let case_sensitive_like = match crate::exec::current_session_ptr() {
+        Some(ptr) => {
+            // SAFETY: ptr installed by enclosing write path; valid for the scope.
+            let session: &SessionState = unsafe { &*ptr };
+            session.case_sensitive_like
+        }
+        None => false,
+    };
+    eval_expr(
+        default_expr,
+        &EmptyDefaultRow,
+        scratch,
+        case_sensitive_like,
+    )
         .map(Some)
         .map_err(|err| Error::UnsupportedSql(format!("invalid default expression: {err}")))
 }
@@ -423,12 +436,20 @@ pub(crate) fn apply_constraints(table: &TableDef, values: &[SqlValue]) -> Result
         }
         None => false,
     };
+    let case_sensitive_like = match crate::exec::current_session_ptr() {
+        Some(ptr) => {
+            // SAFETY: ptr installed by enclosing with_write_tx; lives for its scope.
+            let session: &SessionState = unsafe { &*ptr };
+            session.case_sensitive_like
+        }
+        None => false,
+    };
     if ignore_checks {
         return Ok(());
     }
     for check in &table.checks {
         let row = TableRowSource { values };
-        let result = eval_expr(&check.expr, &row, &mut scratch).map_err(|_| {
+        let result = eval_expr(&check.expr, &row, &mut scratch, case_sensitive_like).map_err(|_| {
             Error::ConstraintViolation(format!("CHECK constraint failed: {}", table.name))
         })?;
         if matches!(result, SqlValue::Null) || is_truthy(&result) {
