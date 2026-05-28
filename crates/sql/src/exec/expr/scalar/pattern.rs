@@ -116,21 +116,22 @@ pub(crate) fn ilike_result(
 }
 
 fn like_match(text: &str, pattern: &str, escape: Option<char>, case_insensitive: bool) -> bool {
-    let text = if case_insensitive {
-        text.to_ascii_lowercase()
+    // A40: on the case-sensitive path (the common SQLite default), borrow
+    // the input strings directly — `like_match_inner` takes `&[u8]` so it
+    // doesn't need owned input. The previous code did `text.to_owned()`
+    // and `pattern.to_owned()` unconditionally, allocating two Strings
+    // per LIKE evaluation even when the case fold was unnecessary.
+    if case_insensitive {
+        let text = text.to_ascii_lowercase();
+        let pattern = pattern.to_ascii_lowercase();
+        like_match_inner(
+            text.as_bytes(),
+            pattern.as_bytes(),
+            escape.map(|c| c.to_ascii_lowercase()),
+        )
     } else {
-        text.to_owned()
-    };
-    let pattern = if case_insensitive {
-        pattern.to_ascii_lowercase()
-    } else {
-        pattern.to_owned()
-    };
-    like_match_inner(
-        text.as_bytes(),
-        pattern.as_bytes(),
-        escape.map(|c| c.to_ascii_lowercase()),
-    )
+        like_match_inner(text.as_bytes(), pattern.as_bytes(), escape)
+    }
 }
 
 fn unicode_like_match(text: &str, pattern: &str, escape: Option<char>) -> bool {
