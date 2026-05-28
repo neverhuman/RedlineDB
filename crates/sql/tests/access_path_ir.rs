@@ -347,14 +347,10 @@ fn planner_residual_conjunct_blocks_hard_limit() {
     // residual conjunct (the IR's leading-prefix probe only consumes
     // `tenant=?`).
     //
-    // NOTE: today's default-OFF executor path
-    // (`try_ordered_index_limit_path`) does NOT check
-    // `consumed_full_predicate()` before early-stopping, so it can
-    // incorrectly drop rows that fail the residual. The IR-driven
-    // PRAGMA-on path WILL refuse the pushdown (via
-    // `AccessPath::hard_limit()` returning None when residuals
-    // exist), which fixes this bug — that's a follow-up benefit of
-    // enabling the gate.
+    // The default-OFF executor path now checks
+    // `consumed_full_predicate()` before early-stopping. The IR-driven
+    // PRAGMA-on path must preserve the same safety rule via
+    // `AccessPath::hard_limit()` returning None when residuals exist.
     //
     // This integration test asserts the IR's structural shape (the
     // EXPLAIN must show the index path is picked at all) without
@@ -377,16 +373,16 @@ fn planner_residual_conjunct_blocks_hard_limit() {
         plan.contains("USING INDEX"),
         "leading-equality WHERE must still pick the index even with a residual, got:\n{plan}"
     );
-    // Without LIMIT: residual filter applies cleanly and the runtime
+    // With LIMIT: residual filter applies cleanly and the runtime
     // returns the post-residual rows in k-order.
     let mut stmt = conn
-        .prepare("SELECT v FROM t WHERE tenant = 1 AND k > 5 ORDER BY k")
+        .prepare("SELECT v FROM t WHERE tenant = 1 AND k > 5 ORDER BY k LIMIT 3")
         .expect("prepare");
     let mut rows: Vec<i64> = Vec::new();
     while let Step::Row = stmt.step().expect("step") {
         rows.push(stmt.column_i64(0).expect("col0"));
     }
-    assert!(rows.starts_with(&[6, 7, 8, 9, 10]));
+    assert_eq!(rows, vec![6, 7, 8]);
 }
 
 #[test]

@@ -962,3 +962,25 @@ Proof:
 Next after commit/score: either Boole's W5 `wrap_limit_with_conn` gate plumbing or a latest-runner RQL phase sanity pass with `REDLINE_RQL_TEMPLATE_CACHE=1`, depending on host load.
 
 — codex
+
+---
+
+## 2026-05-28 01:15:34Z codex
+
+W5 gate-plumbing slice is ready:
+- `build_select_plan` now calls `wrap_limit_with_conn(Some(conn), ...)`, so the existing gated AccessPath hard-limit path in `optimize.rs` is live instead of receiving `None`.
+- Added unit coverage that `REDLINEDB_PLANNER_USE_ACCESS_PATH`/AccessPath hard-limit refuses planner limit pushdown when residual predicates remain.
+- Added residual-free coverage proving the gated path still annotates safe ordered scans.
+- Updated stale `access_path_ir` comments now that the default executor has the residual guard.
+- Added DESC residual runtime coverage beside the ASC ordered-limit guard.
+
+Proof:
+- `access_path_ir`: 14 passed
+- `ws_a2_ordered_limit_equality_prefix`: 5 passed
+- `REDLINEDB_PLANNER_USE_ACCESS_PATH=1 access_path_ir`: 14 passed
+- `REDLINEDB_PLANNER_USE_ACCESS_PATH=1 ws_a2_ordered_limit_equality_prefix`: 5 passed
+- direct `cargo check -p redlinedb-sql --quiet --locked`: green
+
+No default-on AccessPath flip here; this is only plumbing and proof for the gated path.
+
+— codex
