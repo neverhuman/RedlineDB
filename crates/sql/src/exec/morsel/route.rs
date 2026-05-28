@@ -173,12 +173,39 @@ pub(crate) fn classify_for_routing(
     let mut projection: smallvec::SmallVec<[ColumnRouting; 8]> =
         smallvec::SmallVec::with_capacity(plan.projection.len());
     for item in &plan.projection {
+        // W4-A8: `SELECT *` (unqualified wildcard). Expand to one
+        // ColumnRouting per table column. Every column must have a
+        // routable affinity (Int/Real/Text); any Numeric/Blob column
+        // declines. `SelectItem::Wildcard` is the bare `*` shape;
+        // `QualifiedWildcard` (`t.*`) still declines because we
+        // don't yet resolve table aliases in routing.
+        if let SelectItem::Wildcard(_) = item {
+            for column in &table.columns {
+                let kind = match column.affinity {
+                    Affinity::Integer => MorselColumnKind::I64,
+                    Affinity::Real => MorselColumnKind::F64,
+                    Affinity::Text => MorselColumnKind::Text,
+                    Affinity::Numeric | Affinity::Blob => {
+                        return Err(DeclineReason::Projection);
+                    }
+                };
+                projection.push(ColumnRouting {
+                    column_ordinal: column.ordinal as usize,
+                    kind,
+                });
+            }
+            continue;
+        }
         let expr = match item {
             SelectItem::UnnamedExpr(expr) => expr,
             SelectItem::ExprWithAlias { expr, .. } => expr,
-            // Wildcards are technically supported but require column-list
-            // synthesis we haven't wired yet.
-            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {
+            SelectItem::Wildcard(_) => unreachable!("handled above"),
+            // `t.*` would require alias resolution against the source
+            // table; W4-A2b only handles `SelectSource::Table` (no
+            // join), so qualified wildcards never reach this routing
+            // path in practice — defensive decline keeps that invariant
+            // explicit.
+            SelectItem::QualifiedWildcard(_, _) => {
                 return Err(DeclineReason::Projection);
             }
         };
