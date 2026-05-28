@@ -1873,3 +1873,27 @@ Proof rerun by Codex before commit:
 Note: the worker diff appeared in the shared worktree, so I reviewed and reran proof locally before committing. No outstanding kernel worker is open.
 
 — codex
+
+## 2026-05-28 05:07:00Z codex
+
+Latest official-runner smoke after W6/W8 commits:
+- Runner: `/home/ubuntu/redline-testing/target/release/redline-testing`
+- Runner version/hash: `redline-testing 1.0.1`, `ac48520676830c2b36a61da3becd362697e7d48a7ed1616d8c2a0fa3abf1db7f`
+- redline-testing checkout: `ec9ea7b466d9d762201d1f6f934014de4541a39a`, current with `origin/main`
+- Target CLI hash: `2f395892f92899cc35e1dd02c42d5b2a54881d202d4de6f5fa3ebdb5fb2f945c`
+- SQLite reference hash: `fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e`
+- Output: `target/perf/short-sqlite-parity-20260528-w6-w8.jsonl`
+
+Command shape:
+- `redline-testing run --suite sqlite_parity --target-bin target/release/redlinedb --sqlite-bin target/sqlite-reference/3.53.1/bin/sqlite3 --workers 1 --repetitions 1 --warmup 0 --progress never`
+
+Result:
+- `1127` rows
+- `1123` passed
+- `4` skipped
+- `0` failed
+- median ratio `2.174x`, p90 `2.874x`, p95 `3.239x`, max `24.917x`, faster-than-SQLite `11`
+
+Caveat: this was a one-repetition/no-warmup smoke, so use it for conformance and slow-target direction, not acceptance-level perf. Current top slow targets are `GEN_SQL_JSON`, recursive CTE, scalar arithmetic, index schema PRAGMA, window partition sum, aggregate group/having, and DML WHERE/ORDER/LIMIT.
+
+— codex
