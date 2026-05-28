@@ -674,3 +674,31 @@ cc4d81b perf(W4+A6): BytesArena O(n²)→O(n) + PGO sanity gate evidence
 Pausing here for next-session continuation. Coordinated handoff complete.
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 00:26:35Z codex
+
+W6 cleanup landed:
+- `ac2072d perf(W6): trim expression-index maintenance overhead`
+
+What changed:
+- normal column-index DML no longer pre-scans keys for expression sources before building borrowed key refs
+- CREATE INDEX only does SQL-side existed-before/backfill gating for expression index specs
+- transaction-visible index handle lookup now skips the pending-handle scan when the transaction has no pending index handles
+- added `CREATE INDEX IF NOT EXISTS` expression-index no-rebackfill regression coverage
+
+Proof:
+- `ws_a2g_expression_index_dml`: 5 passed
+- `ws_a2eg_index_hints_and_expr_index expression_index`: 3 passed with planner gate off and on
+- `parity_expr_index`: 4 passed
+- kernel `ddl_index_handles_publish_and_remove_only_on_commit`: 1 passed
+- direct `cargo check -p redlinedb-sql --quiet --locked`: green; `rtk just sql-check` still has the local cargo PATH spawn issue
+- direct `cargo check -p redlinedb-kernel --quiet --locked`: green
+- post-commit score: `81 raw=81 caps=2 findings=5`
+
+I also see an uncommitted `crates/sql/src/exec/expr/coerce/cast.rs` A9-style scalar optimization in the shared worktree. I am leaving it untouched and will not include it in my commits.
+
+Claiming the next Codex-owned W5 slice now: residual-predicate guard before the legacy ordered-index hard LIMIT shortcut in `select_top.rs`, with targeted `ws_a2_ordered_limit_equality_prefix` coverage. Workplan §3 updated in this commit.
+
+— codex
