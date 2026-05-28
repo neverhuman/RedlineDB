@@ -145,10 +145,11 @@ pub(crate) fn classify_for_routing(
     plan: &crate::statement::SelectPlan,
     table: &TableDef,
 ) -> std::result::Result<RoutingPlan, DeclineReason> {
-    // W4-A3: extract the predicate, if any.
-    let predicate = match plan.selection.as_ref() {
-        None => None,
-        Some(expr) => Some(classify_predicate(expr, table)?),
+    // W4-A3/A5: extract the predicate, if any. W4-A5 widens to a
+    // SmallVec so AND-conjunctions yield multiple per-row checks.
+    let predicates: smallvec::SmallVec<[RoutedPredicate; 2]> = match plan.selection.as_ref() {
+        None => smallvec::SmallVec::new(),
+        Some(expr) => classify_predicate_top(expr, table)?,
     };
 
     let mut projection: smallvec::SmallVec<[ColumnRouting; 8]> =
@@ -207,20 +208,57 @@ pub(crate) fn classify_for_routing(
 
     Ok(RoutingPlan {
         projection,
-        predicate,
+        predicates,
     })
 }
 
-/// W4-A3: parse a WHERE expression into a `RoutedPredicate`. Accepts a
-/// single binary comparison; everything else returns
-/// `DeclineReason::Predicate`.
-fn classify_predicate(
+/// W4-A5: parse a WHERE expression into one or more `RoutedPredicate`s.
+/// Accepts a single binary comparison OR an AND-conjunction of two
+/// comparisons (BETWEEN-style filters lower to this shape). Anything
+/// else returns `DeclineReason::Predicate`.
+fn classify_predicate_top(
+    expr: &Expr,
+    table: &TableDef,
+) -> std::result::Result<smallvec::SmallVec<[RoutedPredicate; 2]>, DeclineReason> {
+    // Unwrap `Nested` at the top to peel off a single `(pred)` paren.
+    let expr = match expr {
+        Expr::Nested(inner) => inner.as_ref(),
+        other => other,
+    };
+    // AND-conjunction: classify both arms separately, concatenate the
+    // resulting predicate lists. The eval pass ANDs them together (all
+    // must pass for the row to match).
+    if let Expr::BinaryOp { left, op, right } = expr
+        && matches!(op, BinaryOperator::And)
+    {
+        let lhs = classify_predicate_top(left, table)?;
+        let rhs = classify_predicate_top(right, table)?;
+        let mut out: smallvec::SmallVec<[RoutedPredicate; 2]> = smallvec::SmallVec::new();
+        out.extend(lhs.into_iter());
+        out.extend(rhs.into_iter());
+        // Defensive cap: in W4-A5 we expect at most ~4 conjuncts on the
+        // realistic BETWEEN-style shapes; refuse anything wider so the
+        // per-row check stays predictable. Long AND chains likely
+        // benefit more from index_access than morsel routing.
+        if out.len() > 4 {
+            return Err(DeclineReason::Predicate);
+        }
+        return Ok(out);
+    }
+    // Single comparison.
+    let pred = classify_single_predicate(expr, table)?;
+    let mut out: smallvec::SmallVec<[RoutedPredicate; 2]> = smallvec::SmallVec::new();
+    out.push(pred);
+    Ok(out)
+}
+
+fn classify_single_predicate(
     expr: &Expr,
     table: &TableDef,
 ) -> std::result::Result<RoutedPredicate, DeclineReason> {
     let (op, left, right) = match expr {
         Expr::BinaryOp { left, op, right } => (op, left.as_ref(), right.as_ref()),
-        Expr::Nested(inner) => return classify_predicate(inner, table),
+        Expr::Nested(inner) => return classify_single_predicate(inner, table),
         _ => return Err(DeclineReason::Predicate),
     };
 
@@ -294,9 +332,10 @@ pub(crate) struct RoutingPlan {
     /// these columns into morsel batches, then the emit pass projects
     /// them out in the same order to produce final tuples.
     pub(crate) projection: smallvec::SmallVec<[ColumnRouting; 8]>,
-    /// W4-A3: optional single-comparison WHERE predicate. `None` means
-    /// "no WHERE — emit every row".
-    pub(crate) predicate: Option<RoutedPredicate>,
+    /// W4-A3/A5: zero or more AND-conjuncted WHERE predicates. Empty
+    /// vec = "no WHERE, emit every row". `>= 2` entries come from
+    /// AND-conjunctions (BETWEEN-style filters).
+    pub(crate) predicates: smallvec::SmallVec<[RoutedPredicate; 2]>,
 }
 
 /// W4-A3: a single-comparison WHERE predicate the morsel scan can
@@ -420,22 +459,29 @@ pub(crate) fn execute_routed_scan(
             continue;
         };
 
-        // W4-A3: predicate evaluation before projection. SQL's three-
+        // W4-A3/A5: predicate evaluation before projection. SQL's three-
         // valued comparison: NULL <op> anything = NULL, treated as
         // "not matching" (same as the tuple path's filter). For a
         // wrong-kind value (e.g. INTEGER-affinity column holds a TEXT
         // value via SQLite loose typing), bail to tuple path so
-        // affinity coercion semantics stay identical.
-        if let Some(pred) = &routing.predicate {
+        // affinity coercion semantics stay identical. AND-conjunctions:
+        // every predicate must pass; the first non-match short-circuits
+        // to `continue` on the rowid loop.
+        let mut row_matches = true;
+        for pred in &routing.predicates {
             let value = fresh
                 .values
                 .get(pred.column_ordinal)
                 .unwrap_or(&SqlValue::Null);
             match value {
-                SqlValue::Null => continue,
+                SqlValue::Null => {
+                    row_matches = false;
+                    break;
+                }
                 SqlValue::Integer(lhs) => {
                     if !pred.op.eval(*lhs, pred.target) {
-                        continue;
+                        row_matches = false;
+                        break;
                     }
                 }
                 _ => {
@@ -443,6 +489,9 @@ pub(crate) fn execute_routed_scan(
                     return Ok(None);
                 }
             }
+        }
+        if !row_matches {
+            continue;
         }
 
         let mut row_out: Vec<SqlValue> = Vec::with_capacity(routing.projection.len());
@@ -551,7 +600,7 @@ mod tests {
                     kind: MorselColumnKind::F64,
                 },
             ],
-            predicate: None,
+            predicates: smallvec::SmallVec::new(),
         };
         assert_eq!(plan.projection.len(), 2);
         assert_eq!(plan.projection[0].kind, MorselColumnKind::I64);
