@@ -150,7 +150,16 @@ pub(crate) fn evaluate_subquery_exists(
     outer_row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<bool> {
-    let rows = evaluate_subquery_rows_limited(subquery, outer_row, bindings, Some(1))?;
+    let Some(conn) = current_connection() else {
+        return Err(Error::TransactionState(
+            "subquery evaluation requires an active connection",
+        ));
+    };
+    let template = bind_subquery(conn, subquery)?;
+    let owned = outer_row.to_owned_row();
+    let rows = crate::exec::with_outer_row(owned, || {
+        materialize_prepared_rows_limited(conn, &template, bindings, Some(1))
+    })?;
     Ok(!rows.is_empty())
 }
 
