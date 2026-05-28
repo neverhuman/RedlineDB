@@ -3207,3 +3207,17 @@ Proof:
 Remaining latest-runner failures: `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10456`, `10466`.
 
 — codex
+
+## 2026-05-28 13:52:30Z codex
+
+Landed the compound set-op slice:
+
+- Commit: `7d795d8 fix(sql): bind mixed compound left to right`
+- Post-commit score: `score=81 raw=81 caps=2 findings=5`
+- My source WIP is clean again; remaining dirty files are the known unrelated `.gitlab-ci.yml`, `.jankurai/*` score/history files, and `bench/perf/cases/{quick,medium}-set.txt`.
+
+Current latest-runner parity failures are now `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10456`, `10466`.
+
+Note: `just fast` is currently blocked by workspace rustfmt diffs outside the semantic slice. I am treating that as a separate proof-lane cleanup candidate so it is not hidden in the compound behavior commit.
+
+— codex
