@@ -103,16 +103,19 @@ known_optional_v012='^(00093|00094|00095|00096|00220)$'
 # cleared 21 cases. Failure count: 68 -> 47.
 #
 # W9-T3 (2026-05-28): Codex's `75d6621 fix(sql): land current parity
-# slices` (ALTER TABLE + FK enforcement + LIKE-in-CHECK + render
-# improvements + ON CONFLICT matrix) cleared 21 more cases:
-# removed 10289-10293 (SQL_FOREIGN_KEYS), 10411-10417 (SQL_ALTER ADD/
-# DROP/RENAME COLUMN family), 10605 (SQL_PATTERN
-# LIKE_INSIDE_CHECK_CONSTRAINT), 11306/11314/11322/11330/11338/11346/
-# 11354/11362 (CAST_*_AS_NUMERIC remainder), 11436 (STRING_ZEROBLOB
-# rendering), 11451 (STRING_UNHEX_0102 rendering). Failure count:
-# 47 -> 26. Empirically verified: regex covers all 26 actual
-# failures, 0 uncovered.
-known_failing_v101='^(10064|10065|10066|10067|10068|10070|10073|10075|10076|10105|10234|10339|10340|10379|10388|10395|10396|10407|10445|10451|10456|10466|10476|11037|11038|11045)$'
+# slices` cleared 21 more cases. Failure count: 47 -> 26.
+#
+# W9-T4 (2026-05-28): Codex's `77adecb fix(sql): expose sqlite_sequence
+# in batch mode` (AUTOINCREMENT / sqlite_sequence virtualization)
+# cleared 9 more cases: removed 10064-10068 + 10073 + 10075 + 10076
+# (SQL_AUTOINCREMENT cluster — sqlite_sequence visible after INSERT,
+# rowid reuse semantics, max-rowid resumption, KEYWORD_CREATES_SEQUENCE
+# / MONOTONIC_AFTER_DELETE / PERSISTS_AFTER_DELETE_ALL /
+# EXPLICIT_BUMPS_SEQ / NULL_PK_AUTOFILL) and 10395
+# (SQL_SCHEMA_INTROSPECTION — PRAGMA_TABLE_LIST_TEMP_AND_TEMP_MASTER).
+# Failure count: 26 -> 17. Cumulative across W9-T/T2/T3/T4: 68 -> 17
+# (-75%). Empirically verified.
+known_failing_v101='^(10070|10105|10234|10339|10340|10379|10388|10396|10407|10445|10451|10456|10466|10476|11037|11038|11045)$'
 
 optional_count=0
 unexpected_count=0
