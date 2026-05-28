@@ -6,7 +6,7 @@ use std::thread;
 
 use crate::format::{Csn, Lsn, TxId};
 use crate::wal::WAL_HEADER_LEN;
-use crate::wal::{WalPayload, WalRecordKind};
+use crate::wal::{CombinedReplacementValue, WalPayload, WalRecord, WalRecordKind};
 use crate::{Error, Result};
 
 use super::helpers::{check_wal_failure, enqueue_reserved_record};
@@ -282,6 +282,27 @@ impl WalCoordinator {
             return Err(Error::CorruptWal("record larger than wal buffer"));
         }
 
+        let combined_semantic_delta = if self.config.semantic_combiner {
+            decode_combined_semantic_delta(kind, tx_id, &payload)
+        } else {
+            None
+        };
+
+        {
+            let mut state = self
+                .shared
+                .state
+                .lock()
+                .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
+            check_wal_failure(&state)?;
+            if let Some(candidate) = combined_semantic_delta.as_ref()
+                && let Some(append) =
+                    self.try_fold_pending_combined_semantic_delta(&mut state, kind, candidate)?
+            {
+                return Ok(append);
+            }
+        }
+
         let mut state = self.wait_for_wal_buffer(encoded_len)?;
         let append = enqueue_reserved_record(
             &mut state,
@@ -291,7 +312,9 @@ impl WalCoordinator {
             payload,
             encoded_len as u64,
         )?;
-        self.shared.cvar.notify_all();
+        if combined_semantic_delta.is_none() {
+            self.shared.cvar.notify_all();
+        }
         Ok(append)
     }
 
@@ -327,5 +350,155 @@ impl WalCoordinator {
                 .wait(state)
                 .map_err(|_| Error::CorruptWal("wal coordinator wait poisoned"))?;
         }
+    }
+
+    fn try_fold_pending_combined_semantic_delta(
+        &self,
+        state: &mut WalCoordinatorState,
+        kind: WalRecordKind,
+        candidate: &CombinedSemanticDeltaParts,
+    ) -> Result<Option<WalAppend>> {
+        if kind != WalRecordKind::PageDelta {
+            return Ok(None);
+        }
+
+        let Some(last) = state.pending.back() else {
+            return Ok(None);
+        };
+        let last_record = match WalRecord::decode(&last.encoded) {
+            Ok(record) => record,
+            Err(_) => return Ok(None),
+        };
+        if last_record.kind != kind || last_record.tx_id != candidate.tx_id {
+            return Ok(None);
+        }
+        let last_payload =
+            match decode_combined_semantic_delta(kind, last_record.tx_id, &last_record.payload) {
+                Some(parts) => parts,
+                _ => return Ok(None),
+            };
+        if last_payload.tx_id != candidate.tx_id
+            || last_payload.rel_id != candidate.rel_id
+            || last_payload.row_id != candidate.row_id
+        {
+            return Ok(None);
+        }
+
+        let merged_payload = merge_combined_semantic_delta_parts(last_payload, candidate.clone());
+        let merged_payload_bytes = merged_payload.encode()?;
+        let merged_encoded_len = WAL_HEADER_LEN
+            .checked_add(merged_payload_bytes.len())
+            .ok_or(Error::CorruptWal("record length overflow"))?;
+        if merged_encoded_len > self.config.segment_bytes as usize
+            || merged_encoded_len > self.config.wal_buffer_bytes
+        {
+            return Ok(None);
+        }
+
+        let old_encoded_len = last.encoded.len();
+        let new_pending_bytes = state
+            .pending_bytes
+            .checked_sub(old_encoded_len)
+            .and_then(|value| value.checked_add(merged_encoded_len))
+            .ok_or(Error::CorruptWal("pending WAL bytes overflow"))?;
+        if new_pending_bytes > self.config.wal_buffer_bytes {
+            return Ok(None);
+        }
+
+        let start_lsn = last.append.start_lsn;
+        if offset_for_lsn(start_lsn, self.config.segment_bytes)
+            .saturating_add(merged_encoded_len as u64)
+            > self.config.segment_bytes
+        {
+            return Ok(None);
+        }
+
+        let merged_record = WalRecord {
+            lsn: start_lsn,
+            prev_lsn: last_record.prev_lsn,
+            tx_id: candidate.tx_id,
+            kind,
+            payload: merged_payload_bytes,
+        };
+        let merged_encoded = merged_record.encode()?;
+        let merged_end_lsn = Lsn(start_lsn.0 + merged_encoded.len() as u64);
+
+        let last = state
+            .pending
+            .back_mut()
+            .ok_or(Error::CorruptWal("pending WAL queue unexpectedly empty"))?;
+        last.append.end_lsn = merged_end_lsn;
+        last.encoded = merged_encoded;
+        state.pending_bytes = new_pending_bytes;
+        state.reserved_lsn = merged_end_lsn;
+        Ok(Some(last.append))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CombinedSemanticDeltaParts {
+    tx_id: TxId,
+    rel_id: crate::format::RelId,
+    row_id: crate::format::RowId,
+    deltas: Vec<(u16, i64)>,
+    replacements: Vec<(u16, CombinedReplacementValue)>,
+    batched_count: u32,
+}
+
+fn decode_combined_semantic_delta(
+    kind: WalRecordKind,
+    tx_id: TxId,
+    payload: &[u8],
+) -> Option<CombinedSemanticDeltaParts> {
+    if kind != WalRecordKind::PageDelta {
+        return None;
+    }
+    match WalPayload::decode(payload) {
+        Ok(WalPayload::CombinedSemanticDelta {
+            tx_id: candidate_tx_id,
+            rel_id,
+            row_id,
+            deltas,
+            replacements,
+            batched_count,
+        }) if candidate_tx_id == tx_id => Some(CombinedSemanticDeltaParts {
+            tx_id: candidate_tx_id,
+            rel_id,
+            row_id,
+            deltas,
+            replacements,
+            batched_count,
+        }),
+        _ => None,
+    }
+}
+
+fn merge_combined_semantic_delta_parts(
+    left: CombinedSemanticDeltaParts,
+    right: CombinedSemanticDeltaParts,
+) -> WalPayload {
+    let mut replacements = left.replacements;
+    for (col, value) in right.replacements {
+        if let Some((_, slot)) = replacements
+            .iter_mut()
+            .rev()
+            .find(|(existing_col, _)| *existing_col == col)
+        {
+            *slot = value;
+        } else {
+            replacements.push((col, value));
+        }
+    }
+
+    let mut deltas = left.deltas;
+    deltas.extend(right.deltas);
+
+    WalPayload::CombinedSemanticDelta {
+        tx_id: left.tx_id,
+        rel_id: left.rel_id,
+        row_id: left.row_id,
+        deltas,
+        replacements,
+        batched_count: left.batched_count.saturating_add(right.batched_count),
     }
 }

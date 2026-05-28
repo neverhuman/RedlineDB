@@ -8,7 +8,10 @@
 //! recovery pipeline.
 
 use redlinedb_kernel::format::{RelId, RowId, TxId};
+use redlinedb_kernel::wal::WalRecordKind;
+use redlinedb_kernel::wal::manager::{WalConfig, WalCoordinator, WalReader};
 use redlinedb_kernel::wal::{CombinedReplacementValue, WalPayload};
+use tempfile::TempDir;
 
 #[test]
 fn combined_semantic_delta_round_trip_minimal() {
@@ -168,4 +171,111 @@ fn combined_semantic_delta_serial_order_replays_to_same_state() {
         }
     }
     assert_eq!(state2, state);
+}
+
+fn append_combined_semantic_delta(
+    wal: &WalCoordinator,
+    tx_id: TxId,
+    rel_id: RelId,
+    row_id: RowId,
+    deltas: Vec<(u16, i64)>,
+    replacements: Vec<(u16, CombinedReplacementValue)>,
+    batched_count: u32,
+) -> redlinedb_kernel::format::Lsn {
+    let payload = WalPayload::CombinedSemanticDelta {
+        tx_id,
+        rel_id,
+        row_id,
+        deltas,
+        replacements,
+        batched_count,
+    };
+    wal.append(
+        WalRecordKind::PageDelta,
+        tx_id,
+        payload.encode().expect("encode"),
+    )
+    .expect("append")
+    .end_lsn
+}
+
+#[test]
+fn semantic_combiner_off_keeps_adjacent_audit_records_separate() {
+    let temp = TempDir::new().expect("tempdir");
+    let wal = WalCoordinator::create(temp.path(), WalConfig::default()).expect("wal");
+
+    let first_end = append_combined_semantic_delta(
+        &wal,
+        TxId(7),
+        RelId(3),
+        RowId(9),
+        vec![(1, 2)],
+        vec![(2, CombinedReplacementValue::Integer(3))],
+        1,
+    );
+    let second_end = append_combined_semantic_delta(
+        &wal,
+        TxId(7),
+        RelId(3),
+        RowId(9),
+        vec![(4, 5)],
+        vec![(2, CombinedReplacementValue::Integer(11))],
+        2,
+    );
+    wal.flush_until(second_end).expect("flush");
+
+    let report = WalReader::new(temp.path(), WalConfig::default())
+        .scan_report()
+        .expect("scan");
+    assert_eq!(report.records.len(), 2);
+    assert!(first_end < second_end);
+}
+
+#[test]
+fn semantic_combiner_on_folds_adjacent_audit_records() {
+    let temp = TempDir::new().expect("tempdir");
+    let config = WalConfig {
+        semantic_combiner: true,
+        ..WalConfig::default()
+    };
+    let wal = WalCoordinator::create(temp.path(), config.clone()).expect("wal");
+
+    let first_end = append_combined_semantic_delta(
+        &wal,
+        TxId(7),
+        RelId(3),
+        RowId(9),
+        vec![(1, 2)],
+        vec![(2, CombinedReplacementValue::Integer(3))],
+        1,
+    );
+    let second_end = append_combined_semantic_delta(
+        &wal,
+        TxId(7),
+        RelId(3),
+        RowId(9),
+        vec![(4, 5)],
+        vec![(2, CombinedReplacementValue::Integer(11))],
+        2,
+    );
+    wal.flush_until(second_end).expect("flush");
+
+    let report = WalReader::new(temp.path(), config)
+        .scan_report()
+        .expect("scan");
+    assert_eq!(report.records.len(), 1);
+    assert!(first_end < second_end);
+
+    let decoded = WalPayload::decode(&report.records[0].payload).expect("decode merged");
+    assert_eq!(
+        decoded,
+        WalPayload::CombinedSemanticDelta {
+            tx_id: TxId(7),
+            rel_id: RelId(3),
+            row_id: RowId(9),
+            deltas: vec![(1, 2), (4, 5)],
+            replacements: vec![(2, CombinedReplacementValue::Integer(11))],
+            batched_count: 3,
+        }
+    );
 }

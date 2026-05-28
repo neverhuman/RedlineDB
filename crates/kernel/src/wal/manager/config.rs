@@ -26,13 +26,10 @@ pub struct WalConfig {
     /// single-lane today.
     pub lanes: usize,
     /// Lane GC (phase 10): opt-in semantic commit combiner. When
-    /// `true`, mutations that the WAL coordinator can prove to be
-    /// commutative deltas on the same `(rel_id, row_id, column)`
-    /// tuple may be merged before fsync. Default `false` — the
-    /// combiner is wired as a no-op today (see
-    /// [`crate::wal::combiner`]) and will be enabled once the safety
-    /// proof lands; consumers may set the flag without changing
-    /// visible behaviour.
+    /// `true`, adjacent `WalPayload::CombinedSemanticDelta` audit
+    /// records on the same `(tx_id, rel_id, row_id)` may be folded
+    /// in-buffer before fsync. Default `false` preserves the
+    /// historical byte-for-byte behaviour.
     pub semantic_combiner: bool,
 }
 
