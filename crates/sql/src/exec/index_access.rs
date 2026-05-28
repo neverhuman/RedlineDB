@@ -316,6 +316,28 @@ pub(crate) fn try_match_index_access_hinted(
                     equality_prefix_len: index.keys.len(),
                 });
             }
+            if let Some((probe, suffix_predicates, suffix_consumed)) =
+                suffix_range_after_prefix(index, table, &leading_value, &conjuncts, bindings)
+            {
+                let mut consumed_idx = vec![leading_idx];
+                consumed_idx.extend(suffix_consumed);
+                let mut predicates = vec![format!(
+                    "{} = {}",
+                    table.columns[leading].name,
+                    sql_value_to_explain(&leading_value)
+                )];
+                predicates.extend(suffix_predicates);
+                let residual_conjuncts = residuals_from_consumed(&conjuncts, &consumed_idx);
+                return Some(IndexAccessMatch {
+                    index: Arc::new(index.clone()),
+                    kind: IndexProbeKind::RangeScan,
+                    probe,
+                    predicates,
+                    ordered_limit: None,
+                    residual_conjuncts,
+                    equality_prefix_len: 1,
+                });
+            }
             // Leading-prefix range scan: encode just the leading value
             // and walk every key that starts with that prefix. Only the
             // leading-column equality was applied to the probe; any
@@ -377,6 +399,40 @@ pub(crate) fn try_match_index_access_hinted(
     }
 
     None
+}
+
+fn suffix_range_after_prefix(
+    index: &IndexDef,
+    table: &TableDef,
+    leading_value: &SqlValue,
+    conjuncts: &[&Expr],
+    bindings: &[Option<SqlValue>],
+) -> Option<(IndexProbe, Vec<String>, Vec<usize>)> {
+    let suffix_key = index.keys.get(1)?;
+    if suffix_key.sort_dir != SortDir::Asc {
+        return None;
+    }
+    let IndexKeySource::Column { attnum } = suffix_key.source else {
+        return None;
+    };
+    let (bounds, predicates, consumed) =
+        leading_range_bounds(conjuncts, table, attnum as usize, bindings)?;
+    let leading_prefix = encode_prefix_key(index, std::slice::from_ref(leading_value));
+    let start = match &bounds.lower {
+        Some((value, inclusive)) => {
+            let key = encode_prefix_key(index, &[leading_value.clone(), value.clone()]);
+            if *inclusive { key } else { next_key(&key) }
+        }
+        None => leading_prefix.clone(),
+    };
+    let end = match &bounds.upper {
+        Some((value, inclusive)) => {
+            let key = encode_prefix_key(index, &[leading_value.clone(), value.clone()]);
+            if *inclusive { next_key(&key) } else { key }
+        }
+        None => prefix_bounds(&leading_prefix).1,
+    };
+    Some((IndexProbe::Range { start, end }, predicates, consumed))
 }
 
 /// Phase 5 WS-A1: clone the conjuncts NOT named in `consumed` into
@@ -714,17 +770,24 @@ fn leading_range_bounds(
             if matches!(value, SqlValue::Null) {
                 continue;
             }
-            predicates.push(format!(
+            let predicate = format!(
                 "{} {} {}",
                 column_name,
                 binary_op_to_str(op, side.side),
                 sql_value_to_explain(&value)
-            ));
+            );
             if is_lower {
+                if bounds.lower.is_some() {
+                    continue;
+                }
                 bounds.lower = Some((value, inclusive_lower));
             } else {
+                if bounds.upper.is_some() {
+                    continue;
+                }
                 bounds.upper = Some((value, inclusive_upper));
             }
+            predicates.push(predicate);
             consumed.push(idx);
             continue;
         }
@@ -739,6 +802,9 @@ fn leading_range_bounds(
             let lo = eval_constant(low, bindings)?;
             let hi = eval_constant(high, bindings)?;
             if matches!(lo, SqlValue::Null) || matches!(hi, SqlValue::Null) {
+                continue;
+            }
+            if bounds.lower.is_some() || bounds.upper.is_some() {
                 continue;
             }
             predicates.push(format!(
@@ -1102,12 +1168,16 @@ mod a7_collate_scan_tests {
 
     #[test]
     fn matches_lowercase() {
-        assert!(contains_collate_nocase_ci("CREATE TABLE t (a TEXT collate nocase)"));
+        assert!(contains_collate_nocase_ci(
+            "CREATE TABLE t (a TEXT collate nocase)"
+        ));
     }
 
     #[test]
     fn matches_uppercase() {
-        assert!(contains_collate_nocase_ci("CREATE TABLE t (a TEXT COLLATE NOCASE)"));
+        assert!(contains_collate_nocase_ci(
+            "CREATE TABLE t (a TEXT COLLATE NOCASE)"
+        ));
     }
 
     #[test]

@@ -342,10 +342,9 @@ fn planner_pushes_limit_through_ordered_index_path() {
 fn planner_residual_conjunct_blocks_hard_limit() {
     // The IR's `AccessPath::hard_limit()` accessor explicitly returns
     // `None` when `IndexRange::residual` is non-empty — an early-stop
-    // would skip rows that failed the residual recheck. The shape
-    // `WHERE tenant=1 AND k>5 ORDER BY k LIMIT n` has `k>5` as a
-    // residual conjunct (the IR's leading-prefix probe only consumes
-    // `tenant=?`).
+    // would skip rows that failed the residual recheck. The suffix
+    // range `k>5` is now encoded into the composite probe, so this
+    // test uses `keep=1` as the unrelated residual conjunct.
     //
     // The default-OFF executor path now checks
     // `consumed_full_predicate()` before early-stopping. The IR-driven
@@ -357,17 +356,18 @@ fn planner_residual_conjunct_blocks_hard_limit() {
     // depending on the buggy default-OFF runtime answer for the
     // limit+residual combination.
     let (_dir, conn) = open_database();
-    conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, v INTEGER)")
+    conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, keep INTEGER, v INTEGER)")
         .expect("create");
     conn.execute("CREATE INDEX t_tk_idx ON t(tenant, k)")
         .expect("create index");
     for i in 0..30 {
-        conn.execute(&format!("INSERT INTO t VALUES (1, {i}, {i})"))
+        let keep = if i >= 8 { 1 } else { 0 };
+        conn.execute(&format!("INSERT INTO t VALUES (1, {i}, {keep}, {i})"))
             .expect("insert");
     }
     let plan = explain_text(
         &conn,
-        "SELECT v FROM t WHERE tenant = 1 AND k > 5 ORDER BY k LIMIT 3",
+        "SELECT v FROM t WHERE tenant = 1 AND k > 5 AND keep = 1 ORDER BY k LIMIT 3",
     );
     assert!(
         plan.contains("USING INDEX"),
@@ -376,13 +376,13 @@ fn planner_residual_conjunct_blocks_hard_limit() {
     // With LIMIT: residual filter applies cleanly and the runtime
     // returns the post-residual rows in k-order.
     let mut stmt = conn
-        .prepare("SELECT v FROM t WHERE tenant = 1 AND k > 5 ORDER BY k LIMIT 3")
+        .prepare("SELECT v FROM t WHERE tenant = 1 AND k > 5 AND keep = 1 ORDER BY k LIMIT 3")
         .expect("prepare");
     let mut rows: Vec<i64> = Vec::new();
     while let Step::Row = stmt.step().expect("step") {
         rows.push(stmt.column_i64(0).expect("col0"));
     }
-    assert_eq!(rows, vec![6, 7, 8]);
+    assert_eq!(rows, vec![8, 9, 10]);
 }
 
 #[test]

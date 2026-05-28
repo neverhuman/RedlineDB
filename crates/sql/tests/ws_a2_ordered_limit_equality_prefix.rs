@@ -109,6 +109,36 @@ fn ordered_limit_with_residual_predicate_does_not_hard_stop() {
 }
 
 #[test]
+fn suffix_range_on_composite_index_preserves_ordered_limit() {
+    let conn = open();
+    conn.execute("CREATE TABLE kv (id INTEGER PRIMARY KEY, tenant INTEGER, k INTEGER, v TEXT)")
+        .expect("ddl");
+    conn.execute("CREATE INDEX kv_tk ON kv(tenant, k)")
+        .expect("idx");
+
+    for (tenant, k, v) in [
+        (1, 50, "outside-high"),
+        (1, 30, "c"),
+        (2, 10, "other"),
+        (1, 10, "a"),
+        (1, 20, "b"),
+        (1, 5, "outside-low"),
+    ] {
+        conn.execute(&format!(
+            "INSERT INTO kv(tenant, k, v) VALUES ({tenant}, {k}, '{v}')"
+        ))
+        .expect("insert");
+    }
+
+    let rows = collect_int_col(
+        &conn,
+        "SELECT k FROM kv WHERE tenant = 1 AND k BETWEEN 10 AND 30 ORDER BY k LIMIT 2",
+        0,
+    );
+    assert_eq!(rows, vec![10, 20]);
+}
+
+#[test]
 fn ordered_limit_desc_with_residual_predicate_does_not_hard_stop() {
     let conn = open();
     conn.execute(

@@ -813,10 +813,10 @@ mod tests {
                     equality_prefix_len, 1,
                     "tenant=? pins one leading key position"
                 );
-                // The `k > 5` conjunct was NOT folded into the leading
-                // prefix probe (only `tenant=1` was), so it remains as
-                // a residual the executor must recheck.
-                assert!(!residual.is_empty(), "k>5 should remain residual");
+                assert!(
+                    residual.is_empty(),
+                    "suffix range k>5 should be encoded into the composite probe"
+                );
             }
             other => panic!("expected IndexRange, got {other:?}"),
         }
@@ -836,16 +836,20 @@ mod tests {
             &conn,
             "SELECT v FROM t WHERE tenant = 1 AND k > 5 ORDER BY k DESC LIMIT 10",
         );
-        match choose(&conn, &plan, None) {
+        let path = choose(&conn, &plan, None);
+        match &path {
             AccessPath::IndexRange {
                 equality_prefix_len,
                 order_satisfies,
                 hard_limit,
+                residual,
                 ..
             } => {
-                assert_eq!(equality_prefix_len, 1);
-                assert_eq!(order_satisfies, OrderSatisfies::Descending);
-                assert_eq!(hard_limit, Some(10));
+                assert_eq!(*equality_prefix_len, 1);
+                assert_eq!(*order_satisfies, OrderSatisfies::Descending);
+                assert_eq!(*hard_limit, Some(10));
+                assert!(residual.is_empty());
+                assert_eq!(path.hard_limit(), Some(10));
             }
             other => panic!("expected IndexRange, got {other:?}"),
         }
@@ -943,16 +947,16 @@ mod tests {
         let (_dir, conn) = fresh_conn();
         exec_sql(
             &conn,
-            "CREATE TABLE t(tenant INTEGER, k INTEGER, v INTEGER); \
+            "CREATE TABLE t(tenant INTEGER, k INTEGER, keep INTEGER, v INTEGER); \
              CREATE INDEX ix ON t(tenant, k);",
         );
-        // `k > 5` is a residual on `INDEX(tenant, k)` (only `tenant=1`
-        // is consumed by the leading-prefix probe). The raw IR field
-        // carries the candidate limit so old tests still pass; the
-        // accessor enforces the safety check.
+        // `k > 5` is encoded into the composite probe; `keep = 1` is
+        // unrelated to the index and remains residual. The raw IR
+        // field carries the candidate limit so old tests still pass;
+        // the accessor enforces the safety check.
         let plan = select_plan_for(
             &conn,
-            "SELECT v FROM t WHERE tenant = 1 AND k > 5 ORDER BY k LIMIT 7",
+            "SELECT v FROM t WHERE tenant = 1 AND k > 5 AND keep = 1 ORDER BY k LIMIT 7",
         );
         let ir = choose(&conn, &plan, None);
         match &ir {
@@ -961,7 +965,7 @@ mod tests {
                 residual,
                 ..
             } => {
-                assert!(!residual.is_empty(), "k>5 stays residual");
+                assert!(!residual.is_empty(), "keep=1 stays residual");
                 assert_eq!(*hard_limit, Some(7), "raw field carries the candidate");
             }
             other => panic!("expected IndexRange, got {other:?}"),
