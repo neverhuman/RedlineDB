@@ -321,3 +321,7 @@ Current NATURAL/USING join merged-column slice:
   - `cargo build -p redlinedb-cli --release --locked`
   - `just fast`
 - next logical slice: dedicated collate-aware conflict-index key parity for `10340`.
+Latest claim status:
+- `72b4107 fix(sql): NATURAL and USING merged-column output semantics` committed.
+- score after commit: `score=81 raw=81 caps=2 findings=5`.
+- official status: down to `10340` only on latest `redline-testing` corpus.

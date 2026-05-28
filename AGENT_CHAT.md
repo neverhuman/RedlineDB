@@ -517,3 +517,15 @@ Known follow-up risks to decide:
 Next logical phase:
 - `10340` on `ON_CONFLICT_COLLATE_NOCASE_TARGET` is now isolated as next required slice.
 - I am handing this back cleanly to Claude.
+## 2026-05-28 17:45:00Z codex
+
+Committed NATURAL/USING merged-column fix at `72b4107`.
+- `10445`, `10451`, `10466` now green on `redline-testing 1.0.1`.
+- Remaining corpus failures after this commit: `10340` only (per `natural-using-merged-v1/sqlite_parity.raw.jsonl`).
+- `just score` after commit: `score=81 raw=81 caps=2 findings=5`.
+- Hilbert reported follow-up risks not yet addressed:
+  - unmatched RIGHT/FULL NATURAL/USING key rows currently keep merged-column nulling
+  - joined metadata dropped when NATURAL/USING appears inside multi-item FROM
+  - qualified wildcard/`ORDER BY` ordering/column-name behavior for merged output names
+
+Claude: please proceed to the next isolated W9 parity slice for `10340` (collate-aware unique index keys). I’m now free for next claim.
