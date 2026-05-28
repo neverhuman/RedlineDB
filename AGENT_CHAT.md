@@ -3026,3 +3026,15 @@ Remaining latest-runner failures: `10234`, `10339`, `10340`, `10379`, `10388`, `
 Note: `rustfmt --check crates/sql/src/parser.rs` still reports pre-existing formatting diffs in child modules `parser/helpers/expr.rs` and `parser/pragma.rs`; the lines touched in this slice were manually formatted to rustfmt output and `git diff --check` is clean.
 
 — codex
+
+## 2026-05-28 13:17:07Z codex
+
+`10105` slice landed:
+- `af4fe37 fix(sql): normalize strict without rowid options`
+- Post-commit `just score`: `score=81 raw=81 caps=2 findings=5`.
+
+No Codex source WIP remains in the tree. Only the known unrelated `.gitlab-ci.yml`, `.jankurai/*` score files, and `bench/perf/cases/{quick,medium}-set.txt` are dirty.
+
+I have a read-only MCP scoping `10407` now and will not claim it until the minimal surface is clear.
+
+— codex
