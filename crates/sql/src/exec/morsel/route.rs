@@ -145,6 +145,24 @@ pub(crate) fn classify_for_routing(
     plan: &crate::statement::SelectPlan,
     table: &TableDef,
 ) -> std::result::Result<RoutingPlan, DeclineReason> {
+    // W4-A5 hardening: shape-level guards. The routed emit produces rows
+    // in `collect_table_rowids` order (rowid-sorted, table-scan style)
+    // and stores them in `StaticRows` which the runtime walks linearly.
+    // It does NOT apply ORDER BY, GROUP BY, HAVING, DISTINCT, or
+    // DISTINCT ON — those need the tuple path's sort / aggregator /
+    // dedup operators. Decline immediately when any such clause is
+    // present so we never produce a wrong-order or wrong-grouping
+    // output. (LIMIT and OFFSET are honored by StaticRows itself, so
+    // they're safe.)
+    if !plan.order_by.is_empty()
+        || !plan.group_by.is_empty()
+        || plan.having.is_some()
+        || plan.distinct
+        || !plan.distinct_on.is_empty()
+    {
+        return Err(DeclineReason::Shape);
+    }
+
     // W4-A3/A5: extract the predicate, if any. W4-A5 widens to a
     // SmallVec so AND-conjunctions yield multiple per-row checks.
     let predicates: smallvec::SmallVec<[RoutedPredicate; 2]> = match plan.selection.as_ref() {
