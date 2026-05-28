@@ -103,15 +103,24 @@ fn split_first_statement_state(sql: &str) -> StatementSplit<'_> {
             b';' => {
                 i += 1;
             }
-            _ if is_word_boundary_keyword(bytes, i, b"TRIGGER") => {
+            // A30: first-byte fast-reject for keyword scanning. The TRIGGER /
+            // BEGIN / END word-boundary check is the hot inner work for
+            // every byte that ISN'T already matched by the quote / comment /
+            // semicolon arms above. By predicating each keyword arm on its
+            // expected first letter (`T`/`t`, `B`/`b`, `E`/`e`), the
+            // overwhelming majority of bytes — alphanumerics not starting
+            // those keywords — skip the function call entirely and fall
+            // through to the `_` arm in a single byte compare. Prior code
+            // always called `is_word_boundary_keyword` per byte.
+            b'T' | b't' if is_word_boundary_keyword(bytes, i, b"TRIGGER") => {
                 in_trigger = true;
                 i += 7;
             }
-            _ if in_trigger && is_word_boundary_keyword(bytes, i, b"BEGIN") => {
+            b'B' | b'b' if in_trigger && is_word_boundary_keyword(bytes, i, b"BEGIN") => {
                 block_depth += 1;
                 i += 5;
             }
-            _ if in_trigger && is_word_boundary_keyword(bytes, i, b"END") => {
+            b'E' | b'e' if in_trigger && is_word_boundary_keyword(bytes, i, b"END") => {
                 block_depth = block_depth.saturating_sub(1);
                 if block_depth == 0 {
                     in_trigger = false;
