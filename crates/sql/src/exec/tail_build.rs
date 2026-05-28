@@ -251,16 +251,23 @@ pub(crate) fn compute_stored_generated_columns(
 pub(crate) fn apply_row_affinity(table: &TableDef, values: Vec<SqlValue>) -> Result<Vec<SqlValue>> {
     let mut out = values;
     for (idx, column) in table.columns.iter().enumerate() {
-        let original = out[idx].clone();
+        // A27: take the value by move instead of `out[idx].clone()`.
+        // The slot is restored at the end of the iteration with the
+        // coerced result; `apply_affinity` needs an owned `SqlValue`,
+        // and `apply_strict_storage` borrows `original` — moving lets
+        // us serve both with a single `Arc::clone`-shaped clone instead
+        // of the previous two (one for `original`, one fed into
+        // `apply_affinity`).
+        let original = std::mem::replace(&mut out[idx], SqlValue::Null);
         // SQLite formats REAL → TEXT through its `%!.*g` printf path.
         // Pre-format when the destination is TEXT affinity. Also: STRICT
         // tables declared with the `ANY` pseudo-type preserve the input
         // storage class as-is (SQLite v3.53 STRICT-ANY behavior).
         let coerced = if matches!(column.affinity, redlinedb_kernel::catalog::Affinity::Text)
-            && let SqlValue::Real(v) = original
+            && let SqlValue::Real(v) = &original
         {
             SqlValue::Text(std::sync::Arc::from(
-                crate::exec::expr::scalar::format_real_sqlite(v),
+                crate::exec::expr::scalar::format_real_sqlite(*v),
             ))
         } else if table.is_strict() && strict_declared_any(column) {
             original.clone()
