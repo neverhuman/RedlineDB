@@ -226,6 +226,23 @@ fn parse_json_text_cached(text: &str) -> Result<Value> {
     })
 }
 
+fn json_text_valid_cached(text: &str) -> bool {
+    JSON_SCALAR_CACHES.with(|cache| {
+        let cached = {
+            let cache = cache.borrow();
+            cache.docs.iter().any(|(cached, _)| cached == text)
+        };
+        if cached {
+            return true;
+        }
+        let Ok(parsed) = serde_json::from_str::<Value>(text) else {
+            return false;
+        };
+        insert_bounded(&mut cache.borrow_mut().docs, text.to_owned(), parsed);
+        true
+    })
+}
+
 fn parse_path_cached(text: &str) -> Result<JsonPath> {
     JSON_SCALAR_CACHES.with(|cache| {
         if let Some(path) = cache
@@ -548,9 +565,9 @@ pub fn json_valid(values: &[SqlValue]) -> Result<SqlValue> {
             ));
         }
     };
-    let s = match arg {
+    let ok = match arg {
         SqlValue::Null => return Ok(SqlValue::Null),
-        SqlValue::Text(s) => s.to_string(),
+        SqlValue::Text(s) => json_text_valid_cached(s.as_ref()),
         SqlValue::Blob(b) => {
             // JSONB blobs validate via the wire-format walker rather than a
             // UTF-8 reinterpretation; this preserves SQLite semantics for
@@ -559,14 +576,13 @@ pub fn json_valid(values: &[SqlValue]) -> Result<SqlValue> {
                 return Ok(SqlValue::Integer(if jsonb_is_valid(b) { 1 } else { 0 }));
             }
             match std::str::from_utf8(b) {
-                Ok(s) => s.to_owned(),
+                Ok(s) => json_text_valid_cached(s),
                 Err(_) => return Ok(SqlValue::Integer(0)),
             }
         }
         // Per SQLite: numerics are valid JSON.
         SqlValue::Integer(_) | SqlValue::Real(_) => return Ok(SqlValue::Integer(1)),
     };
-    let ok = parse_json_text_cached(&s).is_ok();
     Ok(SqlValue::Integer(if ok { 1 } else { 0 }))
 }
 

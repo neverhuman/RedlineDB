@@ -75,6 +75,11 @@ impl Pair {
         let sl = self.sqlite_rows(sql);
         assert_eq!(rl, sl, "rows differ for: {sql}");
     }
+
+    fn execute(&self, sql: &str) {
+        self.redline.execute(sql).expect("redline execute");
+        self.sqlite.execute_batch(sql).expect("sqlite execute");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +224,21 @@ fn parity_json_valid_malformed() {
 fn parity_json_valid_null() {
     let pair = Pair::new();
     pair.assert_parity("SELECT json_valid(NULL)");
+}
+
+#[test]
+fn parity_json_extract_set_official_shape() {
+    let pair = Pair::new();
+    pair.execute("CREATE TABLE docs(id INT PRIMARY KEY, doc TEXT)");
+    pair.execute("INSERT INTO docs VALUES (1, json_object('a',40,'b',json_array(1,2,3)))");
+    pair.execute(
+        "INSERT INTO docs VALUES (2, json_set(json_object('a',0), '$.a', 41, '$.c', 'x'))",
+    );
+    pair.assert_parity(
+        "SELECT id, json_extract(doc,'$.a'), json_type(doc,'$.b'), json_valid(doc) \
+         FROM docs ORDER BY id",
+    );
+    pair.assert_parity("SELECT json_array_length(json_extract(doc,'$.b')) FROM docs WHERE id=1");
 }
 
 // ---------------------------------------------------------------------------
