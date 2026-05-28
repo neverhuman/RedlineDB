@@ -27,6 +27,7 @@ pub mod builder;
 pub mod column;
 pub mod filter;
 pub mod hash_agg;
+pub mod route;
 pub mod scan;
 
 #[allow(unused_imports)]
@@ -72,6 +73,19 @@ pub static MORSEL_QUERIES_PRIMITIVE_AGG: AtomicU64 = AtomicU64::new(0);
 pub static MORSEL_QUERIES_DEFERRED_SHAPE: AtomicU64 = AtomicU64::new(0);
 pub static MORSEL_QUERIES_NOT_ELIGIBLE: AtomicU64 = AtomicU64::new(0);
 
+// W4-A1: routing decision counters. Incremented from
+// `morsel::route::route_primitive_scan` when telemetry is enabled. The
+// `_USED` counter is incremented only on actual routing wins; the
+// `_FALLBACK_*` counters split by fallback reason so we can identify
+// which constraint is firing most often in the corpus.
+pub static MORSEL_ROUTE_USED: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_ROUTE_FALLBACK_DISABLED: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_ROUTE_FALLBACK_INELIGIBLE: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_ROUTE_FALLBACK_PROJECTION: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_ROUTE_FALLBACK_PREDICATE: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND: AtomicU64 = AtomicU64::new(0);
+pub static MORSEL_ROUTE_FALLBACK_SHAPE: AtomicU64 = AtomicU64::new(0);
+
 /// True when `REDLINE_MORSEL_TELEMETRY=1` is set. Cached on first call.
 pub fn morsel_telemetry_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
@@ -79,6 +93,38 @@ pub fn morsel_telemetry_enabled() -> bool {
         std::env::var_os("REDLINE_MORSEL_TELEMETRY")
             .map(|v| v != "0" && !v.is_empty())
             .unwrap_or(false)
+    })
+}
+
+/// W4-A1: parsed `REDLINE_MORSEL_ROUTE` env var. `None` means "stay on
+/// tuple path" (the default); `Some(MorselRouteMode::PrimitiveScan)` opts
+/// into the W4-A1 primitive-scan routing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MorselRouteMode {
+    /// Route eligible single-table all-primitive-column scans through the
+    /// morsel filter + emit pipeline. Tuple path stays as the fallback.
+    PrimitiveScan,
+}
+
+/// Cached `REDLINE_MORSEL_ROUTE` parse. Unrecognised values are rejected
+/// with a stderr notice and treated as off.
+pub fn morsel_route_mode() -> Option<MorselRouteMode> {
+    static MODE: OnceLock<Option<MorselRouteMode>> = OnceLock::new();
+    *MODE.get_or_init(|| {
+        let raw = std::env::var("REDLINE_MORSEL_ROUTE").ok()?;
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "primitive_scan" | "primitive-scan" | "all" | "1" | "on" => {
+                Some(MorselRouteMode::PrimitiveScan)
+            }
+            "" | "0" | "off" => None,
+            other => {
+                eprintln!(
+                    "redlinedb: REDLINEDB_MORSEL_ROUTE={other:?} not recognised; \
+                     valid values: primitive_scan, all, on, 1, off, 0"
+                );
+                None
+            }
+        }
     })
 }
 
