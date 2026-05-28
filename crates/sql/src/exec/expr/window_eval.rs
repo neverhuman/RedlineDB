@@ -282,7 +282,23 @@ fn eval_window_call(
 
     let frame = resolve_frame(window);
 
-    let func_name = func.name.to_string().to_ascii_lowercase();
+    // A46: stack-buffer function-name lowering (reuse the
+    // `simple_function_name_lower` helper from json_dispatch.rs). The
+    // previous `func.name.to_string().to_ascii_lowercase()` allocated
+    // a fresh String per window function call; the helper lowercases
+    // into a 48-byte stack scratch and only falls through to the
+    // owned-String path for qualified / quoted / >48-byte names
+    // (< 1% of real-world calls). Fires per window function per query.
+    let mut scratch = [0u8; crate::exec::expr::json_dispatch::FN_NAME_STACK];
+    let borrowed = crate::exec::expr::json_dispatch::simple_function_name_lower(func, &mut scratch);
+    let owned_name;
+    let func_name: &str = match borrowed {
+        Some(s) => s,
+        None => {
+            owned_name = func.name.to_string().to_ascii_lowercase();
+            owned_name.as_str()
+        }
+    };
     let args = function_args(func);
 
     let mut results = vec![SqlValue::Null; rows.len()];
