@@ -707,13 +707,30 @@ fn build_select_runtime(
         }
     };
 
+    // A28: only the live-iteration source variants (Table, SqliteSchema,
+    // Empty) consult `runtime.selection` / `runtime.projection` per
+    // `selection_passes` + `project_row` in exec/mod.rs. Batched sources
+    // pre-project via `order_and_project_rows_with_distinct_on`; StaticRows
+    // sources are pre-projected by their fast paths (covering scan, index
+    // count, morsel route). Cloning the plan's selection/projection for
+    // those variants is dead work — and selection trees can be deep
+    // sqlparser AST nodes, so the saving compounds on complex queries.
+    let (selection, projection) = match &source {
+        SelectRuntimeSource::Table { .. }
+        | SelectRuntimeSource::SqliteSchema { .. }
+        | SelectRuntimeSource::Empty => (plan.selection.clone(), plan.projection.clone()),
+        SelectRuntimeSource::Batched { .. } | SelectRuntimeSource::StaticRows { .. } => {
+            (None, Vec::new())
+        }
+    };
+
     let runtime_tx = std::mem::replace(tx, SelectRuntimeTx::Empty);
     Ok(SelectRuntime {
         tx: runtime_tx,
         restore_tx,
         source,
-        selection: plan.selection.clone(),
-        projection: plan.projection.clone(),
+        selection,
+        projection,
         limit,
         offset,
         seen: 0,
