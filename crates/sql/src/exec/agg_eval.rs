@@ -224,10 +224,14 @@ pub(super) fn eval_group_scalar_with_ctx(
             }
             Expr::Nested(expr) => eval_group_scalar_with_ctx(expr, group, first_context, bindings),
             Expr::Cast {
-                expr, data_type, ..
+                kind,
+                expr,
+                data_type,
+                ..
             } => cast_value(
                 eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
                 data_type,
+                kind.clone(),
             ),
             Expr::Between {
                 expr,

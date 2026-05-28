@@ -268,8 +268,11 @@ pub(crate) fn eval_scalar(
             eval_scalar(expr, row, bindings)?
         }
         Expr::Cast {
-            expr, data_type, ..
-        } => cast_value(eval_scalar(expr, row, bindings)?, data_type)?,
+            kind,
+            expr,
+            data_type,
+            ..
+        } => cast_value(eval_scalar(expr, row, bindings)?, data_type, kind.clone())?,
         Expr::Ceil { expr, .. } => match eval_scalar(expr, row, bindings)? {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::Real(numeric_value(&value)?.ceil()),

@@ -536,6 +536,21 @@ fn ctas_table_info_metadata_matches_sqlite() {
 }
 
 #[test]
+fn sqlite_cast_numeric_returns_numeric_storage_class() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT typeof(CAST(5 AS NUMERIC))"),
+        SqlValue::Text(Arc::from("integer"))
+    );
+    assert_eq!(q1(&c, "SELECT CAST(5 AS NUMERIC)"), SqlValue::Integer(5));
+    assert_eq!(
+        q1(&c, "SELECT typeof(CAST(3.14 AS NUMERIC))"),
+        SqlValue::Text(Arc::from("real"))
+    );
+    assert_eq!(q1(&c, "SELECT CAST(3.14 AS NUMERIC)"), SqlValue::Real(3.14));
+}
+
+#[test]
 fn ctas_duplicate_and_aliased_names_match_sqlite() {
     let lab = CtasLab::new();
     lab.execute_both("CREATE TABLE src(a INTEGER, b INTEGER)");

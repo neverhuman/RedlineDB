@@ -23,6 +23,7 @@ fn type_name_contains_ci(haystack: &str, needle: &str) -> bool {
 pub(crate) fn cast_value(
     value: SqlValue,
     data_type: &sqlparser::ast::DataType,
+    kind: sqlparser::ast::CastKind,
 ) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null) {
         return Ok(SqlValue::Null);
@@ -71,24 +72,20 @@ pub(crate) fn cast_value(
     }
 
     if type_name_contains_ci(&type_name, "numeric") {
-        // Track H — PG-style: keep NUMERIC values as TEXT so subsequent
-        // arithmetic can preserve full precision (PG's `0.1 + 0.2 = 0.3`
-        // semantics) rather than being rounded into a Rust f64. The binary
-        // operator dispatcher (see `crate::exec::expr::coerce::binary`)
-        // recognises TEXT-shaped decimals and applies string-based math.
-        //
-        // If the type carries an explicit `(p, s)` form, we round-pad the
-        // result to exactly `s` fractional digits so `(1.5 * 3)::numeric(10,2)`
-        // renders as `4.50` (not `4.5`).
-        let scale = parse_numeric_scale(&type_name);
-        let result = cast_to_numeric_text(&value);
-        if let (SqlValue::Text(text), Some(target_scale)) = (&result, scale) {
-            return Ok(SqlValue::Text(Arc::from(rescale_decimal_text(
-                text.as_ref(),
-                target_scale,
-            ))));
+        if matches!(kind, sqlparser::ast::CastKind::DoubleColon) {
+            // Track H — PG-style `::numeric`: keep NUMERIC values as TEXT so
+            // subsequent arithmetic can preserve full precision.
+            let scale = parse_numeric_scale(&type_name);
+            let result = cast_to_numeric_text(&value);
+            if let (SqlValue::Text(text), Some(target_scale)) = (&result, scale) {
+                return Ok(SqlValue::Text(Arc::from(rescale_decimal_text(
+                    text.as_ref(),
+                    target_scale,
+                ))));
+            }
+            return Ok(result);
         }
-        return Ok(result);
+        return Ok(cast_to_numeric(&value));
     }
 
     // Track H — beyond-SQLite (Postgres parity) casts. Both target a TEXT-or-

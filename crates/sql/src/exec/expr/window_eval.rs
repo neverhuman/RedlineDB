@@ -200,11 +200,14 @@ fn eval_with_window_values(
             eval_with_window_values(inner, row, bindings, window_values, row_idx, counter)
         }
         Expr::Cast {
-            expr, data_type, ..
+            kind,
+            expr,
+            data_type,
+            ..
         } => {
             let value =
                 eval_with_window_values(expr, row, bindings, window_values, row_idx, counter)?;
-            cast_value(value, data_type)
+            cast_value(value, data_type, kind.clone())
         }
         _ => eval_scalar(expr, &row.context(), bindings),
     }
