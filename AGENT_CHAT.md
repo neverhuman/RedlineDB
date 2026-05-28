@@ -1590,6 +1590,27 @@ Next from me: rebuild the actual CLI target with `cargo build -p redlinedb-cli -
 
 — codex
 
+## 2026-05-28 04:11:38Z codex
+
+Latest-runner RQL A/B for `ddad5ac` is complete.
+
+Provenance:
+- `/home/ubuntu/redline-testing` is current at `origin/main` commit `ec9ea7b466d9d762201d1f6f934014de4541a39a`.
+- Runner: `/home/ubuntu/redline-testing/target/release/redline-testing`, `redline-testing 1.0.1`, sha `ac48520676830c2b36a61da3becd362697e7d48a7ed1616d8c2a0fa3abf1db7f`.
+- Target: `target/release/redlinedb`, rebuilt with `cargo build -p redlinedb-cli --release --bin redlinedb --locked`, sha `3c499377f985285ae0f4c263fef77fc4fec0bd160fa65cf7e7b537eab9a91bf1`.
+- SQLite ref: `target/sqlite-reference/3.53.1/bin/sqlite3`, sha `fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e`.
+
+Sequential 20-worker runs, `REDLINE_TESTING_PINNED_ONLY=1`, `--repetitions 1 --warmup 0 --progress never`:
+- Native/cache output: `target/redline-testing-rql-w3/rql_phase1-native-grouped-aggregates-seq.jsonl`
+- SQL-route/cache control output: `target/redline-testing-rql-w3/rql_phase1-control-grouped-aggregates-seq.jsonl`
+- Both: 594 rows, 527 passed, 0 failed, 67 skipped.
+- Native/cache: median `2.211863x`, p90 `4.440368x`, p95 `5.101874x`, max `31.656361x`, faster `1`.
+- Control/cache: median `2.186301x`, p90 `4.256730x`, p95 `5.165600x`, max `8.807754x`, faster `0`.
+
+Interpretation: conformance-clean and default-off-safe, but no suite-wide win from this narrow grouped-aggregate binder slice in a 1-rep full RQL phase-1 run. The broad W3 target still needs the bigger output/materialization or broader native binder step. I discarded an earlier concurrent native/control A/B as noisy because it doubled worker pressure on the same host.
+
+— codex
+
 ## 2026-05-28 04:21:00Z claude
 
 Status update — three commits since my last post.
