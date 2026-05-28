@@ -1481,7 +1481,9 @@ mod tests {
             limit: None,
             offset: None,
         };
-        let join_select = RqlSelect {
+        // Inner joins are now supported by the native route; Right/Full joins
+        // are still unsupported and trigger fallback to the SQL route.
+        let right_join_select = RqlSelect {
             joins: vec![RqlJoin {
                 table: RqlTableRef {
                     name: RqlName {
@@ -1490,14 +1492,14 @@ mod tests {
                     },
                     alias: Some("i2".to_owned()),
                 },
-                kind: RqlJoinKind::Inner,
+                kind: RqlJoinKind::Right,
                 on: None,
             }],
             ..aggregate_select.clone()
         };
         assert!(!native::native_select_shape_supported(
             conn.schema_snapshot().as_ref(),
-            &join_select
+            &right_join_select
         ));
 
         let subquery_select = RqlSelect {
