@@ -100,13 +100,19 @@ known_optional_v012='^(00093|00094|00095|00096|00220)$'
 # the audit history.
 # W9-T2 (2026-05-28): Codex's `90ecc82 fix(sql): route attach pragmas
 # correctly` + `b2640bb fix(sql): attach parity shell and pragmas`
-# cleared 21 cases (empirically verified by fresh corpus run):
-# removed 10034-10037 (NULLS FIRST/LAST), 10062-10063 (INTPK rowid
-# reuse), 10381 (DOT_DATABASES_LISTS_ATTACHED), 10385/10387 (PRAGMA_AUX
-# schema/version), 10555/10556 (NO_SUCH_COLUMN error message format),
-# 10630 (JSON_REJECTS_BLOB), 11209-11244 step-5 (SQL_CAST NUMERIC
-# subset), 11410 (STRING_LOWER rendering). Failure count: 68 -> 47.
-known_failing_v101='^(10064|10065|10066|10067|10068|10070|10073|10075|10076|10105|10234|10289|10290|10291|10293|10339|10340|10379|10388|10395|10396|10407|10411|10412|10414|10415|10416|10417|10445|10451|10456|10466|10476|10605|11037|11038|11045|11306|11314|11322|11330|11338|11346|11354|11362|11436|11451)$'
+# cleared 21 cases. Failure count: 68 -> 47.
+#
+# W9-T3 (2026-05-28): Codex's `75d6621 fix(sql): land current parity
+# slices` (ALTER TABLE + FK enforcement + LIKE-in-CHECK + render
+# improvements + ON CONFLICT matrix) cleared 21 more cases:
+# removed 10289-10293 (SQL_FOREIGN_KEYS), 10411-10417 (SQL_ALTER ADD/
+# DROP/RENAME COLUMN family), 10605 (SQL_PATTERN
+# LIKE_INSIDE_CHECK_CONSTRAINT), 11306/11314/11322/11330/11338/11346/
+# 11354/11362 (CAST_*_AS_NUMERIC remainder), 11436 (STRING_ZEROBLOB
+# rendering), 11451 (STRING_UNHEX_0102 rendering). Failure count:
+# 47 -> 26. Empirically verified: regex covers all 26 actual
+# failures, 0 uncovered.
+known_failing_v101='^(10064|10065|10066|10067|10068|10070|10073|10075|10076|10105|10234|10339|10340|10379|10388|10395|10396|10407|10445|10451|10456|10466|10476|11037|11038|11045)$'
 
 optional_count=0
 unexpected_count=0

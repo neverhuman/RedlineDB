@@ -505,13 +505,7 @@ pub(crate) fn eval_scalar_function_values(
             // A14: pass by reference — `glob_result` now takes `&SqlValue`.
             glob_result(&values[1], &values[0], false)
         }
-        "typeof" => Ok(SqlValue::Text(Arc::from(match values.first() {
-            Some(SqlValue::Null) | None => "null",
-            Some(SqlValue::Integer(_)) => "integer",
-            Some(SqlValue::Real(_)) => "real",
-            Some(SqlValue::Text(_)) => "text",
-            Some(SqlValue::Blob(_)) => "blob",
-        }))),
+        "typeof" => Ok(SqlValue::Text(Arc::clone(typeof_name(values.first())))),
         "json" => crate::json::scalar::json_func(&values),
         "json_array" => crate::json::scalar::json_array(&values),
         "json_array_length" => crate::json::scalar::json_array_length(&values),
@@ -596,6 +590,32 @@ pub(crate) fn eval_scalar_function_values(
 }
 
 /// Track J — Postgres `nextval(seq)`. Reads the named sequence from
+/// A36: process-wide cached `Arc<str>` names for `typeof()`. The previous
+/// implementation called `Arc::from(&'static str)` on every `typeof()`
+/// invocation, allocating a fresh `Arc<str>` and heap buffer for one of
+/// five constant strings ("null", "integer", "real", "text", "blob").
+/// The LITERALS_AND_TYPEOF case (00002, 2.407× SQLite) calls `typeof()`
+/// many times per row — the per-call alloc dominates.
+///
+/// Cache one `Arc<str>` per kind in process-wide OnceLocks. Subsequent
+/// calls return `Arc::clone`, which is one atomic refcount bump —
+/// cheaper than allocating a fresh Arc.
+fn typeof_name(value: Option<&SqlValue>) -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static NULL_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static INTEGER_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static REAL_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static TEXT_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static BLOB_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    match value {
+        Some(SqlValue::Null) | None => NULL_NAME.get_or_init(|| Arc::from("null")),
+        Some(SqlValue::Integer(_)) => INTEGER_NAME.get_or_init(|| Arc::from("integer")),
+        Some(SqlValue::Real(_)) => REAL_NAME.get_or_init(|| Arc::from("real")),
+        Some(SqlValue::Text(_)) => TEXT_NAME.get_or_init(|| Arc::from("text")),
+        Some(SqlValue::Blob(_)) => BLOB_NAME.get_or_init(|| Arc::from("blob")),
+    }
+}
+
 /// session state, advances it by `increment`, and returns the new value.
 /// The first call returns the configured `start`; subsequent calls add
 /// `increment`. Unknown sequences raise an UnsupportedSql error
