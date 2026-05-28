@@ -45,3 +45,33 @@ fn plain_index_still_works() {
     conn.execute("CREATE INDEX i_basic ON t(a, b)")
         .expect("plain index should still build");
 }
+
+#[test]
+fn create_index_nulls_first_last_is_rejected() {
+    let (_dir, conn) = open();
+    conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
+    for (sql, expected) in [
+        (
+            "CREATE INDEX i_asc_first ON t(a ASC NULLS FIRST)",
+            "unsupported use of NULLS FIRST",
+        ),
+        (
+            "CREATE INDEX i_desc_last ON t(a DESC NULLS LAST)",
+            "unsupported use of NULLS LAST",
+        ),
+        (
+            "CREATE INDEX i_asc_last ON t(a ASC NULLS LAST)",
+            "unsupported use of NULLS LAST",
+        ),
+        (
+            "CREATE INDEX i_desc_first ON t(a DESC NULLS FIRST)",
+            "unsupported use of NULLS FIRST",
+        ),
+    ] {
+        let err = conn.execute(sql).expect_err("NULLS order must be rejected");
+        assert!(
+            err.to_string().contains(expected),
+            "expected {expected:?} in {err:?}"
+        );
+    }
+}

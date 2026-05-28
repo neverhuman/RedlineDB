@@ -510,6 +510,7 @@ pub(crate) fn bind_create_index(
     let table = parse_qualified_name(create_index.table_name)?;
     let mut columns = Vec::with_capacity(create_index.columns.len());
     for column in create_index.columns {
+        reject_index_null_order(&column)?;
         match convert_index_column(column.clone()) {
             Ok(c) => columns.push(c),
             Err(_) => {
@@ -559,6 +560,18 @@ pub(crate) fn bind_create_index(
             predicate_sql,
         }),
     })
+}
+
+fn reject_index_null_order(column: &sqlparser::ast::IndexColumn) -> Result<()> {
+    match column.column.options.nulls_first {
+        Some(true) => Err(Error::UnsupportedSql(
+            "unsupported use of NULLS FIRST".to_owned(),
+        )),
+        Some(false) => Err(Error::UnsupportedSql(
+            "unsupported use of NULLS LAST".to_owned(),
+        )),
+        None => Ok(()),
+    }
 }
 
 pub(crate) fn bind_drop(
