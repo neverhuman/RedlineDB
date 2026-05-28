@@ -106,16 +106,15 @@ known_optional_v012='^(00093|00094|00095|00096|00220)$'
 # slices` cleared 21 more cases. Failure count: 47 -> 26.
 #
 # W9-T4 (2026-05-28): Codex's `77adecb fix(sql): expose sqlite_sequence
-# in batch mode` (AUTOINCREMENT / sqlite_sequence virtualization)
-# cleared 9 more cases: removed 10064-10068 + 10073 + 10075 + 10076
-# (SQL_AUTOINCREMENT cluster — sqlite_sequence visible after INSERT,
-# rowid reuse semantics, max-rowid resumption, KEYWORD_CREATES_SEQUENCE
-# / MONOTONIC_AFTER_DELETE / PERSISTS_AFTER_DELETE_ALL /
-# EXPLICIT_BUMPS_SEQ / NULL_PK_AUTOFILL) and 10395
-# (SQL_SCHEMA_INTROSPECTION — PRAGMA_TABLE_LIST_TEMP_AND_TEMP_MASTER).
-# Failure count: 26 -> 17. Cumulative across W9-T/T2/T3/T4: 68 -> 17
-# (-75%). Empirically verified.
-known_failing_v101='^(10070|10105|10234|10339|10340|10379|10388|10396|10407|10445|10451|10456|10466|10476|11037|11038|11045)$'
+# in batch mode` cleared 9 cases. Failure count: 26 -> 17.
+#
+# W9-T5 (2026-05-28): Codex's `11b24e7 fix(sql): complete
+# sqlite_sequence autoincrement path` + `14be575 fix(sql): propagate
+# sqlite_sequence row errors` cleared the last SQL_AUTOINCREMENT
+# residual: removed 10070 (AUTOINCREMENT_MAX_ROWID_FAIL — sequence
+# resumes correctly when rowid is at MAX). Failure count: 17 -> 16.
+# Cumulative across W9-T/T2/T3/T4/T5: 68 -> 16 (-76%).
+known_failing_v101='^(10105|10234|10339|10340|10379|10388|10396|10407|10445|10451|10456|10466|10476|11037|11038|11045)$'
 
 optional_count=0
 unexpected_count=0
