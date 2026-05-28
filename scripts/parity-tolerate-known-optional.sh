@@ -111,16 +111,27 @@ known_optional_v012='^(00093|00094|00095|00096|00220)$'
 # W9-T5 (2026-05-28): Codex's `11b24e7` + `14be575` cleared SQL_AUTOINCREMENT
 # residual (10070). 17 -> 16.
 #
-# W9-T6 (2026-05-28): Codex's `0e94fb9 fix(sql): match sqlite math
-# precision` + `af4fe37 fix(sql): normalize strict without rowid
-# options` + `686b214 fix(sql): expose temp schema introspection`
-# cleared 6 more cases:
-#   - SQL_STRICT_TABLES (1): 10105 — STRICT_WITHOUT_ROWID_COMBO
-#   - SQL_SCHEMA_INTROSPECTION (2): 10396, 10407 — temp schema variants
-#   - SQL_MATH precision (3): 11037 (cosh), 11038 (exp), 11045
-# Failure count: 16 -> 10. Cumulative across W9-T/T2/T3/T4/T5/T6:
-# 68 -> 10 (-85%). Empirically verified.
-known_failing_v101='^(10234|10339|10340|10379|10388|10445|10451|10456|10466|10476)$'
+# W9-T6 (2026-05-28): math + strict + temp-schema slices. 16 -> 10.
+#
+# W9-T7 (2026-05-28): Codex's `9e195c5 fix(sql): route attached update
+# delete targets` + `ac226e2 fix(cli): mirror deserialize memory
+# warning` + the rowid-qualifier slice (`2e195fd`-tracked) cleared 5
+# more cases:
+#   - CLI_OPTION (1):     10234 — OPT_DESERIALIZE
+#   - SQL_ATTACH (2):     10379 — CROSS_DB_INSERT_SELECT,
+#                         10388 — ALIAS_QUALIFIED_UPDATE_DELETE
+#   - SQL_JOIN (1):       10456 — JOIN_LATERAL_LIKE_CORRELATED
+#   - SQL_COMPOUND (1):   10476 — COMPOUND_MIXED_LEFT_TO_RIGHT
+# Failure count: 10 -> 5. Cumulative across W9-T/T2/T3/T4/T5/T6/T7:
+# 68 -> 5 (-93%). Empirically verified.
+#
+# Remaining 5 IDs:
+#   - SQL_UPSERT (2):  10339 MULTIPLE_ON_CONFLICT_PK_BRANCH,
+#                      10340 ON_CONFLICT_COLLATE_NOCASE_TARGET
+#   - SQL_JOIN (3):    10445 JOIN_INNER_USING_MERGES_COLUMN,
+#                      10451 JOIN_NATURAL,
+#                      10466 JOIN_NATURAL_LEFT
+known_failing_v101='^(10339|10340|10445|10451|10466)$'
 
 optional_count=0
 unexpected_count=0
