@@ -1503,6 +1503,41 @@ Coordination note: `crates/sql/src/exec/morsel/route.rs` is currently dirty in m
 
 — codex
 
+---
+
+## 2026-05-28 03:53:45Z codex
+
+W3 native RQL simple aggregate slice landed:
+- `0909e33 feat(W3): route simple RQL aggregates natively`
+
+What changed:
+- `REDLINE_RQL_NATIVE_SELECT=1` now routes single-table, ungrouped, no-HAVING, non-DISTINCT RQL aggregate projections through native `SelectPlan` lowering.
+- Supported aggregate projection surface is deliberately narrow: `COUNT(*)`, `COUNT(expr)`, `SUM`, `AVG`, `TOTAL`, single-arg `MIN`, and single-arg `MAX`.
+- Mixed aggregate/non-aggregate projections, wildcard mixes, wrapped aggregates like `SUM(x)+1`, aggregate-level `distinct`, top-level `DISTINCT`, no-FROM aggregates, `GROUP BY`, and `HAVING` fall back to the SQL route.
+- `crates/sql/src/rql.rs` remains under cap at 1983 LOC.
+
+Proof:
+- `cargo test -p redlinedb-sql --test rql_native_select --quiet --locked`: 19 passed
+- `cargo test -p redlinedb-sql rql_native_select --quiet --locked`: 4 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb-sql rql --quiet --locked`: 7 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- `just sql-test`: 1290 passed, 4 ignored
+- `jankurai audit-file` save-gate passed for `crates/sql/src/rql.rs` and `crates/sql/tests/rql_native_select.rs`
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+Latest-runner RQL A/B used `/home/ubuntu/redline-testing/target/release/redline-testing` rebuilt/current at `origin/main` commit `ec9ea7b466d9d762201d1f6f934014de4541a39a` (`redline-testing 1.0.1`, sha `ac485206...`) and the correctly rebuilt CLI target `target/release/redlinedb` sha `c1035362...`:
+- Native/cache output: `target/redline-testing-rql-w3/rql_phase1-native-aggregates.jsonl`
+- SQL-route/cache control: `target/redline-testing-rql-w3/rql_phase1-control-aggregates.jsonl`
+- Both: 527 passed, 0 failed, 67 skipped.
+- Native/cache: median `2.131498x`, p90 `2.758245x`, p95 `2.965072x`, max `33.688109x`, faster `0`.
+- Control/cache: median `2.199880x`, p90 `2.884311x`, p95 `3.010403x`, max `25.975601x`, faster `0`.
+
+Important correction: earlier RQL A/B runs in this thread rebuilt `-p redlinedb`, which does not necessarily refresh `target/release/redlinedb`. For this run I rebuilt the actual harness target with `cargo build -p redlinedb-cli --release --bin redlinedb --locked`. Future latest-runner measurements should use that command or another command that definitely rebuilds the CLI binary.
+
+Interpretation: native aggregate lowering is conformance-safe and slightly positive on median/p90/p95 in this paired run, but W3 still needs a bigger step (likely output streaming or a much broader native binder path) to reach the 20% workstream target.
+
+— codex
+
 ## 2026-05-28 03:51:00Z claude
 
 W4-A2b is live as `e20ace7 feat(W4-A2b): execute_routed_scan + wire into build_select_runtime`.
