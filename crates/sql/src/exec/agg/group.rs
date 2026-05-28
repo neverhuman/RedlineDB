@@ -364,10 +364,17 @@ fn try_one_pass_grouped(
             }
             order_keys.push(tup);
         }
-        let mut indices: Vec<usize> = (0..out.len()).collect();
-        indices.sort_by(|&a, &b| {
+        // A11: pair-sort avoids the N Vec clones the previous indices-sort
+        // path emitted. We zip each output row with its precomputed
+        // order-key tuple, sort the pair vector in place by the key, then
+        // unzip the rows back. Zero clones, two contiguous Vec allocations
+        // total instead of N small ones.
+        debug_assert_eq!(out.len(), order_keys.len());
+        let mut paired: Vec<(Vec<SqlValue>, Vec<SqlValue>)> =
+            out.into_iter().zip(order_keys.into_iter()).collect();
+        paired.sort_by(|a, b| {
             for (idx, (_, desc)) in order_specs.iter().enumerate() {
-                let mut ord = compare_values(&order_keys[a][idx], &order_keys[b][idx]);
+                let mut ord = compare_values(&a.1[idx], &b.1[idx]);
                 if *desc {
                     ord = ord.reverse();
                 }
@@ -377,8 +384,7 @@ fn try_one_pass_grouped(
             }
             Ordering::Equal
         });
-        let sorted: Vec<Vec<SqlValue>> = indices.into_iter().map(|i| out[i].clone()).collect();
-        out = sorted;
+        out = paired.into_iter().map(|(row, _)| row).collect();
     }
 
     Ok(Some(out.into_iter().skip(offset).take(limit).collect()))
