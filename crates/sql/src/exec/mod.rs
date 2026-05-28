@@ -439,8 +439,6 @@ pub fn execute_prepared(
         PreparedKind::CreateTable(spec) => {
             with_write_tx(conn, |session, tx| {
                 let table = conn.engine().create_table(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 session.last_insert_rowid = Some(table.table_id.0 as i64);
                 Ok(())
             })?;
@@ -459,8 +457,6 @@ pub fn execute_prepared(
                 {
                     session.temp_tables.push(spec.name.original().to_owned());
                 }
-                session.changes += 1;
-                session.total_changes += 1;
                 session.last_insert_rowid = Some(table.table_id.0 as i64);
                 Ok(())
             })?;
@@ -473,7 +469,7 @@ pub fn execute_prepared(
             execute_create_table_as_select(conn, spec, bindings)
         }
         PreparedKind::CreateIndex(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 let spec_has_expression_key =
                     spec.columns.iter().any(|column| column.expr_sql.is_some());
                 let existed_before = if spec_has_expression_key {
@@ -485,8 +481,6 @@ pub fn execute_prepared(
                 if spec_has_expression_key && !existed_before {
                     backfill_expression_index(conn, tx, &index)?;
                 }
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -510,8 +504,6 @@ pub fn execute_prepared(
                     .sqlite_sequences_dirty
                     .insert(spec.name.name.folded().to_owned());
                 conn.engine().drop_table(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -520,10 +512,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::DropIndex(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_index(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -532,10 +522,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::CreateView(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().create_view(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -544,10 +532,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::DropView(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_view(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -556,10 +542,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::CreateTrigger(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().create_trigger(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -568,10 +552,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::DropTrigger(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_trigger(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -586,11 +568,9 @@ pub fn execute_prepared(
             // / table rename. Snapshot the bit, install, run, restore.
             let prev_legacy = redlinedb_kernel::catalog::legacy_alter_table_active_for_tests();
             redlinedb_kernel::catalog::set_legacy_alter_table(conn.legacy_alter_table());
-            let alter_result = with_write_tx(conn, |session, tx| {
+            let alter_result = with_write_tx(conn, |_session, tx| {
                 rewrite_drop_column_rows(conn, tx, spec)?;
                 conn.engine().alter_table(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             });
             redlinedb_kernel::catalog::set_legacy_alter_table(prev_legacy);
@@ -602,13 +582,7 @@ pub fn execute_prepared(
         }
         PreparedKind::Insert(plan) => {
             let result = execute_insert(conn, plan, bindings)?;
-            if result.affected_rows > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += result.affected_rows;
-                    session.total_changes += result.affected_rows;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, result.affected_rows)?;
             Ok(result)
         }
         PreparedKind::InsertView(plan) => {
@@ -624,13 +598,7 @@ pub fn execute_prepared(
                 trigger::fire_instead_of_insert(conn, &plan.view_name, &plan.columns, values)?;
                 affected += 1;
             }
-            if affected > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += affected;
-                    session.total_changes += affected;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, affected)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: affected,
@@ -638,35 +606,17 @@ pub fn execute_prepared(
         }
         PreparedKind::Update(plan) => {
             let result = execute_update(conn, plan, bindings)?;
-            if result.affected_rows > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += result.affected_rows;
-                    session.total_changes += result.affected_rows;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, result.affected_rows)?;
             Ok(result)
         }
         PreparedKind::Delete(plan) => {
             let result = execute_delete(conn, plan, bindings)?;
-            if result.affected_rows > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += result.affected_rows;
-                    session.total_changes += result.affected_rows;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, result.affected_rows)?;
             Ok(result)
         }
         PreparedKind::Merge(plan) => {
             let result = crate::exec::merge::execute_merge(conn, plan, bindings)?;
-            if result.affected_rows > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += result.affected_rows;
-                    session.total_changes += result.affected_rows;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, result.affected_rows)?;
             Ok(result)
         }
         PreparedKind::Analyze(plan) => {
@@ -1059,8 +1009,7 @@ fn execute_create_table_as_select(
             session.last_insert_rowid = Some(rowid.0 as i64);
         }
         if inserted > 0 {
-            session.changes += inserted;
-            session.total_changes += inserted;
+            session.last_insert_rowid = Some(inserted as i64);
         }
         Ok(inserted)
     })?;
@@ -1068,6 +1017,14 @@ fn execute_create_table_as_select(
     Ok(ExecutionResult {
         runtime: RuntimeState::Done,
         affected_rows: inserted,
+    })
+}
+
+fn record_row_changes(conn: &Connection, affected_rows: usize) -> Result<()> {
+    with_session_reentrant(conn, |session| {
+        session.changes = affected_rows;
+        session.total_changes += affected_rows;
+        Ok(())
     })
 }
 

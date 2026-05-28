@@ -11,7 +11,8 @@
 mod common;
 
 use common::{open_database, open_database_with_options, step_done};
-use redlinedb_sql::{Database, DbOptions, Step};
+use redlinedb_sql::{Connection, Database, DbOptions, Step};
+use std::sync::Arc;
 use tempfile::tempdir;
 
 #[test]
@@ -164,6 +165,40 @@ fn execute_returns_read_and_write_counts() {
         1
     );
     assert_eq!(conn.execute("SELECT a, b FROM t").expect("select"), 1);
+}
+
+#[test]
+fn changes_and_total_changes_scalar_functions_track_dml() {
+    let (_dir, conn) = open_database();
+
+    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (0, 0));
+
+    conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b TEXT)")
+        .expect("create table");
+    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (0, 0));
+
+    conn.execute("INSERT INTO t VALUES(1, 'a')")
+        .expect("insert one");
+    assert_eq!(scalar_i64(&conn, "SELECT changes()"), 1);
+
+    conn.execute("INSERT INTO t VALUES(2, 'b'),(3, 'c')")
+        .expect("insert two");
+    assert_eq!(scalar_i64(&conn, "SELECT changes()"), 2);
+    assert_eq!(scalar_i64(&conn, "SELECT total_changes()"), 3);
+
+    conn.execute("UPDATE t SET b = 'X'").expect("update all");
+    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (3, 6));
+
+    conn.execute("DELETE FROM t WHERE a = 1")
+        .expect("delete one");
+    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (1, 7));
+
+    assert_eq!(scalar_i64(&conn, "SELECT count(*) FROM t"), 2);
+    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (1, 7));
+
+    conn.execute("UPDATE t SET b = 'none' WHERE a = 99")
+        .expect("update none");
+    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (0, 7));
 }
 
 #[test]
@@ -460,4 +495,21 @@ fn commit_failure_surfaces_maybe_committed_without_index_repair() {
         .expect("prepare count");
     assert_eq!(stmt.step().expect("step count"), Step::Row);
     assert_eq!(stmt.column_i64(0).expect("count"), 1);
+}
+
+fn scalar_i64(conn: &Arc<Connection>, sql: &str) -> i64 {
+    let mut stmt = conn.prepare(sql).expect("prepare scalar");
+    assert_eq!(stmt.step().expect("step scalar"), Step::Row);
+    let value = stmt.column_i64(0).expect("read scalar");
+    assert_eq!(stmt.step().expect("done scalar"), Step::Done);
+    value
+}
+
+fn scalar_i64_pair(conn: &Arc<Connection>, sql: &str) -> (i64, i64) {
+    let mut stmt = conn.prepare(sql).expect("prepare scalar pair");
+    assert_eq!(stmt.step().expect("step scalar pair"), Step::Row);
+    let left = stmt.column_i64(0).expect("read left");
+    let right = stmt.column_i64(1).expect("read right");
+    assert_eq!(stmt.step().expect("done scalar pair"), Step::Done);
+    (left, right)
 }

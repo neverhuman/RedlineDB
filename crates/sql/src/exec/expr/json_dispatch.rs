@@ -126,6 +126,22 @@ pub(crate) fn eval_scalar_function_values(
             }
             Ok(SqlValue::Integer(last_insert_rowid_value()))
         }
+        "changes" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql(
+                    "changes requires 0 args".to_owned(),
+                ));
+            }
+            Ok(SqlValue::Integer(changes_value()))
+        }
+        "total_changes" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql(
+                    "total_changes requires 0 args".to_owned(),
+                ));
+            }
+            Ok(SqlValue::Integer(total_changes_value()))
+        }
         "length" => match values.first() {
             // SQLite: length(NULL) is NULL, not 0. For TEXT, length returns
             // the count of Unicode characters (not bytes); for BLOB, byte
@@ -953,4 +969,37 @@ fn last_insert_rowid_value() -> i64 {
     current_connection()
         .and_then(|conn| conn.last_insert_rowid())
         .unwrap_or(0)
+}
+
+fn changes_value() -> i64 {
+    if let Some(ptr) = crate::exec::current_session_ptr() {
+        // SAFETY: installed by `with_write_tx` for the duration of the
+        // synchronous statement/trigger execution scope.
+        let session: &crate::session::SessionState = unsafe { &*ptr };
+        return usize_to_sql_i64(session.changes);
+    }
+    match current_connection() {
+        Some(conn) => usize_to_sql_i64(conn.changes()),
+        None => 0,
+    }
+}
+
+fn total_changes_value() -> i64 {
+    if let Some(ptr) = crate::exec::current_session_ptr() {
+        // SAFETY: installed by `with_write_tx` for the duration of the
+        // synchronous statement/trigger execution scope.
+        let session: &crate::session::SessionState = unsafe { &*ptr };
+        return usize_to_sql_i64(session.total_changes);
+    }
+    match current_connection() {
+        Some(conn) => usize_to_sql_i64(conn.total_changes()),
+        None => 0,
+    }
+}
+
+fn usize_to_sql_i64(value: usize) -> i64 {
+    match i64::try_from(value) {
+        Ok(value) => value,
+        Err(_) => i64::MAX,
+    }
 }

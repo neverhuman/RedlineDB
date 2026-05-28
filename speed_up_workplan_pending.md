@@ -102,3 +102,19 @@ Verification:
 
 Next safe slice:
 - `SQL_AUTOINCREMENT` case `10070` (`changes()` / `total_changes()`), isolated to scalar dispatch and `smoke_misc` coverage.
+
+Current changes/total_changes slice:
+- `SQL_AUTOINCREMENT` case `10070` is fixed on latest `redline-testing 1.0.1`.
+- `changes()` and `total_changes()` now resolve as zero-argument scalar functions.
+- DML row counters now match SQLite's last-statement and cumulative row-change semantics; DDL no longer increments them.
+
+Verification:
+- `cargo test -p redlinedb-sql --test smoke_misc changes_and_total_changes_scalar_functions_track_dml --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_misc --quiet --locked`
+- `cargo test -p redlinedb-sql --test phase10_sqlb --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `10070` passed; total failures now `16 / 2445`.
+
+Next safe slice:
+- SQL_MATH precision cluster: `11037`, `11038`, `11045`.
