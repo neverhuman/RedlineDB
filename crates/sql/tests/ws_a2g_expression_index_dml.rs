@@ -195,3 +195,68 @@ fn unique_expression_index_backfill_rejects_duplicates() {
         "backfill should reject duplicate evaluated lower(name) keys"
     );
 }
+
+#[test]
+fn expression_index_survives_reopen() {
+    // Verify the expression index is durable: after the database is closed
+    // and reopened, INDEXED BY queries over the expression index return the
+    // same results as before the close.
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = dir.path().join("ws-a2g-reopen.db");
+
+    {
+        let db = Database::create(&path, DbOptions::default()).expect("create");
+        let conn = db.connect();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")
+            .expect("create table");
+        conn.execute("CREATE INDEX t_lname ON t(lower(name))")
+            .expect("create expression index");
+        conn.execute("INSERT INTO t VALUES (1, 'Alice'), (2, 'BOB'), (3, 'alice')")
+            .expect("insert");
+        conn.execute("UPDATE t SET name = 'charlie' WHERE id = 2")
+            .expect("update");
+        conn.execute("DELETE FROM t WHERE id = 3").expect("delete");
+        // Verify correct state before close.
+        assert_eq!(
+            collect_i64(
+                &conn,
+                "SELECT id FROM t INDEXED BY t_lname WHERE lower(name) = 'alice' ORDER BY id"
+            ),
+            vec![1]
+        );
+        assert_eq!(
+            collect_i64(
+                &conn,
+                "SELECT id FROM t INDEXED BY t_lname WHERE lower(name) = 'charlie' ORDER BY id"
+            ),
+            vec![2]
+        );
+    }
+    // Reopen the database and verify the index is intact.
+    let db = Database::open(&path, DbOptions::default()).expect("reopen");
+    let conn = db.connect();
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_lname WHERE lower(name) = 'alice' ORDER BY id"
+        ),
+        vec![1],
+        "expression index key for 'alice' must survive reopen"
+    );
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_lname WHERE lower(name) = 'charlie' ORDER BY id"
+        ),
+        vec![2],
+        "expression index key for 'charlie' (via UPDATE) must survive reopen"
+    );
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_lname WHERE lower(name) = 'bob' ORDER BY id"
+        ),
+        Vec::<i64>::new(),
+        "deleted-then-updated 'bob' key must be absent after reopen"
+    );
+}

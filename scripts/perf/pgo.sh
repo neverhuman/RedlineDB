@@ -199,6 +199,7 @@ fi
 echo ">>> [3a/3] Running training workload (subset=$TRAINING_SUBSET) to gather profile data"
 mkdir -p target/redline-testing-pgo
 if [ "$TRAINING_SUBSET" = "full" ]; then
+    REDLINEDB_DEFAULT_DURABILITY=normal \
     "$REDLINE_TESTING_BIN" run \
         --target-bin "$INSTR_BIN" \
         --sqlite-bin "$SQLITE_REF_BIN" \
@@ -218,6 +219,7 @@ else
         "$REDLINE_TESTING_BIN" list --suite sqlite_parity --format json > "$SNAPSHOT"
     fi
     mkdir -p /dev/shm/redline-testing-pgo
+    REDLINEDB_DEFAULT_DURABILITY=normal \
     python3 scripts/perf/run_subset.py \
         --case-list   "$CASE_LIST" \
         --target-bin  "$INSTR_BIN" \

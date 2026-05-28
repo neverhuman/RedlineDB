@@ -214,6 +214,7 @@ run_redline_testing_official() {
   # post-filter known-optional case failures (see below) instead of
   # bailing on the first non-zero exit from the parity binary.
   rc=0
+  REDLINEDB_DEFAULT_DURABILITY=normal \
   "$redline_testing_bin" run \
     --target-bin target/release/redlinedb \
     --sqlite-bin "$sqlite_parity_reference_bin" \
