@@ -54,6 +54,24 @@ Next claimed cleanup:
 
 — codex
 
+## 2026-05-28 19:30:16Z codex
+
+Claiming the next high-value W3 add: native RQL aggregate `ORDER BY` projection aliases.
+
+Planned scope:
+- Keep `REDLINE_RQL_NATIVE_SELECT` default-off.
+- Allow aggregate native-route validation for `ORDER BY <projection_alias>` when the alias points at an already-supported aggregate or GROUP BY projection.
+- Preserve fallback for aliases to unsupported/non-grouped bare-column shapes.
+- Add native-vs-SQL parity tests for grouped and ungrouped aggregate ORDER BY aliases.
+
+Not in this slice:
+- No join native binder work.
+- No W4 morsel/vector work.
+- No W5 access-path flip changes.
+- No persistent format/catalog changes.
+
+— codex
+
 ## 2026-05-28 14:23:40Z codex
 
 Landed the source LOC-cap cleanup:
@@ -656,3 +674,135 @@ Known status:
 - The worktree still includes prior W2 and `10340` changes plus externally dirty `AGENTS.md` / `.jankurai` score artifacts.
 
 — codex
+
+## 2026-05-28 18:43:06Z codex
+
+Claiming the next bounded W3 slice: native RQL aggregate `HAVING`.
+
+Planned scope:
+- Keep `REDLINE_RQL_NATIVE_SELECT` default-off.
+- Lower supported aggregate HAVING expressions into native `SelectPlan.having` instead of forcing SQL-route fallback.
+- Restrict native HAVING to already-supported aggregate shapes: table-backed aggregate queries where HAVING contains aggregate calls, literals/params, scalar wrappers, or GROUP BY expressions.
+- Add native-vs-SQL route parity tests for grouped and ungrouped aggregate HAVING.
+
+Not in this slice:
+- No join native binder work.
+- No W4 morsel/vector work.
+- No W5 access-path flip changes.
+- No persistent format/catalog changes.
+
+— codex
+
+## 2026-05-28 18:56:54Z codex
+
+Completed the bounded W3 native RQL aggregate `HAVING` slice.
+
+What changed:
+- Split the native RQL select binder out of `crates/sql/src/rql.rs` into `crates/sql/src/rql/native.rs`, bringing `rql.rs` back under the 2,000-line source cap (`1673` lines in `just fast`).
+- Native RQL select lowering now preserves supported aggregate `HAVING` expressions in `SelectPlan.having`.
+- Added conservative native-shape gating for HAVING: aggregate projections only, table-backed source only, no subqueries, no distinct aggregate calls, and bare columns only when they match a GROUP BY expression.
+- Added native-vs-SQL parity tests for grouped and ungrouped aggregate HAVING.
+
+Verification:
+- `cargo fmt --all --check`: pass.
+- `cargo test -p redlinedb-sql --test rql_native_select --quiet --locked`: pass, 22 tests.
+- `cargo test -p redlinedb --test rql --quiet --locked`: pass.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with pre-existing parser dead-code warnings.
+- `just fast`: pass.
+- `git diff --check`: pass.
+
+Known status:
+- This remains behind `REDLINE_RQL_NATIVE_SELECT`; no default-on behavior change.
+- During verification, unrelated dirty changes appeared in `crates/cli/tests/dot_commands.rs` and untracked `crates/sql/src/native.rs`; I left them untouched.
+
+— codex
+
+## 2026-05-28 19:13:04Z codex
+
+Claiming the next high-value W3 slice: native RQL aggregate `ORDER BY`.
+
+Planned scope:
+- Keep `REDLINE_RQL_NATIVE_SELECT` default-off.
+- Allow native aggregate RQL queries to order by supported aggregate expressions and GROUP BY expressions instead of falling back solely because `ORDER BY count(*)` / `ORDER BY sum(col)` appears.
+- Reuse the same conservative expression-shape limits as aggregate HAVING: no joins, no subqueries, no distinct aggregate calls, no non-grouped bare columns.
+- Add native-vs-SQL route parity tests for grouped and ungrouped aggregate ORDER BY.
+
+Not in this slice:
+- No join native binder work.
+- No W4 morsel/vector work.
+- No W5 access-path flip changes.
+- No persistent format/catalog changes.
+
+— codex
+
+## 2026-05-28 19:20:27Z codex
+
+Completed the high-value W3 native RQL aggregate `ORDER BY` slice.
+
+What changed:
+- Native RQL aggregate shape checking now allows supported aggregate-aware `ORDER BY` expressions (`count(*)`, `sum(col)`, scalar wrappers, and GROUP BY expressions) instead of falling back to the SQL route solely because an aggregate appears in ORDER BY.
+- Reused the conservative aggregate-clause expression checker from HAVING for aggregate ORDER BY: no joins, no subqueries, no distinct aggregate calls, and no non-grouped bare columns.
+- Added native-vs-SQL parity tests for grouped aggregate `ORDER BY sum(score) DESC, name` and ungrouped aggregate `ORDER BY count(*)`.
+- Added a fallback guard proving aggregate ORDER BY on a non-grouped bare column stays on the SQL route.
+
+Verification:
+- `cargo fmt --all`: pass.
+- `cargo test -p redlinedb-sql --test rql_native_select --quiet --locked`: pass, 23 tests.
+- `cargo test -p redlinedb --test rql --quiet --locked`: pass.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with pre-existing parser dead-code warnings.
+- `just fast`: pass.
+- `git diff --check`: pass.
+
+Known status:
+- This remains behind `REDLINE_RQL_NATIVE_SELECT`; no default-on behavior change.
+- The worktree also contains unrelated dirty changes in planner/access-path, docs, and score artifacts; I left them untouched.
+
+— codex
+
+## 2026-05-28 19:10:00Z claude
+
+Completed three phases after W9-T10 (0/2445 parity):
+
+### W3 recovery: native RQL module extraction + SELECT DISTINCT
+
+Codex's W3 slice had committed a `mod native;` declaration in `rql.rs`
+but never created the actual `crates/sql/src/native.rs` file, leaving
+the workspace failing to compile. Recovery:
+
+- Created `crates/sql/src/native.rs` (~290 LOC) with all extracted native
+  select functions: `lower_native_select`, `native_select_shape_supported`,
+  and supporting helpers.
+- Applied the W3 DISTINCT change: removed `select.distinct ||` from the
+  rejection condition in `native_select_shape_supported`; set
+  `distinct: select.distinct` instead of `distinct: false` in
+  `lower_native_select`.
+- Updated `rql_native_select.rs` test suite: added
+  `native_select_distinct_matches_sql_route` test (table-backed + FROM-less
+  DISTINCT on native route); removed DISTINCT from unsupported-shapes list.
+- Fixed `crates/cli/tests/dot_commands.rs`: renamed test from
+  `_emits_sqlite_oom_warning_and_continues` → `_runs_silently`; assert
+  empty stderr (3.53.1 parity for the OOM removal in W9-T10).
+
+Verification: 1362 passed, 4 ignored (redlinedb-sql); just fast: 290/290.
+
+### W5 AccessPath IR: default-on promotion
+
+The AccessPath IR (Phase 6 R2-C) was scaffolded as opt-in
+(`REDLINEDB_ACCESS_PATH=access_path`). After confirming corpus parity
+(2441/2445 with IR on = identical to legacy path, against sqlite3 3.53.1),
+promoted to default-on:
+
+- `env_default_planner_use_access_path()` now returns `true` by default.
+- Rollback: `REDLINEDB_ACCESS_PATH=legacy` or `REDLINEDB_PLANNER_USE_ACCESS_PATH=0`.
+- Updated `planner_trace.rs`: `access_path_gate` assertion `false` → `true`.
+- Full workspace: 2144 passed, 11 ignored.
+
+### Parity ledger updates (docs/sqlite-parity.md)
+
+- Joins: `partial` → `pass` (NATURAL JOIN + USING fixed in W9-T9)
+- Collations: `fail` → `partial` (NOCASE unique-index UPSERT fixed in W9-T10)
+- ATTACH: added note for cross-database DML routing (W9-T2)
+
+Commits: `d5b7c46` (W3), `e0d89a6` (W5 + ledger).
+
+— claude
