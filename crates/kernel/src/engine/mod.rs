@@ -152,9 +152,9 @@ pub enum CommitOutcome {
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        let parallelism = std::thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(4);
+        // A26: hit the process-wide cached value so subsequent EngineConfig
+        // defaults don't re-walk the cgroup hierarchy.
+        let parallelism = crate::cached_available_parallelism();
         Self {
             rel_id: RelId(1),
             wal: WalConfig::default(),

@@ -117,9 +117,9 @@ impl BufferPool {
         if capacity == 0 {
             return Err(Error::CorruptPage("buffer pool capacity must be nonzero"));
         }
-        let parallelism = thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(4);
+        // A26: hit the process-wide cached available_parallelism() so the
+        // BufferPool constructor doesn't re-walk the cgroup hierarchy.
+        let parallelism = crate::cached_available_parallelism();
         let base_shard_count = capacity.min((parallelism * 4).max(16)).max(1);
         // Phase 5 WS-B6: with `--features numa` round the shard count up
         // to a multiple of the host's NUMA node count so each node owns
