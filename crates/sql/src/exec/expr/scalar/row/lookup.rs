@@ -9,7 +9,7 @@ fn lookup_column_local(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
         RowContext::Joined(rows) => {
             let mut found = None;
             for row in rows.iter() {
-                if let Ok(value) = lookup_joined_row_column(row, name) {
+                if let Ok(value) = lookup_joined_row_visible_column(row, name) {
                     if found.as_ref().is_some_and(|existing| {
                         crate::value::compare_values(existing, &value) != std::cmp::Ordering::Equal
                     }) {
@@ -261,6 +261,13 @@ fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
             Ok(SqlValue::Null)
         }
     }
+}
+
+fn lookup_joined_row_visible_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
+    if row.hides_column_name(name) {
+        return Err(Error::UnknownColumn(name.to_owned()));
+    }
+    lookup_joined_row_column(row, name)
 }
 
 fn lookup_excluded_column(table: &TableDef, excluded: &[SqlValue], name: &str) -> Result<SqlValue> {

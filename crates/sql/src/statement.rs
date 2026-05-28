@@ -500,6 +500,7 @@ pub struct JoinStep {
     pub right: BoundTable,
     pub kind: JoinKind,
     pub selection: Option<Expr>,
+    pub hidden_right_columns: Arc<[usize]>,
 }
 
 #[derive(Debug, Clone)]

@@ -287,6 +287,70 @@ fn left_join_null_extends_missing_rows() {
 }
 
 #[test]
+fn natural_using_join_merged_star_and_left_order() {
+    let (_dir, conn) = open_database();
+
+    conn.execute("CREATE TABLE p(id INTEGER, x INTEGER)")
+        .expect("create p");
+    conn.execute("CREATE TABLE q(id INTEGER, y INTEGER)")
+        .expect("create q");
+    conn.execute("INSERT INTO p VALUES (1,10),(2,20),(3,30)")
+        .expect("insert p");
+    conn.execute("INSERT INTO q VALUES (1,100),(3,300)")
+        .expect("insert q");
+
+    let mut using_stmt = conn
+        .prepare("SELECT * FROM p JOIN q USING(id) ORDER BY id")
+        .expect("prepare using");
+    assert_eq!(using_stmt.column_count(), 3);
+    assert_eq!(using_stmt.step().expect("step"), Step::Row);
+    assert_eq!(using_stmt.column_i64(0).expect("id"), 1);
+    assert_eq!(using_stmt.column_i64(1).expect("x"), 10);
+    assert_eq!(using_stmt.column_i64(2).expect("y"), 100);
+    assert_eq!(using_stmt.step().expect("step"), Step::Row);
+    assert_eq!(using_stmt.column_i64(0).expect("id"), 3);
+    assert_eq!(using_stmt.column_i64(1).expect("x"), 30);
+    assert_eq!(using_stmt.column_i64(2).expect("y"), 300);
+    assert_eq!(using_stmt.step().expect("done"), Step::Done);
+
+    let mut natural_left = conn
+        .prepare("SELECT * FROM p NATURAL LEFT JOIN q ORDER BY id")
+        .expect("prepare natural left");
+    assert_eq!(natural_left.column_count(), 3);
+    let mut rows = Vec::new();
+    while let Step::Row = natural_left.step().expect("natural step") {
+        rows.push((
+            natural_left.column_i64(0).expect("id"),
+            natural_left.column_i64(1).expect("x"),
+            natural_left.column_value(2).expect("y").clone(),
+        ));
+    }
+    assert_eq!(
+        rows,
+        vec![
+            (1, 10, redlinedb_sql::SqlValue::Integer(100)),
+            (2, 20, redlinedb_sql::SqlValue::Null),
+            (3, 30, redlinedb_sql::SqlValue::Integer(300)),
+        ]
+    );
+
+    let mut qualified = conn
+        .prepare("SELECT p.id, q.id, id FROM p NATURAL LEFT JOIN q ORDER BY p.id")
+        .expect("prepare qualified");
+    assert_eq!(qualified.step().expect("step"), Step::Row);
+    assert_eq!(qualified.column_i64(0).expect("p.id"), 1);
+    assert_eq!(qualified.column_i64(1).expect("q.id"), 1);
+    assert_eq!(qualified.column_i64(2).expect("id"), 1);
+    assert_eq!(qualified.step().expect("step"), Step::Row);
+    assert_eq!(qualified.column_i64(0).expect("p.id"), 2);
+    assert_eq!(
+        qualified.column_value(1).expect("q.id"),
+        &redlinedb_sql::SqlValue::Null
+    );
+    assert_eq!(qualified.column_i64(2).expect("id"), 2);
+}
+
+#[test]
 fn inner_join_and_grouped_aggregate_work() {
     let (_dir, conn) = open_database();
 

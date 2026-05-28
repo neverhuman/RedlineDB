@@ -304,3 +304,20 @@ Remaining latest-runner failures after this slice:
 Next safe slice:
 - NATURAL/USING join merged-column output and bare-name lookup for `10445`, `10451`, and `10466`.
 - Defer `10340` until a dedicated collated UNIQUE index key slice; it is not safe as an UPSERT-only patch.
+Current NATURAL/USING join merged-column slice:
+- `10445`, `10451`, and `10466` now pass on latest `redline-testing 1.0.1` runner.
+- remaining official failures after this slice: only `10340` (`ON_CONFLICT_COLLATE_NOCASE_TARGET`).
+- proof artifacts:
+  - raw: `target/redline-testing/natural-using-merged-v1/sqlite_parity.raw.jsonl`
+  - raw sha: `66d51ee9dc77cac27a801c889a690154aae9e35e425327eb12a290f88f94e5c1`
+  - target bin sha: `7c19b661d1ce4fa9e37976e438e32d1a9b9af3c66421c27d0e5157b39d7712cd`
+- focused proof passed:
+  - `cargo test -p redlinedb-sql --test differential_lab diff_natural_using_join_output_shape --quiet --locked`
+  - `cargo test -p redlinedb-sql --test smoke_select natural_using_join_merged_star_and_left_order --quiet --locked`
+  - `cargo test -p redlinedb-sql --test smoke_select --quiet --locked`
+  - `cargo test -p redlinedb-sql --test differential_lab diff_outer_and_cross_join_matrix --quiet --locked`
+  - `cargo check -p redlinedb-sql --quiet --locked`
+  - `jankurai audit-file` on touched files (no new findings)
+  - `cargo build -p redlinedb-cli --release --locked`
+  - `just fast`
+- next logical slice: dedicated collate-aware conflict-index key parity for `10340`.

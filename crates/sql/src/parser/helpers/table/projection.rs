@@ -31,13 +31,18 @@ pub(crate) fn push_projection_columns(source: &SelectSource, out: &mut Vec<Strin
                 }
             }));
             for step in &join.joins {
-                out.extend(step.right.table.columns.iter().map(|column| {
-                    if let Some(alias) = &step.right.alias {
-                        format!("{}.{}", alias, column.name)
-                    } else {
-                        format!("{}.{}", step.right.table.name, column.name)
-                    }
-                }));
+                out.extend(step.right.table.columns.iter().enumerate().filter_map(
+                    |(idx, column)| {
+                        if step.hidden_right_columns.contains(&idx) {
+                            return None;
+                        }
+                        if let Some(alias) = &step.right.alias {
+                            Some(format!("{}.{}", alias, column.name))
+                        } else {
+                            Some(format!("{}.{}", step.right.table.name, column.name))
+                        }
+                    },
+                ));
             }
         }
         SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => {

@@ -158,6 +158,7 @@ fn joined_from(table: &Arc<TableDef>, alias: Option<Arc<str>>, row: Option<Table
         table: Arc::clone(table),
         alias,
         row,
+        hidden_columns: Arc::from([]),
     }
 }
 

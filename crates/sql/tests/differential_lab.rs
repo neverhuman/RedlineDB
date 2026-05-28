@@ -190,6 +190,23 @@ fn diff_outer_and_cross_join_matrix() {
 }
 
 #[test]
+fn diff_natural_using_join_output_shape() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE p(id INTEGER, x INTEGER)");
+    lab.execute("CREATE TABLE q(id INTEGER, y INTEGER)");
+    lab.execute("INSERT INTO p VALUES (1,10),(2,20),(3,30)");
+    lab.execute("INSERT INTO q VALUES (1,100),(3,300)");
+
+    lab.assert_queries(&[
+        "SELECT * FROM p JOIN q USING(id) ORDER BY id",
+        "SELECT * FROM p NATURAL JOIN q ORDER BY id",
+        "SELECT * FROM p NATURAL LEFT JOIN q ORDER BY id",
+        "SELECT id FROM p NATURAL LEFT JOIN q ORDER BY id",
+        "SELECT p.id, q.id, id FROM p NATURAL LEFT JOIN q ORDER BY p.id",
+    ]);
+}
+
+#[test]
 fn diff_group_by_having_matrix() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(grp TEXT, v INTEGER)");

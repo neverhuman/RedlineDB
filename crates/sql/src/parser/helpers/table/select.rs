@@ -224,31 +224,31 @@ pub(crate) fn bind_select_join_source(
     let mut joins = Vec::new();
     for join in table.joins {
         let right = bind_select_join_relation(schema, join.relation)?;
-        let (kind, join_selection) = match join.join_operator {
-            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => (
-                JoinKind::Inner,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
+        let (kind, join_constraint) = match join.join_operator {
+            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Inner, constraint)
+            }
             JoinOperator::CrossJoin(constraint) => match constraint {
-                JoinConstraint::None => (JoinKind::Inner, None),
+                JoinConstraint::None => (JoinKind::Inner, JoinConstraintBinding::default()),
                 _ => {
                     return Err(Error::UnsupportedSql(
                         "CROSS JOIN cannot have a constraint".to_owned(),
                     ));
                 }
             },
-            JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => (
-                JoinKind::Left,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
-            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => (
-                JoinKind::Right,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
-            JoinOperator::FullOuter(constraint) => (
-                JoinKind::Full,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
+            JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Left, constraint)
+            }
+            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Right, constraint)
+            }
+            JoinOperator::FullOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Full, constraint)
+            }
             JoinOperator::Semi(_)
             | JoinOperator::LeftSemi(_)
             | JoinOperator::RightSemi(_)
@@ -267,7 +267,8 @@ pub(crate) fn bind_select_join_source(
         joins.push(JoinStep {
             right,
             kind,
-            selection: join_selection,
+            selection: join_constraint.selection,
+            hidden_right_columns: join_constraint.hidden_right_columns,
         });
         left_tables.push(joins.last().expect("join just pushed").right.clone());
     }
@@ -440,15 +441,24 @@ pub(crate) fn bind_select_join_relation(
     bind_select_table_factor(schema, relation)
 }
 
+#[derive(Default)]
+pub(crate) struct JoinConstraintBinding {
+    pub(crate) selection: Option<Expr>,
+    pub(crate) hidden_right_columns: Arc<[usize]>,
+}
+
 pub(crate) fn bind_join_constraint(
     left: &[BoundTable],
     right: &BoundTable,
     constraint: JoinConstraint,
     params: &mut ParamLayout,
-) -> Result<Option<Expr>> {
+) -> Result<JoinConstraintBinding> {
     match constraint {
-        JoinConstraint::None => Ok(None),
-        JoinConstraint::On(expr) => Ok(Some(crate::parser::select::normalize_expr(expr, params)?)),
+        JoinConstraint::None => Ok(JoinConstraintBinding::default()),
+        JoinConstraint::On(expr) => Ok(JoinConstraintBinding {
+            selection: Some(crate::parser::select::normalize_expr(expr, params)?),
+            hidden_right_columns: Arc::from([]),
+        }),
         JoinConstraint::Using(columns) => {
             let right_name = match right.alias.as_ref().map(|alias| alias.to_string()) {
                 Some(n) => n,
@@ -468,6 +478,7 @@ pub(crate) fn bind_join_constraint(
                 }
             };
             let mut expr = None;
+            let mut hidden = Vec::new();
             for column in columns {
                 let column_part = match column.0.last() {
                     Some(p) => p,
@@ -476,6 +487,11 @@ pub(crate) fn bind_join_constraint(
                     }
                 };
                 let column_name = object_name_part_to_string(column_part)?;
+                if let Some(ordinal) = right_column_ordinal(right, &column_name)
+                    && !hidden.contains(&ordinal)
+                {
+                    hidden.push(ordinal);
+                }
                 let left_col = Expr::CompoundIdentifier(vec![
                     Ident::new(left_name.clone()),
                     Ident::new(column_name.clone()),
@@ -494,15 +510,21 @@ pub(crate) fn bind_join_constraint(
                     None => eq,
                 });
             }
-            Ok(expr)
+            Ok(JoinConstraintBinding {
+                selection: expr,
+                hidden_right_columns: Arc::from(hidden),
+            })
         }
         JoinConstraint::Natural => bind_natural_constraint(left, right),
     }
 }
 
-fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Option<Expr>> {
+fn bind_natural_constraint(
+    left: &[BoundTable],
+    right: &BoundTable,
+) -> Result<JoinConstraintBinding> {
     let Some(left_table) = left.last() else {
-        return Ok(None);
+        return Ok(JoinConstraintBinding::default());
     };
     let left_name = left_table
         .alias
@@ -515,13 +537,17 @@ fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Op
         .map(|alias| alias.to_string())
         .unwrap_or_else(|| right.table.name.to_string());
     let mut expr = None;
+    let mut hidden = Vec::new();
     for lcol in &left_table.table.columns {
-        if right
+        if let Some(ordinal) = right
             .table
             .columns
             .iter()
-            .any(|rcol| rcol.folded.eq_ignore_ascii_case(lcol.folded.as_ref()))
+            .position(|rcol| rcol.folded.eq_ignore_ascii_case(lcol.folded.as_ref()))
         {
+            if !hidden.contains(&ordinal) {
+                hidden.push(ordinal);
+            }
             let column_name = lcol.name.to_string();
             let eq = Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![
@@ -540,7 +566,18 @@ fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Op
             });
         }
     }
-    Ok(expr)
+    Ok(JoinConstraintBinding {
+        selection: expr,
+        hidden_right_columns: Arc::from(hidden),
+    })
+}
+
+fn right_column_ordinal(right: &BoundTable, column_name: &str) -> Option<usize> {
+    right
+        .table
+        .columns
+        .iter()
+        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(column_name))
 }
 
 pub(crate) fn and_expr(left: Expr, right: Expr) -> Expr {
