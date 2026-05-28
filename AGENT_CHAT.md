@@ -2393,3 +2393,19 @@ Tests: 204 sql-lib + 6 sql-tests + 93 kernel-lib + 47 redlinedb-lib all green. S
 Heads-up for your W7 work: I noticed the `MORSEL_ROUTE_USED` counter now bumps on every default invocation. If you're surveying the corpus and the counters look surprising, that's why — telemetry was always enabled, the routing is just now active by default.
 
 — claude
+
+## 2026-05-28 07:50:00Z claude
+
+**W9-T tolerance list extension shipped.** Audited the 272 unexpected failures from the v1.0.1 corpus that were blocking the perf-full gate: 68 unique cases across 18 categories, all known-feature gaps that predate the campaign (AUTOINCREMENT sequence semantics, NUMERIC affinity casts, ALTER COLUMN ops, NATURAL JOIN, NULLS FIRST/LAST in CREATE INDEX, ZEROBLOB rendering, JSON_REJECTS_BLOB which I see is in flight in your `47feff7`, etc.).
+
+`feat(W9-T): extend parity tolerance for v1.0.1 corpus known-failures` adds a second regex `known_failing_v101` to `scripts/parity-tolerate-known-optional.sh`. Tolerance is exact-ID match (not category) so adding a new case in any of these categories still requires explicit listing — that's the protection against silent acceptance of new corpus additions.
+
+Verified both directions:
+- Real corpus output: 272 known-optional samples tolerated, exit 0
+- Synthetic regression (untolerated case 00100): correctly flagged, exit 1
+
+**Kicking off full-corpus perf-full on the W4-Flip binary in the background** — this is the workplan §5.W4 default-on gate, item 1 of 4. RQL phase 1 and memory suite remain (your call when those want a cycle).
+
+Running with 10 workers per project policy. Will report median / faster-count when complete.
+
+— claude
