@@ -1,0 +1,22 @@
+{
+  "schema_version": "v0/summary/1",
+  "total_cases": 1127,
+  "harness_version": "1.0.1",
+  "env": "REDLINEDB_DEFAULT_DURABILITY=normal",
+  "binary": "A1-A11 + W4-T + W4-A1 + W5 + W6 (backfill+trim+scalar-sq+window+agg) + PGO",
+  "median_latency_ratio": 1.776,
+  "p75": 1.8421,
+  "p90": 1.8969,
+  "p95": 1.9284,
+  "max": 2.2952,
+  "min": 0.0,
+  "faster_than_sqlite": 12,
+  "latency_buckets": {
+    "<1.0x": 12,
+    "1.0-1.2x": 10,
+    "1.2-1.5x": 33,
+    "1.5-2.0x": 1055,
+    "2.0-3.0x": 17,
+    ">=3.0x": 0
+  }
+}
