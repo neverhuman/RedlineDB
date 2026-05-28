@@ -106,6 +106,21 @@ fn select_from(from: RqlTableRef, projection: Vec<RqlSelectItem>) -> RqlStatemen
     })
 }
 
+fn select_no_from(projection: Vec<RqlSelectItem>) -> RqlStatement {
+    RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection,
+        from: None,
+        joins: Vec::new(),
+        filter: None,
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    })
+}
+
 fn is_native_select(conn: &Arc<Connection>, statement: &RqlStatement) -> bool {
     conn.prepare_rql(statement)
         .expect("prepare rql")
@@ -411,4 +426,229 @@ fn native_select_supports_scalar_functions_but_falls_back_for_aggregates() {
     assert!(!stmt.template().sql.as_ref().ends_with("select_native"));
     assert!(matches!(stmt.step().expect("aggregate row"), Step::Row));
     assert_eq!(stmt.column_i64(0).expect("sum"), 60);
+}
+
+#[test]
+fn native_select_no_from_arith_matches_sql_route() {
+    let conn = memory_conn();
+    let statement = select_no_from(vec![
+        RqlSelectItem::Expr {
+            expr: RqlExpr::Binary {
+                left: Box::new(RqlExpr::Integer { value: 1 }),
+                op: RqlBinaryOp::Add,
+                right: Box::new(RqlExpr::Integer { value: 2 }),
+            },
+            alias: Some("sum".to_owned()),
+        },
+        RqlSelectItem::Expr {
+            expr: RqlExpr::Binary {
+                left: Box::new(RqlExpr::Text {
+                    value: "a".to_owned(),
+                }),
+                op: RqlBinaryOp::Concat,
+                right: Box::new(RqlExpr::Text {
+                    value: "b".to_owned(),
+                }),
+            },
+            alias: Some("joined".to_owned()),
+        },
+    ]);
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &statement);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &statement));
+    assert_eq!(snapshot(&conn, &statement), expected);
+}
+
+#[test]
+fn native_select_no_from_cast_typeof_matches_sql_route() {
+    let conn = memory_conn();
+    let statement = select_no_from(vec![
+        RqlSelectItem::Expr {
+            expr: RqlExpr::Function {
+                name: "typeof".to_owned(),
+                args: vec![RqlExpr::Integer { value: 7 }],
+                distinct: false,
+            },
+            alias: Some("kind".to_owned()),
+        },
+        RqlSelectItem::Expr {
+            expr: RqlExpr::Cast {
+                expr: Box::new(RqlExpr::Text {
+                    value: "42".to_owned(),
+                }),
+                data_type: "INTEGER".to_owned(),
+            },
+            alias: Some("casted".to_owned()),
+        },
+    ]);
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &statement);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &statement));
+    assert_eq!(snapshot(&conn, &statement), expected);
+}
+
+#[test]
+fn native_select_no_from_null_functions_matches_sql_route() {
+    let conn = memory_conn();
+    let statement = select_no_from(vec![
+        RqlSelectItem::Expr {
+            expr: RqlExpr::Function {
+                name: "coalesce".to_owned(),
+                args: vec![
+                    RqlExpr::Null,
+                    RqlExpr::Text {
+                        value: "fallback".to_owned(),
+                    },
+                ],
+                distinct: false,
+            },
+            alias: Some("coalesced".to_owned()),
+        },
+        RqlSelectItem::Expr {
+            expr: RqlExpr::Function {
+                name: "ifnull".to_owned(),
+                args: vec![
+                    RqlExpr::Null,
+                    RqlExpr::Text {
+                        value: "ifnull".to_owned(),
+                    },
+                ],
+                distinct: false,
+            },
+            alias: Some("ifnull_value".to_owned()),
+        },
+        RqlSelectItem::Expr {
+            expr: RqlExpr::Function {
+                name: "nullif".to_owned(),
+                args: vec![
+                    RqlExpr::Text {
+                        value: "same".to_owned(),
+                    },
+                    RqlExpr::Text {
+                        value: "same".to_owned(),
+                    },
+                ],
+                distinct: false,
+            },
+            alias: Some("nullif_value".to_owned()),
+        },
+    ]);
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &statement);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &statement));
+    assert_eq!(snapshot(&conn, &statement), expected);
+}
+
+#[test]
+fn native_select_no_from_filter_order_limit_matches_sql_route() {
+    let conn = memory_conn();
+    let mut select = match select_no_from(vec![RqlSelectItem::Expr {
+        expr: RqlExpr::Integer { value: 7 },
+        alias: Some("value".to_owned()),
+    }]) {
+        RqlStatement::Select(select) => select,
+        _ => unreachable!(),
+    };
+    select.filter = Some(RqlExpr::Binary {
+        left: Box::new(RqlExpr::Integer { value: 1 }),
+        op: RqlBinaryOp::Eq,
+        right: Box::new(RqlExpr::Integer { value: 1 }),
+    });
+    select.order_by.push(RqlOrder {
+        expr: RqlExpr::Text {
+            value: "constant".to_owned(),
+        },
+        descending: true,
+        nulls_first: Some(false),
+    });
+    select.limit = Some(1);
+    let statement = RqlStatement::Select(select);
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &statement);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &statement));
+    assert_eq!(snapshot(&conn, &statement), expected);
+}
+
+#[test]
+fn native_select_table_json_functions_match_sql_route() {
+    let conn = memory_conn();
+    conn.execute("CREATE TABLE docs(id INTEGER PRIMARY KEY, body TEXT)")
+        .expect("create docs");
+    conn.execute(
+        "INSERT INTO docs(id, body) VALUES (1, '{\"a\":7,\"b\":\"x\"}'), (2, '{\"a\":9}')",
+    )
+    .expect("seed docs");
+    let mut select = match select_from(
+        table_ref(None, "docs", None),
+        vec![
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "json_extract".to_owned(),
+                    args: vec![
+                        column("body"),
+                        RqlExpr::Text {
+                            value: "$.a".to_owned(),
+                        },
+                    ],
+                    distinct: false,
+                },
+                alias: Some("a".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "json_type".to_owned(),
+                    args: vec![
+                        column("body"),
+                        RqlExpr::Text {
+                            value: "$.b".to_owned(),
+                        },
+                    ],
+                    distinct: false,
+                },
+                alias: Some("b_type".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "json_valid".to_owned(),
+                    args: vec![column("body")],
+                    distinct: false,
+                },
+                alias: Some("valid".to_owned()),
+            },
+        ],
+    ) {
+        RqlStatement::Select(select) => select,
+        _ => unreachable!(),
+    };
+    select.order_by.push(RqlOrder {
+        expr: column("id"),
+        descending: false,
+        nulls_first: None,
+    });
+    select.limit = Some(1);
+    let statement = RqlStatement::Select(select);
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &statement);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &statement));
+    assert_eq!(snapshot(&conn, &statement), expected);
 }

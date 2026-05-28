@@ -722,15 +722,21 @@ fn lower_native_select(
     if !native_select_shape_supported(&schema, select) {
         return Ok(None);
     }
-    let Some(from) = &select.from else {
-        return Ok(None);
-    };
-    let Some(source) = native_select_source(&schema, from) else {
-        return Ok(None);
+    let source = if let Some(from) = &select.from {
+        let Some(source) = native_select_source(&schema, from) else {
+            return Ok(None);
+        };
+        source
+    } else {
+        SelectSource::Empty
     };
     let mut params = ParamLayout::default();
-    let (projection, output_columns) =
-        native_select_projection(&source, from, &select.projection, &mut params)?;
+    let (projection, output_columns) = native_select_projection(
+        &source,
+        select.from.as_ref(),
+        &select.projection,
+        &mut params,
+    )?;
     let selection = select
         .filter
         .as_ref()
@@ -782,17 +788,18 @@ fn lower_native_select(
 
 fn native_select_shape_supported(schema: &SchemaSnapshot, select: &RqlSelect) -> bool {
     if select.distinct
-        || select.from.is_none()
         || !select.joins.is_empty()
         || !select.group_by.is_empty()
         || select.having.is_some()
     {
         return false;
     }
-    let Some(from) = &select.from else {
-        return false;
-    };
-    if crate::exec::view::name_is_view(schema, &sql_name(&from.name)) {
+    let from = select.from.as_ref();
+    if let Some(from) = from {
+        if crate::exec::view::name_is_view(schema, &sql_name(&from.name)) {
+            return false;
+        }
+    } else if select.projection.is_empty() {
         return false;
     }
     select
@@ -809,10 +816,12 @@ fn native_select_shape_supported(schema: &SchemaSnapshot, select: &RqlSelect) ->
         })
 }
 
-fn native_select_item_supported(from: &RqlTableRef, item: &RqlSelectItem) -> bool {
+fn native_select_item_supported(from: Option<&RqlTableRef>, item: &RqlSelectItem) -> bool {
     match item {
-        RqlSelectItem::Wildcard => true,
-        RqlSelectItem::QualifiedWildcard { table } => native_select_table_matches(from, table),
+        RqlSelectItem::Wildcard => from.is_some(),
+        RqlSelectItem::QualifiedWildcard { table } => from
+            .as_ref()
+            .is_some_and(|from| native_select_table_matches(from, table)),
         RqlSelectItem::Expr { expr, .. } => native_select_expr_supported(from, expr),
     }
 }
@@ -824,7 +833,7 @@ fn native_select_table_matches(from: &RqlTableRef, table: &str) -> bool {
     }
 }
 
-fn native_select_expr_supported(from: &RqlTableRef, expr: &RqlExpr) -> bool {
+fn native_select_expr_supported(from: Option<&RqlTableRef>, expr: &RqlExpr) -> bool {
     match expr {
         RqlExpr::Null
         | RqlExpr::Bool { .. }
@@ -833,10 +842,12 @@ fn native_select_expr_supported(from: &RqlTableRef, expr: &RqlExpr) -> bool {
         | RqlExpr::Text { .. }
         | RqlExpr::Blob { .. }
         | RqlExpr::Param { .. } => true,
-        RqlExpr::Column { column } => column
-            .table
-            .as_ref()
-            .is_none_or(|table| native_select_table_matches(from, table)),
+        RqlExpr::Column { column } => from.is_some_and(|from| {
+            column
+                .table
+                .as_ref()
+                .is_none_or(|table| native_select_table_matches(from, table))
+        }),
         RqlExpr::Unary { expr, .. }
         | RqlExpr::Cast { expr, .. }
         | RqlExpr::IsNull { expr, .. }
@@ -897,7 +908,7 @@ fn native_select_function_is_aggregate(name: &str, arity: usize) -> bool {
 
 fn native_select_projection(
     source: &SelectSource,
-    from: &RqlTableRef,
+    from: Option<&RqlTableRef>,
     projection: &[RqlSelectItem],
     params: &mut ParamLayout,
 ) -> Result<(Vec<SelectItem>, Vec<String>)> {
@@ -915,7 +926,7 @@ fn native_select_projection(
                 push_projection_columns(source, &mut output_columns);
             }
             RqlSelectItem::QualifiedWildcard { table } => {
-                if !native_select_table_matches(from, table) {
+                if !from.is_some_and(|from| native_select_table_matches(from, table)) {
                     return Err(Error::UnknownTable(table.clone()));
                 }
                 items.push(SelectItem::QualifiedWildcard(
