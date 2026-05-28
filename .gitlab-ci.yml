@@ -81,6 +81,7 @@ beyond_postgres:
     POSTGRES_PASSWORD: postgres
     REDLINE_TESTING_POSTGRES_URL: postgresql://postgres@postgres:5432/postgres
   before_script:
+    - *evict_sccache
     - apt-get update
     - apt-get install -y --no-install-recommends ca-certificates curl git jq postgresql-client sqlite3
   script:
