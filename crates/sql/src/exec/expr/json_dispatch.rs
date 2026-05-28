@@ -329,9 +329,12 @@ pub(crate) fn eval_scalar_function_values(
         // see https://sqlite.org/lang_corefunc.html#hex and `func.c`. We
         // also default to empty TEXT when called with no args so error
         // surfaces stay consistent with sqlite.
+        // A37: cache the empty `Arc<str>` for the None/Null branches.
+        // SQLite returns empty TEXT (not NULL) for `hex(NULL)`; the previous
+        // code allocated a fresh `Arc<str>` per call via `Arc::from("")`.
+        // Cached clone is one atomic refcount bump.
         "hex" => match values.first() {
-            None => Ok(SqlValue::Text(Arc::from(""))),
-            Some(SqlValue::Null) => Ok(SqlValue::Text(Arc::from(""))),
+            None | Some(SqlValue::Null) => Ok(SqlValue::Text(Arc::clone(empty_text_arc()))),
             Some(other) => Ok(SqlValue::Text(Arc::from(hex_value(other)))),
         },
         "quote" => Ok(SqlValue::Text(Arc::from(quote_value(
@@ -575,7 +578,10 @@ pub(crate) fn eval_scalar_function_values(
         "nextval" => pg_sequence_nextval(&values),
         "currval" => pg_sequence_currval(&values),
         "setval" => pg_sequence_setval(&values),
-        "current_schema" => Ok(SqlValue::Text(std::sync::Arc::from("public"))),
+        // A37: cache the "public" Arc<str>. SQLite/Postgres-compat returns
+        // this constant string for every call; one OnceLock initialization
+        // then Arc::clone for each invocation.
+        "current_schema" => Ok(SqlValue::Text(Arc::clone(current_schema_arc()))),
         _ => {
             let db = crate::udf::current_db();
             match crate::udf::call_registered_scalar(db, &name, &values) {
@@ -614,6 +620,26 @@ fn typeof_name(value: Option<&SqlValue>) -> &'static Arc<str> {
         Some(SqlValue::Text(_)) => TEXT_NAME.get_or_init(|| Arc::from("text")),
         Some(SqlValue::Blob(_)) => BLOB_NAME.get_or_init(|| Arc::from("blob")),
     }
+}
+
+/// A37: cached empty `Arc<str>`. Used by `hex(NULL)` / `hex()` — SQLite
+/// returns empty TEXT (not NULL) for the no-arg / null-arg cases. The
+/// previous code allocated `Arc::from("")` per call; cached clone is one
+/// atomic refcount bump. Could also be reused by other empty-string
+/// branches in future sweeps.
+fn empty_text_arc() -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY.get_or_init(|| Arc::from(""))
+}
+
+/// A37: cached `Arc<str>` for `current_schema()`. SQLite/Postgres-compat
+/// always returns "public" for this function. One-time alloc, then
+/// `Arc::clone` per call.
+fn current_schema_arc() -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static SCHEMA: OnceLock<Arc<str>> = OnceLock::new();
+    SCHEMA.get_or_init(|| Arc::from("public"))
 }
 
 /// session state, advances it by `increment`, and returns the new value.
