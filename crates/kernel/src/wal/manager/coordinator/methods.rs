@@ -68,6 +68,17 @@ impl WalCoordinator {
         Self::new(dir, wal, config, flush_on_shutdown)
     }
 
+    pub(crate) fn open_with_scan_summary_and_shutdown_flush(
+        path: impl AsRef<Path>,
+        config: WalConfig,
+        summary: WalOpenScanSummary,
+        flush_on_shutdown: bool,
+    ) -> Result<Self> {
+        let dir = path.as_ref().to_path_buf();
+        let wal = WalManager::open_with_scan_summary(&dir, config.clone(), summary)?;
+        Self::new(dir, wal, config, flush_on_shutdown)
+    }
+
     fn new(
         dir: PathBuf,
         mut wal: WalManager,

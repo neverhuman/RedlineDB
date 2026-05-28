@@ -133,6 +133,7 @@ impl Engine {
         let wal_dir = path.as_ref().join("wal");
         let mut reader = WalReader::new(&wal_dir, config.wal.clone());
         let scan_report = reader.scan_report()?;
+        let wal_open_summary = scan_report.open_summary();
         let txs = ConcurrentTxStatus::new();
         std::fs::create_dir_all(path.as_ref())
             .map_err(|_| Error::CorruptPage("create engine directory failed"))?;
@@ -160,9 +161,10 @@ impl Engine {
                 .map_err(|_| Error::CorruptPage("create buffer pool failed"))?,
         );
         let wal = Arc::new(
-            WalCoordinator::open_with_shutdown_flush(
+            WalCoordinator::open_with_scan_summary_and_shutdown_flush(
                 &wal_dir,
                 config.wal.clone(),
+                wal_open_summary,
                 flush_wal_on_shutdown(config.commit_durability),
             )
             .map_err(|_| Error::CorruptWal("open wal coordinator failed"))?,

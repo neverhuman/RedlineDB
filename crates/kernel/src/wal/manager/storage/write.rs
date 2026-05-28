@@ -16,6 +16,14 @@ impl WalManager<StdFileSystem> {
         Self::open_with_fs(path, config, StdFileSystem)
     }
 
+    pub(crate) fn open_with_scan_summary(
+        path: impl AsRef<Path>,
+        config: WalConfig,
+        summary: WalOpenScanSummary,
+    ) -> Result<Self> {
+        Self::open_with_fs_and_scan_summary(path, config, StdFileSystem, summary)
+    }
+
     pub fn prune_segments_below_checkpoint_lsn(&mut self, checkpoint_lsn: Lsn) -> Result<usize> {
         let keep_segment = segment_for_lsn(checkpoint_lsn, self.config.segment_bytes);
         self.prune_segments_below(keep_segment)
@@ -74,14 +82,31 @@ impl<Fs: FileSystem> WalManager<Fs> {
         fs.create_dir_all(&dir)?;
         let mut scan = WalReader::new_with_fs(&dir, config.clone(), fs);
         let report = scan.scan_report()?;
-        let records = report.records;
+        let summary = report.open_summary();
         let fs = scan.into_fs();
+        Self::open_prepared(dir, config, fs, summary)
+    }
 
-        let written_lsn = records
-            .last()
-            .map(|record| Lsn(record.lsn.0 + record.encoded_len() as u64))
-            .unwrap_or(Lsn::ZERO);
-        let prev_lsn = records.last().map(|record| record.lsn).unwrap_or(Lsn::ZERO);
+    pub(crate) fn open_with_fs_and_scan_summary(
+        path: impl AsRef<Path>,
+        config: WalConfig,
+        fs: Fs,
+        summary: WalOpenScanSummary,
+    ) -> Result<Self> {
+        validate_config(&config)?;
+        let dir = path.as_ref().to_path_buf();
+        fs.create_dir_all(&dir)?;
+        Self::open_prepared(dir, config, fs, summary)
+    }
+
+    fn open_prepared(
+        dir: std::path::PathBuf,
+        config: WalConfig,
+        fs: Fs,
+        summary: WalOpenScanSummary,
+    ) -> Result<Self> {
+        let written_lsn = summary.valid_end_lsn;
+        let prev_lsn = summary.last_record_lsn;
         let active_segment = segment_for_lsn(written_lsn, config.segment_bytes);
         let active_offset = offset_for_lsn(written_lsn, config.segment_bytes);
         let active_file = fs.open_rw_create(&segment_path(&dir, active_segment))?;
