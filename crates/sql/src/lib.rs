@@ -15,7 +15,7 @@ pub mod udf;
 pub mod value;
 
 pub use connection::{
-    Connection, Database, DbOptions, OptimizerConfig, QueryMemoryConfig, StatsConfig,
+    Connection, Database, DbOptions, OptimizerConfig, QueryMemoryConfig, RqlStats, StatsConfig,
 };
 pub use error::{Error, Result};
 pub use parser::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};

@@ -429,12 +429,33 @@ pub(crate) fn prepare_template_with_options(
         RqlStatement::Update(update) => lower_update(conn.schema_snapshot(), schema_epoch, update)?,
         RqlStatement::Delete(delete) => lower_delete(conn.schema_snapshot(), schema_epoch, delete)?,
         RqlStatement::Select(select) => {
-            if options.native_select
-                && let Some(template) =
+            conn.record_rql_eligible();
+            if options.native_select {
+                if let Some(template) =
                     native::lower_native_select(conn.schema_snapshot(), schema_epoch, select)?
-            {
-                template
+                {
+                    conn.record_rql_native();
+                    template
+                } else {
+                    conn.record_rql_sql_route(
+                        native::native_select_sql_route_reason(
+                            conn.schema_snapshot().as_ref(),
+                            select,
+                        )
+                        .unwrap_or(crate::connection::RqlRouteReason::Shape),
+                    );
+                    let mut params = ParamLayout::default();
+                    bind_query_with_params(
+                        conn,
+                        conn.schema_snapshot(),
+                        schema_epoch,
+                        rql_sql("select").as_ref(),
+                        select_query(select)?,
+                        &mut params,
+                    )?
+                }
             } else {
+                conn.record_rql_sql_route(crate::connection::RqlRouteReason::Disabled);
                 let mut params = ParamLayout::default();
                 bind_query_with_params(
                     conn,

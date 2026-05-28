@@ -2,7 +2,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use redlinedb_sql::{
     Connection, Database, DbOptions, RqlBinaryOp, RqlColumnRef, RqlExpr, RqlJoin, RqlJoinKind,
-    RqlName, RqlOrder, RqlSelect, RqlSelectItem, RqlStatement, RqlTableRef, SqlValue, Step,
+    RqlName, RqlOrder, RqlSelect, RqlSelectItem, RqlStatement, RqlStats, RqlTableRef, SqlValue,
+    Step,
 };
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -253,6 +254,99 @@ fn native_select_falls_back_for_attached_schema_sources() {
     let mut stmt = conn.prepare_rql(&select).expect("aux select");
     assert!(matches!(stmt.step().expect("row"), Step::Row));
     assert_eq!(stmt.column_text(0).expect("kind"), "boot");
+}
+
+#[test]
+fn native_select_telemetry_counts_disabled_fallbacks() {
+    let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let conn = memory_conn();
+    create_items(&conn);
+
+    let select = select_from(
+        table_ref(None, "items", None),
+        vec![RqlSelectItem::Wildcard],
+    );
+    let _ = conn.prepare_rql(&select).expect("sql route");
+
+    assert_eq!(
+        conn.rql_stats(),
+        RqlStats {
+            eligible: 1,
+            native: 0,
+            sql_route: 1,
+            sql_route_disabled: 1,
+            sql_route_source: 0,
+            sql_route_join: 0,
+            sql_route_shape: 0,
+        }
+    );
+}
+
+#[test]
+fn native_select_telemetry_counts_native_and_fallback_reasons() {
+    let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    let conn = memory_conn();
+    create_items(&conn);
+    conn.execute("CREATE TABLE users(id INTEGER, name TEXT)")
+        .expect("create users");
+    conn.execute("CREATE TABLE events(uid INTEGER, kind TEXT)")
+        .expect("create events");
+
+    let native_select = select_from(
+        table_ref(None, "items", None),
+        vec![RqlSelectItem::Wildcard],
+    );
+    let source_select = select_from(
+        table_ref(None, "sqlite_schema", None),
+        vec![RqlSelectItem::Wildcard],
+    );
+    let join_select = select_joined(
+        table_ref(None, "users", Some("u")),
+        vec![RqlJoin {
+            table: table_ref(None, "events", Some("e")),
+            kind: RqlJoinKind::Right,
+            on: Some(RqlExpr::Binary {
+                left: Box::new(qualified_column("u", "id")),
+                op: RqlBinaryOp::Eq,
+                right: Box::new(qualified_column("e", "uid")),
+            }),
+        }],
+        vec![RqlSelectItem::Wildcard],
+    );
+    let mut shape_select = match select_from(
+        table_ref(None, "items", None),
+        vec![RqlSelectItem::Expr {
+            expr: column("name"),
+            alias: None,
+        }],
+    ) {
+        RqlStatement::Select(select) => select,
+        _ => unreachable!(),
+    };
+    shape_select.order_by.push(RqlOrder {
+        expr: RqlExpr::Integer { value: 1 },
+        descending: false,
+        nulls_first: None,
+    });
+    let shape_select = RqlStatement::Select(shape_select);
+
+    let _ = conn.prepare_rql(&native_select).expect("native route");
+    let _ = conn.prepare_rql(&source_select).expect("source fallback");
+    let _ = conn.prepare_rql(&join_select).expect("join fallback");
+    let _ = conn.prepare_rql(&shape_select).expect("shape fallback");
+
+    assert_eq!(
+        conn.rql_stats(),
+        RqlStats {
+            eligible: 4,
+            native: 1,
+            sql_route: 3,
+            sql_route_disabled: 0,
+            sql_route_source: 1,
+            sql_route_join: 1,
+            sql_route_shape: 1,
+        }
+    );
 }
 
 #[test]

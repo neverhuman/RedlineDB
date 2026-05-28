@@ -10,6 +10,7 @@ use super::{
     RqlExpr, RqlJoinKind, RqlName, RqlSelect, RqlSelectItem, RqlTableRef, normalized_expr, rql_sql,
     sql_name, u64_expr,
 };
+use crate::connection::RqlRouteReason;
 use crate::error::{Error, Result};
 use crate::parser::{normalize_expr, push_projection_columns, render_expr_name};
 use crate::statement::{
@@ -88,6 +89,35 @@ pub(super) fn lower_native_select(
             table_hint: None,
         }),
     }))
+}
+
+pub(super) fn native_select_sql_route_reason(
+    schema: &SchemaSnapshot,
+    select: &RqlSelect,
+) -> Option<RqlRouteReason> {
+    if select.from.is_none() && !select.joins.is_empty() {
+        return Some(RqlRouteReason::Shape);
+    }
+    if let Some(from) = &select.from
+        && native_select_bound_table(schema, from).is_none()
+    {
+        return Some(RqlRouteReason::Source);
+    }
+    for join in &select.joins {
+        match join.kind {
+            RqlJoinKind::Right | RqlJoinKind::Full => return Some(RqlRouteReason::Join),
+            RqlJoinKind::Cross if join.on.is_some() => return Some(RqlRouteReason::Join),
+            _ => {}
+        }
+        if native_select_bound_table(schema, &join.table).is_none() {
+            return Some(RqlRouteReason::Source);
+        }
+    }
+    if native_select_shape_supported(schema, select) {
+        None
+    } else {
+        Some(RqlRouteReason::Shape)
+    }
 }
 
 pub(super) fn native_select_shape_supported(schema: &SchemaSnapshot, select: &RqlSelect) -> bool {

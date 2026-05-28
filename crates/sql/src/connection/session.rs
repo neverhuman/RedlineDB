@@ -1,5 +1,6 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -17,11 +18,84 @@ use super::cache::{StatementCache, StatementCacheKey};
 use super::database::Database;
 use super::options::{OptimizerConfig, QueryMemoryConfig, StatsConfig};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RqlStats {
+    pub eligible: u64,
+    pub native: u64,
+    /// Queries routed to the SQL engine (native path did not apply).
+    pub sql_route: u64,
+    pub sql_route_disabled: u64,
+    pub sql_route_source: u64,
+    pub sql_route_join: u64,
+    pub sql_route_shape: u64,
+}
+
+/// Reason a query was routed through the SQL engine rather than native path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RqlRouteReason {
+    Disabled,
+    Source,
+    Join,
+    Shape,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct RqlStatsState {
+    eligible: AtomicU64,
+    native: AtomicU64,
+    sql_route: AtomicU64,
+    sql_route_disabled: AtomicU64,
+    sql_route_source: AtomicU64,
+    sql_route_join: AtomicU64,
+    sql_route_shape: AtomicU64,
+}
+
+impl RqlStatsState {
+    fn snapshot(&self) -> RqlStats {
+        RqlStats {
+            eligible: self.eligible.load(Ordering::Relaxed),
+            native: self.native.load(Ordering::Relaxed),
+            sql_route: self.sql_route.load(Ordering::Relaxed),
+            sql_route_disabled: self.sql_route_disabled.load(Ordering::Relaxed),
+            sql_route_source: self.sql_route_source.load(Ordering::Relaxed),
+            sql_route_join: self.sql_route_join.load(Ordering::Relaxed),
+            sql_route_shape: self.sql_route_shape.load(Ordering::Relaxed),
+        }
+    }
+
+    fn record_eligible(&self) {
+        self.eligible.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_native(&self) {
+        self.native.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_sql_route(&self, reason: RqlRouteReason) {
+        self.sql_route.fetch_add(1, Ordering::Relaxed);
+        match reason {
+            RqlRouteReason::Disabled => {
+                self.sql_route_disabled.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Source => {
+                self.sql_route_source.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Join => {
+                self.sql_route_join.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Shape => {
+                self.sql_route_shape.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Connection {
     pub(super) db: Arc<Database>,
     pub(super) session: Mutex<SessionState>,
     pub(super) local_cache: StatementCache,
+    pub(super) rql_stats: RqlStatsState,
     /// Per-connection ATTACH/DETACH alias map. Populated by
     /// `crate::exec::attach::apply_attach_plan` when the executor runs
     /// `PreparedKind::Attach`.
@@ -39,6 +113,22 @@ impl Connection {
         dirty: &std::collections::BTreeSet<String>,
     ) {
         self.db.publish_sqlite_sequence_entries(sequences, dirty);
+    }
+
+    pub fn rql_stats(&self) -> RqlStats {
+        self.rql_stats.snapshot()
+    }
+
+    pub(crate) fn record_rql_eligible(&self) {
+        self.rql_stats.record_eligible();
+    }
+
+    pub(crate) fn record_rql_native(&self) {
+        self.rql_stats.record_native();
+    }
+
+    pub(crate) fn record_rql_sql_route(&self, reason: RqlRouteReason) {
+        self.rql_stats.record_sql_route(reason);
     }
 
     /// Prepare a single SQL statement, ignoring any trailing statements.
