@@ -179,10 +179,17 @@ pub(crate) fn classify_for_routing(
         let kind = match column.affinity {
             Affinity::Integer => MorselColumnKind::I64,
             Affinity::Real => MorselColumnKind::F64,
-            // Numeric is integer-or-real at runtime; treating it as I64
-            // would mishandle Real-shaped values, so defer until W4-A3
-            // adds runtime kind detection.
-            Affinity::Numeric | Affinity::Text | Affinity::Blob => {
+            // W4-A4: Text affinity columns in the projection list are
+            // routable — they pass through as `SqlValue::Text(Arc<str>)`
+            // with no morsel-side coercion. The kind-mismatch bail in
+            // `execute_routed_scan` still catches loose-typed values
+            // (e.g. an Integer stored under TEXT affinity) and falls
+            // back to the tuple path.
+            Affinity::Text => MorselColumnKind::Text,
+            // Numeric is integer-or-real at runtime; routing it would
+            // need a per-row kind probe (W4-A5). Blob projection is
+            // rare in the corpus and defers to W4-A6.
+            Affinity::Numeric | Affinity::Blob => {
                 return Err(DeclineReason::Projection);
             }
         };
@@ -350,12 +357,16 @@ pub(crate) struct ColumnRouting {
     pub(crate) kind: MorselColumnKind,
 }
 
-/// Narrow column-kind enum for the W4-A initial wave. Mirrors the subset
-/// of `super::ColumnKind` we actually route through filter kernels.
+/// Narrow column-kind enum for the W4-A wave. Mirrors the subset of
+/// `super::ColumnKind` we actually route. W4-A2a shipped I64/F64;
+/// W4-A4 adds Text for SELECT-list projection (Text values pass
+/// through as `SqlValue::Text(Arc<str>)` with no coercion in the
+/// routed emit path).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MorselColumnKind {
     I64,
     F64,
+    Text,
 }
 
 /// W4-A2b: the actual scan-and-emit. Returns `Some(rows)` on a successful
@@ -450,6 +461,7 @@ pub(crate) fn execute_routed_scan(
                 (SqlValue::Null, _) => {}
                 (SqlValue::Integer(_), MorselColumnKind::I64) => {}
                 (SqlValue::Real(_), MorselColumnKind::F64) => {}
+                (SqlValue::Text(_), MorselColumnKind::Text) => {}
                 _ => {
                     record_decline(&MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND);
                     return Ok(None);
