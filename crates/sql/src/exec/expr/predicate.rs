@@ -248,36 +248,47 @@ pub(crate) fn in_subquery_result(
         ));
     }
     let cache_key = subquery_cache_key(conn, subquery);
-    let rows = if in_subquery_is_cacheable(subquery) {
-        if let Some(rows) =
-            IN_SUBQUERY_ROW_CACHE.with(|cache| cache.borrow().get(&cache_key).cloned())
-        {
-            rows
-        } else {
-            let owned = row.to_owned_row();
-            let (rows, used_correlated_lookup) = crate::exec::with_outer_row(owned, || {
-                crate::exec::with_correlated_lookup_tracking(|| {
-                    materialize_prepared_rows(conn, &template, bindings)
-                })
-            });
-            let rows = rows?;
-            if !used_correlated_lookup {
-                IN_SUBQUERY_ROW_CACHE.with(|cache| {
-                    cache.borrow_mut().insert(cache_key, rows.clone());
-                });
-            }
-            rows
+    if in_subquery_is_cacheable(subquery) {
+        if let Some(result) = IN_SUBQUERY_ROW_CACHE.with(|cache| {
+            let cache = cache.borrow();
+            cache
+                .get(&cache_key)
+                .map(|rows| finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated))
+        }) {
+            return result;
         }
-    } else {
+
         let owned = row.to_owned_row();
-        crate::exec::with_outer_row(owned, || {
-            materialize_prepared_rows(conn, &template, bindings)
-        })?
-    };
+        let (rows, used_correlated_lookup) = crate::exec::with_outer_row(owned, || {
+            crate::exec::with_correlated_lookup_tracking(|| {
+                materialize_prepared_rows(conn, &template, bindings)
+            })
+        });
+        let rows = rows?;
+        let result = finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated)?;
+        if !used_correlated_lookup {
+            IN_SUBQUERY_ROW_CACHE.with(|cache| {
+                cache.borrow_mut().insert(cache_key, rows);
+            });
+        }
+        return Ok(result);
+    }
+
+    let owned = row.to_owned_row();
+    let rows = crate::exec::with_outer_row(owned, || {
+        materialize_prepared_rows(conn, &template, bindings)
+    })?;
+    finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated)
+}
+
+fn finish_in_rows<'a, I>(value: &[SqlValue], rows: I, negated: bool) -> Result<SqlValue>
+where
+    I: IntoIterator<Item = &'a [SqlValue]>,
+{
     let mut found = false;
     let mut saw_null = false;
     for row in rows {
-        match row_eq(&value, &row)? {
+        match row_eq(value, row)? {
             Some(true) => {
                 found = true;
                 break;

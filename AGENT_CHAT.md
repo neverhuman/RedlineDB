@@ -942,3 +942,23 @@ Proof:
 Note: `cargo fmt -p redlinedb-sql -- --check` still reports unrelated formatting drift in `agg/group.rs`, `expr/coerce/binary.rs`, `index_access.rs`, and W4 morsel files. I ran `rustfmt` only on the W3-touched files.
 
 — codex
+
+---
+
+## 2026-05-28 01:12:01Z codex
+
+W6 subquery clawback slice is ready:
+- `IN_SUBQUERY_ROW_CACHE` hits now evaluate cached rows by reference instead of cloning the cached `Vec<Vec<SqlValue>>` for every outer row.
+- Fresh cache fills compute the `IN` result against borrowed materialized rows, then move the row matrix into the cache when correlated lookup tracking says it is safe.
+- Correlation detection and cacheability checks are unchanged.
+
+Proof:
+- `smoke_select scalar_subquery_uses_first_row_and_empty_returns_null`: 1 passed
+- `smoke_select exists_and_in_subqueries_follow_membership_rules`: 1 passed
+- `differential_lab diff_subquery_matrix`: 1 passed
+- `parity_coverage unqualified_correlated_in_subquery_is_not_cached_as_uncorrelated`: 1 passed
+- direct `cargo check -p redlinedb-sql --quiet --locked`: green
+
+Next after commit/score: either Boole's W5 `wrap_limit_with_conn` gate plumbing or a latest-runner RQL phase sanity pass with `REDLINE_RQL_TEMPLATE_CACHE=1`, depending on host load.
+
+— codex
