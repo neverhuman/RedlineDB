@@ -18,20 +18,6 @@ pub(super) fn execute_select(
     plan: &crate::statement::SelectPlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<SelectRuntime> {
-    // W4-T: morsel-eligibility telemetry. Observe-only; no behaviour
-    // change. Activated by `REDLINE_MORSEL_TELEMETRY=1`. See
-    // `crates/sql/src/exec/morsel/mod.rs` for the classifier and counters.
-    super::morsel::record_morsel_eligibility(
-        super::morsel::classify_select_plan_eligibility(plan),
-    );
-
-    // W4-A1: morsel-routing tap. Commit-1 always falls back to the tuple
-    // path (route_primitive_scan returns Fallback unconditionally) — the
-    // tap exists so the routing counters increment under
-    // `REDLINE_MORSEL_TELEMETRY=1`, and to keep the call site stable for
-    // W4-A2/A3 which add real routing on top.
-    let _ = super::morsel::route::route_primitive_scan(plan);
-
     // SQLite authorizer contract: consult before any access. We check
     // every table referenced by the top-level source so DENY surfaces as
     // the standard "not authorized" error before any rows are read.
@@ -60,6 +46,21 @@ pub(super) fn execute_select(
     if let Some(runtime) = try_fromless_select_fast_path(plan, bindings)? {
         return Ok(runtime);
     }
+
+    // W4-T: morsel-eligibility telemetry. Observe-only; no behaviour change.
+    // Placed AFTER the fromless fast path so scalar-only queries (which can
+    // never benefit from morsel routing — they have no source table) don't
+    // pay the classifier cost on their critical path. Activated by
+    // `REDLINE_MORSEL_TELEMETRY=1`; see `morsel/mod.rs` for counters.
+    super::morsel::record_morsel_eligibility(
+        super::morsel::classify_select_plan_eligibility(plan),
+    );
+
+    // W4-A1: morsel-routing tap. Commit-1 always declines so the caller
+    // continues on the tuple path; the tap exists so routing counters
+    // increment under `REDLINE_MORSEL_TELEMETRY=1` and the call site is
+    // stable for W4-A2/A3 which add real routing on top.
+    let _ = super::morsel::route::route_primitive_scan(plan);
 
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
     let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
