@@ -7,6 +7,7 @@
 //! finalises after a second merge pass.
 
 use std::cmp::Ordering;
+use std::collections::hash_map::Entry;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -255,18 +256,19 @@ impl HashAggregator {
     pub fn observe(&mut self, key: Vec<SqlValue>, arg_values: &[SqlValue]) -> Result<()> {
         debug_assert_eq!(arg_values.len(), self.aggs.len());
         let bytes = Self::encode_key(&key)?;
-        let entry = self.table.entry(bytes.clone()).or_insert_with(|| {
-            let states = self.aggs.iter().map(|k| AccState::new(*k)).collect();
-            (key.clone(), states)
-        });
+        let entry = match self.table.entry(bytes) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                self.table_bytes = self
+                    .table_bytes
+                    .saturating_add(entry.key().len() + 8 * self.aggs.len());
+                let states = self.aggs.iter().map(|k| AccState::new(*k)).collect();
+                entry.insert((key, states))
+            }
+        };
         for (state, value) in entry.1.iter_mut().zip(arg_values.iter()) {
             state.observe(value);
         }
-        // Rough sizing: key bytes + per-state words. Avoid recomputing
-        // from scratch every row by approximating per-row cost.
-        self.table_bytes = self
-            .table_bytes
-            .saturating_add(bytes.len() + 8 * self.aggs.len());
 
         if self.table_bytes > self.work_mem_bytes {
             self.spill_table()?;
@@ -525,6 +527,24 @@ mod tests {
         agg.observe(key1(0), &[SqlValue::Integer(3)]).expect("o");
         let rows = agg.finalize().expect("finalize");
         assert_eq!(rows[0].1[0], SqlValue::Integer(2));
+    }
+
+    #[test]
+    fn repeated_group_hits_do_not_create_spill_pressure() {
+        let root = tempdir().expect("tempdir");
+        let mut agg = HashAggregator::new(
+            vec![AggKind::CountStar],
+            1024,
+            1024 * 1024,
+            root.path().to_path_buf(),
+        );
+        for _ in 0..200 {
+            agg.observe(key1(0), &[SqlValue::Null]).expect("o");
+        }
+        assert_eq!(agg.group_count(), 1);
+        assert_eq!(agg.spilled_bytes(), 0);
+        let rows = agg.finalize().expect("finalize");
+        assert_eq!(rows[0].1[0], SqlValue::Integer(200));
     }
 
     #[test]
