@@ -266,8 +266,11 @@ impl Engine {
 
 fn catalog_sync_policy(config: &EngineConfig) -> CatalogSyncPolicy {
     match config.commit_durability {
-        CommitDurability::Strict | CommitDurability::Normal => CatalogSyncPolicy::Durable,
-        CommitDurability::UnsafeDev => CatalogSyncPolicy::Volatile,
+        // A6-b: Normal durability means write schema changes but do NOT
+        // fsync them — matching the WAL-commit policy.  Only Strict
+        // requires a catalog fsync for power-failure durability.
+        CommitDurability::Strict => CatalogSyncPolicy::Durable,
+        CommitDurability::Normal | CommitDurability::UnsafeDev => CatalogSyncPolicy::Volatile,
     }
 }
 

@@ -150,7 +150,27 @@ impl Database {
         } else {
             Engine::create(base, opts.engine)?
         };
-        save_user_version(base, 0, metadata_sync_policy)?;
+        // A6-b: Only initialise user_version for *fresh* databases.  The
+        // old code called save_user_version(0) unconditionally, which
+        // (a) silently reset any existing user_version to 0 every time
+        //     the CLI reopened an existing database, and
+        // (b) paid a write + optional fsync on every open even when the
+        //     value was already 0.
+        // Now we load the existing value when the sidecar is present, and
+        // write 0 only for brand-new databases.
+        let user_version_init = if private_memory {
+            0
+        } else {
+            let uv_path = path.join(USER_VERSION_FILE);
+            if uv_path.exists() {
+                // Existing database: load current value, skip the write.
+                load_user_version(base)?
+            } else {
+                // New database: persist the initial value of 0.
+                save_user_version(base, 0, metadata_sync_policy)?;
+                0
+            }
+        };
         let stats_store = StatsStore::new(base);
         let stats = if private_memory {
             Arc::new(StatsSnapshot::default())
@@ -173,11 +193,7 @@ impl Database {
             query_memory: opts.query_memory,
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
-            user_version: Mutex::new(if private_memory {
-                0
-            } else {
-                load_user_version(base)?
-            }),
+            user_version: Mutex::new(user_version_init),
             sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
             _ephemeral_root: ephemeral_root,
@@ -260,6 +276,7 @@ impl Database {
             db: Arc::clone(self),
             session: Mutex::new(session),
             local_cache: StatementCache::with_capacity(self.stmt_cache.capacity()),
+            rql_stats: Default::default(),
             attach_map: crate::exec::attach::AttachMap::new(),
         })
     }
@@ -407,8 +424,11 @@ enum MetadataSyncPolicy {
 impl MetadataSyncPolicy {
     fn from_commit_durability(commit_durability: CommitDurability) -> Self {
         match commit_durability {
-            CommitDurability::Strict | CommitDurability::Normal => Self::Durable,
-            CommitDurability::UnsafeDev => Self::Volatile,
+            // A6-b: Normal durability means write but do NOT fsync metadata
+            // (same policy as WAL commits under Normal: OS-buffered writes).
+            // Only Strict requires an fsync to survive a power failure.
+            CommitDurability::Strict => Self::Durable,
+            CommitDurability::Normal | CommitDurability::UnsafeDev => Self::Volatile,
         }
     }
 
