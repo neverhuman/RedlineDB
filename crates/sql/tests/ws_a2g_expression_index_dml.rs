@@ -84,6 +84,59 @@ fn expression_index_backfills_existing_rows() {
 }
 
 #[test]
+fn partial_expression_index_tracks_update_membership() {
+    let (_dir, conn) = open_db();
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, active INTEGER)")
+        .expect("create table");
+    conn.execute("INSERT INTO t VALUES (1, 'Foo', 1), (2, 'bar', 0), (3, 'foo', 1)")
+        .expect("insert before index");
+    conn.execute("CREATE INDEX t_active_lname ON t(lower(name)) WHERE active = 1")
+        .expect("create partial expression index");
+
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_active_lname \
+             WHERE active = 1 AND lower(name) = 'foo' ORDER BY id"
+        ),
+        vec![1, 3]
+    );
+
+    conn.execute("UPDATE t SET active = 0 WHERE id = 3")
+        .expect("update row out of partial index");
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_active_lname \
+             WHERE active = 1 AND lower(name) = 'foo' ORDER BY id"
+        ),
+        vec![1]
+    );
+
+    conn.execute("UPDATE t SET active = 1, name = 'FOO' WHERE id = 2")
+        .expect("update row into partial index");
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_active_lname \
+             WHERE active = 1 AND lower(name) = 'foo' ORDER BY id"
+        ),
+        vec![1, 2]
+    );
+
+    conn.execute("UPDATE t SET name = 'zap' WHERE id = 1")
+        .expect("update expression key inside partial index");
+    assert_eq!(
+        collect_i64(
+            &conn,
+            "SELECT id FROM t INDEXED BY t_active_lname \
+             WHERE active = 1 AND lower(name) = 'foo' ORDER BY id"
+        ),
+        vec![2]
+    );
+}
+
+#[test]
 fn expression_index_if_not_exists_does_not_rebackfill_existing_index() {
     let (_dir, conn) = open_db();
     conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)")

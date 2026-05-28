@@ -180,12 +180,10 @@ fn expression_index_lower_equality_uses_index() {
     // `CREATE INDEX i ON t(lower(name))` exists and the WHERE contains
     // `lower(name) = ?`, the planner CAN pick the expression index.
     //
-    // GATING: expression-index DML maintenance is wired, but CREATE
-    // INDEX backfill and expression canonicalization still need broader
-    // proof before unhinted queries can default to this path. WS-A2g
-    // therefore keeps the planner match behind `INDEXED BY <name>` so
-    // users opt in explicitly while the planner wiring is exercised
-    // end-to-end.
+    // Expression-index DML maintenance and CREATE INDEX backfill are
+    // wired, so the unhinted planner may use the single-key expression
+    // index. Multi-key expression indexes stay disabled in the planner
+    // until their residual semantics are proven.
     let (_dir, conn) = open_db();
     conn.execute("CREATE TABLE t(id INTEGER, name TEXT)")
         .expect("create");
@@ -194,12 +192,18 @@ fn expression_index_lower_equality_uses_index() {
     conn.execute("INSERT INTO t VALUES (1, 'Foo'), (2, 'BAR'), (3, 'foo')")
         .expect("insert");
 
-    // Unhinted: planner must NOT use the empty expression index.
+    // Unhinted: planner can use the expression index now that DML and
+    // backfill keep it populated.
     let plan_unhinted = explain_text(&conn, "SELECT id FROM t WHERE lower(name) = 'foo'");
     assert!(
-        plan_unhinted.contains("SCAN TABLE t"),
-        "unhinted expression-index query expected TableScan, got:\n{plan_unhinted}"
+        plan_unhinted.contains("USING INDEX t_lname"),
+        "unhinted expression-index query expected USING INDEX, got:\n{plan_unhinted}"
     );
+    let rows_unhinted = collect_ints(
+        &conn,
+        "SELECT id FROM t WHERE lower(name) = 'foo' ORDER BY id",
+    );
+    assert_eq!(rows_unhinted, vec![1, 3]);
 
     // Hinted: planner picks the named expression index.
     let plan_hinted = explain_text(
@@ -210,13 +214,15 @@ fn expression_index_lower_equality_uses_index() {
         plan_hinted.contains("USING INDEX t_lname"),
         "INDEXED BY t_lname expected USING INDEX, got:\n{plan_hinted}"
     );
+    let rows_hinted = collect_ints(
+        &conn,
+        "SELECT id FROM t INDEXED BY t_lname WHERE lower(name) = 'foo' ORDER BY id",
+    );
+    assert_eq!(rows_hinted, vec![1, 3]);
 }
 
 #[test]
 fn expression_index_only_matches_normalized_text() {
-    // Plan-only with `INDEXED BY` opt-in (see the note on
-    // `expression_index_lower_equality_uses_index` for the default-on
-    // gating).
     // The textual match folds case and collapses whitespace, so
     // `LOWER(name)`, `lower(name)`, and `lower( name )` all bind. A
     // structurally different predicate (`lower(name || '')` etc.) must
@@ -230,20 +236,14 @@ fn expression_index_only_matches_normalized_text() {
         .expect("insert");
 
     // Case-folded form picks the index.
-    let plan_upper = explain_text(
-        &conn,
-        "SELECT id FROM t INDEXED BY t_lname WHERE LOWER(name) = 'foo'",
-    );
+    let plan_upper = explain_text(&conn, "SELECT id FROM t WHERE LOWER(name) = 'foo'");
     assert!(
         plan_upper.contains("USING INDEX t_lname"),
         "LOWER(name) normalization expected USING INDEX, got:\n{plan_upper}"
     );
 
     // Whitespace-normalized form also matches.
-    let plan_ws = explain_text(
-        &conn,
-        "SELECT id FROM t INDEXED BY t_lname WHERE lower( name ) = 'foo'",
-    );
+    let plan_ws = explain_text(&conn, "SELECT id FROM t WHERE lower( name ) = 'foo'");
     assert!(
         plan_ws.contains("USING INDEX t_lname"),
         "whitespace-normalized form expected USING INDEX, got:\n{plan_ws}"

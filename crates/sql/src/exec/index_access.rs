@@ -231,22 +231,12 @@ pub(crate) fn try_match_index_access_hinted(
         // Phase 5 WS-A2g: expression-index equality. When the leading
         // key is an expression and a top-level conjunct compares that
         // exact expression to a constant, treat it as a point lookup on
-        // the encoded constant. Multi-key expression indexes are not
-        // handled in this wave — only single-key expression indexes.
-        //
-        // Gating: expression-index DML maintenance (Lane B) is not yet
-        // wired (see `index_dml.rs::build_index_key`), so the leaf is
-        // always empty after INSERTs. To avoid emitting a planner path
-        // that returns zero rows, we ONLY match the expression index
-        // when the user explicitly opts in via
-        // `INDEXED BY <expr_index_name>`. The hinted path lets us prove
-        // the planner machinery is wired without exposing the empty
-        // leaves to unhinted queries.
+        // the encoded constant. Expression-index DML/backfill is wired,
+        // so unhinted single-key expression indexes are safe to consider.
+        // Multi-key expression indexes still stay out of this path until
+        // every key has explicit residual and lookup proof.
         if let IndexKeySource::Expression { sql: expr_sql, .. } = &first_key.source {
             if index.keys.len() != 1 {
-                continue;
-            }
-            if !matches!(hint, Some(TableAccessHint::IndexedBy(_))) {
                 continue;
             }
             if let Some((value, consumed_idx)) =
