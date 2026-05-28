@@ -1535,19 +1535,25 @@ fn pragma_column_rows(
     // "kernel set not_null because of PRIMARY KEY" (surface notnull = 0
     // for a rowid alias) from "user wrote NOT NULL" (surface notnull = 1).
     use std::collections::HashSet;
-    let explicit_not_null: HashSet<u16> = table
+    let explicit_not_null = table
         .constraints
         .iter()
-        .filter(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
-        .filter_map(|c| {
-            let column_id = c.column_id?;
+        .any(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
+        .then(|| {
             table
-                .columns
+                .constraints
                 .iter()
-                .position(|col| col.column_id == column_id)
-                .map(|ordinal| ordinal as u16)
-        })
-        .collect();
+                .filter(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
+                .filter_map(|c| {
+                    let column_id = c.column_id?;
+                    table
+                        .columns
+                        .iter()
+                        .position(|col| col.column_id == column_id)
+                        .map(|ordinal| ordinal as u16)
+                })
+                .collect::<HashSet<u16>>()
+        });
     table
         .columns
         .iter()
@@ -1562,7 +1568,9 @@ fn pragma_column_rows(
             let cid_u16 = cid as u16;
             let is_rowid_alias = rowid_alias_ordinal == Some(cid_u16);
             let surface_not_null = if is_rowid_alias {
-                explicit_not_null.contains(&cid_u16)
+                explicit_not_null
+                    .as_ref()
+                    .is_some_and(|columns| columns.contains(&cid_u16))
             } else {
                 column.not_null
             };
@@ -1626,8 +1634,6 @@ pub(crate) fn pragma_index_list_rows(
                 )
                 && table.rowid_alias_column.is_some())
         })
-        .collect::<Vec<_>>()
-        .iter()
         .rev()
         .enumerate()
         .map(|(seq, index)| {
