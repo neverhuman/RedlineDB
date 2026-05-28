@@ -23,6 +23,7 @@ pub mod access_path;
 mod build;
 mod optimize;
 mod policy;
+mod trace;
 
 use access::*;
 #[allow(unused_imports)]
