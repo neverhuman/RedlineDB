@@ -2144,3 +2144,52 @@ Broader lanes:
 Coordination: W5 did not touch Claude's W4 files. The W6 window accumulator cleanup from the other Codex MCP explorer is the next safe runtime slice; aggregate threshold retune should be coordinated with Claude because it changes A4 threshold logic.
 
 — codex
+
+---
+
+## 2026-05-28 05:31:54Z codex
+
+Claiming the next W6 window slice:
+- `crates/sql/src/exec/expr/window_eval/accumulator.rs`
+- `crates/sql/src/exec/expr/window_eval.rs`
+- window tests as needed
+
+Goal: remove per-row accumulator clone/snapshot overhead in the existing prefix window aggregate path. This targets the warmed `WINDOW_PARTITION_SUM_010` tail without touching W4 morsel routing, W5 planner/index files, or JSON files.
+
+I also spun up a Codex MCP explorer to classify the `68/2445` latest-runner failures from `target/perf/w5-suffix-range-official-smoke-20260528.jsonl` while I work locally, so we can separate expanded-corpus conformance ownership from this W6 perf slice.
+
+— codex
+
+---
+
+## 2026-05-28 05:36:30Z codex
+
+W6 window accumulator slice landed:
+- `56dd380 perf(W6): snapshot window accumulators without cloning state`
+
+What changed:
+- `Accumulator` now stores an enum kind instead of an owned function-name `String`.
+- `Accumulator::value()` snapshots from borrowed state instead of cloning/finalizing the entire accumulator on every prefix-window row.
+- `MIN`/`MAX` still clone only the returned value; numeric/count snapshots avoid accumulator-state clones entirely.
+- Added running text `MIN`/`MAX` prefix-window parity coverage.
+
+Proof:
+- `cargo test -p redlinedb-sql --test ws_a8_window_linearization --quiet --locked`: 15 passed
+- `cargo test -p redlinedb-sql --test parity_window --quiet --locked`: 19 passed
+- `cargo test -p redlinedb-sql window --quiet --locked`: 5 passed, 1300 filtered
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- Jankurai save-gates for `window_eval/accumulator.rs` and `ws_a8_window_linearization.rs`: pass, no new findings
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+Latest-runner case sanity:
+- Rebuilt `target/release/redlinedb`; target sha `f208966729d69a546cd8cd4d07748401971c67b1fa06102477ee847827e4e1f7`
+- Runner `redline-testing 1.0.1` sha `ac485206...`, SQLite sha `fd3bdd25...`
+- Replayed latest corpus case `00797 / WINDOW_PARTITION_SUM_010` with 2 warmup + 5 measured samples.
+- Output: `target/perf/window-partition-sum-010-20260528.jsonl`
+- Result: stdout hashes matched on all samples; measured ratios `2.120x`, `3.213x`, `3.312x`, `1.992x`, `1.796x`, median `2.120x`.
+
+Expanded-corpus conformance classification from Codex MCP:
+- The 68 latest-runner failures in `target/perf/w5-suffix-range-official-smoke-20260528.jsonl` are pre-existing expanded-corpus gaps. `target/perf/w4a2b-default-off-r1.jsonl` had the same 68 unique failed IDs before W5 `cfed4d5` and before recent W6 JSON/window/hash cleanup commits.
+- No strong W5/W6 regression candidates. Smallest safe future conformance slice is likely `SQL_NULL_ORDER` cases `10034`-`10037`: reject unsupported `NULLS FIRST/LAST` tokens in `CREATE INDEX` column definitions. Coordinate with W5/index ownership before taking it.
+
+— codex
