@@ -274,6 +274,59 @@ fn classify_single_predicate(
     expr: &Expr,
     table: &TableDef,
 ) -> std::result::Result<RoutedPredicate, DeclineReason> {
+    // W4-A7: `col IN (lit1, lit2, ...)` and `col NOT IN (...)`. Defer
+    // any other IN shape (subquery, expression list elements, mixed
+    // kinds). Defensive cap at 64 list items so per-row cost stays
+    // predictable; larger IN-lists are better served by a hash join.
+    if let Expr::InList {
+        expr: probe,
+        list,
+        negated,
+    } = expr
+    {
+        let Expr::Identifier(ident) = probe.as_ref() else {
+            return Err(DeclineReason::Predicate);
+        };
+        if list.is_empty() || list.len() > 64 {
+            return Err(DeclineReason::Predicate);
+        }
+        let column = table
+            .columns
+            .iter()
+            .find(|c| c.folded.eq_ignore_ascii_case(ident.value.as_str()))
+            .ok_or(DeclineReason::Predicate)?;
+        let column_ordinal = column.ordinal as usize;
+        match column.affinity {
+            Affinity::Integer => {
+                let mut values: smallvec::SmallVec<[i64; 4]> = smallvec::SmallVec::new();
+                for item in list {
+                    values.push(literal_as_i64(item)?);
+                }
+                return Ok(RoutedPredicate {
+                    column_ordinal,
+                    kind: RoutedPredicateKind::InListI64 {
+                        negated: *negated,
+                        values,
+                    },
+                });
+            }
+            Affinity::Real => {
+                let mut values: smallvec::SmallVec<[f64; 4]> = smallvec::SmallVec::new();
+                for item in list {
+                    values.push(literal_as_f64(item)?);
+                }
+                return Ok(RoutedPredicate {
+                    column_ordinal,
+                    kind: RoutedPredicateKind::InListF64 {
+                        negated: *negated,
+                        values,
+                    },
+                });
+            }
+            _ => return Err(DeclineReason::Predicate),
+        }
+    }
+
     let (op, left, right) = match expr {
         Expr::BinaryOp { left, op, right } => (op, left.as_ref(), right.as_ref()),
         Expr::Nested(inner) => return classify_single_predicate(inner, table),
@@ -311,8 +364,7 @@ fn classify_single_predicate(
     let op = if swap { pred_op.reverse() } else { pred_op };
     Ok(RoutedPredicate {
         column_ordinal: col_ord,
-        op,
-        target,
+        kind: RoutedPredicateKind::Compare { op, target },
     })
 }
 
@@ -383,19 +435,41 @@ pub(crate) struct RoutingPlan {
     pub(crate) predicates: smallvec::SmallVec<[RoutedPredicate; 2]>,
 }
 
-/// W4-A3/A6: a single-comparison WHERE predicate the morsel scan can
-/// evaluate inline before projection.
-#[derive(Debug, Clone, Copy)]
+/// W4-A3/A6/A7: a routed WHERE predicate. The `kind` enum keeps each
+/// variant flat and per-row evaluation a single match on the variant.
+#[derive(Debug, Clone)]
 pub(crate) struct RoutedPredicate {
     pub(crate) column_ordinal: usize,
-    pub(crate) op: PredicateOp,
-    pub(crate) target: PredicateTarget,
+    pub(crate) kind: RoutedPredicateKind,
 }
 
-/// W4-A6: typed predicate target. The classifier requires the literal's
-/// kind to match the column's affinity exactly — `WHERE int_col = 1.5`
-/// declines (the tuple path coerces via `apply_affinity`, but routing
-/// would mis-handle the coercion).
+/// W4-A3/A6/A7: predicate variants. `Compare` is the binary <op>
+/// shape from W4-A3 (extended by W4-A6 to Real columns). `InListI64`
+/// / `InListF64` are W4-A7 IN-list comparisons over a small literal
+/// set (covers BETWEEN-style lowering via W4-A5 too — but IN-list
+/// uses one predicate slot vs the AND-chain shape that BETWEEN
+/// lowers into).
+#[derive(Debug, Clone)]
+pub(crate) enum RoutedPredicateKind {
+    Compare {
+        op: PredicateOp,
+        target: PredicateTarget,
+    },
+    InListI64 {
+        negated: bool,
+        values: smallvec::SmallVec<[i64; 4]>,
+    },
+    InListF64 {
+        negated: bool,
+        values: smallvec::SmallVec<[f64; 4]>,
+    },
+}
+
+/// W4-A6: typed predicate target for the `Compare` shape. The
+/// classifier requires the literal's kind to match the column's
+/// affinity exactly — `WHERE int_col = 1.5` declines (the tuple
+/// path coerces via `apply_affinity`, but routing would mis-handle
+/// the coercion).
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PredicateTarget {
     I64(i64),
@@ -546,32 +620,44 @@ pub(crate) fn execute_routed_scan(
                 .values
                 .get(pred.column_ordinal)
                 .unwrap_or(&SqlValue::Null);
-            match (value, &pred.target) {
-                // NULL <op> _ → NULL → not matching (matches tuple path).
-                (SqlValue::Null, _) => {
-                    row_matches = false;
-                    break;
+            let passes = match (value, &pred.kind) {
+                // NULL <op> anything = NULL = not matching (matches tuple path).
+                (SqlValue::Null, _) => false,
+                // Compare path (W4-A3 / W4-A6).
+                (
+                    SqlValue::Integer(lhs),
+                    RoutedPredicateKind::Compare {
+                        op,
+                        target: PredicateTarget::I64(rhs),
+                    },
+                ) => op.eval(*lhs, *rhs),
+                (
+                    SqlValue::Real(lhs),
+                    RoutedPredicateKind::Compare {
+                        op,
+                        target: PredicateTarget::F64(rhs),
+                    },
+                ) => op.eval_f64(*lhs, *rhs),
+                // W4-A7 IN-list: linear scan over small literal sets.
+                (SqlValue::Integer(lhs), RoutedPredicateKind::InListI64 { negated, values }) => {
+                    let hit = values.iter().any(|v| *v == *lhs);
+                    if *negated { !hit } else { hit }
                 }
-                // Kind-matched: evaluate.
-                (SqlValue::Integer(lhs), PredicateTarget::I64(rhs)) => {
-                    if !pred.op.eval(*lhs, *rhs) {
-                        row_matches = false;
-                        break;
-                    }
+                (SqlValue::Real(lhs), RoutedPredicateKind::InListF64 { negated, values }) => {
+                    let hit = values.iter().any(|v| *v == *lhs);
+                    if *negated { !hit } else { hit }
                 }
-                (SqlValue::Real(lhs), PredicateTarget::F64(rhs)) => {
-                    if !pred.op.eval_f64(*lhs, *rhs) {
-                        row_matches = false;
-                        break;
-                    }
-                }
-                // Kind mismatch: SQLite's loose typing would coerce via
-                // `apply_affinity`. Routing doesn't, so bail to tuple
-                // path. `MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND` records.
+                // Kind mismatch on a routed predicate: SQLite would
+                // coerce via `apply_affinity`. Routing doesn't, so
+                // bail to the tuple path so semantics stay identical.
                 _ => {
                     record_decline(&MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND);
                     return Ok(None);
                 }
+            };
+            if !passes {
+                row_matches = false;
+                break;
             }
         }
         if !row_matches {
