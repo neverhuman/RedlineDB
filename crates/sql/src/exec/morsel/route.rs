@@ -22,8 +22,8 @@ use std::sync::atomic::Ordering;
 
 use super::{
     MORSEL_ROUTE_FALLBACK_DISABLED, MORSEL_ROUTE_FALLBACK_INELIGIBLE,
-    MORSEL_ROUTE_FALLBACK_SHAPE, MorselEligibility, MorselRouteMode,
-    classify_select_plan_eligibility, morsel_route_mode, morsel_telemetry_enabled,
+    MORSEL_ROUTE_FALLBACK_SHAPE, MorselEligibility, classify_select_plan_eligibility,
+    morsel_route_mode, morsel_telemetry_enabled,
 };
 
 /// Telemetry tap for routing decisions. No-op when telemetry is disabled.
