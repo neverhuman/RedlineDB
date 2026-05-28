@@ -25,9 +25,9 @@
 use std::cell::Cell;
 use std::sync::Arc;
 
-use redlinedb_kernel::catalog::{IndexDef, TableDef};
+use redlinedb_kernel::catalog::{IndexDef, IndexKeySource, TableDef};
 use redlinedb_kernel::engine::Engine;
-use sqlparser::ast::{Expr, OrderByExpr};
+use sqlparser::ast::{Expr, OrderByExpr, SelectItem};
 
 use crate::exec::index_access::{
     IndexAccessMatch, IndexProbe, IndexProbeKind, OutputColumnSource, try_match_index_access_hinted,
@@ -349,6 +349,11 @@ pub(crate) fn lower_to_legacy(path: &AccessPath) -> super::AccessPath {
 /// the new `AccessPath` IR. This is the planner's single entry point
 /// for picking an access path on a `(table, WHERE)` pair.
 ///
+/// `projection` — the SELECT items the query needs. When non-empty,
+/// the IR will populate `covering` on `IndexRange` / `IndexPointLookup`
+/// if all projected columns are present in the chosen index's key list.
+/// Pass `&[]` (empty slice) when covering detection is not needed.
+///
 /// Scaffolding contract: behaviour mirrors today's
 /// `try_match_index_access_hinted` exactly. Order/limit fields are
 /// computed conservatively here (default `No` / `None`); a later wave
@@ -358,6 +363,7 @@ pub(crate) fn lower_to_legacy(path: &AccessPath) -> super::AccessPath {
 pub(crate) fn choose_access_path(
     engine: &Engine,
     table: &Arc<TableDef>,
+    projection: &[SelectItem],
     selection: &Option<Expr>,
     bindings: &[Option<SqlValue>],
     hint: Option<&TableAccessHint>,
@@ -377,33 +383,48 @@ pub(crate) fn choose_access_path(
         // additional conjunct shape disqualifies the shortcut and
         // returns None — meaning we only reach this branch when the
         // entire WHERE was the rowid equality, hence no residuals.
-        return AccessPath::RowIdGet {
+        let path = AccessPath::RowIdGet {
             table: Arc::clone(table),
             rowid: SqlValue::Integer(rowid.0 as i64),
             residual: Vec::new(),
         };
+        maybe_trace_access_path_ir(&path);
+        return path;
     }
 
     // Step 2: legacy `try_match_index_access_hinted` -> Point/Range.
     if let Some(matched) = try_match_index_access_hinted(engine, table, selection, bindings, hint) {
-        return translate_index_access_match(matched, table, requested_order, requested_limit);
+        let path = translate_index_access_match(
+            matched,
+            table,
+            projection,
+            requested_order,
+            requested_limit,
+        );
+        maybe_trace_access_path_ir(&path);
+        return path;
     }
 
     // Step 3: fall through to a heap scan. Every top-level conjunct
     // becomes a residual the executor must recheck.
-    AccessPath::TableScan {
+    let path = AccessPath::TableScan {
         table: Arc::clone(table),
         residual: residual_from_selection(selection),
-    }
+    };
+    maybe_trace_access_path_ir(&path);
+    path
 }
 
 /// Convert an `IndexAccessMatch` into either `IndexPointLookup` or
-/// `IndexRange`. Today the legacy match does not populate covering
-/// metadata or carry the ORDER BY decision; both stay `None` /
-/// computed-here in this wave.
+/// `IndexRange`. The ORDER BY satisfaction and covering metadata are
+/// computed here. `projection` is used for covering detection: when
+/// every projected column is present in the index key list the IR sets
+/// `covering: Some(CoveringMap { .. })` so downstream consumers can
+/// skip the heap fetch.
 fn translate_index_access_match(
     matched: IndexAccessMatch,
     table: &Arc<TableDef>,
+    projection: &[SelectItem],
     requested_order: &[OrderByExpr],
     requested_limit: Option<usize>,
 ) -> AccessPath {
@@ -426,11 +447,12 @@ fn translate_index_access_match(
                 IndexProbe::Point { key } => key,
                 IndexProbe::Range { .. } => Vec::new(),
             };
+            let covering = compute_covering_map(table, &index, projection);
             AccessPath::IndexPointLookup {
                 index,
                 key,
                 residual: residual_conjuncts,
-                covering: None,
+                covering,
             }
         }
         IndexProbeKind::RangeScan => {
@@ -458,6 +480,7 @@ fn translate_index_access_match(
                 (_, _, Some(n)) => Some(n),
                 _ => None,
             };
+            let covering = compute_covering_map(table, &index, projection);
             AccessPath::IndexRange {
                 index,
                 probe,
@@ -465,8 +488,153 @@ fn translate_index_access_match(
                 equality_prefix_len,
                 order_satisfies,
                 hard_limit,
-                covering: None,
+                covering,
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// W5: covering index detection.
+//
+// Build a `CoveringMap` when every column the projection mentions is
+// present in the chosen index's key list (either as a key column or as
+// the implicit rowid). Returns `None` when:
+//   - projection is empty (SELECT * or caller did not supply one)
+//   - any item is a wildcard / qualified wildcard
+//   - any item is an expression that cannot be resolved to a column name
+//   - any column is not in the index key list
+// ---------------------------------------------------------------------------
+
+/// Try to build a `CoveringMap` for `index` covering `projection` over
+/// `table`. Returns `None` when the index does not fully cover the
+/// projected columns.
+fn compute_covering_map(
+    table: &Arc<TableDef>,
+    index: &Arc<IndexDef>,
+    projection: &[SelectItem],
+) -> Option<CoveringMap> {
+    if projection.is_empty() {
+        return None;
+    }
+    // Build a map from table-column ordinal to index-key position.
+    // Expression-keyed index positions are skipped — they are not
+    // addressable by column name.
+    let mut col_to_index_pos: std::collections::HashMap<usize, usize> =
+        std::collections::HashMap::new();
+    for (pos, key) in index.keys.iter().enumerate() {
+        if let IndexKeySource::Column { attnum } = key.source {
+            col_to_index_pos.insert(attnum as usize, pos);
+        }
+    }
+    let mut sources: Vec<OutputColumnSource> = Vec::with_capacity(projection.len());
+    for item in projection {
+        let expr = match item {
+            SelectItem::UnnamedExpr(expr) => expr,
+            SelectItem::ExprWithAlias { expr, .. } => expr,
+            // Wildcards force a heap fetch; cannot cover.
+            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => return None,
+        };
+        let column_name = match expr {
+            Expr::Identifier(ident) => ident.value.as_str(),
+            Expr::CompoundIdentifier(parts) => parts.last()?.value.as_str(),
+            // Non-trivial expressions require the full row.
+            _ => return None,
+        };
+        // Rowid alias (rowid, _rowid_, oid) lives on the index leaf
+        // directly as the stored row ID — no key decoding needed.
+        if table.is_public_rowid_name(column_name)
+            || table.rowid_alias_column_name_matches(column_name)
+        {
+            sources.push(OutputColumnSource::Rowid);
+            continue;
+        }
+        let table_ord = table
+            .columns
+            .iter()
+            .position(|c| c.folded.as_ref().eq_ignore_ascii_case(column_name))?;
+        let &index_pos = col_to_index_pos.get(&table_ord)?;
+        sources.push(OutputColumnSource::IndexColumn { ordinal: index_pos });
+    }
+    Some(CoveringMap { sources })
+}
+
+// ---------------------------------------------------------------------------
+// W5: per-decision planner-trace emission.
+//
+// When `REDLINEDB_PLANNER_TRACE_PATH` is set to a file path, append a
+// one-line JSON object for each `AccessPath` decision made by
+// `choose_access_path`. This is a lightweight companion to the
+// existing `REDLINEDB_PLANNER_TRACE_DIR` (which traces full physical
+// plans via `trace.rs`) — it focuses on the IR-level choice without
+// requiring a full `PhysicalPlan` to have been built yet.
+//
+// Format (one JSON object per newline):
+//   {"ir_variant":"IndexRange","index":"ix","order_satisfies":"Ascending","hard_limit":10,"covering":true}
+// ---------------------------------------------------------------------------
+
+const TRACE_PATH_ENV: &str = "REDLINEDB_PLANNER_TRACE_PATH";
+
+fn maybe_trace_access_path_ir(path: &AccessPath) {
+    let Ok(file_path) = std::env::var(TRACE_PATH_ENV) else {
+        return;
+    };
+    // Best-effort: ignore I/O errors so a misconfigured trace path
+    // never breaks a query.
+    let _ = write_access_path_trace_line(&file_path, path);
+}
+
+fn write_access_path_trace_line(file_path: &str, path: &AccessPath) -> std::io::Result<()> {
+    use std::fs::OpenOptions;
+    use std::io::Write as _;
+    let record = access_path_trace_json(path);
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)?;
+    let mut row = record.into_bytes();
+    row.push(b'\n');
+    file.write_all(&row)
+}
+
+fn access_path_trace_json(path: &AccessPath) -> String {
+    match path {
+        AccessPath::TableScan { .. } => {
+            r#"{"ir_variant":"TableScan","index":null,"order_satisfies":null,"hard_limit":null,"covering":false}"#.to_owned()
+        }
+        AccessPath::RowIdGet { .. } => {
+            r#"{"ir_variant":"RowIdGet","index":null,"order_satisfies":null,"hard_limit":null,"covering":false}"#.to_owned()
+        }
+        AccessPath::IndexPointLookup { index, covering, .. } => {
+            format!(
+                r#"{{"ir_variant":"IndexPointLookup","index":"{}","order_satisfies":null,"hard_limit":null,"covering":{}}}"#,
+                index.name,
+                covering.is_some(),
+            )
+        }
+        AccessPath::IndexRange {
+            index,
+            order_satisfies,
+            hard_limit,
+            covering,
+            ..
+        } => {
+            let order_str = match order_satisfies {
+                OrderSatisfies::Ascending => "\"Ascending\"",
+                OrderSatisfies::Descending => "\"Descending\"",
+                OrderSatisfies::No => "null",
+            };
+            let limit_str = match hard_limit {
+                Some(n) => n.to_string(),
+                None => "null".to_owned(),
+            };
+            format!(
+                r#"{{"ir_variant":"IndexRange","index":"{}","order_satisfies":{},"hard_limit":{},"covering":{}}}"#,
+                index.name,
+                order_str,
+                limit_str,
+                covering.is_some(),
+            )
         }
     }
 }
@@ -646,11 +814,21 @@ mod tests {
         plan: &SelectPlan,
         hint: Option<&TableAccessHint>,
     ) -> AccessPath {
+        choose_with_projection(conn, plan, hint, &[])
+    }
+
+    fn choose_with_projection(
+        conn: &Arc<Connection>,
+        plan: &SelectPlan,
+        hint: Option<&TableAccessHint>,
+        projection: &[sqlparser::ast::SelectItem],
+    ) -> AccessPath {
         let engine = engine_of(conn);
         let table = table_of(plan);
         choose_access_path(
             &engine,
             &table,
+            projection,
             &plan.selection,
             &[],
             hint,

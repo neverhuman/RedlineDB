@@ -11,7 +11,7 @@ pub(crate) use projection::*;
 pub(crate) fn choose_access_path(
     conn: &Connection,
     table: &Arc<TableDef>,
-    _projection: &[SelectItem],
+    projection: &[SelectItem],
     selection: &Option<Expr>,
     order_by: &[OrderByExpr],
     rowid: Option<RowId>,
@@ -37,6 +37,7 @@ pub(crate) fn choose_access_path(
         let ir = choose_access_path_ir(
             conn.engine(),
             table,
+            projection,
             selection,
             bindings,
             table_hint,

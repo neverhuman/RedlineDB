@@ -242,6 +242,7 @@ pub(crate) fn wrap_limit_with_conn(
             let ir = choose_access_path_ir(
                 conn.engine(),
                 table,
+                &[], // covering detection not needed for limit-pushdown check
                 &plan.selection,
                 &[],
                 plan.table_hint.as_ref(),
