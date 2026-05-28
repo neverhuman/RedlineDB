@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use redlinedb_sql::{
-    Connection, Database, DbOptions, RqlBinaryOp, RqlColumnRef, RqlExpr, RqlName, RqlOrder,
-    RqlSelect, RqlSelectItem, RqlStatement, RqlTableRef, SqlValue, Step,
+    Connection, Database, DbOptions, RqlBinaryOp, RqlColumnRef, RqlExpr, RqlJoin, RqlJoinKind,
+    RqlName, RqlOrder, RqlSelect, RqlSelectItem, RqlStatement, RqlTableRef, SqlValue, Step,
 };
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -97,6 +97,25 @@ fn select_from(from: RqlTableRef, projection: Vec<RqlSelectItem>) -> RqlStatemen
         projection,
         from: Some(from),
         joins: Vec::new(),
+        filter: None,
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    })
+}
+
+fn select_joined(
+    from: RqlTableRef,
+    joins: Vec<RqlJoin>,
+    projection: Vec<RqlSelectItem>,
+) -> RqlStatement {
+    RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection,
+        from: Some(from),
+        joins,
         filter: None,
         group_by: Vec::new(),
         having: None,
@@ -234,6 +253,151 @@ fn native_select_falls_back_for_attached_schema_sources() {
     let mut stmt = conn.prepare_rql(&select).expect("aux select");
     assert!(matches!(stmt.step().expect("row"), Step::Row));
     assert_eq!(stmt.column_text(0).expect("kind"), "boot");
+}
+
+#[test]
+fn native_select_inner_join_matches_sql_route() {
+    let conn = memory_conn();
+    conn.execute("CREATE TABLE users(id INTEGER, name TEXT)")
+        .expect("create users");
+    conn.execute("CREATE TABLE events(uid INTEGER, kind TEXT)")
+        .expect("create events");
+    conn.execute("INSERT INTO users(id, name) VALUES (1, 'Ada'), (2, 'Bob'), (3, 'Cy')")
+        .expect("seed users");
+    conn.execute("INSERT INTO events(uid, kind) VALUES (1, 'login'), (1, 'logout'), (2, 'login')")
+        .expect("seed events");
+
+    let statement = select_joined(
+        table_ref(None, "users", Some("u")),
+        vec![RqlJoin {
+            table: table_ref(None, "events", Some("e")),
+            kind: RqlJoinKind::Inner,
+            on: Some(RqlExpr::Binary {
+                left: Box::new(qualified_column("u", "id")),
+                op: RqlBinaryOp::Eq,
+                right: Box::new(qualified_column("e", "uid")),
+            }),
+        }],
+        vec![
+            RqlSelectItem::Expr {
+                expr: qualified_column("u", "name"),
+                alias: Some("user_name".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: qualified_column("e", "kind"),
+                alias: Some("event_kind".to_owned()),
+            },
+        ],
+    );
+    let mut select = match &statement {
+        RqlStatement::Select(select) => select.clone(),
+        _ => unreachable!(),
+    };
+    select.order_by = vec![
+        RqlOrder {
+            expr: qualified_column("u", "id"),
+            descending: false,
+            nulls_first: None,
+        },
+        RqlOrder {
+            expr: qualified_column("e", "kind"),
+            descending: false,
+            nulls_first: None,
+        },
+    ];
+    let statement = RqlStatement::Select(select);
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &statement);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &statement));
+    assert_eq!(snapshot(&conn, &statement), expected);
+}
+
+#[test]
+fn native_select_left_join_matches_sql_route() {
+    let conn = memory_conn();
+    conn.execute("CREATE TABLE users(id INTEGER, name TEXT)")
+        .expect("create users");
+    conn.execute("CREATE TABLE events(uid INTEGER, kind TEXT)")
+        .expect("create events");
+    conn.execute("INSERT INTO users(id, name) VALUES (1, 'Ada'), (2, 'Bob')")
+        .expect("seed users");
+    conn.execute("INSERT INTO events(uid, kind) VALUES (1, 'login')")
+        .expect("seed events");
+
+    let statement = select_joined(
+        table_ref(None, "users", Some("u")),
+        vec![RqlJoin {
+            table: table_ref(None, "events", Some("e")),
+            kind: RqlJoinKind::Left,
+            on: Some(RqlExpr::Binary {
+                left: Box::new(qualified_column("u", "id")),
+                op: RqlBinaryOp::Eq,
+                right: Box::new(qualified_column("e", "uid")),
+            }),
+        }],
+        vec![
+            RqlSelectItem::Expr {
+                expr: qualified_column("u", "name"),
+                alias: Some("user_name".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: qualified_column("e", "kind"),
+                alias: Some("event_kind".to_owned()),
+            },
+        ],
+    );
+    let mut select = match &statement {
+        RqlStatement::Select(select) => select.clone(),
+        _ => unreachable!(),
+    };
+    select.order_by = vec![RqlOrder {
+        expr: qualified_column("u", "id"),
+        descending: false,
+        nulls_first: None,
+    }];
+    let statement = RqlStatement::Select(select);
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &statement);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &statement));
+    assert_eq!(snapshot(&conn, &statement), expected);
+}
+
+#[test]
+fn native_select_right_join_falls_back_for_now() {
+    let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    let conn = memory_conn();
+    conn.execute("CREATE TABLE users(id INTEGER, name TEXT)")
+        .expect("create users");
+    conn.execute("CREATE TABLE events(uid INTEGER, kind TEXT)")
+        .expect("create events");
+
+    let statement = select_joined(
+        table_ref(None, "users", Some("u")),
+        vec![RqlJoin {
+            table: table_ref(None, "events", Some("e")),
+            kind: RqlJoinKind::Right,
+            on: Some(RqlExpr::Binary {
+                left: Box::new(qualified_column("u", "id")),
+                op: RqlBinaryOp::Eq,
+                right: Box::new(qualified_column("e", "uid")),
+            }),
+        }],
+        vec![RqlSelectItem::Wildcard],
+    );
+    let template = conn
+        .prepare_rql(&statement)
+        .expect("right join fallback")
+        .template();
+    assert!(template.sql.as_ref().ends_with("select"));
+    assert!(!template.sql.as_ref().ends_with("select_native"));
 }
 
 #[test]
