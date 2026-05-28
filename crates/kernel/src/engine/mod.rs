@@ -152,20 +152,39 @@ pub enum CommitOutcome {
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        // A26: hit the process-wide cached value so subsequent EngineConfig
-        // defaults don't re-walk the cgroup hierarchy.
-        let parallelism = crate::cached_available_parallelism();
+        // W7-perf: avoid the cgroup walk in `cached_available_parallelism()`
+        // when constructing the default config for volatile (in-memory) databases.
+        // Persistent databases call `with_detected_parallelism()` in
+        // `Engine::create_inner`, which scales up to match CPU count at that
+        // point (still using the process-wide OnceLock cache).  Using a fixed
+        // baseline here means constructing DbOptions::default() or
+        // EngineConfig::default() for an in-memory database no longer triggers
+        // the 4–6 syscall cgroup walk on every fresh process.
         Self {
             rel_id: RelId(1),
             wal: WalConfig::default(),
             commit_durability: CommitDurability::Strict,
-            lock_shards: (parallelism * 4).max(16),
+            lock_shards: 16,
             busy_timeout: Duration::from_millis(250),
-            heap_lanes: parallelism.max(4),
+            heap_lanes: 4,
             page_size: DEFAULT_PAGE_SIZE,
             buffer_pool_pages: 1024,
             data_file_name: "data.redline".to_owned(),
         }
+    }
+}
+
+impl EngineConfig {
+    /// Scale `lock_shards` and `heap_lanes` to match `available_parallelism()`.
+    ///
+    /// Called in `Engine::create_inner` for persistent databases only.  Volatile
+    /// (in-memory) databases do not need CPU-scaled shards and skip this call to
+    /// avoid the cgroup walk on every fresh process.
+    pub(crate) fn with_detected_parallelism(mut self) -> Self {
+        let parallelism = crate::cached_available_parallelism();
+        self.lock_shards = (parallelism * 4).max(self.lock_shards);
+        self.heap_lanes = parallelism.max(self.heap_lanes);
+        self
     }
 }
 

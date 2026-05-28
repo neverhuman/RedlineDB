@@ -34,19 +34,41 @@ impl Engine {
     }
 
     fn create_inner(path: &Path, config: EngineConfig, volatile: bool) -> Result<Arc<Self>> {
-        // For persistent databases, ensure the directory exists.
-        // For volatile (in-memory) databases the caller (EphemeralRoot or
-        // OwnedTempRoot) always creates the directory just before this call,
-        // so skipping create_dir_all saves 3–4 extra syscalls (mkdir EEXIST +
-        // statx × path depth) per process startup — meaningful when the parity
-        // harness launches 1127 fresh processes back-to-back.
-        if !volatile {
+        // For persistent databases, ensure the directory exists and scale shard
+        // counts to match the available CPU parallelism.  For volatile (in-memory)
+        // databases:
+        //   • The caller (EphemeralRoot / OwnedTempRoot) already created the dir,
+        //     so skipping create_dir_all saves 3–4 extra syscalls per process.
+        //   • The config was built from EngineConfig::default() which deliberately
+        //     does NOT call cached_available_parallelism() — avoiding the 4–6
+        //     syscall cgroup walk on every fresh process.  Volatile databases use
+        //     the small fixed shard counts; only persistent engines need full CPU
+        //     scaling for multi-writer throughput.
+        let config = if volatile {
+            config
+        } else {
             std::fs::create_dir_all(path)?;
-        }
+            config.with_detected_parallelism()
+        };
         let data_path = path.join(&config.data_file_name);
         let wal_dir = path.join("wal");
         let page_file = Arc::new(PageFile::create(&data_path, config.page_size)?);
-        let buffer = Arc::new(BufferPool::new(page_file, config.buffer_pool_pages)?);
+        // W7-perf: for volatile databases use the caller-supplied shard hint so
+        // we skip the cgroup walk inside BufferPool::new.  The parallelism value
+        // from the (already-scaled) config is what we want; persistent databases
+        // already went through with_detected_parallelism() above.
+        let buffer = if volatile {
+            // lock_shards is already the right scale (config default = 16, so
+            // parallelism_hint = lock_shards / 4 = 4 matches heap_lanes default).
+            let parallelism_hint = (config.lock_shards / 4).max(1);
+            Arc::new(BufferPool::new_with_parallelism(
+                page_file,
+                config.buffer_pool_pages,
+                parallelism_hint,
+            )?)
+        } else {
+            Arc::new(BufferPool::new(page_file, config.buffer_pool_pages)?)
+        };
         let wal = if volatile {
             Arc::new(WalCoordinator::volatile(config.wal.clone()))
         } else {
@@ -151,6 +173,9 @@ impl Engine {
         config: EngineConfig,
         target: RecoveryTarget,
     ) -> Result<(Arc<Self>, RecoveryReport)> {
+        // W7-perf: persistent-open path — scale shards up to CPU count just
+        // like create_inner does for persistent databases.
+        let config = config.with_detected_parallelism();
         let wal_dir = path.as_ref().join("wal");
         let mut reader = WalReader::new(&wal_dir, config.wal.clone());
         let scan_report = reader.scan_report()?;
