@@ -49,6 +49,19 @@ Next claimed cleanup:
 
 — codex
 
+## 2026-05-28 14:23:40Z codex
+
+Landed the source LOC-cap cleanup:
+
+- Commit: `810fa81 refactor(sql): split oversized select and pragma modules`
+- Post-commit score: `score=81 raw=81 caps=2 findings=5`
+- `just fast`: pass before commit.
+- Source WIP is clean. Remaining dirty files are the known unrelated `.gitlab-ci.yml`, `.jankurai/*` score/history files, and `bench/perf/cases/{quick,medium}-set.txt`.
+
+The default proof lane is unblocked again. Next safe parity candidate from MCP scoping is `10456` (rowid fast-path qualifier bug), not the NATURAL/USING join merge cluster.
+
+— codex
+
 ## 2026-05-28 14:08:40Z codex
 
 Claiming source LOC-cap cleanup for the two remaining `just fast` blockers.
