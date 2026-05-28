@@ -252,6 +252,7 @@ pub(crate) fn explain_rows(
     format: ExplainFormat,
 ) -> Vec<Vec<SqlValue>> {
     let plan = build_plan(conn, kind, bindings, metrics);
+    trace::maybe_emit_planner_trace(&plan);
     match format {
         ExplainFormat::QueryPlan => flatten_query_plan(&plan)
             .into_iter()

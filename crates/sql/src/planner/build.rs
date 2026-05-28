@@ -123,8 +123,6 @@ pub(crate) fn build_select_plan(
         base = wrap_limit_with_conn(Some(conn), base, plan);
     }
 
-    super::trace::maybe_emit_planner_trace(&base);
-
     base
 }
 

@@ -21,15 +21,16 @@ fn emit_planner_trace(dir: &Path, plan: &PhysicalPlan) -> std::io::Result<()> {
     let path = dir.join(TRACE_FILE);
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
     let record = trace_record(plan);
-    serde_json::to_writer(&mut file, &record)?;
-    file.write_all(b"\n")
+    let mut row = serde_json::to_vec(&record)?;
+    row.push(b'\n');
+    file.write_all(&row)
 }
 
 fn trace_record(plan: &PhysicalPlan) -> serde_json::Value {
     let access = first_access_node(plan);
     let hard_limit = first_ordered_index_limit(plan);
     json!({
-        "schema": "redlinedb-planner-trace/1",
+        "trace_version": 1,
         "planner": {
             "access_path_gate": planner_use_access_path(),
         },
@@ -38,19 +39,19 @@ fn trace_record(plan: &PhysicalPlan) -> serde_json::Value {
             "sort_required": contains_kind(plan, PhysicalKind::Sort) || contains_kind(plan, PhysicalKind::TopN),
             "limit_pushdown": hard_limit,
         },
-        "access": access.map(|node| json!({
+        "chosen_access": access.map(|node| json!({
             "kind": physical_kind_label(node.kind),
             "relation": node.relation,
             "index": node.index,
             "index_probe_kind": node.index_probe_kind,
-            "access_predicate_count": node.access_predicates.len(),
-            "residual_predicate_count": node.residual_predicates.len(),
-            "output_order_count": node.output_order.len(),
+            "access_predicates": node.access_predicates,
+            "residual_predicates": node.residual_predicates,
+            "output_order": node.output_order,
             "covering": false,
             "estimated_rows": node.estimated_rows,
-            "cost_total": node.cost.total,
+            "total_cost": node.cost.total,
         })),
-        "rejected_paths": [],
+        "rejected_paths_complete": false,
     })
 }
 
@@ -131,17 +132,21 @@ mod tests {
     fn trace_record_reports_access_shape_and_limit_pushdown() {
         let plan = index_scan_plan();
         let record = trace_record(&plan);
-        assert_eq!(record["schema"], "redlinedb-planner-trace/1");
+        assert_eq!(record["trace_version"], 1);
         assert_eq!(record["plan"]["root_kind"], "Limit");
         assert_eq!(record["plan"]["sort_required"], false);
         assert_eq!(record["plan"]["limit_pushdown"], 3);
-        assert_eq!(record["access"]["kind"], "IndexScan");
-        assert_eq!(record["access"]["relation"], "kv");
-        assert_eq!(record["access"]["index"], "kv_tk");
-        assert_eq!(record["access"]["index_probe_kind"], "RangeScan");
-        assert_eq!(record["access"]["access_predicate_count"], 1);
-        assert_eq!(record["access"]["output_order_count"], 1);
-        assert_eq!(record["access"]["covering"], false);
+        assert_eq!(record["chosen_access"]["kind"], "IndexScan");
+        assert_eq!(record["chosen_access"]["relation"], "kv");
+        assert_eq!(record["chosen_access"]["index"], "kv_tk");
+        assert_eq!(record["chosen_access"]["index_probe_kind"], "RangeScan");
+        assert_eq!(
+            record["chosen_access"]["access_predicates"][0],
+            "USING INDEX kv_tk (RangeScan)"
+        );
+        assert_eq!(record["chosen_access"]["output_order"][0], "k");
+        assert_eq!(record["chosen_access"]["covering"], false);
+        assert_eq!(record["rejected_paths_complete"], false);
     }
 
     #[test]
@@ -156,6 +161,6 @@ mod tests {
         let rows: Vec<_> = text.lines().collect();
         assert_eq!(rows.len(), 2);
         let parsed: serde_json::Value = serde_json::from_str(rows[0]).expect("json row");
-        assert_eq!(parsed["access"]["index"], "kv_tk");
+        assert_eq!(parsed["chosen_access"]["index"], "kv_tk");
     }
 }
