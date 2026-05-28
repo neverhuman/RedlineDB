@@ -203,3 +203,23 @@ Proof-lane caveat:
 
 Remaining latest-runner failures after this slice:
 - `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10456`, `10466`.
+
+Current rowid qualifier slice:
+- `SQL_JOIN` case `10456` now passes on the latest `redline-testing 1.0.1` runner.
+- The rowid equality fast path is qualifier-aware, so a correlated outer reference such as `a.id` is not mistaken for the scanned inner table `b`'s rowid alias while planning `WHERE b.a_id = a.id`.
+- Added focused differential coverage for the official correlated-subquery shape.
+
+Verification:
+- `cargo test -p redlinedb-sql --test differential_lab diff_correlated_subquery_outer_pk_is_not_inner_rowid_alias --quiet --locked`
+- `cargo test -p redlinedb-sql --test differential_lab diff_subquery_matrix --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_select --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `jankurai audit-file . --path crates/sql/src/planner/helpers.rs --mode save-gate`
+- `jankurai audit-file . --path crates/sql/tests/differential_lab.rs --mode save-gate`
+- `cargo build -p redlinedb-cli --release --locked`
+- Direct batch replay of the official correlated-subquery shape on `target/release/redlinedb`: outputs `1|one|101`, `2|two|200`, `3|three|NULL`.
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `8` remaining failures out of `2445`; `10456` passed with matching stdout hash.
+- `just fast`
+
+Remaining latest-runner failures after this slice:
+- `10234`, `10339`, `10340`, `10379`, `10388`, `10445`, `10451`, `10466`.

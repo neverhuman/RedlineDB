@@ -277,3 +277,17 @@ fn diff_subquery_matrix() {
         "SELECT id, (SELECT v FROM b WHERE b.aid = a.id ORDER BY v LIMIT 1) FROM a ORDER BY id",
     ]);
 }
+
+#[test]
+fn diff_correlated_subquery_outer_pk_is_not_inner_rowid_alias() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE a(id INTEGER PRIMARY KEY, name TEXT)");
+    lab.execute("CREATE TABLE b(id INTEGER PRIMARY KEY, a_id INTEGER, val INTEGER)");
+    lab.execute("INSERT INTO a VALUES (1, 'one'), (2, 'two'), (3, 'three')");
+    lab.execute("INSERT INTO b VALUES (10, 1, 100), (11, 1, 101), (12, 2, 200)");
+
+    lab.assert_query(
+        "SELECT a.id, a.name, (SELECT max(b.val) FROM b WHERE b.a_id = a.id) AS top \
+         FROM a ORDER BY a.id",
+    );
+}
