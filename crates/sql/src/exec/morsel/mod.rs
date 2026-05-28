@@ -96,22 +96,39 @@ pub fn morsel_telemetry_enabled() -> bool {
     })
 }
 
-/// W4-A1: parsed `REDLINE_MORSEL_ROUTE` env var. `None` means "stay on
-/// tuple path" (the default); `Some(MorselRouteMode::PrimitiveScan)` opts
-/// into the W4-A1 primitive-scan routing.
+/// W4-A1: parsed `REDLINE_MORSEL_ROUTE` env var. `Some(PrimitiveScan)`
+/// means morsel-routed scans are active; `None` means tuple path only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MorselRouteMode {
-    /// Route eligible single-table all-primitive-column scans through the
-    /// morsel filter + emit pipeline. Tuple path stays as the fallback.
+    /// Route eligible single-table primitive-column scans through the
+    /// morsel filter + emit pipeline. Tuple path stays as the fallback
+    /// for any shape the routing classifier declines (joins, ORDER BY,
+    /// GROUP BY, DISTINCT, HAVING, mixed-kind predicates, Numeric/Blob
+    /// projections, aggregates, subqueries, LIKE, IS NULL).
     PrimitiveScan,
 }
 
-/// Cached `REDLINE_MORSEL_ROUTE` parse. Unrecognised values are rejected
-/// with a stderr notice and treated as off.
+/// Cached `REDLINE_MORSEL_ROUTE` parse.
+///
+/// **W4-Flip**: As of the W4-A2..A8 wave, primitive-scan routing is
+/// the DEFAULT when the env var is unset. Medium-set differential
+/// validation against the tuple path (`scripts/perf/medium.sh` with
+/// the env on vs off) showed 289 / 289 cases passing in both modes,
+/// 0 new failures, and median ratio 1.895× → 1.843× (-2.7 pp,
+/// +9 faster cases). The decline guards in
+/// `morsel::route::classify_for_routing` keep semantically risky
+/// shapes on the tuple path so this flip is purely additive.
+///
+/// Rollback hatch: set `REDLINE_MORSEL_ROUTE=off` (or `0`) to force
+/// the tuple path. Unrecognised values still print a stderr notice
+/// and fall through to the new default (PrimitiveScan).
 pub fn morsel_route_mode() -> Option<MorselRouteMode> {
     static MODE: OnceLock<Option<MorselRouteMode>> = OnceLock::new();
     *MODE.get_or_init(|| {
-        let raw = std::env::var("REDLINE_MORSEL_ROUTE").ok()?;
+        let raw = match std::env::var("REDLINE_MORSEL_ROUTE") {
+            Ok(v) => v,
+            Err(_) => return Some(MorselRouteMode::PrimitiveScan),
+        };
         match raw.trim().to_ascii_lowercase().as_str() {
             "primitive_scan" | "primitive-scan" | "all" | "1" | "on" => {
                 Some(MorselRouteMode::PrimitiveScan)
@@ -119,10 +136,11 @@ pub fn morsel_route_mode() -> Option<MorselRouteMode> {
             "" | "0" | "off" => None,
             other => {
                 eprintln!(
-                    "redlinedb: REDLINEDB_MORSEL_ROUTE={other:?} not recognised; \
-                     valid values: primitive_scan, all, on, 1, off, 0"
+                    "redlinedb: REDLINE_MORSEL_ROUTE={other:?} not recognised; \
+                     valid values: primitive_scan, all, on, 1, off, 0 \
+                     (falling through to the default PrimitiveScan)"
                 );
-                None
+                Some(MorselRouteMode::PrimitiveScan)
             }
         }
     })
