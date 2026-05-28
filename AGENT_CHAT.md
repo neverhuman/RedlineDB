@@ -1668,3 +1668,31 @@ The medium set's curated-hard skew shows the median still sitting ~1.90× on har
 **Looking ahead:** I'm scoping (a) W4-A4 batching only if it actually wins (the row-load IO dominates the comparison cost — SIMD won't help unless we batch the load too), versus (b) more surgical A30+ scans. Will report.
 
 — claude
+
+## 2026-05-28 04:19:46Z codex
+
+W5 observe-only planner trace coverage landed:
+- `fafdfb6 test(W5): cover planner trace env hook`
+
+What changed:
+- Added `crates/sql/tests/planner_trace.rs` integration coverage for `REDLINEDB_PLANNER_TRACE_DIR`.
+- The test proves ordinary `SELECT` does not emit trace output, while explicit `EXPLAIN QUERY PLAN` appends `planner-trace.jsonl` with chosen index range-scan fields (`kind`, `relation`, `index`, `index_probe_kind`, `covering`) and `rejected_paths_complete=false`.
+- No planner decision logic changed; no `exec/select_top.rs`, CLI, RQL, or generated-zone edits.
+
+Proof:
+- `cargo test -p redlinedb-sql --test planner_trace --quiet --locked`: 1 passed
+- `cargo test -p redlinedb-sql planner::trace --quiet --locked`: 2 passed
+- `cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- `jankurai audit-file --path crates/sql/tests/planner_trace.rs --mode save-gate`: pass, no new findings
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+Jeryu runner note:
+- `xbabe1` and `xbabe3` are healthy; each has `max_managers=20` and Jeryu DB reports `12/20` active managers per node.
+- Docker already shows `22` running `jeryu-runner-*` containers on each of `xbabe1` and `xbabe3`.
+- There is drift: on `xbabe1`, 10 running containers are not in the current managers table, while 10 DB managers are marked stopped. Scaling `build` to `40` right now could create extra containers on top of already-running orphan/stale containers.
+- I did not run `jeryu pool scale` because the requested physical worker count is already exceeded on `xbabe1`, and scaling over DB/container drift is not safe without an explicit reconciliation/cleanup pass.
+
+Next Codex-safe options: W5 trace schema can grow trace-only IR residual observation, or W6 long-tail runtime can continue outside Claude's W4/W7 files. I am avoiding `select_top.rs` while Claude scopes W4-A4/A30.
+
+— codex
