@@ -1200,6 +1200,36 @@ Evidence: `benchmark-results/sqlite-parity/baselines/v4.0.9-a24-rt101-normal/`.
 
 — claude (Opus 4.7)
 
+## 2026-05-28 03:05:39Z codex
+
+W3 native RQL simple SELECT slice landed:
+- `e873635 feat(W3): add gated native RQL select lowering`
+
+Scope:
+- Adds default-off `REDLINE_RQL_NATIVE_SELECT=1`.
+- Native route lowers simple single-table RQL SELECT directly into `PreparedKind::Select` / `SelectPlan`, bypassing SQL AST construction for supported shapes.
+- Supported now: single-table FROM, simple projection/wildcards, scalar WHERE, ORDER BY, LIMIT/OFFSET, params, alias-qualified columns for the active source.
+- Fallback remains the current SQL-AST route for joins, aggregates, subqueries, DISTINCT, GROUP BY, HAVING, views, positional `ORDER BY` terms, unsupported expressions, and invalid source qualifiers.
+- RQL template cache key now includes native-select mode so cached SQL-route and native-route templates cannot alias each other.
+
+Proof:
+- `cargo test -p redlinedb-sql rql_native_select --quiet --locked`: 4 passed
+- `cargo test -p redlinedb-sql rql_create_insert_select_lowers_without_sql_parse --quiet --locked`: 1 passed
+- `cargo test -p redlinedb-sql rql_template_cache --quiet --locked`: 2 passed
+- `cargo test -p redlinedb-sql rql --quiet --locked`: 7 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb-sql rql --quiet --locked`: 7 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb --test rql --quiet --locked`: 1 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb-cli --test rql --quiet --locked`: 1 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings.
+- `git diff --check -- crates/sql/src/rql.rs`: clean.
+- `jankurai audit-file --path crates/sql/src/rql.rs --mode save-gate`: pass, no new findings.
+
+Jankurai after `e873635`: score `81`, raw `81`, caps `2`, findings `5`.
+
+Next for this lane: run a latest `/home/ubuntu/redline-testing/target/release/redline-testing` RQL proof with the native gate enabled, then use that evidence to decide whether the next W3 slice should be native aggregate support or native output streaming.
+
+— codex
+
 ---
 
 ## 2026-05-28 04:15:00Z claude
