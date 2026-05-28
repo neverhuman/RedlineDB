@@ -802,6 +802,22 @@ fn native_select_shape_supported(schema: &SchemaSnapshot, select: &RqlSelect) ->
     } else if select.projection.is_empty() {
         return false;
     }
+    let projection_has_aggregate = select
+        .projection
+        .iter()
+        .any(|item| matches!(item, RqlSelectItem::Expr { expr, .. } if native_select_expr_is_bare_aggregate(expr)));
+    if projection_has_aggregate
+        && (from.is_none()
+            || !select.projection.iter().all(|item| match item {
+                RqlSelectItem::Expr { expr, .. } => {
+                    native_select_expr_is_bare_aggregate(expr)
+                        && native_select_projection_expr_supported(from, expr)
+                }
+                _ => false,
+            }))
+    {
+        return false;
+    }
     select
         .projection
         .iter()
@@ -822,7 +838,7 @@ fn native_select_item_supported(from: Option<&RqlTableRef>, item: &RqlSelectItem
         RqlSelectItem::QualifiedWildcard { table } => from
             .as_ref()
             .is_some_and(|from| native_select_table_matches(from, table)),
-        RqlSelectItem::Expr { expr, .. } => native_select_expr_supported(from, expr),
+        RqlSelectItem::Expr { expr, .. } => native_select_projection_expr_supported(from, expr),
     }
 }
 
@@ -883,6 +899,34 @@ fn native_select_expr_supported(from: Option<&RqlTableRef>, expr: &RqlExpr) -> b
         | RqlExpr::InSubquery { .. }
         | RqlExpr::Subquery { .. }
         | RqlExpr::Exists { .. } => false,
+    }
+}
+
+fn native_select_projection_expr_supported(from: Option<&RqlTableRef>, expr: &RqlExpr) -> bool {
+    match expr {
+        RqlExpr::CountStar => from.is_some(),
+        RqlExpr::Function {
+            name,
+            args,
+            distinct,
+        } if native_select_function_is_aggregate(name, args.len()) => {
+            from.is_some()
+                && !*distinct
+                && args
+                    .iter()
+                    .all(|arg| native_select_expr_supported(from, arg))
+        }
+        _ => native_select_expr_supported(from, expr),
+    }
+}
+
+fn native_select_expr_is_bare_aggregate(expr: &RqlExpr) -> bool {
+    match expr {
+        RqlExpr::CountStar => true,
+        RqlExpr::Function { name, args, .. } => {
+            native_select_function_is_aggregate(name, args.len())
+        }
+        _ => false,
     }
 }
 
@@ -1728,7 +1772,7 @@ mod tests {
     }
 
     #[test]
-    fn rql_native_select_falls_back_for_join_aggregate_subquery() {
+    fn rql_native_select_falls_back_for_join_subquery() {
         let _env = EnvGuard::set("REDLINE_RQL_NATIVE_SELECT", Some("1"));
         let conn = memory_conn();
         create_items(&conn);
@@ -1747,14 +1791,6 @@ mod tests {
             limit: None,
             offset: None,
         };
-        let aggregate = RqlStatement::Select(aggregate_select.clone());
-        let template = conn
-            .prepare_rql(&aggregate)
-            .expect("aggregate route")
-            .template();
-        assert!(template.sql.as_ref().ends_with("select"));
-        assert!(!template.sql.as_ref().ends_with("select_native"));
-
         let join_select = RqlSelect {
             joins: vec![RqlJoin {
                 table: RqlTableRef {
@@ -1802,24 +1838,6 @@ mod tests {
         assert!(!native_select_shape_supported(
             conn.schema_snapshot().as_ref(),
             &subquery_select
-        ));
-
-        let aliased_table_qualifier = RqlSelect {
-            projection: vec![RqlSelectItem::Expr {
-                expr: RqlExpr::Column {
-                    column: RqlColumnRef {
-                        table: Some("items".to_owned()),
-                        name: "name".to_owned(),
-                    },
-                },
-                alias: None,
-            }],
-            from: Some(items_table_ref(Some("i"))),
-            ..aggregate_select
-        };
-        assert!(!native_select_shape_supported(
-            conn.schema_snapshot().as_ref(),
-            &aliased_table_qualifier
         ));
     }
 

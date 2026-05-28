@@ -369,7 +369,7 @@ fn native_select_rejects_hidden_table_qualifier_when_alias_is_present() {
 }
 
 #[test]
-fn native_select_supports_scalar_functions_but_falls_back_for_aggregates() {
+fn native_select_supports_scalar_functions_and_ungrouped_aggregates() {
     let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
     let conn = memory_conn();
     create_items(&conn);
@@ -421,13 +421,224 @@ fn native_select_supports_scalar_functions_but_falls_back_for_aggregates() {
 
     let aggregate = RqlStatement::Select(RqlSelect {
         distinct: false,
+        projection: vec![
+            RqlSelectItem::Expr {
+                expr: RqlExpr::CountStar,
+                alias: Some("n".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "count".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("score_count".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "sum".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("total_score".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "total".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("total_real".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "avg".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("avg_score".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "min".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("min_score".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "max".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("max_score".to_owned()),
+            },
+        ],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: None,
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    });
+    let mut stmt = conn.prepare_rql(&aggregate).expect("aggregate native");
+    assert!(stmt.template().sql.as_ref().ends_with("select_native"));
+    assert!(matches!(stmt.step().expect("aggregate row"), Step::Row));
+    assert_eq!(stmt.column_i64(0).expect("count"), 3);
+    assert_eq!(stmt.column_i64(1).expect("score count"), 3);
+    assert_eq!(stmt.column_i64(2).expect("sum"), 60);
+    assert_eq!(stmt.column_f64(3).expect("total"), 60.0);
+    assert_eq!(stmt.column_f64(4).expect("avg"), 20.0);
+    assert_eq!(stmt.column_i64(5).expect("min"), 10);
+    assert_eq!(stmt.column_i64(6).expect("max"), 30);
+}
+
+#[test]
+fn native_select_aggregate_matches_sql_route_with_params() {
+    let conn = memory_conn();
+    create_items(&conn);
+    let aggregate = RqlStatement::Select(RqlSelect {
+        distinct: false,
         projection: vec![RqlSelectItem::Expr {
             expr: RqlExpr::Function {
-                name: "sum".to_owned(),
+                name: "total".to_owned(),
                 args: vec![column("score")],
                 distinct: false,
             },
-            alias: None,
+            alias: Some("total_score".to_owned()),
+        }],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: Some(RqlExpr::Binary {
+            left: Box::new(column("score")),
+            op: RqlBinaryOp::Gt,
+            right: Box::new(RqlExpr::Param { index: 1 }),
+        }),
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    });
+    let binds = [(1, 10)];
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot_with_i64_binds(&conn, &aggregate, &binds);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    let stmt = conn.prepare_rql(&aggregate).expect("native aggregate");
+    assert!(stmt.template().sql.as_ref().ends_with("select_native"));
+    assert_eq!(stmt.parameter_count(), 1);
+    drop(stmt);
+    assert_eq!(snapshot_with_i64_binds(&conn, &aggregate, &binds), expected);
+}
+
+#[test]
+fn native_select_aggregate_empty_table_matches_sql_route() {
+    let conn = memory_conn();
+    conn.execute("CREATE TABLE items(id INTEGER PRIMARY KEY, score INTEGER)")
+        .expect("create empty items");
+    let aggregate = RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection: vec![
+            RqlSelectItem::Expr {
+                expr: RqlExpr::CountStar,
+                alias: Some("n".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "count".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("non_null".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "sum".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("sum_score".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "avg".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("avg_score".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "min".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("min_score".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "max".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("max_score".to_owned()),
+            },
+            RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "total".to_owned(),
+                    args: vec![column("score")],
+                    distinct: false,
+                },
+                alias: Some("total_score".to_owned()),
+            },
+        ],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: None,
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    });
+
+    let _sql_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", None)]);
+    let expected = snapshot(&conn, &aggregate);
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    assert!(is_native_select(&conn, &aggregate));
+    let actual = snapshot(&conn, &aggregate);
+    assert_eq!(actual, expected);
+    assert_eq!(
+        actual.1[0],
+        vec![
+            SqlValue::Integer(0),
+            SqlValue::Integer(0),
+            SqlValue::Null,
+            SqlValue::Null,
+            SqlValue::Null,
+            SqlValue::Null,
+            SqlValue::Real(0.0),
+        ]
+    );
+}
+
+#[test]
+fn native_select_aggregate_cache_is_gate_separated() {
+    let conn = memory_conn();
+    create_items(&conn);
+    let aggregate = RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection: vec![RqlSelectItem::Expr {
+            expr: RqlExpr::CountStar,
+            alias: Some("n".to_owned()),
         }],
         from: Some(table_ref(None, "items", None)),
         joins: Vec::new(),
@@ -438,10 +649,128 @@ fn native_select_supports_scalar_functions_but_falls_back_for_aggregates() {
         limit: None,
         offset: None,
     });
-    let mut stmt = conn.prepare_rql(&aggregate).expect("aggregate fallback");
-    assert!(!stmt.template().sql.as_ref().ends_with("select_native"));
-    assert!(matches!(stmt.step().expect("aggregate row"), Step::Row));
-    assert_eq!(stmt.column_i64(0).expect("sum"), 60);
+
+    let _sql_route = EnvGuard::set_many(&[
+        ("REDLINE_RQL_TEMPLATE_CACHE", Some("1")),
+        ("REDLINE_RQL_NATIVE_SELECT", None),
+    ]);
+    let sql_template = conn.prepare_rql(&aggregate).expect("sql route").template();
+    assert!(sql_template.sql.as_ref().ends_with("select"));
+    assert!(!sql_template.sql.as_ref().ends_with("select_native"));
+    drop(_sql_route);
+
+    let _native_route = EnvGuard::set_many(&[
+        ("REDLINE_RQL_TEMPLATE_CACHE", Some("1")),
+        ("REDLINE_RQL_NATIVE_SELECT", Some("1")),
+    ]);
+    let native_template = conn
+        .prepare_rql(&aggregate)
+        .expect("native route")
+        .template();
+    assert!(native_template.sql.as_ref().ends_with("select_native"));
+    assert!(!Arc::ptr_eq(&sql_template, &native_template));
+}
+
+#[test]
+fn native_select_aggregate_keeps_unsupported_shapes_on_sql_route() {
+    let _env = EnvGuard::set_many(&[("REDLINE_RQL_NATIVE_SELECT", Some("1"))]);
+    let conn = memory_conn();
+    create_items(&conn);
+    let base = RqlSelect {
+        distinct: false,
+        projection: vec![RqlSelectItem::Expr {
+            expr: RqlExpr::CountStar,
+            alias: None,
+        }],
+        from: Some(table_ref(None, "items", None)),
+        joins: Vec::new(),
+        filter: None,
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    };
+
+    for select in [
+        RqlSelect {
+            distinct: true,
+            ..base.clone()
+        },
+        RqlSelect {
+            projection: vec![RqlSelectItem::Expr {
+                expr: RqlExpr::Function {
+                    name: "count".to_owned(),
+                    args: vec![column("score")],
+                    distinct: true,
+                },
+                alias: None,
+            }],
+            ..base.clone()
+        },
+        RqlSelect {
+            projection: vec![
+                RqlSelectItem::Expr {
+                    expr: RqlExpr::CountStar,
+                    alias: None,
+                },
+                RqlSelectItem::Expr {
+                    expr: column("name"),
+                    alias: None,
+                },
+            ],
+            ..base.clone()
+        },
+        RqlSelect {
+            projection: vec![
+                RqlSelectItem::Expr {
+                    expr: RqlExpr::CountStar,
+                    alias: None,
+                },
+                RqlSelectItem::Wildcard,
+            ],
+            ..base.clone()
+        },
+        RqlSelect {
+            projection: vec![RqlSelectItem::Expr {
+                expr: RqlExpr::Binary {
+                    left: Box::new(RqlExpr::Function {
+                        name: "sum".to_owned(),
+                        args: vec![column("score")],
+                        distinct: false,
+                    }),
+                    op: RqlBinaryOp::Add,
+                    right: Box::new(RqlExpr::Integer { value: 1 }),
+                },
+                alias: None,
+            }],
+            ..base.clone()
+        },
+        RqlSelect {
+            from: None,
+            ..base.clone()
+        },
+        RqlSelect {
+            group_by: vec![column("name")],
+            ..base.clone()
+        },
+        RqlSelect {
+            having: Some(RqlExpr::Binary {
+                left: Box::new(RqlExpr::CountStar),
+                op: RqlBinaryOp::Gt,
+                right: Box::new(RqlExpr::Integer { value: 0 }),
+            }),
+            ..base
+        },
+    ] {
+        let statement = RqlStatement::Select(select);
+        let template = conn
+            .prepare_rql(&statement)
+            .expect("fallback prepare")
+            .template();
+        assert!(template.sql.as_ref().ends_with("select"));
+        assert!(!template.sql.as_ref().ends_with("select_native"));
+    }
 }
 
 #[test]
