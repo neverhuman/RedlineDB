@@ -145,8 +145,18 @@ mod tests {
         let [child] = plan.children.as_slice() else {
             panic!("expected LIMIT over one child, got {plan:?}");
         };
-        assert!(matches!(child.kind, PhysicalKind::IndexScan));
-        child.ordered_index_scan_limit
+        let index = match child.kind {
+            PhysicalKind::IndexScan => child,
+            PhysicalKind::Project => {
+                let [project_child] = child.children.as_slice() else {
+                    panic!("expected PROJECT over one child, got {child:?}");
+                };
+                assert!(matches!(project_child.kind, PhysicalKind::IndexScan));
+                project_child
+            }
+            _ => panic!("expected LIMIT over IndexScan or Project, got {child:?}"),
+        };
+        index.ordered_index_scan_limit
     }
 
     fn with_access_path_gate<T>(value: bool, f: impl FnOnce() -> T) -> T {
@@ -223,7 +233,9 @@ pub(crate) fn build_table_scan_plan(
         table_hint,
     );
     let is_covering = matches!(&access, AccessPath::CoveringIndexScan { .. });
-    let ordering_satisfied = satisfies_ordering(table, &access, order_by);
+    let ordering_satisfied = access_path_satisfies_ordering(
+        conn, table, &access, selection, order_by, bindings, table_hint,
+    );
 
     let mut node = match access {
         AccessPath::TableScan => {
@@ -328,6 +340,30 @@ pub(crate) fn build_table_scan_plan(
     }
 
     node
+}
+
+fn access_path_satisfies_ordering(
+    conn: &Connection,
+    table: &Arc<TableDef>,
+    access: &AccessPath,
+    selection: &Option<Expr>,
+    order_by: &[OrderByExpr],
+    bindings: &[Option<SqlValue>],
+    table_hint: Option<&crate::statement::TableAccessHint>,
+) -> bool {
+    if planner_use_access_path() {
+        let ir = choose_access_path_ir(
+            conn.engine(),
+            table,
+            selection,
+            bindings,
+            table_hint,
+            order_by,
+            None,
+        );
+        return ir.order_satisfies(order_by);
+    }
+    satisfies_ordering(table, access, order_by)
 }
 
 pub(crate) fn access_plan_to_node(

@@ -236,7 +236,7 @@ pub(crate) fn wrap_limit_with_conn(
     if planner_use_access_path()
         && let Some(conn) = conn
         && let Some(n) = limit_n
-        && matches!(input.kind, PhysicalKind::IndexScan)
+        && limit_annotatable_index_scan_mut(&mut input).is_some()
     {
         if let SelectSource::Table(table) = &plan.source {
             let ir = choose_access_path_ir(
@@ -249,7 +249,9 @@ pub(crate) fn wrap_limit_with_conn(
                 Some(n),
             );
             if let Some(k) = ir.hard_limit() {
-                input.ordered_index_scan_limit = Some(k);
+                if let Some(index_scan) = limit_annotatable_index_scan_mut(&mut input) {
+                    index_scan.ordered_index_scan_limit = Some(k);
+                }
             }
         }
     } else if let (PhysicalKind::IndexScan, Some(n)) = (input.kind, limit_n)
@@ -279,4 +281,18 @@ pub(crate) fn wrap_limit_with_conn(
         None => "LIMIT".to_owned(),
     });
     node
+}
+
+fn limit_annotatable_index_scan_mut(input: &mut PhysicalPlan) -> Option<&mut PhysicalPlan> {
+    match input.kind {
+        PhysicalKind::IndexScan => Some(input),
+        // Projection preserves row count and order. This is the common
+        // SELECT-col path because `build_select_plan` wraps projection
+        // before LIMIT.
+        PhysicalKind::Project => match input.children.as_mut_slice() {
+            [child] if matches!(child.kind, PhysicalKind::IndexScan) => Some(child),
+            _ => None,
+        },
+        _ => None,
+    }
 }
