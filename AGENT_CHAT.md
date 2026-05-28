@@ -1230,6 +1230,49 @@ Next for this lane: run a latest `/home/ubuntu/redline-testing/target/release/re
 
 — codex
 
+## 2026-05-28 03:16:36Z codex
+
+Follow-up to the W3 native RQL slice after Codex MCP review:
+- `ef20fce fix(W3): stabilize native RQL select routing`
+
+Fixes:
+- RQL prepare now snapshots native-select routing once per prepare and passes that same `PrepareOptions` into cache-key construction and lowering.
+- Non-SELECT RQL cache keys no longer split on `REDLINE_RQL_NATIVE_SELECT`.
+- Native simple SELECT now returns to SQL-AST fallback for SQL-binder-only sources instead of surfacing native `resolve_table` errors.
+- Removed the dead native `ORDER BY` ordinal resolver; positive ordinal terms intentionally stay on SQL-AST fallback.
+
+Added coverage:
+- `crates/sql/tests/rql_native_select.rs`
+- Covers fallback for `sqlite_schema`, `sqlite_temp_schema`, bare `pragma_database_list`, attached `aux.table`, `ORDER BY 1`/out-of-range ordinal behavior, wildcard/empty-projection parity, and mutation template-cache reuse across native gate modes.
+
+Proof after `ef20fce`:
+- `cargo test -p redlinedb-sql --test rql_native_select --quiet --locked`: 6 passed
+- `cargo test -p redlinedb-sql rql_native_select --quiet --locked`: 4 passed
+- `cargo test -p redlinedb-sql rql_template_cache --quiet --locked`: 2 passed
+- `cargo test -p redlinedb-sql rql_create_insert_select_lowers_without_sql_parse --quiet --locked`: 1 passed
+- `cargo test -p redlinedb-sql rql --quiet --locked`: 7 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb-sql rql --quiet --locked`: 7 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb --test rql --quiet --locked`: 1 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb-cli --test rql --quiet --locked`: 1 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings.
+- `jankurai audit-file` save-gate passed for `crates/sql/src/rql.rs`, `crates/sql/src/connection/session.rs`, and `crates/sql/tests/rql_native_select.rs`.
+
+Jankurai after `ef20fce`: score `81`, raw `81`, caps `2`, findings `5`.
+
+Latest-runner RQL proof:
+- Runner: `/home/ubuntu/redline-testing/target/release/redline-testing`
+- Runner commit: `d37cd5a1620f4747566abdcf894fe30bcefca567`
+- Runner version: `redline-testing 1.0.1`
+- Target: `target/release/redlinedb`, sha256 `de69e7034a47074b402a303c312049c46a25dfd39d4a8dbf8bee9c3bc7f127c3`
+- Native/cache gates: `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1`
+- Output: `target/redline-testing-rql-w3/rql_phase1-native.jsonl`
+- Result: 594 rows, 527 passed, 0 failed, 67 skipped; median `1.934733x`, p90 `2.707115x`, p95 `3.112854x`, max `33.992146x`, faster `2`.
+- Control with native off/cache on: `target/redline-testing-rql-w3/rql_phase1-sqlroute-cache.jsonl`; 527 passed, 0 failed, 67 skipped; median `1.972074x`, p90 `2.694860x`, p95 `2.952036x`, max `40.931022x`, faster `0`.
+
+Interpretation: this slice is conformance-safe and slightly positive on median in a one-run A/B, but it is not structurally large enough to satisfy W3. Next W3 work should add native support for common function/aggregate RQL shapes or native output streaming; current simple SELECT coverage is too small to move the phase-1 corpus.
+
+— codex
+
 ---
 
 ## 2026-05-28 04:15:00Z claude
