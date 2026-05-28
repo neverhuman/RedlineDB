@@ -294,23 +294,55 @@ where
 }
 
 fn in_subquery_is_cacheable(subquery: &sqlparser::ast::Query) -> bool {
+    // A12: drop the per-row `to_ascii_lowercase()` allocation. `Query`'s
+    // Display still allocates the rendered string (sqlparser API), but
+    // we don't need to clone-and-downcase it to do case-insensitive
+    // substring checks — the byte-scan helper handles that allocation-
+    // free for every marker we're looking for. The list of volatile/
+    // session-bound function names is closed and ASCII-only, so a
+    // simple `eq_ignore_ascii_case` window check is sufficient.
+    const VOLATILE_MARKERS: &[&[u8]] = &[
+        b"random(",
+        b"randomblob(",
+        b"last_insert_rowid",
+        b"changes(",
+        b"total_changes(",
+        b"current_date",
+        b"current_time",
+        b"current_timestamp",
+        b"date(",
+        b"time(",
+        b"datetime(",
+        b"julianday(",
+        b"unixepoch(",
+        b"strftime(",
+    ];
     let rendered = subquery.to_string();
-    let lower = rendered.to_ascii_lowercase();
-    !rendered.contains('.')
-        && !lower.contains("random(")
-        && !lower.contains("randomblob(")
-        && !lower.contains("last_insert_rowid")
-        && !lower.contains("changes(")
-        && !lower.contains("total_changes(")
-        && !lower.contains("current_date")
-        && !lower.contains("current_time")
-        && !lower.contains("current_timestamp")
-        && !lower.contains("date(")
-        && !lower.contains("time(")
-        && !lower.contains("datetime(")
-        && !lower.contains("julianday(")
-        && !lower.contains("unixepoch(")
-        && !lower.contains("strftime(")
+    if rendered.contains('.') {
+        return false;
+    }
+    let bytes = rendered.as_bytes();
+    for marker in VOLATILE_MARKERS {
+        if contains_token_ci(bytes, marker) {
+            return false;
+        }
+    }
+    true
+}
+
+/// A12 helper: allocation-free case-insensitive substring scan. Same shape
+/// as A7/A8/A9 byte-scans elsewhere.
+#[inline]
+fn contains_token_ci(haystack: &[u8], needle: &[u8]) -> bool {
+    if haystack.len() < needle.len() {
+        return false;
+    }
+    haystack.windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
 }
 
 fn finish_in_result(found: bool, saw_null: bool, negated: bool) -> Result<SqlValue> {

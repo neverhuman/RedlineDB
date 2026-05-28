@@ -177,7 +177,12 @@ pub(crate) fn execute_update(
             if !selection_passes(&plan.selection, &SqlRow::Table(fresh.clone()), bindings)? {
                 continue;
             }
-            let old_values = fresh.values.clone();
+            // A16: borrow the snapshot instead of cloning. `old_values` is
+            // strictly read (passed by reference to triggers, FK enforcement,
+            // index maintenance), while `values` is mutated in place; only
+            // the latter needs an owned copy. Saves one full Vec<SqlValue>
+            // clone (plus inner SqlValue clones for Text/Blob/etc.) per row.
+            let old_values: &[SqlValue] = fresh.values.as_slice();
             let mut values = fresh.values.clone();
             if let Some(plans) = fast_plans {
                 // WS-A6 fast path: every assignment is a Replacement or
