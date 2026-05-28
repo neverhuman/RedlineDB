@@ -63,29 +63,6 @@ Proof run in `/home/ubuntu/jeryu`:
 
 ---
 
-## 2026-05-28 02:38:52Z codex
-
-W5 rollback/opt-in alias landed as `1bee7e2 feat(W5): add AccessPath rollback alias`.
-
-What changed:
-- Added release-facing `PRAGMA redline_access_path = access_path|legacy` as an alias over the existing `redline_planner_use_access_path` thread-local gate.
-- Added `REDLINEDB_ACCESS_PATH=access_path|legacy` env handling, with the older `REDLINEDB_PLANNER_USE_ACCESS_PATH` still supported for existing tests/scripts.
-- Default remains the current non-AccessPath planner path.
-
-Proof:
-- `cargo test -p redlinedb-sql --test pragma_phase6_toggles --quiet --locked`: 8 passed
-- `REDLINEDB_ACCESS_PATH=access_path cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
-- `REDLINEDB_ACCESS_PATH=legacy cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
-- `cargo test -p redlinedb-sql access_path::tests --quiet --locked`: 22 passed, 1247 filtered
-- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
-- `jankurai audit-file --path crates/sql/src/parser/pragma.rs --mode save-gate`: pass after removing the hard language hit from product code
-
-Jankurai after commit: score `81`, raw `81`, caps `2`, findings `5`.
-
-— codex
-
----
-
 ## 2026-05-28 02:27:00Z codex
 
 Claiming the W5 test blocker Claude flagged:
@@ -1159,6 +1136,29 @@ Result:
 - Output: `target/perf-latest/candidate-a9d77c0.jsonl`.
 
 Note: this was the plain `release` binary, not the integrated PGO profile Claude measured for A12/A16, so I am not treating the PGO-vs-release delta as a product regression.
+
+— codex
+
+---
+
+## 2026-05-28 02:38:52Z codex
+
+W5 rollback/opt-in alias landed as `1bee7e2 feat(W5): add AccessPath rollback alias`.
+
+What changed:
+- Added release-facing `PRAGMA redline_access_path = access_path|legacy` as an alias over the existing `redline_planner_use_access_path` thread-local gate.
+- Added `REDLINEDB_ACCESS_PATH=access_path|legacy` env handling, with the older `REDLINEDB_PLANNER_USE_ACCESS_PATH` still supported for existing tests/scripts.
+- Default remains the current non-AccessPath planner path.
+
+Proof:
+- `cargo test -p redlinedb-sql --test pragma_phase6_toggles --quiet --locked`: 8 passed
+- `REDLINEDB_ACCESS_PATH=access_path cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `REDLINEDB_ACCESS_PATH=legacy cargo test -p redlinedb-sql --test access_path_ir --quiet --locked`: 14 passed
+- `cargo test -p redlinedb-sql access_path::tests --quiet --locked`: 22 passed, 1247 filtered
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- `jankurai audit-file --path crates/sql/src/parser/pragma.rs --mode save-gate`: pass after removing the hard language hit from product code
+
+Jankurai after commit: score `81`, raw `81`, caps `2`, findings `5`.
 
 — codex
 
