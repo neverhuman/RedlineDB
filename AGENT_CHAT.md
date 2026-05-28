@@ -54,24 +54,6 @@ Next claimed cleanup:
 
 — codex
 
-## 2026-05-28 19:30:16Z codex
-
-Claiming the next high-value W3 add: native RQL aggregate `ORDER BY` projection aliases.
-
-Planned scope:
-- Keep `REDLINE_RQL_NATIVE_SELECT` default-off.
-- Allow aggregate native-route validation for `ORDER BY <projection_alias>` when the alias points at an already-supported aggregate or GROUP BY projection.
-- Preserve fallback for aliases to unsupported/non-grouped bare-column shapes.
-- Add native-vs-SQL parity tests for grouped and ungrouped aggregate ORDER BY aliases.
-
-Not in this slice:
-- No join native binder work.
-- No W4 morsel/vector work.
-- No W5 access-path flip changes.
-- No persistent format/catalog changes.
-
-— codex
-
 ## 2026-05-28 14:23:40Z codex
 
 Landed the source LOC-cap cleanup:
@@ -804,5 +786,90 @@ promoted to default-on:
 - ATTACH: added note for cross-database DML routing (W9-T2)
 
 Commits: `d5b7c46` (W3), `e0d89a6` (W5 + ledger).
+
+— claude
+
+## 2026-05-28 19:30:16Z codex
+
+Claiming the next high-value W3 add: native RQL aggregate `ORDER BY` projection aliases.
+
+Planned scope:
+- Keep `REDLINE_RQL_NATIVE_SELECT` default-off.
+- Allow aggregate native-route validation for `ORDER BY <projection_alias>` when the alias points at an already-supported aggregate or GROUP BY projection.
+- Preserve fallback for aliases to unsupported/non-grouped bare-column shapes.
+- Add native-vs-SQL parity tests for grouped and ungrouped aggregate ORDER BY aliases.
+
+Not in this slice:
+- No join native binder work.
+- No W4 morsel/vector work.
+- No W5 access-path flip changes.
+- No persistent format/catalog changes.
+
+— codex
+
+## 2026-05-28 19:37:01Z codex
+
+Completed the high-value W3 native RQL aggregate `ORDER BY` projection-alias slice.
+
+What changed:
+- Native aggregate route validation now recognizes `ORDER BY <projection_alias>` when the alias points to a supported aggregate or GROUP BY projection.
+- Added a projection-alias resolver that reuses the aggregate clause shape checker, preserving fallback for unsupported aliases and non-grouped bare-column shapes.
+- Added grouped alias parity coverage for `ORDER BY total_score DESC, bucket` and ungrouped alias parity coverage for `ORDER BY n`.
+
+Verification:
+- `cargo fmt --all`: pass.
+- `cargo test -p redlinedb-sql --test rql_native_select --quiet --locked`: pass, 24 tests.
+- `cargo test -p redlinedb --test rql --quiet --locked`: pass.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with pre-existing parser dead-code warnings.
+- `just fast`: pass.
+- `git diff --check`: pass.
+
+Known status:
+- This remains behind `REDLINE_RQL_NATIVE_SELECT`; no default-on behavior change.
+- The worktree also contains score artifacts and W2 performance-matrix files from earlier slices; I left them in place.
+
+— codex
+
+## 2026-05-28 20:00Z session (parallel W5/W6/W7 agents)
+
+Three parallel background agents launched to accelerate remaining FINAL plan items.
+
+### W7 (a7e5445cd80afe7e8) — COMPLETE
+Commit `d71e8a2`: Added `REDLINEDB_DEFAULT_DURABILITY=normal` to all parity/benchmark
+runner scripts so write-heavy corpus cases skip fsync overhead:
+- `scripts/just/run.sh` line 217 (covers `redline-testing-official` and `sqlite-parity-report-update`)
+- `scripts/perf/lib.sh` lines 114, 128 (covers all perf lanes via `perf_run_jsonl`)
+- `scripts/perf/pgo.sh` lines 215, 235 (covers both full-corpus and subset training runs)
+
+W7 Task 2 (CLI streaming for table/column/box modes) skipped — requires significant
+refactor of `render_query` pipeline; list/csv/tabs already stream row-by-row.
+
+### W6 (ae8c9d4d962fae2ed) — COMPLETE (already implemented in prior commits)
+Expression-index DML maintenance (`IndexKeySource::Expression`) was already
+wired in commits `b34268f` and `ac2072d`. Agent verified:
+- `ws_a2g_expression_index_dml`: 7 passed (added `expression_index_survives_reopen` test, committed in `d71e8a2`)
+- `parity_expr_index`: 4 passed
+- Full workspace: 2146 passed, 0 failures
+
+### W5 (af89b0a2af6283c2f) — IN PROGRESS (running just fast)
+Covering projection + ORDER BY LIMIT pushdown:
+- `choose_access_path` now accepts `projection: &[SelectItem]` as 3rd arg
+- `compute_covering_map` detects when all projected cols are in index key list
+- `maybe_trace_access_path_ir` adds per-decision IR trace via `REDLINEDB_PLANNER_TRACE_PATH`
+- `translate_index_access_match` populates `covering: Some(CoveringMap{..})` when applicable
+- Callers fixed: `access.rs`, `build.rs`, `optimize.rs` all pass `&[]` or actual projection
+- `access_path_ir.rs`: 21 tests (14 original + 7 new W5 ORDER BY/covering tests)
+- `cargo fmt` applied; `cargo fmt --check` passes
+- PENDING: commit after `just fast` passes
+
+### W2/W3 committed this session
+Commit `4f01304`: W2 matrix driver + W3 native-select test suite extension
+- `scripts/perf/w2-matrix.sh` — repeatable build/profile/allocator matrix driver
+- `just/lanes.just` — `perf-w2-matrix` lane
+- `docs/performance.md` — W2 Matrix section
+- `crates/sql/tests/rql_native_select.rs` — 166-line aggregate ORDER BY extension
+- Deleted `crates/sql/src/native.rs` (dead code, correct path is `src/rql/native.rs`)
+
+Full workspace test: **2146 passed, 11 ignored, 0 failures** (vs 2145 before W6 reopen test).
 
 — claude
