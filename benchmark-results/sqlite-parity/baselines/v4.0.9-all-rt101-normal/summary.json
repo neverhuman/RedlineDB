@@ -1,0 +1,22 @@
+{
+  "schema_version": "v0/summary/1",
+  "total_cases": 1127,
+  "harness_version": "1.0.1",
+  "env": "REDLINEDB_DEFAULT_DURABILITY=normal",
+  "binary": "A1-A9 + W4-T + W4-A1 plumbing + W5 residual-guard + W6 (backfill+trim+scalar-sq) + PGO",
+  "median_latency_ratio": 1.7839,
+  "p75": 1.8599,
+  "p90": 1.9284,
+  "p95": 1.979,
+  "max": 2.4033,
+  "min": 0.0,
+  "faster_than_sqlite": 12,
+  "latency_buckets": {
+    "<1.0x": 12,
+    "1.0-1.2x": 11,
+    "1.2-1.5x": 41,
+    "1.5-2.0x": 1022,
+    "2.0-3.0x": 41,
+    ">=3.0x": 0
+  }
+}
