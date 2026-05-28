@@ -27,7 +27,7 @@ use std::sync::atomic::Ordering;
 
 use redlinedb_kernel::catalog::{Affinity, TableDef};
 use redlinedb_kernel::engine::{Engine, Txn};
-use sqlparser::ast::{Expr, SelectItem};
+use sqlparser::ast::{BinaryOperator, Expr, SelectItem, Value};
 
 use super::{
     MORSEL_ROUTE_FALLBACK_DISABLED, MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND,
@@ -124,25 +124,32 @@ pub fn route_primitive_scan(plan: &crate::statement::SelectPlan) -> Result<Route
     Ok(RouteDecision::Decline(DeclineReason::NotYetImplemented))
 }
 
-/// W4-A2a: classify a plan's projection and WHERE into a concrete routing
-/// plan. Returns `Err(DeclineReason)` when any shape is outside the
-/// primitive-scan subset.
+/// W4-A2a/A3: classify a plan's projection and WHERE into a concrete
+/// routing plan. Returns `Err(DeclineReason)` when any shape is outside
+/// the primitive-scan subset.
 ///
-/// Initial-wave subset (will grow in W4-A3):
+/// W4-A3 wave subset:
 /// - Projection: each item must be `SelectItem::UnnamedExpr(Identifier)`
 ///   or `SelectItem::ExprWithAlias { expr: Identifier, .. }`. The
 ///   identifier must resolve to a column on `table` with Integer or Real
 ///   affinity. (Wildcards, expressions, qualified idents — all deferred.)
-/// - WHERE: must be `None`. Predicate translation lands in W4-A3 along
-///   with the filter-kernel dispatch.
+/// - WHERE: optional. When present, must be a single binary comparison
+///   of the form `col <op> integer_literal` (or `literal <op> col`)
+///   where:
+///     - `col` resolves to an Integer-affinity column on `table`.
+///     - `op` is one of `=`, `!=`, `<`, `<=`, `>`, `>=`.
+///     - `integer_literal` parses as `i64`.
+///   Anything else (AND/OR chains, IS NULL, BETWEEN, real literal,
+///   string literal, qualified identifier, etc.) is deferred to W4-A4+.
 pub(crate) fn classify_for_routing(
     plan: &crate::statement::SelectPlan,
     table: &TableDef,
 ) -> std::result::Result<RoutingPlan, DeclineReason> {
-    // W4-A2a defers WHERE entirely — any selection means tuple path.
-    if plan.selection.is_some() {
-        return Err(DeclineReason::Predicate);
-    }
+    // W4-A3: extract the predicate, if any.
+    let predicate = match plan.selection.as_ref() {
+        None => None,
+        Some(expr) => Some(classify_predicate(expr, table)?),
+    };
 
     let mut projection: smallvec::SmallVec<[ColumnRouting; 8]> =
         smallvec::SmallVec::with_capacity(plan.projection.len());
@@ -191,18 +198,148 @@ pub(crate) fn classify_for_routing(
         return Err(DeclineReason::Projection);
     }
 
-    Ok(RoutingPlan { projection })
+    Ok(RoutingPlan {
+        projection,
+        predicate,
+    })
+}
+
+/// W4-A3: parse a WHERE expression into a `RoutedPredicate`. Accepts a
+/// single binary comparison; everything else returns
+/// `DeclineReason::Predicate`.
+fn classify_predicate(
+    expr: &Expr,
+    table: &TableDef,
+) -> std::result::Result<RoutedPredicate, DeclineReason> {
+    let (op, left, right) = match expr {
+        Expr::BinaryOp { left, op, right } => (op, left.as_ref(), right.as_ref()),
+        Expr::Nested(inner) => return classify_predicate(inner, table),
+        _ => return Err(DeclineReason::Predicate),
+    };
+
+    // Map sqlparser op → PredicateOp, also recording whether the column
+    // is on the left or right (swap reverses lt/le/gt/ge).
+    let pred_op = match op {
+        BinaryOperator::Eq => PredicateOp::Eq,
+        BinaryOperator::NotEq => PredicateOp::Ne,
+        BinaryOperator::Lt => PredicateOp::Lt,
+        BinaryOperator::LtEq => PredicateOp::Le,
+        BinaryOperator::Gt => PredicateOp::Gt,
+        BinaryOperator::GtEq => PredicateOp::Ge,
+        _ => return Err(DeclineReason::Predicate),
+    };
+
+    // Either (Ident, Literal) or (Literal, Ident). Anything else (two
+    // identifiers, two literals, nested AND/OR, function calls) declines.
+    let (col_ord, target, swap) = match (left, right) {
+        (Expr::Identifier(ident), other) => {
+            let target = literal_as_i64(other)?;
+            let col_ord = resolve_int_column(table, ident.value.as_str())?;
+            (col_ord, target, false)
+        }
+        (other, Expr::Identifier(ident)) => {
+            let target = literal_as_i64(other)?;
+            let col_ord = resolve_int_column(table, ident.value.as_str())?;
+            (col_ord, target, true)
+        }
+        _ => return Err(DeclineReason::Predicate),
+    };
+
+    let op = if swap { pred_op.reverse() } else { pred_op };
+    Ok(RoutedPredicate {
+        column_ordinal: col_ord,
+        op,
+        target,
+    })
+}
+
+fn literal_as_i64(expr: &Expr) -> std::result::Result<i64, DeclineReason> {
+    let Expr::Value(value_with_span) = expr else {
+        return Err(DeclineReason::Predicate);
+    };
+    let Value::Number(text, _exact) = &value_with_span.value else {
+        return Err(DeclineReason::Predicate);
+    };
+    text.parse::<i64>().map_err(|_| DeclineReason::Predicate)
+}
+
+fn resolve_int_column(
+    table: &TableDef,
+    name: &str,
+) -> std::result::Result<usize, DeclineReason> {
+    let column = table
+        .columns
+        .iter()
+        .find(|c| c.folded.eq_ignore_ascii_case(name))
+        .ok_or(DeclineReason::Predicate)?;
+    if !matches!(column.affinity, Affinity::Integer) {
+        return Err(DeclineReason::Predicate);
+    }
+    Ok(column.ordinal as usize)
 }
 
 /// W4-A2a: concrete plan of which columns the morsel scan should read
 /// out of `table`, and what kind each column is expected to be. Consumed
-/// by W4-A2b's `execute_routed_scan` (TBD).
+/// by `execute_routed_scan`.
 #[derive(Debug, Clone)]
 pub(crate) struct RoutingPlan {
     /// One entry per projection item, in order. The morsel scan reads
     /// these columns into morsel batches, then the emit pass projects
     /// them out in the same order to produce final tuples.
     pub(crate) projection: smallvec::SmallVec<[ColumnRouting; 8]>,
+    /// W4-A3: optional single-comparison WHERE predicate. `None` means
+    /// "no WHERE — emit every row".
+    pub(crate) predicate: Option<RoutedPredicate>,
+}
+
+/// W4-A3: a single-comparison WHERE predicate the morsel scan can
+/// evaluate inline before projection.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RoutedPredicate {
+    pub(crate) column_ordinal: usize,
+    pub(crate) op: PredicateOp,
+    pub(crate) target: i64,
+}
+
+/// W4-A3: predicate operator. Mirrors the `filter_i64_*` kernel family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PredicateOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+impl PredicateOp {
+    /// Swap left/right operands: `5 < col` becomes `col > 5`.
+    fn reverse(self) -> Self {
+        match self {
+            Self::Eq => Self::Eq,
+            Self::Ne => Self::Ne,
+            Self::Lt => Self::Gt,
+            Self::Le => Self::Ge,
+            Self::Gt => Self::Lt,
+            Self::Ge => Self::Le,
+        }
+    }
+
+    /// Evaluate `lhs <op> rhs` on a scalar pair. The morsel filter
+    /// kernels do the same comparison over a `&[i64]` column — this
+    /// scalar variant is used by W4-A3a's row-at-a-time path until
+    /// W4-A4 batches into a columnar vector.
+    #[inline]
+    fn eval(self, lhs: i64, rhs: i64) -> bool {
+        match self {
+            Self::Eq => lhs == rhs,
+            Self::Ne => lhs != rhs,
+            Self::Lt => lhs < rhs,
+            Self::Le => lhs <= rhs,
+            Self::Gt => lhs > rhs,
+            Self::Ge => lhs >= rhs,
+        }
+    }
 }
 
 /// Per-column routing entry: which ordinal to read from the source row,
@@ -271,6 +408,32 @@ pub(crate) fn execute_routed_scan(
         else {
             continue;
         };
+
+        // W4-A3: predicate evaluation before projection. SQL's three-
+        // valued comparison: NULL <op> anything = NULL, treated as
+        // "not matching" (same as the tuple path's filter). For a
+        // wrong-kind value (e.g. INTEGER-affinity column holds a TEXT
+        // value via SQLite loose typing), bail to tuple path so
+        // affinity coercion semantics stay identical.
+        if let Some(pred) = &routing.predicate {
+            let value = fresh
+                .values
+                .get(pred.column_ordinal)
+                .unwrap_or(&SqlValue::Null);
+            match value {
+                SqlValue::Null => continue,
+                SqlValue::Integer(lhs) => {
+                    if !pred.op.eval(*lhs, pred.target) {
+                        continue;
+                    }
+                }
+                _ => {
+                    record_decline(&MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND);
+                    return Ok(None);
+                }
+            }
+        }
+
         let mut row_out: Vec<SqlValue> = Vec::with_capacity(routing.projection.len());
         for col in &routing.projection {
             let value = fresh
@@ -376,9 +539,34 @@ mod tests {
                     kind: MorselColumnKind::F64,
                 },
             ],
+            predicate: None,
         };
         assert_eq!(plan.projection.len(), 2);
         assert_eq!(plan.projection[0].kind, MorselColumnKind::I64);
         assert_eq!(plan.projection[1].kind, MorselColumnKind::F64);
+    }
+
+    #[test]
+    fn predicate_op_eval_table() {
+        assert!(PredicateOp::Eq.eval(5, 5));
+        assert!(!PredicateOp::Eq.eval(5, 6));
+        assert!(PredicateOp::Ne.eval(5, 6));
+        assert!(!PredicateOp::Ne.eval(5, 5));
+        assert!(PredicateOp::Lt.eval(4, 5));
+        assert!(!PredicateOp::Lt.eval(5, 5));
+        assert!(PredicateOp::Le.eval(5, 5));
+        assert!(PredicateOp::Gt.eval(6, 5));
+        assert!(!PredicateOp::Gt.eval(5, 5));
+        assert!(PredicateOp::Ge.eval(5, 5));
+    }
+
+    #[test]
+    fn predicate_op_reverse_swaps_ordering() {
+        assert_eq!(PredicateOp::Eq.reverse(), PredicateOp::Eq);
+        assert_eq!(PredicateOp::Ne.reverse(), PredicateOp::Ne);
+        assert_eq!(PredicateOp::Lt.reverse(), PredicateOp::Gt);
+        assert_eq!(PredicateOp::Le.reverse(), PredicateOp::Ge);
+        assert_eq!(PredicateOp::Gt.reverse(), PredicateOp::Lt);
+        assert_eq!(PredicateOp::Ge.reverse(), PredicateOp::Le);
     }
 }
