@@ -6,7 +6,7 @@ use super::*;
 pub(super) fn rows(
     conn: &Connection,
     alias: Option<&Arc<str>>,
-) -> Vec<crate::statement::SqliteSequenceRow> {
+) -> Result<Vec<crate::statement::SqliteSequenceRow>> {
     super::with_session_reentrant(conn, |session| {
         let sequences = if session.tx.is_some() || session.sqlite_sequences_tx_snapshot.is_some() {
             session.sqlite_sequences.clone()
@@ -22,7 +22,6 @@ pub(super) fn rows(
             })
             .collect())
     })
-    .unwrap_or_default()
 }
 
 pub(super) fn build_runtime(
@@ -35,7 +34,7 @@ pub(super) fn build_runtime(
     temp_dir: Option<PathBuf>,
     memory: &mut QueryMemoryBroker,
 ) -> Result<SelectRuntimeSource> {
-    let rows = rows(conn, alias);
+    let rows = rows(conn, alias)?;
     if plan.order_by.is_empty() {
         return Ok(SelectRuntimeSource::SqliteSequence { rows, cursor: 0 });
     }
@@ -68,9 +67,9 @@ pub(super) fn build_runtime(
     })
 }
 
-pub(super) fn collect_rows(conn: &Connection, alias: Option<&Arc<str>>) -> Vec<SqlRow> {
-    rows(conn, alias)
+pub(super) fn collect_rows(conn: &Connection, alias: Option<&Arc<str>>) -> Result<Vec<SqlRow>> {
+    Ok(rows(conn, alias)?
         .into_iter()
         .map(SqlRow::SqliteSequence)
-        .collect()
+        .collect())
 }

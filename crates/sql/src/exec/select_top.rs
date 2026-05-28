@@ -1112,7 +1112,7 @@ pub(super) fn collect_select_rows(
             .map(SqlRow::SqliteSchema)
             .collect()),
         SelectSource::SqliteSequence { alias } => {
-            Ok(super::sqlite_sequence::collect_rows(conn, alias.as_ref()))
+            super::sqlite_sequence::collect_rows(conn, alias.as_ref())
         }
         SelectSource::SqliteTempSchema => Ok(temp_schema_rows(conn)
             .into_iter()
