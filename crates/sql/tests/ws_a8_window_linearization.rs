@@ -176,6 +176,21 @@ fn whole_partition_single_partition() {
     lab.assert_match("SELECT v, SUM(v) OVER () AS s FROM t ORDER BY v");
 }
 
+#[test]
+fn ordered_default_range_keeps_peer_frame() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(p INTEGER, k INTEGER, v INTEGER)");
+    lab.execute(
+        "INSERT INTO t VALUES \
+         (1,1,10),(1,1,20),(1,2,30),(1,3,40), \
+         (2,1,100),(2,2,200)",
+    );
+    lab.assert_match(
+        "SELECT p, k, v, SUM(v) OVER (PARTITION BY p ORDER BY k) \
+         FROM t ORDER BY p, k, v",
+    );
+}
+
 // ── Running-sum prefix path (UNBOUNDED PRECEDING → CURRENT ROW) ─────
 
 #[test]

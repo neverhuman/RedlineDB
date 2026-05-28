@@ -276,6 +276,17 @@ fn eval_window_call(
 
     let mut results = vec![SqlValue::Null; rows.len()];
     let layouts = window_cache.layouts_for(window)?;
+    if whole_partition_aggregate_window(
+        &func_name,
+        &args,
+        rows,
+        layouts,
+        &frame,
+        bindings,
+        &mut results,
+    )? {
+        return Ok(results);
+    }
     if prefix_aggregate_window(
         &func_name,
         &args,
@@ -310,6 +321,39 @@ fn eval_window_call(
     Ok(results)
 }
 
+fn whole_partition_aggregate_window(
+    func_name: &str,
+    args: &[Expr],
+    rows: &[SqlRow],
+    layouts: &[CachedWindowPartition],
+    frame: &ResolvedFrame,
+    bindings: &[Option<SqlValue>],
+    results: &mut [SqlValue],
+) -> Result<bool> {
+    if !is_window_aggregate(func_name)
+        || !matches!(&frame.start, ResolvedBound::UnboundedPreceding)
+        || !matches!(&frame.end, ResolvedBound::UnboundedFollowing)
+        || frame.exclude != ExcludeMode::NoOthers
+    {
+        return Ok(false);
+    }
+    for layout in layouts {
+        let mut accumulator = Accumulator::new(func_name);
+        for row_idx in &layout.order_index_map {
+            let value = match args.first() {
+                Some(expr) => eval_scalar(expr, &rows[*row_idx].context(), bindings)?,
+                None => SqlValue::Integer(1),
+            };
+            accumulator.push(value);
+        }
+        let value = accumulator.finalize();
+        for row_idx in &layout.order_index_map {
+            results[*row_idx] = value.clone();
+        }
+    }
+    Ok(true)
+}
+
 fn prefix_aggregate_window(
     func_name: &str,
     args: &[Expr],
@@ -319,7 +363,7 @@ fn prefix_aggregate_window(
     bindings: &[Option<SqlValue>],
     results: &mut [SqlValue],
 ) -> Result<bool> {
-    if !matches!(func_name, "sum" | "count" | "avg" | "min" | "max" | "total")
+    if !is_window_aggregate(func_name)
         || !matches!(frame.units, WindowFrameUnits::Rows)
         || !matches!(&frame.start, ResolvedBound::UnboundedPreceding)
         || !matches!(&frame.end, ResolvedBound::CurrentRow)
@@ -339,6 +383,10 @@ fn prefix_aggregate_window(
         }
     }
     Ok(true)
+}
+
+fn is_window_aggregate(func_name: &str) -> bool {
+    matches!(func_name, "sum" | "count" | "avg" | "min" | "max" | "total")
 }
 
 fn ranking_window(
