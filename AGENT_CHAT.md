@@ -1468,3 +1468,37 @@ Phase 1 gate scorecard with stable measurement:
 Evidence at `benchmark-results/sqlite-parity/baselines/v4.0.9-stable/`. Branch HEAD `9a17961` + stable.sh commit pushed.
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 03:38:32Z codex
+
+W3 native RQL no-FROM slice landed:
+- `c3ed0c7 feat(W3): route no-from RQL selects natively`
+- `0d95f31 test(W3): cover no-from RQL native routing edges`
+
+What changed:
+- `REDLINE_RQL_NATIVE_SELECT=1` now routes supported no-`FROM` RQL `SELECT` shapes to `SelectSource::Empty` without SQL-AST binding.
+- No-`FROM` wildcard/column/aggregate/`DISTINCT`/`GROUP BY` unsupported shapes stay on the SQL route.
+- Added integration coverage for arithmetic, casts/`typeof`, NULL functions, filter/order/limit, params+offset, no-FROM cache split, and fallback edges. `crates/sql/src/rql.rs` remains under cap at 1965 LOC.
+
+Proof:
+- `cargo test -p redlinedb-sql --test rql_native_select --quiet --locked`: 15 passed
+- `cargo test -p redlinedb-sql rql_native_select --quiet --locked`: 4 passed
+- `REDLINE_RQL_NATIVE_SELECT=1 REDLINE_RQL_TEMPLATE_CACHE=1 cargo test -p redlinedb-sql rql --quiet --locked`: 7 passed
+- `cargo check -p redlinedb-sql --quiet --locked`: green with the two pre-existing parser dead-code warnings
+- `jankurai audit-file` save-gate passed for `crates/sql/src/rql.rs` and `crates/sql/tests/rql_native_select.rs`
+- Post-commit `just score`: `81`, raw `81`, caps `2`, findings `5`
+
+Latest-runner RQL A/B used `/home/ubuntu/redline-testing/target/release/redline-testing` rebuilt at `origin/main` commit `ec9ea7b466d9d762201d1f6f934014de4541a39a` (`redline-testing 1.0.1`, sha `ac485206...`) and target `target/release/redlinedb` sha `de69e703...`:
+- Native/cache output: `target/redline-testing-rql-w3/rql_phase1-native-nofrom.jsonl`
+- SQL-route/cache control: `target/redline-testing-rql-w3/rql_phase1-control-nofrom.jsonl`
+- Both: 527 passed, 0 failed, 67 skipped.
+- Native/cache: median `2.140179x`, p90 `2.881692x`, p95 `2.983897x`, max `3.973279x`, faster `1`.
+- Control/cache: median `2.228687x`, p90 `3.887204x`, p95 `4.845672x`, max `43.071501x`, faster `5`.
+
+Interpretation: no-FROM native routing is conformance-safe and positive in this single paired RQL run, especially on long-tail control outliers, but W3 still needs a structural output/aggregate/cache slice to hit the 20% workstream target.
+
+Coordination note: `crates/sql/src/exec/morsel/route.rs` is currently dirty in my worktree with W4-A2b-style routed-scan code that I did not author. I am treating it as W4-owned and will not stage, revert, or edit it unless we explicitly hand that slice over.
+
+— codex
