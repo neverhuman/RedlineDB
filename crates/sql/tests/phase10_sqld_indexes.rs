@@ -75,3 +75,13 @@ fn create_index_nulls_first_last_is_rejected() {
         );
     }
 }
+
+#[test]
+fn create_index_plain_asc_desc_still_works() {
+    let (_dir, conn) = open();
+    conn.execute("CREATE TABLE t(a INTEGER)").expect("create");
+    conn.execute("CREATE INDEX i_asc ON t(a ASC)")
+        .expect("ASC index should build");
+    conn.execute("CREATE INDEX i_desc ON t(a DESC)")
+        .expect("DESC index should build");
+}
