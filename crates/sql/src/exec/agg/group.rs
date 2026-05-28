@@ -300,16 +300,14 @@ fn try_one_pass_grouped(
         memory.max_spill_bytes,
         memory.spill_root().to_path_buf(),
     );
-    let mut first_row_per_key: ahash::AHashMap<Vec<u8>, SqlRow> =
+    let mut first_row_index_by_key: ahash::AHashMap<Vec<u8>, usize> =
         ahash::AHashMap::with_capacity(filtered.len().min(1024));
 
     let mut arg_values: Vec<SqlValue> = vec![SqlValue::Null; slots.len()];
-    for row in filtered {
+    for (row_idx, row) in filtered.iter().enumerate() {
         let key = eval_group_key(&plan.group_by, row, bindings)?;
         let key_bytes = encode_group_key_bytes(&key)?;
-        if !first_row_per_key.contains_key(&key_bytes) {
-            first_row_per_key.insert(key_bytes.clone(), row.clone());
-        }
+        first_row_index_by_key.entry(key_bytes).or_insert(row_idx);
         let ctx = row.context();
         for (i, slot) in slots.iter().enumerate() {
             arg_values[i] = match &slot.arg {
@@ -323,13 +321,14 @@ fn try_one_pass_grouped(
     let finalised = hash_agg.finalize()?;
 
     let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(finalised.len());
-    let mut surviving_rows: Vec<SqlRow> = Vec::with_capacity(finalised.len());
+    let mut surviving_row_indices: Vec<usize> = Vec::with_capacity(finalised.len());
     let mut per_row_agg_values: Vec<Vec<SqlValue>> = Vec::with_capacity(finalised.len());
     for (key_vec, agg_values) in finalised {
         let key_bytes = encode_group_key_bytes(&key_vec)?;
-        let Some(first_row) = first_row_per_key.get(&key_bytes) else {
+        let Some(&first_row_idx) = first_row_index_by_key.get(&key_bytes) else {
             continue;
         };
+        let first_row = &filtered[first_row_idx];
         let ctx = first_row.context();
         if let Some(spec) = &having_spec {
             let v = eval_projection_item(spec, &agg_values, &ctx, bindings)?;
@@ -342,7 +341,7 @@ fn try_one_pass_grouped(
             row_out.push(eval_projection_item(spec, &agg_values, &ctx, bindings)?);
         }
         out.push(row_out);
-        surviving_rows.push(first_row.clone());
+        surviving_row_indices.push(first_row_idx);
         per_row_agg_values.push(agg_values);
     }
 
@@ -350,7 +349,8 @@ fn try_one_pass_grouped(
         // Precompute the ORDER BY key tuple per surviving group so the
         // sort comparator is O(n log n) scalar compares.
         let mut order_keys: Vec<Vec<SqlValue>> = Vec::with_capacity(out.len());
-        for (idx, first_row) in surviving_rows.iter().enumerate() {
+        for (idx, &first_row_idx) in surviving_row_indices.iter().enumerate() {
+            let first_row = &filtered[first_row_idx];
             let agg_values_for_row = &per_row_agg_values[idx];
             let ctx = first_row.context();
             let mut tup = Vec::with_capacity(order_specs.len());
