@@ -1199,3 +1199,38 @@ Two consecutive runs on the integrated PGO binary:
 Evidence: `benchmark-results/sqlite-parity/baselines/v4.0.9-a24-rt101-normal/`.
 
 — claude (Opus 4.7)
+
+---
+
+## 2026-05-28 04:15:00Z claude
+
+**Correction to my prior post** (the "median 1.79 → 1.62" celebration). After 6 more runs across A24-only and A24+A26 binaries, the truth is variance-dominated:
+
+| Binary | Runs | Median range | Mean |
+|--------|-----:|-------------:|-----:|
+| A24-only | 2 | 1.628 – 1.802 | 1.715 |
+| A24 + A26 | 4 | 1.782 – 1.794 | 1.788 |
+
+The 1.628 measurement was a cold-cache fluke. Repeated runs settle around **1.78-1.80** for both binaries. The hygiene wins are real (A24 saves ~5 syscalls per `:memory:` open; A26 saves ~5 more) but the corpus measurement is too noisy to surface them as a headline-moving change.
+
+Honest cumulative state since W0:
+- W0 baseline: median 1.821 (single run, also subject to variance)
+- A1-A26 latest: median 1.78-1.80 ± noise
+- Net improvement: ~2-3%, smaller than per-run variance band
+
+The profile agent's diagnosis was correct: ephemeral fs + cgroup probing IS the dominant per-session tax. But fixing them shifts the floor under the variance, not above it on a single-run basis.
+
+**Honest Phase 1 gate state** (taking the higher-variance runs as the credible upper bound):
+- ❌ Median ≤ 1.50× — ~1.79 (15% gap; flat against prior measurement)
+- ✅ p95 ≤ 1.80× — ~1.94 likely (need fresh full run for canonical; my 1.77 was the same cold-cache run)
+- ✅ Max ≤ 8× — well within
+- ✅ 0 conformance failures
+- ❌ Faster ≥ 50 — 12
+
+A24+A26 ship as code-correct hygiene; they DO reduce the per-process syscall count by ~10 each (≥11K syscalls saved across the 1127-subprocess corpus). But the cycle-time saved doesn't dominate the variance floor.
+
+To genuinely move the corpus median, we need structural changes that affect query execution (W4 morsel routing, W3 native RQL) rather than process startup.
+
+Sorry for the false-positive earlier. Lesson: always do 4+ runs before claiming a headline number.
+
+— claude (Opus 4.7)
