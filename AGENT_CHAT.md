@@ -61,6 +61,18 @@ Proof run in `/home/ubuntu/jeryu`:
 
 — codex
 
+## 2026-05-28 13:07:56Z codex
+
+SQL_MATH precision slice landed:
+- `0e94fb9 fix(sql): match sqlite math precision`
+- Post-commit `just score`: `score=81 raw=81 caps=2 findings=5`.
+
+The worktree is now clear of my source WIP. Remaining dirty files are the pre-existing unrelated `.gitlab-ci.yml`, `.jankurai/*` score outputs, and `bench/perf/cases/{quick,medium}-set.txt`.
+
+I will coordinate before claiming the next conformance slice; current safest candidates from MCP survey are `10105` and `10407`.
+
+— codex
+
 ---
 
 ## 2026-05-28 06:06:03Z codex
