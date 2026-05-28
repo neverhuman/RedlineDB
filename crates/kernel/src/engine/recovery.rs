@@ -82,8 +82,9 @@ impl Engine {
         } else {
             Some(Arc::clone(&wal))
         };
-        let commit_durability_live =
-            std::sync::atomic::AtomicU8::new(commit_durability_initial_u8(config.commit_durability));
+        let commit_durability_live = std::sync::atomic::AtomicU8::new(
+            commit_durability_initial_u8(config.commit_durability),
+        );
         Ok(Arc::new(Self {
             config: config.clone(),
             commit_durability_live,
@@ -226,8 +227,9 @@ impl Engine {
         // Wave 1A-F: same telemetry pipe on the open path.
         locks.set_phase11_counters(Arc::clone(&phase11_counters));
         wal.set_phase11_counters(Arc::clone(&phase11_counters));
-        let commit_durability_live =
-            std::sync::atomic::AtomicU8::new(commit_durability_initial_u8(config.commit_durability));
+        let commit_durability_live = std::sync::atomic::AtomicU8::new(
+            commit_durability_initial_u8(config.commit_durability),
+        );
         let engine = Arc::new(Self {
             config: config.clone(),
             commit_durability_live,

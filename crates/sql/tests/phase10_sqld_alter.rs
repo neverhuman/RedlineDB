@@ -12,9 +12,7 @@ fn open() -> (tempfile::TempDir, Arc<Connection>) {
 }
 
 fn sqlite_master_sql(conn: &Arc<Connection>, kind: &str, name: &str) -> String {
-    let sql = format!(
-        "SELECT sql FROM sqlite_master WHERE type='{kind}' AND name='{name}'"
-    );
+    let sql = format!("SELECT sql FROM sqlite_master WHERE type='{kind}' AND name='{name}'");
     let mut stmt = conn.prepare(&sql).expect("prepare sqlite_master query");
     assert_eq!(stmt.step().expect("step"), Step::Row);
     let sql = stmt.column_text(0).expect("sql").to_owned();
@@ -87,7 +85,10 @@ fn alter_table_rename_column_rewrites_dependent_trigger_sql() {
     conn.execute("ALTER TABLE t RENAME COLUMN b TO bb")
         .expect("rename column");
     let sql = sqlite_master_sql(&conn, "trigger", "trg");
-    assert_eq!(sql, "CREATE TRIGGER trg AFTER INSERT ON t BEGIN SELECT NEW.bb; END");
+    assert_eq!(
+        sql,
+        "CREATE TRIGGER trg AFTER INSERT ON t BEGIN SELECT NEW.bb; END"
+    );
 }
 
 #[test]
@@ -113,7 +114,10 @@ fn alter_table_rename_table_rewrites_dependent_trigger_sql() {
     conn.execute("ALTER TABLE t RENAME TO tt")
         .expect("rename table");
     let sql = sqlite_master_sql(&conn, "trigger", "tr");
-    assert_eq!(sql, "CREATE TRIGGER tr AFTER INSERT ON \"tt\" BEGIN SELECT NEW.b; END");
+    assert_eq!(
+        sql,
+        "CREATE TRIGGER tr AFTER INSERT ON \"tt\" BEGIN SELECT NEW.b; END"
+    );
 }
 
 #[test]
@@ -182,10 +186,7 @@ fn alter_table_drop_column_rejects_indexed_column() {
     conn.execute("CREATE INDEX t_b_idx ON t(b)")
         .expect("create index");
     let res = conn.execute("ALTER TABLE t DROP COLUMN b");
-    assert!(
-        res.is_err(),
-        "drop column should reject indexed column"
-    );
+    assert!(res.is_err(), "drop column should reject indexed column");
     let msg = format!("{:?}", res.unwrap_err());
     assert!(
         msg.to_ascii_lowercase().contains("rewrite")

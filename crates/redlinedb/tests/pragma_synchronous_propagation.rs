@@ -97,11 +97,8 @@ fn writes_still_succeed_after_normal_demote() {
     conn.execute("CREATE TABLE t (k INTEGER PRIMARY KEY, v TEXT)", ())
         .expect("CREATE TABLE");
     for i in 0..16 {
-        conn.execute(
-            "INSERT INTO t (k, v) VALUES (?, ?)",
-            (i, format!("row{i}")),
-        )
-        .expect("INSERT");
+        conn.execute("INSERT INTO t (k, v) VALUES (?, ?)", (i, format!("row{i}")))
+            .expect("INSERT");
     }
     use redlinedb::Step;
     let mut stmt = conn

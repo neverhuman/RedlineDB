@@ -171,11 +171,17 @@ fn execute_returns_read_and_write_counts() {
 fn changes_and_total_changes_scalar_functions_track_dml() {
     let (_dir, conn) = open_database();
 
-    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (0, 0));
+    assert_eq!(
+        scalar_i64_pair(&conn, "SELECT changes(), total_changes()"),
+        (0, 0)
+    );
 
     conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b TEXT)")
         .expect("create table");
-    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (0, 0));
+    assert_eq!(
+        scalar_i64_pair(&conn, "SELECT changes(), total_changes()"),
+        (0, 0)
+    );
 
     conn.execute("INSERT INTO t VALUES(1, 'a')")
         .expect("insert one");
@@ -187,18 +193,30 @@ fn changes_and_total_changes_scalar_functions_track_dml() {
     assert_eq!(scalar_i64(&conn, "SELECT total_changes()"), 3);
 
     conn.execute("UPDATE t SET b = 'X'").expect("update all");
-    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (3, 6));
+    assert_eq!(
+        scalar_i64_pair(&conn, "SELECT changes(), total_changes()"),
+        (3, 6)
+    );
 
     conn.execute("DELETE FROM t WHERE a = 1")
         .expect("delete one");
-    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (1, 7));
+    assert_eq!(
+        scalar_i64_pair(&conn, "SELECT changes(), total_changes()"),
+        (1, 7)
+    );
 
     assert_eq!(scalar_i64(&conn, "SELECT count(*) FROM t"), 2);
-    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (1, 7));
+    assert_eq!(
+        scalar_i64_pair(&conn, "SELECT changes(), total_changes()"),
+        (1, 7)
+    );
 
     conn.execute("UPDATE t SET b = 'none' WHERE a = 99")
         .expect("update none");
-    assert_eq!(scalar_i64_pair(&conn, "SELECT changes(), total_changes()"), (0, 7));
+    assert_eq!(
+        scalar_i64_pair(&conn, "SELECT changes(), total_changes()"),
+        (0, 7)
+    );
 }
 
 #[test]

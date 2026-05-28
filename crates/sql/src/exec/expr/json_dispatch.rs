@@ -128,9 +128,7 @@ pub(crate) fn eval_scalar_function_values(
         }
         "changes" => {
             if !values.is_empty() {
-                return Err(Error::UnsupportedSql(
-                    "changes requires 0 args".to_owned(),
-                ));
+                return Err(Error::UnsupportedSql("changes requires 0 args".to_owned()));
             }
             Ok(SqlValue::Integer(changes_value()))
         }

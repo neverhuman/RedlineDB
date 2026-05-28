@@ -1356,8 +1356,7 @@ fn with_write_tx<T>(
                             session.unique_guards.clear();
                             session.sqlite_sequences_tx_snapshot = None;
                             session.sqlite_sequences = sqlite_sequence_snapshot.clone();
-                            session.sqlite_sequences_dirty =
-                                sqlite_sequence_dirty_snapshot.clone();
+                            session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot.clone();
                             return Err(err);
                         }
                         match conn.engine().commit(tx) {

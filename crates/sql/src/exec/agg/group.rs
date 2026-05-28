@@ -43,7 +43,8 @@ pub(crate) fn execute_grouped_select(
     // is a fast-path, not a different algorithm) — guarded by the differential
     // test in `crates/sql/tests/agg_group_one_pass_threshold.rs`.
     if filtered.len() >= ONE_PASS_GROUP_THRESHOLD
-        && let Some(routed) = try_one_pass_grouped(plan, &filtered, bindings, limit, offset, memory)?
+        && let Some(routed) =
+            try_one_pass_grouped(plan, &filtered, bindings, limit, offset, memory)?
     {
         return Ok(routed);
     }

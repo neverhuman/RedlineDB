@@ -493,12 +493,7 @@ impl TvFunc for PragmaTableList {
     fn name(&self) -> &'static str {
         "pragma_table_list"
     }
-    fn eval(
-        &self,
-        conn: &Connection,
-        schema: &SchemaSnapshot,
-        args: &[TvArg],
-    ) -> Result<TvResult> {
+    fn eval(&self, conn: &Connection, schema: &SchemaSnapshot, args: &[TvArg]) -> Result<TvResult> {
         if !args.is_empty() {
             return Err(Error::UnsupportedSql(
                 "pragma_table_list takes no arguments".to_owned(),

@@ -296,7 +296,9 @@ mod a8_nocase_token_tests {
 
     #[test]
     fn rejects_no_token() {
-        assert!(!contains_nocase_token_ci("CREATE TABLE t (a TEXT, b INTEGER)"));
+        assert!(!contains_nocase_token_ci(
+            "CREATE TABLE t (a TEXT, b INTEGER)"
+        ));
         assert!(!contains_nocase_token_ci("COLLATE BINARY"));
         assert!(!contains_nocase_token_ci(""));
     }

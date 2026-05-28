@@ -90,15 +90,9 @@ pub fn apply_modifiers<S: AsRef<str>>(mut dt: DateTime, mods: &[S]) -> Result<Da
             continue;
         }
         if let Some(weekday) = m.strip_prefix("weekday ") {
-            let target: u32 = weekday
-                .trim()
-                .parse()
-                .map_err(|_| {
-                    Error::UnsupportedSql(format!(
-                        "invalid weekday modifier: {}",
-                        raw.as_ref()
-                    ))
-                })?;
+            let target: u32 = weekday.trim().parse().map_err(|_| {
+                Error::UnsupportedSql(format!("invalid weekday modifier: {}", raw.as_ref()))
+            })?;
             if target > 6 {
                 return Err(Error::UnsupportedSql(format!(
                     "weekday must be in 0..=6: {}",

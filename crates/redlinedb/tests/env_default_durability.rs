@@ -24,7 +24,9 @@ fn env_lock() -> &'static Mutex<()> {
 fn with_env<F: FnOnce()>(value: Option<&str>, body: F) {
     // Lock for the duration of the env mutation; panics inside `body` still
     // unwind correctly because the MutexGuard handles poisoning by ignoring.
-    let _guard = env_lock().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = env_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let prev = std::env::var_os(ENV_NAME);
     // Always suppress the one-line stderr notice during tests — its presence
     // is asserted separately in the dedicated stderr_notice test below.

@@ -623,11 +623,7 @@ fn sqlite_stat1_source(
     SelectSource::Cte {
         name: Arc::from("sqlite_stat1"),
         alias,
-        columns: Arc::<[String]>::from(vec![
-            "tbl".to_owned(),
-            "idx".to_owned(),
-            "stat".to_owned(),
-        ]),
+        columns: Arc::<[String]>::from(vec!["tbl".to_owned(), "idx".to_owned(), "stat".to_owned()]),
         rows: Arc::from(sqlite_stat1_rows(conn, schema)),
     }
 }

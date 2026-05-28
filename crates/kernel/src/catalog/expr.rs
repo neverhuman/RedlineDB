@@ -264,7 +264,17 @@ fn like_match(text: &str, pattern: &str, escape: Option<char>, case_sensitive: b
     } else {
         pattern.to_ascii_lowercase()
     };
-    like_match_inner(text.as_bytes(), pattern.as_bytes(), escape.map(|c| if case_sensitive { c } else { c.to_ascii_lowercase() }))
+    like_match_inner(
+        text.as_bytes(),
+        pattern.as_bytes(),
+        escape.map(|c| {
+            if case_sensitive {
+                c
+            } else {
+                c.to_ascii_lowercase()
+            }
+        }),
+    )
 }
 
 fn like_match_inner(text: &[u8], pattern: &[u8], escape: Option<char>) -> bool {

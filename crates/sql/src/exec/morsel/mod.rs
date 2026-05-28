@@ -197,9 +197,7 @@ pub fn snapshot_morsel_eligibility() -> [(MorselEligibility, u64); 4] {
 }
 
 /// Classify a `SelectPlan` for morsel-routing eligibility. Pure; no execution.
-pub fn classify_select_plan_eligibility(
-    plan: &crate::statement::SelectPlan,
-) -> MorselEligibility {
+pub fn classify_select_plan_eligibility(plan: &crate::statement::SelectPlan) -> MorselEligibility {
     use crate::statement::SelectSource;
     if !matches!(plan.source, SelectSource::Table(_)) {
         return MorselEligibility::NotEligible;

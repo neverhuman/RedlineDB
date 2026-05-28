@@ -137,9 +137,7 @@ pub(crate) fn expr_to_kernel_ast(
     })
 }
 
-fn ddl_like_escape_char(
-    escape_char: Option<&sqlparser::ast::Value>,
-) -> Result<Option<char>> {
+fn ddl_like_escape_char(escape_char: Option<&sqlparser::ast::Value>) -> Result<Option<char>> {
     match escape_char {
         Some(sqlparser::ast::Value::SingleQuotedString(s))
         | Some(sqlparser::ast::Value::DoubleQuotedString(s))
@@ -148,7 +146,9 @@ fn ddl_like_escape_char(
         | Some(sqlparser::ast::Value::TripleSingleQuotedString(s))
         | Some(sqlparser::ast::Value::TripleDoubleQuotedString(s))
         | Some(sqlparser::ast::Value::EscapedStringLiteral(s))
-        | Some(sqlparser::ast::Value::UnicodeStringLiteral(s)) if s.chars().count() == 1 => {
+        | Some(sqlparser::ast::Value::UnicodeStringLiteral(s))
+            if s.chars().count() == 1 =>
+        {
             Ok(Some(s.chars().next().unwrap()))
         }
         Some(sqlparser::ast::Value::DollarQuotedString(s)) if s.value.chars().count() == 1 => {

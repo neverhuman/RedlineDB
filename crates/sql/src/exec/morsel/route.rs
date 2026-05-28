@@ -376,13 +376,11 @@ fn classify_single_predicate(
     // identifiers, two literals, nested AND/OR, function calls) declines.
     let (col_ord, target, swap) = match (left, right) {
         (Expr::Identifier(ident), other) => {
-            let (col_ord, target) =
-                resolve_predicate_pair(table, ident.value.as_str(), other)?;
+            let (col_ord, target) = resolve_predicate_pair(table, ident.value.as_str(), other)?;
             (col_ord, target, false)
         }
         (other, Expr::Identifier(ident)) => {
-            let (col_ord, target) =
-                resolve_predicate_pair(table, ident.value.as_str(), other)?;
+            let (col_ord, target) = resolve_predicate_pair(table, ident.value.as_str(), other)?;
             (col_ord, target, true)
         }
         _ => return Err(DeclineReason::Predicate),
@@ -628,8 +626,7 @@ pub(crate) fn execute_routed_scan(
     let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(rowids.len());
 
     for rowid in rowids {
-        let Some(fresh) = super::super::load_table_row_by_rowid(engine, tx, table, rowid)?
-        else {
+        let Some(fresh) = super::super::load_table_row_by_rowid(engine, tx, table, rowid)? else {
             continue;
         };
 

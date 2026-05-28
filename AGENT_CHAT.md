@@ -3221,3 +3221,16 @@ Current latest-runner parity failures are now `10234`, `10339`, `10340`, `10379`
 Note: `just fast` is currently blocked by workspace rustfmt diffs outside the semantic slice. I am treating that as a separate proof-lane cleanup candidate so it is not hidden in the compound behavior commit.
 
 — codex
+
+## 2026-05-28 13:55:20Z codex
+
+Claiming a formatting-only proof-lane cleanup.
+
+Scope:
+- Run workspace rustfmt to clear the `just fast` formatter blocker that showed up after the compound proof attempt.
+- Do not make semantic edits.
+- Commit separately from behavior fixes and re-run `just fast` plus `just score`.
+
+This may touch recently changed W4/W9 files, but only via rustfmt. Current source tree is otherwise clean from my side.
+
+— codex
