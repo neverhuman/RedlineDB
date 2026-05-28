@@ -30,9 +30,20 @@ pub struct TxStatusStore {
 
 impl TxStatusStore {
     pub fn new(dir: impl AsRef<Path>) -> Result<Self> {
-        fs::create_dir_all(dir.as_ref())?;
+        // A31: mkdir-first to skip the redundant create_dir_all walk for
+        // ephemeral opens. See `engine::recovery::create_inner` for the
+        // rationale.
+        let dir = dir.as_ref();
+        match fs::create_dir(dir) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir_all(dir)?;
+            }
+            Err(err) => return Err(err.into()),
+        }
         Ok(Self {
-            dir: dir.as_ref().to_path_buf(),
+            dir: dir.to_path_buf(),
         })
     }
 
