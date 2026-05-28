@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use redlinedb_sql::{
-    Connection, Database, DbOptions, RqlBinaryOp, RqlColumnRef, RqlExpr, RqlName, RqlOrder,
-    RqlSelect, RqlSelectItem, RqlStatement, RqlTableRef, SqlValue, Step,
+    Connection, Database, DbOptions, RqlBinaryOp, RqlColumnRef, RqlExpr, RqlJoin, RqlJoinKind,
+    RqlName, RqlOrder, RqlSelect, RqlSelectItem, RqlStatement, RqlTableRef, SqlValue, Step,
 };
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -97,6 +97,25 @@ fn select_from(from: RqlTableRef, projection: Vec<RqlSelectItem>) -> RqlStatemen
         projection,
         from: Some(from),
         joins: Vec::new(),
+        filter: None,
+        group_by: Vec::new(),
+        having: None,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    })
+}
+
+fn select_joined(
+    from: RqlTableRef,
+    joins: Vec<RqlJoin>,
+    projection: Vec<RqlSelectItem>,
+) -> RqlStatement {
+    RqlStatement::Select(RqlSelect {
+        distinct: false,
+        projection,
+        from: Some(from),
+        joins,
         filter: None,
         group_by: Vec::new(),
         having: None,
