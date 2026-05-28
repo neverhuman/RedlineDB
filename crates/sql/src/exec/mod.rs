@@ -26,7 +26,7 @@ use crate::batch::{
 use crate::connection::Connection;
 use crate::error::{Error, Result};
 use crate::planner::{self, ExplainMetrics};
-use crate::session::SessionState;
+use crate::session::{BeginMode, SessionState};
 use crate::statement::{
     AnalyzePlan, CreateTableAsSelectSpec, DmlValue, ExecutionResult, ExplainPlan, PragmaPlan,
     PreparedKind, PreparedTemplate, RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource,
@@ -662,6 +662,58 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::CrossDbInsertSelect(plan) => {
+            if conn.in_transaction() {
+                return Err(Error::UnsupportedSql(
+                    "cross-database INSERT SELECT inside a transaction is not supported".to_owned(),
+                ));
+            }
+            let source_rows = materialize_select_plan_rows(conn, &plan.source, bindings)?;
+            let Some(sidecar) = conn.attach_map().database(&plan.alias) else {
+                return Err(Error::UnknownTable(format!(
+                    "no such database: {}",
+                    plan.alias
+                )));
+            };
+            let sidecar_conn = sidecar.connect();
+            let insert_sql =
+                cross_db_insert_values_sql(&plan.table, &plan.columns, plan.source_arity);
+            sidecar_conn.begin(BeginMode::Deferred)?;
+            let result = (|| -> Result<(usize, Option<i64>)> {
+                let mut stmt = sidecar_conn.prepare(&insert_sql)?;
+                validate_cross_db_insert_arity(&stmt, plan.source_arity)?;
+                let mut affected_rows = 0usize;
+                for row in source_rows {
+                    if row.len() != plan.source_arity {
+                        return Err(Error::Bind(
+                            "INSERT SELECT row arity does not match target".to_owned(),
+                        ));
+                    }
+                    for (idx, value) in row.into_iter().enumerate() {
+                        stmt.bind_value(idx + 1, value)?;
+                    }
+                    while matches!(stmt.step()?, crate::statement::Step::Row) {}
+                    affected_rows += stmt.affected_rows();
+                    stmt.reset()?;
+                }
+                Ok((affected_rows, sidecar_conn.last_insert_rowid()))
+            })();
+            let (affected_rows, last_insert_rowid) = match result {
+                Ok(result) => result,
+                Err(err) => {
+                    let _ = sidecar_conn.rollback();
+                    return Err(err);
+                }
+            };
+            if let Err(err) = sidecar_conn.commit() {
+                return Err(err);
+            }
+            record_row_changes_and_last_insert_rowid(conn, affected_rows, last_insert_rowid)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows,
+            })
+        }
         // Track J: register a Postgres-style schema name on the session.
         // SQLite has no schema layer, so this is purely a name-bookkeeping
         // operation that lets later `<schema>.<table>` references and
@@ -942,6 +994,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Update(_)
         | PreparedKind::Delete(_)
         | PreparedKind::CrossDbSql(_)
+        | PreparedKind::CrossDbInsertSelect(_)
         | PreparedKind::CreateSchema { .. }
         | PreparedKind::DropSchema { .. }
         | PreparedKind::CreateSequence { .. }
@@ -977,6 +1030,59 @@ fn execute_create_virtual_table(
         let _ = materialize_prepared_rows(conn, &template, &[])?;
     }
     Ok(())
+}
+
+fn cross_db_insert_values_sql(table: &str, columns: &[String], arity: usize) -> String {
+    let mut sql = String::from("INSERT INTO ");
+    push_quoted_ident(&mut sql, table);
+    if !columns.is_empty() {
+        sql.push('(');
+        for (idx, column) in columns.iter().enumerate() {
+            if idx > 0 {
+                sql.push(',');
+            }
+            push_quoted_ident(&mut sql, column);
+        }
+        sql.push(')');
+    }
+    sql.push_str(" VALUES (");
+    for idx in 0..arity {
+        if idx > 0 {
+            sql.push(',');
+        }
+        sql.push('?');
+    }
+    sql.push(')');
+    sql
+}
+
+fn validate_cross_db_insert_arity(
+    stmt: &crate::statement::Statement,
+    source_arity: usize,
+) -> Result<()> {
+    let template = stmt.template();
+    let PreparedKind::Insert(insert_plan) = &template.kind else {
+        return Err(Error::UnsupportedSql(
+            "cross-database INSERT SELECT target must be a table".to_owned(),
+        ));
+    };
+    if insert_plan.columns.len() != source_arity {
+        return Err(Error::Bind(
+            "INSERT SELECT row arity does not match column list".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn push_quoted_ident(out: &mut String, ident: &str) {
+    out.push('"');
+    for ch in ident.chars() {
+        if ch == '"' {
+            out.push('"');
+        }
+        out.push(ch);
+    }
+    out.push('"');
 }
 
 fn execute_create_table_as_select(
@@ -1025,6 +1131,23 @@ fn record_row_changes(conn: &Connection, affected_rows: usize) -> Result<()> {
     with_session_reentrant(conn, |session| {
         session.changes = affected_rows;
         session.total_changes += affected_rows;
+        Ok(())
+    })
+}
+
+fn record_row_changes_and_last_insert_rowid(
+    conn: &Connection,
+    affected_rows: usize,
+    last_insert_rowid: Option<i64>,
+) -> Result<()> {
+    with_session_reentrant(conn, |session| {
+        session.changes = affected_rows;
+        session.total_changes += affected_rows;
+        if affected_rows > 0
+            && let Some(rowid) = last_insert_rowid
+        {
+            session.last_insert_rowid = Some(rowid);
+        }
         Ok(())
     })
 }

@@ -124,6 +124,7 @@ pub enum PreparedKind {
     /// alias-map maintenance executed by [`crate::exec::attach::AttachPlan`].
     Attach(crate::exec::attach::AttachPlan),
     CrossDbSql(CrossDbSqlPlan),
+    CrossDbInsertSelect(CrossDbInsertSelectPlan),
     CreateVirtualTable(CreateVirtualTablePlan),
     /// Track J — `CREATE SCHEMA <name> [IF NOT EXISTS]`. Records the
     /// namespace name on the session so `<schema>.<table>` qualifier
@@ -235,6 +236,15 @@ pub struct CreateTableAsSelectSpec {
 pub struct CrossDbSqlPlan {
     pub alias: Arc<str>,
     pub sql: Arc<str>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CrossDbInsertSelectPlan {
+    pub alias: Arc<str>,
+    pub table: Arc<str>,
+    pub columns: Arc<[String]>,
+    pub source: Box<SelectPlan>,
+    pub source_arity: usize,
 }
 
 #[derive(Debug, Clone)]

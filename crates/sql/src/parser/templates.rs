@@ -41,6 +41,18 @@ pub(crate) fn bind_statement(
         SqlStatement::Query(query) => bind_query(conn, schema, schema_epoch, sql, *query),
         SqlStatement::Insert(insert) => {
             if let sqlparser::ast::TableObject::TableName(name) = &insert.table
+                && let Some(template) = bind_cross_db_insert_select(
+                    conn,
+                    Arc::clone(&schema),
+                    schema_epoch,
+                    sql,
+                    &insert,
+                    name,
+                )?
+            {
+                return Ok(template);
+            }
+            if let sqlparser::ast::TableObject::TableName(name) = &insert.table
                 && let Some(template) = bind_cross_db_sql(sql, schema_epoch, name)?
             {
                 return Ok(template);
@@ -426,11 +438,93 @@ fn bind_cross_db_sql(
     schema_epoch: SchemaEpoch,
     name: &ObjectName,
 ) -> Result<Option<PreparedTemplate>> {
-    let Some((alias, _table)) = two_part_name(name) else {
+    let Some((alias, _table)) = cross_db_alias_table(name) else {
         return Ok(None);
     };
-    if alias.eq_ignore_ascii_case("main") || alias.eq_ignore_ascii_case(concat!("te", "mp")) {
+    let rewritten = remove_qualifier_once(sql, &alias);
+    Ok(Some(template(
+        sql,
+        schema_epoch,
+        false,
+        PreparedKind::CrossDbSql(crate::statement::CrossDbSqlPlan {
+            alias: Arc::from(alias),
+            sql: Arc::from(rewritten),
+        }),
+    )))
+}
+
+fn bind_cross_db_insert_select(
+    conn: &Connection,
+    schema: Arc<SchemaSnapshot>,
+    schema_epoch: SchemaEpoch,
+    sql: &str,
+    insert: &sqlparser::ast::Insert,
+    name: &ObjectName,
+) -> Result<Option<PreparedTemplate>> {
+    let Some((alias, table)) = cross_db_alias_table(name) else {
         return Ok(None);
+    };
+    let Some(source) = insert.source.as_ref() else {
+        return Ok(None);
+    };
+    if matches!(&*source.body, SetExpr::Values(_)) {
+        return Ok(None);
+    }
+    if !insert.assignments.is_empty()
+        || insert.or.is_some()
+        || insert.on.is_some()
+        || insert.returning.is_some()
+    {
+        return Err(Error::UnsupportedSql(
+            "cross-database INSERT SELECT does not support modifiers".to_owned(),
+        ));
+    }
+
+    let mut params = ParamLayout::default();
+    let template = bind_query_with_params(
+        conn,
+        schema,
+        schema_epoch,
+        sql,
+        (**source).clone(),
+        &mut params,
+    )?;
+    let source_arity = template.output_columns.len();
+    let PreparedKind::Select(source) = template.kind else {
+        return Err(Error::UnsupportedSql(
+            "INSERT SELECT source must bind as SELECT".to_owned(),
+        ));
+    };
+    let columns = insert
+        .columns
+        .iter()
+        .map(|ident| ident.value.clone())
+        .collect::<Vec<_>>();
+    if params.count() == 0 {
+        scan_sql_parameters(sql, &mut params);
+    }
+    Ok(Some(PreparedTemplate {
+        sql: Arc::from(sql),
+        schema_epoch,
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: params,
+        output_columns: Arc::from([]),
+        readonly: false,
+        kind: PreparedKind::CrossDbInsertSelect(crate::statement::CrossDbInsertSelectPlan {
+            alias: Arc::from(alias),
+            table: Arc::from(table),
+            columns: Arc::from(columns),
+            source: Box::new(source),
+            source_arity,
+        }),
+    }))
+}
+
+fn cross_db_alias_table(name: &ObjectName) -> Option<(String, String)> {
+    let (alias, table) = two_part_name(name)?;
+    if alias.eq_ignore_ascii_case("main") || alias.eq_ignore_ascii_case(concat!("te", "mp")) {
+        return None;
     }
     // Track J — Postgres-style `<schema>.<table>` references against a
     // CREATE-SCHEMA-registered namespace are treated as plain table
@@ -443,19 +537,10 @@ fn bind_cross_db_sql(
             .with_session(|session| Ok(session.pg_schemas.contains(&alias.to_ascii_lowercase())))
             .unwrap_or(false);
         if registered {
-            return Ok(None);
+            return None;
         }
     }
-    let rewritten = remove_qualifier_once(sql, &alias);
-    Ok(Some(template(
-        sql,
-        schema_epoch,
-        false,
-        PreparedKind::CrossDbSql(crate::statement::CrossDbSqlPlan {
-            alias: Arc::from(alias),
-            sql: Arc::from(rewritten),
-        }),
-    )))
+    Some((alias, table))
 }
 
 fn two_part_name(name: &ObjectName) -> Option<(String, String)> {

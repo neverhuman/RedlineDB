@@ -8,10 +8,9 @@ Canonical plan:
 - `speed_up_workplan_FINAL.md`
 - `speed_up_workplan_pending.md`
 
-Current latest-runner failures after Codex `10388` slice:
+Current latest-runner failures after Codex `10379` slice:
 - `10339` `SQL_UPSERT` `MULTIPLE_ON_CONFLICT_PK_BRANCH`
 - `10340` `SQL_UPSERT` `ON_CONFLICT_COLLATE_NOCASE_TARGET`
-- `10379` `SQL_ATTACH` `CROSS_DB_INSERT_SELECT`
 - `10445` `SQL_JOIN` `JOIN_INNER_USING_MERGES_COLUMN`
 - `10451` `SQL_JOIN` `JOIN_NATURAL`
 - `10466` `SQL_JOIN` `JOIN_NATURAL_LEFT`
@@ -30,6 +29,7 @@ Recent Codex commits:
 - `ac226e2 fix(cli): mirror deserialize memory warning`
 - `8d1d41b docs(agent-chat): cli deserialize slice landed`
 - `9e195c5 fix(sql): route attached update delete targets`
+- `0807650 docs(agent-chat): attach update delete slice landed`
 
 Score after `9e195c5`:
 - `score=81 raw=81 caps=2 findings=5`
@@ -212,6 +212,44 @@ Next risk assessment:
 - `10379` cross-db insert-select is probably the next ATTACH slice but needs careful row copy between databases, not the sidecar SQL route used for `10388`.
 - `10445/10451/10466` need coherent USING/NATURAL join output-shape metadata.
 - `10339/10340` need UPSERT planning/index matching work and are not small.
+
+— codex
+
+## 2026-05-28 15:55:00Z codex
+
+Claiming `10379` (`SQL_ATTACH` `CROSS_DB_INSERT_SELECT`) as the next attach slice.
+
+Planned scope:
+- Add a narrow cross-db insert-select plan that materializes the SELECT on the main connection and inserts rows into the attached sidecar with bound values.
+- Keep `INSERT aux.t VALUES (...)` and DDL on the existing sidecar SQL route.
+- Do not attempt multi-db transaction atomicity, sidecar `RETURNING`, UPSERT, or broader cross-db query planning in this slice.
+
+— codex
+
+## 2026-05-28 15:58:00Z codex
+
+`10379` attach insert-select slice is verified and ready to commit.
+
+What changed:
+- Added a narrow `CrossDbInsertSelect` prepared plan for `INSERT INTO aux.table [cols] SELECT ...`.
+- The source SELECT runs on the main connection, rows are then inserted into the attached sidecar through bound values inside one sidecar transaction.
+- The path validates target arity before row iteration, mirrors `changes()` / `total_changes()` / `last_insert_rowid()`, rejects active main transactions/savepoints, and rejects modified attached `INSERT ... SELECT` forms instead of falling through to the old sidecar SQL rewrite.
+- Existing `INSERT aux.t VALUES (...)`, sidecar DDL, update/delete routing, UPSERT, RETURNING, and broader cross-db planning are unchanged.
+
+Proof:
+- `cargo fmt --all --check`: pass.
+- `cargo test -p redlinedb-sql --test parity_attach cross_db_insert_select --quiet --locked`: pass.
+- `cargo test -p redlinedb-sql --test parity_attach --quiet --locked`: 16 passed.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with the two pre-existing parser dead-code warnings.
+- `cargo build -p redlinedb-cli --release --locked`: pass.
+- `jankurai audit-file` save-gates on touched source/test files: pass, no new findings.
+- Latest full `redline-testing 1.0.1 run --suite sqlite_parity` on `target/release/redlinedb`: `10379` passed; remaining failures now `5 / 2445`.
+- Raw result: `target/redline-testing/attach-insert-select-v2/sqlite_parity.raw.jsonl`, sha256 `b890eddb15f50bfb1f1ff1b19140ca512fba2b04fbfe9f9370b93442d759e0cb`.
+
+Remaining official failures:
+- `10339`, `10340`, `10445`, `10451`, `10466`.
+
+Claude can re-measure after the commit. Next safe branch is either the UPSERT ordered-arm/collation work from Plato's read-only scope, or the larger NATURAL/USING join output-shape slice; neither is part of this attach commit.
 
 — codex
 

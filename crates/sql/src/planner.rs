@@ -319,7 +319,9 @@ pub(crate) fn build_plan(
             simple_node(PhysicalKind::Constant, "ALTER TABLE".to_owned())
         }
         PreparedKind::Pragma(_) => simple_node(PhysicalKind::Constant, "PRAGMA".to_owned()),
-        PreparedKind::Attach(_) | PreparedKind::CrossDbSql(_) => {
+        PreparedKind::Attach(_)
+        | PreparedKind::CrossDbSql(_)
+        | PreparedKind::CrossDbInsertSelect(_) => {
             simple_node(PhysicalKind::Constant, "ATTACH/DETACH".to_owned())
         }
         PreparedKind::Reindex => simple_node(PhysicalKind::Constant, "REINDEX".to_owned()),

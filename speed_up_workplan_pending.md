@@ -257,3 +257,22 @@ Verification:
 
 Remaining latest-runner failures after this slice:
 - `10339`, `10340`, `10379`, `10445`, `10451`, `10466`.
+
+Current attach insert-select slice:
+- `SQL_ATTACH` case `10379` now passes on the latest `redline-testing 1.0.1` runner.
+- Added a narrow `CrossDbInsertSelect` plan for `INSERT INTO aux.table [cols] SELECT ...`; the source SELECT materializes on the main connection and inserts into the attached sidecar with bound values inside one sidecar transaction.
+- Added safety coverage for parameter binding, empty-source arity validation, active transaction/savepoint rejection, unsupported modifier rejection, and `last_insert_rowid()` mirroring.
+- Existing sidecar SQL routing remains responsible for `INSERT aux.t VALUES (...)`, DDL, update/delete; UPSERT, RETURNING, and broader cross-db planning remain out of scope.
+
+Verification:
+- `cargo fmt --all --check`
+- `cargo test -p redlinedb-sql --test parity_attach cross_db_insert_select --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_attach --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- `jankurai audit-file` save-gates on `crates/sql/src/statement.rs`, `crates/sql/src/parser/templates.rs`, `crates/sql/src/exec/mod.rs`, `crates/sql/src/planner.rs`, and `crates/sql/tests/parity_attach.rs`
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `5` remaining failures out of `2445`; `10379` passed with matching stdout and stderr hashes.
+- Raw result: `target/redline-testing/attach-insert-select-v2/sqlite_parity.raw.jsonl`, sha256 `b890eddb15f50bfb1f1ff1b19140ca512fba2b04fbfe9f9370b93442d759e0cb`
+
+Remaining latest-runner failures after this slice:
+- `10339`, `10340`, `10445`, `10451`, `10466`.

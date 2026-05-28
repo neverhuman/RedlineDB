@@ -251,6 +251,185 @@ fn cross_db_write_routes_to_attached_database() {
 }
 
 #[test]
+fn cross_db_insert_select_copies_main_rows_to_attached_database() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let aux_path = dir.path().join("aux.db");
+    let main_db =
+        Database::create(dir.path().join("main.db"), DbOptions::default()).expect("create main");
+    let main_conn = main_db.connect();
+    let attach_sql = format!("ATTACH DATABASE '{}' AS aux", aux_path.display());
+    main_conn.execute(&attach_sql).expect("attach");
+
+    main_conn
+        .execute("CREATE TABLE main.src(x INTEGER)")
+        .expect("create main table");
+    main_conn
+        .execute("INSERT INTO main.src VALUES (1), (2), (3)")
+        .expect("insert main rows");
+    main_conn
+        .execute("CREATE TABLE aux.dst(x INTEGER)")
+        .expect("create aux table");
+
+    main_conn
+        .execute("INSERT INTO aux.dst SELECT x FROM main.src")
+        .expect("insert select into aux");
+
+    let rows = collect_rows(&main_conn, "SELECT x FROM aux.dst ORDER BY x");
+    assert_eq!(
+        rows,
+        vec![
+            vec![SqlValue::Integer(1)],
+            vec![SqlValue::Integer(2)],
+            vec![SqlValue::Integer(3)],
+        ]
+    );
+    assert_eq!(
+        collect_rows(&main_conn, "SELECT changes(), total_changes()"),
+        vec![vec![SqlValue::Integer(3), SqlValue::Integer(6)]]
+    );
+}
+
+#[test]
+fn cross_db_insert_select_uses_bound_source_parameters() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let aux_path = dir.path().join("aux.db");
+    let main_db =
+        Database::create(dir.path().join("main.db"), DbOptions::default()).expect("create main");
+    let main_conn = main_db.connect();
+    let attach_sql = format!("ATTACH DATABASE '{}' AS aux", aux_path.display());
+    main_conn.execute(&attach_sql).expect("attach");
+
+    main_conn
+        .execute("CREATE TABLE main.src(x INTEGER)")
+        .expect("create main table");
+    main_conn
+        .execute("INSERT INTO main.src VALUES (1), (2), (3)")
+        .expect("insert main rows");
+    main_conn
+        .execute("CREATE TABLE aux.dst(y INTEGER)")
+        .expect("create aux table");
+
+    let mut stmt = main_conn
+        .prepare("INSERT INTO aux.dst(y) SELECT x FROM main.src WHERE x > ?")
+        .expect("prepare insert select");
+    stmt.bind_i64(1, 1).expect("bind");
+    assert_eq!(stmt.step().expect("step"), Step::Done);
+    assert_eq!(stmt.affected_rows(), 2);
+
+    let rows = collect_rows(&main_conn, "SELECT y FROM aux.dst ORDER BY y");
+    assert_eq!(
+        rows,
+        vec![vec![SqlValue::Integer(2)], vec![SqlValue::Integer(3)]]
+    );
+    assert_eq!(
+        collect_rows(&main_conn, "SELECT last_insert_rowid(), changes()"),
+        vec![vec![SqlValue::Integer(2), SqlValue::Integer(2)]]
+    );
+}
+
+#[test]
+fn cross_db_insert_select_validates_arity_for_empty_sources() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let aux_path = dir.path().join("aux.db");
+    let main_db =
+        Database::create(dir.path().join("main.db"), DbOptions::default()).expect("create main");
+    let main_conn = main_db.connect();
+    let attach_sql = format!("ATTACH DATABASE '{}' AS aux", aux_path.display());
+    main_conn.execute(&attach_sql).expect("attach");
+
+    main_conn
+        .execute("CREATE TABLE main.src(x INTEGER)")
+        .expect("create main table");
+    main_conn
+        .execute("CREATE TABLE aux.dst(a INTEGER, b INTEGER)")
+        .expect("create aux table");
+
+    let err = main_conn
+        .execute("INSERT INTO aux.dst(a, b) SELECT x FROM main.src")
+        .expect_err("arity mismatch should fail even when source is empty");
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("arity") || msg.contains("column list"),
+        "expected arity error, got: {msg}"
+    );
+    assert_eq!(
+        collect_rows(&main_conn, "SELECT count(*) FROM aux.dst"),
+        vec![vec![SqlValue::Integer(0)]]
+    );
+}
+
+#[test]
+fn cross_db_insert_select_rejects_active_transactions() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let aux_path = dir.path().join("aux.db");
+    let main_db =
+        Database::create(dir.path().join("main.db"), DbOptions::default()).expect("create main");
+    let main_conn = main_db.connect();
+    let attach_sql = format!("ATTACH DATABASE '{}' AS aux", aux_path.display());
+    main_conn.execute(&attach_sql).expect("attach");
+
+    main_conn
+        .execute("CREATE TABLE main.src(x INTEGER)")
+        .expect("create main table");
+    main_conn
+        .execute("INSERT INTO main.src VALUES (1)")
+        .expect("insert main row");
+    main_conn
+        .execute("CREATE TABLE aux.dst(x INTEGER)")
+        .expect("create aux table");
+
+    main_conn.execute("SAVEPOINT s").expect("savepoint");
+    let err = main_conn
+        .execute("INSERT INTO aux.dst SELECT x FROM main.src")
+        .expect_err("active transaction should be rejected");
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("cross-database INSERT SELECT") || msg.contains("transaction"),
+        "expected transaction guard error, got: {msg}"
+    );
+    main_conn.execute("ROLLBACK TO s").expect("rollback to");
+    main_conn.execute("RELEASE s").expect("release");
+    assert_eq!(
+        collect_rows(&main_conn, "SELECT count(*) FROM aux.dst"),
+        vec![vec![SqlValue::Integer(0)]]
+    );
+}
+
+#[test]
+fn cross_db_insert_select_rejects_modifiers_without_sidecar_rewrite() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let aux_path = dir.path().join("aux.db");
+    let main_db =
+        Database::create(dir.path().join("main.db"), DbOptions::default()).expect("create main");
+    let main_conn = main_db.connect();
+    let attach_sql = format!("ATTACH DATABASE '{}' AS aux", aux_path.display());
+    main_conn.execute(&attach_sql).expect("attach");
+
+    main_conn
+        .execute("CREATE TABLE main.src(x INTEGER)")
+        .expect("create main table");
+    main_conn
+        .execute("INSERT INTO main.src VALUES (1)")
+        .expect("insert main row");
+    main_conn
+        .execute("CREATE TABLE aux.dst(x INTEGER UNIQUE)")
+        .expect("create aux table");
+
+    let err = main_conn
+        .execute("INSERT OR IGNORE INTO aux.dst SELECT x FROM main.src")
+        .expect_err("modified cross-db insert select should be rejected");
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("cross-database INSERT SELECT") || msg.contains("modifiers"),
+        "expected unsupported-modifier error, got: {msg}"
+    );
+    assert_eq!(
+        collect_rows(&main_conn, "SELECT count(*) FROM aux.dst"),
+        vec![vec![SqlValue::Integer(0)]]
+    );
+}
+
+#[test]
 fn alias_qualified_update_delete_routes_to_attached_database() {
     let dir = tempfile::tempdir().expect("tempdir");
     let aux_path = dir.path().join("aux.db");
