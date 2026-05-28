@@ -116,20 +116,21 @@ known_optional_v012='^(00093|00094|00095|00096|00220)$'
 # W9-T7 (2026-05-28): attach UPDATE/DELETE + CLI deserialize + rowid
 # qualifier slices cleared 5 more cases. 10 -> 5.
 #
-# W9-T8 (2026-05-28): Codex's `dbb0bbe fix(sql): preserve ordered
-# upsert arms` cleared:
-#   - SQL_UPSERT (1): 10339 — MULTIPLE_ON_CONFLICT_PK_BRANCH
-# Failure count: 5 -> 4. Cumulative across W9-T/T2/T3/T4/T5/T6/T7/T8:
-# 68 -> 4 (-94%). Empirically verified.
+# W9-T8 (2026-05-28): UPSERT ordered arms cleared 10339. 5 -> 4.
 #
-# Remaining 4 IDs:
-#   - SQL_UPSERT (1):  10340 ON_CONFLICT_COLLATE_NOCASE_TARGET
-#   - SQL_JOIN (3):    10445 JOIN_INNER_USING_MERGES_COLUMN,
-#                      10451 JOIN_NATURAL,
-#                      10466 JOIN_NATURAL_LEFT
-#                      (NATURAL/USING claimed by Codex per
-#                      AGENT_CHAT 2026-05-28 16:12)
-known_failing_v101='^(10340|10445|10451|10466)$'
+# W9-T9 (2026-05-28): Codex's `72b4107 fix(sql): NATURAL and USING
+# merged-column output semantics` cleared the entire JOIN cluster:
+#   - SQL_JOIN (3): 10445 JOIN_INNER_USING_MERGES_COLUMN,
+#                   10451 JOIN_NATURAL,
+#                   10466 JOIN_NATURAL_LEFT
+# Failure count: 4 -> 1. Cumulative across nine W9-T passes:
+# 68 -> 1 (-99%). Empirically verified.
+#
+# Remaining 1 ID:
+#   - SQL_UPSERT (1): 10340 ON_CONFLICT_COLLATE_NOCASE_TARGET
+#     (collated UNIQUE-index UPSERT target; Codex's open follow-up
+#     per AGENT_CHAT 2026-05-28 16:12 "Not in this slice".)
+known_failing_v101='^(10340)$'
 
 optional_count=0
 unexpected_count=0
