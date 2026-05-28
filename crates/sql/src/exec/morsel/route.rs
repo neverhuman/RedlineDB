@@ -296,13 +296,13 @@ fn classify_single_predicate(
     // identifiers, two literals, nested AND/OR, function calls) declines.
     let (col_ord, target, swap) = match (left, right) {
         (Expr::Identifier(ident), other) => {
-            let target = literal_as_i64(other)?;
-            let col_ord = resolve_int_column(table, ident.value.as_str())?;
+            let (col_ord, target) =
+                resolve_predicate_pair(table, ident.value.as_str(), other)?;
             (col_ord, target, false)
         }
         (other, Expr::Identifier(ident)) => {
-            let target = literal_as_i64(other)?;
-            let col_ord = resolve_int_column(table, ident.value.as_str())?;
+            let (col_ord, target) =
+                resolve_predicate_pair(table, ident.value.as_str(), other)?;
             (col_ord, target, true)
         }
         _ => return Err(DeclineReason::Predicate),
@@ -316,6 +316,31 @@ fn classify_single_predicate(
     })
 }
 
+/// W4-A6: resolve `col <op> literal` so the literal's kind matches the
+/// column's affinity exactly. Integer-affinity column with i64 literal,
+/// or Real-affinity column with f64 literal. Mixed-kind (e.g. Real
+/// column with integer literal) is deferred — the tuple path's
+/// `apply_affinity` coerces them and we'd need the same to keep
+/// output identical.
+fn resolve_predicate_pair(
+    table: &TableDef,
+    column_name: &str,
+    literal: &Expr,
+) -> std::result::Result<(usize, PredicateTarget), DeclineReason> {
+    let column = table
+        .columns
+        .iter()
+        .find(|c| c.folded.eq_ignore_ascii_case(column_name))
+        .ok_or(DeclineReason::Predicate)?;
+    let col_ord = column.ordinal as usize;
+    match column.affinity {
+        Affinity::Integer => Ok((col_ord, PredicateTarget::I64(literal_as_i64(literal)?))),
+        Affinity::Real => Ok((col_ord, PredicateTarget::F64(literal_as_f64(literal)?))),
+        // Numeric / Text / Blob — defer to later A-passes.
+        _ => Err(DeclineReason::Predicate),
+    }
+}
+
 fn literal_as_i64(expr: &Expr) -> std::result::Result<i64, DeclineReason> {
     let Expr::Value(value_with_span) = expr else {
         return Err(DeclineReason::Predicate);
@@ -326,19 +351,21 @@ fn literal_as_i64(expr: &Expr) -> std::result::Result<i64, DeclineReason> {
     text.parse::<i64>().map_err(|_| DeclineReason::Predicate)
 }
 
-fn resolve_int_column(
-    table: &TableDef,
-    name: &str,
-) -> std::result::Result<usize, DeclineReason> {
-    let column = table
-        .columns
-        .iter()
-        .find(|c| c.folded.eq_ignore_ascii_case(name))
-        .ok_or(DeclineReason::Predicate)?;
-    if !matches!(column.affinity, Affinity::Integer) {
+/// W4-A6: parse the literal as an f64. Requires `is_finite()` so NaN
+/// and infinity literals don't sneak through; SQLite's semantics
+/// around NaN are subtle and the tuple path handles them already.
+fn literal_as_f64(expr: &Expr) -> std::result::Result<f64, DeclineReason> {
+    let Expr::Value(value_with_span) = expr else {
+        return Err(DeclineReason::Predicate);
+    };
+    let Value::Number(text, _exact) = &value_with_span.value else {
+        return Err(DeclineReason::Predicate);
+    };
+    let v: f64 = text.parse().map_err(|_| DeclineReason::Predicate)?;
+    if !v.is_finite() {
         return Err(DeclineReason::Predicate);
     }
-    Ok(column.ordinal as usize)
+    Ok(v)
 }
 
 /// W4-A2a: concrete plan of which columns the morsel scan should read
@@ -356,13 +383,23 @@ pub(crate) struct RoutingPlan {
     pub(crate) predicates: smallvec::SmallVec<[RoutedPredicate; 2]>,
 }
 
-/// W4-A3: a single-comparison WHERE predicate the morsel scan can
+/// W4-A3/A6: a single-comparison WHERE predicate the morsel scan can
 /// evaluate inline before projection.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RoutedPredicate {
     pub(crate) column_ordinal: usize,
     pub(crate) op: PredicateOp,
-    pub(crate) target: i64,
+    pub(crate) target: PredicateTarget,
+}
+
+/// W4-A6: typed predicate target. The classifier requires the literal's
+/// kind to match the column's affinity exactly — `WHERE int_col = 1.5`
+/// declines (the tuple path coerces via `apply_affinity`, but routing
+/// would mis-handle the coercion).
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum PredicateTarget {
+    I64(i64),
+    F64(f64),
 }
 
 /// W4-A3: predicate operator. Mirrors the `filter_i64_*` kernel family.
@@ -389,12 +426,30 @@ impl PredicateOp {
         }
     }
 
-    /// Evaluate `lhs <op> rhs` on a scalar pair. The morsel filter
+    /// Evaluate `lhs <op> rhs` on an i64 scalar pair. The morsel filter
     /// kernels do the same comparison over a `&[i64]` column — this
-    /// scalar variant is used by W4-A3a's row-at-a-time path until
-    /// W4-A4 batches into a columnar vector.
+    /// scalar variant is used by W4-A3's row-at-a-time path until
+    /// columnar batching lands.
     #[inline]
     fn eval(self, lhs: i64, rhs: i64) -> bool {
+        match self {
+            Self::Eq => lhs == rhs,
+            Self::Ne => lhs != rhs,
+            Self::Lt => lhs < rhs,
+            Self::Le => lhs <= rhs,
+            Self::Gt => lhs > rhs,
+            Self::Ge => lhs >= rhs,
+        }
+    }
+
+    /// W4-A6: evaluate `lhs <op> rhs` on an f64 scalar pair. Rust's
+    /// `partial_cmp` returns `None` when either operand is NaN; per
+    /// SQLite's semantics, comparisons involving NaN evaluate to NULL,
+    /// treated here as "not matching" (consistent with the tuple
+    /// path's filter behavior). Eq/Ne use direct `==` / `!=` which
+    /// already give NaN-aware semantics (NaN != NaN, NaN != anything).
+    #[inline]
+    fn eval_f64(self, lhs: f64, rhs: f64) -> bool {
         match self {
             Self::Eq => lhs == rhs,
             Self::Ne => lhs != rhs,
@@ -491,17 +546,28 @@ pub(crate) fn execute_routed_scan(
                 .values
                 .get(pred.column_ordinal)
                 .unwrap_or(&SqlValue::Null);
-            match value {
-                SqlValue::Null => {
+            match (value, &pred.target) {
+                // NULL <op> _ → NULL → not matching (matches tuple path).
+                (SqlValue::Null, _) => {
                     row_matches = false;
                     break;
                 }
-                SqlValue::Integer(lhs) => {
-                    if !pred.op.eval(*lhs, pred.target) {
+                // Kind-matched: evaluate.
+                (SqlValue::Integer(lhs), PredicateTarget::I64(rhs)) => {
+                    if !pred.op.eval(*lhs, *rhs) {
                         row_matches = false;
                         break;
                     }
                 }
+                (SqlValue::Real(lhs), PredicateTarget::F64(rhs)) => {
+                    if !pred.op.eval_f64(*lhs, *rhs) {
+                        row_matches = false;
+                        break;
+                    }
+                }
+                // Kind mismatch: SQLite's loose typing would coerce via
+                // `apply_affinity`. Routing doesn't, so bail to tuple
+                // path. `MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND` records.
                 _ => {
                     record_decline(&MORSEL_ROUTE_FALLBACK_DYNAMIC_KIND);
                     return Ok(None);
