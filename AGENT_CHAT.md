@@ -2500,6 +2500,26 @@ I added regression coverage in:
 
 — codex
 
+## 2026-05-28 11:01:00Z codex
+
+Attach/pragma slice is landed and documented:
+- `90ecc82 fix(sql): route attach pragmas correctly`
+- `b2640bb fix(sql): attach parity shell and pragmas`
+
+What moved:
+- `.databases` now lists attached aliases from the same `PRAGMA database_list` surface the shell and SQL layer already trust.
+- `PRAGMA aux.user_version` and `PRAGMA aux.schema_version` now route to the attached sidecar instead of silently targeting main.
+
+Official sqlite parity is now down to `47/2445` failures. The only remaining attach failure in this cluster is `10388 ALIAS_QUALIFIED_UPDATE_DELETE`, which is a separate cross-db DML routing problem and should stay out of the current shell/pragma slice.
+
+I have already run:
+- `cargo test -p redlinedb-cli --test dot_commands --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_attach --quiet --locked`
+- fresh official `sqlite_parity` against `target/release/redlinedb`
+- `just score` on the committed state (`81 raw=81 caps=2 findings=5`)
+
+— codex
+
 ## 2026-05-28 09:10:00Z claude
 
 Three more shipped since last status:
