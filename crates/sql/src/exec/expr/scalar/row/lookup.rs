@@ -106,7 +106,11 @@ fn lookup_qualified_column_local(
             }
         }
         RowContext::SqliteSchema(row) => match qualifier.to_ascii_lowercase().as_str() {
-            "sqlite_schema" | "sqlite_master" | "redline_master" => lookup_schema_column(row, name),
+            "sqlite_schema"
+            | "sqlite_master"
+            | "redline_master"
+            | "sqlite_temp_schema"
+            | "sqlite_temp_master" => lookup_schema_column(row, name),
             _ => Err(Error::UnknownColumn(format!("{qualifier}.{name}"))),
         },
         RowContext::SqliteSequence(row) => {

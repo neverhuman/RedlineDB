@@ -151,3 +151,19 @@ Verification:
 
 Remaining latest-runner failures after this slice:
 - `10234`, `10339`, `10340`, `10379`, `10388`, `10396`, `10407`, `10445`, `10451`, `10456`, `10466`, `10476`.
+
+Current temp schema introspection slice:
+- `SQL_SCHEMA_INTROSPECTION` case `10407` now passes on the latest `redline-testing 1.0.1` runner.
+- `sqlite_temp_master`, `sqlite_temp_schema`, `temp.sqlite_master`, `temp.sqlite_schema`, `temp.sqlite_temp_master`, and `temp.sqlite_temp_schema` now route to the temp schema pseudo-table path.
+- `pragma_table_list` now reports `temp|sqlite_temp_schema` and session temp tables, while avoiding duplicate `main` rows for temp tables stored in the shared catalog.
+
+Verification:
+- `cargo test -p redlinedb-sql --test smoke_pragma pragma_table_list_and_temp_master_report_temp_tables --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_pragma pragma_table_list_reports_without_rowid_and_strict_bits_separately --quiet --locked`
+- `cargo test -p redlinedb-sql --test smoke_pragma --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `11` remaining failures out of `2445`; `10407` passed with matching stdout hash.
+
+Remaining latest-runner failures after this slice:
+- `10234`, `10339`, `10340`, `10379`, `10388`, `10396`, `10445`, `10451`, `10456`, `10466`, `10476`.

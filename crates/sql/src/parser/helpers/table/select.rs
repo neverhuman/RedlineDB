@@ -573,14 +573,20 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
 pub(crate) fn is_sqlite_temp_schema_name(name: &ObjectName) -> bool {
     match name.0.as_slice() {
         [part] => object_name_part_to_string(part)
-            .map(|s| s.eq_ignore_ascii_case("sqlite_temp_schema"))
+            .map(|s| {
+                s.eq_ignore_ascii_case("sqlite_temp_schema")
+                    || s.eq_ignore_ascii_case("sqlite_temp_master")
+            })
             .unwrap_or(false),
         [schema, table] => {
             let schema = object_name_part_to_string(schema).ok();
             let table = object_name_part_to_string(table).ok();
             matches!(
                 (schema.as_deref(), table.as_deref()),
-                (Some(schema), Some("sqlite_schema")) | (Some(schema), Some("sqlite_temp_schema"))
+                (Some(schema), Some("sqlite_schema"))
+                    | (Some(schema), Some("sqlite_master"))
+                    | (Some(schema), Some("sqlite_temp_schema"))
+                    | (Some(schema), Some("sqlite_temp_master"))
                     if schema.eq_ignore_ascii_case(concat!("te", "mp"))
             )
         }

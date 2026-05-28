@@ -495,7 +495,7 @@ impl TvFunc for PragmaTableList {
     }
     fn eval(
         &self,
-        _conn: &Connection,
+        conn: &Connection,
         schema: &SchemaSnapshot,
         args: &[TvArg],
     ) -> Result<TvResult> {
@@ -503,27 +503,6 @@ impl TvFunc for PragmaTableList {
             return Err(Error::UnsupportedSql(
                 "pragma_table_list takes no arguments".to_owned(),
             ));
-        }
-        // sqlite_schema row always appears in pragma_table_list as a
-        // built-in table backing `sqlite_master`. The user-table rows
-        // come from the live catalog snapshot.
-        let mut rows: Vec<Vec<SqlValue>> = vec![vec![
-            SqlValue::Text(Arc::from("main")),
-            SqlValue::Text(Arc::from("sqlite_schema")),
-            SqlValue::Text(Arc::from("table")),
-            SqlValue::Integer(5),
-            SqlValue::Integer(0),
-            SqlValue::Integer(0),
-        ]];
-        for table in &schema.tables {
-            rows.push(vec![
-                SqlValue::Text(Arc::from("main")),
-                SqlValue::Text(Arc::from(table.name.as_ref())),
-                SqlValue::Text(Arc::from("table")),
-                SqlValue::Integer(table.columns.len() as i64),
-                SqlValue::Integer(if table.is_without_rowid() { 1 } else { 0 }),
-                SqlValue::Integer(if table.is_strict() { 1 } else { 0 }),
-            ]);
         }
         Ok(TvResult {
             columns: vec![
@@ -534,7 +513,7 @@ impl TvFunc for PragmaTableList {
                 "wr".into(),
                 "strict".into(),
             ],
-            rows,
+            rows: crate::parser::pragma_table_list_rows(conn, schema)?,
         })
     }
 }

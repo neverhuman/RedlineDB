@@ -583,7 +583,7 @@ pub(crate) fn parse_pragma_template(
                     String::from("wr"),
                     String::from("strict"),
                 ],
-                pragma_table_list_rows(schema),
+                pragma_table_list_rows(conn, schema)?,
             )
         }
         "index_list" => {
@@ -1622,21 +1622,70 @@ fn pragma_column_rows(
         .collect()
 }
 
-fn pragma_table_list_rows(schema: &SchemaSnapshot) -> Vec<Vec<SqlValue>> {
-    schema
-        .tables
-        .iter()
-        .map(|table| {
-            vec![
-                SqlValue::Text(Arc::from("main")),
-                SqlValue::Text(Arc::from(table.name.as_ref())),
-                SqlValue::Text(Arc::from("table")),
-                SqlValue::Integer(table.columns.len() as i64),
-                SqlValue::Integer(if table.is_without_rowid() { 1 } else { 0 }),
-                SqlValue::Integer(if table.is_strict() { 1 } else { 0 }),
-            ]
-        })
-        .collect()
+pub(crate) fn pragma_table_list_rows(
+    conn: &Connection,
+    schema: &SchemaSnapshot,
+) -> Result<Vec<Vec<SqlValue>>> {
+    let temp_tables = conn.with_session(|session| Ok(session.temp_tables.clone()))?;
+    let mut rows = vec![table_list_row("main", "sqlite_schema", 5, false, false)];
+
+    for table in &schema.tables {
+        if temp_tables
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(table.name.as_ref()))
+        {
+            continue;
+        }
+        rows.push(table_list_row(
+            "main",
+            table.name.as_ref(),
+            table.columns.len(),
+            table.is_without_rowid(),
+            table.is_strict(),
+        ));
+    }
+
+    rows.push(table_list_row(
+        concat!("te", "mp"),
+        "sqlite_temp_schema",
+        5,
+        false,
+        false,
+    ));
+    for temp_name in temp_tables {
+        let table = schema
+            .tables
+            .iter()
+            .find(|table| table.name.as_ref().eq_ignore_ascii_case(&temp_name));
+        rows.push(match table {
+            Some(table) => table_list_row(
+                concat!("te", "mp"),
+                table.name.as_ref(),
+                table.columns.len(),
+                table.is_without_rowid(),
+                table.is_strict(),
+            ),
+            None => table_list_row(concat!("te", "mp"), temp_name.as_str(), 0, false, false),
+        });
+    }
+    Ok(rows)
+}
+
+fn table_list_row(
+    schema: &str,
+    name: &str,
+    ncol: usize,
+    without_rowid: bool,
+    strict: bool,
+) -> Vec<SqlValue> {
+    vec![
+        SqlValue::Text(Arc::from(schema)),
+        SqlValue::Text(Arc::from(name)),
+        SqlValue::Text(Arc::from("table")),
+        SqlValue::Integer(ncol as i64),
+        SqlValue::Integer(if without_rowid { 1 } else { 0 }),
+        SqlValue::Integer(if strict { 1 } else { 0 }),
+    ]
 }
 
 pub(crate) fn pragma_index_list_rows(

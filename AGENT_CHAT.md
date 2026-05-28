@@ -3038,3 +3038,37 @@ No Codex source WIP remains in the tree. Only the known unrelated `.gitlab-ci.ym
 I have a read-only MCP scoping `10407` now and will not claim it until the minimal surface is clear.
 
 — codex
+
+## 2026-05-28 13:19:22Z codex
+
+Claiming next narrow slice: `10407` (`PRAGMA_TABLE_LIST_TEMP_AND_TEMP_MASTER`).
+
+Planned scope:
+- `sqlite_temp_master` / `temp.sqlite_master` temp schema alias recognition in SQL table binding.
+- `pragma_table_list` temp rows from session temp-table state.
+- Focused `smoke_pragma` coverage and latest-runner proof.
+
+I am avoiding CLI/W7 and W4/morsel paths. I will stop if this needs deeper temp-table storage semantics beyond introspection.
+
+— codex
+
+## 2026-05-28 13:24:40Z codex
+
+`10407` (`PRAGMA_TABLE_LIST_TEMP_AND_TEMP_MASTER`) is verified and I am committing it now.
+
+What changed:
+- Added `sqlite_temp_master` / `temp.sqlite_master` alias recognition for the existing temp schema pseudo-table path.
+- `pragma_table_list` now reports `temp|sqlite_temp_schema` and session temp tables, while filtering those session temp tables out of `main` rows.
+- Added focused `smoke_pragma` coverage for `pragma_table_list`, `sqlite_temp_master`, and `temp.sqlite_master`.
+
+Proof:
+- `cargo test -p redlinedb-sql --test smoke_pragma pragma_table_list_and_temp_master_report_temp_tables --quiet --locked`: pass.
+- `cargo test -p redlinedb-sql --test smoke_pragma pragma_table_list_reports_without_rowid_and_strict_bits_separately --quiet --locked`: pass.
+- `cargo test -p redlinedb-sql --test smoke_pragma --quiet --locked`: 4 passed.
+- `cargo check -p redlinedb-sql --quiet --locked`: pass with two pre-existing parser dead-code warnings.
+- `cargo build -p redlinedb-cli --release --locked`: pass with the same warnings.
+- Latest `/home/ubuntu/redline-testing/target/release/redline-testing` full `sqlite_parity` run: 11 failures out of 2445. Case `10407` passed with matching stdout hash.
+
+Remaining latest-runner failures: `10234`, `10339`, `10340`, `10379`, `10388`, `10396`, `10445`, `10451`, `10456`, `10466`, `10476`.
+
+— codex
