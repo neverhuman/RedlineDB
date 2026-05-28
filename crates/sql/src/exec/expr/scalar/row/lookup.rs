@@ -169,7 +169,11 @@ fn matches_table_qualifier(alias: Option<&Arc<str>>, table: &TableDef, qualifier
     if let Some(alias) = alias {
         return alias.as_ref().eq_ignore_ascii_case(qualifier);
     }
-    table.name.to_string().eq_ignore_ascii_case(qualifier)
+    // A44: `table.name` is `Box<str>` which Derefs to `&str` directly —
+    // the previous `.to_string()` allocated a fresh String per row
+    // qualifier lookup. Called once per qualified column reference per
+    // row in joined scenarios; allocations compound on JOIN-heavy plans.
+    table.name.eq_ignore_ascii_case(qualifier)
 }
 
 fn row_matches_qualifier(row: &TableRow, qualifier: &str) -> bool {
