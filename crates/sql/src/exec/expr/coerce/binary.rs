@@ -245,9 +245,17 @@ fn declared_collation(row: &RowContext<'_>, expr: &Expr) -> Option<crate::collat
     }
     let sql = raw_sql.to_ascii_lowercase();
     let needle = name.to_ascii_lowercase();
+    // A29: hoist the two needle suffixes out of the `split(',').any(..)`
+    // loop. Previously each iteration allocated two new Strings
+    // (`needle.clone() + " "` and `needle.clone() + "\t"`); for a wide
+    // table with N columns that was 2N String allocations per call. The
+    // function is invoked per binary comparison via `eval_binary`
+    // (line 17), so wide-table workloads hit this loop often.
+    let needle_space = format!("{needle} ");
+    let needle_tab = format!("{needle}\t");
     if sql.split(',').any(|part| {
         let part = part.rsplit('(').next().unwrap_or(part).trim();
-        (part.starts_with(&(needle.clone() + " ")) || part.starts_with(&(needle.clone() + "\t")))
+        (part.starts_with(&needle_space) || part.starts_with(&needle_tab))
             && part.contains("collate nocase")
     }) {
         Some(crate::collation::Collation::NoCase)
