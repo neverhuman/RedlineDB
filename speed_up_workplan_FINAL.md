@@ -63,7 +63,7 @@ The work is **phased**:
 | W3 | Native RQL fast path | **Codex** | Slice completed (default-off RQL prepared-template cache; native binder remains open) | 2 |
 | W4 | Morsel/vector wiring on default SQL path | **Claude** | Claimed | 2 |
 | W5 | AccessPath IR default-on + index expansion | **Codex** | Slices completed (residual ORDER BY LIMIT guard, gated AccessPath hard-limit planner plumbing; W5 remains open) | 2 |
-| W6 | Aggregation/CTE/window/subquery runtime | **Codex** | Slices completed (expression-index DML/backfill, hot-path cleanup, scalar-subquery first-row limit, direct EXISTS first-row path, cached IN-subquery no-clone lookup, first/last/nth window direct frame lookup, aggregate ORDER BY pair-sort; W6 remains open) | 2 |
+| W6 | Aggregation/CTE/window/subquery runtime | **Codex** | Slices completed (expression-index DML/backfill, hot-path cleanup, scalar-subquery first-row streaming, direct EXISTS has-row streaming, cached IN-subquery no-clone lookup, first/last/nth window direct frame lookup, aggregate ORDER BY pair-sort; W6 remains open) | 2 |
 | W7 | CLI startup, output rendering, RSS | **Claude** | Claimed | 2/3 |
 | W8 | Kernel, WAL group-commit, write-path | **Codex** | Offered | 2/3 |
 | W9 | Safety / regression / proof lanes | **Claude** | Claimed | continuous |

@@ -77,13 +77,12 @@ pub(crate) fn eval_subquery_value(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    let rows = evaluate_subquery_rows_limited(subquery, row, bindings, Some(1))?;
     // SQLite scalar-subquery semantics
     // (https://sqlite.org/lang_expr.html#subqueries): a multi-row
     // subquery returns the value of the first row (in projection
     // order). A multi-column subquery is still rejected since the
     // expression context demands a single column.
-    match rows.first() {
+    match evaluate_subquery_first_row(subquery, row, bindings)? {
         None => Ok(SqlValue::Null),
         Some(first) if first.is_empty() => Ok(SqlValue::Null),
         Some(first) if first.len() == 1 => Ok(first[0].clone()),
@@ -123,16 +122,11 @@ fn subquery_cache_key(conn: &Connection, subquery: &sqlparser::ast::Query) -> Su
     }
 }
 
-/// Evaluate a subquery, pushing the caller's row onto the correlated-scope
-/// stack so qualified references (`outer.col`) resolve through
-/// `lookup_correlated`. The row snapshot is dropped automatically once
-/// the subquery returns.
-fn evaluate_subquery_rows_limited(
+fn evaluate_subquery_first_row(
     subquery: &sqlparser::ast::Query,
     outer_row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
-    max_rows: Option<usize>,
-) -> Result<Vec<Vec<SqlValue>>> {
+) -> Result<Option<Vec<SqlValue>>> {
     let Some(conn) = current_connection() else {
         return Err(Error::TransactionState(
             "subquery evaluation requires an active connection",
@@ -141,7 +135,7 @@ fn evaluate_subquery_rows_limited(
     let template = bind_subquery(conn, subquery)?;
     let owned = outer_row.to_owned_row();
     crate::exec::with_outer_row(owned, || {
-        materialize_prepared_rows_limited(conn, &template, bindings, max_rows)
+        crate::exec::materialize_first_prepared_row(conn, &template, bindings)
     })
 }
 
@@ -157,10 +151,9 @@ pub(crate) fn evaluate_subquery_exists(
     };
     let template = bind_subquery(conn, subquery)?;
     let owned = outer_row.to_owned_row();
-    let rows = crate::exec::with_outer_row(owned, || {
-        materialize_prepared_rows_limited(conn, &template, bindings, Some(1))
-    })?;
-    Ok(!rows.is_empty())
+    crate::exec::with_outer_row(owned, || {
+        crate::exec::prepared_select_has_row(conn, &template, bindings)
+    })
 }
 
 fn row_values_for_expr(

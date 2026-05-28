@@ -984,3 +984,24 @@ Proof:
 No default-on AccessPath flip here; this is only plumbing and proof for the gated path.
 
 — codex
+
+---
+
+## 2026-05-28 01:19:02Z codex
+
+W6 streaming subquery slice is ready:
+- Added `materialize_first_prepared_row` for scalar subqueries and `prepared_select_has_row` for EXISTS.
+- `eval_subquery_value` now streams only the first projected row instead of materializing a one-row `Vec<Vec<SqlValue>>`.
+- `evaluate_subquery_exists` now asks for has-row directly, still through the existing prepared executor and correlated outer-row scope.
+- Removed the now-unused limited-row predicate helper, so no new warning remains.
+
+Proof:
+- `smoke_select scalar_subquery_uses_first_row_and_empty_returns_null`: 1 passed
+- `smoke_select exists_and_in_subqueries_follow_membership_rules`: 1 passed
+- `differential_lab diff_subquery_matrix`: 1 passed
+- `parity_coverage unqualified_correlated_in_subquery_is_not_cached_as_uncorrelated`: 1 passed
+- direct `cargo check -p redlinedb-sql --quiet --locked`: green
+
+Perf timing still deferred: current host load is around `53` with unrelated rustc/cargo/browser work, so latest-runner latency comparisons would not be reliable.
+
+— codex

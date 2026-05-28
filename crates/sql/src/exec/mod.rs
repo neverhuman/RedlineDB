@@ -882,6 +882,50 @@ pub(crate) fn materialize_prepared_rows_limited(
     Ok(rows)
 }
 
+pub(crate) fn materialize_first_prepared_row(
+    conn: &Connection,
+    template: &PreparedTemplate,
+    bindings: &[Option<SqlValue>],
+) -> Result<Option<Vec<SqlValue>>> {
+    let result = execute_prepared(conn, template, bindings)?;
+    let RuntimeState::Select(mut runtime) = result.runtime else {
+        return Ok(None);
+    };
+    let mut current = None;
+    if step_select_runtime(conn, &mut runtime, bindings, &mut current)? {
+        return Ok(None);
+    }
+    let Some(row) = current.take() else {
+        return Err(Error::Bind(
+            "select runtime yielded without a current row".to_owned(),
+        ));
+    };
+    finish_select_runtime(conn, &mut runtime)?;
+    Ok(Some(row))
+}
+
+pub(crate) fn prepared_select_has_row(
+    conn: &Connection,
+    template: &PreparedTemplate,
+    bindings: &[Option<SqlValue>],
+) -> Result<bool> {
+    let result = execute_prepared(conn, template, bindings)?;
+    let RuntimeState::Select(mut runtime) = result.runtime else {
+        return Ok(false);
+    };
+    let mut current = None;
+    if step_select_runtime(conn, &mut runtime, bindings, &mut current)? {
+        return Ok(false);
+    }
+    if current.is_none() {
+        return Err(Error::Bind(
+            "select runtime yielded without a current row".to_owned(),
+        ));
+    }
+    finish_select_runtime(conn, &mut runtime)?;
+    Ok(true)
+}
+
 pub(crate) fn materialize_select_plan_rows(
     conn: &Connection,
     plan: &SelectPlan,
