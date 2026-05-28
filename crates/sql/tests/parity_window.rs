@@ -147,6 +147,19 @@ fn ntile_distributes_buckets() {
     lab.assert_match("SELECT v, NTILE(3) OVER (ORDER BY v) AS bucket FROM t ORDER BY v");
 }
 
+#[test]
+fn percent_rank_and_cume_dist_with_ties() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(grp TEXT, v INTEGER)");
+    lab.execute("INSERT INTO t VALUES ('A',1),('A',1),('A',2),('A',4),('B',5),('B',5)");
+    lab.assert_match(
+        "SELECT grp, v, \
+            PERCENT_RANK() OVER (PARTITION BY grp ORDER BY v) AS pr, \
+            CUME_DIST() OVER (PARTITION BY grp ORDER BY v) AS cd \
+         FROM t ORDER BY grp, v",
+    );
+}
+
 // ── LAG / LEAD ─────────────────────────────────────────────────────────────
 
 #[test]

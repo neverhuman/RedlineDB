@@ -287,6 +287,9 @@ fn eval_window_call(
     )? {
         return Ok(results);
     }
+    if ranking_window(&func_name, &args, layouts, &mut results)? {
+        return Ok(results);
+    }
     for layout in layouts {
         for (sorted_pos, row_idx) in layout.order_index_map.iter().enumerate() {
             let value = compute_function_for_row(
@@ -333,6 +336,65 @@ fn prefix_aggregate_window(
             };
             accumulator.push(value);
             results[*row_idx] = accumulator.value();
+        }
+    }
+    Ok(true)
+}
+
+fn ranking_window(
+    func_name: &str,
+    args: &[Expr],
+    layouts: &[CachedWindowPartition],
+    results: &mut [SqlValue],
+) -> Result<bool> {
+    if !matches!(
+        func_name,
+        "row_number" | "rank" | "dense_rank" | "percent_rank" | "cume_dist" | "ntile"
+    ) {
+        return Ok(false);
+    }
+    for layout in layouts {
+        let total = layout.order_index_map.len();
+        for (sorted_pos, row_idx) in layout.order_index_map.iter().enumerate() {
+            let value = match func_name {
+                "row_number" => SqlValue::Integer((sorted_pos + 1) as i64),
+                "rank" => {
+                    let target = layout.peer_ids[sorted_pos];
+                    let first_peer_pos = layout
+                        .peer_ranges
+                        .get(target)
+                        .map(|range| range.0)
+                        .unwrap_or(sorted_pos);
+                    SqlValue::Integer((first_peer_pos + 1) as i64)
+                }
+                "dense_rank" => SqlValue::Integer((layout.peer_ids[sorted_pos] + 1) as i64),
+                "percent_rank" => {
+                    let target = layout.peer_ids[sorted_pos];
+                    let pre = layout
+                        .peer_ranges
+                        .get(target)
+                        .map(|range| range.0)
+                        .unwrap_or(sorted_pos) as f64;
+                    let total = total as f64;
+                    if total <= 1.0 {
+                        SqlValue::Real(0.0)
+                    } else {
+                        SqlValue::Real(pre / (total - 1.0))
+                    }
+                }
+                "cume_dist" => {
+                    let target = layout.peer_ids[sorted_pos];
+                    let n = layout
+                        .peer_ranges
+                        .get(target)
+                        .map(|range| range.1 + 1)
+                        .unwrap_or(sorted_pos + 1) as f64;
+                    SqlValue::Real(n / total as f64)
+                }
+                "ntile" => ntile_value(args, total, sorted_pos)?,
+                _ => unreachable!("ranking function checked above"),
+            };
+            results[*row_idx] = value;
         }
     }
     Ok(true)
