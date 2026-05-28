@@ -39,6 +39,11 @@ REDLINE_CARGO_FEATURE_ARGS="--no-default-features --features alloc-jemalloc" \
   scripts/perf/pgo.sh --training-subset quick
 ```
 
+By default the script also allocates unique temporary PGO data/profile
+directories per run, which avoids collisions when multiple perf jobs are
+active. Override `PGO_DATA_DIR` and `PGO_PROFILE_DIR` if you want to
+pin the output locations.
+
 ## W2 Matrix
 
 Use `scripts/perf/w2-matrix.sh` for repeatable W2 build/profile runs. It
@@ -61,6 +66,10 @@ scripts/perf/w2-matrix.sh \
   --allocators mimalloc,jemalloc \
   --pgo-training-subset medium
 ```
+
+The matrix passes the allocator feature set through to `pgo.sh`, so the
+`release-pgo` and `release-pgo-bolt` legs train and rebuild under the
+selected allocator as well.
 
 Allocator choices are currently the mutually exclusive CLI features
 `alloc-mimalloc`, `alloc-jemalloc`, and `alloc-snmalloc`. There is no
