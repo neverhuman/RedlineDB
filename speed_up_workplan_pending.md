@@ -118,3 +118,19 @@ Verification:
 
 Next safe slice:
 - SQL_MATH precision cluster: `11037`, `11038`, `11045`.
+
+Current SQL_MATH slice:
+- `SQL_MATH` cases `11037`, `11038`, and `11045` now pass on the latest `redline-testing 1.0.1` runner.
+- `cosh()` and `exp()` now use the host `f64` implementations on the scalar dispatch path, matching the SQLite reference formatting for the current official binary.
+- Added scalar parity coverage for the exact `cosh(1.0)`, `cosh(-1.0)`, and `exp(1.0)` precision cases.
+
+Verification:
+- `cargo test -p redlinedb-sql --test parity_scalar_funcs math1_exp_cosh_match_sqlite_3531_rendering --quiet --locked`
+- `cargo test -p redlinedb-sql --test parity_scalar_funcs math1 --quiet --locked`
+- `cargo check -p redlinedb-sql --quiet --locked`
+- `cargo build -p redlinedb-cli --release --locked`
+- Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `13` remaining failures out of `2445`; `11037`, `11038`, and `11045` all passed with matching stdout hashes.
+
+Next safe slices identified by read-only MCP survey:
+- `10105` (`STRICT, WITHOUT ROWID` option ordering), likely low risk in parser normalization plus SQL test coverage.
+- `10407` (`pragma_table_list` temp schema / `sqlite_temp_master` introspection), low-medium risk in pragma table-valued path.

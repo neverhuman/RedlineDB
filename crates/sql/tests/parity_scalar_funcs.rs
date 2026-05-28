@@ -489,6 +489,26 @@ fn math1_acos_unit_circle() {
 }
 
 #[test]
+fn math1_exp_cosh_match_sqlite_3531_rendering() {
+    let (_d, c) = open();
+
+    for (sql, expected) in [
+        ("SELECT cosh(1.0)", "1.5430806348152437"),
+        ("SELECT cosh(-1.0)", "1.5430806348152437"),
+        ("SELECT exp(1.0)", "2.7182818284590451"),
+    ] {
+        let rendered = match q1(&c, sql) {
+            SqlValue::Real(value) => redlinedb_sql::format_real_sqlite(value),
+            other => panic!("expected real for {sql}, got {other:?}"),
+        };
+        assert_eq!(
+            rendered, expected,
+            "rendered output differs from SQLite 3.53.1 for {sql}"
+        );
+    }
+}
+
+#[test]
 fn math1_log_overload_natural_vs_base() {
     let (_d, c) = open();
     // log(x) = natural log; log(b, x) = log base b of x.
