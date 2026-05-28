@@ -26,6 +26,10 @@ pub struct IndexKeyDef {
     pub source: IndexKeySource,
     pub sort_dir: SortDir,
     pub null_order: NullOrder,
+    /// Per-key collation name in UPPER-CASE (e.g. `"NOCASE"`, `"RTRIM"`).
+    /// `None` means binary (byte-level) comparison — the default.
+    /// Propagated from `CREATE INDEX … (col COLLATE name)`.
+    pub collation: Option<Box<str>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

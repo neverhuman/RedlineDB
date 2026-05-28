@@ -120,6 +120,7 @@ pub fn apply_create_table(
                             },
                             sort_dir: *sort_dir,
                             null_order: NullOrder::First,
+                            collation: None,
                         }],
                         flags: 0,
                         normalized_sql: None,
@@ -162,6 +163,7 @@ pub fn apply_create_table(
                             },
                             sort_dir: super::SortDir::Asc,
                             null_order: NullOrder::First,
+                            collation: None,
                         }],
                         flags: 0,
                         normalized_sql: None,
@@ -997,6 +999,7 @@ fn apply_alter_add_constraint(
                     source: super::key::IndexKeySource::Column { attnum: ordinal },
                     sort_dir: super::SortDir::Asc,
                     null_order: super::key::NullOrder::First,
+                    collation: None,
                 });
             }
             let display_name = name
@@ -1322,6 +1325,10 @@ fn build_index_keys(table: &TableDef, columns: &[IndexColumnSpec]) -> Result<Vec
             source,
             sort_dir: column.sort_dir,
             null_order: NullOrder::First,
+            collation: column
+                .collation
+                .as_deref()
+                .map(|s| s.to_ascii_uppercase().into_boxed_str()),
         });
     }
     Ok(keys)
@@ -1341,6 +1348,7 @@ fn build_index_keys_from_names(
             source: IndexKeySource::Column { attnum: ordinal },
             sort_dir: super::SortDir::Asc,
             null_order: NullOrder::First,
+            collation: None,
         });
     }
     Ok(keys)

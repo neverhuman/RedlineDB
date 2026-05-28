@@ -238,7 +238,7 @@ impl Engine {
         index: &crate::catalog::IndexDef,
     ) -> Result<()> {
         use crate::catalog::{
-            EncodedIndexKey, IndexKeySource, RecordRef, RecordScratch, ValueRef, encode_index_key,
+            EncodedIndexKey, IndexKeySource, OwnedValue, RecordRef, RecordScratch, encode_index_key,
         };
 
         // Snapshot the row directory for this relation BEFORE we begin so the
@@ -278,7 +278,7 @@ impl Engine {
             } else {
                 0
             };
-            let mut parts: Vec<ValueRef<'_>> = Vec::with_capacity(index.keys.len());
+            let mut parts: Vec<OwnedValue> = Vec::with_capacity(index.keys.len());
             let mut has_expression_key = false;
             for key in &index.keys {
                 let attnum = match &key.source {
@@ -294,15 +294,22 @@ impl Engine {
                 let value = record
                     .value_at(&scratch, attnum as usize + col_offset)
                     .map_err(|_| Error::CorruptPage("index backfill: column out of range"))?;
+                let value = match (value, key.collation.as_deref()) {
+                    (crate::catalog::ValueRef::Text(text), Some("NOCASE")) => {
+                        OwnedValue::Text(std::sync::Arc::from(text.to_ascii_lowercase()))
+                    }
+                    _ => value.to_owned(),
+                };
                 parts.push(value);
             }
             if has_expression_key {
                 continue;
             }
+            let value_refs: Vec<_> = parts.iter().map(OwnedValue::as_ref).collect();
             let EncodedIndexKey {
                 bytes,
                 contains_null,
-            } = encode_index_key(&parts, &dirs, &mut key_buf);
+            } = encode_index_key(&value_refs, &dirs, &mut key_buf);
             // SQLite NULL-uniqueness rule: skip the unique conflict check
             // when any leading key component is NULL — duplicates of NULL
             // are allowed in unique indexes.

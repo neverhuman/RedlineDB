@@ -126,11 +126,14 @@ known_optional_v012='^(00093|00094|00095|00096|00220)$'
 # Failure count: 4 -> 1. Cumulative across nine W9-T passes:
 # 68 -> 1 (-99%). Empirically verified.
 #
-# Remaining 1 ID:
+# W9-T10 (2026-05-28): collated UNIQUE-index UPSERT conflict target fixed:
 #   - SQL_UPSERT (1): 10340 ON_CONFLICT_COLLATE_NOCASE_TARGET
-#     (collated UNIQUE-index UPSERT target; Codex's open follow-up
-#     per AGENT_CHAT 2026-05-28 16:12 "Not in this slice".)
-known_failing_v101='^(10340)$'
+#     `IndexKeyDef.collation` + `apply_index_key_collations_from_sql` +
+#     `apply_index_key_collation` in index_dml.rs. format_version stays 7.
+#   Also: removed spurious "Error: out of memory" on -deserialize :memory:
+#     (sqlite3 3.53.1 does not emit it; regression from ac226e2).
+# Failure count: 1 -> 0. Cumulative: 68 -> 0 (-100%).
+known_failing_v101='^$'
 
 optional_count=0
 unexpected_count=0

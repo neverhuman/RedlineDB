@@ -41,30 +41,34 @@ pub(crate) struct BuiltIndexKeyWithValues {
     pub values: Vec<SqlValue>,
 }
 
+/// Apply the per-key collation normalization to a single value before it is
+/// encoded into an index key. For NOCASE, text is lowercased so the B-tree
+/// (which uses byte-level comparison) treats `'Apple'` and `'apple'` as
+/// equal. All other collations (BINARY, RTRIM, custom) leave the value
+/// unchanged — BINARY is byte-exact by definition, and RTRIM/custom
+/// collations are not yet reflected in the physical key encoding.
+fn apply_index_key_collation(value: SqlValue, collation: Option<&str>) -> SqlValue {
+    if let Some("NOCASE") = collation {
+        if let SqlValue::Text(s) = value {
+            return SqlValue::Text(s.to_ascii_lowercase().into());
+        }
+    }
+    value
+}
+
 /// Build the encoded index key bytes for `index` from a row's column values.
 ///
 /// Mirrors the kernel-side encoding used by Lane A's CREATE INDEX backfill,
-/// so SQL DML and DDL agree byte-for-byte on key shape.
+/// so SQL DML and DDL agree byte-for-byte on key shape. Delegates to
+/// `build_index_key_with_values` so collation normalisation is applied
+/// consistently on every write path (insert, update, delete) and every read
+/// path (unique-conflict probe, heap-scan comparison).
 pub(crate) fn build_index_key(
     table: &TableDef,
     index: &IndexDef,
     values: &[SqlValue],
 ) -> Result<BuiltIndexKey> {
-    let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
-    let mut value_refs = Vec::with_capacity(index.keys.len());
-    let null_value = SqlValue::Null;
-    for key in &index.keys {
-        match key.source {
-            IndexKeySource::Column { attnum } => {
-                value_refs.push(values.get(attnum as usize).unwrap_or(&null_value).as_ref());
-            }
-            IndexKeySource::Expression { .. } => {
-                return Ok(build_index_key_with_values(table, index, values)?.key);
-            }
-        }
-        dirs.push(key.sort_dir);
-    }
-    Ok(encode_built_index_key(&value_refs, &dirs))
+    Ok(build_index_key_with_values(table, index, values)?.key)
 }
 
 pub(crate) fn build_index_key_with_values(
@@ -75,7 +79,7 @@ pub(crate) fn build_index_key_with_values(
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
     let mut key_values: Vec<SqlValue> = Vec::with_capacity(index.keys.len());
     for key in &index.keys {
-        let value = match &key.source {
+        let raw = match &key.source {
             IndexKeySource::Column { attnum } => values
                 .get(*attnum as usize)
                 .cloned()
@@ -84,6 +88,9 @@ pub(crate) fn build_index_key_with_values(
                 crate::exec::index_predicate::eval_index_value_expr(table, sql, values)?
             }
         };
+        // Apply per-key collation normalisation so the B-tree key bytes
+        // reflect the collation semantics (NOCASE → lowercase).
+        let value = apply_index_key_collation(raw, key.collation.as_deref());
         key_values.push(value);
         dirs.push(key.sort_dir);
     }

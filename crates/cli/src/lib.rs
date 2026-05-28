@@ -258,9 +258,8 @@ pub fn run() {
         Some(f) => f,
         None => ":memory:".to_string(),
     };
-    if cli.deserialize && filename == ":memory:" {
-        eprintln!("Error: out of memory");
-    }
+    // SQLite 3.53.1 no longer emits "Error: out of memory" for
+    // `-deserialize :memory:`; we match that behavior for parity.
     use std::io::IsTerminal;
     let stdin_is_batch = !io::stdin().is_terminal() || cli.batch;
     if preloaded_stdin.is_none()
