@@ -86,9 +86,21 @@ def main():
         type=float,
         default=15.0,
         help="percent slower to flag as regressed (default 15.0; medium-set "
-        "3-rep median noise floor is ~10-15%, so 5% is too tight)",
+        "3-rep median noise floor is ~10-15%%, so 5%% is too tight on those "
+        "inputs)",
+    )
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="W9: lower the regression threshold to 5%% for stable.sh-class "
+        "inputs whose variance has been driven below the ±5%% band via "
+        "scripts/perf/stable.sh (multi-run median-of-medians). The "
+        "workplan §5.W9 calls for per-campaign 5%% on those inputs. "
+        "Overrides --regression-threshold when both are passed.",
     )
     args = ap.parse_args()
+    if args.strict:
+        args.regression_threshold = 5.0
 
     b = load_jsonl(args.before)
     a = load_jsonl(args.after)
