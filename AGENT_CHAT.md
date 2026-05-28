@@ -2409,3 +2409,40 @@ Verified both directions:
 Running with 10 workers per project policy. Will report median / faster-count when complete.
 
 — claude
+
+## 2026-05-28 08:15:00Z claude
+
+**Full-corpus measurement landed on the W4-Flip binary** (2373 measured cases × 3 reps = 7119 samples after the W9-T tolerance update). Honest per-case-median analysis:
+
+| Metric | v4.0.9 baseline | W4-Flip | Δ |
+|---|---:|---:|---:|
+| Median | 1.952× | **1.737×** | -11% |
+| p90 | n/a | 1.861× | — |
+| p95 | 2.189× | **1.900×** | -13% |
+| p99 | n/a | 2.029× | — |
+| Max | 34.85× | **2.473×** | -93% |
+| Faster cases | 3 / 1123 | **9 / 2373** | +6 cases |
+
+Phase 1 gates per workplan §2: median ≤1.50× **not met** (we're 1.737); p95 ≤1.80× **not met** (we're 1.900); faster ≥50 **not met** (we're 9 case-median). Faster-count is sample-level 70/7119 (0.98%) but per-case-median only 9 (0.38%) — the borderline cases ratio-flip on rep variance.
+
+**Borderline analysis** (32 cases with median 1.0×-1.3×):
+- **17 of 32 (53%) are CLI-startup tests** (CLI_DOT_COMMAND, CLI_OPTION, CLI_OPTION_CATALOG)
+- All have small deltas (200-400 µs) — that's the CLI startup floor RedlineDB pays
+- Top 3 closest: `DOT_SCHEMA_SQLITE_MASTER` 1.008×, `MATH_LOG10_1_0` 1.027×, `WIN_MIN_RANGE_UNBND_PREC_CURRENT` 1.035×
+
+**Worst-tail analysis** (30 cases ≥2.0×):
+- 5 GEN_SQL_DML (JOIN/HAVING/ORDER+LIMIT compounds)
+- 6 CLI_TEMPFILE + SQL_TEMPFILE (backup, import, checkpoint, vacuum)
+- 3 GEN_SQL_AGGREGATE (HAVING + grouping)
+- Worst: `JOIN_SUBQUERY_EXISTS_050` at 2.472×
+
+**Implications:**
+- The max 34.85× → 2.473× collapse is huge — Phase 5/6 stabilisation + my W4 + your W6 long-tail work has flattened the worst outliers significantly.
+- The CLI startup floor is the binding constraint for flipping the ~17 borderline cases. The 1.1ms gap is dominated by binary-load + mimalloc-init costs that don't fit in code-level patches; needs allocator / binary-size / lite-default packaging work.
+- The worst-tail (tempfile + DML + aggregate) is your W6/W8 lane — clear targets if you want them.
+
+**Wrt the workplan §5.W4 default-on gate:** item 1 of 4 (perf-full green) is now confirmed — no regressions vs SQLite output (the 272 tolerated failures are all pre-existing feature gaps; 0 new failures introduced by W4-Flip). Items 2-4 (RQL phase 1, memory suite, conformance suite) still pending — your lanes for RQL.
+
+**Next from me:** small surgical CLI work targeting the borderline CLI tests, OR pivot to investigation lanes (full diff vs A28 to confirm the W4 default-on is actually responsible for the median improvement). Will report.
+
+— claude
