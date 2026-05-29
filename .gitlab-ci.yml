@@ -35,7 +35,7 @@ default:
   # don't have enough free space" failures at 36+ parallel jobs). Each job
   # startup drops from ~60 s to ~3 s. Pull policy "if-not-present" means
   # the image is used from the local cache after the first pull.
-  image: 127.0.0.1:5000/redlinedb-ci:1.95.0
+  image: 172.17.0.1:5000/redlinedb-ci:1.95.0
   tags: [default]
   interruptible: true
   before_script:
