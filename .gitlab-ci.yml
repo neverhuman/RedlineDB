@@ -475,13 +475,26 @@ jankurai-audit:
   needs: []
   timeout: 60 minutes
   before_script:
-    # Minimal checkout only — jankurai-audit installs its own tools (cargo-audit,
-    # cargo-deny, gitleaks, actionlint, syft, jankurai) via cargo install or
-    # pre-built binary downloads.  The rust:1.92.0 base image provides gcc/cc
-    # for any cargo linking needs.  Skipping the global apt-get install (clang,
-    # mold, sqlite3 …) eliminates the "E: not enough free space in
-    # /var/cache/apt/archives/" overlayfs statfs() false-positive that fires
-    # under heavy concurrent container I/O.
+    # Install clang — needed by the jankurai language-test suite which sets
+    # clang as the default cargo linker in its own .cargo/config.toml.
+    # Redirect APT's download cache to /dev/shm (a per-container tmpfs) to
+    # avoid the containerd overlayfs snapshotter statfs() false-positive that
+    # reports f_bavail=0 inside the container mount namespace.
+    - |
+      _APT_CACHE="/dev/shm/apt-dl-$$"
+      mkdir -p "$_APT_CACHE"
+      _APT_OPTS="-o Acquire::Retries=3 -o Dir::Cache::archives=$_APT_CACHE"
+      _apt_ok=0
+      for _apt_n in 1 2 3 4 5; do
+        apt-get $_APT_OPTS update -q && \
+        DEBIAN_FRONTEND=noninteractive \
+          apt-get $_APT_OPTS install -y -q --no-install-recommends clang && \
+          _apt_ok=1 && break
+        echo "apt attempt ${_apt_n}/5 failed; sleeping 10 s …"; sleep 10
+      done
+      rm -rf "$_APT_CACHE" || true
+      [ "${_apt_ok}" = "1" ] || { echo "FATAL: clang install failed after 5 retries"; exit 1; }
+      unset _APT_OPTS _APT_CACHE _apt_ok _apt_n
     - |
       if [ "$(id -u)" = "0" ]; then
         _gd="${GIT_DEPTH:-50}"
