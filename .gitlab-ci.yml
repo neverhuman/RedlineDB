@@ -33,9 +33,18 @@ default:
   #
   # This eliminates concurrent apt-get disk pressure (was causing "E: You
   # don't have enough free space" failures at 36+ parallel jobs). Each job
-  # startup drops from ~60 s to ~3 s. Pull policy "if-not-present" means
-  # the image is used from the local cache after the first pull.
-  image: 172.17.0.1:5000/redlinedb-ci:1.95.0
+  # startup drops from ~60 s to ~3 s.
+  #
+  # pull_policy: never — Docker 29 + containerd snapshotter resolves image
+  # references against the registry even when the image is in local cache.
+  # Since the registry at 172.17.0.1:5000 is HTTP-only but containerd uses
+  # HTTPS by default, the resolve step fails with "connection refused" unless
+  # we bypass registry calls entirely via "never".
+  # The image is pre-pulled on the host daemon; all runners share that cache
+  # via the mounted /var/run/docker.sock.
+  image:
+    name: 172.17.0.1:5000/redlinedb-ci:1.95.0
+    pull_policy: never
   tags: [default]
   interruptible: true
   before_script:
