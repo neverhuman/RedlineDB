@@ -91,22 +91,19 @@ default:
         unset _gd
 
         # ── apt-get build deps ───────────────────────────────────────────────
-        # Each container uses its own ephemeral apt archive cache (the default
-        # /var/cache/apt/archives/ inside the overlay fs) rather than the
-        # shared /cache/apt-archives pool.  The shared pool approach caused
-        # "E: You don't have enough free space in /cache/apt-archives/" when
-        # the host filesystem (95% full, 411 GB free) triggered false positives
-        # in APT's statvfs() space-check under concurrent container I/O.
-        # Per-container caches are always fresh, isolated, and automatically
-        # cleaned when the container exits.
+        # APT's pre-download space check calls statfs() on the archives
+        # directory.  Under heavy concurrent container I/O the overlayfs
+        # upper-dir stat is skewed and f_bavail is transiently under-reported,
+        # producing "E: not enough free space in /var/cache/apt/archives/"
+        # even though 411 GB are available.
         #
-        # Retry loop: Linux's overlayfs statfs() can transiently under-report
-        # free space when many containers are writing simultaneously (kernel
-        # copies the upper-dir stats but heavy concurrent I/O skews f_bavail).
-        # APT's pre-download space check then fails with "not enough free space
-        # in /var/cache/apt/archives/" even though 411 GB are available.
-        # Five attempts with 20 s gaps reliably clears the I/O storm.
-        _APT_OPTS="-o Acquire::Retries=3"
+        # Fix: redirect the APT archive cache to a PID-unique directory on
+        # /cache (a host bind-mount, real ext4/xfs filesystem).  Host-side
+        # statfs() reports the correct available space; the overlayfs false-
+        # positive never fires.  The directory is cleaned after the install.
+        _APT_CACHE="/cache/apt-dl-$$-${RANDOM:-0}"
+        mkdir -p "$_APT_CACHE"
+        _APT_OPTS="-o Acquire::Retries=3 -o Dir::Cache::archives=$_APT_CACHE"
         apt-get $_APT_OPTS update -q
         _apt_ok=0
         for _apt_n in 1 2 3 4 5; do
@@ -115,11 +112,12 @@ default:
                build-essential clang mold openssl sqlite3 zlib1g-dev jq; then
             _apt_ok=1; break
           fi
-          echo "apt-get install attempt ${_apt_n}/5 failed; sleeping 20 s …"
-          sleep 20
+          echo "apt-get install attempt ${_apt_n}/5 failed; sleeping 10 s …"
+          sleep 10
         done
+        rm -rf "$_APT_CACHE" || true
         [ "${_apt_ok}" = "1" ] || { echo "FATAL: apt-get exhausted all 5 retries"; exit 1; }
-        unset _APT_OPTS _apt_ok _apt_n
+        unset _APT_OPTS _apt_ok _apt_n _APT_CACHE
         # Install cargo-nextest if not already present
         if ! command -v cargo-nextest >/dev/null 2>&1; then
           curl -LsSf https://get.nexte.st/0.9.133/linux \
