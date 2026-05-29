@@ -27,55 +27,29 @@
 #     mirrors `push: branches: [main]`.
 
 default:
-  image: rust:1.95.0
+  # redlinedb-ci:1.95.0 is rust:1.95.0 with all build deps pre-baked:
+  #   build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
+  #   rustfmt clippy  cargo-nextest
+  #
+  # This eliminates concurrent apt-get disk pressure (was causing "E: You
+  # don't have enough free space" failures at 36+ parallel jobs). Each job
+  # startup drops from ~60 s to ~3 s. Pull policy "if-not-present" means
+  # the image is used from the local cache after the first pull.
+  image: 127.0.0.1:5000/redlinedb-ci:1.95.0
   tags: [default]
   interruptible: true
   before_script:
-    # The default before_script handles BOTH docker (root) and shell-runner
-    # (non-root, gitlab-runner user) execution paths.
-    #
-    # Docker path: apt-get installs build deps; nextest into /usr/local/bin.
-    # Shell-runner path: skip apt-get (no sudo); assume host has all deps
-    # pre-installed; install nextest into per-user CARGO_HOME if missing.
+    # All packages and tools are pre-installed in the image.
+    # Shell-runner (bare-metal, non-root) path: verify host has the same
+    # tools and wire up nextest if missing.
     - |
-      if [ "$(id -u)" = "0" ]; then
-        # docker container — full apt install with shared download cache.
-        #
-        # Root cause of past "not enough free space" failures: all 36 jobs
-        # start simultaneously and each downloads ~500 MB of packages into
-        # its own overlayfs writable layer, causing a burst-write storm.
-        #
-        # Fix: point apt's download cache at the pool-cache volume (/cache).
-        # The first job to run downloads the .deb files; every subsequent
-        # job on ANY slot finds them already present and skips the download.
-        # Each job still installs into its own overlay layer (fast, local).
-        # flock serialises the update+download phase so only one job fetches
-        # the package lists and .debs at a time — eliminating the burst.
-        APT_POOL=/cache/apt-archives
-        mkdir -p "$APT_POOL" "$APT_POOL/partial"
-        flock -w 300 "$APT_POOL/.lock" bash -c "
-          apt-get clean
-          apt-get update -qq
-          apt-get install -y -qq \
-            -o Dir::Cache::Archives='$APT_POOL' \
-            build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
-        "
-        rustup component add rustfmt clippy
-        # nextest into /usr/local/bin (writable for root)
-        if ! command -v cargo-nextest >/dev/null 2>&1; then
-          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C /usr/local/bin cargo-nextest
-        fi
-      else
+      if [ "$(id -u)" != "0" ]; then
         # bare-metal shell runner — rustup install lands under ~/.cargo/bin
-        # which isn't on PATH by default in a non-login shell. Export it
-        # FIRST, then verify host has the deps the docker path would
-        # install. Fail fast if anything is missing.
+        # which isn't on PATH by default in a non-login shell.
         export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
-        for tool in cargo rustc clang mold sqlite3 jq curl git; do
+        for tool in cargo rustc mold sqlite3 jq curl git; do
           command -v "$tool" >/dev/null 2>&1 || { echo "shell-runner host missing $tool"; exit 1; }
         done
-        # nextest into the user-writable CARGO_HOME/bin (host operator
-        # installed rustup under ~/.cargo)
         mkdir -p "${CARGO_HOME:-$HOME/.cargo}/bin"
         if ! command -v cargo-nextest >/dev/null 2>&1; then
           curl -LsSf https://get.nexte.st/0.9.133/linux \
@@ -268,16 +242,7 @@ parity:
     # downloads.
     CI_REDLINE_TESTING_URL: "https://github.com/neverhuman/redline-testing/releases/download/v1.0.1/redline-testing-1.0.1-linux-x86_64.tar.gz"
   before_script:
-    - |
-      APT_POOL=/cache/apt-archives
-      mkdir -p "$APT_POOL" "$APT_POOL/partial"
-      flock -w 300 "$APT_POOL/.lock" bash -c "
-        apt-get clean
-        apt-get update -qq
-        apt-get install -y -qq \
-          -o Dir::Cache::Archives='$APT_POOL' \
-          build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
-      "
+    # All packages pre-installed in redlinedb-ci:1.95.0 — no apt needed.
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
   script:
@@ -383,7 +348,7 @@ jankurai-audit:
   needs: []
   timeout: 60 minutes
   script:
-    - apt-get install -y -qq tar
+    # tar is pre-installed in redlinedb-ci:1.95.0 — no apt needed.
     - cargo install cargo-audit --locked
     - cargo install cargo-deny --locked --version 0.18.0
     - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_gitleaks'
