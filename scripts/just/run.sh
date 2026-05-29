@@ -215,6 +215,7 @@ run_redline_testing_official() {
   # bailing on the first non-zero exit from the parity binary.
   rc=0
   REDLINEDB_DEFAULT_DURABILITY=normal \
+  REDLINEDB_QUIET_DURABILITY=1 \
   "$redline_testing_bin" run \
     --target-bin target/release/redlinedb \
     --sqlite-bin "$sqlite_parity_reference_bin" \
