@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+## [4.1.0] - 2026-05-29
+
+W7 startup optimization — eliminate cgroup walk from the volatile (in-memory)
+database startup path.
+
+### Changed
+
+- **`EngineConfig::default()`** no longer calls `cached_available_parallelism()`.
+  Volatile databases (`:memory:`, `PrivateEphemeral`, unnamed temp) use fixed
+  small shard defaults (`lock_shards=16, heap_lanes=4`). Persistent databases
+  call the new `EngineConfig::with_detected_parallelism()` method inside
+  `Engine::create_inner` to scale shards to the host CPU count exactly as before.
+  Eliminates a 6-syscall cgroup walk (`openat /proc/self/cgroup` + traversal of
+  `/sys/fs/cgroup/.../cpu.max`) that previously ran on every process launch.
+
+- **`BufferPool::new_with_parallelism(page_file, capacity, parallelism)`** added
+  as a cgroup-walk-free constructor. Existing `BufferPool::new()` is unchanged
+  (still calls `cached_available_parallelism()` for backward compatibility).
+  Volatile engine path now uses `new_with_parallelism` with a derived hint
+  (`config.lock_shards / 4`).
+
+- **`Engine::create_inner`** splits volatile vs persistent initialization:
+  volatile databases skip `create_dir_all` (caller already created the dir),
+  skip the cgroup walk, and use the lean `new_with_parallelism` constructor.
+  Persistent databases continue to call `with_detected_parallelism()` and
+  `BufferPool::new()` as before.
+
+### Performance
+
+Measured on the 294-case medium parity benchmark (882 samples = 294 × 3 reps,
+memory profile), PGO binary with quick training set, vs SQLite 3.53.1:
+
+| Metric | v4.0.9 | v4.1.0 | Δ |
+|--------|-------:|-------:|--:|
+| Median ratio | 1.780× | 1.749× | **−1.7%** |
+| p95 ratio | 1.990× | 1.887× | **−5.2%** |
+
+Cumulative improvement from the release-only v4.0.8 baseline:
+median **−5.3%**, p95 **−22.3%**.
+
 ## [4.0.7] - 2026-05-26
 
 Phase 6 R4-B — WAL group-commit pipeline scaffolding (Candidate 4).
