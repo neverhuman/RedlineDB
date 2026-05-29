@@ -27,34 +27,32 @@
 #     mirrors `push: branches: [main]`.
 
 default:
-  # redlinedb-ci:1.95.0 is rust:1.95.0 with all build deps pre-baked:
-  #   build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
-  #   rustfmt clippy  cargo-nextest
+  # rust:1.95.0 from Docker Hub — always available from local cache via
+  # "if-not-present" (Docker Hub images don't trigger containerd's HTTPS
+  # manifest-resolve step for locally-cached images).
   #
-  # This eliminates concurrent apt-get disk pressure (was causing "E: You
-  # don't have enough free space" failures at 36+ parallel jobs). Each job
-  # startup drops from ~60 s to ~3 s.
-  #
-  # pull_policy: never — Docker 29 + containerd snapshotter resolves image
-  # references against the registry even when the image is in local cache.
-  # Since the registry at 172.17.0.1:5000 is HTTP-only but containerd uses
-  # HTTPS by default, the resolve step fails with "connection refused" unless
-  # we bypass registry calls entirely via "never".
-  # The image is pre-pulled on the host daemon; all runners share that cache
-  # via the mounted /var/run/docker.sock.
-  image:
-    name: 172.17.0.1:5000/redlinedb-ci:1.95.0
-    pull_policy: never
+  # Build deps installed per-container via apt-get into each container's
+  # own writable overlayfs layer — no shared-volume contention, no
+  # "E: You don't have enough free space" disk pressure from concurrent jobs.
+  image: rust:1.95.0
   tags: [default]
   interruptible: true
   before_script:
-    # All packages and tools are pre-installed in the image.
-    # Shell-runner (bare-metal, non-root) path: verify host has the same
-    # tools and wire up nextest if missing.
     - |
-      if [ "$(id -u)" != "0" ]; then
-        # bare-metal shell runner — rustup install lands under ~/.cargo/bin
-        # which isn't on PATH by default in a non-login shell.
+      if [ "$(id -u)" = "0" ]; then
+        # Docker runner — install build deps into this container's own layer.
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+          build-essential clang mold openssl sqlite3 zlib1g-dev jq 2>/dev/null
+        # Install cargo-nextest if not already present
+        if ! command -v cargo-nextest >/dev/null 2>&1; then
+          curl -LsSf https://get.nexte.st/0.9.133/linux \
+            | tar zxf - -C /usr/local/bin cargo-nextest
+        fi
+        # Ensure rustfmt and clippy are present
+        rustup component add rustfmt clippy 2>/dev/null || true
+      else
+        # Bare-metal shell runner — verify host toolchain
         export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
         for tool in cargo rustc mold sqlite3 jq curl git; do
           command -v "$tool" >/dev/null 2>&1 || { echo "shell-runner host missing $tool"; exit 1; }
@@ -357,7 +355,6 @@ jankurai-audit:
   needs: []
   timeout: 60 minutes
   script:
-    # tar is pre-installed in redlinedb-ci:1.95.0 — no apt needed.
     - cargo install cargo-audit --locked
     - cargo install cargo-deny --locked --version 0.18.0
     - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_gitleaks'
