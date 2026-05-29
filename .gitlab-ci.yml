@@ -486,15 +486,15 @@ jankurai-audit:
       mkdir -p "$_APT_CACHE"
       _APT_OPTS="-o Acquire::Retries=3 -o Dir::Cache::archives=$_APT_CACHE"
       apt-get $_APT_OPTS update -q
-      # ── Batch 1: mold (~4 MB) ──────────────────────────────────────────
+      # ── Batch 1: mold + jq (~5 MB) ────────────────────────────────────────
       _apt_ok=0
       for _apt_n in 1 2 3 4 5; do
         DEBIAN_FRONTEND=noninteractive \
-          apt-get $_APT_OPTS install -y -q --no-install-recommends mold && \
+          apt-get $_APT_OPTS install -y -q --no-install-recommends mold jq && \
           _apt_ok=1 && break
-        echo "apt attempt ${_apt_n}/5 failed (mold); sleeping 10 s …"; sleep 10
+        echo "apt attempt ${_apt_n}/5 failed (mold jq); sleeping 10 s …"; sleep 10
       done
-      [ "${_apt_ok}" = "1" ] || { rm -rf "$_APT_CACHE" || true; echo "FATAL: mold install failed"; exit 1; }
+      [ "${_apt_ok}" = "1" ] || { rm -rf "$_APT_CACHE" || true; echo "FATAL: mold jq install failed"; exit 1; }
       rm -f "${_APT_CACHE:?}"/*.deb 2>/dev/null || true
       # ── Batch 2: clang (~60 MB) ────────────────────────────────────────
       _apt_ok=0
