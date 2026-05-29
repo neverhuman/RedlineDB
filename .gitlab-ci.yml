@@ -101,9 +101,15 @@ variables:
   CARGO_TERM_COLOR: "always"
   RUST_BACKTRACE: "1"
   REDLINEDB_BENCH_GIT_SHA: "$CI_COMMIT_SHA"
-  # Shallow clone — 50 commits is ample for CI. Full history (0) is slow
-  # and overloads GitLab with large pack transfers when 30+ jobs clone in
-  # parallel, causing 502 errors even with retry:2.
+  # Use fetch (not clone) when the runner slot already has the repo.
+  # On the FIRST run for a slot, GitLab falls back to clone; on all
+  # subsequent runs (including the very next pipeline) it does a fast
+  # incremental git-fetch of only the new commits rather than re-cloning
+  # the full tree. This prevents the 30-simultaneous-clone burst that
+  # overwhelms GitLab with 502 errors when all jobs start at once.
+  GIT_STRATEGY: fetch
+  # Shallow — 50 commits is ample for CI. Limits the pack size for both
+  # the initial clone (new slot) and any forced deepen-on-fetch.
   GIT_DEPTH: "50"
   # Disable runner's auto-wired sccache. Pipeline 437 hung 3 jobs at
   # 0% CPU each — `cargo install cargo-audit --locked` and
@@ -356,6 +362,11 @@ branch-freshness:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   before_script: []
   image: alpine:3.20
+  variables:
+    # Override: needs full git history to check merge-base ancestry.
+    # Our branch is ~250 commits deep; GIT_DEPTH:50 cannot see the fork
+    # point so git merge-base --is-ancestor returns a false negative.
+    GIT_DEPTH: "0"
   script:
     - apk add --no-cache git
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --quiet
@@ -369,6 +380,12 @@ jankurai-audit:
   stage: jankurai
   needs: []
   timeout: 60 minutes
+  variables:
+    # Override: staged-gate.sh calls `git merge-base origin/main HEAD` with
+    # set -euo pipefail. Our branch is ~250 commits deep; GIT_DEPTH:50
+    # shallow clone can't find the merge base, causing git merge-base to exit
+    # non-zero → the gate script dies before its "no merge base" guard.
+    GIT_DEPTH: "0"
   script:
     - cargo install cargo-audit --locked
     - cargo install cargo-deny --locked --version 0.18.0
