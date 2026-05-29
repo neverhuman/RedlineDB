@@ -71,8 +71,12 @@ default:
         else
           rm -rf "${CI_PROJECT_DIR}"
           mkdir -p "$(dirname "${CI_PROJECT_DIR}")"
+          # Clone the source branch so CI_COMMIT_SHA is reachable.
+          # Without --branch the clone defaults to main and the checkout
+          # below fails for commits that only exist on the feature branch.
           flock -x -w 600 /cache/git-clone.lock \
-            git clone --depth="${_gd}" "${CI_REPOSITORY_URL}" "${CI_PROJECT_DIR}"
+            git clone --depth="${_gd}" --branch "${CI_COMMIT_REF_NAME}" \
+              "${CI_REPOSITORY_URL}" "${CI_PROJECT_DIR}"
         fi
         git -C "${CI_PROJECT_DIR}" checkout -f "${CI_COMMIT_SHA}"
         unset _gd
