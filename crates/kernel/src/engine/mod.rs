@@ -174,20 +174,6 @@ impl Default for EngineConfig {
     }
 }
 
-impl EngineConfig {
-    /// Scale `lock_shards` and `heap_lanes` to match `available_parallelism()`.
-    ///
-    /// Called in `Engine::create_inner` for persistent databases only.  Volatile
-    /// (in-memory) databases do not need CPU-scaled shards and skip this call to
-    /// avoid the cgroup walk on every fresh process.
-    pub(crate) fn with_detected_parallelism(mut self) -> Self {
-        let parallelism = crate::cached_available_parallelism();
-        self.lock_shards = (parallelism * 4).max(self.lock_shards);
-        self.heap_lanes = parallelism.max(self.heap_lanes);
-        self
-    }
-}
-
 #[derive(Debug)]
 pub struct Engine {
     config: EngineConfig,
