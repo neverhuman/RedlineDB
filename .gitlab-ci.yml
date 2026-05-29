@@ -475,22 +475,34 @@ jankurai-audit:
   needs: []
   timeout: 60 minutes
   before_script:
-    # Install clang — needed by the jankurai language-test suite which sets
-    # clang as the default cargo linker in its own .cargo/config.toml.
+    # Install clang + mold — needed by the jankurai language-test suite which
+    # sets clang as the cargo linker and -fuse-ld=mold as a rustflag in its
+    # own .cargo/config.toml.  Split into two batches so each fits in the
+    # 64 MB default Docker /dev/shm (mold ~4 MB, clang ~60 MB).
     # Redirect APT's download cache to /dev/shm (a per-container tmpfs) to
-    # avoid the containerd overlayfs snapshotter statfs() false-positive that
-    # reports f_bavail=0 inside the container mount namespace.
+    # avoid the containerd overlayfs snapshotter statfs() false-positive.
     - |
       _APT_CACHE="/dev/shm/apt-dl-$$"
       mkdir -p "$_APT_CACHE"
       _APT_OPTS="-o Acquire::Retries=3 -o Dir::Cache::archives=$_APT_CACHE"
+      apt-get $_APT_OPTS update -q
+      # ── Batch 1: mold (~4 MB) ──────────────────────────────────────────
       _apt_ok=0
       for _apt_n in 1 2 3 4 5; do
-        apt-get $_APT_OPTS update -q && \
+        DEBIAN_FRONTEND=noninteractive \
+          apt-get $_APT_OPTS install -y -q --no-install-recommends mold && \
+          _apt_ok=1 && break
+        echo "apt attempt ${_apt_n}/5 failed (mold); sleeping 10 s …"; sleep 10
+      done
+      [ "${_apt_ok}" = "1" ] || { rm -rf "$_APT_CACHE" || true; echo "FATAL: mold install failed"; exit 1; }
+      rm -f "${_APT_CACHE:?}"/*.deb 2>/dev/null || true
+      # ── Batch 2: clang (~60 MB) ────────────────────────────────────────
+      _apt_ok=0
+      for _apt_n in 1 2 3 4 5; do
         DEBIAN_FRONTEND=noninteractive \
           apt-get $_APT_OPTS install -y -q --no-install-recommends clang && \
           _apt_ok=1 && break
-        echo "apt attempt ${_apt_n}/5 failed; sleeping 10 s …"; sleep 10
+        echo "apt attempt ${_apt_n}/5 failed (clang); sleeping 10 s …"; sleep 10
       done
       rm -rf "$_APT_CACHE" || true
       [ "${_apt_ok}" = "1" ] || { echo "FATAL: clang install failed after 5 retries"; exit 1; }
