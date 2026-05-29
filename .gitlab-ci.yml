@@ -45,15 +45,17 @@ default:
     - |
       if [ "$(id -u)" = "0" ]; then
         # Docker runner — install build deps into this container's own layer.
-        # -o Acquire::Retries=3 retries each HTTP fetch 3 times before failing.
-        # Pre-clean any stale archives (safety for re-used overlay layers).
-        apt-get clean 2>/dev/null || true
-        apt-get -o Acquire::Retries=3 update -q
-        DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y -q --no-install-recommends \
+        # Share the .deb archive cache via the pool volume so 30+ concurrent
+        # containers re-use the same downloaded packages rather than each
+        # downloading them independently (which exhausts per-container overlayfs
+        # space on the host when many run simultaneously).
+        _APT_CACHE=/cache/apt-archives
+        mkdir -p "$_APT_CACHE"
+        _APT_OPTS="-o Dir::Cache::archives=$_APT_CACHE -o Acquire::Retries=3"
+        apt-get $_APT_OPTS update -q
+        DEBIAN_FRONTEND=noninteractive apt-get $_APT_OPTS install -y -q --no-install-recommends \
           build-essential clang mold openssl sqlite3 zlib1g-dev jq
-        # Free the .deb archive cache immediately — each container downloads
-        # ~300-500 MB; 30+ concurrent jobs can exhaust the host overlayfs disk.
-        apt-get clean && rm -rf /var/lib/apt/lists/*
+        unset _APT_CACHE _APT_OPTS
         # Install cargo-nextest if not already present
         if ! command -v cargo-nextest >/dev/null 2>&1; then
           curl -LsSf https://get.nexte.st/0.9.133/linux \
@@ -99,7 +101,10 @@ variables:
   CARGO_TERM_COLOR: "always"
   RUST_BACKTRACE: "1"
   REDLINEDB_BENCH_GIT_SHA: "$CI_COMMIT_SHA"
-  GIT_DEPTH: "0"
+  # Shallow clone — 50 commits is ample for CI. Full history (0) is slow
+  # and overloads GitLab with large pack transfers when 30+ jobs clone in
+  # parallel, causing 502 errors even with retry:2.
+  GIT_DEPTH: "50"
   # Disable runner's auto-wired sccache. Pipeline 437 hung 3 jobs at
   # 0% CPU each — `cargo install cargo-audit --locked` and
   # `cargo build --release --locked` each had a `[sccache] <defunct>`
