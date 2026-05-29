@@ -37,13 +37,18 @@ default:
   image: rust:1.95.0
   tags: [default]
   interruptible: true
+  # Retry up to 2 times to absorb transient GitLab 502 clone errors and
+  # intermittent apt-get network timeouts that hit some containers when many
+  # jobs start simultaneously.
+  retry: 2
   before_script:
     - |
       if [ "$(id -u)" = "0" ]; then
         # Docker runner — install build deps into this container's own layer.
-        apt-get update -qq
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-          build-essential clang mold openssl sqlite3 zlib1g-dev jq 2>/dev/null
+        # -o Acquire::Retries=3 retries each HTTP fetch 3 times before failing.
+        apt-get -o Acquire::Retries=3 update -q
+        DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y -q --no-install-recommends \
+          build-essential clang mold openssl sqlite3 zlib1g-dev jq
         # Install cargo-nextest if not already present
         if ! command -v cargo-nextest >/dev/null 2>&1; then
           curl -LsSf https://get.nexte.st/0.9.133/linux \

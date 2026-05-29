@@ -51,3 +51,7 @@ FUCKIT.md
 
 # Local-only safety-net backups (e.g., backup of stashes during dir moves)
 .scratch/
+
+# Compiled baseline binaries in benchmark-results — these are ELF executables
+# that jankurai cannot read as UTF-8 text. Store raw.jsonl/summary.json only.
+benchmark-results/sqlite-parity/baselines/**/redlinedb-*
