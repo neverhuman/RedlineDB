@@ -99,25 +99,46 @@ default:
         #
         # Fix: redirect APT's download cache to /dev/shm, a per-container
         # tmpfs mount that is NOT part of the overlay mount namespace.  Its
-        # statfs() always reports the true tmpfs capacity (set to 256 MB via
-        # shm_size in runner config), which is far more than the ~62 MB of
-        # archives needed.  The directory is cleaned after install.
+        # statfs() always reports the true tmpfs capacity.  Docker's default
+        # /dev/shm size is 64 MB.  The full package set (including clang/LLVM)
+        # needs ~69 MB total, so we split into two batches, clearing the
+        # download cache between them so each batch fits within 64 MB:
+        #   Batch 1: small utils  (~9 MB  — build-essential mold openssl etc.)
+        #   Batch 2: clang        (~60 MB — clang and LLVM libs)
         _APT_CACHE="/dev/shm/apt-dl-$$"
         mkdir -p "$_APT_CACHE"
         _APT_OPTS="-o Acquire::Retries=3 -o Dir::Cache::archives=$_APT_CACHE"
         apt-get $_APT_OPTS update -q
+        # ── Batch 1: small packages ──────────────────────────────────────────
         _apt_ok=0
         for _apt_n in 1 2 3 4 5; do
           if DEBIAN_FRONTEND=noninteractive \
              apt-get $_APT_OPTS install -y -q --no-install-recommends \
-               build-essential clang mold openssl sqlite3 zlib1g-dev jq; then
+               build-essential mold openssl sqlite3 zlib1g-dev jq; then
             _apt_ok=1; break
           fi
-          echo "apt-get install attempt ${_apt_n}/5 failed; sleeping 10 s …"
+          echo "apt-get install attempt ${_apt_n}/5 failed (batch 1); sleeping 10 s …"
+          sleep 10
+        done
+        if [ "${_apt_ok}" != "1" ]; then
+          rm -rf "$_APT_CACHE" || true
+          echo "FATAL: apt-get exhausted all 5 retries (batch 1)"; exit 1
+        fi
+        # Clear downloaded .debs so /dev/shm has room for the larger clang batch
+        rm -f "${_APT_CACHE:?}"/*.deb 2>/dev/null || true
+        # ── Batch 2: clang (~60 MB, fits in 64 MB /dev/shm after clearing batch 1)
+        _apt_ok=0
+        for _apt_n in 1 2 3 4 5; do
+          if DEBIAN_FRONTEND=noninteractive \
+             apt-get $_APT_OPTS install -y -q --no-install-recommends \
+               clang; then
+            _apt_ok=1; break
+          fi
+          echo "apt-get install attempt ${_apt_n}/5 failed (batch 2); sleeping 10 s …"
           sleep 10
         done
         rm -rf "$_APT_CACHE" || true
-        [ "${_apt_ok}" = "1" ] || { echo "FATAL: apt-get exhausted all 5 retries"; exit 1; }
+        [ "${_apt_ok}" = "1" ] || { echo "FATAL: apt-get exhausted all 5 retries (batch 2)"; exit 1; }
         unset _APT_OPTS _apt_ok _apt_n _APT_CACHE
         # Install cargo-nextest if not already present
         if ! command -v cargo-nextest >/dev/null 2>&1; then
