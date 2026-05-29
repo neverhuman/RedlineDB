@@ -91,27 +91,20 @@ default:
         unset _gd
 
         # ── apt-get build deps ───────────────────────────────────────────────
-        # Share the .deb archive cache via the pool volume so 30+ concurrent
-        # containers re-use the same downloaded packages rather than each
-        # downloading them independently (which exhausts per-container overlayfs
-        # space on the host when many run simultaneously).
-        _APT_CACHE=/cache/apt-archives
-        mkdir -p "$_APT_CACHE"
-        _APT_OPTS="-o Dir::Cache::archives=$_APT_CACHE -o Acquire::Retries=3"
+        # Each container uses its own ephemeral apt archive cache (the default
+        # /var/cache/apt/archives/ inside the overlay fs) rather than the
+        # shared /cache/apt-archives pool.  The shared pool approach caused
+        # "E: You don't have enough free space in /cache/apt-archives/" when
+        # the host filesystem (95% full, 419 GB free) triggered false positives
+        # in APT's statvfs() space-check under concurrent container I/O.
+        # Per-container caches are always fresh, isolated, and automatically
+        # cleaned when the container exits.
+        _APT_OPTS="-o Acquire::Retries=3"
         apt-get $_APT_OPTS update -q
-        # Serialize concurrent apt-get install across ~40 runner slots that all
-        # share /cache. Without this lock every container simultaneously tries to
-        # download 61 MB into /cache/apt-archives/, causing APT's pre-download
-        # statvfs() check to race against partial downloads from other containers
-        # and report "E: You don't have enough free space" even though the host
-        # has 441 GB free. With the lock only one container downloads at a time;
-        # every subsequent container finds the .debs already cached and skips the
-        # network download entirely (completes in ~1 s instead of ~30 s).
-        flock -x -w 600 /cache/apt-ci.lock \
-          env DEBIAN_FRONTEND=noninteractive \
+        DEBIAN_FRONTEND=noninteractive \
           apt-get $_APT_OPTS install -y -q --no-install-recommends \
             build-essential clang mold openssl sqlite3 zlib1g-dev jq
-        unset _APT_CACHE _APT_OPTS
+        unset _APT_OPTS
         # Install cargo-nextest if not already present
         if ! command -v cargo-nextest >/dev/null 2>&1; then
           curl -LsSf https://get.nexte.st/0.9.133/linux \
