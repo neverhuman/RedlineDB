@@ -454,6 +454,38 @@ jankurai-audit:
   stage: jankurai
   needs: []
   timeout: 60 minutes
+  before_script:
+    # Minimal checkout only — jankurai-audit installs its own tools (cargo-audit,
+    # cargo-deny, gitleaks, actionlint, syft, jankurai) via cargo install or
+    # pre-built binary downloads.  The rust:1.92.0 base image provides gcc/cc
+    # for any cargo linking needs.  Skipping the global apt-get install (clang,
+    # mold, sqlite3 …) eliminates the "E: not enough free space in
+    # /var/cache/apt/archives/" overlayfs statfs() false-positive that fires
+    # under heavy concurrent container I/O.
+    - |
+      if [ "$(id -u)" = "0" ]; then
+        _gd="${GIT_DEPTH:-50}"
+        if [ -d "${CI_PROJECT_DIR}/.git" ] && \
+           git -C "${CI_PROJECT_DIR}" remote get-url origin >/dev/null 2>&1; then
+          git -C "${CI_PROJECT_DIR}" remote set-url origin "${CI_REPOSITORY_URL}"
+          git -C "${CI_PROJECT_DIR}" fetch --depth="${_gd}" origin \
+            "+${CI_COMMIT_REF_NAME}:refs/remotes/origin/${CI_COMMIT_REF_NAME}" \
+            2>/dev/null || \
+          git -C "${CI_PROJECT_DIR}" fetch --depth="${_gd}" origin 2>/dev/null || true
+        else
+          _parent="$(dirname "${CI_PROJECT_DIR}")"
+          mkdir -p "${_parent}"
+          cd "${_parent}"
+          rm -rf "${CI_PROJECT_DIR}"
+          flock -x -w 600 /cache/git-clone.lock \
+            git clone --depth="${_gd}" --branch "${CI_COMMIT_REF_NAME}" \
+              "${CI_REPOSITORY_URL}" "${CI_PROJECT_DIR}"
+          cd "${CI_PROJECT_DIR}"
+          unset _parent
+        fi
+        git -C "${CI_PROJECT_DIR}" checkout -f "${CI_COMMIT_SHA}"
+        unset _gd
+      fi
   script:
     - cargo install cargo-audit --locked
     - cargo install cargo-deny --locked --version 0.18.0
