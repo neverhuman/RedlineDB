@@ -69,14 +69,23 @@ default:
             2>/dev/null || \
           git -C "${CI_PROJECT_DIR}" fetch --depth="${_gd}" origin 2>/dev/null || true
         else
+          # Cold slot: CI_PROJECT_DIR has no valid .git.
+          # cd to the parent first so we are NOT inside the directory we
+          # are about to remove — child processes (git, curl) inherit the
+          # cwd, and if cwd is deleted they get "unable to read current
+          # working directory" even though rmdir itself succeeds on Linux.
+          _parent="$(dirname "${CI_PROJECT_DIR}")"
+          mkdir -p "${_parent}"
+          cd "${_parent}"
           rm -rf "${CI_PROJECT_DIR}"
-          mkdir -p "$(dirname "${CI_PROJECT_DIR}")"
           # Clone the source branch so CI_COMMIT_SHA is reachable.
           # Without --branch the clone defaults to main and the checkout
           # below fails for commits that only exist on the feature branch.
           flock -x -w 600 /cache/git-clone.lock \
             git clone --depth="${_gd}" --branch "${CI_COMMIT_REF_NAME}" \
               "${CI_REPOSITORY_URL}" "${CI_PROJECT_DIR}"
+          cd "${CI_PROJECT_DIR}"
+          unset _parent
         fi
         git -C "${CI_PROJECT_DIR}" checkout -f "${CI_COMMIT_SHA}"
         unset _gd
