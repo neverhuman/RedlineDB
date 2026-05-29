@@ -91,17 +91,18 @@ default:
         unset _gd
 
         # ── apt-get build deps ───────────────────────────────────────────────
-        # APT's pre-download space check calls statfs() on the archives
-        # directory.  Under heavy concurrent container I/O the overlayfs
-        # upper-dir stat is skewed and f_bavail is transiently under-reported,
-        # producing "E: not enough free space in /var/cache/apt/archives/"
-        # even though 411 GB are available.
+        # APT's pre-download space check calls statfs() on the archives dir.
+        # Docker's containerd overlayfs snapshotter (io.containerd.snapshotter.v1)
+        # returns a broken f_bavail for ALL paths inside the container's mount
+        # namespace — including bind mounts — causing the false-positive even
+        # with 477 GB available on the host.
         #
-        # Fix: redirect the APT archive cache to a PID-unique directory on
-        # /cache (a host bind-mount, real ext4/xfs filesystem).  Host-side
-        # statfs() reports the correct available space; the overlayfs false-
-        # positive never fires.  The directory is cleaned after the install.
-        _APT_CACHE="/cache/apt-dl-$$-${RANDOM:-0}"
+        # Fix: redirect APT's download cache to /dev/shm, a per-container
+        # tmpfs mount that is NOT part of the overlay mount namespace.  Its
+        # statfs() always reports the true tmpfs capacity (set to 256 MB via
+        # shm_size in runner config), which is far more than the ~62 MB of
+        # archives needed.  The directory is cleaned after install.
+        _APT_CACHE="/dev/shm/apt-dl-$$"
         mkdir -p "$_APT_CACHE"
         _APT_OPTS="-o Acquire::Retries=3 -o Dir::Cache::archives=$_APT_CACHE"
         apt-get $_APT_OPTS update -q
