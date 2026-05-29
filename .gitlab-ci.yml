@@ -40,6 +40,10 @@ default:
     - |
       if [ "$(id -u)" = "0" ]; then
         # docker container — full apt install
+        # apt-get clean first: clears any stale partial downloads or
+        # accumulated archives that can cause "not enough free space"
+        # errors when the overlayfs writable layer has leftover state.
+        apt-get clean
         apt-get update -qq
         apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
         rustup component add rustfmt clippy
