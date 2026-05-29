@@ -373,10 +373,10 @@ branch-freshness:
   before_script: []
   image: alpine:3.20
   variables:
-    # Override: needs full git history to check merge-base ancestry.
-    # Our branch is ~250 commits deep; GIT_DEPTH:50 cannot see the fork
-    # point so git merge-base --is-ancestor returns a false negative.
-    GIT_DEPTH: "0"
+    # Override: needs enough git history to check merge-base ancestry.
+    # Our branch is ~250 commits deep; depth 300 reaches the fork point
+    # without a full unbounded clone that risks 502 on fresh runner slots.
+    GIT_DEPTH: "300"
   script:
     - apk add --no-cache git
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --quiet
@@ -390,12 +390,6 @@ jankurai-audit:
   stage: jankurai
   needs: []
   timeout: 60 minutes
-  variables:
-    # Override: staged-gate.sh calls `git merge-base origin/main HEAD` with
-    # set -euo pipefail. Our branch is ~250 commits deep; GIT_DEPTH:50
-    # shallow clone can't find the merge base, causing git merge-base to exit
-    # non-zero → the gate script dies before its "no merge base" guard.
-    GIT_DEPTH: "0"
   script:
     - cargo install cargo-audit --locked
     - cargo install cargo-deny --locked --version 0.18.0
