@@ -229,8 +229,14 @@ pub fn run() {
     // below has not yet run.  Reading stdin early lets us overlap I/O with
     // the subsequent Clap parse, flag resolution, and DB setup.
     {
-        let is_batch = matches!(raw_args.get(0).map(String::as_str), Some("-batch") | Some("--batch"));
-        let is_bail  = matches!(raw_args.get(1).map(String::as_str), Some("-bail")  | Some("--bail"));
+        let is_batch = matches!(
+            raw_args.get(0).map(String::as_str),
+            Some("-batch") | Some("--batch")
+        );
+        let is_bail = matches!(
+            raw_args.get(1).map(String::as_str),
+            Some("-bail") | Some("--bail")
+        );
         if raw_args.len() == 3 && is_batch && is_bail {
             let mut input = String::new();
             io::stdin().read_to_string(&mut input).unwrap_or_default();
