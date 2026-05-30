@@ -364,7 +364,11 @@ parity:
     # below replaces it), so native fetch is the right strategy.
     GIT_STRATEGY: fetch
   before_script:
-    # All packages pre-installed in redlinedb-ci:1.95.0 — no apt needed.
+    # The global before_script is overridden here to skip the flock-based
+    # git clone (GIT_STRATEGY: fetch handles that) and the heavy apt block.
+    # We still need clang + mold for the Rust link step; rust:1.95.0 ships
+    # neither.  Install only what parity.sh actually needs.
+    - apt-get update -qq && apt-get install -y --no-install-recommends clang mold jq
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
   script:
