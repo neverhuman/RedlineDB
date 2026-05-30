@@ -7,15 +7,15 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1779985630`
-- Started at: `1779985630`
-- Elapsed: `14800` ms
+- Run ID: `1780177839`
+- Started at: `1780177839`
+- Elapsed: `14687` ms
 - Scope: `full`
-- Raw score: `81`
-- Final score: `81`
-- Decision: `advisory`
+- Raw score: `76`
+- Final score: `64`
+- Decision: `fail`
 - Minimum score: `85`
-- Caps applied: `missing-web-e2e-lane, missing-rendered-ux-qa-lane`
+- Caps applied: `future-hostile-dead-language-in-product-code, missing-web-e2e-lane, missing-rendered-ux-qa-lane, git-bad-behavior`
 
 ## Hard Rule Caps
 
@@ -35,7 +35,7 @@
 | `boundary-reclassification-evidence-gap` | 72 | no |
 | `vibe-placeholders-in-product-code` | 68 | no |
 | `fallback-soup-in-product-code` | 70 | no |
-| `future-hostile-dead-language-in-product-code` | 64 | no |
+| `future-hostile-dead-language-in-product-code` | 64 | yes |
 | `severe-duplication-in-product-code` | 70 | no |
 | `generated-zone-mutation-risk` | 76 | no |
 | `direct-db-access-from-wrong-layer` | 66 | no |
@@ -60,7 +60,7 @@
 | `docker-bad-behavior` | 72 | no |
 | `python-bad-behavior` | 72 | no |
 | `ci-bad-behavior` | 70 | no |
-| `git-bad-behavior` | 70 | no |
+| `git-bad-behavior` | 70 | yes |
 | `gittools-bad-behavior` | 70 | no |
 | `release-bad-behavior` | 70 | no |
 | `web-security-bad-behavior` | 68 | no |
@@ -70,15 +70,15 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`124` files=`362`
+- Status: `review` hard=`0` warning=`127` files=`363`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`238` tokens=`744` bytes=`6850`
+- Duplicate volume: lines=`241` tokens=`759` bytes=`6963`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 74 lower-ranked classes
+  - showing the top 50 classes and omitting 77 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
@@ -89,7 +89,7 @@
 | `ExactUnitSameName` | `Warning` | `rust` | 16 | 37 | `crates/sql/src/exec/agg/select.rs:85-101, crates/sql/src/planner/access/projection.rs:153-169` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/cli/src/dot/control.rs:112-114, crates/cli/src/dot/control.rs:116-118, crates/cli/src/dot/control.rs:120-122, crates/cli/src/dot/control.rs:124-126, crates/cli/src/dot/control.rs:137-139, crates/cli/src/dot/control.rs:291-293, crates/cli/src/dot/control.rs:374-376` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 11 | 57 | `crates/sql/src/datetime/format.rs:75-86, crates/sql/src/datetime/modifiers.rs:193-204` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:1788-1789, crates/sql/src/parser.rs:1893-1894, crates/sql/src/parser.rs:1992-1993, crates/sql/src/parser.rs:2468-2469, crates/sql/src/parser.rs:2620-2621, crates/sql/src/parser.rs:2663-2664, crates/sql/src/parser.rs:2808-2809, crates/sql/src/parser.rs:3118-3119, crates/sql/src/parser.rs:3166-3167, crates/sql/src/parser.rs:3396-3397, crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:171-172` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:515-516, crates/sql/src/parser.rs:1821-1822, crates/sql/src/parser.rs:1926-1927, crates/sql/src/parser.rs:2025-2026, crates/sql/src/parser.rs:2501-2502, crates/sql/src/parser.rs:2653-2654, crates/sql/src/parser.rs:2696-2697, crates/sql/src/parser.rs:2841-2842, crates/sql/src/parser.rs:3151-3152, crates/sql/src/parser.rs:3199-3200, crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:171-172` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174, crates/redlinedb-sqlx/src/bridge/runtime.rs:390-391, crates/redlinedb-sqlx/src/bridge/runtime.rs:487-488, crates/redlinedb/src/value_conv.rs:261-262, crates/sql/src/exec/expr/coerce/binary.rs:396-397, crates/sql/src/exec/expr/coerce/binary.rs:403-404, crates/sql/src/exec/expr/coerce/binary.rs:512-513, crates/sql/src/exec/expr/json_dispatch.rs:765-766, crates/sql/src/exec/json_tv.rs:241-242` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/value.rs:43-44, crates/redlinedb/src/value.rs:57-58, crates/redlinedb/src/value.rs:64-65, crates/redlinedb/src/value.rs:71-72, crates/redlinedb/src/value.rs:78-79, crates/sql/src/exec/expr/scalar/row/model.rs:67-68, crates/sql/src/exec/expr/scalar/row/model.rs:81-82, crates/sql/src/exec/expr/scalar/row/model.rs:92-93` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 7 | 12 | `crates/kernel/src/engine/page_heap/policy.rs:78-85, crates/kernel/src/engine/page_heap/policy.rs:108-115` | `same-name semantic unit copied across multiple files` |
@@ -98,6 +98,7 @@
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 12 | `crates/sql/src/exec/policy.rs:32-38, crates/sql/src/exec/policy.rs:57-63` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:313-313, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:214-214, crates/kernel/src/integrity/page_csum.rs:107-107, crates/redlinedb-sqlx/src/bridge/options.rs:253-254, crates/redlinedb-sqlx/src/bridge/runtime.rs:127-128, crates/sql/src/exec/merge.rs:278-278` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:629-630, crates/sql/src/parser.rs:810-811, crates/sql/src/parser.rs:898-899, crates/sql/src/parser.rs:1107-1108, crates/sql/src/parser.rs:3055-3056, crates/sql/src/parser.rs:3119-3120` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 13 | `crates/sql/src/exec/agg/select.rs:103-108, crates/sql/src/planner/access/projection.rs:171-176` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 12 | `crates/cli/src/render.rs:979-984, crates/cli/src/render.rs:1003-1008` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 10 | `crates/cli/src/render.rs:459-464, crates/cli/src/render.rs:549-554` | `same body appears under different names across files` |
@@ -105,14 +106,13 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 12 | `crates/sql/src/exec/expr/json_dispatch.rs:62-66, crates/sql/src/exec/expr/json_dispatch.rs:822-826` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/format/bytes.rs:44-46, crates/kernel/src/format/bytes.rs:49-51, crates/kernel/src/format/bytes.rs:54-56` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 9 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:68-72, crates/sql/src/exec/expr/scalar/row/lookup.rs:137-141` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:147-149, crates/kernel/src/storage/tx_status_checkpoint.rs:147-149` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:156-158, crates/kernel/src/storage/tx_status_checkpoint.rs:156-158` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 5 | `crates/redlinedb/src/connection.rs:154-158, crates/redlinedb/src/connection.rs:169-173` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111, crates/kernel/src/storage/numa.rs:47-49` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 16 | `crates/sql/src/exec/expr/scalar/value.rs:556-559, crates/sql/src/exec/expr/scalar/value.rs:710-713` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:1239-1240, crates/sql/src/parser.rs:1262-1263, crates/sql/src/parser.rs:3022-3023, crates/sql/src/parser.rs:3086-3087` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/sql/src/rql.rs:1634-1635, crates/sql/src/rql.rs:1719-1720, crates/sql/src/rql.rs:1856-1857, crates/sql/src/rql.rs:1880-1881` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/sql/src/rql.rs:1334-1335, crates/sql/src/rql.rs:1419-1420, crates/sql/src/rql.rs:1558-1559, crates/sql/src/rql.rs:1582-1583` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 7 | `crates/sql/src/exec/expr/scalar/value.rs:321-324, crates/sql/src/exec/expr/scalar/value.rs:369-372` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 6 | `crates/sql/src/parser.rs:1304-1307, crates/sql/src/parser.rs:1332-1335` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 6 | `crates/sql/src/parser.rs:1330-1333, crates/sql/src/parser.rs:1351-1354` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/sql/src/exec/expr/program.rs:970-971, crates/sql/src/exec/expr/program.rs:1027-1028, crates/sql/src/exec/expr/program.rs:1042-1043, crates/sql/src/exec/expr/program.rs:1096-1097` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/sqlite_parity/engine.rs:172-173, crates/redlinedb-sqlx/src/driver.rs:216-217, crates/sql/src/exec/expr/program.rs:372-373, crates/sql/src/exec/morsel/hash_agg.rs:301-302` | `same body appears under different names across files` |
@@ -124,6 +124,7 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/redlinedb-sqlx/src/bridge/options.rs:249-250, crates/redlinedb-sqlx/src/bridge/options.rs:255-256, crates/redlinedb-sqlx/src/bridge/runtime.rs:129-130` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/exec/morsel/arena.rs:75-76, crates/sql/src/exec/morsel/arena.rs:91-92, crates/sql/src/exec/morsel/column.rs:74-75` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/exec/expr/json_dispatch.rs:623-624, crates/sql/src/exec/expr/json_dispatch.rs:644-645, crates/sql/src/exec/expr/json_dispatch.rs:653-654` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:593-594, crates/sql/src/parser.rs:684-685, crates/sql/src/parser.rs:903-904` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/redlinedb/src/connection.rs:303-304, crates/redlinedb/src/connection.rs:312-313, crates/redlinedb/src/connection.rs:322-323` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/json/path_bytecode.rs:138-140, crates/sql/src/json/jsonb.rs:1062-1064` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/redlinedb/src/connection.rs:52-53, crates/redlinedb/src/connection.rs:182-183, crates/redlinedb/src/connection.rs:188-189` | `same body appears under different names across files` |
@@ -131,7 +132,6 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/sql/src/exec/expr/json_dispatch.rs:914-915, crates/sql/src/exec/expr/json_dispatch.rs:935-936, crates/sql/src/exec/table_valued.rs:120-121` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:268-270, crates/redlinedb/src/pool.rs:199-201` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 2 | 3 | `crates/redlinedb-tokio/src/lib.rs:263-265, crates/redlinedb/src/pool.rs:204-206` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/sqlite_parity/report_gen/io.rs:209-210, crates/cli/src/dot/control.rs:558-559, crates/cli/src/render.rs:1120-1121` | `same body appears under different names across files` |
 
 ## Dimensions
 
@@ -141,7 +141,7 @@
 | Contract and boundary integrity | 13 | 88 | 11.44 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 68 | 8.16 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 45 | 5.40 | largest authored code file: crates/sql/src/parser.rs (5237 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 6 | 0.72 | largest authored code file: crates/sql/src/parser.rs (5270 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 85 | 6.80 | database surface present; migration directory present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
 | Context economy and agent instructions | 7 | 91 | 6.37 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -205,14 +205,6 @@
 | `release-readiness` | `release` | `auto` | `artifact_verified` | `manual launch checklist` | `agent/repo-score.json, agent/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `artifact_verified` | `manual spend review` | `agent/repo-score.json, agent/repo-score.md` |
 
-## Security evidence (ingested)
-
-- Source: `target/jankurai/security/evidence.json`
-- Envelope exit code: `0` · elapsed: `53839` ms · strict: `false`
-- Commands — ran: `1`, skipped: `0`, failed: `0`
-- Generated at: `1779631279`
-- Git HEAD (envelope): `37342ced9d7a1b9dd18891e12f2a28b6963cae53`
-
 ## Boundary Reclassifications
 
 No audited runtime boundary reclassifications declared.
@@ -224,11 +216,11 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
    Route: TLR `Entropy`, lane `fast`, owner `tools`
    Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 45 below the standard floor of 85
+   Reason: `Code shape and semantic surface` scored 6 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:07dfa22c0d8e4e44ddaca2d6607727e9413c20918a90bc35739369dd74b82ce0`
-   Evidence: largest authored code file: crates/sql/src/parser.rs (5237 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
+   Fingerprint: `sha256:d3b5ded8cb681a2f72fecb8101c45f8e3e2b62474e9d2f546ba590febac25aa7`
+   Evidence: largest authored code file: crates/sql/src/parser.rs (5270 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
 2. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
@@ -269,6 +261,49 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just ux-qa`
    Fingerprint: `sha256:571d35c2e730a393b782bac14825b197c0543920bb21967079d264ac602ea5b1`
    Evidence: rendered UX QA lane missing
+6. `high` `agent` `ci-fast-push.sh:40`
+   Rule: `HLT-035-GIT-BAD-BEHAVIOR`
+   Check: `HLT-035-GIT-BAD-BEHAVIOR:agent` `hard` confidence `0.95`
+   Route: TLR `Context/setup`, lane `audit`, owner `agent`
+   Docs: `docs/testing.md`
+   Matched term: `git.stage.unbounded`
+   Reason: automation commits broad untracked state or bypasses verification
+   Fix: enumerate the exact paths and keep verification on
+   Rerun: `just score`
+   Fingerprint: `sha256:0c6fc6f3d7438543a4805cbed082184d33823145ecd98f46d8083f5edfc213b0`
+   Evidence: detector=git.stage.unbounded, path=ci-fast-push.sh, line=40, proof_window=None, snippet=git add -A
+7. `high` `agent` `ci-fast-push.sh:47`
+   Rule: `HLT-035-GIT-BAD-BEHAVIOR`
+   Check: `HLT-035-GIT-BAD-BEHAVIOR:agent` `hard` confidence `0.95`
+   Route: TLR `Context/setup`, lane `audit`, owner `agent`
+   Docs: `docs/testing.md`
+   Matched term: `git.stage.unbounded`
+   Reason: automation commits broad untracked state or bypasses verification
+   Fix: enumerate the exact paths and keep verification on
+   Rerun: `just score`
+   Fingerprint: `sha256:a6115d4161a4f09cdef2be567a1298062c07015fbb0c1013afff1ec07dc4e427`
+   Evidence: detector=git.stage.unbounded, path=ci-fast-push.sh, line=47, proof_window=None, snippet=git -c user.name="$git_author_name" -c user.email="$git_author_email" commit --no-verify -m "$message"
+8. `high` `agent` `ci-fast-push.sh:242`
+   Rule: `HLT-035-GIT-BAD-BEHAVIOR`
+   Check: `HLT-035-GIT-BAD-BEHAVIOR:agent` `hard` confidence `0.95`
+   Route: TLR `Context/setup`, lane `audit`, owner `agent`
+   Docs: `docs/testing.md`
+   Matched term: `git.remote.force-mutation`
+   Reason: remote mutation can overwrite shared branch history
+   Fix: replace the force push with a reviewed fast-forward or a dedicated release branch
+   Rerun: `just score`
+   Fingerprint: `sha256:0ed3e9017e83e1e27f71d5f125d21fbe573a3eab3e92ded7b017636706d900a0`
+   Evidence: detector=git.remote.force-mutation, path=ci-fast-push.sh, line=242, proof_window=None, snippet=run git push --force-with-lease=main:"$github_main_sha" github HEAD:main
+9. `high` `vibe` `crates/sql/src/planner/access_path.rs:66`
+   Rule: `HLT-001-DEAD-MARKER`
+   Check: `HLT-001-DEAD-MARKER:vibe` `hard` confidence `0.88`
+   Route: TLR `Entropy`, lane `fast`, owner `tools`
+   Docs: `docs/audit-rubric.md#future-hostile-language-rule`
+   Reason: future-hostile/dead-language term `legacy` appears in product/runtime code
+   Fix: remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Rerun: `just fast`
+   Fingerprint: `sha256:1e8011cfd520048e005a67ef2089e5f7d8a1df8fd0c96bcf1266b3f8b4074bac`
+   Evidence: crates/sql/src/planner/access_path.rs:66, future-hostile/dead-language term `legacy` appears
 
 ## Policy
 
@@ -282,9 +317,15 @@ No audited runtime boundary reclassifications declared.
    Route: `Verification`/`fast`
 2. `medium` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - route each owned path to a deterministic proof command and make the lane executable in CI
    Route: `Verification`/`fast`
-3. `high` `HLT-013-RENDERED-UX-GAP` `apps/web` - add Playwright e2e tests for critical user flows and wire them into the fast or CI proof map
+3. `high` `HLT-035-GIT-BAD-BEHAVIOR` `ci-fast-push.sh` - enumerate the exact paths and keep verification on
+   Route: `Context/setup`/`audit`
+4. `high` `HLT-035-GIT-BAD-BEHAVIOR` `ci-fast-push.sh` - replace the force push with a reviewed fast-forward or a dedicated release branch
+   Route: `Context/setup`/`audit`
+5. `high` `HLT-013-RENDERED-UX-GAP` `apps/web` - add Playwright e2e tests for critical user flows and wire them into the fast or CI proof map
    Route: `Verification and rendered UX`/`web`
-4. `high` `HLT-013-RENDERED-UX-GAP` `apps/web` - add Storybook state coverage, Playwright screenshots, visual review or `@jankurai/ux-qa`, accessibility scans, CLS checks, generated mocks, and design tokens
+6. `high` `HLT-013-RENDERED-UX-GAP` `apps/web` - add Storybook state coverage, Playwright screenshots, visual review or `@jankurai/ux-qa`, accessibility scans, CLS checks, generated mocks, and design tokens
    Route: `Verification and rendered UX`/`web`
-5. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+7. `high` `HLT-001-DEAD-MARKER` `crates/sql/src/planner/access_path.rs` - remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context
+   Route: `Entropy`/`fast`
+8. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`

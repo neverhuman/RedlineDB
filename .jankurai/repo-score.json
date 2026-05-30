@@ -1,10 +1,10 @@
 {
-  "report_fingerprint": "sha256:c0865d01a6582249a5804c5fd30334d2d4cdfd582a17eafd8e814b6c7c3c1ef7",
-  "input_fingerprint": "sha256:58a435ed1b17614198ddd0c9f39b161854cf9c9d049d9e2a45a5c1ed72e2b288",
+  "report_fingerprint": "sha256:f82f1f5d5838875dc7d2d66db2d49e5e0dabeaa26d4255bd74e42a79351510e9",
+  "input_fingerprint": "sha256:bed29f837a697e1a4ce0a005c0c87ad3c3881d2e37d357e2c7a061c47951d797",
   "policy_fingerprint": "sha256:7d659eb917c4ef7187555d29d1c4b86c7e68faadc52ec5bfa54d8b559ec2f965",
   "manifest_fingerprints": {},
   "dirty_worktree": true,
-  "generated_at": "1779985630",
+  "generated_at": "1780177839",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -18,39 +18,51 @@
   "conformance_decision": "block",
   "conformance_blockers": [
     "HLT-013-RENDERED-UX-GAP on apps/web",
-    "HLT-013-RENDERED-UX-GAP on apps/web"
+    "HLT-013-RENDERED-UX-GAP on apps/web",
+    "HLT-035-GIT-BAD-BEHAVIOR on ci-fast-push.sh",
+    "HLT-035-GIT-BAD-BEHAVIOR on ci-fast-push.sh",
+    "HLT-035-GIT-BAD-BEHAVIOR on ci-fast-push.sh",
+    "HLT-001-DEAD-MARKER on crates/sql/src/planner/access_path.rs"
   ],
   "repo": ".",
-  "run_id": "1779985630",
-  "started_at": "1779985630",
-  "elapsed_ms": 14800,
+  "run_id": "1780177839",
+  "started_at": "1780177839",
+  "elapsed_ms": 14687,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 81,
-  "raw_score": 81,
+  "score": 64,
+  "raw_score": 76,
   "decision": {
-    "status": "advisory",
+    "status": "fail",
     "minimum_score": 85,
-    "passed": true,
-    "hard_findings": 2,
+    "passed": false,
+    "hard_findings": 6,
     "soft_findings": 3,
     "ratchet": {
       "baseline_score": 81,
       "allowed_drop": 0,
       "passed": false,
-      "score_delta": 0,
-      "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "new_caps": [],
-      "new_hard_findings": [],
+      "score_delta": -17,
+      "baseline_report_fingerprint": "sha256:c0865d01a6582249a5804c5fd30334d2d4cdfd582a17eafd8e814b6c7c3c1ef7",
+      "baseline_input_fingerprint": "sha256:58a435ed1b17614198ddd0c9f39b161854cf9c9d049d9e2a45a5c1ed72e2b288",
+      "baseline_policy_fingerprint": "sha256:7d659eb917c4ef7187555d29d1c4b86c7e68faadc52ec5bfa54d8b559ec2f965",
+      "new_caps": [
+        "future-hostile-dead-language-in-product-code",
+        "git-bad-behavior"
+      ],
+      "new_hard_findings": [
+        "sha256:0c6fc6f3d7438543a4805cbed082184d33823145ecd98f46d8083f5edfc213b0",
+        "sha256:0ed3e9017e83e1e27f71d5f125d21fbe573a3eab3e92ded7b017636706d900a0",
+        "sha256:1e8011cfd520048e005a67ef2089e5f7d8a1df8fd0c96bcf1266b3f8b4074bac",
+        "sha256:a6115d4161a4f09cdef2be567a1298062c07015fbb0c1013afff1ec07dc4e427"
+      ],
       "policy_changed": false
     }
   },
   "git": {
-    "head": "d7f3ac9",
+    "head": "62aff64",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -67,7 +79,7 @@
       "medium",
       "low"
     ],
-    "mode": "advisory",
+    "mode": "ratchet",
     "standard_version": "0.9.0",
     "auditor_version": "1.5.1",
     "schema_version": "1.9.0",
@@ -75,8 +87,10 @@
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
   },
   "caps_applied": [
+    "future-hostile-dead-language-in-product-code",
     "missing-web-e2e-lane",
-    "missing-rendered-ux-qa-lane"
+    "missing-rendered-ux-qa-lane",
+    "git-bad-behavior"
   ],
   "hard_rules": [
     {
@@ -323,14 +337,11 @@
         "test runner present in automation surface",
         "GitHub workflow files present",
         "jankurai audit lane found in CI",
-        "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=113 missing=113 high_or_critical_missing=33 verdict=review"
+        "Rust property/integration tests present or no Rust surface"
       ],
       "notes": [
         "web surface lacks Playwright/Cypress e2e lane",
-        "web surface lacks layered rendered UX QA",
-        "proofbind reports 113 unresolved obligation(s)",
-        "proofbind reports 33 missing high/critical semantic proof obligation(s)"
+        "web surface lacks layered rendered UX QA"
       ]
     },
     {
@@ -346,9 +357,9 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 2550",
+        "rust bad-behavior advisory signals: 2567",
         "ci bad-behavior advisory signals: 3",
-        "git bad-behavior advisory signals: 2",
+        "git bad-behavior hard findings: 3",
         "secret scanning command is operational"
       ],
       "notes": []
@@ -356,20 +367,22 @@
     {
       "name": "Code shape and semantic surface",
       "weight": 12,
-      "score": 45,
-      "weighted_points": 5.4,
+      "score": 6,
+      "weighted_points": 0.72,
       "evidence": [
-        "largest authored code file: crates/sql/src/parser.rs (5237 LOC)",
+        "largest authored code file: crates/sql/src/parser.rs (5270 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 124 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 2550",
+        "copy-code advisory classes found: 127 (advisory only, no score impact)",
+        "future-hostile/dead-language marker found",
+        "rust bad-behavior advisory signals: 2567",
         "ci bad-behavior advisory signals: 3",
-        "git bad-behavior advisory signals: 2",
-        "no hard bad-behavior findings across detector-backed language families"
+        "git bad-behavior hard findings: 3"
       ],
-      "notes": []
+      "notes": [
+        "product/runtime code contains future-hostile or dead-language terms"
+      ]
     },
     {
       "name": "Data truth and workflow safety",
@@ -1044,30 +1057,14 @@
       "ux-qa"
     ]
   },
-  "security_evidence": {
-    "artifact": {
-      "path": "target/jankurai/security/evidence.json",
-      "envelope_exit_code": 0,
-      "elapsed_ms": 53839,
-      "wrapper_strict": false,
-      "profile": "local",
-      "commands_ran": 1,
-      "commands_skipped": 0,
-      "commands_failed": 0,
-      "required_commands_skipped": 0,
-      "required_commands_failed": 0,
-      "blocking_commands": [],
-      "generated_at": "1779631279",
-      "git_head": "37342ced9d7a1b9dd18891e12f2a28b6963cae53"
-    }
-  },
+  "security_evidence": {},
   "boundaries": {
     "reclassifications": []
   },
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-05-28T16:26:55.985244085+00:00",
+    "generated_at": "2026-05-30T21:50:25.459837202+00:00",
     "repo": ".",
     "auditor_version": "1.5.1",
     "status": "review",
@@ -1105,20 +1102,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 1203,
-      "files_considered": 362,
-      "active_files": 362,
+      "files_scanned": 1198,
+      "files_considered": 363,
+      "active_files": 363,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 124,
+      "warning_classes": 127,
       "hard_instances": 0,
-      "warning_instances": 329,
-      "duplicate_lines": 238,
-      "duplicate_tokens": 744,
-      "duplicate_bytes": 6850,
-      "total_redundant_lines": 411,
-      "total_redundant_tokens": 1142,
-      "total_redundant_bytes": 11142
+      "warning_instances": 339,
+      "duplicate_lines": 241,
+      "duplicate_tokens": 759,
+      "duplicate_bytes": 6963,
+      "total_redundant_lines": 418,
+      "total_redundant_tokens": 1170,
+      "total_redundant_bytes": 11377
     },
     "classes": [
       {
@@ -1554,72 +1551,72 @@
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 1788,
-            "end_line": 1789,
+            "start_line": 515,
+            "end_line": 516,
+            "unit_name": "split_top_level_statements"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1821,
+            "end_line": 1822,
             "unit_name": "strip_create_index_using_clause"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 1893,
-            "end_line": 1894,
+            "start_line": 1926,
+            "end_line": 1927,
             "unit_name": "has_jsonb_question_op"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 1992,
-            "end_line": 1993,
+            "start_line": 2025,
+            "end_line": 2026,
             "unit_name": "rewrite_jsonb_question_ops"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2468,
-            "end_line": 2469,
+            "start_line": 2501,
+            "end_line": 2502,
             "unit_name": "rewrite_pg_array_literal"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2620,
-            "end_line": 2621,
+            "start_line": 2653,
+            "end_line": 2654,
             "unit_name": "rewrite_pg_bytea_literal"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2663,
-            "end_line": 2664,
+            "start_line": 2696,
+            "end_line": 2697,
             "unit_name": "rewrite_pg_array_overlap"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2808,
-            "end_line": 2809,
+            "start_line": 2841,
+            "end_line": 2842,
             "unit_name": "rewrite_postfix_index"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 3118,
-            "end_line": 3119,
+            "start_line": 3151,
+            "end_line": 3152,
             "unit_name": "rewrite_pg_interval_literal"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 3166,
-            "end_line": 3167,
+            "start_line": 3199,
+            "end_line": 3200,
             "unit_name": "rewrite_date_arith_with_modifier"
-          },
-          {
-            "path": "crates/sql/src/parser.rs",
-            "language": "rust",
-            "start_line": 3396,
-            "end_line": 3397,
-            "unit_name": "rewrite_at_time_zone"
           },
           {
             "path": "crates/sql/src/parser/split.rs",
@@ -2097,6 +2094,69 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-39f51bfba53487ca",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 41,
+        "instance_count": 6,
+        "total_redundant_lines": 5,
+        "total_redundant_tokens": 20,
+        "total_redundant_bytes": 205,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "2cdac3dbeece40b0",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 629,
+            "end_line": 630,
+            "unit_name": "wrap_insert_select_with_upsert"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 810,
+            "end_line": 811,
+            "unit_name": "collect_on_conflict_segments"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 898,
+            "end_line": 899,
+            "unit_name": "contains_on_conflict_clause"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 1107,
+            "end_line": 1108,
+            "unit_name": "has_window_exclude"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 3055,
+            "end_line": 3056,
+            "unit_name": "rewrite_array_length_function"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 3119,
+            "end_line": 3120,
+            "unit_name": "rewrite_array_agg_function"
+          }
+        ]
+      },
+      {
         "id": "copy-code-unit-rust-ce971d3e603f01c8",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -2379,15 +2439,15 @@
           {
             "path": "crates/kernel/src/storage/control.rs",
             "language": "rust",
-            "start_line": 147,
-            "end_line": 149,
+            "start_line": 156,
+            "end_line": 158,
             "unit_name": "checksum_control_bytes"
           },
           {
             "path": "crates/kernel/src/storage/tx_status_checkpoint.rs",
             "language": "rust",
-            "start_line": 147,
-            "end_line": 149,
+            "start_line": 156,
+            "end_line": 158,
             "unit_name": "checksum_tx_status_bytes"
           }
         ]
@@ -2505,55 +2565,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-39f51bfba53487ca",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 4,
-        "duplicate_bytes": 41,
-        "instance_count": 4,
-        "total_redundant_lines": 3,
-        "total_redundant_tokens": 12,
-        "total_redundant_bytes": 123,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "307575d316e067aa",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/sql/src/parser.rs",
-            "language": "rust",
-            "start_line": 1239,
-            "end_line": 1240,
-            "unit_name": "extract_named_window_spec"
-          },
-          {
-            "path": "crates/sql/src/parser.rs",
-            "language": "rust",
-            "start_line": 1262,
-            "end_line": 1263,
-            "unit_name": "strip_window_clause"
-          },
-          {
-            "path": "crates/sql/src/parser.rs",
-            "language": "rust",
-            "start_line": 3022,
-            "end_line": 3023,
-            "unit_name": "rewrite_array_length_function"
-          },
-          {
-            "path": "crates/sql/src/parser.rs",
-            "language": "rust",
-            "start_line": 3086,
-            "end_line": 3087,
-            "unit_name": "rewrite_array_agg_function"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-30e002fd23793617",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -2575,29 +2586,29 @@
           {
             "path": "crates/sql/src/rql.rs",
             "language": "rust",
-            "start_line": 1634,
-            "end_line": 1635,
+            "start_line": 1334,
+            "end_line": 1335,
             "unit_name": "rql_create_insert_select_lowers_without_sql_parse"
           },
           {
             "path": "crates/sql/src/rql.rs",
             "language": "rust",
-            "start_line": 1719,
-            "end_line": 1720,
+            "start_line": 1419,
+            "end_line": 1420,
             "unit_name": "rql_native_select_matches_sql_ast_path_for_filter_order_limit"
           },
           {
             "path": "crates/sql/src/rql.rs",
             "language": "rust",
-            "start_line": 1856,
-            "end_line": 1857,
+            "start_line": 1558,
+            "end_line": 1559,
             "unit_name": "rql_native_select_template_cache_is_gate_separated"
           },
           {
             "path": "crates/sql/src/rql.rs",
             "language": "rust",
-            "start_line": 1880,
-            "end_line": 1881,
+            "start_line": 1582,
+            "end_line": 1583,
             "unit_name": "rql_template_cache_reuses_only_when_enabled"
           }
         ]
@@ -2659,15 +2670,15 @@
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 1304,
-            "end_line": 1307,
+            "start_line": 1330,
+            "end_line": 1333,
             "unit_name": "parse_detach_template"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 1332,
-            "end_line": 1335,
+            "start_line": 1351,
+            "end_line": 1354,
             "unit_name": "parse_attach_template"
           }
         ]
@@ -3137,6 +3148,48 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-7db3bee684d709bc",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 21,
+        "instance_count": 3,
+        "total_redundant_lines": 2,
+        "total_redundant_tokens": 8,
+        "total_redundant_bytes": 42,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "fcc9cebff34a45f6",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 593,
+            "end_line": 594,
+            "unit_name": "find_top_level_keyword"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 684,
+            "end_line": 685,
+            "unit_name": "find_top_level_on_conflict"
+          },
+          {
+            "path": "crates/sql/src/parser.rs",
+            "language": "rust",
+            "start_line": 903,
+            "end_line": 904,
+            "unit_name": "find_on_conflict_keyword"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-799befce78daf466",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -3410,55 +3463,13 @@
             "unit_name": "database"
           }
         ]
-      },
-      {
-        "id": "copy-code-body-rust-ab80b0029566ed53",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 1,
-        "duplicate_bytes": 9,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 2,
-        "total_redundant_bytes": 18,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "75a6814c640e7ff4",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/bench/src/sqlite_parity/report_gen/io.rs",
-            "language": "rust",
-            "start_line": 209,
-            "end_line": 210,
-            "unit_name": "normalize_git_sha"
-          },
-          {
-            "path": "crates/cli/src/dot/control.rs",
-            "language": "rust",
-            "start_line": 558,
-            "end_line": 559,
-            "unit_name": "escape"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 1120,
-            "end_line": 1121,
-            "unit_name": "escape_html"
-          }
-        ]
       }
     ],
     "notes": [
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 74 lower-ranked classes"
+      "showing the top 50 classes and omitting 77 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3741,10 +3752,10 @@
       "severity": "medium",
       "category": "shape",
       "path": ".",
-      "problem": "`Code shape and semantic surface` scored 45 below the standard floor of 85",
+      "problem": "`Code shape and semantic surface` scored 6 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/parser.rs (5237 LOC)",
+        "largest authored code file: crates/sql/src/parser.rs (5270 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC"
@@ -3754,7 +3765,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:07dfa22c0d8e4e44ddaca2d6607727e9413c20918a90bc35739369dd74b82ce0",
+      "fingerprint": "sha256:d3b5ded8cb681a2f72fecb8101c45f8e3e2b62474e9d2f546ba590febac25aa7",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3850,6 +3861,113 @@
       "lane": "web",
       "docs_url": "docs/testing.md",
       "owner": "tools"
+    },
+    {
+      "severity": "high",
+      "category": "agent",
+      "path": "ci-fast-push.sh",
+      "problem": "script stages the entire tree or skips verification",
+      "agent_fix": "enumerate the exact paths and keep verification on",
+      "evidence": [
+        "detector=git.stage.unbounded",
+        "path=ci-fast-push.sh",
+        "line=40",
+        "proof_window=None",
+        "snippet=git add -A"
+      ],
+      "check_id": "HLT-035-GIT-BAD-BEHAVIOR:agent",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just score",
+      "fingerprint": "sha256:0c6fc6f3d7438543a4805cbed082184d33823145ecd98f46d8083f5edfc213b0",
+      "rule_id": "HLT-035-GIT-BAD-BEHAVIOR",
+      "tlr": "Context/setup",
+      "lane": "audit",
+      "docs_url": "docs/testing.md",
+      "owner": "agent",
+      "line": 40,
+      "matched_term": "git.stage.unbounded",
+      "reason": "automation commits broad untracked state or bypasses verification"
+    },
+    {
+      "severity": "high",
+      "category": "agent",
+      "path": "ci-fast-push.sh",
+      "problem": "script stages the entire tree or skips verification",
+      "agent_fix": "enumerate the exact paths and keep verification on",
+      "evidence": [
+        "detector=git.stage.unbounded",
+        "path=ci-fast-push.sh",
+        "line=47",
+        "proof_window=None",
+        "snippet=git -c user.name=\"$git_author_name\" -c user.email=\"$git_author_email\" commit --no-verify -m \"$message\""
+      ],
+      "check_id": "HLT-035-GIT-BAD-BEHAVIOR:agent",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just score",
+      "fingerprint": "sha256:a6115d4161a4f09cdef2be567a1298062c07015fbb0c1013afff1ec07dc4e427",
+      "rule_id": "HLT-035-GIT-BAD-BEHAVIOR",
+      "tlr": "Context/setup",
+      "lane": "audit",
+      "docs_url": "docs/testing.md",
+      "owner": "agent",
+      "line": 47,
+      "matched_term": "git.stage.unbounded",
+      "reason": "automation commits broad untracked state or bypasses verification"
+    },
+    {
+      "severity": "high",
+      "category": "agent",
+      "path": "ci-fast-push.sh",
+      "problem": "script force-pushes or mirrors refs to the remote",
+      "agent_fix": "replace the force push with a reviewed fast-forward or a dedicated release branch",
+      "evidence": [
+        "detector=git.remote.force-mutation",
+        "path=ci-fast-push.sh",
+        "line=242",
+        "proof_window=None",
+        "snippet=run git push --force-with-lease=main:\"$github_main_sha\" github HEAD:main"
+      ],
+      "check_id": "HLT-035-GIT-BAD-BEHAVIOR:agent",
+      "hardness": "hard",
+      "confidence": 0.95,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just score",
+      "fingerprint": "sha256:0ed3e9017e83e1e27f71d5f125d21fbe573a3eab3e92ded7b017636706d900a0",
+      "rule_id": "HLT-035-GIT-BAD-BEHAVIOR",
+      "tlr": "Context/setup",
+      "lane": "audit",
+      "docs_url": "docs/testing.md",
+      "owner": "agent",
+      "line": 242,
+      "matched_term": "git.remote.force-mutation",
+      "reason": "remote mutation can overwrite shared branch history"
+    },
+    {
+      "severity": "high",
+      "category": "vibe",
+      "path": "crates/sql/src/planner/access_path.rs",
+      "problem": "future-hostile/dead-language term `legacy` appears in product/runtime code",
+      "agent_fix": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "evidence": [
+        "crates/sql/src/planner/access_path.rs:66",
+        "future-hostile/dead-language term `legacy` appears"
+      ],
+      "check_id": "HLT-001-DEAD-MARKER:vibe",
+      "hardness": "hard",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:1e8011cfd520048e005a67ef2089e5f7d8a1df8fd0c96bcf1266b3f8b4074bac",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "docs_url": "docs/audit-rubric.md#future-hostile-language-rule",
+      "owner": "tools",
+      "line": 66
     }
   ],
   "agent_fix_queue": [
@@ -3874,6 +3992,26 @@
       "why": "`Proof lanes and test routing` scored 68 below the standard floor of 85"
     },
     {
+      "path": "ci-fast-push.sh",
+      "priority": "high",
+      "rule_id": "HLT-035-GIT-BAD-BEHAVIOR",
+      "tlr": "Context/setup",
+      "lane": "audit",
+      "owner": "agent",
+      "task": "enumerate the exact paths and keep verification on",
+      "why": "script stages the entire tree or skips verification"
+    },
+    {
+      "path": "ci-fast-push.sh",
+      "priority": "high",
+      "rule_id": "HLT-035-GIT-BAD-BEHAVIOR",
+      "tlr": "Context/setup",
+      "lane": "audit",
+      "owner": "agent",
+      "task": "replace the force push with a reviewed fast-forward or a dedicated release branch",
+      "why": "script force-pushes or mirrors refs to the remote"
+    },
+    {
       "path": "apps/web",
       "priority": "high",
       "rule_id": "HLT-013-RENDERED-UX-GAP",
@@ -3894,6 +4032,16 @@
       "why": "web surface lacks layered rendered UX QA evidence"
     },
     {
+      "path": "crates/sql/src/planner/access_path.rs",
+      "priority": "high",
+      "rule_id": "HLT-001-DEAD-MARKER",
+      "tlr": "Entropy",
+      "lane": "fast",
+      "owner": "tools",
+      "task": "remove or rename the marker, implement the intended behavior, model a typed unsupported state, or move docs/generated/vendor/product-copy text into an allowlisted context",
+      "why": "future-hostile/dead-language term `legacy` appears in product/runtime code"
+    },
+    {
       "path": ".",
       "priority": "medium",
       "rule_id": "HLT-001-DEAD-MARKER",
@@ -3901,7 +4049,7 @@
       "lane": "fast",
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
-      "why": "`Code shape and semantic surface` scored 45 below the standard floor of 85"
+      "why": "`Code shape and semantic surface` scored 6 below the standard floor of 85"
     }
   ]
 }
