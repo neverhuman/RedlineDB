@@ -25,12 +25,15 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 strip = "symbols"
+debug = false
+debug-assertions = false
+overflow-checks = false
+incremental = false
 
-# release-native inherits release; the per-host-CPU specialization is
-# applied via RUSTFLAGS="-C target-cpu=native" in .cargo/config.toml
-# (always on for the Linux toolchain). Build artifacts produced under
-# this profile are NOT portable across CPU classes — they target the
-# build host. By project policy users compile from source for their CPU.
+# release-native inherits release; per-host CPU specialization is applied via
+# .cargo/config.toml on Linux targets. Build artifacts produced under this
+# profile are NOT portable across CPU classes — they target the build host.
+# By project policy users compile from source for their CPU.
 [profile.release-native]
 inherits = "release"
 
@@ -38,6 +41,18 @@ inherits = "release"
 # -Cprofile-use. Consumed by the redline-testing parity gate in CI.
 [profile.release-pgo]
 inherits = "release-native"
+
+# Keep cargo bench aligned with the production optimization lane so parser,
+# SQL, RQL, and storage benchmarks do not accidentally measure debug info,
+# incremental state, or multi-codegen-unit artifacts.
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = false
+debug-assertions = false
+overflow-checks = false
+incremental = false
 
 # release-fast is the contributor escape hatch: thin LTO + multiple
 # codegen units so dev iteration on `--release` builds doesn't pay the
