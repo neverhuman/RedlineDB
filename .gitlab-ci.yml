@@ -357,6 +357,12 @@ parity:
     # public v1.0.1 asset; anonymous curl works fine for github release
     # downloads.
     CI_REDLINE_TESTING_URL: "https://github.com/neverhuman/redline-testing/releases/download/v1.0.1/redline-testing-1.0.1-linux-x86_64.tar.gz"
+    # Use runner's native git fetch (single job → no thundering-herd risk).
+    # GIT_STRATEGY:none is the global default; override here so the runner
+    # fetches the repo before our custom before_script runs.  The global
+    # before_script's flock-based clone is NOT used (before_script override
+    # below replaces it), so native fetch is the right strategy.
+    GIT_STRATEGY: fetch
   before_script:
     # All packages pre-installed in redlinedb-ci:1.95.0 — no apt needed.
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
