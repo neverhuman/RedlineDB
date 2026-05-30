@@ -292,12 +292,22 @@ fn starts_with_pragma_keyword(stmt: &str) -> bool {
 /// is not enforced — callers pass a literal). For ASCII haystacks the cost
 /// is one memmem-style byte walk instead of a full-string allocation.
 pub(crate) fn contains_ignore_ascii_case(haystack: &str, needle_lower: &[u8]) -> bool {
+    find_ignore_ascii_case(haystack, needle_lower).is_some()
+}
+
+/// Allocation-free case-insensitive substring search that returns the
+/// byte offset of the first match.
+///
+/// This is the indexed sibling of `contains_ignore_ascii_case`. It lets
+/// parser rewrites locate ASCII SQL tokens without cloning the whole SQL
+/// string into lowercase form first.
+pub(crate) fn find_ignore_ascii_case(haystack: &str, needle_lower: &[u8]) -> Option<usize> {
     let hay = haystack.as_bytes();
     if needle_lower.is_empty() {
-        return true;
+        return Some(0);
     }
     if hay.len() < needle_lower.len() {
-        return false;
+        return None;
     }
     let head = needle_lower[0];
     let head_alt = match head {
@@ -313,7 +323,7 @@ pub(crate) fn contains_ignore_ascii_case(haystack: &str, needle_lower: &[u8]) ->
             for j in 1..needle_lower.len() {
                 let h = hay[i + j];
                 let n = needle_lower[j];
-                let eq = if (b'a'..=b'z').contains(&n) {
+                let eq = if n.is_ascii_lowercase() {
                     h == n || h == n - 32
                 } else {
                     h == n
@@ -324,12 +334,30 @@ pub(crate) fn contains_ignore_ascii_case(haystack: &str, needle_lower: &[u8]) ->
                 }
             }
             if matched {
-                return true;
+                return Some(i);
             }
         }
         i += 1;
     }
-    false
+    None
+}
+
+fn strip_ignore_ascii_case_prefix<'a>(value: &'a str, prefix_lower: &[u8]) -> Option<&'a str> {
+    let bytes = value.as_bytes();
+    if bytes.len() < prefix_lower.len() {
+        return None;
+    }
+    for (byte, expected) in bytes.iter().zip(prefix_lower.iter()) {
+        let matches = if expected.is_ascii_lowercase() {
+            *byte == *expected || *byte == *expected - 32
+        } else {
+            *byte == *expected
+        };
+        if !matches {
+            return None;
+        }
+    }
+    Some(&value[prefix_lower.len()..])
 }
 
 fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
@@ -1237,9 +1265,8 @@ fn inject_partition_marker(body: &str, marker: &str) -> String {
 }
 
 fn extract_named_window_spec(sql: &str, name: &str) -> Option<String> {
-    let lower = sql.to_ascii_lowercase();
-    let needle = format!(" window {name} as (");
-    let start = lower.find(&needle)? + needle.len();
+    let needle = format!(" window {} as (", name.to_ascii_lowercase());
+    let start = find_ignore_ascii_case(sql, needle.as_bytes())? + needle.len();
     let bytes = sql.as_bytes();
     let mut depth = 1i32;
     let mut end = start;
@@ -1260,9 +1287,8 @@ fn extract_named_window_spec(sql: &str, name: &str) -> Option<String> {
 }
 
 fn strip_window_clause(sql: &str, name: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
-    let needle = format!(" window {name} as (");
-    let Some(start) = lower.find(&needle) else {
+    let needle = format!(" window {} as (", name.to_ascii_lowercase());
+    let Some(start) = find_ignore_ascii_case(sql, needle.as_bytes()) else {
         return sql.to_owned();
     };
     let mut end = start + needle.len();
@@ -1306,16 +1332,9 @@ pub(crate) fn parse_detach_template(
     schema_epoch: SchemaEpoch,
 ) -> Option<PreparedTemplate> {
     let trimmed = sql.trim().trim_end_matches(';').trim();
-    let lower = trimmed.to_ascii_lowercase();
-    let rest = if let Some(rest) = lower.strip_prefix("detach database ") {
-        rest
-    } else if let Some(rest) = lower.strip_prefix("detach ") {
-        rest
-    } else {
-        return None;
-    };
-    let original_rest = &trimmed[trimmed.len() - rest.len()..];
-    let alias = original_rest.trim();
+    let rest = strip_ignore_ascii_case_prefix(trimmed, b"detach database ")
+        .or_else(|| strip_ignore_ascii_case_prefix(trimmed, b"detach "))?;
+    let alias = rest.trim();
     if alias.is_empty() {
         return None;
     }
@@ -1334,12 +1353,9 @@ pub(crate) fn parse_attach_template(
     schema_epoch: SchemaEpoch,
 ) -> Option<PreparedTemplate> {
     let trimmed = sql.trim().trim_end_matches(';').trim();
-    let lower = trimmed.to_ascii_lowercase();
-    let rest = lower
-        .strip_prefix("attach database ")
-        .or_else(|| lower.strip_prefix("attach "))?;
-    let original_rest = &trimmed[trimmed.len() - rest.len()..];
-    let (path_part, alias_part) = split_attach_path_alias(original_rest)?;
+    let rest = strip_ignore_ascii_case_prefix(trimmed, b"attach database ")
+        .or_else(|| strip_ignore_ascii_case_prefix(trimmed, b"attach "))?;
+    let (path_part, alias_part) = split_attach_path_alias(rest)?;
     let alias = alias_part.trim();
     if alias.is_empty() {
         return None;
@@ -1382,9 +1398,7 @@ fn split_attach_path_alias(rest: &str) -> Option<(String, &str)> {
 
 fn parse_attach_alias(rest: &str) -> Option<&str> {
     let rest = rest.trim_start();
-    let lower = rest.to_ascii_lowercase();
-    let alias = lower.strip_prefix("as ")?;
-    Some(&rest[rest.len() - alias.len()..])
+    strip_ignore_ascii_case_prefix(rest, b"as ")
 }
 
 #[cfg(test)]
@@ -1431,6 +1445,22 @@ mod tests {
             out.contains("PARTITION BY '__redline_exc_no_others__', g"),
             "got: {out}"
         );
+    }
+
+    #[test]
+    fn ascii_search_returns_match_offset() {
+        assert_eq!(
+            find_ignore_ascii_case("SELECT WINDOW win AS (x)", b" window win as ("),
+            Some(6)
+        );
+        assert_eq!(find_ignore_ascii_case("SELECT 1", b" window win as ("), None);
+    }
+
+    #[test]
+    fn attach_alias_prefix_is_case_insensitive() {
+        assert_eq!(parse_attach_alias("  AS aux"), Some("aux"));
+        assert_eq!(parse_attach_alias("  as aux"), Some("aux"));
+        assert_eq!(parse_attach_alias("  aS aux"), Some("aux"));
     }
 }
 /// Rewrite `<expr> GLOB <pattern>` and `<expr> NOT GLOB <pattern>` into
