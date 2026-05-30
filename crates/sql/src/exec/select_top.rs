@@ -1,3 +1,6 @@
+use super::select_parallel::{
+    ParallelCoveringDecision, decide_parallel_covering_scan, record_parallel_covering_decision,
+};
 use super::*;
 
 pub(super) fn begin_select_tx(conn: &Connection) -> Result<(SelectRuntimeTx, bool)> {
@@ -45,6 +48,16 @@ pub(super) fn execute_select(
     // which are 100% fromless.
     if let Some(runtime) = try_fromless_select_fast_path(plan, bindings)? {
         return Ok(runtime);
+    }
+
+    // W4-T/W4-A1: morsel observation/routing hooks. Default-OFF runs must not
+    // pay classifier or route-tap overhead; enable this block with
+    // REDLINE_MORSEL_TELEMETRY or REDLINE_MORSEL_ROUTE.
+    if super::morsel::morsel_observation_or_route_enabled() {
+        super::morsel::record_morsel_eligibility(super::morsel::classify_select_plan_eligibility(
+            plan,
+        ));
+        let _ = super::morsel::route::route_primitive_scan(plan);
     }
 
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
@@ -184,12 +197,26 @@ fn build_select_runtime(
         // index-leaf serial covering path. Result-set parity vs
         // the serial path is enforced by
         // `tests/ws_c3_parallel_scan_dispatch.rs`.
-        let parallel_decision = decide_parallel_covering_scan(plan, limit);
-        debug_assert!(
-            !parallel_decision.would_dispatch() || super::outer_row_stack_is_empty(),
-            "WS-C3 R2: parallel covering-scan gate fired with non-empty OUTER_ROW_STACK"
-        );
-        record_parallel_covering_decision(parallel_decision);
+        // A5: skip the gate when no Rayon pool is installed. By default
+        // `OpenOptions::rayon_threads = None`, so `current_rayon_pool()`
+        // returns `None` and the gate would walk the eligibility checks
+        // only to return `FallbackNoPool`. Hoist that decision up so every
+        // covering-eligible SELECT in default (no-pool) mode pays only an
+        // atomic-load + branch, not the full per-condition evaluation +
+        // `record_parallel_covering_decision` thread-local update.
+        // Pool-installed tests (`ws_c3_parallel_scan_dispatch.rs`) still
+        // exercise the gate because they install a pool first.
+        let parallel_decision = if super::current_rayon_pool().is_none() {
+            ParallelCoveringDecision::FallbackNoPool
+        } else {
+            let decision = decide_parallel_covering_scan(plan, limit);
+            debug_assert!(
+                !decision.would_dispatch() || super::outer_row_stack_is_empty(),
+                "WS-C3 R2: parallel covering-scan gate fired with non-empty OUTER_ROW_STACK"
+            );
+            record_parallel_covering_decision(decision);
+            decision
+        };
 
         let tx_ref = tx.as_mut().expect("tx present");
         let cover_limit = if plan.order_by.is_empty() {
@@ -243,6 +270,28 @@ fn build_select_runtime(
             )?,
         };
         fast_path_rows = Some(rows);
+    }
+
+    // W4-A2b: morsel-routed primitive scan. Off by default — gated by
+    // `REDLINE_MORSEL_ROUTE=primitive_scan` (or `all`/`1`/`on`). When the
+    // env var is unset, the check is one OnceLock load + branch so default
+    // builds pay nothing here. When enabled, we route bare-column
+    // projections of Integer/Real affinity columns through the direct
+    // rowid scan + indexed projection path, skipping `eval_projection_item`
+    // for the supported shape. Falls through to the tuple path when the
+    // plan doesn't match (telemetry counters surface why) or when a runtime
+    // value's kind doesn't match the affinity-derived kind (SQLite loose
+    // typing safety net).
+    if fast_path_rows.is_none()
+        && super::morsel::morsel_route_mode().is_some()
+        && let SelectSource::Table(table) = &plan.source
+    {
+        let tx_ref = tx.as_mut().expect("tx present");
+        if let Some(rows) =
+            super::morsel::route::execute_routed_scan(conn.engine(), tx_ref, table, plan)?
+        {
+            fast_path_rows = Some(rows);
+        }
     }
 
     if let Some(rows) = fast_path_rows {
@@ -528,6 +577,16 @@ fn build_select_runtime(
                     SelectRuntimeSource::SqliteSchema { rows, cursor: 0 }
                 }
             }
+            SelectSource::SqliteSequence { alias } => super::sqlite_sequence::build_runtime(
+                conn,
+                alias.as_ref(),
+                plan,
+                bindings,
+                limit,
+                offset,
+                temp_dir.clone(),
+                &mut memory,
+            )?,
             SelectSource::StaticRows { rows } => SelectRuntimeSource::StaticRows {
                 rows: Arc::clone(rows),
                 cursor: 0,
@@ -661,13 +720,31 @@ fn build_select_runtime(
         }
     };
 
+    // A28: only the live-iteration source variants (Table, SqliteSchema,
+    // Empty) consult `runtime.selection` / `runtime.projection` per
+    // `selection_passes` + `project_row` in exec/mod.rs. Batched sources
+    // pre-project via `order_and_project_rows_with_distinct_on`; StaticRows
+    // sources are pre-projected by their fast paths (covering scan, index
+    // count, morsel route). Cloning the plan's selection/projection for
+    // those variants is dead work — and selection trees can be deep
+    // sqlparser AST nodes, so the saving compounds on complex queries.
+    let (selection, projection) = match &source {
+        SelectRuntimeSource::Table { .. }
+        | SelectRuntimeSource::SqliteSchema { .. }
+        | SelectRuntimeSource::SqliteSequence { .. }
+        | SelectRuntimeSource::Empty => (plan.selection.clone(), plan.projection.clone()),
+        SelectRuntimeSource::Batched { .. } | SelectRuntimeSource::StaticRows { .. } => {
+            (None, Vec::new())
+        }
+    };
+
     let runtime_tx = std::mem::replace(tx, SelectRuntimeTx::Empty);
     Ok(SelectRuntime {
         tx: runtime_tx,
         restore_tx,
         source,
-        selection: plan.selection.clone(),
-        projection: plan.projection.clone(),
+        selection,
+        projection,
         limit,
         offset,
         seen: 0,
@@ -678,6 +755,24 @@ fn build_select_runtime(
 
 fn sqlite_schema_rows(conn: &Connection) -> Vec<SqliteSchemaRow> {
     let mut rows = conn.engine().sqlite_schema();
+    if conn
+        .engine()
+        .schema_snapshot()
+        .tables
+        .iter()
+        .any(|table| table.is_autoincrement())
+        && !rows
+            .iter()
+            .any(|row| row.name.as_ref() == "sqlite_sequence")
+    {
+        rows.push(SqliteSchemaRow {
+            type_name: "table".into(),
+            name: "sqlite_sequence".into(),
+            tbl_name: "sqlite_sequence".into(),
+            rootpage: 0,
+            sql: "CREATE TABLE sqlite_sequence(name,seq)".into(),
+        });
+    }
     if !conn.stats_snapshot().tables.is_empty()
         && !rows.iter().any(|row| row.name.as_ref() == "sqlite_stat1")
     {
@@ -1019,6 +1114,9 @@ pub(super) fn collect_select_rows(
             .into_iter()
             .map(SqlRow::SqliteSchema)
             .collect()),
+        SelectSource::SqliteSequence { alias } => {
+            super::sqlite_sequence::collect_rows(conn, alias.as_ref())
+        }
         SelectSource::SqliteTempSchema => Ok(temp_schema_rows(conn)
             .into_iter()
             .map(SqlRow::SqliteSchema)
@@ -1337,6 +1435,9 @@ fn try_ordered_index_limit_path(
     ) else {
         return Ok(None);
     };
+    if !matched.consumed_full_predicate() {
+        return Ok(None);
+    }
     if matched.index.keys.len() == 1
         && order_by_rowid_alias(table, &plan.order_by)
         && matches!(matched.probe, index_access::IndexProbe::Point { .. })
@@ -1441,6 +1542,7 @@ fn authorize_select_source(source: &SelectSource) -> Option<crate::udf::Authoriz
         }
         SelectSource::SqliteSchema
         | SelectSource::SqliteTempSchema
+        | SelectSource::SqliteSequence { .. }
         | SelectSource::StaticRows { .. }
         | SelectSource::Empty
         | SelectSource::CompoundSet { .. }
@@ -1695,110 +1797,6 @@ fn is_aggregate_function_name(func: &sqlparser::ast::Function) -> bool {
     )
 }
 
-// ============================================================
-// WS-C3 R2: parallel covering-scan gate
-// ============================================================
-
-/// Outcome of the WS-C3 R2 parallel covering-scan gate. The variants
-/// document *why* the gate chose one path over the other; the
-/// `Dispatch` variant is the only one that would actually fan work
-/// out across the rayon pool. Today no production covering pipeline
-/// reaches `Dispatch` because the path walks index leaves rather
-/// than heap pages — see the module note at the gate site for
-/// the rationale (kept here so tests can assert the predicate's
-/// per-condition behaviour without rebuilding the gate).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ParallelCoveringDecision {
-    /// All gate conditions hold AND a downstream consumer
-    /// (HashAggregator / SpillSort) was detected — the executor
-    /// would dispatch the parallel scan if the underlying engine
-    /// were appropriate.
-    Dispatch { worker_count: usize },
-    /// `LIMIT` clause present — covering scans with a hard cap stay
-    /// serial so the early-stop semantics survive.
-    FallbackLimitPresent,
-    /// `OUTER_ROW_STACK` is non-empty — a correlated outer row is
-    /// in scope and a worker thread would lose access to it
-    /// (the stack is thread-local).
-    FallbackOuterRowStack,
-    /// No rayon pool installed on the per-thread slot — operators
-    /// must take the serial path until WS-C7 installs one.
-    FallbackNoPool,
-    /// Downstream consumer is neither HashAggregator nor SpillSort
-    /// — the parallel result-ordering relaxation does not apply.
-    FallbackDownstreamNotAggregator,
-}
-
-impl ParallelCoveringDecision {
-    pub fn would_dispatch(self) -> bool {
-        matches!(self, Self::Dispatch { .. })
-    }
-}
-
-/// WS-C3 R2 gate predicate. Returns the decision the gate would
-/// make for `plan` under the current thread-local context (rayon
-/// pool slot + correlated-row stack). The actual heap-side
-/// dispatch lives in `PageBackedHeap::parallel_scan_page_range`;
-/// today the covering path serves results directly from the
-/// index leaf chain, so even a `Dispatch` decision is honoured
-/// by walking the existing serial cursor — the wiring is in
-/// place for the future, the perf delta is what R1-D shipped.
-pub(crate) fn decide_parallel_covering_scan(
-    plan: &crate::statement::SelectPlan,
-    limit: usize,
-) -> ParallelCoveringDecision {
-    if plan.limit.is_some() || limit != usize::MAX {
-        return ParallelCoveringDecision::FallbackLimitPresent;
-    }
-    if !super::outer_row_stack_is_empty() {
-        return ParallelCoveringDecision::FallbackOuterRowStack;
-    }
-    let pool = match super::current_rayon_pool() {
-        Some(pool) => pool,
-        None => return ParallelCoveringDecision::FallbackNoPool,
-    };
-    if !plan_downstream_is_aggregator_or_spill_sort(plan) {
-        return ParallelCoveringDecision::FallbackDownstreamNotAggregator;
-    }
-    ParallelCoveringDecision::Dispatch {
-        worker_count: pool.current_num_threads().max(1),
-    }
-}
-
-/// Returns `true` when `plan`'s downstream operator (after the
-/// covering scan emits rows) is a `HashAggregator` or `SpillSort`
-/// — both tolerate unordered input which is what the parallel
-/// scan produces. Today this is approximated by the presence of
-/// `GROUP BY` / aggregate projections (→ HashAggregator) or a
-/// non-empty `ORDER BY` (→ SpillSort).
-fn plan_downstream_is_aggregator_or_spill_sort(plan: &crate::statement::SelectPlan) -> bool {
-    if !plan.group_by.is_empty() {
-        return true;
-    }
-    if select_requires_aggregation(plan) {
-        return true;
-    }
-    if !plan.order_by.is_empty() {
-        return true;
-    }
-    false
-}
-
-thread_local! {
-    /// Last `ParallelCoveringDecision` emitted on this thread, set by
-    /// [`record_parallel_covering_decision`]. The SQL gate's tests read
-    /// it to verify per-condition branching without intercepting the
-    /// kernel scan call. Cleared lazily — readers should call
-    /// [`take_last_parallel_covering_decision`] so a follow-up SELECT
-    /// does not observe stale state.
-    static LAST_PARALLEL_DECISION: std::cell::Cell<Option<ParallelCoveringDecision>> =
-        const { std::cell::Cell::new(None) };
-}
-
-fn record_parallel_covering_decision(decision: ParallelCoveringDecision) {
-    LAST_PARALLEL_DECISION.with(|cell| cell.set(Some(decision)));
-}
-
 /// WS-C3 R3-C: dispatch the heap-side parallel scan and reshape its
 /// output into the same `Vec<Vec<SqlValue>>` projection that the
 /// serial covering path produces. The serial path walks the index
@@ -1914,13 +1912,6 @@ fn dispatch_parallel_covering_scan(
         out.push(project_row(projection, &row, bindings)?);
     }
     Ok(out)
-}
-
-/// WS-C3 R2 test hook: read and clear the most recent decision the
-/// parallel covering-scan gate made on this thread. Returns `None`
-/// when no covering-eligible SELECT has run since the last read.
-pub fn take_last_parallel_covering_decision() -> Option<ParallelCoveringDecision> {
-    LAST_PARALLEL_DECISION.with(|cell| cell.take())
 }
 
 /// Build a SELECT runtime that yields zero rows. Used when the

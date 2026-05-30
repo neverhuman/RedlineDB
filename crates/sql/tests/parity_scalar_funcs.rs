@@ -329,6 +329,13 @@ fn unicode_multi_char_returns_first() {
 }
 
 #[test]
+fn unicode_multibyte_literal_returns_first_codepoint() {
+    let (_d, c) = open();
+    let v = q1(&c, "SELECT unicode('á')");
+    assert_eq!(v, SqlValue::Integer(225));
+}
+
+#[test]
 fn unicode_null_propagates() {
     let (_d, c) = open();
     assert_eq!(q1(&c, "SELECT unicode(NULL)"), SqlValue::Null);
@@ -486,6 +493,26 @@ fn math1_acos_unit_circle() {
     assert_eq!(q1(&c, "SELECT acos(2.0)"), SqlValue::Null);
     assert_eq!(q1(&c, "SELECT acos(-2.0)"), SqlValue::Null);
     assert_eq!(q1(&c, "SELECT acos(NULL)"), SqlValue::Null);
+}
+
+#[test]
+fn math1_exp_cosh_match_sqlite_3531_rendering() {
+    let (_d, c) = open();
+
+    for (sql, expected) in [
+        ("SELECT cosh(1.0)", "1.5430806348152437"),
+        ("SELECT cosh(-1.0)", "1.5430806348152437"),
+        ("SELECT exp(1.0)", "2.7182818284590451"),
+    ] {
+        let rendered = match q1(&c, sql) {
+            SqlValue::Real(value) => redlinedb_sql::format_real_sqlite(value),
+            other => panic!("expected real for {sql}, got {other:?}"),
+        };
+        assert_eq!(
+            rendered, expected,
+            "rendered output differs from SQLite 3.53.1 for {sql}"
+        );
+    }
 }
 
 #[test]

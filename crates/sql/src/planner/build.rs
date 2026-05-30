@@ -44,6 +44,16 @@ pub(crate) fn build_select_plan(
             ];
             node
         }
+        SelectSource::SqliteSequence { .. } => {
+            let mut node =
+                PhysicalPlan::leaf(PhysicalKind::TableScan, Some("sqlite_sequence".to_owned()));
+            node.estimated_rows = conn
+                .with_session(|session| Ok(session.sqlite_sequences.len() as f64))
+                .unwrap_or(0.0);
+            node.cost = estimate_scan_cost(node.estimated_rows, 2.0);
+            node.projected_columns = vec!["name".into(), "seq".into()];
+            node
+        }
         SelectSource::StaticRows { rows } => {
             let mut node =
                 PhysicalPlan::leaf(PhysicalKind::Constant, Some("static rows".to_owned()));
@@ -120,10 +130,87 @@ pub(crate) fn build_select_plan(
     }
 
     if plan.limit.is_some() || plan.offset.is_some() {
-        base = wrap_limit(base, plan);
+        base = wrap_limit_with_conn(Some(conn), base, plan);
     }
 
     base
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::connection::{Database, DbOptions};
+    use crate::planner::access_path::{planner_use_access_path, set_planner_use_access_path};
+    use crate::statement::PreparedKind;
+
+    fn select_plan(conn: &Arc<Connection>, sql: &str) -> SelectPlan {
+        let stmt = conn.prepare(sql).expect("prepare");
+        match &stmt.template().kind {
+            PreparedKind::Select(plan) => plan.clone(),
+            other => panic!("expected SELECT plan, got {other:?}"),
+        }
+    }
+
+    fn index_child_limit(plan: &PhysicalPlan) -> Option<usize> {
+        let [child] = plan.children.as_slice() else {
+            panic!("expected LIMIT over one child, got {plan:?}");
+        };
+        let index = match child.kind {
+            PhysicalKind::IndexScan => child,
+            PhysicalKind::Project => {
+                let [project_child] = child.children.as_slice() else {
+                    panic!("expected PROJECT over one child, got {child:?}");
+                };
+                assert!(matches!(project_child.kind, PhysicalKind::IndexScan));
+                project_child
+            }
+            _ => panic!("expected LIMIT over IndexScan or Project, got {child:?}"),
+        };
+        index.ordered_index_scan_limit
+    }
+
+    fn with_access_path_gate<T>(value: bool, f: impl FnOnce() -> T) -> T {
+        let prev = planner_use_access_path();
+        set_planner_use_access_path(value);
+        let out = f();
+        set_planner_use_access_path(prev);
+        out
+    }
+
+    #[test]
+    fn access_path_limit_pushdown_refuses_residual_predicate() {
+        let conn = Database::create_in_memory(DbOptions::default())
+            .expect("db")
+            .connect();
+        conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, keep INTEGER)")
+            .expect("create");
+        conn.execute("CREATE INDEX t_tk ON t(tenant, k)")
+            .expect("index");
+        let select = select_plan(
+            &conn,
+            "SELECT k FROM t WHERE tenant = 1 AND keep = 1 ORDER BY k LIMIT 3",
+        );
+        with_access_path_gate(true, || {
+            let physical = build_select_plan(&conn, &select, &[]);
+            assert_eq!(index_child_limit(&physical), None);
+        });
+    }
+
+    #[test]
+    fn access_path_limit_pushdown_keeps_residual_free_ordered_scan() {
+        let conn = Database::create_in_memory(DbOptions::default())
+            .expect("db")
+            .connect();
+        conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, v INTEGER)")
+            .expect("create");
+        conn.execute("CREATE INDEX t_tk ON t(tenant, k)")
+            .expect("index");
+        let select = select_plan(&conn, "SELECT k FROM t WHERE tenant = 1 ORDER BY k LIMIT 3");
+        with_access_path_gate(true, || {
+            let physical = build_select_plan(&conn, &select, &[]);
+            assert_eq!(index_child_limit(&physical), Some(3));
+        });
+    }
 }
 
 pub(crate) fn build_table_scan_plan(
@@ -156,7 +243,9 @@ pub(crate) fn build_table_scan_plan(
         table_hint,
     );
     let is_covering = matches!(&access, AccessPath::CoveringIndexScan { .. });
-    let ordering_satisfied = satisfies_ordering(table, &access, order_by);
+    let ordering_satisfied = access_path_satisfies_ordering(
+        conn, table, &access, selection, order_by, bindings, table_hint,
+    );
 
     let mut node = match access {
         AccessPath::TableScan => {
@@ -261,6 +350,31 @@ pub(crate) fn build_table_scan_plan(
     }
 
     node
+}
+
+fn access_path_satisfies_ordering(
+    conn: &Connection,
+    table: &Arc<TableDef>,
+    access: &AccessPath,
+    selection: &Option<Expr>,
+    order_by: &[OrderByExpr],
+    bindings: &[Option<SqlValue>],
+    table_hint: Option<&crate::statement::TableAccessHint>,
+) -> bool {
+    if planner_use_access_path() {
+        let ir = choose_access_path_ir(
+            conn.engine(),
+            table,
+            &[], // covering detection not needed for order-satisfaction check
+            selection,
+            bindings,
+            table_hint,
+            order_by,
+            None,
+        );
+        return ir.order_satisfies(order_by);
+    }
+    satisfies_ordering(table, access, order_by)
 }
 
 pub(crate) fn access_plan_to_node(

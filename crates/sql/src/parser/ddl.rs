@@ -249,6 +249,7 @@ fn build_ctas_columns(select: &SelectPlan) -> Result<Vec<ColumnSpec>> {
             constraints: Vec::new(),
             collation: None,
             default_value: None,
+            autoincrement: false,
             generated: None,
         });
     }
@@ -376,6 +377,7 @@ fn source_output_names(source: &SelectSource) -> Vec<String> {
             "sql".to_owned(),
         ]
         .into(),
+        SelectSource::SqliteSequence { .. } => ["name".to_owned(), "seq".to_owned()].into(),
         SelectSource::Empty => Vec::new(),
     }
 }
@@ -424,6 +426,10 @@ fn source_output_affinities(source: &SelectSource) -> Vec<redlinedb_kernel::cata
             redlinedb_kernel::catalog::Affinity::Text,
             redlinedb_kernel::catalog::Affinity::Integer,
             redlinedb_kernel::catalog::Affinity::Text,
+        ],
+        SelectSource::SqliteSequence { .. } => vec![
+            redlinedb_kernel::catalog::Affinity::Text,
+            redlinedb_kernel::catalog::Affinity::Integer,
         ],
         SelectSource::Empty => Vec::new(),
     }
@@ -510,6 +516,7 @@ pub(crate) fn bind_create_index(
     let table = parse_qualified_name(create_index.table_name)?;
     let mut columns = Vec::with_capacity(create_index.columns.len());
     for column in create_index.columns {
+        reject_index_null_order(&column)?;
         match convert_index_column(column.clone()) {
             Ok(c) => columns.push(c),
             Err(_) => {
@@ -559,6 +566,18 @@ pub(crate) fn bind_create_index(
             predicate_sql,
         }),
     })
+}
+
+fn reject_index_null_order(column: &sqlparser::ast::IndexColumn) -> Result<()> {
+    match column.column.options.nulls_first {
+        Some(true) => Err(Error::UnsupportedSql(
+            "unsupported use of NULLS FIRST".to_owned(),
+        )),
+        Some(false) => Err(Error::UnsupportedSql(
+            "unsupported use of NULLS LAST".to_owned(),
+        )),
+        None => Ok(()),
+    }
 }
 
 pub(crate) fn bind_drop(
@@ -708,11 +727,6 @@ pub(crate) fn bind_alter_table(
                 &std::collections::HashMap::new(),
                 &mut alter_constraints,
             )?;
-            if !alter_constraints.is_empty() {
-                return Err(Error::UnsupportedSql(
-                    "ALTER TABLE ADD COLUMN with FOREIGN KEY is not supported".to_owned(),
-                ));
-            }
             if column.constraints.iter().any(|constraint| {
                 !matches!(
                     constraint,
@@ -740,6 +754,7 @@ pub(crate) fn bind_alter_table(
             redlinedb_kernel::catalog::AlterTableOperationSpec::AddColumn {
                 column,
                 if_not_exists,
+                table_constraints: alter_constraints,
             }
         }
         AlterTableOperation::DropColumn {

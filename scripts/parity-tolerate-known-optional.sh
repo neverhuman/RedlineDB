@@ -62,13 +62,85 @@ if [ -z "$failed_rows" ]; then
     exit 0
 fi
 
-known_optional='^(00093|00094|00095|00096|00220)$'
+# V0.1.2 tolerated case IDs (CI-pinned older harness):
+known_optional_v012='^(00093|00094|00095|00096|00220)$'
+
+# W9-T: V1.0.1 corpus expanded the case set to 2445 from 1127. The new
+# cases include 68 unique known-feature-gap failures across 18
+# categories — all predating the campaign. The pinned v1.0.0+ harness
+# normally skips these via capability gating, but v1.0.1 doesn't gate
+# every category and the script that resolves "official" expects an
+# explicit tolerance list. Adding these IDs unblocks full-corpus
+# measurement against the latest binary without masking real
+# regressions in the WORKED categories (W4 routing, A-series surgical,
+# W3/W5/W6/W7 lanes).
+#
+# Category breakdown (n=samples per category, see audit in this commit
+# message and AGENT_CHAT.md 2026-05-28):
+#   SQL_AUTOINCREMENT       (11 names) — autoincrement sequence semantics
+#   SQL_CAST/SQL_TYPE_AFFIN (16 names) — NUMERIC affinity casts + BLOB-hex
+#   SQL_ALTER               ( 6 names) — ADD/DROP/RENAME COLUMN
+#   SQL_ATTACH              ( 5 names) — ATTACH DATABASE
+#   SQL_NULL_ORDER          ( 4 names) — CREATE INDEX NULLS FIRST/LAST
+#   SQL_FOREIGN_KEYS        ( 4 names) — FK pragma + composite/self-ref
+#   SQL_JOIN                ( 4 names) — NATURAL/LATERAL join variants
+#   SQL_SCHEMA_INTROSPECT   ( 3 names) — sqlite_schema views
+#   SQL_MATH                ( 3 names) — MATH_COSH, MATH_EXP
+#   SQL_STRING              ( 3 names) — ZEROBLOB, UNHEX, LOWER rendering
+#   SQL_UPSERT              ( 2 names) — multi-conflict ON CONFLICT
+#   SQL_ERROR_MESSAGES      ( 2 names) — NO_SUCH_COLUMN variants
+#   SQL_STRICT_TABLES       ( 1 name)  — STRICT + WITHOUT ROWID combo
+#   CLI_OPTION              ( 1 name)  — OPT_DESERIALIZE
+#   SQL_COMPOUND            ( 1 name)  — COMPOUND_MIXED_LEFT_TO_RIGHT
+#   SQL_PATTERN             ( 1 name)  — LIKE_INSIDE_CHECK_CONSTRAINT
+#   SQL_BLOB                ( 1 name)  — JSON_REJECTS_BLOB (in flight by Codex per `47feff7`)
+#
+# Adding a new failing case to this list requires a SHA-256 attestation
+# from a fresh corpus run + author justification. See AGENT_CHAT.md for
+# the audit history.
+# W9-T2 (2026-05-28): Codex's `90ecc82 fix(sql): route attach pragmas
+# correctly` + `b2640bb fix(sql): attach parity shell and pragmas`
+# cleared 21 cases. Failure count: 68 -> 47.
+#
+# W9-T3 (2026-05-28): Codex's `75d6621 fix(sql): land current parity
+# slices` cleared 21 more cases. Failure count: 47 -> 26.
+#
+# W9-T4 (2026-05-28): Codex's `77adecb fix(sql): expose sqlite_sequence
+# in batch mode` cleared 9 cases. Failure count: 26 -> 17.
+#
+# W9-T5 (2026-05-28): Codex's `11b24e7` + `14be575` cleared SQL_AUTOINCREMENT
+# residual (10070). 17 -> 16.
+#
+# W9-T6 (2026-05-28): math + strict + temp-schema slices. 16 -> 10.
+#
+# W9-T7 (2026-05-28): attach UPDATE/DELETE + CLI deserialize + rowid
+# qualifier slices cleared 5 more cases. 10 -> 5.
+#
+# W9-T8 (2026-05-28): UPSERT ordered arms cleared 10339. 5 -> 4.
+#
+# W9-T9 (2026-05-28): Codex's `72b4107 fix(sql): NATURAL and USING
+# merged-column output semantics` cleared the entire JOIN cluster:
+#   - SQL_JOIN (3): 10445 JOIN_INNER_USING_MERGES_COLUMN,
+#                   10451 JOIN_NATURAL,
+#                   10466 JOIN_NATURAL_LEFT
+# Failure count: 4 -> 1. Cumulative across nine W9-T passes:
+# 68 -> 1 (-99%). Empirically verified.
+#
+# W9-T10 (2026-05-28): collated UNIQUE-index UPSERT conflict target fixed:
+#   - SQL_UPSERT (1): 10340 ON_CONFLICT_COLLATE_NOCASE_TARGET
+#     `IndexKeyDef.collation` + `apply_index_key_collations_from_sql` +
+#     `apply_index_key_collation` in index_dml.rs. format_version stays 7.
+#   Also: removed spurious "Error: out of memory" on -deserialize :memory:
+#     (sqlite3 3.53.1 does not emit it; regression from ac226e2).
+# Failure count: 1 -> 0. Cumulative: 68 -> 0 (-100%).
+known_failing_v101='^$'
+
 optional_count=0
 unexpected_count=0
 unexpected_lines=""
 
 while IFS=$'\t' read -r case_id name; do
-    if [[ "$case_id" =~ $known_optional ]]; then
+    if [[ "$case_id" =~ $known_optional_v012 ]] || [[ "$case_id" =~ $known_failing_v101 ]]; then
         optional_count=$((optional_count + 1))
     else
         unexpected_count=$((unexpected_count + 1))
@@ -88,6 +160,6 @@ if [ "$unexpected_count" -gt 0 ]; then
     exit 1
 fi
 
-printf 'parity tolerance: %d known-optional case failure(s) tolerated in %s (SQL_VIRTUAL_TABLE_OPTIONAL: fts5/rtree/dbstat — target lacks virtual-table API)\n' \
+printf 'parity tolerance: %d known-optional case failure(s) tolerated in %s (v0.1.2 virtual-table-optional + v1.0.1 feature-gap categories: AUTOINCREMENT, CAST/AFFINITY NUMERIC, ALTER COLUMN, NATURAL JOIN, NULLS FIRST/LAST, etc.)\n' \
     "$optional_count" "$(basename "$jsonl_path")" >&2
 exit 0

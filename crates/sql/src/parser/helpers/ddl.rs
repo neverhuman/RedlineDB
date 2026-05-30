@@ -170,6 +170,7 @@ pub(crate) fn convert_column_def(
         constraints,
         collation,
         default_value,
+        autoincrement: has_autoincrement,
         generated,
     })
 }
@@ -311,13 +312,27 @@ pub(crate) fn table_level_foreign_key(fk: ForeignKeyConstraint) -> TableConstrai
 }
 
 pub(crate) fn convert_index_column(column: IndexColumn) -> Result<IndexColumnSpec> {
+    let mut column = column;
+    let collation = match column.column.expr.clone() {
+        Expr::Collate { expr, collation } => {
+            let collation_name = collation.to_string();
+            if !crate::collation::Collation::is_known(&collation_name) {
+                return Err(Error::Bind(format!(
+                    "no such collation sequence: {collation_name}"
+                )));
+            }
+            column.column.expr = *expr;
+            Some(collation_name)
+        }
+        _ => None,
+    };
     Ok(IndexColumnSpec {
         name: DbName::new(index_column_name(&column)?),
         sort_dir: match column.column.options.asc {
             Some(false) => SortDir::Desc,
             _ => SortDir::Asc,
         },
-        collation: None,
+        collation,
         expr_sql: None,
         expr_referenced_cols: Vec::new(),
     })

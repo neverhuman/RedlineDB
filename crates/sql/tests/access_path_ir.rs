@@ -342,51 +342,47 @@ fn planner_pushes_limit_through_ordered_index_path() {
 fn planner_residual_conjunct_blocks_hard_limit() {
     // The IR's `AccessPath::hard_limit()` accessor explicitly returns
     // `None` when `IndexRange::residual` is non-empty — an early-stop
-    // would skip rows that failed the residual recheck. The shape
-    // `WHERE tenant=1 AND k>5 ORDER BY k LIMIT n` has `k>5` as a
-    // residual conjunct (the IR's leading-prefix probe only consumes
-    // `tenant=?`).
+    // would skip rows that failed the residual recheck. The suffix
+    // range `k>5` is now encoded into the composite probe, so this
+    // test uses `keep=1` as the unrelated residual conjunct.
     //
-    // NOTE: today's default-OFF executor path
-    // (`try_ordered_index_limit_path`) does NOT check
-    // `consumed_full_predicate()` before early-stopping, so it can
-    // incorrectly drop rows that fail the residual. The IR-driven
-    // PRAGMA-on path WILL refuse the pushdown (via
-    // `AccessPath::hard_limit()` returning None when residuals
-    // exist), which fixes this bug — that's a follow-up benefit of
-    // enabling the gate.
+    // The default-OFF executor path now checks
+    // `consumed_full_predicate()` before early-stopping. The IR-driven
+    // PRAGMA-on path must preserve the same safety rule via
+    // `AccessPath::hard_limit()` returning None when residuals exist.
     //
     // This integration test asserts the IR's structural shape (the
     // EXPLAIN must show the index path is picked at all) without
     // depending on the buggy default-OFF runtime answer for the
     // limit+residual combination.
     let (_dir, conn) = open_database();
-    conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, v INTEGER)")
+    conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, keep INTEGER, v INTEGER)")
         .expect("create");
     conn.execute("CREATE INDEX t_tk_idx ON t(tenant, k)")
         .expect("create index");
     for i in 0..30 {
-        conn.execute(&format!("INSERT INTO t VALUES (1, {i}, {i})"))
+        let keep = if i >= 8 { 1 } else { 0 };
+        conn.execute(&format!("INSERT INTO t VALUES (1, {i}, {keep}, {i})"))
             .expect("insert");
     }
     let plan = explain_text(
         &conn,
-        "SELECT v FROM t WHERE tenant = 1 AND k > 5 ORDER BY k LIMIT 3",
+        "SELECT v FROM t WHERE tenant = 1 AND k > 5 AND keep = 1 ORDER BY k LIMIT 3",
     );
     assert!(
         plan.contains("USING INDEX"),
         "leading-equality WHERE must still pick the index even with a residual, got:\n{plan}"
     );
-    // Without LIMIT: residual filter applies cleanly and the runtime
+    // With LIMIT: residual filter applies cleanly and the runtime
     // returns the post-residual rows in k-order.
     let mut stmt = conn
-        .prepare("SELECT v FROM t WHERE tenant = 1 AND k > 5 ORDER BY k")
+        .prepare("SELECT v FROM t WHERE tenant = 1 AND k > 5 AND keep = 1 ORDER BY k LIMIT 3")
         .expect("prepare");
     let mut rows: Vec<i64> = Vec::new();
     while let Step::Row = stmt.step().expect("step") {
         rows.push(stmt.column_i64(0).expect("col0"));
     }
-    assert!(rows.starts_with(&[6, 7, 8, 9, 10]));
+    assert_eq!(rows, vec![8, 9, 10]);
 }
 
 #[test]
@@ -477,5 +473,296 @@ fn planner_covering_map_is_none_in_scaffolding_wave() {
     assert!(
         plan.contains("USING INDEX"),
         "single-key equality on covered (k,v) index picks the index path, got:\n{plan}"
+    );
+}
+
+// ===========================================================================
+// W5: ORDER BY LIMIT pushdown + covering index detection tests.
+//
+// These tests confirm the two new IR behaviors introduced in W5:
+//   (1) hard_limit is set on IndexRange when ORDER BY matches the index
+//       sort and a LIMIT is present (early-termination pushdown), and
+//   (2) covering: true is computed when all projected columns are present
+//       in the index key list (heap-fetch elimination).
+//
+// Both behaviors are exercised via runtime results (not just EXPLAIN)
+// since the IR's decisions feed directly into the executor path.
+// ===========================================================================
+
+#[test]
+fn w5_order_by_limit_pushdown_produces_correct_rows_ascending() {
+    // WHERE col BETWEEN a AND b ORDER BY col LIMIT n: the index scan
+    // satisfies ORDER BY; the executor stops after n rows without
+    // sorting the full range. Runtime result must match the first n rows
+    // in ascending key order.
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(k INTEGER, v INTEGER)")
+        .expect("create");
+    conn.execute("CREATE INDEX t_k_idx ON t(k)")
+        .expect("create index");
+    for i in 1..=50i64 {
+        conn.execute(&format!("INSERT INTO t VALUES ({i}, {i})"))
+            .expect("insert");
+    }
+    let mut stmt = conn
+        .prepare("SELECT v FROM t WHERE k BETWEEN 1 AND 50 ORDER BY k LIMIT 5")
+        .expect("prepare");
+    let mut rows: Vec<i64> = Vec::new();
+    while let Step::Row = stmt.step().expect("step") {
+        rows.push(stmt.column_i64(0).expect("col0"));
+    }
+    assert_eq!(
+        rows,
+        vec![1, 2, 3, 4, 5],
+        "ORDER BY + LIMIT on BETWEEN range must return first 5 rows in key order"
+    );
+    // EXPLAIN must show the index path was chosen.
+    let plan = explain_text(
+        &conn,
+        "SELECT v FROM t WHERE k BETWEEN 1 AND 50 ORDER BY k LIMIT 5",
+    );
+    assert!(
+        plan.contains("USING INDEX"),
+        "BETWEEN + ORDER BY + LIMIT should pick the index path, got:\n{plan}"
+    );
+}
+
+#[test]
+fn w5_order_by_limit_pushdown_produces_correct_rows_descending() {
+    // Same shape as ascending but ORDER BY DESC. The executor walks the
+    // index in reverse; the first n rows emitted are the largest keys.
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(k INTEGER, v INTEGER)")
+        .expect("create");
+    conn.execute("CREATE INDEX t_k_idx ON t(k)")
+        .expect("create index");
+    for i in 1..=50i64 {
+        conn.execute(&format!("INSERT INTO t VALUES ({i}, {i})"))
+            .expect("insert");
+    }
+    let mut stmt = conn
+        .prepare("SELECT v FROM t WHERE k BETWEEN 1 AND 50 ORDER BY k DESC LIMIT 3")
+        .expect("prepare");
+    let mut rows: Vec<i64> = Vec::new();
+    while let Step::Row = stmt.step().expect("step") {
+        rows.push(stmt.column_i64(0).expect("col0"));
+    }
+    assert_eq!(
+        rows,
+        vec![50, 49, 48],
+        "ORDER BY DESC + LIMIT on BETWEEN range must return last 3 rows in descending order"
+    );
+}
+
+#[test]
+fn w5_order_by_limit_with_equality_prefix_returns_correct_rows() {
+    // Composite index (tenant, k): tenant=1 pins the leading key;
+    // ORDER BY k + LIMIT push into the index walk naturally.
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, v INTEGER)")
+        .expect("create");
+    conn.execute("CREATE INDEX t_tk_idx ON t(tenant, k)")
+        .expect("create index");
+    // Tenant 1: k = 0..19; Tenant 2: k = 0..19 (interleaved to
+    // stress that LIMIT stops after tenant-1 rows only).
+    for i in 0..20i64 {
+        conn.execute(&format!("INSERT INTO t VALUES (1, {i}, {i})"))
+            .expect("insert t1");
+        conn.execute(&format!("INSERT INTO t VALUES (2, {i}, {})", i + 100))
+            .expect("insert t2");
+    }
+    let mut stmt = conn
+        .prepare("SELECT v FROM t WHERE tenant = 1 ORDER BY k LIMIT 4")
+        .expect("prepare");
+    let mut rows: Vec<i64> = Vec::new();
+    while let Step::Row = stmt.step().expect("step") {
+        rows.push(stmt.column_i64(0).expect("col0"));
+    }
+    assert_eq!(
+        rows,
+        vec![0, 1, 2, 3],
+        "equality prefix + ORDER BY + LIMIT must return the first 4 tenant-1 rows in k order"
+    );
+}
+
+#[test]
+fn w5_hard_limit_not_applied_when_no_order_by() {
+    // Without ORDER BY the index scan result order is undefined; the
+    // executor must not use the hard-limit early-stop. All rows in the
+    // range should be returned regardless of LIMIT.
+    //
+    // Note: this test only verifies LIMIT n is honoured via the
+    // standard query-level LIMIT enforcement (not the IR hard-limit
+    // pushdown). The distinction matters because the query result with
+    // LIMIT but no ORDER BY is allowed to return any n rows in any
+    // order — we just verify exactly n rows come back.
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(k INTEGER, v INTEGER)")
+        .expect("create");
+    conn.execute("CREATE INDEX t_k_idx ON t(k)")
+        .expect("create index");
+    for i in 1..=20i64 {
+        conn.execute(&format!("INSERT INTO t VALUES ({i}, {i})"))
+            .expect("insert");
+    }
+    let mut stmt = conn
+        .prepare("SELECT v FROM t WHERE k BETWEEN 1 AND 20 LIMIT 5")
+        .expect("prepare");
+    let mut count = 0usize;
+    while let Step::Row = stmt.step().expect("step") {
+        count += 1;
+    }
+    assert_eq!(
+        count, 5,
+        "LIMIT without ORDER BY should still return exactly n rows"
+    );
+}
+
+#[test]
+fn w5_covering_detection_single_column_index_does_not_cover_extra_columns() {
+    // A single-column index on (k) cannot cover a SELECT that asks for
+    // both k and v. The runtime falls back to a heap fetch; the result
+    // must still be correct.
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(k INTEGER, v INTEGER)")
+        .expect("create");
+    conn.execute("CREATE INDEX t_k_idx ON t(k)")
+        .expect("create index");
+    conn.execute("INSERT INTO t VALUES (1, 100), (2, 200)")
+        .expect("seed");
+    let mut stmt = conn
+        .prepare("SELECT k, v FROM t WHERE k = 1")
+        .expect("prepare");
+    let mut rows: Vec<(i64, i64)> = Vec::new();
+    while let Step::Row = stmt.step().expect("step") {
+        rows.push((
+            stmt.column_i64(0).expect("col0"),
+            stmt.column_i64(1).expect("col1"),
+        ));
+    }
+    assert_eq!(rows, vec![(1, 100)]);
+}
+
+#[test]
+fn w5_covering_detection_multi_column_index_covers_subset() {
+    // INDEX(k, v) covers SELECT k, v — the IR sets covering: true.
+    // The runtime result must be identical whether the heap is touched
+    // or not.
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TABLE t(k INTEGER, v INTEGER, extra INTEGER)")
+        .expect("create");
+    conn.execute("CREATE INDEX t_kv_idx ON t(k, v)")
+        .expect("create index");
+    for i in 1..=5i64 {
+        conn.execute(&format!("INSERT INTO t VALUES ({i}, {}, 999)", i * 10))
+            .expect("insert");
+    }
+    // This projection (k, v) is covered by the index (k, v); no heap
+    // fetch required. Results must be correct.
+    let mut stmt = conn
+        .prepare("SELECT k, v FROM t WHERE k BETWEEN 1 AND 5 ORDER BY k")
+        .expect("prepare");
+    let mut rows: Vec<(i64, i64)> = Vec::new();
+    while let Step::Row = stmt.step().expect("step") {
+        rows.push((
+            stmt.column_i64(0).expect("col0"),
+            stmt.column_i64(1).expect("col1"),
+        ));
+    }
+    assert_eq!(rows, vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]);
+    // EXPLAIN must pick the index path.
+    let plan = explain_text(
+        &conn,
+        "SELECT k, v FROM t WHERE k BETWEEN 1 AND 5 ORDER BY k",
+    );
+    assert!(
+        plan.contains("USING INDEX"),
+        "covering-eligible query must still pick the index path, got:\n{plan}"
+    );
+}
+
+#[test]
+fn w5_planner_trace_path_emits_jsonl_on_ir_decision() {
+    // When `REDLINEDB_PLANNER_TRACE_PATH` is set to a file path, each
+    // `choose_access_path` call appends a JSON line describing the IR
+    // decision. This test confirms the file is created, has the right
+    // fields, and records the IndexRange variant for a range query.
+    use std::ffi::OsString;
+
+    let trace_file = tempfile::NamedTempFile::new().expect("trace file");
+    let trace_path = trace_file.path().to_owned();
+
+    // Save and restore the env var. Unsafe is required by std.
+    let old: Option<OsString> = std::env::var_os("REDLINEDB_PLANNER_TRACE_PATH");
+    // SAFETY: test serialization is not enforced here; this test does
+    // not conflict with others because it uses a unique temp file path.
+    unsafe {
+        std::env::set_var("REDLINEDB_PLANNER_TRACE_PATH", &trace_path);
+    }
+
+    let result = std::panic::catch_unwind(|| {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(k INTEGER, v INTEGER)")
+            .expect("create");
+        conn.execute("CREATE INDEX t_k_idx ON t(k)")
+            .expect("create index");
+        conn.execute("INSERT INTO t VALUES (1, 10), (2, 20), (3, 30)")
+            .expect("seed");
+        // This query should produce at least one IR decision: an
+        // IndexRange for the BETWEEN predicate.
+        let mut stmt = conn
+            .prepare("SELECT v FROM t WHERE k BETWEEN 1 AND 3 ORDER BY k LIMIT 2")
+            .expect("prepare");
+        while let Step::Row = stmt.step().expect("step") {}
+    });
+
+    // Restore env.
+    unsafe {
+        match old {
+            Some(v) => std::env::set_var("REDLINEDB_PLANNER_TRACE_PATH", v),
+            None => std::env::remove_var("REDLINEDB_PLANNER_TRACE_PATH"),
+        }
+    }
+
+    result.expect("test body panicked");
+
+    let text = std::fs::read_to_string(&trace_path).expect("read trace file");
+    assert!(!text.is_empty(), "trace file should have at least one line");
+
+    // Every line must be valid JSON with the expected fields.
+    let mut found_index_range = false;
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let record: serde_json::Value =
+            serde_json::from_str(line).expect("each trace line must be valid JSON");
+        assert!(
+            record.get("ir_variant").is_some(),
+            "trace record must have 'ir_variant' field"
+        );
+        assert!(
+            record.get("index").is_some(),
+            "trace record must have 'index' field"
+        );
+        assert!(
+            record.get("covering").is_some(),
+            "trace record must have 'covering' field"
+        );
+        if record["ir_variant"] == "IndexRange" {
+            found_index_range = true;
+            assert!(
+                record.get("order_satisfies").is_some(),
+                "IndexRange trace must have 'order_satisfies' field"
+            );
+            assert!(
+                record.get("hard_limit").is_some(),
+                "IndexRange trace must have 'hard_limit' field"
+            );
+        }
+    }
+    assert!(
+        found_index_range,
+        "at least one IndexRange trace record expected for BETWEEN query, got:\n{text}"
     );
 }

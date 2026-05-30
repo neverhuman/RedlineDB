@@ -10,9 +10,10 @@
 //!
 //!   PRAGMA redline_scalar_vm = ON | OFF
 //!   PRAGMA redline_planner_use_access_path = ON | OFF
+//!   PRAGMA redline_access_path = legacy | access_path
 //!
 //! With no argument, each PRAGMA returns a single-row recall of the
-//! current state (`0` / `1`), mirroring SQLite's PRAGMA-recall surface.
+//! current state, mirroring SQLite's PRAGMA-recall surface.
 //!
 //! The scalar-VM toggle is a process-wide `AtomicBool`, so the tests
 //! that touch it share a `Mutex` to keep them race-free under
@@ -56,6 +57,30 @@ fn pragma_set_and_recall(conn: &Arc<Connection>, name: &str, value: &str) -> i64
     let mut observed: Option<i64> = None;
     while let Step::Row = stmt.step().expect("step PRAGMA set") {
         observed = Some(stmt.column_i64(0).expect("set recall column_i64"));
+    }
+    observed.expect("PRAGMA set produced no recall row")
+}
+
+fn pragma_text_recall(conn: &Arc<Connection>, name: &str) -> String {
+    let sql = format!("PRAGMA {name}");
+    let mut stmt = conn.prepare(&sql).expect("prepare PRAGMA recall");
+    let mut value: Option<String> = None;
+    while let Step::Row = stmt.step().expect("step PRAGMA recall") {
+        value = Some(stmt.column_text(0).expect("recall column_text").to_owned());
+    }
+    value.expect("PRAGMA recall produced no row")
+}
+
+fn pragma_text_set_and_recall(conn: &Arc<Connection>, name: &str, value: &str) -> String {
+    let set_sql = format!("PRAGMA {name} = {value}");
+    let mut stmt = conn.prepare(&set_sql).expect("prepare PRAGMA set");
+    let mut observed: Option<String> = None;
+    while let Step::Row = stmt.step().expect("step PRAGMA set") {
+        observed = Some(
+            stmt.column_text(0)
+                .expect("set recall column_text")
+                .to_owned(),
+        );
     }
     observed.expect("PRAGMA set produced no recall row")
 }
@@ -198,4 +223,46 @@ fn pragma_redline_planner_use_access_path_bool_variants() {
     // Final cleanup — leave thread-local cleared.
     conn.execute("PRAGMA redline_planner_use_access_path = OFF")
         .expect("restore OFF");
+}
+
+#[test]
+fn pragma_redline_access_path_named_alias_round_trips() {
+    let (_dir, conn) = open_database();
+    assert_eq!(
+        pragma_text_set_and_recall(&conn, "redline_access_path", "access_path"),
+        "access_path"
+    );
+    assert_eq!(
+        pragma_text_recall(&conn, "redline_access_path"),
+        "access_path"
+    );
+    assert_eq!(
+        pragma_recall(&conn, "redline_planner_use_access_path"),
+        1,
+        "legacy boolean PRAGMA should observe alias opt-in"
+    );
+
+    assert_eq!(
+        pragma_text_set_and_recall(&conn, "redline_access_path", "legacy"),
+        "legacy"
+    );
+    assert_eq!(pragma_text_recall(&conn, "redline_access_path"), "legacy");
+    assert_eq!(
+        pragma_recall(&conn, "redline_planner_use_access_path"),
+        0,
+        "legacy boolean PRAGMA should observe alias rollback"
+    );
+}
+
+#[test]
+fn pragma_redline_access_path_alias_accepts_bool_compat_values() {
+    let (_dir, conn) = open_database();
+    assert_eq!(
+        pragma_text_set_and_recall(&conn, "redline_access_path", "ON"),
+        "access_path"
+    );
+    assert_eq!(
+        pragma_text_set_and_recall(&conn, "redline_access_path", "OFF"),
+        "legacy"
+    );
 }

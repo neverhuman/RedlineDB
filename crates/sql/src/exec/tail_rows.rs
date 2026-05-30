@@ -57,7 +57,11 @@ pub(crate) fn collect_join_rows(
         for prefix in &joined {
             for row in &rows {
                 let mut combined = prefix.clone();
-                combined.push(joined_row_from_table_row(table, Some(row.clone())));
+                combined.push(joined_row_from_table_row(
+                    table,
+                    Some(row.clone()),
+                    Arc::from([]),
+                ));
                 next.push(combined);
             }
         }
@@ -76,7 +80,13 @@ pub(crate) fn collect_join_source_rows(
         collect_table_rows_with_alias(engine, tx, &source.base.table, source.base.alias.clone())?;
     let mut joined: Vec<Vec<JoinedRow>> = base_rows
         .into_iter()
-        .map(|row| vec![joined_row_from_table_row(&source.base, Some(row))])
+        .map(|row| {
+            vec![joined_row_from_table_row(
+                &source.base,
+                Some(row),
+                Arc::from([]),
+            )]
+        })
         .collect();
 
     for step in &source.joins {
@@ -88,7 +98,11 @@ pub(crate) fn collect_join_source_rows(
             let mut matched = false;
             for (right_idx, row) in right_rows.iter().enumerate() {
                 let mut combined = prefix.clone();
-                combined.push(joined_row_from_table_row(&step.right, Some(row.clone())));
+                combined.push(joined_row_from_table_row(
+                    &step.right,
+                    Some(row.clone()),
+                    Arc::clone(&step.hidden_right_columns),
+                ));
                 if selection_passes(&step.selection, &SqlRow::Joined(combined.clone()), bindings)? {
                     matched = true;
                     matched_right[right_idx] = true;
@@ -102,7 +116,11 @@ pub(crate) fn collect_join_source_rows(
                 )
             {
                 let mut combined = prefix.clone();
-                combined.push(joined_row_from_table_row(&step.right, None));
+                combined.push(joined_row_from_table_row(
+                    &step.right,
+                    None,
+                    Arc::clone(&step.hidden_right_columns),
+                ));
                 next.push(combined);
             }
         }
@@ -118,7 +136,11 @@ pub(crate) fn collect_join_source_rows(
                 for left in prefix_shape_for_unmatched_right(&joined) {
                     combined.push(left);
                 }
-                combined.push(joined_row_from_table_row(&step.right, Some(row.clone())));
+                combined.push(joined_row_from_table_row(
+                    &step.right,
+                    Some(row.clone()),
+                    Arc::clone(&step.hidden_right_columns),
+                ));
                 next.push(combined);
             }
         }
@@ -138,6 +160,7 @@ fn prefix_shape_for_unmatched_right(joined: &[Vec<JoinedRow>]) -> Vec<JoinedRow>
                     table: Arc::clone(&row.table),
                     alias: row.alias.clone(),
                     row: None,
+                    hidden_columns: Arc::clone(&row.hidden_columns),
                 })
                 .collect()
         })
@@ -147,6 +170,7 @@ fn prefix_shape_for_unmatched_right(joined: &[Vec<JoinedRow>]) -> Vec<JoinedRow>
 fn joined_row_from_table_row(
     table: &crate::statement::BoundTable,
     row: Option<TableRow>,
+    hidden_columns: Arc<[usize]>,
 ) -> JoinedRow {
     let alias = table.alias.clone();
     let row = row.map(|mut row| {
@@ -157,6 +181,7 @@ fn joined_row_from_table_row(
         table: Arc::clone(&table.table),
         alias,
         row,
+        hidden_columns,
     }
 }
 

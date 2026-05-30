@@ -127,25 +127,23 @@ fn jsonb_is_valid(bytes: &[u8]) -> bool {
 ///
 /// Per SQLite docs: text arguments are taken as **JSON values** if they
 /// parse as valid JSON, otherwise as quoted JSON strings. INTEGER/REAL go
-/// straight to numbers, NULL → null, BLOB → quoted base16 string (we use
-/// a straight string repr for simplicity, matching SQLite's behaviour for
-/// text-affinity).
+/// straight to numbers, NULL → null, and BLOBs are rejected.
 ///
 /// `as_json_argument`: text is *always* a JSON string (used by the input
 /// arg of json/json_extract, where the whole text is the JSON document).
-pub(crate) fn sql_to_json_value(value: &SqlValue) -> Value {
+pub(crate) fn sql_to_json_value(value: &SqlValue) -> Result<Value> {
     match value {
-        SqlValue::Null => Value::Null,
-        SqlValue::Integer(n) => Value::Number((*n).into()),
-        SqlValue::Real(f) => serde_json::Number::from_f64(*f)
+        SqlValue::Null => Ok(Value::Null),
+        SqlValue::Integer(n) => Ok(Value::Number((*n).into())),
+        SqlValue::Real(f) => Ok(serde_json::Number::from_f64(*f)
             .map(Value::Number)
-            .unwrap_or(Value::Null),
-        SqlValue::Text(s) => match serde_json::from_str::<Value>(s.as_ref()) {
+            .unwrap_or(Value::Null)),
+        SqlValue::Text(s) => Ok(match serde_json::from_str::<Value>(s.as_ref()) {
             Ok(Value::Array(values)) => Value::Array(values),
             Ok(Value::Object(values)) => Value::Object(values),
             _ => Value::String(s.to_string()),
-        },
-        SqlValue::Blob(b) => Value::String(String::from_utf8_lossy(b).into_owned()),
+        }),
+        SqlValue::Blob(_) => Err(Error::Parse("JSON cannot hold BLOB values".into())),
     }
 }
 
@@ -226,6 +224,23 @@ fn parse_json_text_cached(text: &str) -> Result<Value> {
     })
 }
 
+fn json_text_valid_cached(text: &str) -> bool {
+    JSON_SCALAR_CACHES.with(|cache| {
+        let cached = {
+            let cache = cache.borrow();
+            cache.docs.iter().any(|(cached, _)| cached == text)
+        };
+        if cached {
+            return true;
+        }
+        let Ok(parsed) = serde_json::from_str::<Value>(text) else {
+            return false;
+        };
+        insert_bounded(&mut cache.borrow_mut().docs, text.to_owned(), parsed);
+        true
+    })
+}
+
 fn parse_path_cached(text: &str) -> Result<JsonPath> {
     JSON_SCALAR_CACHES.with(|cache| {
         if let Some(path) = cache
@@ -273,8 +288,8 @@ pub fn json_func(values: &[SqlValue]) -> Result<SqlValue> {
 }
 
 pub fn json_array(values: &[SqlValue]) -> Result<SqlValue> {
-    let arr: Vec<Value> = values.iter().map(sql_to_json_value).collect();
-    Ok(render_json(&Value::Array(arr)))
+    let arr: Result<Vec<Value>> = values.iter().map(sql_to_json_value).collect();
+    Ok(render_json(&Value::Array(arr?)))
 }
 
 pub fn json_array_length(values: &[SqlValue]) -> Result<SqlValue> {
@@ -340,7 +355,7 @@ pub fn json_object(values: &[SqlValue]) -> Result<SqlValue> {
             SqlValue::Real(f) => crate::exec::expr::scalar::value::format_real_sqlite(*f),
             SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
         };
-        map.insert(key, sql_to_json_value(&pair[1]));
+        map.insert(key, sql_to_json_value(&pair[1])?);
     }
     Ok(render_json(&Value::Object(map)))
 }
@@ -415,7 +430,7 @@ fn apply_mutation(values: &[SqlValue], mode: MutationMode, name: &str) -> Result
     let mut i = 1usize;
     while i + 1 < values.len() {
         let path = parse_path(&values[i])?;
-        let value = sql_to_json_value(&values[i + 1]);
+        let value = sql_to_json_value(&values[i + 1])?;
         mutate(&mut doc, &path, value, mode).map_err(path_error)?;
         i += 2;
     }
@@ -548,9 +563,9 @@ pub fn json_valid(values: &[SqlValue]) -> Result<SqlValue> {
             ));
         }
     };
-    let s = match arg {
+    let ok = match arg {
         SqlValue::Null => return Ok(SqlValue::Null),
-        SqlValue::Text(s) => s.to_string(),
+        SqlValue::Text(s) => json_text_valid_cached(s.as_ref()),
         SqlValue::Blob(b) => {
             // JSONB blobs validate via the wire-format walker rather than a
             // UTF-8 reinterpretation; this preserves SQLite semantics for
@@ -559,14 +574,13 @@ pub fn json_valid(values: &[SqlValue]) -> Result<SqlValue> {
                 return Ok(SqlValue::Integer(if jsonb_is_valid(b) { 1 } else { 0 }));
             }
             match std::str::from_utf8(b) {
-                Ok(s) => s.to_owned(),
+                Ok(s) => json_text_valid_cached(s),
                 Err(_) => return Ok(SqlValue::Integer(0)),
             }
         }
         // Per SQLite: numerics are valid JSON.
         SqlValue::Integer(_) | SqlValue::Real(_) => return Ok(SqlValue::Integer(1)),
     };
-    let ok = parse_json_text_cached(&s).is_ok();
     Ok(SqlValue::Integer(if ok { 1 } else { 0 }))
 }
 
@@ -579,7 +593,7 @@ pub fn json_quote(values: &[SqlValue]) -> Result<SqlValue> {
             ));
         }
     };
-    Ok(render_json(&sql_to_json_value(arg)))
+    Ok(render_json(&sql_to_json_value(arg)?))
 }
 
 /// Re-export `json_func` under the alias `json_minify` for symmetry with
@@ -767,6 +781,12 @@ mod tests {
     #[test]
     fn json_quote_quotes_text() {
         assert_eq!(json_quote(&[t("hi")]).unwrap(), t("\"hi\""));
+    }
+
+    #[test]
+    fn json_quote_rejects_blob_values() {
+        let err = json_quote(&[SqlValue::Blob(Arc::from([0x01_u8, 0xab_u8]))]).unwrap_err();
+        assert!(format!("{err:?}").contains("JSON cannot hold BLOB values"));
     }
 
     #[test]

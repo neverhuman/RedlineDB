@@ -445,6 +445,9 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
     for _ in 0..key_count {
         keys.push(decode_index_key(reader, format_version)?);
     }
+    if let Some(sql) = normalized_sql.as_deref() {
+        apply_index_key_collations_from_sql(&mut keys, sql);
+    }
     let predicate_sql = if format_version >= 7 {
         read_opt_box_str(reader)?
     } else {
@@ -531,7 +534,122 @@ fn decode_index_key(reader: &mut BytesReader<'_>, format_version: u64) -> Result
         source,
         sort_dir,
         null_order,
+        collation: None,
     })
+}
+
+fn apply_index_key_collations_from_sql(keys: &mut [IndexKeyDef], sql: &str) {
+    let Some(inner) = create_index_column_list(sql) else {
+        return;
+    };
+    for (key, part) in keys.iter_mut().zip(split_top_level_commas(inner)) {
+        if key.collation.is_some() {
+            continue;
+        }
+        if contains_collate_name(part, "nocase") {
+            key.collation = Some(Box::from("NOCASE"));
+        } else if contains_collate_name(part, "rtrim") {
+            key.collation = Some(Box::from("RTRIM"));
+        }
+    }
+}
+
+fn create_index_column_list(sql: &str) -> Option<&str> {
+    let bytes = sql.as_bytes();
+    let on_pos = find_ascii_keyword(sql, "on")?;
+    let open = bytes
+        .iter()
+        .enumerate()
+        .skip(on_pos + 2)
+        .find_map(|(idx, b)| (*b == b'(').then_some(idx))?;
+    let mut depth = 0usize;
+    let mut quote = None;
+    for (idx, &b) in bytes.iter().enumerate().skip(open) {
+        if let Some(q) = quote {
+            if b == q {
+                quote = None;
+            }
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'`' => quote = Some(b),
+            b'(' => depth += 1,
+            b')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return sql.get(open + 1..idx);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn split_top_level_commas(input: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0usize;
+    let mut depth = 0usize;
+    let mut quote = None;
+    for (idx, b) in input.bytes().enumerate() {
+        if let Some(q) = quote {
+            if b == q {
+                quote = None;
+            }
+            continue;
+        }
+        match b {
+            b'\'' | b'"' | b'`' => quote = Some(b),
+            b'(' => depth += 1,
+            b')' => depth = depth.saturating_sub(1),
+            b',' if depth == 0 => {
+                if let Some(part) = input.get(start..idx) {
+                    parts.push(part.trim());
+                }
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    if let Some(part) = input.get(start..) {
+        parts.push(part.trim());
+    }
+    parts
+}
+
+fn contains_collate_name(input: &str, expected: &str) -> bool {
+    let mut words = input.split(|c: char| !c.is_ascii_alphanumeric() && c != '_');
+    while let Some(word) = words.next() {
+        if word.eq_ignore_ascii_case("collate")
+            && words
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case(expected))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn find_ascii_keyword(input: &str, keyword: &str) -> Option<usize> {
+    let mut word_start = None;
+    for (idx, ch) in input.char_indices() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            word_start.get_or_insert(idx);
+            continue;
+        }
+        if let Some(start) = word_start.take()
+            && input[start..idx].eq_ignore_ascii_case(keyword)
+        {
+            return Some(start);
+        }
+    }
+    if let Some(start) = word_start
+        && input[start..].eq_ignore_ascii_case(keyword)
+    {
+        return Some(start);
+    }
+    None
 }
 
 fn encode_constraint(out: &mut BytesWriter, constraint: &ConstraintDef) -> Result<()> {
@@ -802,6 +920,17 @@ fn encode_expr_op(out: &mut BytesWriter, op: &ExprOp) -> Result<()> {
         ExprOp::Le => out.u8(8),
         ExprOp::Gt => out.u8(9),
         ExprOp::Ge => out.u8(10),
+        ExprOp::Like { negated, escape } => {
+            out.u8(15);
+            out.bool(*negated);
+            match escape {
+                Some(escape) => {
+                    out.bool(true);
+                    out.u32(*escape as u32);
+                }
+                None => out.bool(false),
+            }
+        }
         // Phase-10 Lane V1: `BlobLen` was introduced for vector-dimension
         // CHECK constraints. Older binaries cannot read databases that use
         // it (the unknown-opcode arm in `decode_expr_op` will surface as
@@ -828,6 +957,16 @@ fn decode_expr_op(reader: &mut BytesReader<'_>) -> Result<ExprOp> {
         8 => ExprOp::Le,
         9 => ExprOp::Gt,
         10 => ExprOp::Ge,
+        15 => {
+            let negated = reader.bool()?;
+            let escape = if reader.bool()? {
+                let value = reader.u32()?;
+                Some(char::from_u32(value).ok_or(Error::CatalogCorrupt("invalid expr escape"))?)
+            } else {
+                None
+            };
+            ExprOp::Like { negated, escape }
+        }
         11 => ExprOp::BlobLen,
         _ => return Err(Error::CatalogCorrupt("invalid expr opcode")),
     })

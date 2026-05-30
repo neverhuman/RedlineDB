@@ -23,6 +23,7 @@ pub mod access_path;
 mod build;
 mod optimize;
 mod policy;
+mod trace;
 
 use access::*;
 #[allow(unused_imports)]
@@ -251,6 +252,7 @@ pub(crate) fn explain_rows(
     format: ExplainFormat,
 ) -> Vec<Vec<SqlValue>> {
     let plan = build_plan(conn, kind, bindings, metrics);
+    trace::maybe_emit_planner_trace(&plan);
     match format {
         ExplainFormat::QueryPlan => flatten_query_plan(&plan)
             .into_iter()
@@ -317,7 +319,9 @@ pub(crate) fn build_plan(
             simple_node(PhysicalKind::Constant, "ALTER TABLE".to_owned())
         }
         PreparedKind::Pragma(_) => simple_node(PhysicalKind::Constant, "PRAGMA".to_owned()),
-        PreparedKind::Attach(_) | PreparedKind::CrossDbSql(_) => {
+        PreparedKind::Attach(_)
+        | PreparedKind::CrossDbSql(_)
+        | PreparedKind::CrossDbInsertSelect(_) => {
             simple_node(PhysicalKind::Constant, "ATTACH/DETACH".to_owned())
         }
         PreparedKind::Reindex => simple_node(PhysicalKind::Constant, "REINDEX".to_owned()),

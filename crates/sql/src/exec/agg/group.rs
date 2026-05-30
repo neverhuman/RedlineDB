@@ -5,6 +5,14 @@ use super::super::vec::hash_agg::{AggKind, HashAggregator, encode_group_key_byte
 use super::super::*;
 use super::order::{eval_group_key, sort_groups_by_order_by, sort_projected_rows_by_order_by};
 
+/// A4: minimum filtered-row count to attempt the WS-C2 one-pass HashAggregator
+/// route. Below this threshold the projection-classification cost outweighs
+/// the win and the legacy materialised group path is faster. Tune via the
+/// micro-bench in W9; correctness is path-independent (one-pass and
+/// materialised paths produce byte-identical output, asserted by the
+/// differential test).
+pub(crate) const ONE_PASS_GROUP_THRESHOLD: usize = 16;
+
 pub(crate) fn execute_grouped_select(
     plan: &crate::statement::SelectPlan,
     rows: Vec<SqlRow>,
@@ -24,7 +32,20 @@ pub(crate) fn execute_grouped_select(
     // shape is compatible (GROUP BY + bare built-in aggregates, no DISTINCT,
     // no exotic aggregates). Falls back to the materialised group path on
     // None.
-    if let Some(routed) = try_one_pass_grouped(plan, &filtered, bindings, limit, offset, memory)? {
+    //
+    // A4: only attempt the one-pass routing for inputs large enough to amortise
+    // the projection classification + HashAggregator setup. Below the
+    // threshold the legacy materialised group path is faster, so the routing
+    // attempt is pure overhead on tiny benchmark queries. The cutoff was
+    // picked from W0 ranked-CSV evidence: cases with ≤ ONE_PASS_GROUP_THRESHOLD
+    // post-filter rows make up most of the per-statement overhead tax in the
+    // parity corpus. Both code paths produce byte-identical output (one-pass
+    // is a fast-path, not a different algorithm) — guarded by the differential
+    // test in `crates/sql/tests/agg_group_one_pass_threshold.rs`.
+    if filtered.len() >= ONE_PASS_GROUP_THRESHOLD
+        && let Some(routed) =
+            try_one_pass_grouped(plan, &filtered, bindings, limit, offset, memory)?
+    {
         return Ok(routed);
     }
 
@@ -280,16 +301,14 @@ fn try_one_pass_grouped(
         memory.max_spill_bytes,
         memory.spill_root().to_path_buf(),
     );
-    let mut first_row_per_key: ahash::AHashMap<Vec<u8>, SqlRow> =
+    let mut first_row_index_by_key: ahash::AHashMap<Vec<u8>, usize> =
         ahash::AHashMap::with_capacity(filtered.len().min(1024));
 
     let mut arg_values: Vec<SqlValue> = vec![SqlValue::Null; slots.len()];
-    for row in filtered {
+    for (row_idx, row) in filtered.iter().enumerate() {
         let key = eval_group_key(&plan.group_by, row, bindings)?;
         let key_bytes = encode_group_key_bytes(&key)?;
-        if !first_row_per_key.contains_key(&key_bytes) {
-            first_row_per_key.insert(key_bytes.clone(), row.clone());
-        }
+        first_row_index_by_key.entry(key_bytes).or_insert(row_idx);
         let ctx = row.context();
         for (i, slot) in slots.iter().enumerate() {
             arg_values[i] = match &slot.arg {
@@ -303,13 +322,14 @@ fn try_one_pass_grouped(
     let finalised = hash_agg.finalize()?;
 
     let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(finalised.len());
-    let mut surviving_rows: Vec<SqlRow> = Vec::with_capacity(finalised.len());
+    let mut surviving_row_indices: Vec<usize> = Vec::with_capacity(finalised.len());
     let mut per_row_agg_values: Vec<Vec<SqlValue>> = Vec::with_capacity(finalised.len());
     for (key_vec, agg_values) in finalised {
         let key_bytes = encode_group_key_bytes(&key_vec)?;
-        let Some(first_row) = first_row_per_key.get(&key_bytes) else {
+        let Some(&first_row_idx) = first_row_index_by_key.get(&key_bytes) else {
             continue;
         };
+        let first_row = &filtered[first_row_idx];
         let ctx = first_row.context();
         if let Some(spec) = &having_spec {
             let v = eval_projection_item(spec, &agg_values, &ctx, bindings)?;
@@ -322,7 +342,7 @@ fn try_one_pass_grouped(
             row_out.push(eval_projection_item(spec, &agg_values, &ctx, bindings)?);
         }
         out.push(row_out);
-        surviving_rows.push(first_row.clone());
+        surviving_row_indices.push(first_row_idx);
         per_row_agg_values.push(agg_values);
     }
 
@@ -330,7 +350,8 @@ fn try_one_pass_grouped(
         // Precompute the ORDER BY key tuple per surviving group so the
         // sort comparator is O(n log n) scalar compares.
         let mut order_keys: Vec<Vec<SqlValue>> = Vec::with_capacity(out.len());
-        for (idx, first_row) in surviving_rows.iter().enumerate() {
+        for (idx, &first_row_idx) in surviving_row_indices.iter().enumerate() {
+            let first_row = &filtered[first_row_idx];
             let agg_values_for_row = &per_row_agg_values[idx];
             let ctx = first_row.context();
             let mut tup = Vec::with_capacity(order_specs.len());
@@ -344,10 +365,17 @@ fn try_one_pass_grouped(
             }
             order_keys.push(tup);
         }
-        let mut indices: Vec<usize> = (0..out.len()).collect();
-        indices.sort_by(|&a, &b| {
+        // A11: pair-sort avoids the N Vec clones the previous indices-sort
+        // path emitted. We zip each output row with its precomputed
+        // order-key tuple, sort the pair vector in place by the key, then
+        // unzip the rows back. Zero clones, two contiguous Vec allocations
+        // total instead of N small ones.
+        debug_assert_eq!(out.len(), order_keys.len());
+        let mut paired: Vec<(Vec<SqlValue>, Vec<SqlValue>)> =
+            out.into_iter().zip(order_keys.into_iter()).collect();
+        paired.sort_by(|a, b| {
             for (idx, (_, desc)) in order_specs.iter().enumerate() {
-                let mut ord = compare_values(&order_keys[a][idx], &order_keys[b][idx]);
+                let mut ord = compare_values(&a.1[idx], &b.1[idx]);
                 if *desc {
                     ord = ord.reverse();
                 }
@@ -357,8 +385,7 @@ fn try_one_pass_grouped(
             }
             Ordering::Equal
         });
-        let sorted: Vec<Vec<SqlValue>> = indices.into_iter().map(|i| out[i].clone()).collect();
-        out = sorted;
+        out = paired.into_iter().map(|(row, _)| row).collect();
     }
 
     Ok(Some(out.into_iter().skip(offset).take(limit).collect()))

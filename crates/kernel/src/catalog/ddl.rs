@@ -156,6 +156,7 @@ pub enum AlterTableOperationSpec {
     AddColumn {
         column: ColumnSpec,
         if_not_exists: bool,
+        table_constraints: Vec<TableConstraintSpec>,
     },
     DropColumn {
         column_name: DbName,
@@ -233,6 +234,7 @@ pub struct ColumnSpec {
     pub constraints: Vec<ColumnConstraintSpec>,
     pub collation: Option<String>,
     pub default_value: Option<OwnedValue>,
+    pub autoincrement: bool,
     /// A6 SQL-D: GENERATED ALWAYS AS (expr) [STORED|VIRTUAL]. None for
     /// ordinary columns.
     pub generated: Option<super::schema::GeneratedColumnSpec>,

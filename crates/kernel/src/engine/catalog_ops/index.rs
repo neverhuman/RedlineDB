@@ -114,6 +114,29 @@ impl Engine {
             .and_then(|handles| handles.get(&index_id).cloned())
     }
 
+    /// Returns the live index handle visible to `tx`, including handles
+    /// created by DDL in the same transaction but not published yet.
+    pub fn index_handle_for_tx(
+        &self,
+        tx: &Txn,
+        index_id: CatalogIndexId,
+    ) -> Option<Arc<BtreeIndex>> {
+        let pending = tx.pending_index_handles();
+        if pending.is_empty() {
+            return self.index_handle(index_id);
+        }
+        for action in pending.iter().rev() {
+            match action {
+                PendingIndexHandle::Install(candidate, handle) if *candidate == index_id => {
+                    return Some(Arc::clone(handle));
+                }
+                PendingIndexHandle::Remove(candidate) if *candidate == index_id => return None,
+                _ => {}
+            }
+        }
+        self.index_handle(index_id)
+    }
+
     pub(crate) fn rehydrate_index_handles(self: &Arc<Self>) -> Result<()> {
         let snapshot = self.catalog.current();
         let mut rebuilt = Vec::new();
@@ -215,7 +238,7 @@ impl Engine {
         index: &crate::catalog::IndexDef,
     ) -> Result<()> {
         use crate::catalog::{
-            EncodedIndexKey, IndexKeySource, RecordRef, RecordScratch, ValueRef, encode_index_key,
+            EncodedIndexKey, IndexKeySource, OwnedValue, RecordRef, RecordScratch, encode_index_key,
         };
 
         // Snapshot the row directory for this relation BEFORE we begin so the
@@ -255,7 +278,7 @@ impl Engine {
             } else {
                 0
             };
-            let mut parts: Vec<ValueRef<'_>> = Vec::with_capacity(index.keys.len());
+            let mut parts: Vec<OwnedValue> = Vec::with_capacity(index.keys.len());
             let mut has_expression_key = false;
             for key in &index.keys {
                 let attnum = match &key.source {
@@ -271,15 +294,22 @@ impl Engine {
                 let value = record
                     .value_at(&scratch, attnum as usize + col_offset)
                     .map_err(|_| Error::CorruptPage("index backfill: column out of range"))?;
+                let value = match (value, key.collation.as_deref()) {
+                    (crate::catalog::ValueRef::Text(text), Some("NOCASE")) => {
+                        OwnedValue::Text(std::sync::Arc::from(text.to_ascii_lowercase()))
+                    }
+                    _ => value.to_owned(),
+                };
                 parts.push(value);
             }
             if has_expression_key {
                 continue;
             }
+            let value_refs: Vec<_> = parts.iter().map(OwnedValue::as_ref).collect();
             let EncodedIndexKey {
                 bytes,
                 contains_null,
-            } = encode_index_key(&parts, &dirs, &mut key_buf);
+            } = encode_index_key(&value_refs, &dirs, &mut key_buf);
             // SQLite NULL-uniqueness rule: skip the unique conflict check
             // when any leading key component is NULL — duplicates of NULL
             // are allowed in unique indexes.

@@ -26,6 +26,10 @@ pub struct DispatchArgs<'a> {
     pub separator: &'a str,
     pub row_separator: &'a str,
     pub null_value: &'a str,
+    /// W7-L1: file path passed to the binary (`:memory:` if unspecified).
+    /// Needed so `.databases` can render the correct
+    /// `main: "<path>" r/w` line in-process for the common batch shape.
+    pub filename: Option<&'a str>,
 }
 
 pub fn dispatch(args: DispatchArgs<'_>) -> Dispatch {
@@ -48,7 +52,7 @@ pub fn dispatch(args: DispatchArgs<'_>) -> Dispatch {
             continue;
         }
         if let Some(rest) = trimmed.strip_prefix('.') {
-            match handle_dot(rest, &mut out) {
+            match handle_dot(rest, args.filename, &mut out) {
                 DotResult::Ok => continue,
                 DotResult::Exit(code) => {
                     exit_code = code;
@@ -79,7 +83,7 @@ pub fn dispatch(args: DispatchArgs<'_>) -> Dispatch {
     }
 }
 
-fn handle_dot(rest: &str, out: &mut String) -> DotResult {
+fn handle_dot(rest: &str, filename: Option<&str>, out: &mut String) -> DotResult {
     let mut parts = rest.split_whitespace();
     let head = match parts.next() {
         Some(h) => h,
@@ -89,6 +93,24 @@ fn handle_dot(rest: &str, out: &mut String) -> DotResult {
     match head {
         "help" => {
             print_help_into(out);
+            DotResult::Ok
+        }
+        "databases" => {
+            // W7-L1: mirror the full CLI's `.databases` exactly.
+            // crates/cli/src/dot/schema.rs::databases renders the main
+            // database as `main: "<path>" r/w`, with `:memory:` and the
+            // empty string both displayed as `""`. Replicating that
+            // verbatim keeps the parity test
+            // DOT_DATABASES_LISTS_ATTACHED (and any similar single-DB
+            // introspection case) in-process for lite, sparing the
+            // execve handoff to the full binary.
+            let display = filename.unwrap_or(":memory:");
+            let path = if display == ":memory:" || display.is_empty() {
+                ""
+            } else {
+                display
+            };
+            out.push_str(&format!("main: \"{path}\" r/w\n"));
             DotResult::Ok
         }
         "version" => {

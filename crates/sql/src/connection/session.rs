@@ -1,5 +1,6 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -17,11 +18,84 @@ use super::cache::{StatementCache, StatementCacheKey};
 use super::database::Database;
 use super::options::{OptimizerConfig, QueryMemoryConfig, StatsConfig};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RqlStats {
+    pub eligible: u64,
+    pub native: u64,
+    /// Queries routed to the SQL engine (native path did not apply).
+    pub sql_route: u64,
+    pub sql_route_disabled: u64,
+    pub sql_route_source: u64,
+    pub sql_route_join: u64,
+    pub sql_route_shape: u64,
+}
+
+/// Reason a query was routed through the SQL engine rather than native path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RqlRouteReason {
+    Disabled,
+    Source,
+    Join,
+    Shape,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct RqlStatsState {
+    eligible: AtomicU64,
+    native: AtomicU64,
+    sql_route: AtomicU64,
+    sql_route_disabled: AtomicU64,
+    sql_route_source: AtomicU64,
+    sql_route_join: AtomicU64,
+    sql_route_shape: AtomicU64,
+}
+
+impl RqlStatsState {
+    fn snapshot(&self) -> RqlStats {
+        RqlStats {
+            eligible: self.eligible.load(Ordering::Relaxed),
+            native: self.native.load(Ordering::Relaxed),
+            sql_route: self.sql_route.load(Ordering::Relaxed),
+            sql_route_disabled: self.sql_route_disabled.load(Ordering::Relaxed),
+            sql_route_source: self.sql_route_source.load(Ordering::Relaxed),
+            sql_route_join: self.sql_route_join.load(Ordering::Relaxed),
+            sql_route_shape: self.sql_route_shape.load(Ordering::Relaxed),
+        }
+    }
+
+    fn record_eligible(&self) {
+        self.eligible.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_native(&self) {
+        self.native.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_sql_route(&self, reason: RqlRouteReason) {
+        self.sql_route.fetch_add(1, Ordering::Relaxed);
+        match reason {
+            RqlRouteReason::Disabled => {
+                self.sql_route_disabled.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Source => {
+                self.sql_route_source.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Join => {
+                self.sql_route_join.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Shape => {
+                self.sql_route_shape.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Connection {
     pub(super) db: Arc<Database>,
     pub(super) session: Mutex<SessionState>,
     pub(super) local_cache: StatementCache,
+    pub(super) rql_stats: RqlStatsState,
     /// Per-connection ATTACH/DETACH alias map. Populated by
     /// `crate::exec::attach::apply_attach_plan` when the executor runs
     /// `PreparedKind::Attach`.
@@ -29,6 +103,34 @@ pub struct Connection {
 }
 
 impl Connection {
+    pub(crate) fn committed_sqlite_sequences(&self) -> std::collections::BTreeMap<String, i64> {
+        self.db.sqlite_sequence_snapshot()
+    }
+
+    pub(crate) fn publish_sqlite_sequence_entries(
+        &self,
+        sequences: &std::collections::BTreeMap<String, i64>,
+        dirty: &std::collections::BTreeSet<String>,
+    ) {
+        self.db.publish_sqlite_sequence_entries(sequences, dirty);
+    }
+
+    pub fn rql_stats(&self) -> RqlStats {
+        self.rql_stats.snapshot()
+    }
+
+    pub(crate) fn record_rql_eligible(&self) {
+        self.rql_stats.record_eligible();
+    }
+
+    pub(crate) fn record_rql_native(&self) {
+        self.rql_stats.record_native();
+    }
+
+    pub(crate) fn record_rql_sql_route(&self, reason: RqlRouteReason) {
+        self.rql_stats.record_sql_route(reason);
+    }
+
     /// Prepare a single SQL statement, ignoring any trailing statements.
     ///
     /// Most callers want this for backward compatibility — the returned
@@ -128,16 +230,63 @@ impl Connection {
         statement: &crate::RqlStatement,
     ) -> Result<Arc<PreparedTemplate>> {
         crate::exec::with_current_connection(self.as_ref(), || {
-            let template = crate::rql::prepare_template(self.as_ref(), statement)?;
-            if !template.readonly
-                && self.with_session(|session| Ok(!session.savepoints.is_empty()))?
-            {
-                return Err(Error::UnsupportedSql(
-                    "RQL mutations inside SAVEPOINT are not supported".to_owned(),
-                ));
+            let options = crate::rql::PrepareOptions::from_env();
+            if crate::rql::template_cache_enabled() {
+                return self.prepare_rql_template_cached(statement, options);
             }
-            Ok(Arc::new(template))
+            let template = Arc::new(crate::rql::prepare_template_with_options(
+                self.as_ref(),
+                statement,
+                options,
+            )?);
+            self.ensure_rql_template_allowed(&template)?;
+            Ok(template)
         })
+    }
+
+    fn prepare_rql_template_cached(
+        self: &Arc<Self>,
+        statement: &crate::RqlStatement,
+        options: crate::rql::PrepareOptions,
+    ) -> Result<Arc<PreparedTemplate>> {
+        let key = StatementCacheKey {
+            schema_epoch: self.schema_epoch().0,
+            stats_epoch: self.stats_epoch().0,
+            optimizer_hash: self.optimizer_hash(),
+            sql: crate::rql::cache_key(statement, options)?,
+        };
+        if let Some(template) = self.local_cache.get(&key) {
+            self.ensure_rql_template_allowed(&template)?;
+            return Ok(template);
+        }
+        if let Some(template) = self.db.stmt_cache.get(&key) {
+            self.ensure_rql_template_allowed(&template)?;
+            self.local_cache.insert(key, Arc::clone(&template));
+            return Ok(template);
+        }
+
+        let template = Arc::new(crate::rql::prepare_template_with_options(
+            self.as_ref(),
+            statement,
+            options,
+        )?);
+        self.ensure_rql_template_allowed(&template)?;
+        if !template_embeds_materialised_rows(&template) {
+            self.db
+                .stmt_cache
+                .insert(key.clone(), Arc::clone(&template));
+            self.local_cache.insert(key, Arc::clone(&template));
+        }
+        Ok(template)
+    }
+
+    fn ensure_rql_template_allowed(&self, template: &PreparedTemplate) -> Result<()> {
+        if !template.readonly && self.with_session(|session| Ok(!session.savepoints.is_empty()))? {
+            return Err(Error::UnsupportedSql(
+                "RQL mutations inside SAVEPOINT are not supported".to_owned(),
+            ));
+        }
+        Ok(())
     }
 
     /// Execute a typed RQL program and return the last statement result count.
@@ -197,11 +346,17 @@ impl Connection {
     /// implicit deferred transaction first (matching SQLite, where SAVEPOINT
     /// outside a tx works as if BEGIN had been called).
     pub fn savepoint(&self, name: &str) -> Result<()> {
+        let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         let implicit_tx = if session.tx.is_none() {
             let tx = self.db.engine.begin(Isolation::Snapshot)?;
+            session.sqlite_sequences = committed_sqlite_sequences;
             session.tx = Some(tx);
             session.failed = false;
+            session.sqlite_sequences_dirty.clear();
+            if session.sqlite_sequences_tx_snapshot.is_none() {
+                session.sqlite_sequences_tx_snapshot = Some(session.sqlite_sequences.clone());
+            }
             true
         } else {
             false
@@ -282,6 +437,10 @@ impl Connection {
             session.changes = 0;
             session.total_changes = 0;
             session.last_insert_rowid = None;
+            if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.as_ref() {
+                session.sqlite_sequences = snapshot.clone();
+            }
+            session.sqlite_sequences_dirty.clear();
             (
                 journal_prefix,
                 frame.changes,
@@ -327,6 +486,7 @@ impl Connection {
     }
 
     pub fn begin(&self, mode: BeginMode) -> Result<()> {
+        let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         if session.tx.is_some() {
             return Err(Error::TransactionState("transaction already active"));
@@ -339,6 +499,9 @@ impl Connection {
         if matches!(mode, BeginMode::Immediate | BeginMode::Exclusive) {
             self.db.engine.reserve_begin_lock(&mut tx)?;
         }
+        session.sqlite_sequences = committed_sqlite_sequences;
+        session.sqlite_sequences_tx_snapshot = Some(session.sqlite_sequences.clone());
+        session.sqlite_sequences_dirty.clear();
         session.tx = Some(tx);
         session.failed = false;
         // A fresh tx can never replay — drop any leftover journal/savepoint
@@ -395,6 +558,9 @@ impl Connection {
                 session.unique_guards.clear();
                 session.failed = false;
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
                 return Err(err);
             }
             session.tx = Some(tx);
@@ -408,6 +574,12 @@ impl Connection {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                session.sqlite_sequences_tx_snapshot = None;
+                self.db.publish_sqlite_sequence_entries(
+                    &session.sqlite_sequences,
+                    &session.sqlite_sequences_dirty,
+                );
+                session.sqlite_sequences_dirty.clear();
                 // SQLite parity: `PRAGMA defer_foreign_keys` is a
                 // single-transaction flag — it auto-clears at COMMIT
                 // (and at ROLLBACK below) so the next tx starts with
@@ -419,18 +591,28 @@ impl Connection {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                session.sqlite_sequences_tx_snapshot = None;
+                session.sqlite_sequences_dirty.clear();
                 Err(Error::CommitMaybeCommitted)
             }
             Ok(CommitOutcome::RolledBack) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
+                session.sqlite_sequences_dirty.clear();
                 Err(Error::TransactionState("transaction rolled back"))
             }
             Err(err) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
+                session.sqlite_sequences_dirty.clear();
                 Err(err.into())
             }
         }
@@ -448,6 +630,10 @@ impl Connection {
         // A6 SQLite parity: ROLLBACK discards every pending deferred FK
         // check; the rolled-back rows never made it to the durable state.
         crate::exec::fk::clear_deferred_fk_checks(&mut session);
+        if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+            session.sqlite_sequences = snapshot;
+        }
+        session.sqlite_sequences_dirty.clear();
         // SQLite parity: `PRAGMA defer_foreign_keys` is auto-cleared
         // at the next transaction boundary.
         session.defer_foreign_keys = false;

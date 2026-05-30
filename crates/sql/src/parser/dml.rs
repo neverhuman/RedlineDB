@@ -20,7 +20,8 @@ pub(crate) fn bind_insert(
     }
     let table = bind_table_object(&schema, &insert.table)?;
     let mut params = ParamLayout::default();
-    let conflict = bind_insert_conflict(&table, insert.or, insert.on, &mut params)?;
+    let conflict_or = insert.or;
+    let conflict_on = insert.on;
     let columns = if insert.columns.is_empty() {
         // Phase-11 SQL-D A6: implicit INSERT (no column list) only
         // binds to non-generated columns; user-provided VALUES must
@@ -101,6 +102,7 @@ pub(crate) fn bind_insert(
     } else {
         default_values = true;
     }
+    let conflict = bind_insert_conflict(&table, conflict_or, conflict_on, sql, &mut params)?;
     let returning = match insert.returning {
         Some(items) => Some(normalize_select_projection(items, &mut params)?),
         None => None,
@@ -396,6 +398,7 @@ pub(crate) fn bind_insert_conflict(
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
     or: Option<SqliteOnConflict>,
     on: Option<OnInsert>,
+    sql: &str,
     params: &mut ParamLayout,
 ) -> Result<Option<InsertConflict>> {
     if or.is_some() && on.is_some() {
@@ -418,12 +421,96 @@ pub(crate) fn bind_insert_conflict(
         return Ok(None);
     };
 
+    if let Some(conflict) = bind_chained_upsert_conflict(table, sql, params)? {
+        return Ok(Some(conflict));
+    }
+
     let OnInsert::OnConflict(on_conflict) = on else {
         return Err(Error::UnsupportedSql(
             "INSERT ON DUPLICATE KEY UPDATE is not supported".to_owned(),
         ));
     };
 
+    let arm = bind_upsert_arm(table, on_conflict, params)?;
+    Ok(Some(InsertConflict::Upsert(Box::new(UpsertPlan {
+        arms: Arc::from([arm]),
+    }))))
+}
+
+fn bind_chained_upsert_conflict(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    sql: &str,
+    params: &mut ParamLayout,
+) -> Result<Option<InsertConflict>> {
+    let segments = collect_on_conflict_segments(sql);
+    let Some(run) = first_chained_on_conflict_run(sql, &segments) else {
+        return Ok(None);
+    };
+    let mut arms = Vec::with_capacity(run.len());
+    let run_len = run.len();
+    for (position, idx) in run.into_iter().enumerate() {
+        let segment = &segments[idx];
+        let arm = bind_upsert_arm_segment(table, &sql[segment.start..segment.end], params)?;
+        if position + 1 < run_len && arm.target.is_none() {
+            return Err(Error::Parse(
+                "ON CONFLICT clause without target must be last".to_owned(),
+            ));
+        }
+        arms.push(arm);
+    }
+    Ok(Some(InsertConflict::Upsert(Box::new(UpsertPlan {
+        arms: Arc::from(arms),
+    }))))
+}
+
+fn first_chained_on_conflict_run(sql: &str, segments: &[OnConflictSegment]) -> Option<Vec<usize>> {
+    if segments.len() <= 1 {
+        return None;
+    }
+    let mut current = vec![0usize];
+    for i in 1..segments.len() {
+        let gap = &sql[segments[i - 1].end..segments[i].start];
+        if sql_gap_is_trivia(gap) {
+            current.push(i);
+        } else {
+            if current.len() > 1 {
+                return Some(current);
+            }
+            current.clear();
+            current.push(i);
+        }
+    }
+    (current.len() > 1).then_some(current)
+}
+
+fn bind_upsert_arm_segment(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    segment: &str,
+    params: &mut ParamLayout,
+) -> Result<UpsertArm> {
+    let cleaned = strip_on_conflict_extras(segment);
+    let probe_sql = format!("INSERT INTO __redlinedb_upsert_probe VALUES (NULL) {cleaned}");
+    let mut statements =
+        sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::SQLiteDialect {}, &probe_sql)
+            .map_err(|err| Error::Parse(err.to_string()))?;
+    let Some(SqlStatement::Insert(insert)) = statements.pop() else {
+        return Err(Error::Parse(
+            "failed to parse chained ON CONFLICT arm".to_owned(),
+        ));
+    };
+    let Some(OnInsert::OnConflict(on_conflict)) = insert.on else {
+        return Err(Error::Parse(
+            "failed to parse chained ON CONFLICT arm".to_owned(),
+        ));
+    };
+    bind_upsert_arm(table, on_conflict, params)
+}
+
+fn bind_upsert_arm(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    on_conflict: sqlparser::ast::OnConflict,
+    params: &mut ParamLayout,
+) -> Result<UpsertArm> {
     let target = match on_conflict.conflict_target {
         Some(ConflictTarget::Columns(columns)) => {
             let ordinals: Vec<usize> = columns
@@ -493,10 +580,7 @@ pub(crate) fn bind_insert_conflict(
         }
     };
 
-    Ok(Some(InsertConflict::Upsert(Box::new(UpsertPlan {
-        target,
-        action,
-    }))))
+    Ok(UpsertArm { target, action })
 }
 
 fn normalize_dml_value(expr: Expr, params: &mut ParamLayout) -> Result<DmlValue> {

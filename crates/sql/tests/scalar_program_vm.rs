@@ -731,13 +731,13 @@ fn oracle_fn(name: &str, v: SqlValue) -> SqlValue {
         },
         "lower" => match v {
             SqlValue::Null => SqlValue::Null,
-            SqlValue::Text(s) => SqlValue::Text(Arc::from(s.to_lowercase())),
-            other => SqlValue::Text(Arc::from(oracle_to_string(&other).to_lowercase())),
+            SqlValue::Text(s) => SqlValue::Text(Arc::from(s.to_ascii_lowercase())),
+            other => SqlValue::Text(Arc::from(oracle_to_string(&other).to_ascii_lowercase())),
         },
         "upper" => match v {
             SqlValue::Null => SqlValue::Null,
-            SqlValue::Text(s) => SqlValue::Text(Arc::from(s.to_uppercase())),
-            other => SqlValue::Text(Arc::from(oracle_to_string(&other).to_uppercase())),
+            SqlValue::Text(s) => SqlValue::Text(Arc::from(s.to_ascii_uppercase())),
+            other => SqlValue::Text(Arc::from(oracle_to_string(&other).to_ascii_uppercase())),
         },
         other => panic!("oracle: unknown fn {other}"),
     }

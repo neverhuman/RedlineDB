@@ -34,11 +34,42 @@ impl Engine {
     }
 
     fn create_inner(path: &Path, config: EngineConfig, volatile: bool) -> Result<Arc<Self>> {
-        std::fs::create_dir_all(path)?;
+        // For volatile (in-memory) databases:
+        //   • The caller (EphemeralRoot / OwnedTempRoot) already created the dir,
+        //     so skipping create_dir_all saves 3–4 extra syscalls per process.
+        //   • The config was built from EngineConfig::default() which deliberately
+        //     does NOT call cached_available_parallelism() — avoiding the 4–6
+        //     syscall cgroup walk on every fresh process.  Volatile databases use
+        //     the small fixed shard counts.
+        //
+        // For persistent databases: use the config exactly as supplied by the
+        // caller.  Callers who need CPU-scaled shards should call
+        // `EngineConfig::with_detected_parallelism()` on their config before
+        // passing it to Engine::create(); we do NOT override the caller's values
+        // here so that explicit test configs (e.g. buffer_pool_pages=16 with
+        // heap_lanes=4) are respected as-written.
+        if !volatile {
+            std::fs::create_dir_all(path)?;
+        }
         let data_path = path.join(&config.data_file_name);
         let wal_dir = path.join("wal");
         let page_file = Arc::new(PageFile::create(&data_path, config.page_size)?);
-        let buffer = Arc::new(BufferPool::new(page_file, config.buffer_pool_pages)?);
+        // W7-perf: for volatile databases use the caller-supplied shard hint so
+        // we skip the cgroup walk inside BufferPool::new.  For volatile databases
+        // EngineConfig::default() uses fixed baseline values (lock_shards=16,
+        // heap_lanes=4), so parallelism_hint = lock_shards / 4 = 4.
+        // Persistent databases call BufferPool::new which uses the process-wide
+        // OnceLock cache (one cgroup walk total, amortised across all opens).
+        let buffer = if volatile {
+            let parallelism_hint = (config.lock_shards / 4).max(1);
+            Arc::new(BufferPool::new_with_parallelism(
+                page_file,
+                config.buffer_pool_pages,
+                parallelism_hint,
+            )?)
+        } else {
+            Arc::new(BufferPool::new(page_file, config.buffer_pool_pages)?)
+        };
         let wal = if volatile {
             Arc::new(WalCoordinator::volatile(config.wal.clone()))
         } else {
@@ -48,8 +79,20 @@ impl Engine {
                 flush_wal_on_shutdown(config.commit_durability),
             )?)
         };
-        let control = ControlStore::new(path)?;
-        let tx_status_store = TxStatusStore::new(path)?;
+        // Use the volatile constructors for in-memory engines: they skip
+        // create_dir_all (already done by the caller) saving another 4–6
+        // syscalls per process start.  Persistent engines use the regular
+        // constructors which also guarantee the subdirectory exists.
+        let control = if volatile {
+            ControlStore::new_volatile(path)
+        } else {
+            ControlStore::new(path)?
+        };
+        let tx_status_store = if volatile {
+            TxStatusStore::new_volatile(path)
+        } else {
+            TxStatusStore::new(path)?
+        };
         let checkpoint = if volatile {
             None
         } else {
@@ -82,8 +125,12 @@ impl Engine {
         } else {
             Some(Arc::clone(&wal))
         };
+        let commit_durability_live = std::sync::atomic::AtomicU8::new(
+            commit_durability_initial_u8(config.commit_durability),
+        );
         Ok(Arc::new(Self {
             config: config.clone(),
+            commit_durability_live,
             volatile,
             data_path,
             wal_dir,
@@ -130,6 +177,7 @@ impl Engine {
         let wal_dir = path.as_ref().join("wal");
         let mut reader = WalReader::new(&wal_dir, config.wal.clone());
         let scan_report = reader.scan_report()?;
+        let wal_open_summary = scan_report.open_summary();
         let txs = ConcurrentTxStatus::new();
         std::fs::create_dir_all(path.as_ref())
             .map_err(|_| Error::CorruptPage("create engine directory failed"))?;
@@ -157,9 +205,10 @@ impl Engine {
                 .map_err(|_| Error::CorruptPage("create buffer pool failed"))?,
         );
         let wal = Arc::new(
-            WalCoordinator::open_with_shutdown_flush(
+            WalCoordinator::open_with_scan_summary_and_shutdown_flush(
                 &wal_dir,
                 config.wal.clone(),
+                wal_open_summary,
                 flush_wal_on_shutdown(config.commit_durability),
             )
             .map_err(|_| Error::CorruptWal("open wal coordinator failed"))?,
@@ -221,8 +270,12 @@ impl Engine {
         // Wave 1A-F: same telemetry pipe on the open path.
         locks.set_phase11_counters(Arc::clone(&phase11_counters));
         wal.set_phase11_counters(Arc::clone(&phase11_counters));
+        let commit_durability_live = std::sync::atomic::AtomicU8::new(
+            commit_durability_initial_u8(config.commit_durability),
+        );
         let engine = Arc::new(Self {
             config: config.clone(),
+            commit_durability_live,
             volatile: false,
             data_path: page_path,
             wal_dir,
@@ -256,13 +309,28 @@ impl Engine {
 
 fn catalog_sync_policy(config: &EngineConfig) -> CatalogSyncPolicy {
     match config.commit_durability {
-        CommitDurability::Strict | CommitDurability::Normal => CatalogSyncPolicy::Durable,
-        CommitDurability::UnsafeDev => CatalogSyncPolicy::Volatile,
+        // A6-b: Normal durability means write schema changes but do NOT
+        // fsync them — matching the WAL-commit policy.  Only Strict
+        // requires a catalog fsync for power-failure durability.
+        CommitDurability::Strict => CatalogSyncPolicy::Durable,
+        CommitDurability::Normal | CommitDurability::UnsafeDev => CatalogSyncPolicy::Volatile,
     }
 }
 
 fn flush_wal_on_shutdown(commit_durability: CommitDurability) -> bool {
     !matches!(commit_durability, CommitDurability::UnsafeDev)
+}
+
+/// Encode the open-time `CommitDurability` to the u8 representation used by
+/// `Engine::commit_durability_live`. Kept private to the kernel so the
+/// `Engine::commit_durability` / `set_commit_durability` accessors are the
+/// only public surface.
+fn commit_durability_initial_u8(durability: CommitDurability) -> u8 {
+    match durability {
+        CommitDurability::Strict => 0,
+        CommitDurability::Normal => 1,
+        CommitDurability::UnsafeDev => 2,
+    }
 }
 
 fn recover_heap(

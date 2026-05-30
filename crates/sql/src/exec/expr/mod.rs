@@ -268,8 +268,11 @@ pub(crate) fn eval_scalar(
             eval_scalar(expr, row, bindings)?
         }
         Expr::Cast {
-            expr, data_type, ..
-        } => cast_value(eval_scalar(expr, row, bindings)?, data_type)?,
+            kind,
+            expr,
+            data_type,
+            ..
+        } => cast_value(eval_scalar(expr, row, bindings)?, data_type, kind.clone())?,
         Expr::Ceil { expr, .. } => match eval_scalar(expr, row, bindings)? {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::Real(numeric_value(&value)?.ceil()),
@@ -296,8 +299,8 @@ pub(crate) fn eval_scalar(
             let case_insensitive =
                 crate::exec::current_connection().is_none_or(|conn| !conn.case_sensitive_like());
             like_result(
-                value,
-                pattern,
+                &value,
+                &pattern,
                 *negated,
                 escape_char.clone(),
                 case_insensitive,
@@ -317,7 +320,7 @@ pub(crate) fn eval_scalar(
             }
             let value = eval_scalar(expr, row, bindings)?;
             let pattern = eval_scalar(pattern, row, bindings)?;
-            ilike_result(value, pattern, *negated, escape_char.clone())?
+            ilike_result(&value, &pattern, *negated, escape_char.clone())?
         }
         // `SIMILAR TO` (https://www.postgresql.org/docs/16/functions-matching.html
         // #FUNCTIONS-SIMILARTO-REGEXP) is the SQL-standard regex flavour

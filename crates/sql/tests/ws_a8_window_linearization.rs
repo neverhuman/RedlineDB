@@ -176,6 +176,21 @@ fn whole_partition_single_partition() {
     lab.assert_match("SELECT v, SUM(v) OVER () AS s FROM t ORDER BY v");
 }
 
+#[test]
+fn ordered_default_range_keeps_peer_frame() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(p INTEGER, k INTEGER, v INTEGER)");
+    lab.execute(
+        "INSERT INTO t VALUES \
+         (1,1,10),(1,1,20),(1,2,30),(1,3,40), \
+         (2,1,100),(2,2,200)",
+    );
+    lab.assert_match(
+        "SELECT p, k, v, SUM(v) OVER (PARTITION BY p ORDER BY k) \
+         FROM t ORDER BY p, k, v",
+    );
+}
+
 // ── Running-sum prefix path (UNBOUNDED PRECEDING → CURRENT ROW) ─────
 
 #[test]
@@ -204,6 +219,25 @@ fn running_sum_partitioned() {
             sum(val) OVER (PARTITION BY part ORDER BY val \
                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
          FROM t ORDER BY part, val",
+    );
+}
+
+#[test]
+fn running_min_max_text_prefix() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(part INTEGER, seq INTEGER, label TEXT)");
+    lab.execute(
+        "INSERT INTO t VALUES \
+         (1,1,'delta'),(1,2,'alpha'),(1,3,'charlie'), \
+         (2,1,'bravo'),(2,2,'echo')",
+    );
+    lab.assert_match(
+        "SELECT part, seq, label, \
+            MIN(label) OVER (PARTITION BY part ORDER BY seq \
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), \
+            MAX(label) OVER (PARTITION BY part ORDER BY seq \
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) \
+         FROM t ORDER BY part, seq",
     );
 }
 

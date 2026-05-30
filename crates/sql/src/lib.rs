@@ -15,7 +15,7 @@ pub mod udf;
 pub mod value;
 
 pub use connection::{
-    Connection, Database, DbOptions, OptimizerConfig, QueryMemoryConfig, StatsConfig,
+    Connection, Database, DbOptions, OptimizerConfig, QueryMemoryConfig, RqlStats, StatsConfig,
 };
 pub use error::{Error, Result};
 pub use parser::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};
@@ -43,7 +43,7 @@ pub use value::{SqlValue, SqlValueRef};
 /// as internal.
 #[doc(hidden)]
 pub mod ws_c3_testing {
-    pub use crate::exec::select_top::{
+    pub use crate::exec::select_parallel::{
         ParallelCoveringDecision, take_last_parallel_covering_decision,
     };
     pub use crate::exec::{

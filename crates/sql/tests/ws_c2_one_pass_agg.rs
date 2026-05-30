@@ -101,6 +101,17 @@ const SETUP_T: &[&str] = &[
         ('c', 9), ('c', 1), ('c', 3), ('c', 5)",
 ];
 
+const SETUP_BIG: &[&str] = &[
+    "CREATE TABLE big(k TEXT, v INTEGER)",
+    "INSERT INTO big VALUES \
+        ('a', 1), ('a', 2), ('a', 3), ('a', 4), ('a', 5), \
+        ('b', 1), ('b', 2), ('b', 3), ('b', 4), \
+        ('c', 1), ('c', 2), ('c', 3), ('c', 4), \
+        ('d', 1), ('d', 2), ('d', 3), \
+        ('e', 1), ('e', 2), \
+        ('f', 1)",
+];
+
 fn seed_t(conn: &Arc<Connection>) {
     for statement in SETUP_T {
         conn.execute(statement).expect("setup t");
@@ -216,5 +227,19 @@ fn one_pass_limit_offset_pagination() {
         &conn,
         SETUP_T,
         "SELECT k, SUM(v) FROM t GROUP BY k ORDER BY k LIMIT 2 OFFSET 1",
+    );
+}
+
+#[test]
+fn one_pass_large_order_by_aggregate_alias_with_limit_offset() {
+    let (_dir, conn) = open();
+    for statement in SETUP_BIG {
+        conn.execute(statement).expect("setup big");
+    }
+    assert_matches_sqlite_ordered(
+        &conn,
+        SETUP_BIG,
+        "SELECT k, COUNT(*) AS c, SUM(v) AS s \
+         FROM big GROUP BY k ORDER BY c DESC, k ASC LIMIT 4 OFFSET 1",
     );
 }

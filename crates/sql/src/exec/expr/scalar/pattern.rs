@@ -8,9 +8,11 @@
 
 use super::*;
 
+// A13: take args by reference. The body only needs `value_to_string(&v)`,
+// never ownership; previously every LIKE evaluation cloned both operands.
 pub(crate) fn like_result(
-    value: SqlValue,
-    pattern: SqlValue,
+    value: &SqlValue,
+    pattern: &SqlValue,
     negated: bool,
     escape_char: Option<Value>,
     case_insensitive: bool,
@@ -18,8 +20,8 @@ pub(crate) fn like_result(
     if matches!(value, SqlValue::Null) || matches!(pattern, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let text = value_to_string(&value);
-    let pattern = value_to_string(&pattern);
+    let text = value_to_string(value);
+    let pattern = value_to_string(pattern);
     let escape = match escape_char {
         Some(Value::SingleQuotedString(s)) if s.chars().count() == 1 => {
             Some(s.chars().next().unwrap())
@@ -59,17 +61,21 @@ pub(crate) fn like_result(
     Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
 }
 
+// A13b: take args by reference. ILIKE's per-row `.to_lowercase()` is still
+// per-call but at least the outer `SqlValue` clones at the call sites are
+// gone. A future commit could push case-folding into `unicode_like_match`
+// itself to drop the lowercase clones too — that's a larger refactor.
 pub(crate) fn ilike_result(
-    value: SqlValue,
-    pattern: SqlValue,
+    value: &SqlValue,
+    pattern: &SqlValue,
     negated: bool,
     escape_char: Option<Value>,
 ) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null) || matches!(pattern, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let text = value_to_string(&value).to_lowercase();
-    let pattern = value_to_string(&pattern).to_lowercase();
+    let text = value_to_string(value).to_lowercase();
+    let pattern = value_to_string(pattern).to_lowercase();
     let escape = match escape_char {
         Some(Value::SingleQuotedString(s)) if s.chars().count() == 1 => {
             Some(s.chars().next().unwrap())
@@ -110,21 +116,22 @@ pub(crate) fn ilike_result(
 }
 
 fn like_match(text: &str, pattern: &str, escape: Option<char>, case_insensitive: bool) -> bool {
-    let text = if case_insensitive {
-        text.to_ascii_lowercase()
+    // A40: on the case-sensitive path (the common SQLite default), borrow
+    // the input strings directly — `like_match_inner` takes `&[u8]` so it
+    // doesn't need owned input. The previous code did `text.to_owned()`
+    // and `pattern.to_owned()` unconditionally, allocating two Strings
+    // per LIKE evaluation even when the case fold was unnecessary.
+    if case_insensitive {
+        let text = text.to_ascii_lowercase();
+        let pattern = pattern.to_ascii_lowercase();
+        like_match_inner(
+            text.as_bytes(),
+            pattern.as_bytes(),
+            escape.map(|c| c.to_ascii_lowercase()),
+        )
     } else {
-        text.to_owned()
-    };
-    let pattern = if case_insensitive {
-        pattern.to_ascii_lowercase()
-    } else {
-        pattern.to_owned()
-    };
-    like_match_inner(
-        text.as_bytes(),
-        pattern.as_bytes(),
-        escape.map(|c| c.to_ascii_lowercase()),
-    )
+        like_match_inner(text.as_bytes(), pattern.as_bytes(), escape)
+    }
 }
 
 fn unicode_like_match(text: &str, pattern: &str, escape: Option<char>) -> bool {
@@ -235,12 +242,14 @@ fn like_match_inner(text: &[u8], pattern: &[u8], escape: Option<char>) -> bool {
     inner(text, pattern, escape.map(|c| c as u8))
 }
 
-pub(crate) fn glob_result(value: SqlValue, pattern: SqlValue, negated: bool) -> Result<SqlValue> {
+// A14: take args by reference. The body only needs `value_to_string(&v)`,
+// never ownership; previously every GLOB evaluation cloned both operands.
+pub(crate) fn glob_result(value: &SqlValue, pattern: &SqlValue, negated: bool) -> Result<SqlValue> {
     if matches!(value, SqlValue::Null) || matches!(pattern, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let text = value_to_string(&value);
-    let pattern = value_to_string(&pattern);
+    let text = value_to_string(value);
+    let pattern = value_to_string(pattern);
     let matched = glob_match(text.as_bytes(), pattern.as_bytes());
     Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
 }

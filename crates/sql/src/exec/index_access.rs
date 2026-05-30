@@ -134,6 +134,25 @@ pub(crate) fn try_match_index_access(
     try_match_index_access_hinted(engine, table, selection, bindings, None)
 }
 
+/// Allocation-free case-insensitive substring scan for the literal
+/// `"collate nocase"`. Used by `try_match_index_access_hinted` to bail out
+/// of index-probe matching when the table's `normalized_sql` declares a
+/// NOCASE collation (which the current index machinery doesn't honour).
+#[inline]
+fn contains_collate_nocase_ci(haystack: &str) -> bool {
+    const NEEDLE: &[u8] = b"collate nocase";
+    let bytes = haystack.as_bytes();
+    if bytes.len() < NEEDLE.len() {
+        return false;
+    }
+    bytes.windows(NEEDLE.len()).any(|window| {
+        window
+            .iter()
+            .zip(NEEDLE.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
+}
+
 /// Phase 5 WS-A2e / A2g entry point. The optional `hint` rides through
 /// SQLite-parity `INDEXED BY` / `NOT INDEXED` table-access hints; pass
 /// `None` for callers that have no hint context (joins, CTE row sources,
@@ -154,10 +173,14 @@ pub(crate) fn try_match_index_access_hinted(
     if table.indexes.is_empty() {
         return None;
     }
+    // A7: avoid the per-SELECT `to_ascii_lowercase()` allocation. Each call
+    // here previously copied the entire normalized_sql into a fresh String
+    // just to do a case-insensitive substring check. Common case: no COLLATE
+    // NOCASE present, so the allocation was pure waste.
     if table
         .normalized_sql
         .as_deref()
-        .is_some_and(|sql| sql.to_ascii_lowercase().contains("collate nocase"))
+        .is_some_and(contains_collate_nocase_ci)
     {
         return None;
     }
@@ -208,22 +231,12 @@ pub(crate) fn try_match_index_access_hinted(
         // Phase 5 WS-A2g: expression-index equality. When the leading
         // key is an expression and a top-level conjunct compares that
         // exact expression to a constant, treat it as a point lookup on
-        // the encoded constant. Multi-key expression indexes are not
-        // handled in this wave — only single-key expression indexes.
-        //
-        // Gating: expression-index DML maintenance (Lane B) is not yet
-        // wired (see `index_dml.rs::build_index_key`), so the leaf is
-        // always empty after INSERTs. To avoid emitting a planner path
-        // that returns zero rows, we ONLY match the expression index
-        // when the user explicitly opts in via
-        // `INDEXED BY <expr_index_name>`. The hinted path lets us prove
-        // the planner machinery is wired without exposing the empty
-        // leaves to unhinted queries.
+        // the encoded constant. Expression-index DML/backfill is wired,
+        // so unhinted single-key expression indexes are safe to consider.
+        // Multi-key expression indexes still stay out of this path until
+        // every key has explicit residual and lookup proof.
         if let IndexKeySource::Expression { sql: expr_sql, .. } = &first_key.source {
             if index.keys.len() != 1 {
-                continue;
-            }
-            if !matches!(hint, Some(TableAccessHint::IndexedBy(_))) {
                 continue;
             }
             if let Some((value, consumed_idx)) =
@@ -303,6 +316,28 @@ pub(crate) fn try_match_index_access_hinted(
                     equality_prefix_len: index.keys.len(),
                 });
             }
+            if let Some((probe, suffix_predicates, suffix_consumed)) =
+                suffix_range_after_prefix(index, table, &leading_value, &conjuncts, bindings)
+            {
+                let mut consumed_idx = vec![leading_idx];
+                consumed_idx.extend(suffix_consumed);
+                let mut predicates = vec![format!(
+                    "{} = {}",
+                    table.columns[leading].name,
+                    sql_value_to_explain(&leading_value)
+                )];
+                predicates.extend(suffix_predicates);
+                let residual_conjuncts = residuals_from_consumed(&conjuncts, &consumed_idx);
+                return Some(IndexAccessMatch {
+                    index: Arc::new(index.clone()),
+                    kind: IndexProbeKind::RangeScan,
+                    probe,
+                    predicates,
+                    ordered_limit: None,
+                    residual_conjuncts,
+                    equality_prefix_len: 1,
+                });
+            }
             // Leading-prefix range scan: encode just the leading value
             // and walk every key that starts with that prefix. Only the
             // leading-column equality was applied to the probe; any
@@ -364,6 +399,40 @@ pub(crate) fn try_match_index_access_hinted(
     }
 
     None
+}
+
+fn suffix_range_after_prefix(
+    index: &IndexDef,
+    table: &TableDef,
+    leading_value: &SqlValue,
+    conjuncts: &[&Expr],
+    bindings: &[Option<SqlValue>],
+) -> Option<(IndexProbe, Vec<String>, Vec<usize>)> {
+    let suffix_key = index.keys.get(1)?;
+    if suffix_key.sort_dir != SortDir::Asc {
+        return None;
+    }
+    let IndexKeySource::Column { attnum } = suffix_key.source else {
+        return None;
+    };
+    let (bounds, predicates, consumed) =
+        leading_range_bounds(conjuncts, table, attnum as usize, bindings)?;
+    let leading_prefix = encode_prefix_key(index, std::slice::from_ref(leading_value));
+    let start = match &bounds.lower {
+        Some((value, inclusive)) => {
+            let key = encode_prefix_key(index, &[leading_value.clone(), value.clone()]);
+            if *inclusive { key } else { next_key(&key) }
+        }
+        None => leading_prefix.clone(),
+    };
+    let end = match &bounds.upper {
+        Some((value, inclusive)) => {
+            let key = encode_prefix_key(index, &[leading_value.clone(), value.clone()]);
+            if *inclusive { next_key(&key) } else { key }
+        }
+        None => prefix_bounds(&leading_prefix).1,
+    };
+    Some((IndexProbe::Range { start, end }, predicates, consumed))
 }
 
 /// Phase 5 WS-A1: clone the conjuncts NOT named in `consumed` into
@@ -701,17 +770,24 @@ fn leading_range_bounds(
             if matches!(value, SqlValue::Null) {
                 continue;
             }
-            predicates.push(format!(
+            let predicate = format!(
                 "{} {} {}",
                 column_name,
                 binary_op_to_str(op, side.side),
                 sql_value_to_explain(&value)
-            ));
+            );
             if is_lower {
+                if bounds.lower.is_some() {
+                    continue;
+                }
                 bounds.lower = Some((value, inclusive_lower));
             } else {
+                if bounds.upper.is_some() {
+                    continue;
+                }
                 bounds.upper = Some((value, inclusive_upper));
             }
+            predicates.push(predicate);
             consumed.push(idx);
             continue;
         }
@@ -726,6 +802,9 @@ fn leading_range_bounds(
             let lo = eval_constant(low, bindings)?;
             let hi = eval_constant(high, bindings)?;
             if matches!(lo, SqlValue::Null) || matches!(hi, SqlValue::Null) {
+                continue;
+            }
+            if bounds.lower.is_some() || bounds.upper.is_some() {
                 continue;
             }
             predicates.push(format!(
@@ -1080,5 +1159,51 @@ fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue>
             }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod a7_collate_scan_tests {
+    use super::contains_collate_nocase_ci;
+
+    #[test]
+    fn matches_lowercase() {
+        assert!(contains_collate_nocase_ci(
+            "CREATE TABLE t (a TEXT collate nocase)"
+        ));
+    }
+
+    #[test]
+    fn matches_uppercase() {
+        assert!(contains_collate_nocase_ci(
+            "CREATE TABLE t (a TEXT COLLATE NOCASE)"
+        ));
+    }
+
+    #[test]
+    fn matches_mixed_case() {
+        assert!(contains_collate_nocase_ci(
+            "CREATE TABLE t (a TEXT Collate NoCase)"
+        ));
+    }
+
+    #[test]
+    fn rejects_unrelated_text() {
+        assert!(!contains_collate_nocase_ci(
+            "CREATE TABLE t (a INTEGER PRIMARY KEY)"
+        ));
+    }
+
+    #[test]
+    fn rejects_partial_match() {
+        // 'collate' alone or 'nocase' alone must not trigger.
+        assert!(!contains_collate_nocase_ci("a TEXT COLLATE BINARY"));
+        assert!(!contains_collate_nocase_ci("nocase_column TEXT"));
+    }
+
+    #[test]
+    fn rejects_shorter_than_needle() {
+        assert!(!contains_collate_nocase_ci("short"));
+        assert!(!contains_collate_nocase_ci(""));
     }
 }

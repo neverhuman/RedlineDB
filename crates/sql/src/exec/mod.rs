@@ -7,12 +7,12 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use redlinedb_kernel::catalog::{
-    ColumnStats, ConstraintKind, EvalScratch, HistogramBucket, IndexStats, MostCommonValue,
-    OwnedValue, RecordRef, RecordScratch, RowValueSource, SchemaSnapshot, SqliteSchemaRow,
-    StatsEpoch, StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity, encode_record,
-    eval_expr,
+    ColumnStats, ConstraintKind, EvalScratch, HistogramBucket, IndexDef, IndexStats,
+    MostCommonValue, OwnedValue, RecordRef, RecordScratch, RowValueSource, SchemaSnapshot,
+    SqliteSchemaRow, StatsEpoch, StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity,
+    encode_record, eval_expr,
 };
-use redlinedb_kernel::engine::{CommitOutcome, Engine, Txn};
+use redlinedb_kernel::engine::{CommitDurability, CommitOutcome, Engine, Txn};
 use redlinedb_kernel::format::RowId;
 use redlinedb_kernel::txn::Isolation;
 use sqlparser::ast::{
@@ -26,11 +26,11 @@ use crate::batch::{
 use crate::connection::Connection;
 use crate::error::{Error, Result};
 use crate::planner::{self, ExplainMetrics};
-use crate::session::SessionState;
+use crate::session::{BeginMode, SessionState};
 use crate::statement::{
     AnalyzePlan, CreateTableAsSelectSpec, DmlValue, ExecutionResult, ExplainPlan, PragmaPlan,
     PreparedKind, PreparedTemplate, RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource,
-    SelectRuntimeTx, SelectSource,
+    SelectRuntimeTx, SelectSource, SynchronousLevel,
 };
 use crate::value::{SqlValue, canonicalize, compare_values, is_truthy};
 
@@ -44,12 +44,15 @@ pub(crate) mod index_predicate;
 pub(crate) mod policy;
 mod tail;
 use tail::*;
+pub(crate) use tail::{collect_table_rowids, load_table_row_by_rowid};
 pub(crate) mod vec;
 
 mod agg;
 mod agg_eval;
 pub(crate) mod intern;
 use agg::*;
+mod alter;
+use alter::*;
 mod insert;
 use insert::*;
 pub(crate) mod select_top;
@@ -60,10 +63,12 @@ pub(crate) mod cte;
 pub(crate) mod fk;
 pub(crate) mod hot_row;
 pub(crate) mod json_tv;
+pub(crate) mod select_parallel;
 // Track K — SQL:2003 MERGE dispatch.
 pub(crate) mod merge;
 pub(crate) mod pragma_tv;
 pub(crate) mod set_ops;
+mod sqlite_sequence;
 pub(crate) mod table_valued;
 pub(crate) mod trigger;
 pub(crate) mod view;
@@ -435,8 +440,6 @@ pub fn execute_prepared(
         PreparedKind::CreateTable(spec) => {
             with_write_tx(conn, |session, tx| {
                 let table = conn.engine().create_table(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 session.last_insert_rowid = Some(table.table_id.0 as i64);
                 Ok(())
             })?;
@@ -455,8 +458,6 @@ pub fn execute_prepared(
                 {
                     session.temp_tables.push(spec.name.original().to_owned());
                 }
-                session.changes += 1;
-                session.total_changes += 1;
                 session.last_insert_rowid = Some(table.table_id.0 as i64);
                 Ok(())
             })?;
@@ -469,10 +470,18 @@ pub fn execute_prepared(
             execute_create_table_as_select(conn, spec, bindings)
         }
         PreparedKind::CreateIndex(spec) => {
-            with_write_tx(conn, |session, tx| {
-                conn.engine().create_index(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
+            with_write_tx(conn, |_session, tx| {
+                let spec_has_expression_key =
+                    spec.columns.iter().any(|column| column.expr_sql.is_some());
+                let existed_before = if spec_has_expression_key {
+                    create_index_existed_before(conn, tx, spec)?
+                } else {
+                    false
+                };
+                let index = conn.engine().create_index(tx, spec.clone())?;
+                if spec_has_expression_key && !existed_before {
+                    backfill_expression_index(conn, tx, &index)?;
+                }
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -489,9 +498,13 @@ pub fn execute_prepared(
         }
         PreparedKind::DropTable(spec) => {
             with_write_tx(conn, |session, tx| {
+                session
+                    .sqlite_sequences
+                    .remove(&spec.name.name.folded().to_owned());
+                session
+                    .sqlite_sequences_dirty
+                    .insert(spec.name.name.folded().to_owned());
                 conn.engine().drop_table(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -500,10 +513,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::DropIndex(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_index(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -512,10 +523,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::CreateView(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().create_view(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -524,10 +533,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::DropView(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_view(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -536,10 +543,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::CreateTrigger(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().create_trigger(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -548,10 +553,8 @@ pub fn execute_prepared(
             })
         }
         PreparedKind::DropTrigger(spec) => {
-            with_write_tx(conn, |session, tx| {
+            with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_trigger(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             })?;
             Ok(ExecutionResult {
@@ -566,10 +569,9 @@ pub fn execute_prepared(
             // / table rename. Snapshot the bit, install, run, restore.
             let prev_legacy = redlinedb_kernel::catalog::legacy_alter_table_active_for_tests();
             redlinedb_kernel::catalog::set_legacy_alter_table(conn.legacy_alter_table());
-            let alter_result = with_write_tx(conn, |session, tx| {
+            let alter_result = with_write_tx(conn, |_session, tx| {
+                rewrite_drop_column_rows(conn, tx, spec)?;
                 conn.engine().alter_table(tx, spec.clone())?;
-                session.changes += 1;
-                session.total_changes += 1;
                 Ok(())
             });
             redlinedb_kernel::catalog::set_legacy_alter_table(prev_legacy);
@@ -581,13 +583,7 @@ pub fn execute_prepared(
         }
         PreparedKind::Insert(plan) => {
             let result = execute_insert(conn, plan, bindings)?;
-            if result.affected_rows > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += result.affected_rows;
-                    session.total_changes += result.affected_rows;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, result.affected_rows)?;
             Ok(result)
         }
         PreparedKind::InsertView(plan) => {
@@ -603,13 +599,7 @@ pub fn execute_prepared(
                 trigger::fire_instead_of_insert(conn, &plan.view_name, &plan.columns, values)?;
                 affected += 1;
             }
-            if affected > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += affected;
-                    session.total_changes += affected;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, affected)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: affected,
@@ -617,35 +607,17 @@ pub fn execute_prepared(
         }
         PreparedKind::Update(plan) => {
             let result = execute_update(conn, plan, bindings)?;
-            if result.affected_rows > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += result.affected_rows;
-                    session.total_changes += result.affected_rows;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, result.affected_rows)?;
             Ok(result)
         }
         PreparedKind::Delete(plan) => {
             let result = execute_delete(conn, plan, bindings)?;
-            if result.affected_rows > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += result.affected_rows;
-                    session.total_changes += result.affected_rows;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, result.affected_rows)?;
             Ok(result)
         }
         PreparedKind::Merge(plan) => {
             let result = crate::exec::merge::execute_merge(conn, plan, bindings)?;
-            if result.affected_rows > 0 {
-                with_session_reentrant(conn, |session| {
-                    session.changes += result.affected_rows;
-                    session.total_changes += result.affected_rows;
-                    Ok(())
-                })?;
-            }
+            record_row_changes(conn, result.affected_rows)?;
             Ok(result)
         }
         PreparedKind::Analyze(plan) => {
@@ -688,6 +660,58 @@ pub fn execute_prepared(
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 0,
+            })
+        }
+        PreparedKind::CrossDbInsertSelect(plan) => {
+            if conn.in_transaction() {
+                return Err(Error::UnsupportedSql(
+                    "cross-database INSERT SELECT inside a transaction is not supported".to_owned(),
+                ));
+            }
+            let source_rows = materialize_select_plan_rows(conn, &plan.source, bindings)?;
+            let Some(sidecar) = conn.attach_map().database(&plan.alias) else {
+                return Err(Error::UnknownTable(format!(
+                    "no such database: {}",
+                    plan.alias
+                )));
+            };
+            let sidecar_conn = sidecar.connect();
+            let insert_sql =
+                cross_db_insert_values_sql(&plan.table, &plan.columns, plan.source_arity);
+            sidecar_conn.begin(BeginMode::Deferred)?;
+            let result = (|| -> Result<(usize, Option<i64>)> {
+                let mut stmt = sidecar_conn.prepare(&insert_sql)?;
+                validate_cross_db_insert_arity(&stmt, plan.source_arity)?;
+                let mut affected_rows = 0usize;
+                for row in source_rows {
+                    if row.len() != plan.source_arity {
+                        return Err(Error::Bind(
+                            "INSERT SELECT row arity does not match target".to_owned(),
+                        ));
+                    }
+                    for (idx, value) in row.into_iter().enumerate() {
+                        stmt.bind_value(idx + 1, value)?;
+                    }
+                    while matches!(stmt.step()?, crate::statement::Step::Row) {}
+                    affected_rows += stmt.affected_rows();
+                    stmt.reset()?;
+                }
+                Ok((affected_rows, sidecar_conn.last_insert_rowid()))
+            })();
+            let (affected_rows, last_insert_rowid) = match result {
+                Ok(result) => result,
+                Err(err) => {
+                    let _ = sidecar_conn.rollback();
+                    return Err(err);
+                }
+            };
+            if let Err(err) = sidecar_conn.commit() {
+                return Err(err);
+            }
+            record_row_changes_and_last_insert_rowid(conn, affected_rows, last_insert_rowid)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows,
             })
         }
         // Track J: register a Postgres-style schema name on the session.
@@ -872,6 +896,50 @@ pub(crate) fn materialize_prepared_rows_limited(
     Ok(rows)
 }
 
+pub(crate) fn materialize_first_prepared_row(
+    conn: &Connection,
+    template: &PreparedTemplate,
+    bindings: &[Option<SqlValue>],
+) -> Result<Option<Vec<SqlValue>>> {
+    let result = execute_prepared(conn, template, bindings)?;
+    let RuntimeState::Select(mut runtime) = result.runtime else {
+        return Ok(None);
+    };
+    let mut current = None;
+    if step_select_runtime(conn, &mut runtime, bindings, &mut current)? {
+        return Ok(None);
+    }
+    let Some(row) = current.take() else {
+        return Err(Error::Bind(
+            "select runtime yielded without a current row".to_owned(),
+        ));
+    };
+    finish_select_runtime(conn, &mut runtime)?;
+    Ok(Some(row))
+}
+
+pub(crate) fn prepared_select_has_row(
+    conn: &Connection,
+    template: &PreparedTemplate,
+    bindings: &[Option<SqlValue>],
+) -> Result<bool> {
+    let result = execute_prepared(conn, template, bindings)?;
+    let RuntimeState::Select(mut runtime) = result.runtime else {
+        return Ok(false);
+    };
+    let mut current = None;
+    if step_select_runtime(conn, &mut runtime, bindings, &mut current)? {
+        return Ok(false);
+    }
+    if current.is_none() {
+        return Err(Error::Bind(
+            "select runtime yielded without a current row".to_owned(),
+        ));
+    }
+    finish_select_runtime(conn, &mut runtime)?;
+    Ok(true)
+}
+
 pub(crate) fn materialize_select_plan_rows(
     conn: &Connection,
     plan: &SelectPlan,
@@ -926,11 +994,12 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Update(_)
         | PreparedKind::Delete(_)
         | PreparedKind::CrossDbSql(_)
+        | PreparedKind::CrossDbInsertSelect(_)
         | PreparedKind::CreateSchema { .. }
         | PreparedKind::DropSchema { .. }
         | PreparedKind::CreateSequence { .. }
         | PreparedKind::DropSequence { .. } => true,
-        PreparedKind::Merge(_) | PreparedKind::CrossDbSql(_) => true,
+        PreparedKind::Merge(_) => true,
     }
 }
 
@@ -961,6 +1030,59 @@ fn execute_create_virtual_table(
         let _ = materialize_prepared_rows(conn, &template, &[])?;
     }
     Ok(())
+}
+
+fn cross_db_insert_values_sql(table: &str, columns: &[String], arity: usize) -> String {
+    let mut sql = String::from("INSERT INTO ");
+    push_quoted_ident(&mut sql, table);
+    if !columns.is_empty() {
+        sql.push('(');
+        for (idx, column) in columns.iter().enumerate() {
+            if idx > 0 {
+                sql.push(',');
+            }
+            push_quoted_ident(&mut sql, column);
+        }
+        sql.push(')');
+    }
+    sql.push_str(" VALUES (");
+    for idx in 0..arity {
+        if idx > 0 {
+            sql.push(',');
+        }
+        sql.push('?');
+    }
+    sql.push(')');
+    sql
+}
+
+fn validate_cross_db_insert_arity(
+    stmt: &crate::statement::Statement,
+    source_arity: usize,
+) -> Result<()> {
+    let template = stmt.template();
+    let PreparedKind::Insert(insert_plan) = &template.kind else {
+        return Err(Error::UnsupportedSql(
+            "cross-database INSERT SELECT target must be a table".to_owned(),
+        ));
+    };
+    if insert_plan.columns.len() != source_arity {
+        return Err(Error::Bind(
+            "INSERT SELECT row arity does not match column list".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn push_quoted_ident(out: &mut String, ident: &str) {
+    out.push('"');
+    for ch in ident.chars() {
+        if ch == '"' {
+            out.push('"');
+        }
+        out.push(ch);
+    }
+    out.push('"');
 }
 
 fn execute_create_table_as_select(
@@ -994,8 +1116,7 @@ fn execute_create_table_as_select(
             session.last_insert_rowid = Some(rowid.0 as i64);
         }
         if inserted > 0 {
-            session.changes += inserted;
-            session.total_changes += inserted;
+            session.last_insert_rowid = Some(inserted as i64);
         }
         Ok(inserted)
     })?;
@@ -1004,6 +1125,79 @@ fn execute_create_table_as_select(
         runtime: RuntimeState::Done,
         affected_rows: inserted,
     })
+}
+
+fn record_row_changes(conn: &Connection, affected_rows: usize) -> Result<()> {
+    with_session_reentrant(conn, |session| {
+        session.changes = affected_rows;
+        session.total_changes += affected_rows;
+        Ok(())
+    })
+}
+
+fn record_row_changes_and_last_insert_rowid(
+    conn: &Connection,
+    affected_rows: usize,
+    last_insert_rowid: Option<i64>,
+) -> Result<()> {
+    with_session_reentrant(conn, |session| {
+        session.changes = affected_rows;
+        session.total_changes += affected_rows;
+        if affected_rows > 0
+            && let Some(rowid) = last_insert_rowid
+        {
+            session.last_insert_rowid = Some(rowid);
+        }
+        Ok(())
+    })
+}
+
+fn create_index_existed_before(
+    conn: &Connection,
+    tx: &Txn,
+    spec: &redlinedb_kernel::catalog::CreateIndexSpec,
+) -> Result<bool> {
+    if !spec.if_not_exists {
+        return Ok(false);
+    }
+    let snapshot = conn.engine().schema_snapshot_for_tx(tx);
+    let schema_id = redlinedb_kernel::catalog::resolve_schema_id(&snapshot, spec.schema.as_ref())?;
+    Ok(snapshot
+        .lookup_index(schema_id, spec.name.folded())
+        .is_some())
+}
+
+fn backfill_expression_index(conn: &Connection, tx: &mut Txn, index: &Arc<IndexDef>) -> Result<()> {
+    let Some(handle) = index_dml::open_index_handle_for_tx(conn.engine(), tx, index) else {
+        return Ok(());
+    };
+    let snapshot = conn.engine().schema_snapshot_for_tx(tx);
+    let table = snapshot
+        .table_by_id(index.table_id)
+        .ok_or(redlinedb_kernel::Error::ObjectNotFound)?;
+    for row in collect_table_rows(conn.engine(), tx, &table)? {
+        if let Some(pred_sql) = index.predicate_sql.as_deref()
+            && !index_predicate::eval_index_predicate(&table, pred_sql, &row.values)?
+        {
+            continue;
+        }
+        let key = index_dml::build_index_key(&table, index, &row.values)?;
+        let _unique_guard = if index.unique && !key.contains_null {
+            let (guard, hit) =
+                index_dml::probe_unique_for_conflict(conn.engine(), &handle, tx, None, &key)?;
+            if hit.is_some() {
+                return Err(Error::ConstraintViolation(format!(
+                    "UNIQUE constraint failed: {}",
+                    table.name
+                )));
+            }
+            Some(guard)
+        } else {
+            None
+        };
+        handle.insert_tx(tx.id(), &key.bytes, index_dml::synthetic_row_ref(row.rowid))?;
+    }
+    Ok(())
 }
 
 /// Returns `Some(value)` when the given PRAGMA SET plan must echo a row
@@ -1029,7 +1223,16 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
             conn.set_foreign_keys(*value);
             Ok(())
         }
-        PragmaPlan::SetUserVersion(value) => conn.set_user_version(*value),
+        PragmaPlan::SetUserVersion { alias, value } => {
+            if let Some(alias) = alias.as_ref() {
+                let Some(db) = conn.attach_map().database(alias.as_ref()) else {
+                    return Err(Error::UnknownTable(format!("no such database: {alias}")));
+                };
+                db.set_user_version(*value)
+            } else {
+                conn.set_user_version(*value)
+            }
+        }
         PragmaPlan::SetRecursiveTriggers(value) => {
             conn.set_recursive_triggers(*value);
             Ok(())
@@ -1040,6 +1243,19 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
         }
         PragmaPlan::SetSynchronous(value) => {
             conn.set_synchronous(*value);
+            // A1: propagate the SQLite-compatible PRAGMA level into the kernel
+            // commit-durability hot path. Without this, `PRAGMA synchronous`
+            // was a silent no-op — the engine kept fsync-per-statement
+            // regardless of OFF/NORMAL requests. Mapping matches SQLite intent:
+            //   OFF | NORMAL  → CommitDurability::Normal  (buffered writes)
+            //   FULL | EXTRA  → CommitDurability::Strict  (fsync each commit)
+            // UnsafeDev is intentionally NOT reachable via PRAGMA — set via
+            // open-time options / REDLINEDB_DEFAULT_DURABILITY env (A2) only.
+            let durability = match *value {
+                SynchronousLevel::Off | SynchronousLevel::Normal => CommitDurability::Normal,
+                SynchronousLevel::Full | SynchronousLevel::Extra => CommitDurability::Strict,
+            };
+            conn.engine().set_commit_durability(durability);
             Ok(())
         }
         PragmaPlan::SetTempStore(value) => {
@@ -1213,6 +1429,8 @@ fn with_write_tx<T>(
         if session.tx.is_some() {
             let mut tx = session.tx.take().expect("checked some");
             let tx_ptr: *mut Txn = &mut tx;
+            let sqlite_sequence_snapshot = session.sqlite_sequences.clone();
+            let sqlite_sequence_dirty_snapshot = session.sqlite_sequences_dirty.clone();
             let result = with_current_session(session_ptr, || {
                 with_current_tx(tx_ptr, || {
                     // SAFETY: `tx_ptr` points at the `tx` local above for the
@@ -1225,10 +1443,15 @@ fn with_write_tx<T>(
             session.tx = Some(tx);
             if result.is_err() {
                 session.failed = true;
+                session.sqlite_sequences = sqlite_sequence_snapshot;
+                session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot;
             }
             result
         } else {
             let mut attempts = 0_usize;
+            session.sqlite_sequences = conn.committed_sqlite_sequences();
+            let sqlite_sequence_snapshot = session.sqlite_sequences.clone();
+            let sqlite_sequence_dirty_snapshot = session.sqlite_sequences_dirty.clone();
             loop {
                 let mut tx = conn.engine().begin(Isolation::ReadCommitted)?;
                 let tx_ptr: *mut Txn = &mut tx;
@@ -1255,27 +1478,48 @@ fn with_write_tx<T>(
                             let _ = conn.engine().rollback(tx);
                             session.kernel_unique_guards.clear();
                             session.unique_guards.clear();
+                            session.sqlite_sequences_tx_snapshot = None;
+                            session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                            session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot.clone();
                             return Err(err);
                         }
                         match conn.engine().commit(tx) {
                             Ok(CommitOutcome::Committed(_)) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
+                                session.sqlite_sequences_tx_snapshot = None;
+                                conn.publish_sqlite_sequence_entries(
+                                    &session.sqlite_sequences,
+                                    &session.sqlite_sequences_dirty,
+                                );
+                                session.sqlite_sequences_dirty.clear();
                                 return Ok(value);
                             }
                             Ok(CommitOutcome::MaybeCommitted) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
+                                session.sqlite_sequences_tx_snapshot = None;
+                                session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                                session.sqlite_sequences_dirty =
+                                    sqlite_sequence_dirty_snapshot.clone();
                                 return Err(Error::CommitMaybeCommitted);
                             }
                             Ok(CommitOutcome::RolledBack) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
+                                session.sqlite_sequences_tx_snapshot = None;
+                                session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                                session.sqlite_sequences_dirty =
+                                    sqlite_sequence_dirty_snapshot.clone();
                                 return Err(Error::TransactionState("transaction rolled back"));
                             }
                             Err(err) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
+                                session.sqlite_sequences_tx_snapshot = None;
+                                session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                                session.sqlite_sequences_dirty =
+                                    sqlite_sequence_dirty_snapshot.clone();
                                 return Err(err.into());
                             }
                         }
@@ -1288,6 +1532,9 @@ fn with_write_tx<T>(
                         let _ = conn.engine().rollback(tx);
                         session.kernel_unique_guards.clear();
                         session.unique_guards.clear();
+                        session.sqlite_sequences_tx_snapshot = None;
+                        session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                        session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot.clone();
                         std::thread::yield_now();
                         continue;
                     }
@@ -1295,6 +1542,9 @@ fn with_write_tx<T>(
                         let _ = conn.engine().rollback(tx);
                         session.kernel_unique_guards.clear();
                         session.unique_guards.clear();
+                        session.sqlite_sequences_tx_snapshot = None;
+                        session.sqlite_sequences = sqlite_sequence_snapshot.clone();
+                        session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot.clone();
                         return Err(err);
                     }
                 }
@@ -1391,6 +1641,30 @@ fn step_select_runtime_inner(
         SelectRuntimeSource::SqliteSchema { rows, cursor } => {
             while *cursor < rows.len() {
                 let row = SqlRow::SqliteSchema(rows[*cursor].clone());
+                *cursor += 1;
+                if !selection_passes(&runtime.selection, &row, bindings)? {
+                    continue;
+                }
+                runtime.seen += 1;
+                if runtime.seen <= runtime.offset {
+                    continue;
+                }
+                if runtime.yielded >= runtime.limit {
+                    finish_select_runtime(conn, runtime)?;
+                    *current_row = None;
+                    return Ok(true);
+                }
+                *current_row = Some(project_row(&runtime.projection, &row, bindings)?);
+                runtime.yielded += 1;
+                return Ok(false);
+            }
+            finish_select_runtime(conn, runtime)?;
+            *current_row = None;
+            Ok(true)
+        }
+        SelectRuntimeSource::SqliteSequence { rows, cursor } => {
+            while *cursor < rows.len() {
+                let row = SqlRow::SqliteSequence(rows[*cursor].clone());
                 *cursor += 1;
                 if !selection_passes(&runtime.selection, &row, bindings)? {
                     continue;

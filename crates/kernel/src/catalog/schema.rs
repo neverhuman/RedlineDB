@@ -136,6 +136,7 @@ pub struct TableDef {
 
 pub const TABLE_FLAG_STRICT: u64 = 1 << 0;
 pub const TABLE_FLAG_WITHOUT_ROWID: u64 = 1 << 1;
+pub const TABLE_FLAG_AUTOINCREMENT: u64 = 1 << 2;
 
 impl TableDef {
     pub fn is_strict(&self) -> bool {
@@ -144,6 +145,10 @@ impl TableDef {
 
     pub fn is_without_rowid(&self) -> bool {
         self.flags & TABLE_FLAG_WITHOUT_ROWID != 0
+    }
+
+    pub fn is_autoincrement(&self) -> bool {
+        self.flags & TABLE_FLAG_AUTOINCREMENT != 0
     }
 
     pub fn has_public_rowid(&self) -> bool {
@@ -480,6 +485,9 @@ fn render_create_table(table: &TableDef) -> String {
         let is_column_pk = column_pk_ordinals.contains(&(idx as u16));
         if is_rowid_alias || is_column_pk {
             out.push_str(" PRIMARY KEY");
+            if is_rowid_alias && table.is_autoincrement() {
+                out.push_str(" AUTOINCREMENT");
+            }
         }
         if column.not_null
             && (!is_rowid_alias && !is_column_pk || explicit_not_null.contains(&(idx as u16)))

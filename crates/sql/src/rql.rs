@@ -24,6 +24,8 @@ use crate::statement::{
     DeletePlan, DmlValue, InsertPlan, ParamLayout, PreparedKind, PreparedTemplate, UpdatePlan,
 };
 
+mod native;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RqlProgram {
     #[serde(default)]
@@ -367,9 +369,23 @@ pub enum RqlLiteral {
     Blob { bytes: Vec<u8> },
 }
 
-pub(crate) fn prepare_template(
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct PrepareOptions {
+    pub(crate) native_select: bool,
+}
+
+impl PrepareOptions {
+    pub(crate) fn from_env() -> Self {
+        Self {
+            native_select: native_select_enabled(),
+        }
+    }
+}
+
+pub(crate) fn prepare_template_with_options(
     conn: &Connection,
     statement: &RqlStatement,
+    options: PrepareOptions,
 ) -> Result<PreparedTemplate> {
     let schema_epoch = conn.schema_epoch();
     let stats_epoch = conn.stats_epoch().0;
@@ -413,20 +429,78 @@ pub(crate) fn prepare_template(
         RqlStatement::Update(update) => lower_update(conn.schema_snapshot(), schema_epoch, update)?,
         RqlStatement::Delete(delete) => lower_delete(conn.schema_snapshot(), schema_epoch, delete)?,
         RqlStatement::Select(select) => {
-            let mut params = ParamLayout::default();
-            bind_query_with_params(
-                conn,
-                conn.schema_snapshot(),
-                schema_epoch,
-                rql_sql("select").as_ref(),
-                select_query(select)?,
-                &mut params,
-            )?
+            conn.record_rql_eligible();
+            if options.native_select {
+                if let Some(template) =
+                    native::lower_native_select(conn.schema_snapshot(), schema_epoch, select)?
+                {
+                    conn.record_rql_native();
+                    template
+                } else {
+                    conn.record_rql_sql_route(
+                        native::native_select_sql_route_reason(
+                            conn.schema_snapshot().as_ref(),
+                            select,
+                        )
+                        .unwrap_or(crate::connection::RqlRouteReason::Shape),
+                    );
+                    let mut params = ParamLayout::default();
+                    bind_query_with_params(
+                        conn,
+                        conn.schema_snapshot(),
+                        schema_epoch,
+                        rql_sql("select").as_ref(),
+                        select_query(select)?,
+                        &mut params,
+                    )?
+                }
+            } else {
+                conn.record_rql_sql_route(crate::connection::RqlRouteReason::Disabled);
+                let mut params = ParamLayout::default();
+                bind_query_with_params(
+                    conn,
+                    conn.schema_snapshot(),
+                    schema_epoch,
+                    rql_sql("select").as_ref(),
+                    select_query(select)?,
+                    &mut params,
+                )?
+            }
         }
     };
     template.stats_epoch = stats_epoch;
     template.optimizer_hash = optimizer_hash;
     Ok(template)
+}
+
+pub(crate) fn template_cache_enabled() -> bool {
+    std::env::var_os("REDLINE_RQL_TEMPLATE_CACHE")
+        .map(|value| value != "0" && !value.is_empty())
+        .unwrap_or(false)
+}
+
+pub(crate) fn native_select_enabled() -> bool {
+    std::env::var_os("REDLINE_RQL_NATIVE_SELECT")
+        .map(|value| value != "0" && !value.is_empty())
+        .unwrap_or(false)
+}
+
+pub(crate) fn cache_key(statement: &RqlStatement, options: PrepareOptions) -> Result<Arc<str>> {
+    let json = serde_json::to_string(statement)
+        .map_err(|err| Error::Bind(format!("failed to build RQL cache key: {err}")))?;
+    let route = if matches!(statement, RqlStatement::Select(_)) {
+        if options.native_select {
+            "cache:native_select=1"
+        } else {
+            "cache:native_select=0"
+        }
+    } else {
+        "cache"
+    };
+    Ok(Arc::from(format!(
+        "{}{route}:{json}",
+        crate::statement::RQL_MARKER_SQL_PREFIX
+    )))
 }
 
 fn lower_create_table(
@@ -467,6 +541,7 @@ fn lower_create_table(
                 constraints,
                 collation: None,
                 default_value,
+                autoincrement: false,
                 generated: None,
             })
         })
@@ -1131,11 +1206,128 @@ mod tests {
     use super::*;
     use crate::connection::{Database, DbOptions};
     use crate::statement::Step;
+    use std::sync::{Mutex, MutexGuard};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvGuard {
+        old: Vec<(&'static str, Option<std::ffi::OsString>)>,
+        _guard: MutexGuard<'static, ()>,
+    }
+
+    impl EnvGuard {
+        fn set(name: &'static str, value: Option<&str>) -> Self {
+            Self::set_many(&[(name, value)])
+        }
+
+        fn set_many(vars: &[(&'static str, Option<&str>)]) -> Self {
+            let guard = ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let old = vars
+                .iter()
+                .map(|(name, _)| (*name, std::env::var_os(name)))
+                .collect::<Vec<_>>();
+            // SAFETY: this test module serializes all mutations to these env vars.
+            unsafe {
+                for (name, value) in vars {
+                    match value {
+                        Some(value) => std::env::set_var(name, value),
+                        None => std::env::remove_var(name),
+                    }
+                }
+            }
+            Self { old, _guard: guard }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // SAFETY: this test module serializes all mutations to these env vars.
+            unsafe {
+                for (name, value) in &self.old {
+                    match value {
+                        Some(value) => std::env::set_var(name, value),
+                        None => std::env::remove_var(name),
+                    }
+                }
+            }
+        }
+    }
 
     fn memory_conn() -> Arc<Connection> {
         Database::create_in_memory(DbOptions::default())
             .expect("db")
             .connect()
+    }
+
+    fn create_items(conn: &Arc<Connection>) {
+        conn.execute("CREATE TABLE items(id INTEGER PRIMARY KEY, name TEXT, score INTEGER)")
+            .expect("create items");
+        conn.execute("INSERT INTO items(id, name, score) VALUES (1, 'Bob', 10), (2, 'Ada', 20), (3, 'Zoe', 30)")
+            .expect("seed items");
+    }
+
+    fn items_table_ref(alias: Option<&str>) -> RqlTableRef {
+        RqlTableRef {
+            name: RqlName {
+                schema: None,
+                name: "items".to_owned(),
+            },
+            alias: alias.map(str::to_owned),
+        }
+    }
+
+    fn native_select_statement() -> RqlStatement {
+        RqlStatement::Select(RqlSelect {
+            distinct: false,
+            projection: vec![RqlSelectItem::Expr {
+                expr: RqlExpr::Column {
+                    column: RqlColumnRef {
+                        table: Some("i".to_owned()),
+                        name: "name".to_owned(),
+                    },
+                },
+                alias: None,
+            }],
+            from: Some(items_table_ref(Some("i"))),
+            joins: Vec::new(),
+            filter: Some(RqlExpr::Binary {
+                left: Box::new(RqlExpr::Column {
+                    column: RqlColumnRef {
+                        table: None,
+                        name: "score".to_owned(),
+                    },
+                }),
+                op: RqlBinaryOp::Gt,
+                right: Box::new(RqlExpr::Param { index: 1 }),
+            }),
+            group_by: Vec::new(),
+            having: None,
+            order_by: vec![RqlOrder {
+                expr: RqlExpr::Column {
+                    column: RqlColumnRef {
+                        table: None,
+                        name: "name".to_owned(),
+                    },
+                },
+                descending: true,
+                nulls_first: None,
+            }],
+            limit: Some(1),
+            offset: Some(0),
+        })
+    }
+
+    fn collect_first_text(
+        conn: &Arc<Connection>,
+        statement: &RqlStatement,
+        min_score: i64,
+    ) -> String {
+        let mut stmt = conn.prepare_rql(statement).expect("prepare rql");
+        stmt.bind_i64(1, min_score).expect("bind min score");
+        assert!(matches!(stmt.step().expect("row"), Step::Row));
+        stmt.column_text(0).expect("text").to_owned()
     }
 
     #[test]
@@ -1199,13 +1391,7 @@ mod tests {
                 },
                 alias: None,
             }],
-            from: Some(RqlTableRef {
-                name: RqlName {
-                    schema: None,
-                    name: "items".to_owned(),
-                },
-                alias: None,
-            }),
+            from: Some(items_table_ref(None)),
             joins: Vec::new(),
             filter: Some(RqlExpr::Binary {
                 left: Box::new(RqlExpr::Column {
@@ -1227,5 +1413,284 @@ mod tests {
         assert_eq!(stmt.column_count(), 1);
         assert!(matches!(stmt.step().expect("row"), Step::Row));
         assert_eq!(stmt.column_text(0).expect("text"), "Ada");
+    }
+
+    #[test]
+    fn rql_native_select_matches_sql_ast_path_for_filter_order_limit() {
+        let conn = memory_conn();
+        create_items(&conn);
+        let select = native_select_statement();
+
+        let _sql_route = EnvGuard::set("REDLINE_RQL_NATIVE_SELECT", None);
+        let expected = collect_first_text(&conn, &select, 10);
+        drop(_sql_route);
+
+        let _native_route = EnvGuard::set("REDLINE_RQL_NATIVE_SELECT", Some("1"));
+        let actual = collect_first_text(&conn, &select, 10);
+        let template = conn
+            .prepare_rql(&select)
+            .expect("native template")
+            .template();
+
+        assert_eq!(actual, expected);
+        assert!(template.sql.as_ref().ends_with("select_native"));
+    }
+
+    #[test]
+    fn rql_native_select_preserves_params_and_output_names() {
+        let _env = EnvGuard::set("REDLINE_RQL_NATIVE_SELECT", Some("1"));
+        let conn = memory_conn();
+        create_items(&conn);
+        let select = RqlStatement::Select(RqlSelect {
+            distinct: false,
+            projection: vec![RqlSelectItem::Expr {
+                expr: RqlExpr::Column {
+                    column: RqlColumnRef {
+                        table: None,
+                        name: "name".to_owned(),
+                    },
+                },
+                alias: Some("item_name".to_owned()),
+            }],
+            from: Some(items_table_ref(None)),
+            joins: Vec::new(),
+            filter: Some(RqlExpr::Binary {
+                left: Box::new(RqlExpr::Column {
+                    column: RqlColumnRef {
+                        table: None,
+                        name: "id".to_owned(),
+                    },
+                }),
+                op: RqlBinaryOp::Eq,
+                right: Box::new(RqlExpr::Param { index: 3 }),
+            }),
+            group_by: Vec::new(),
+            having: None,
+            order_by: Vec::new(),
+            limit: None,
+            offset: None,
+        });
+
+        let mut stmt = conn.prepare_rql(&select).expect("native select");
+        assert_eq!(stmt.parameter_count(), 3);
+        assert_eq!(stmt.parameter_index("?3"), Some(3));
+        assert_eq!(stmt.column_count(), 1);
+        assert_eq!(stmt.column_name(0), "item_name");
+        assert!(stmt.template().sql.as_ref().ends_with("select_native"));
+        stmt.bind_i64(3, 2).expect("bind id");
+        assert!(matches!(stmt.step().expect("row"), Step::Row));
+        assert_eq!(stmt.column_text(0).expect("name"), "Ada");
+    }
+
+    #[test]
+    fn rql_native_select_falls_back_for_join_subquery() {
+        let _env = EnvGuard::set("REDLINE_RQL_NATIVE_SELECT", Some("1"));
+        let conn = memory_conn();
+        create_items(&conn);
+        let aggregate_select = RqlSelect {
+            distinct: false,
+            projection: vec![RqlSelectItem::Expr {
+                expr: RqlExpr::CountStar,
+                alias: None,
+            }],
+            from: Some(items_table_ref(None)),
+            joins: Vec::new(),
+            filter: None,
+            group_by: Vec::new(),
+            having: None,
+            order_by: Vec::new(),
+            limit: None,
+            offset: None,
+        };
+        // Inner joins are now supported by the native route; Right/Full joins
+        // are still unsupported and trigger fallback to the SQL route.
+        let right_join_select = RqlSelect {
+            joins: vec![RqlJoin {
+                table: RqlTableRef {
+                    name: RqlName {
+                        schema: None,
+                        name: "items".to_owned(),
+                    },
+                    alias: Some("i2".to_owned()),
+                },
+                kind: RqlJoinKind::Right,
+                on: None,
+            }],
+            ..aggregate_select.clone()
+        };
+        assert!(!native::native_select_shape_supported(
+            conn.schema_snapshot().as_ref(),
+            &right_join_select
+        ));
+
+        let subquery_select = RqlSelect {
+            projection: vec![RqlSelectItem::Expr {
+                expr: RqlExpr::Subquery {
+                    select: Box::new(RqlSelect {
+                        distinct: false,
+                        projection: vec![RqlSelectItem::Expr {
+                            expr: RqlExpr::Integer { value: 1 },
+                            alias: None,
+                        }],
+                        from: None,
+                        joins: Vec::new(),
+                        filter: None,
+                        group_by: Vec::new(),
+                        having: None,
+                        order_by: Vec::new(),
+                        limit: None,
+                        offset: None,
+                    }),
+                },
+                alias: None,
+            }],
+            from: Some(items_table_ref(None)),
+            joins: Vec::new(),
+            ..aggregate_select.clone()
+        };
+        assert!(!native::native_select_shape_supported(
+            conn.schema_snapshot().as_ref(),
+            &subquery_select
+        ));
+    }
+
+    #[test]
+    fn rql_native_select_template_cache_is_gate_separated() {
+        let conn = memory_conn();
+        create_items(&conn);
+        let select = native_select_statement();
+
+        let _sql_route = EnvGuard::set_many(&[
+            ("REDLINE_RQL_TEMPLATE_CACHE", Some("1")),
+            ("REDLINE_RQL_NATIVE_SELECT", None),
+        ]);
+        let sql_template = conn.prepare_rql(&select).expect("sql route").template();
+        assert!(sql_template.sql.as_ref().ends_with("select"));
+        assert!(!sql_template.sql.as_ref().ends_with("select_native"));
+        drop(_sql_route);
+
+        let _native_route = EnvGuard::set_many(&[
+            ("REDLINE_RQL_TEMPLATE_CACHE", Some("1")),
+            ("REDLINE_RQL_NATIVE_SELECT", Some("1")),
+        ]);
+        let native_template = conn.prepare_rql(&select).expect("native route").template();
+        assert!(native_template.sql.as_ref().ends_with("select_native"));
+        assert!(!Arc::ptr_eq(&sql_template, &native_template));
+    }
+
+    #[test]
+    fn rql_template_cache_reuses_only_when_enabled() {
+        let conn = memory_conn();
+        let create = RqlStatement::CreateTable(RqlCreateTable {
+            table: RqlName {
+                schema: None,
+                name: "items".to_owned(),
+            },
+            if_not_exists: false,
+            columns: vec![RqlColumnDef {
+                name: "id".to_owned(),
+                declared_type: Some("INTEGER".to_owned()),
+                primary_key: true,
+                not_null: false,
+                unique: false,
+                default: None,
+            }],
+            strict: false,
+            without_rowid: false,
+        });
+        let mut stmt = conn.prepare_rql(&create).expect("create");
+        assert!(matches!(stmt.step().expect("step"), Step::Done));
+
+        let select = RqlStatement::Select(RqlSelect {
+            distinct: false,
+            projection: vec![RqlSelectItem::Expr {
+                expr: RqlExpr::Column {
+                    column: RqlColumnRef {
+                        table: None,
+                        name: "id".to_owned(),
+                    },
+                },
+                alias: None,
+            }],
+            from: Some(RqlTableRef {
+                name: RqlName {
+                    schema: None,
+                    name: "items".to_owned(),
+                },
+                alias: None,
+            }),
+            joins: Vec::new(),
+            filter: None,
+            group_by: Vec::new(),
+            having: None,
+            order_by: Vec::new(),
+            limit: None,
+            offset: None,
+        });
+
+        {
+            let _env = EnvGuard::set("REDLINE_RQL_TEMPLATE_CACHE", None);
+            let first = conn.prepare_rql(&select).expect("first").template();
+            let second = conn.prepare_rql(&select).expect("second").template();
+            assert!(!Arc::ptr_eq(&first, &second));
+        }
+        {
+            let _env = EnvGuard::set("REDLINE_RQL_TEMPLATE_CACHE", Some("1"));
+            let first = conn.prepare_rql(&select).expect("cached first").template();
+            let second = conn.prepare_rql(&select).expect("cached second").template();
+            assert!(Arc::ptr_eq(&first, &second));
+        }
+    }
+
+    #[test]
+    fn rql_template_cache_preserves_savepoint_mutation_rejection() {
+        let _env = EnvGuard::set("REDLINE_RQL_TEMPLATE_CACHE", Some("1"));
+        let conn = memory_conn();
+        let create = RqlStatement::CreateTable(RqlCreateTable {
+            table: RqlName {
+                schema: None,
+                name: "items".to_owned(),
+            },
+            if_not_exists: false,
+            columns: vec![RqlColumnDef {
+                name: "id".to_owned(),
+                declared_type: Some("INTEGER".to_owned()),
+                primary_key: true,
+                not_null: false,
+                unique: false,
+                default: None,
+            }],
+            strict: false,
+            without_rowid: false,
+        });
+        let mut stmt = conn.prepare_rql(&create).expect("create");
+        assert!(matches!(stmt.step().expect("step"), Step::Done));
+
+        let insert = RqlStatement::Insert(RqlInsert {
+            table: RqlName {
+                schema: None,
+                name: "items".to_owned(),
+            },
+            columns: vec!["id".to_owned()],
+            values: vec![vec![RqlExpr::Integer { value: 1 }]],
+            default_values: false,
+        });
+        let cached = conn.prepare_rql(&insert).expect("cache insert").template();
+        assert!(!cached.readonly);
+
+        let mut savepoint = conn.prepare("SAVEPOINT rql_cache").expect("savepoint");
+        assert!(matches!(
+            savepoint.step().expect("savepoint step"),
+            Step::Done
+        ));
+
+        let err = match conn.prepare_rql(&insert) {
+            Ok(_) => panic!("cached RQL mutation inside SAVEPOINT must be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string().contains("SAVEPOINT"),
+            "unexpected error: {err:?}"
+        );
     }
 }

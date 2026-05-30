@@ -36,25 +36,76 @@ pub(crate) struct BuiltIndexKey {
     pub contains_null: bool,
 }
 
+pub(crate) struct BuiltIndexKeyWithValues {
+    pub key: BuiltIndexKey,
+    pub values: Vec<SqlValue>,
+}
+
+/// Apply the per-key collation normalization to a single value before it is
+/// encoded into an index key. For NOCASE, text is lowercased so the B-tree
+/// (which uses byte-level comparison) treats `'Apple'` and `'apple'` as
+/// equal. All other collations (BINARY, RTRIM, custom) leave the value
+/// unchanged — BINARY is byte-exact by definition, and RTRIM/custom
+/// collations are not yet reflected in the physical key encoding.
+fn apply_index_key_collation(value: SqlValue, collation: Option<&str>) -> SqlValue {
+    if let Some("NOCASE") = collation {
+        if let SqlValue::Text(s) = value {
+            return SqlValue::Text(s.to_ascii_lowercase().into());
+        }
+    }
+    value
+}
+
 /// Build the encoded index key bytes for `index` from a row's column values.
 ///
 /// Mirrors the kernel-side encoding used by Lane A's CREATE INDEX backfill,
-/// so SQL DML and DDL agree byte-for-byte on key shape.
-pub(crate) fn build_index_key(index: &IndexDef, values: &[SqlValue]) -> BuiltIndexKey {
+/// so SQL DML and DDL agree byte-for-byte on key shape. Delegates to
+/// `build_index_key_with_values` so collation normalisation is applied
+/// consistently on every write path (insert, update, delete) and every read
+/// path (unique-conflict probe, heap-scan comparison).
+pub(crate) fn build_index_key(
+    table: &TableDef,
+    index: &IndexDef,
+    values: &[SqlValue],
+) -> Result<BuiltIndexKey> {
+    Ok(build_index_key_with_values(table, index, values)?.key)
+}
+
+pub(crate) fn build_index_key_with_values(
+    table: &TableDef,
+    index: &IndexDef,
+    values: &[SqlValue],
+) -> Result<BuiltIndexKeyWithValues> {
     let mut dirs: Vec<SortDir> = Vec::with_capacity(index.keys.len());
-    let mut owned_refs: Vec<&SqlValue> = Vec::with_capacity(index.keys.len());
+    let mut key_values: Vec<SqlValue> = Vec::with_capacity(index.keys.len());
     for key in &index.keys {
-        let IndexKeySource::Column { attnum } = key.source else {
-            // A6 SQL-D: expression index key — full per-expression
-            // build path not wired in this adapter. Skip the key;
-            // upper layer should detect expression indexes and route
-            // through the dedicated expression-aware build.
-            continue;
+        let raw = match &key.source {
+            IndexKeySource::Column { attnum } => values
+                .get(*attnum as usize)
+                .cloned()
+                .unwrap_or(SqlValue::Null),
+            IndexKeySource::Expression { sql, .. } => {
+                crate::exec::index_predicate::eval_index_value_expr(table, sql, values)?
+            }
         };
-        owned_refs.push(values.get(attnum as usize).unwrap_or(&SqlValue::Null));
+        // Apply per-key collation normalisation so the B-tree key bytes
+        // reflect the collation semantics (NOCASE → lowercase).
+        let value = apply_index_key_collation(raw, key.collation.as_deref());
+        key_values.push(value);
         dirs.push(key.sort_dir);
     }
-    let value_refs: Vec<_> = owned_refs.iter().map(|v| v.as_ref()).collect();
+    let value_refs: Vec<_> = key_values.iter().map(|v| v.as_ref()).collect();
+    let key = encode_built_index_key(&value_refs, &dirs);
+    Ok(BuiltIndexKeyWithValues {
+        key,
+        values: key_values,
+    })
+}
+
+fn encode_built_index_key(
+    value_refs: &[redlinedb_kernel::catalog::ValueRef<'_>],
+    dirs: &[SortDir],
+) -> BuiltIndexKey {
     let mut buf = Vec::new();
     let EncodedIndexKey {
         bytes,
@@ -66,12 +117,15 @@ pub(crate) fn build_index_key(index: &IndexDef, values: &[SqlValue]) -> BuiltInd
     }
 }
 
-/// Returns the live `BtreeIndex` handle for `index` if Lane A allocated one.
-/// Pre-Lane-A indexes (no `meta_page_id`) return `None`; callers should fall
-/// back to the heap-scan path used before Lane A in that case.
-pub(crate) fn open_index_handle(engine: &Engine, index: &IndexDef) -> Option<Arc<BtreeIndex>> {
+/// Returns the index handle visible inside `tx`, including a handle created
+/// by CREATE INDEX in the same transaction but not published at COMMIT yet.
+pub(crate) fn open_index_handle_for_tx(
+    engine: &Engine,
+    tx: &Txn,
+    index: &IndexDef,
+) -> Option<Arc<BtreeIndex>> {
     index.meta_page_id?;
-    engine.index_handle(index.index_id)
+    engine.index_handle_for_tx(tx, index.index_id)
 }
 
 /// Build an `IndexRowRef` that the BtreeIndex stores alongside the logical
@@ -129,7 +183,7 @@ pub(crate) fn maintain_indexes_on_insert(
     rowid: RowId,
 ) -> Result<()> {
     for index in &table.indexes {
-        let Some(handle) = open_index_handle(engine, index) else {
+        let Some(handle) = open_index_handle_for_tx(engine, tx, index) else {
             continue;
         };
         // A6 SQL-D: partial indexes only contain rows whose WHERE
@@ -141,7 +195,7 @@ pub(crate) fn maintain_indexes_on_insert(
         {
             continue;
         }
-        let key = build_index_key(index, values);
+        let key = build_index_key(table, index, values)?;
         let row_ref = synthetic_row_ref(rowid);
         // SQLite NULL parity for unique indexes: NULL key parts are not
         // duplicates, so we still insert them but never block on conflict.
@@ -160,7 +214,7 @@ pub(crate) fn maintain_indexes_on_delete(
     rowid: RowId,
 ) -> Result<()> {
     for index in &table.indexes {
-        let Some(handle) = open_index_handle(engine, index) else {
+        let Some(handle) = open_index_handle_for_tx(engine, tx, index) else {
             continue;
         };
         // A6 SQL-D: don't delete-mark partial-index keys for rows that
@@ -170,7 +224,7 @@ pub(crate) fn maintain_indexes_on_delete(
         {
             continue;
         }
-        let key = build_index_key(index, old_values);
+        let key = build_index_key(table, index, old_values)?;
         let row_ref = synthetic_row_ref(rowid);
         handle.delete_mark_tx_visible(
             engine.tx_status(),
@@ -198,11 +252,11 @@ pub(crate) fn maintain_indexes_on_update(
     new_rowid: RowId,
 ) -> Result<()> {
     for index in &table.indexes {
-        let Some(handle) = open_index_handle(engine, index) else {
+        let Some(handle) = open_index_handle_for_tx(engine, tx, index) else {
             continue;
         };
-        let old_key = build_index_key(index, old_values);
-        let new_key = build_index_key(index, new_values);
+        let old_key = build_index_key(table, index, old_values)?;
+        let new_key = build_index_key(table, index, new_values)?;
         // The IndexRowRef carries the rowid into the physical entry, so a
         // rowid move always triggers a delete+insert even when key bytes
         // are byte-equal.

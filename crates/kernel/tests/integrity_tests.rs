@@ -54,6 +54,7 @@ fn create_kv_table_only(engine: &Arc<Engine>) {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                     ColumnSpec {
@@ -62,6 +63,7 @@ fn create_kv_table_only(engine: &Arc<Engine>) {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                 ],

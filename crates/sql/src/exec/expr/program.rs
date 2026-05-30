@@ -975,7 +975,19 @@ fn truthy_opt(v: &SqlValue) -> Option<bool> {
 }
 
 fn truthy_strict(v: &SqlValue) -> bool {
-    matches!(truthy_opt(v), Some(true))
+    // A34: direct match without the `Option<bool>` intermediate.
+    // Previously `truthy_strict` called `truthy_opt(v)` (matches the
+    // value once for `Null` vs other) and then `matches!(_, Some(true))`
+    // (matches the Option a second time). Inlined here: one match on
+    // the value directly. NULL is non-strict (false), non-NULL defers
+    // to `is_truthy`. The `truthy_opt` helper stays for `logical_and`/
+    // `logical_or`/`logical_not` which need the Option to distinguish
+    // NULL from false. Called once per `JumpIfFalse` opcode in the
+    // ScalarProgram VM hot loop (program.rs:940).
+    match v {
+        SqlValue::Null => false,
+        _ => crate::value::is_truthy(v),
+    }
 }
 
 fn logical_and(l: &SqlValue, r: &SqlValue) -> SqlValue {
@@ -1110,16 +1122,16 @@ fn call_scalar1(f: ScalarFn, v: SqlValue) -> Result<SqlValue> {
         },
         ScalarFn::Lower => match v {
             SqlValue::Null => Ok(SqlValue::Null),
-            SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_lowercase()))),
+            SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_ascii_lowercase()))),
             other => Ok(SqlValue::Text(Arc::from(
-                value_to_string(&other).to_lowercase(),
+                value_to_string(&other).to_ascii_lowercase(),
             ))),
         },
         ScalarFn::Upper => match v {
             SqlValue::Null => Ok(SqlValue::Null),
-            SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_uppercase()))),
+            SqlValue::Text(s) => Ok(SqlValue::Text(Arc::from(s.to_ascii_uppercase()))),
             other => Ok(SqlValue::Text(Arc::from(
-                value_to_string(&other).to_uppercase(),
+                value_to_string(&other).to_ascii_uppercase(),
             ))),
         },
     }

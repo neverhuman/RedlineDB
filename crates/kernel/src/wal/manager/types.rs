@@ -93,6 +93,25 @@ pub struct WalScanReport {
     pub torn_tail: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WalOpenScanSummary {
+    pub(crate) valid_end_lsn: Lsn,
+    pub(crate) last_record_lsn: Lsn,
+}
+
+impl WalScanReport {
+    pub(crate) fn open_summary(&self) -> WalOpenScanSummary {
+        WalOpenScanSummary {
+            valid_end_lsn: self.valid_end_lsn,
+            last_record_lsn: self
+                .records
+                .last()
+                .map(|record| record.lsn)
+                .unwrap_or(Lsn::ZERO),
+        }
+    }
+}
+
 pub(super) fn validate_config(config: &WalConfig) -> Result<()> {
     if config.segment_bytes < WAL_HEADER_LEN as u64 {
         return Err(Error::CorruptWal("wal segment size too small"));

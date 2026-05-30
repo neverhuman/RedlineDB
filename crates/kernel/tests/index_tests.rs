@@ -607,6 +607,7 @@ fn engine_create_index_allocates_meta_page_and_recovers() {
                         }],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                     ColumnSpec {
@@ -615,6 +616,7 @@ fn engine_create_index_allocates_meta_page_and_recovers() {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                 ],
@@ -751,6 +753,7 @@ fn ddl_index_handles_publish_and_remove_only_on_commit() {
                     constraints: Vec::new(),
                     collation: None,
                     default_value: None,
+                    autoincrement: false,
                     generated: None,
                 }],
                 constraints: Vec::new(),

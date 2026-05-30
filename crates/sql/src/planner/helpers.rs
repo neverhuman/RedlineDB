@@ -564,18 +564,22 @@ where
     if !matches!(op, BinaryOperator::Eq) {
         return Ok(None);
     }
-    let expr_rowid =
-        if let Some(value) = rowid_eq_side(left, right, bindings, &rowid_col, &eval_value)? {
-            value
-        } else if let Some(value) = rowid_eq_side(right, left, bindings, &rowid_col, &eval_value)? {
-            value
-        } else {
-            return Ok(None);
-        };
+    let expr_rowid = if let Some(value) =
+        rowid_eq_side(table, left, right, bindings, &rowid_col, &eval_value)?
+    {
+        value
+    } else if let Some(value) =
+        rowid_eq_side(table, right, left, bindings, &rowid_col, &eval_value)?
+    {
+        value
+    } else {
+        return Ok(None);
+    };
     Ok(Some(expr_rowid))
 }
 
 fn rowid_eq_side<F>(
+    table: &TableDef,
     ident_side: &Expr,
     value_side: &Expr,
     bindings: &[Option<SqlValue>],
@@ -588,7 +592,9 @@ where
     let name = match ident_side {
         Expr::Identifier(ident) if rowid_col(&ident.value) => Some(ident.value.as_str()),
         Expr::CompoundIdentifier(parts) => parts.last().and_then(|ident| {
-            if rowid_col(&ident.value) {
+            if rowid_col(&ident.value)
+                && rowid_qualifier_matches_table(table, &parts[..parts.len() - 1])
+            {
                 Some(ident.value.as_str())
             } else {
                 None
@@ -605,5 +611,16 @@ where
         SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => Ok(Some(RowId::new(v as u64))),
         SqlValue::Null => Ok(None),
         _ => Err(Error::DatatypeMismatch),
+    }
+}
+
+fn rowid_qualifier_matches_table(table: &TableDef, qualifiers: &[sqlparser::ast::Ident]) -> bool {
+    match qualifiers {
+        [table_name] => table_name.value.eq_ignore_ascii_case(table.name.as_ref()),
+        [schema, table_name] => {
+            schema.value.eq_ignore_ascii_case("main")
+                && table_name.value.eq_ignore_ascii_case(table.name.as_ref())
+        }
+        _ => false,
     }
 }

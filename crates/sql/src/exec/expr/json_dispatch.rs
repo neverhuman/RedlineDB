@@ -126,6 +126,20 @@ pub(crate) fn eval_scalar_function_values(
             }
             Ok(SqlValue::Integer(last_insert_rowid_value()))
         }
+        "changes" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql("changes requires 0 args".to_owned()));
+            }
+            Ok(SqlValue::Integer(changes_value()))
+        }
+        "total_changes" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql(
+                    "total_changes requires 0 args".to_owned(),
+                ));
+            }
+            Ok(SqlValue::Integer(total_changes_value()))
+        }
         "length" => match values.first() {
             // SQLite: length(NULL) is NULL, not 0. For TEXT, length returns
             // the count of Unicode characters (not bytes); for BLOB, byte
@@ -228,8 +242,10 @@ pub(crate) fn eval_scalar_function_values(
                     "like requires at least 2 args".to_owned(),
                 ));
             }
-            let pattern = values[0].clone();
-            let value = values[1].clone();
+            // A13: pass by reference — the previous `clone()`s are pure
+            // waste now that `like_result` takes `&SqlValue`.
+            let pattern = &values[0];
+            let value = &values[1];
             let escape_char = values.get(2).and_then(|v| match v {
                 SqlValue::Text(s) if s.chars().count() == 1 => {
                     Some(sqlparser::ast::Value::SingleQuotedString(s.to_string()))
@@ -240,28 +256,19 @@ pub(crate) fn eval_scalar_function_values(
                 crate::exec::current_connection().is_none_or(|conn| !conn.case_sensitive_like());
             like_result(value, pattern, false, escape_char, case_insensitive)
         }
-        // SQLite's `lower`/`upper` are documented as ASCII-only, but in
-        // practice the reference build links against ICU and folds the
-        // full Unicode range. Postgres with a UTF-8 libc locale (e.g.
-        // en_US.UTF-8) does Unicode-aware case folding too — but its
-        // libc `wctoupper`/`wctolower` only do 1-to-1 mappings, NOT
-        // Unicode's full SpecialCasing table. That means `straße` →
-        // `STRAßE` (not `STRASSE`) and `İ` → `İ` (not `I` + combining
-        // dot above). Mirror that by running `char::to_uppercase`/
-        // `to_lowercase` per character and falling back to the original
-        // when the iterator yields more than one char (a SpecialCasing
-        // expansion). NULL propagates.
+        // SQLite `lower`/`upper` are ASCII-only: non-ASCII code points are
+        // preserved, while ASCII letters fold in place. NULL propagates.
         "lower" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(libc_lower(
-                value_as_str(other).as_ref(),
-            )))),
+            Some(other) => Ok(SqlValue::Text(Arc::from(
+                value_as_str(other).as_ref().to_ascii_lowercase(),
+            ))),
         },
         "upper" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(other) => Ok(SqlValue::Text(Arc::from(libc_upper(
-                value_as_str(other).as_ref(),
-            )))),
+            Some(other) => Ok(SqlValue::Text(Arc::from(
+                value_as_str(other).as_ref().to_ascii_uppercase(),
+            ))),
         },
         "abs" => match values.first() {
             // SQLite: abs(NULL) is NULL, not an error.
@@ -305,13 +312,13 @@ pub(crate) fn eval_scalar_function_values(
         "acos" => math1_unary(&values, libm::acos),
         "atan" => math1_unary(&values, libm::atan),
         "sinh" => math1_unary(&values, libm::sinh),
-        "cosh" => math1_unary(&values, libm::cosh),
+        "cosh" => math1_unary(&values, f64::cosh),
         "tanh" => math1_unary(&values, libm::tanh),
         "asinh" => math1_unary(&values, libm::asinh),
         "acosh" => math1_unary(&values, libm::acosh),
         "atanh" => math1_unary(&values, libm::atanh),
         "sqrt" => math1_unary(&values, libm::sqrt),
-        "exp" => math1_unary(&values, libm::exp),
+        "exp" => math1_unary(&values, f64::exp),
         "ln" => math1_unary(&values, libm::log),
         "log10" => math1_unary(&values, libm::log10),
         "log2" => math1_unary(&values, libm::log2),
@@ -336,9 +343,12 @@ pub(crate) fn eval_scalar_function_values(
         // see https://sqlite.org/lang_corefunc.html#hex and `func.c`. We
         // also default to empty TEXT when called with no args so error
         // surfaces stay consistent with sqlite.
+        // A37: cache the empty `Arc<str>` for the None/Null branches.
+        // SQLite returns empty TEXT (not NULL) for `hex(NULL)`; the previous
+        // code allocated a fresh `Arc<str>` per call via `Arc::from("")`.
+        // Cached clone is one atomic refcount bump.
         "hex" => match values.first() {
-            None => Ok(SqlValue::Text(Arc::from(""))),
-            Some(SqlValue::Null) => Ok(SqlValue::Text(Arc::from(""))),
+            None | Some(SqlValue::Null) => Ok(SqlValue::Text(Arc::clone(empty_text_arc()))),
             Some(other) => Ok(SqlValue::Text(Arc::from(hex_value(other)))),
         },
         "quote" => Ok(SqlValue::Text(Arc::from(quote_value(
@@ -509,15 +519,10 @@ pub(crate) fn eval_scalar_function_values(
             if values.len() < 2 {
                 return Err(Error::UnsupportedSql("glob requires 2 args".to_owned()));
             }
-            glob_result(values[1].clone(), values[0].clone(), false)
+            // A14: pass by reference — `glob_result` now takes `&SqlValue`.
+            glob_result(&values[1], &values[0], false)
         }
-        "typeof" => Ok(SqlValue::Text(Arc::from(match values.first() {
-            Some(SqlValue::Null) | None => "null",
-            Some(SqlValue::Integer(_)) => "integer",
-            Some(SqlValue::Real(_)) => "real",
-            Some(SqlValue::Text(_)) => "text",
-            Some(SqlValue::Blob(_)) => "blob",
-        }))),
+        "typeof" => Ok(SqlValue::Text(Arc::clone(typeof_name(values.first())))),
         "json" => crate::json::scalar::json_func(&values),
         "json_array" => crate::json::scalar::json_array(&values),
         "json_array_length" => crate::json::scalar::json_array_length(&values),
@@ -587,7 +592,10 @@ pub(crate) fn eval_scalar_function_values(
         "nextval" => pg_sequence_nextval(&values),
         "currval" => pg_sequence_currval(&values),
         "setval" => pg_sequence_setval(&values),
-        "current_schema" => Ok(SqlValue::Text(std::sync::Arc::from("public"))),
+        // A37: cache the "public" Arc<str>. SQLite/Postgres-compat returns
+        // this constant string for every call; one OnceLock initialization
+        // then Arc::clone for each invocation.
+        "current_schema" => Ok(SqlValue::Text(Arc::clone(current_schema_arc()))),
         _ => {
             let db = crate::udf::current_db();
             match crate::udf::call_registered_scalar(db, &name, &values) {
@@ -602,6 +610,52 @@ pub(crate) fn eval_scalar_function_values(
 }
 
 /// Track J — Postgres `nextval(seq)`. Reads the named sequence from
+/// A36: process-wide cached `Arc<str>` names for `typeof()`. The previous
+/// implementation called `Arc::from(&'static str)` on every `typeof()`
+/// invocation, allocating a fresh `Arc<str>` and heap buffer for one of
+/// five constant strings ("null", "integer", "real", "text", "blob").
+/// The LITERALS_AND_TYPEOF case (00002, 2.407× SQLite) calls `typeof()`
+/// many times per row — the per-call alloc dominates.
+///
+/// Cache one `Arc<str>` per kind in process-wide OnceLocks. Subsequent
+/// calls return `Arc::clone`, which is one atomic refcount bump —
+/// cheaper than allocating a fresh Arc.
+fn typeof_name(value: Option<&SqlValue>) -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static NULL_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static INTEGER_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static REAL_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static TEXT_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static BLOB_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    match value {
+        Some(SqlValue::Null) | None => NULL_NAME.get_or_init(|| Arc::from("null")),
+        Some(SqlValue::Integer(_)) => INTEGER_NAME.get_or_init(|| Arc::from("integer")),
+        Some(SqlValue::Real(_)) => REAL_NAME.get_or_init(|| Arc::from("real")),
+        Some(SqlValue::Text(_)) => TEXT_NAME.get_or_init(|| Arc::from("text")),
+        Some(SqlValue::Blob(_)) => BLOB_NAME.get_or_init(|| Arc::from("blob")),
+    }
+}
+
+/// A37: cached empty `Arc<str>`. Used by `hex(NULL)` / `hex()` — SQLite
+/// returns empty TEXT (not NULL) for the no-arg / null-arg cases. The
+/// previous code allocated `Arc::from("")` per call; cached clone is one
+/// atomic refcount bump. Could also be reused by other empty-string
+/// branches in future sweeps.
+fn empty_text_arc() -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY.get_or_init(|| Arc::from(""))
+}
+
+/// A37: cached `Arc<str>` for `current_schema()`. SQLite/Postgres-compat
+/// always returns "public" for this function. One-time alloc, then
+/// `Arc::clone` per call.
+fn current_schema_arc() -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static SCHEMA: OnceLock<Arc<str>> = OnceLock::new();
+    SCHEMA.get_or_init(|| Arc::from("public"))
+}
+
 /// session state, advances it by `increment`, and returns the new value.
 /// The first call returns the configured `start`; subsequent calls add
 /// `increment`. Unknown sequences raise an UnsupportedSql error
@@ -915,51 +969,35 @@ fn last_insert_rowid_value() -> i64 {
         .unwrap_or(0)
 }
 
-/// libc-style Unicode lowercasing: per-char `to_lowercase`, but if the
-/// canonical mapping yields more than one char (a Unicode SpecialCasing
-/// expansion — e.g. Turkish dotted `İ` → `i`+combining-dot-above) keep
-/// the original char instead. This matches Postgres' `lower()` with a
-/// UTF-8 libc locale, whose underlying `wctolower` only emits 1-to-1
-/// mappings.
-///
-/// Phase 2.1: ASCII fast path. `make_ascii_lowercase` is a single
-/// SIMD-vectorized byte sweep when the input is pure ASCII (the
-/// dominant case for SCALAR_STRING and the SCALAR_ARITH cases). For
-/// any byte >= 0x80 we fall through to the per-char Unicode path.
-fn libc_lower(input: &str) -> String {
-    if input.is_ascii() {
-        let mut bytes = input.as_bytes().to_vec();
-        bytes.make_ascii_lowercase();
-        return String::from_utf8(bytes).expect("ascii bytes are valid utf-8");
+fn changes_value() -> i64 {
+    if let Some(ptr) = crate::exec::current_session_ptr() {
+        // SAFETY: installed by `with_write_tx` for the duration of the
+        // synchronous statement/trigger execution scope.
+        let session: &crate::session::SessionState = unsafe { &*ptr };
+        return usize_to_sql_i64(session.changes);
     }
-    let mut out = String::with_capacity(input.len());
-    for ch in input.chars() {
-        let mut iter = ch.to_lowercase();
-        match (iter.next(), iter.next()) {
-            (Some(first), None) => out.push(first),
-            (Some(_), Some(_)) | (None, _) => out.push(ch),
-        }
+    match current_connection() {
+        Some(conn) => usize_to_sql_i64(conn.changes()),
+        None => 0,
     }
-    out
 }
 
-/// libc-style Unicode uppercasing: per-char `to_uppercase`, but if the
-/// canonical mapping yields more than one char (e.g. `ß` → `SS`) keep
-/// the original char. Matches Postgres' `upper()` with a UTF-8 libc
-/// locale — `upper('straße')` → `STRAßE`, `upper('σς')` → `ΣΣ`.
-fn libc_upper(input: &str) -> String {
-    if input.is_ascii() {
-        let mut bytes = input.as_bytes().to_vec();
-        bytes.make_ascii_uppercase();
-        return String::from_utf8(bytes).expect("ascii bytes are valid utf-8");
+fn total_changes_value() -> i64 {
+    if let Some(ptr) = crate::exec::current_session_ptr() {
+        // SAFETY: installed by `with_write_tx` for the duration of the
+        // synchronous statement/trigger execution scope.
+        let session: &crate::session::SessionState = unsafe { &*ptr };
+        return usize_to_sql_i64(session.total_changes);
     }
-    let mut out = String::with_capacity(input.len());
-    for ch in input.chars() {
-        let mut iter = ch.to_uppercase();
-        match (iter.next(), iter.next()) {
-            (Some(first), None) => out.push(first),
-            (Some(_), Some(_)) | (None, _) => out.push(ch),
-        }
+    match current_connection() {
+        Some(conn) => usize_to_sql_i64(conn.total_changes()),
+        None => 0,
     }
-    out
+}
+
+fn usize_to_sql_i64(value: usize) -> i64 {
+    match i64::try_from(value) {
+        Ok(value) => value,
+        Err(_) => i64::MAX,
+    }
 }

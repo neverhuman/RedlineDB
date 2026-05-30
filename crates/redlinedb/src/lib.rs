@@ -50,6 +50,7 @@ pub use phase8::{
     ArchiveMode, ArchiveStats, PhysicalBackupOptions, PhysicalBackupStats, ReplicationSlot,
     ReplicationSlotStats, RestoreOptions, RestoreStats, RetentionHorizon, SlotKind, WalLevel,
 };
+pub use redlinedb_kernel::engine::CommitDurability;
 pub use redlinedb_kernel::format::{BackupId, Csn, DbId, Lsn, TimelineId, WalSegmentNo};
 pub use redlinedb_sql::BeginMode;
 pub use redlinedb_sql::RecoveryTarget;

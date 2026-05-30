@@ -224,10 +224,14 @@ pub(super) fn eval_group_scalar_with_ctx(
             }
             Expr::Nested(expr) => eval_group_scalar_with_ctx(expr, group, first_context, bindings),
             Expr::Cast {
-                expr, data_type, ..
+                kind,
+                expr,
+                data_type,
+                ..
             } => cast_value(
                 eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
                 data_type,
+                kind.clone(),
             ),
             Expr::Between {
                 expr,
@@ -1008,7 +1012,7 @@ fn eval_group_function(
                         list.args.first()
                 {
                     let val = eval_scalar(expr, &ctx, bindings)?;
-                    arr.push(sql_to_json_value(&val));
+                    arr.push(sql_to_json_value(&val)?);
                 }
             }
             let json = serde_json::Value::Array(arr);
@@ -1037,7 +1041,7 @@ fn eval_group_function(
                         SqlValue::Null
                     };
                     if !matches!(key, SqlValue::Null) {
-                        obj.insert(value_to_string(&key), sql_to_json_value(&val));
+                        obj.insert(value_to_string(&key), sql_to_json_value(&val)?);
                     }
                 }
             }

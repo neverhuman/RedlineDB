@@ -16,6 +16,13 @@ use crate::exec::execute_prepared;
 use crate::session::BeginMode;
 use crate::value::SqlValue;
 
+#[derive(Debug, Clone)]
+pub(crate) struct SqliteSequenceRow {
+    pub(crate) name: Arc<str>,
+    pub(crate) seq: i64,
+    pub(crate) alias: Option<Arc<str>>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ParamLayout {
     pub(crate) slots: Vec<Option<String>>,
@@ -117,6 +124,7 @@ pub enum PreparedKind {
     /// alias-map maintenance executed by [`crate::exec::attach::AttachPlan`].
     Attach(crate::exec::attach::AttachPlan),
     CrossDbSql(CrossDbSqlPlan),
+    CrossDbInsertSelect(CrossDbInsertSelectPlan),
     CreateVirtualTable(CreateVirtualTablePlan),
     /// Track J — `CREATE SCHEMA <name> [IF NOT EXISTS]`. Records the
     /// namespace name on the session so `<schema>.<table>` qualifier
@@ -231,6 +239,15 @@ pub struct CrossDbSqlPlan {
 }
 
 #[derive(Debug, Clone)]
+pub struct CrossDbInsertSelectPlan {
+    pub alias: Arc<str>,
+    pub table: Arc<str>,
+    pub columns: Arc<[String]>,
+    pub source: Box<SelectPlan>,
+    pub source_arity: usize,
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateVirtualTablePlan {
     pub name: Arc<str>,
     pub module: Arc<str>,
@@ -254,7 +271,7 @@ pub struct ExplainPlan {
 #[derive(Debug, Clone)]
 pub enum PragmaPlan {
     SetForeignKeys(bool),
-    SetUserVersion(i64),
+    SetUserVersion { alias: Option<Arc<str>>, value: i64 },
     SetRecursiveTriggers(bool),
     SetJournalMode(JournalMode),
     SetSynchronous(SynchronousLevel),
@@ -375,6 +392,11 @@ pub enum DmlValue {
 
 #[derive(Debug, Clone)]
 pub struct UpsertPlan {
+    pub arms: Arc<[UpsertArm]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertArm {
     pub target: Option<UpsertTarget>,
     pub action: UpsertAction,
 }
@@ -411,6 +433,9 @@ pub enum SelectSource {
         branches: Vec<SelectPlan>,
     },
     SqliteSchema,
+    SqliteSequence {
+        alias: Option<Arc<str>>,
+    },
     SqliteTempSchema,
     StaticRows {
         rows: Arc<[Vec<crate::value::SqlValue>]>,
@@ -475,6 +500,7 @@ pub struct JoinStep {
     pub right: BoundTable,
     pub kind: JoinKind,
     pub selection: Option<Expr>,
+    pub hidden_right_columns: Arc<[usize]>,
 }
 
 #[derive(Debug, Clone)]
@@ -674,6 +700,10 @@ pub(crate) enum SelectRuntimeSource {
     },
     SqliteSchema {
         rows: Vec<SqliteSchemaRow>,
+        cursor: usize,
+    },
+    SqliteSequence {
+        rows: Vec<SqliteSequenceRow>,
         cursor: usize,
     },
     StaticRows {

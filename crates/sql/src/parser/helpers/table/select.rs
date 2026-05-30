@@ -9,6 +9,7 @@ use sqlparser::ast::{
 
 use crate::error::{Error, Result};
 use crate::statement::{BoundTable, JoinKind, JoinSource, JoinStep, ParamLayout, SelectSource};
+use crate::value::SqlValue;
 
 use super::bind::{bind_table_name, object_name_part_to_string};
 
@@ -43,6 +44,14 @@ pub(crate) fn bind_select_from(
             crate::exec::view::try_resolve_view_source(schema, name, alias_arc.as_ref(), params)?
         {
             return Ok((source, None));
+        }
+        if is_sqlite_sequence_name(name)
+            && schema.tables.iter().any(|table| table.is_autoincrement())
+        {
+            return Ok((SelectSource::SqliteSequence { alias: alias_arc }, None));
+        }
+        if is_sqlite_stat1_name(name) && !conn.stats_snapshot().tables.is_empty() {
+            return Ok((sqlite_stat1_source(conn, schema, alias_arc), None));
         }
     }
 
@@ -118,6 +127,11 @@ fn bind_select_from_after_tvf(
 
     for table in from {
         match &table.relation {
+            TableFactor::Table { name, .. } if is_sqlite_sequence_name(name) => {
+                return Err(Error::UnsupportedSql(
+                    "sqlite_sequence cannot participate in joins".to_owned(),
+                ));
+            }
             TableFactor::Table { name, .. } if is_sqlite_temp_schema_name(name) => {
                 if !table.joins.is_empty() {
                     return Err(Error::UnsupportedSql(
@@ -182,6 +196,24 @@ fn bind_select_from_after_tvf(
     Ok((source, selection))
 }
 
+pub(crate) fn is_sqlite_sequence_name(name: &ObjectName) -> bool {
+    match name.0.as_slice() {
+        [part] => object_name_part_to_string(part)
+            .map(|s| s.eq_ignore_ascii_case("sqlite_sequence"))
+            .unwrap_or(false),
+        [schema, table] => match (
+            object_name_part_to_string(schema).ok(),
+            object_name_part_to_string(table).ok(),
+        ) {
+            (Some(schema), Some(table)) => {
+                schema.eq_ignore_ascii_case("main") && table.eq_ignore_ascii_case("sqlite_sequence")
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 pub(crate) fn bind_select_join_source(
     schema: &SchemaSnapshot,
     table: TableWithJoins,
@@ -192,31 +224,31 @@ pub(crate) fn bind_select_join_source(
     let mut joins = Vec::new();
     for join in table.joins {
         let right = bind_select_join_relation(schema, join.relation)?;
-        let (kind, join_selection) = match join.join_operator {
-            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => (
-                JoinKind::Inner,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
+        let (kind, join_constraint) = match join.join_operator {
+            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Inner, constraint)
+            }
             JoinOperator::CrossJoin(constraint) => match constraint {
-                JoinConstraint::None => (JoinKind::Inner, None),
+                JoinConstraint::None => (JoinKind::Inner, JoinConstraintBinding::default()),
                 _ => {
                     return Err(Error::UnsupportedSql(
                         "CROSS JOIN cannot have a constraint".to_owned(),
                     ));
                 }
             },
-            JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => (
-                JoinKind::Left,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
-            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => (
-                JoinKind::Right,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
-            JoinOperator::FullOuter(constraint) => (
-                JoinKind::Full,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
+            JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Left, constraint)
+            }
+            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Right, constraint)
+            }
+            JoinOperator::FullOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Full, constraint)
+            }
             JoinOperator::Semi(_)
             | JoinOperator::LeftSemi(_)
             | JoinOperator::RightSemi(_)
@@ -235,7 +267,8 @@ pub(crate) fn bind_select_join_source(
         joins.push(JoinStep {
             right,
             kind,
-            selection: join_selection,
+            selection: join_constraint.selection,
+            hidden_right_columns: join_constraint.hidden_right_columns,
         });
         left_tables.push(joins.last().expect("join just pushed").right.clone());
     }
@@ -408,15 +441,24 @@ pub(crate) fn bind_select_join_relation(
     bind_select_table_factor(schema, relation)
 }
 
+#[derive(Default)]
+pub(crate) struct JoinConstraintBinding {
+    pub(crate) selection: Option<Expr>,
+    pub(crate) hidden_right_columns: Arc<[usize]>,
+}
+
 pub(crate) fn bind_join_constraint(
     left: &[BoundTable],
     right: &BoundTable,
     constraint: JoinConstraint,
     params: &mut ParamLayout,
-) -> Result<Option<Expr>> {
+) -> Result<JoinConstraintBinding> {
     match constraint {
-        JoinConstraint::None => Ok(None),
-        JoinConstraint::On(expr) => Ok(Some(crate::parser::select::normalize_expr(expr, params)?)),
+        JoinConstraint::None => Ok(JoinConstraintBinding::default()),
+        JoinConstraint::On(expr) => Ok(JoinConstraintBinding {
+            selection: Some(crate::parser::select::normalize_expr(expr, params)?),
+            hidden_right_columns: Arc::from([]),
+        }),
         JoinConstraint::Using(columns) => {
             let right_name = match right.alias.as_ref().map(|alias| alias.to_string()) {
                 Some(n) => n,
@@ -436,6 +478,7 @@ pub(crate) fn bind_join_constraint(
                 }
             };
             let mut expr = None;
+            let mut hidden = Vec::new();
             for column in columns {
                 let column_part = match column.0.last() {
                     Some(p) => p,
@@ -444,6 +487,11 @@ pub(crate) fn bind_join_constraint(
                     }
                 };
                 let column_name = object_name_part_to_string(column_part)?;
+                if let Some(ordinal) = right_column_ordinal(right, &column_name)
+                    && !hidden.contains(&ordinal)
+                {
+                    hidden.push(ordinal);
+                }
                 let left_col = Expr::CompoundIdentifier(vec![
                     Ident::new(left_name.clone()),
                     Ident::new(column_name.clone()),
@@ -462,15 +510,21 @@ pub(crate) fn bind_join_constraint(
                     None => eq,
                 });
             }
-            Ok(expr)
+            Ok(JoinConstraintBinding {
+                selection: expr,
+                hidden_right_columns: Arc::from(hidden),
+            })
         }
         JoinConstraint::Natural => bind_natural_constraint(left, right),
     }
 }
 
-fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Option<Expr>> {
+fn bind_natural_constraint(
+    left: &[BoundTable],
+    right: &BoundTable,
+) -> Result<JoinConstraintBinding> {
     let Some(left_table) = left.last() else {
-        return Ok(None);
+        return Ok(JoinConstraintBinding::default());
     };
     let left_name = left_table
         .alias
@@ -483,13 +537,17 @@ fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Op
         .map(|alias| alias.to_string())
         .unwrap_or_else(|| right.table.name.to_string());
     let mut expr = None;
+    let mut hidden = Vec::new();
     for lcol in &left_table.table.columns {
-        if right
+        if let Some(ordinal) = right
             .table
             .columns
             .iter()
-            .any(|rcol| rcol.folded.eq_ignore_ascii_case(lcol.folded.as_ref()))
+            .position(|rcol| rcol.folded.eq_ignore_ascii_case(lcol.folded.as_ref()))
         {
+            if !hidden.contains(&ordinal) {
+                hidden.push(ordinal);
+            }
             let column_name = lcol.name.to_string();
             let eq = Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![
@@ -508,7 +566,18 @@ fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Op
             });
         }
     }
-    Ok(expr)
+    Ok(JoinConstraintBinding {
+        selection: expr,
+        hidden_right_columns: Arc::from(hidden),
+    })
+}
+
+fn right_column_ordinal(right: &BoundTable, column_name: &str) -> Option<usize> {
+    right
+        .table
+        .columns
+        .iter()
+        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(column_name))
 }
 
 pub(crate) fn and_expr(left: Expr, right: Expr) -> Expr {
@@ -545,19 +614,114 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
 pub(crate) fn is_sqlite_temp_schema_name(name: &ObjectName) -> bool {
     match name.0.as_slice() {
         [part] => object_name_part_to_string(part)
-            .map(|s| s.eq_ignore_ascii_case("sqlite_temp_schema"))
+            .map(|s| {
+                s.eq_ignore_ascii_case("sqlite_temp_schema")
+                    || s.eq_ignore_ascii_case("sqlite_temp_master")
+            })
             .unwrap_or(false),
         [schema, table] => {
             let schema = object_name_part_to_string(schema).ok();
             let table = object_name_part_to_string(table).ok();
             matches!(
                 (schema.as_deref(), table.as_deref()),
-                (Some(schema), Some("sqlite_schema")) | (Some(schema), Some("sqlite_temp_schema"))
+                (Some(schema), Some("sqlite_schema"))
+                    | (Some(schema), Some("sqlite_master"))
+                    | (Some(schema), Some("sqlite_temp_schema"))
+                    | (Some(schema), Some("sqlite_temp_master"))
                     if schema.eq_ignore_ascii_case(concat!("te", "mp"))
             )
         }
         _ => false,
     }
+}
+
+fn is_sqlite_stat1_name(name: &ObjectName) -> bool {
+    match name.0.as_slice() {
+        [part] => object_name_part_to_string(part)
+            .map(|s| s.eq_ignore_ascii_case("sqlite_stat1"))
+            .unwrap_or(false),
+        [schema, table] => {
+            let schema = object_name_part_to_string(schema).ok();
+            let table = object_name_part_to_string(table).ok();
+            matches!(
+                (schema.as_deref(), table.as_deref()),
+                (Some("main"), Some("sqlite_stat1"))
+            )
+        }
+        _ => false,
+    }
+}
+
+fn sqlite_stat1_source(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+    alias: Option<Arc<str>>,
+) -> SelectSource {
+    SelectSource::Cte {
+        name: Arc::from("sqlite_stat1"),
+        alias,
+        columns: Arc::<[String]>::from(vec!["tbl".to_owned(), "idx".to_owned(), "stat".to_owned()]),
+        rows: Arc::from(sqlite_stat1_rows(conn, schema)),
+    }
+}
+
+fn sqlite_stat1_rows(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+) -> Vec<Vec<SqlValue>> {
+    let stats = conn.stats_snapshot();
+    let mut rows = Vec::new();
+    for table in &schema.tables {
+        let Some(table_stats) = stats.tables.get(&table.table_id) else {
+            continue;
+        };
+        let mut added_index_row = false;
+        for index in &table.indexes {
+            if index.primary
+                && matches!(
+                    index.origin,
+                    redlinedb_kernel::catalog::IndexOrigin::PrimaryKey
+                )
+                && table.rowid_alias_column.is_some()
+            {
+                continue;
+            }
+            let Some(index_stats) = stats.indexes.get(&index.index_id) else {
+                continue;
+            };
+            added_index_row = true;
+            rows.push(vec![
+                SqlValue::Text(Arc::from(table.name.as_ref())),
+                SqlValue::Text(Arc::from(index.name.as_ref())),
+                SqlValue::Text(Arc::from(sqlite_stat1_index_stat(
+                    index_stats.entries,
+                    &index_stats.distinct_prefix_counts,
+                ))),
+            ]);
+        }
+        if !added_index_row {
+            rows.push(vec![
+                SqlValue::Text(Arc::from(table.name.as_ref())),
+                SqlValue::Null,
+                SqlValue::Text(Arc::from(table_stats.row_count.to_string())),
+            ]);
+        }
+    }
+    rows
+}
+
+fn sqlite_stat1_index_stat(entries: u64, distinct_prefix_counts: &[f64]) -> String {
+    let mut parts = Vec::with_capacity(distinct_prefix_counts.len() + 1);
+    parts.push(entries.to_string());
+    for distinct in distinct_prefix_counts {
+        let avg = if entries == 0 || *distinct <= 0.0 {
+            0
+        } else {
+            (entries as f64 / *distinct).ceil() as u64
+        };
+        parts.push(avg.to_string());
+    }
+    parts.join(" ")
 }
 
 /// Pre-pass for [`bind_select_from`]: walk the FROM list, materialise

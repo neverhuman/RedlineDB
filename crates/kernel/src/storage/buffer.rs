@@ -114,12 +114,23 @@ pub struct FlushStats {
 
 impl BufferPool {
     pub fn new(page_file: Arc<PageFile>, capacity: usize) -> Result<Self> {
+        // A26: hit the process-wide cached available_parallelism() so the
+        // BufferPool constructor doesn't re-walk the cgroup hierarchy.
+        let parallelism = crate::cached_available_parallelism();
+        Self::new_with_parallelism(page_file, capacity, parallelism)
+    }
+
+    /// Like `new` but uses a caller-supplied parallelism hint instead of
+    /// querying `cached_available_parallelism()`.  Use this for volatile
+    /// (in-memory) databases to avoid the cgroup walk on every fresh process.
+    pub(crate) fn new_with_parallelism(
+        page_file: Arc<PageFile>,
+        capacity: usize,
+        parallelism: usize,
+    ) -> Result<Self> {
         if capacity == 0 {
             return Err(Error::CorruptPage("buffer pool capacity must be nonzero"));
         }
-        let parallelism = thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(4);
         let base_shard_count = capacity.min((parallelism * 4).max(16)).max(1);
         // Phase 5 WS-B6: with `--features numa` round the shard count up
         // to a multiple of the host's NUMA node count so each node owns

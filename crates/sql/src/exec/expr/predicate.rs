@@ -77,13 +77,12 @@ pub(crate) fn eval_subquery_value(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    let rows = evaluate_subquery_rows(subquery, row, bindings)?;
     // SQLite scalar-subquery semantics
     // (https://sqlite.org/lang_expr.html#subqueries): a multi-row
     // subquery returns the value of the first row (in projection
     // order). A multi-column subquery is still rejected since the
     // expression context demands a single column.
-    match rows.first() {
+    match evaluate_subquery_first_row(subquery, row, bindings)? {
         None => Ok(SqlValue::Null),
         Some(first) if first.is_empty() => Ok(SqlValue::Null),
         Some(first) if first.len() == 1 => Ok(first[0].clone()),
@@ -123,15 +122,11 @@ fn subquery_cache_key(conn: &Connection, subquery: &sqlparser::ast::Query) -> Su
     }
 }
 
-/// Evaluate a subquery, pushing the caller's row onto the correlated-scope
-/// stack so qualified references (`outer.col`) resolve through
-/// `lookup_correlated`. The row snapshot is dropped automatically once
-/// the subquery returns.
-pub(crate) fn evaluate_subquery_rows(
+fn evaluate_subquery_first_row(
     subquery: &sqlparser::ast::Query,
     outer_row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
-) -> Result<Vec<Vec<SqlValue>>> {
+) -> Result<Option<Vec<SqlValue>>> {
     let Some(conn) = current_connection() else {
         return Err(Error::TransactionState(
             "subquery evaluation requires an active connection",
@@ -140,7 +135,7 @@ pub(crate) fn evaluate_subquery_rows(
     let template = bind_subquery(conn, subquery)?;
     let owned = outer_row.to_owned_row();
     crate::exec::with_outer_row(owned, || {
-        materialize_prepared_rows(conn, &template, bindings)
+        crate::exec::materialize_first_prepared_row(conn, &template, bindings)
     })
 }
 
@@ -156,10 +151,9 @@ pub(crate) fn evaluate_subquery_exists(
     };
     let template = bind_subquery(conn, subquery)?;
     let owned = outer_row.to_owned_row();
-    let rows = crate::exec::with_outer_row(owned, || {
-        materialize_prepared_rows_limited(conn, &template, bindings, Some(1))
-    })?;
-    Ok(!rows.is_empty())
+    crate::exec::with_outer_row(owned, || {
+        crate::exec::prepared_select_has_row(conn, &template, bindings)
+    })
 }
 
 fn row_values_for_expr(
@@ -247,36 +241,47 @@ pub(crate) fn in_subquery_result(
         ));
     }
     let cache_key = subquery_cache_key(conn, subquery);
-    let rows = if in_subquery_is_cacheable(subquery) {
-        if let Some(rows) =
-            IN_SUBQUERY_ROW_CACHE.with(|cache| cache.borrow().get(&cache_key).cloned())
-        {
-            rows
-        } else {
-            let owned = row.to_owned_row();
-            let (rows, used_correlated_lookup) = crate::exec::with_outer_row(owned, || {
-                crate::exec::with_correlated_lookup_tracking(|| {
-                    materialize_prepared_rows(conn, &template, bindings)
-                })
-            });
-            let rows = rows?;
-            if !used_correlated_lookup {
-                IN_SUBQUERY_ROW_CACHE.with(|cache| {
-                    cache.borrow_mut().insert(cache_key, rows.clone());
-                });
-            }
-            rows
+    if in_subquery_is_cacheable(subquery) {
+        if let Some(result) = IN_SUBQUERY_ROW_CACHE.with(|cache| {
+            let cache = cache.borrow();
+            cache
+                .get(&cache_key)
+                .map(|rows| finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated))
+        }) {
+            return result;
         }
-    } else {
+
         let owned = row.to_owned_row();
-        crate::exec::with_outer_row(owned, || {
-            materialize_prepared_rows(conn, &template, bindings)
-        })?
-    };
+        let (rows, used_correlated_lookup) = crate::exec::with_outer_row(owned, || {
+            crate::exec::with_correlated_lookup_tracking(|| {
+                materialize_prepared_rows(conn, &template, bindings)
+            })
+        });
+        let rows = rows?;
+        let result = finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated)?;
+        if !used_correlated_lookup {
+            IN_SUBQUERY_ROW_CACHE.with(|cache| {
+                cache.borrow_mut().insert(cache_key, rows);
+            });
+        }
+        return Ok(result);
+    }
+
+    let owned = row.to_owned_row();
+    let rows = crate::exec::with_outer_row(owned, || {
+        materialize_prepared_rows(conn, &template, bindings)
+    })?;
+    finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated)
+}
+
+fn finish_in_rows<'a, I>(value: &[SqlValue], rows: I, negated: bool) -> Result<SqlValue>
+where
+    I: IntoIterator<Item = &'a [SqlValue]>,
+{
     let mut found = false;
     let mut saw_null = false;
     for row in rows {
-        match row_eq(&value, &row)? {
+        match row_eq(value, row)? {
             Some(true) => {
                 found = true;
                 break;
@@ -289,23 +294,55 @@ pub(crate) fn in_subquery_result(
 }
 
 fn in_subquery_is_cacheable(subquery: &sqlparser::ast::Query) -> bool {
+    // A12: drop the per-row `to_ascii_lowercase()` allocation. `Query`'s
+    // Display still allocates the rendered string (sqlparser API), but
+    // we don't need to clone-and-downcase it to do case-insensitive
+    // substring checks — the byte-scan helper handles that allocation-
+    // free for every marker we're looking for. The list of volatile/
+    // session-bound function names is closed and ASCII-only, so a
+    // simple `eq_ignore_ascii_case` window check is sufficient.
+    const VOLATILE_MARKERS: &[&[u8]] = &[
+        b"random(",
+        b"randomblob(",
+        b"last_insert_rowid",
+        b"changes(",
+        b"total_changes(",
+        b"current_date",
+        b"current_time",
+        b"current_timestamp",
+        b"date(",
+        b"time(",
+        b"datetime(",
+        b"julianday(",
+        b"unixepoch(",
+        b"strftime(",
+    ];
     let rendered = subquery.to_string();
-    let lower = rendered.to_ascii_lowercase();
-    !rendered.contains('.')
-        && !lower.contains("random(")
-        && !lower.contains("randomblob(")
-        && !lower.contains("last_insert_rowid")
-        && !lower.contains("changes(")
-        && !lower.contains("total_changes(")
-        && !lower.contains("current_date")
-        && !lower.contains("current_time")
-        && !lower.contains("current_timestamp")
-        && !lower.contains("date(")
-        && !lower.contains("time(")
-        && !lower.contains("datetime(")
-        && !lower.contains("julianday(")
-        && !lower.contains("unixepoch(")
-        && !lower.contains("strftime(")
+    if rendered.contains('.') {
+        return false;
+    }
+    let bytes = rendered.as_bytes();
+    for marker in VOLATILE_MARKERS {
+        if contains_token_ci(bytes, marker) {
+            return false;
+        }
+    }
+    true
+}
+
+/// A12 helper: allocation-free case-insensitive substring scan. Same shape
+/// as A7/A8/A9 byte-scans elsewhere.
+#[inline]
+fn contains_token_ci(haystack: &[u8], needle: &[u8]) -> bool {
+    if haystack.len() < needle.len() {
+        return false;
+    }
+    haystack.windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
 }
 
 fn finish_in_result(found: bool, saw_null: bool, negated: bool) -> Result<SqlValue> {

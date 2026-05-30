@@ -30,7 +30,7 @@
 #
 # Outputs:
 #   target/release-pgo/redlinedb  -- the final optimized binary
-#   /tmp/redlinedb-pgo-data/      -- raw profile data (regenerate per build)
+#   /tmp/redlinedb-pgo-data.*     -- raw profile data (regenerate per build)
 
 set -euo pipefail
 
@@ -80,12 +80,30 @@ case "$TRAINING_SUBSET" in
         ;;
 esac
 
-PGO_DATA_DIR="${PGO_DATA_DIR:-/tmp/redlinedb-pgo-data}"
-PGO_PROFILE_DIR="${PGO_PROFILE_DIR:-/tmp/redlinedb-pgo-profile}"
+PGO_DATA_DIR="${PGO_DATA_DIR:-}"
+PGO_PROFILE_DIR="${PGO_PROFILE_DIR:-}"
+REDLINE_CARGO_FEATURE_ARGS_STR="${REDLINE_CARGO_FEATURE_ARGS:-}"
+REDLINE_CARGO_FEATURE_ARGS=()
+if [ -n "$REDLINE_CARGO_FEATURE_ARGS_STR" ]; then
+    # shellcheck disable=SC2206
+    REDLINE_CARGO_FEATURE_ARGS=($REDLINE_CARGO_FEATURE_ARGS_STR)
+fi
 REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-/home/ubuntu/redline-testing/target/release/redline-testing}"
 SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3")}"
 PERF_CASES_DIR="${PERF_CASES_DIR:-bench/perf/cases}"
 PERF_ROOT="${PERF_ROOT:-target/perf}"
+
+if [ "$DRY_RUN" = "0" ]; then
+    if [ -z "$PGO_DATA_DIR" ]; then
+        PGO_DATA_DIR="$(mktemp -d "${TMPDIR:-/tmp}/redlinedb-pgo-data.XXXXXX")"
+    fi
+    if [ -z "$PGO_PROFILE_DIR" ]; then
+        PGO_PROFILE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/redlinedb-pgo-profile.XXXXXX")"
+    fi
+else
+    PGO_DATA_DIR="${PGO_DATA_DIR:-/tmp/redlinedb-pgo-data}"
+    PGO_PROFILE_DIR="${PGO_PROFILE_DIR:-/tmp/redlinedb-pgo-profile}"
+fi
 
 # Resolve subset-specific case list. `build_case_lists.py` is the
 # canonical generator (see scripts/perf/build-case-lists.sh); the
@@ -189,7 +207,7 @@ mkdir -p "$PGO_DATA_DIR" "$PGO_PROFILE_DIR"
 
 echo ">>> [2/3] Building instrumented binary"
 RUSTFLAGS="${REDLINE_BASE_RUSTFLAGS} -Cprofile-generate=$PGO_DATA_DIR" \
-    cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked
+    cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked "${REDLINE_CARGO_FEATURE_ARGS[@]}"
 
 if [ ! -x "$INSTR_BIN" ]; then
     echo "Instrumented binary not found at $INSTR_BIN" >&2
@@ -199,6 +217,12 @@ fi
 echo ">>> [3a/3] Running training workload (subset=$TRAINING_SUBSET) to gather profile data"
 mkdir -p target/redline-testing-pgo
 if [ "$TRAINING_SUBSET" = "full" ]; then
+    # We allow a non-zero exit here (|| true) because the instrumented binary
+    # emits extra stderr (durability notice, LLVM profile warnings) that the
+    # parity harness counts as failures.  The .profraw files are written by
+    # the LLVM runtime regardless, so the profile is still valid.
+    REDLINEDB_DEFAULT_DURABILITY=normal \
+    REDLINEDB_QUIET_DURABILITY=1 \
     "$REDLINE_TESTING_BIN" run \
         --target-bin "$INSTR_BIN" \
         --sqlite-bin "$SQLITE_REF_BIN" \
@@ -206,7 +230,8 @@ if [ "$TRAINING_SUBSET" = "full" ]; then
         --workers "${PERF_WORKERS:-10}" \
         --tmp-root /dev/shm/redline-testing-pgo \
         --repetitions 1 --warmup 0 \
-        --output target/redline-testing-pgo/training.jsonl
+        --output target/redline-testing-pgo/training.jsonl \
+    || true
 else
     # Subset path: replay only the curated case-list via run_subset.py.
     # The instrumented binary still writes .profraw to $PGO_DATA_DIR on
@@ -218,6 +243,7 @@ else
         "$REDLINE_TESTING_BIN" list --suite sqlite_parity --format json > "$SNAPSHOT"
     fi
     mkdir -p /dev/shm/redline-testing-pgo
+    REDLINEDB_DEFAULT_DURABILITY=normal \
     python3 scripts/perf/run_subset.py \
         --case-list   "$CASE_LIST" \
         --target-bin  "$INSTR_BIN" \
@@ -234,7 +260,7 @@ echo ">>> [3b/3] Merging .profraw files"
 
 echo ">>> [3c/3] Building final PGO-optimized binary"
 RUSTFLAGS="${REDLINE_BASE_RUSTFLAGS}${FINAL_LINK_EXTRA} -Cprofile-use=$PGO_PROFILE_DIR/merged.profdata -Cllvm-args=-pgo-warn-missing-function" \
-    cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked
+    cargo build --profile release-pgo -p redlinedb-cli --bin redlinedb --locked "${REDLINE_CARGO_FEATURE_ARGS[@]}"
 
 echo ""
 echo "Done."

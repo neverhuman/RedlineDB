@@ -28,9 +28,12 @@ if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   echo "BASE_REF=$BASE_REF not resolvable; skipping staged-gate" >&2
   exit 0
 fi
-base_sha="$(git merge-base "$BASE_REF" HEAD)"
+# NOTE: on shallow clones git merge-base exits non-zero and set -e would kill
+# the script before the guard below runs. The || true absorbs the non-zero
+# exit so $base_sha is empty and the guard below handles it gracefully.
+base_sha="$(git merge-base "$BASE_REF" HEAD 2>/dev/null)" || true
 if [ -z "$base_sha" ]; then
-  echo "no merge base with $BASE_REF; skipping staged-gate" >&2
+  echo "no merge base with $BASE_REF (shallow clone or unrelated history); skipping staged-gate" >&2
   exit 0
 fi
 

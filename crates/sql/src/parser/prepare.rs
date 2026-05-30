@@ -396,10 +396,15 @@ fn is_ident_start(b: u8) -> bool {
 }
 
 pub(crate) fn apply_cte_materialized_hints(statements: &mut [SqlStatement], sql: &str) {
-    let lower = sql.to_ascii_lowercase();
-    let hint = if lower.contains("as not materialized") {
+    // A38: byte-wise case-insensitive scan. The previous implementation
+    // called `sql.to_ascii_lowercase()` on every prepare to substring-
+    // check two fixed phrases — that allocates a fresh String of the
+    // entire SQL length per call. ~99% of statements don't use CTE
+    // materialization hints, so the allocation was wasted on the
+    // common path. Same shape as A31 (`is_pragma_sql`).
+    let hint = if contains_ci(sql, "as not materialized") {
         Some(sqlparser::ast::CteAsMaterialized::NotMaterialized)
-    } else if lower.contains("as materialized") {
+    } else if contains_ci(sql, "as materialized") {
         Some(sqlparser::ast::CteAsMaterialized::Materialized)
     } else {
         None
@@ -412,6 +417,26 @@ pub(crate) fn apply_cte_materialized_hints(statements: &mut [SqlStatement], sql:
             apply_cte_materialized_hints_to_query(query.as_mut(), hint);
         }
     }
+}
+
+/// A38: allocation-free case-insensitive substring scan. Walks the
+/// haystack once and compares each window byte-by-byte via
+/// `eq_ignore_ascii_case`. For the haystack of an entire SQL
+/// statement that doesn't contain the needle, this is O(N) without
+/// any heap allocation; the previous `to_ascii_lowercase().contains(_)`
+/// path was O(N) plus a full-string heap allocation.
+fn contains_ci(haystack: &str, needle: &str) -> bool {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() || n.len() > h.len() {
+        return false;
+    }
+    h.windows(n.len()).any(|window| {
+        window
+            .iter()
+            .zip(n.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
 }
 
 fn apply_cte_materialized_hints_to_query(

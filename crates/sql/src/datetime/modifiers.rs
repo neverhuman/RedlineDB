@@ -21,9 +21,9 @@ use super::DateTime;
 ///   is still out of range).
 /// * Any other modifier (arithmetic, `start of *`, `weekday N`) preserves
 ///   the flag, so the eventual `format_*`/`julian_day` call returns NULL.
-pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
+pub fn apply_modifiers<S: AsRef<str>>(mut dt: DateTime, mods: &[S]) -> Result<DateTime> {
     for raw in mods {
-        let m = raw.trim().to_ascii_lowercase();
+        let m = raw.as_ref().trim().to_ascii_lowercase();
         if m == "utc" {
             dt.is_local = false;
             if dt.out_of_range.is_some() {
@@ -90,13 +90,13 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
             continue;
         }
         if let Some(weekday) = m.strip_prefix("weekday ") {
-            let target: u32 = weekday
-                .trim()
-                .parse()
-                .map_err(|_| Error::UnsupportedSql(format!("invalid weekday modifier: {raw}")))?;
+            let target: u32 = weekday.trim().parse().map_err(|_| {
+                Error::UnsupportedSql(format!("invalid weekday modifier: {}", raw.as_ref()))
+            })?;
             if target > 6 {
                 return Err(Error::UnsupportedSql(format!(
-                    "weekday must be in 0..=6: {raw}"
+                    "weekday must be in 0..=6: {}",
+                    raw.as_ref()
                 )));
             }
             dt = advance_to_weekday(dt, target);
@@ -107,7 +107,8 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
             continue;
         }
         return Err(Error::UnsupportedSql(format!(
-            "unsupported datetime modifier: {raw}"
+            "unsupported datetime modifier: {}",
+            raw.as_ref()
         )));
     }
     Ok(dt)

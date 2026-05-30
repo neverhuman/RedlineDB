@@ -90,6 +90,25 @@ pub(crate) fn expr_to_kernel_ast(
                 )));
             }
         },
+        Expr::Like {
+            negated,
+            any,
+            expr,
+            pattern,
+            escape_char,
+        } => {
+            if *any {
+                return Err(Error::UnsupportedSql(
+                    "LIKE ANY is not supported in DDL".to_owned(),
+                ));
+            }
+            ExprAst::Like {
+                negated: *negated,
+                value: Box::new(expr_to_kernel_ast(expr, column_lookup)?),
+                pattern: Box::new(expr_to_kernel_ast(pattern, column_lookup)?),
+                escape: ddl_like_escape_char(escape_char.as_ref())?,
+            }
+        }
         Expr::IsNull(expr) => ExprAst::Eq(
             Box::new(expr_to_kernel_ast(expr, column_lookup)?),
             Box::new(ExprAst::Const(OwnedValue::Null)),
@@ -116,6 +135,30 @@ pub(crate) fn expr_to_kernel_ast(
             )));
         }
     })
+}
+
+fn ddl_like_escape_char(escape_char: Option<&sqlparser::ast::Value>) -> Result<Option<char>> {
+    match escape_char {
+        Some(sqlparser::ast::Value::SingleQuotedString(s))
+        | Some(sqlparser::ast::Value::DoubleQuotedString(s))
+        | Some(sqlparser::ast::Value::SingleQuotedRawStringLiteral(s))
+        | Some(sqlparser::ast::Value::DoubleQuotedRawStringLiteral(s))
+        | Some(sqlparser::ast::Value::TripleSingleQuotedString(s))
+        | Some(sqlparser::ast::Value::TripleDoubleQuotedString(s))
+        | Some(sqlparser::ast::Value::EscapedStringLiteral(s))
+        | Some(sqlparser::ast::Value::UnicodeStringLiteral(s))
+            if s.chars().count() == 1 =>
+        {
+            Ok(Some(s.chars().next().unwrap()))
+        }
+        Some(sqlparser::ast::Value::DollarQuotedString(s)) if s.value.chars().count() == 1 => {
+            Ok(Some(s.value.chars().next().unwrap()))
+        }
+        None => Ok(None),
+        Some(other) => Err(Error::UnsupportedSql(format!(
+            "unsupported LIKE escape literal in DDL: {other:?}"
+        ))),
+    }
 }
 
 fn current_datetime_default_ast(expr: &Expr) -> Option<ExprAst> {

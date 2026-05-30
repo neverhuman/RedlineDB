@@ -1055,9 +1055,21 @@ fn format_real(value: f64) -> String {
 }
 
 fn format_blob_text(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len());
-    for byte in bytes {
-        out.push(*byte as char);
+    if bytes.iter().all(|byte| *byte == 0) {
+        return String::new();
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\u{0000}' => out.push_str("^@"),
+            '\u{0001}'..='\u{001A}' => {
+                out.push('^');
+                out.push((b'@' + ch as u8) as char);
+            }
+            '\u{007F}' => out.push_str("^?"),
+            other => out.push(other),
+        }
     }
     out
 }

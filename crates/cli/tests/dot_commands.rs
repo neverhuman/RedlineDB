@@ -136,6 +136,29 @@ fn batch_bail_memory_mode_is_cwd_clean_and_output_exact() {
 }
 
 #[test]
+fn deserialize_memory_mode_runs_silently() {
+    // SQLite 3.53.1 no longer emits "Error: out of memory" for
+    // `-deserialize :memory:`; RedlineDB matches that behavior.
+    let (out, err, code) = run_script_with_args(&["-deserialize", "-list"], None, "SELECT 1;\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "1\n");
+    assert_eq!(err, "", "expected no OOM message on stderr (3.53.1 parity)");
+}
+
+#[test]
+fn batch_autoincrement_exposes_sqlite_sequence() {
+    let (out, err, code) = run_script(
+        None,
+        "CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);\n\
+         SELECT count(*) FROM sqlite_sequence;\n\
+         INSERT INTO t(name) VALUES ('one');\n\
+         SELECT name, seq FROM sqlite_sequence;\n",
+    );
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "0\nt|1\n", "stdout={out}");
+}
+
+#[test]
 fn dot_tables_lists_user_tables() {
     let (out, err, code) = run_script(
         None,
@@ -195,6 +218,38 @@ fn dot_databases_reports_main() {
     assert_eq!(code, 0, "stderr={err}");
     assert!(out.contains("main:"), "stdout={out}");
     assert!(out.contains("main.db"), "stdout={out}");
+}
+
+#[test]
+fn dot_databases_lists_attached_aliases() {
+    let dir = tempdir().expect("tempdir");
+    let main_path = dir.path().join("main.db");
+    let aux_path = dir.path().join("aux.db");
+    let script = format!(
+        "ATTACH DATABASE '{}' AS aux;\n.databases\n",
+        aux_path.display()
+    );
+    let (out, err, code) = run_script(Some(&main_path), &script);
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("main:"), "stdout={out}");
+    assert!(out.contains("aux:"), "stdout={out}");
+    assert!(out.contains("main.db"), "stdout={out}");
+    assert!(out.contains("aux.db"), "stdout={out}");
+}
+
+#[test]
+fn dot_list_renders_blob_text_symbolically() {
+    let (out, err, code) = run_script(None, ".mode list\nSELECT x'01ab';\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert!(out.contains("^A"), "stdout={out}");
+    assert!(out.contains('�'), "stdout={out}");
+}
+
+#[test]
+fn dot_list_renders_zeroblob_as_blank() {
+    let (out, err, code) = run_script(None, ".mode list\nSELECT zeroblob(4);\n");
+    assert_eq!(code, 0, "stderr={err}");
+    assert_eq!(out, "\n", "stdout={out}");
 }
 
 #[test]

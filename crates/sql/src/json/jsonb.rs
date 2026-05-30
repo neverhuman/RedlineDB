@@ -809,13 +809,16 @@ pub fn jsonb_build_object(values: &[SqlValue]) -> Result<SqlValue> {
             SqlValue::Real(f) => crate::exec::expr::scalar::value::format_real_sqlite(*f),
             SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
         };
-        map.insert(key, sql_to_json_value(&pair[1]));
+        map.insert(key, sql_to_json_value(&pair[1])?);
     }
     Ok(jsonb_text(&Value::Object(map)))
 }
 
 pub fn jsonb_build_array(values: &[SqlValue]) -> Result<SqlValue> {
-    let arr: Vec<Value> = values.iter().map(sql_to_json_value).collect();
+    let arr: Vec<Value> = values
+        .iter()
+        .map(sql_to_json_value)
+        .collect::<Result<Vec<_>>>()?;
     Ok(jsonb_text(&Value::Array(arr)))
 }
 

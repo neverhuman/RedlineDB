@@ -729,13 +729,22 @@ fn pg_array_set_op(values: &[SqlValue], op: ArraySetOp) -> Result<SqlValue> {
 
 /// Decode `value` as a JSON array. Returns `None` when the value is not a
 /// valid JSON array text; callers treat `None` as NULL.
+///
+/// A42: `serde_json::from_str` takes `&str`, so we can borrow directly
+/// from the `SqlValue` without allocating:
+/// - `Text(Arc<str>)`: `t.as_ref()` gives `&str` for free (was
+///   `t.to_string()` which cloned).
+/// - `Blob(Arc<[u8]>)`: `std::str::from_utf8(b).ok()?` borrows on valid
+///   UTF-8 (was `String::from_utf8_lossy(b).into_owned()` — always
+///   allocated; invalid UTF-8 can't be valid JSON anyway since `�`
+///   isn't a JSON token, so short-circuiting to `None` is byte-equivalent).
 fn parse_json_array(value: &SqlValue) -> Option<Vec<serde_json::Value>> {
-    let text = match value {
-        SqlValue::Text(t) => t.to_string(),
-        SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
+    let text: &str = match value {
+        SqlValue::Text(t) => t.as_ref(),
+        SqlValue::Blob(b) => std::str::from_utf8(b).ok()?,
         _ => return None,
     };
-    match serde_json::from_str::<serde_json::Value>(&text) {
+    match serde_json::from_str::<serde_json::Value>(text) {
         Ok(serde_json::Value::Array(a)) => Some(a),
         _ => None,
     }

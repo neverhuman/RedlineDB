@@ -207,6 +207,13 @@ fn vector_non_f32_type_is_unsupported() {
     assert_unsupported(res, "not supported");
 }
 
+#[test]
+fn json_quote_rejects_blob_input() {
+    let (_d, c) = open();
+    let res = c.execute("SELECT json_quote(x'01ab')");
+    assert_unsupported(res, "JSON cannot hold BLOB values");
+}
+
 // ── Parse-only features — confirmed boundary ──────────────────────────────────
 
 #[test]
@@ -256,4 +263,24 @@ fn unsupported_function_returns_error() {
     // A function that definitely does not exist
     let res = c.execute("SELECT totally_fake_function_xyz(1)");
     assert_errors(res);
+}
+
+#[test]
+fn missing_select_projection_column_errors_before_scan() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE t(x INTEGER)").expect("create");
+
+    for (sql, expected) in [
+        ("SELECT bogus FROM t", "unknown column: bogus"),
+        ("SELECT t.bogus FROM t", "unknown column: t.bogus"),
+    ] {
+        let err = c
+            .prepare(sql)
+            .expect_err("missing projection column should fail at prepare");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains(expected),
+            "expected {sql:?} to contain {expected:?}, got {msg:?}"
+        );
+    }
 }

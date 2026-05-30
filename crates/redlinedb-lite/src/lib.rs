@@ -57,6 +57,7 @@ where
         separator: &parsed.separator,
         row_separator: &parsed.row_separator,
         null_value: &parsed.null_value,
+        filename: parsed.filename.as_deref(),
     });
 
     match dispatch {

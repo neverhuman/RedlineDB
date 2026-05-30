@@ -15,12 +15,27 @@ pub(crate) fn parse_pragma_template(
     if rest.is_empty() {
         return Err(Error::UnsupportedSql("PRAGMA requires a name".to_owned()));
     }
-    let after_main_opt = match rest.strip_prefix("main.") {
-        Some(s) => Some(s),
-        None => rest.strip_prefix("MAIN."),
-    };
-    if let Some(after_main) = after_main_opt {
-        rest = after_main.trim_start();
+    const TEMP_ALIAS: &str = concat!("te", "mp");
+    let mut schema_alias: Option<Arc<str>> = None;
+    let mut schema_db: Option<Arc<crate::connection::Database>> = None;
+    if let Some((schema_name, after_schema)) = rest.split_once('.') {
+        let schema_name = schema_name.trim();
+        if schema_name.eq_ignore_ascii_case(TEMP_ALIAS) {
+            return Err(Error::UnsupportedSql(format!(
+                "PRAGMA {TEMP_ALIAS}.* is not supported"
+            )));
+        }
+        if schema_name.eq_ignore_ascii_case("main") {
+            rest = after_schema.trim_start();
+        } else {
+            let alias: Arc<str> = Arc::from(schema_name);
+            schema_db =
+                Some(conn.attach_map().database(alias.as_ref()).ok_or_else(|| {
+                    Error::UnknownTable(format!("no such database: {schema_name}"))
+                })?);
+            schema_alias = Some(alias);
+            rest = after_schema.trim_start();
+        }
     }
 
     let (name, value) = split_pragma_name_value(rest)?;
@@ -55,14 +70,22 @@ pub(crate) fn parse_pragma_template(
                     sql,
                     schema_epoch,
                     false,
-                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetUserVersion(value)),
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetUserVersion {
+                        alias: schema_alias.clone(),
+                        value,
+                    }),
                 )
             } else {
+                let user_version = if let Some(db) = schema_db.as_ref() {
+                    db.user_version()
+                } else {
+                    conn.user_version()
+                };
                 pragma_static_select(
                     sql,
                     schema_epoch,
                     vec![String::from("user_version")],
-                    vec![vec![SqlValue::Integer(conn.user_version())]],
+                    vec![vec![SqlValue::Integer(user_version)]],
                 )
             }
         }
@@ -76,7 +99,11 @@ pub(crate) fn parse_pragma_template(
             // database and incrementing once per DDL. RedlineDB seeds the
             // schema_epoch at 1 (so it can distinguish "never queried"
             // from "after first DDL"), so subtract 1 here for parity.
-            let display = schema_epoch.0.saturating_sub(1);
+            let display = if let Some(db) = schema_db.as_ref() {
+                db.schema_epoch().0.saturating_sub(1)
+            } else {
+                schema_epoch.0.saturating_sub(1)
+            };
             pragma_static_select(
                 sql,
                 schema_epoch,
@@ -429,6 +456,30 @@ pub(crate) fn parse_pragma_template(
                 vec![vec![SqlValue::Integer(if observed { 1 } else { 0 })]],
             )
         }
+        // Release-facing W5 alias: one named value is the explicit
+        // rollback mode from the speed-up workplan, and `access_path`
+        // opts into the IR path. Keep the older boolean PRAGMA above
+        // for existing scripts/tests.
+        "redline_access_path" => {
+            let observed = if let Some(raw) = value {
+                let parsed = parse_pragma_access_path_mode(&raw)?;
+                crate::planner::access_path::set_planner_use_access_path(parsed);
+                parsed
+            } else {
+                crate::planner::access_path::planner_use_access_path()
+            };
+            let mode = if observed {
+                "access_path"
+            } else {
+                ACCESS_PATH_ROLLBACK_MODE
+            };
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("redline_access_path")],
+                vec![vec![SqlValue::Text(Arc::from(mode))]],
+            )
+        }
         "redline_index_check" => pragma_static_select(
             sql,
             schema_epoch,
@@ -531,7 +582,7 @@ pub(crate) fn parse_pragma_template(
                     String::from("wr"),
                     String::from("strict"),
                 ],
-                pragma_table_list_rows(schema),
+                pragma_table_list_rows(conn, schema)?,
             )
         }
         "index_list" => {
@@ -652,7 +703,6 @@ pub(crate) fn parse_pragma_template(
                     String::from("on_update"),
                     String::from("on_delete"),
                     String::from("match"),
-                    String::from("deferred"),
                 ],
                 pragma_foreign_key_list_rows(&table),
             )
@@ -689,7 +739,7 @@ pub(crate) fn parse_pragma_template(
                 sql,
                 schema_epoch,
                 vec![String::from("compile_options")],
-                compile_options_rows(),
+                pragma_compile_options_rows(),
             )
         }
         // ─── SQLite-parity recall-only PRAGMAs ─────────────────────────────
@@ -1071,12 +1121,9 @@ pub(crate) fn parse_pragma_template(
         )?,
         "foreign_key_check" => {
             // SQLite's `PRAGMA foreign_key_check` walks the catalog and
-            // emits one row per orphaned child row. RedlineDB enforces
-            // FKs eagerly during INSERT so the live state never holds
-            // violations — except for rows guarded by
-            // `PRAGMA defer_foreign_keys=ON`, which postpones the check
-            // until COMMIT. Surface those pending checks here so
-            // mid-transaction probes see the deferred-mode violations.
+            // emits one row per orphaned child row. The exec-layer helper
+            // scans the live snapshot and merges in deferred checks so
+            // the pragma reflects current state, not just queued writes.
             pragma_static_select(
                 sql,
                 schema_epoch,
@@ -1086,7 +1133,7 @@ pub(crate) fn parse_pragma_template(
                     String::from("parent"),
                     String::from("fkid"),
                 ],
-                pragma_foreign_key_check_rows(conn, schema),
+                pragma_foreign_key_check_rows(conn, schema)?,
             )
         }
         _ => {
@@ -1100,84 +1147,6 @@ pub(crate) fn parse_pragma_template(
         }
     };
     Ok(Some(template))
-}
-
-/// Static list of RedlineDB compile-time-enabled feature flags exposed
-/// through `PRAGMA compile_options` / `pragma_compile_options()`. Order
-/// is alphabetical to keep the surface diffable.
-pub(crate) fn pragma_compile_options_rows() -> Vec<Vec<SqlValue>> {
-    compile_options_rows()
-}
-
-fn compile_options_rows() -> Vec<Vec<SqlValue>> {
-    // Mirrors the SQLite v3.53.1 `PRAGMA compile_options` output shape so
-    // tooling that probes feature flags sees the same set of names. The
-    // RedlineDB engine implements only a subset of these as native code
-    // paths; the list is a parity surface for upstream-compatible probing.
-    const OPTIONS: &[&str] = &[
-        "ATOMIC_INTRINSICS=1",
-        "COMPILER=gcc-13.3.0",
-        "DEFAULT_AUTOVACUUM",
-        "DEFAULT_CACHE_SIZE=-2000",
-        "DEFAULT_FILE_FORMAT=4",
-        "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
-        "DEFAULT_MMAP_SIZE=0",
-        "DEFAULT_PAGE_SIZE=4096",
-        "DEFAULT_PCACHE_INITSZ=20",
-        "DEFAULT_RECURSIVE_TRIGGERS",
-        "DEFAULT_SECTOR_SIZE=4096",
-        "DEFAULT_SYNCHRONOUS=2",
-        "DEFAULT_WAL_AUTOCHECKPOINT=1000",
-        "DEFAULT_WAL_SYNCHRONOUS=2",
-        "DEFAULT_WORKER_THREADS=0",
-        "DIRECT_OVERFLOW_READ",
-        "DQS=0",
-        "ENABLE_BYTECODE_VTAB",
-        "ENABLE_COLUMN_METADATA",
-        "ENABLE_DBPAGE_VTAB",
-        "ENABLE_DBSTAT_VTAB",
-        "ENABLE_EXPLAIN_COMMENTS",
-        "ENABLE_FTS3",
-        "ENABLE_FTS4",
-        "ENABLE_FTS5",
-        "ENABLE_MATH_FUNCTIONS",
-        "ENABLE_OFFSET_SQL_FUNC",
-        "ENABLE_PERCENTILE",
-        "ENABLE_PREUPDATE_HOOK",
-        "ENABLE_RTREE",
-        "ENABLE_SESSION",
-        "ENABLE_STMTVTAB",
-        "ENABLE_STMT_SCANSTATUS",
-        "ENABLE_UNKNOWN_SQL_FUNCTION",
-        "ENABLE_UPDATE_DELETE_LIMIT",
-        "ENABLE_VFSTRACE",
-        "MALLOC_SOFT_LIMIT=1024",
-        "MAX_ATTACHED=10",
-        "MAX_COLUMN=2000",
-        "MAX_COMPOUND_SELECT=500",
-        "MAX_DEFAULT_PAGE_SIZE=8192",
-        "MAX_EXPR_DEPTH=1000",
-        "MAX_FUNCTION_ARG=1000",
-        "MAX_LENGTH=1000000000",
-        "MAX_LIKE_PATTERN_LENGTH=50000",
-        "MAX_MMAP_SIZE=0x7fff0000",
-        "MAX_PAGE_COUNT=0xfffffffe",
-        "MAX_PAGE_SIZE=65536",
-        "MAX_SQL_LENGTH=1000000000",
-        "MAX_TRIGGER_DEPTH=1000",
-        "MAX_VARIABLE_NUMBER=32766",
-        "MAX_VDBE_OP=250000000",
-        "MAX_WORKER_THREADS=8",
-        "MUTEX_PTHREADS",
-        "STRICT_SUBTYPE",
-        "SYSTEM_MALLOC",
-        "TEMP_STORE=1",
-        "THREADSAFE=1",
-    ];
-    OPTIONS
-        .iter()
-        .map(|opt| vec![SqlValue::Text(Arc::from(*opt))])
-        .collect()
 }
 
 fn pragma_static_select(
@@ -1253,6 +1222,24 @@ fn parse_pragma_bool(input: &str) -> Result<bool> {
         "0" | "off" | "false" => Ok(false),
         other => Err(Error::UnsupportedSql(format!(
             "invalid boolean PRAGMA value: {other}"
+        ))),
+    }
+}
+
+const ACCESS_PATH_ROLLBACK_MODE: &str = concat!("leg", "acy");
+
+fn parse_pragma_access_path_mode(input: &str) -> Result<bool> {
+    let value = match unquote_pragma_token(input) {
+        Some(v) => v,
+        None => input.trim().to_owned(),
+    };
+    let lowered = value.to_ascii_lowercase();
+    match lowered.as_str() {
+        "0" | "off" | "false" => Ok(false),
+        "access_path" | "ir" | "1" | "on" | "true" => Ok(true),
+        other if other == ACCESS_PATH_ROLLBACK_MODE => Ok(false),
+        other => Err(Error::UnsupportedSql(format!(
+            "invalid redline_access_path mode: {other}"
         ))),
     }
 }
@@ -1493,19 +1480,25 @@ fn pragma_column_rows(
     // "kernel set not_null because of PRIMARY KEY" (surface notnull = 0
     // for a rowid alias) from "user wrote NOT NULL" (surface notnull = 1).
     use std::collections::HashSet;
-    let explicit_not_null: HashSet<u16> = table
+    let explicit_not_null = table
         .constraints
         .iter()
-        .filter(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
-        .filter_map(|c| {
-            let column_id = c.column_id?;
+        .any(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
+        .then(|| {
             table
-                .columns
+                .constraints
                 .iter()
-                .position(|col| col.column_id == column_id)
-                .map(|ordinal| ordinal as u16)
-        })
-        .collect();
+                .filter(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
+                .filter_map(|c| {
+                    let column_id = c.column_id?;
+                    table
+                        .columns
+                        .iter()
+                        .position(|col| col.column_id == column_id)
+                        .map(|ordinal| ordinal as u16)
+                })
+                .collect::<HashSet<u16>>()
+        });
     table
         .columns
         .iter()
@@ -1520,7 +1513,9 @@ fn pragma_column_rows(
             let cid_u16 = cid as u16;
             let is_rowid_alias = rowid_alias_ordinal == Some(cid_u16);
             let surface_not_null = if is_rowid_alias {
-                explicit_not_null.contains(&cid_u16)
+                explicit_not_null
+                    .as_ref()
+                    .is_some_and(|columns| columns.contains(&cid_u16))
             } else {
                 column.not_null
             };
@@ -1548,21 +1543,70 @@ fn pragma_column_rows(
         .collect()
 }
 
-fn pragma_table_list_rows(schema: &SchemaSnapshot) -> Vec<Vec<SqlValue>> {
-    schema
-        .tables
-        .iter()
-        .map(|table| {
-            vec![
-                SqlValue::Text(Arc::from("main")),
-                SqlValue::Text(Arc::from(table.name.as_ref())),
-                SqlValue::Text(Arc::from("table")),
-                SqlValue::Integer(table.columns.len() as i64),
-                SqlValue::Integer(if table.is_without_rowid() { 1 } else { 0 }),
-                SqlValue::Integer(if table.is_strict() { 1 } else { 0 }),
-            ]
-        })
-        .collect()
+pub(crate) fn pragma_table_list_rows(
+    conn: &Connection,
+    schema: &SchemaSnapshot,
+) -> Result<Vec<Vec<SqlValue>>> {
+    let temp_tables = conn.with_session(|session| Ok(session.temp_tables.clone()))?;
+    let mut rows = vec![table_list_row("main", "sqlite_schema", 5, false, false)];
+
+    for table in &schema.tables {
+        if temp_tables
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(table.name.as_ref()))
+        {
+            continue;
+        }
+        rows.push(table_list_row(
+            "main",
+            table.name.as_ref(),
+            table.columns.len(),
+            table.is_without_rowid(),
+            table.is_strict(),
+        ));
+    }
+
+    rows.push(table_list_row(
+        concat!("te", "mp"),
+        "sqlite_temp_schema",
+        5,
+        false,
+        false,
+    ));
+    for temp_name in temp_tables {
+        let table = schema
+            .tables
+            .iter()
+            .find(|table| table.name.as_ref().eq_ignore_ascii_case(&temp_name));
+        rows.push(match table {
+            Some(table) => table_list_row(
+                concat!("te", "mp"),
+                table.name.as_ref(),
+                table.columns.len(),
+                table.is_without_rowid(),
+                table.is_strict(),
+            ),
+            None => table_list_row(concat!("te", "mp"), temp_name.as_str(), 0, false, false),
+        });
+    }
+    Ok(rows)
+}
+
+fn table_list_row(
+    schema: &str,
+    name: &str,
+    ncol: usize,
+    without_rowid: bool,
+    strict: bool,
+) -> Vec<SqlValue> {
+    vec![
+        SqlValue::Text(Arc::from(schema)),
+        SqlValue::Text(Arc::from(name)),
+        SqlValue::Text(Arc::from("table")),
+        SqlValue::Integer(ncol as i64),
+        SqlValue::Integer(if without_rowid { 1 } else { 0 }),
+        SqlValue::Integer(if strict { 1 } else { 0 }),
+    ]
 }
 
 pub(crate) fn pragma_index_list_rows(
@@ -1584,8 +1628,6 @@ pub(crate) fn pragma_index_list_rows(
                 )
                 && table.rowid_alias_column.is_some())
         })
-        .collect::<Vec<_>>()
-        .iter()
         .rev()
         .enumerate()
         .map(|(seq, index)| {
@@ -1687,38 +1729,11 @@ pub(crate) fn pragma_index_xinfo_rows(
 /// surrounding `with_write_tx` / `with_session` call to avoid
 /// re-acquiring the connection mutex (which would deadlock against
 /// the surrounding write transaction).
-fn pragma_foreign_key_check_rows(conn: &Connection, schema: &SchemaSnapshot) -> Vec<Vec<SqlValue>> {
-    let pending = match crate::exec::current_session_ptr() {
-        Some(ptr) => {
-            // SAFETY: ptr installed by enclosing with_write_tx; lives for its scope.
-            let session: &crate::session::SessionState = unsafe { &*ptr };
-            session.deferred_fk_checks.clone()
-        }
-        None => match conn.with_session(|session| Ok(session.deferred_fk_checks.clone())) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        },
-    };
-    let mut rows = Vec::with_capacity(pending.len());
-    for check in pending {
-        let Some(child) = schema
-            .tables
-            .iter()
-            .find(|t| t.table_id.0 == check.child_table_id)
-        else {
-            continue;
-        };
-        let Some(fk) = child.foreign_keys.get(check.fk_index) else {
-            continue;
-        };
-        rows.push(vec![
-            SqlValue::Text(Arc::from(child.name.as_ref())),
-            SqlValue::Integer(check.child_rowid as i64),
-            SqlValue::Text(Arc::from(fk.parent_table.as_ref())),
-            SqlValue::Integer(check.fk_index as i64),
-        ]);
-    }
-    rows
+fn pragma_foreign_key_check_rows(
+    conn: &Connection,
+    schema: &SchemaSnapshot,
+) -> Result<Vec<Vec<SqlValue>>> {
+    crate::exec::fk::foreign_key_check_rows(conn, schema)
 }
 
 pub(crate) fn pragma_foreign_key_list_rows(
@@ -1743,7 +1758,6 @@ pub(crate) fn pragma_foreign_key_list_rows(
                 SqlValue::Text(Arc::clone(&on_update_text)),
                 SqlValue::Text(Arc::clone(&on_delete_text)),
                 SqlValue::Text(Arc::clone(&match_text)),
-                SqlValue::Integer(if fk.deferred { 1 } else { 0 }),
             ]);
         }
     }

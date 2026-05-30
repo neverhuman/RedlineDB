@@ -36,10 +36,15 @@ pub(crate) fn numeric_value(value: &SqlValue) -> Result<f64> {
         SqlValue::Integer(v) => Ok(*v as f64),
         SqlValue::Real(v) => Ok(*v),
         SqlValue::Text(v) => v.trim().parse::<f64>().map_err(|_| Error::DatatypeMismatch),
-        SqlValue::Blob(v) => String::from_utf8_lossy(v)
-            .trim()
-            .parse::<f64>()
-            .map_err(|_| Error::DatatypeMismatch),
+        // A39: avoid the `String::from_utf8_lossy` allocation. Non-UTF8
+        // blobs can't possibly parse as f64 (replacement chars don't
+        // fit any numeric grammar), so the lossy-then-parse path always
+        // produced `DatatypeMismatch` for them anyway. Short-circuit
+        // directly. Same shape as A33 (is_truthy for Blob).
+        SqlValue::Blob(v) => match std::str::from_utf8(v) {
+            Ok(s) => s.trim().parse::<f64>().map_err(|_| Error::DatatypeMismatch),
+            Err(_) => Err(Error::DatatypeMismatch),
+        },
     }
 }
 

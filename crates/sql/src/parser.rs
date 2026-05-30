@@ -65,6 +65,9 @@ pub(crate) use dml::*;
 pub(crate) mod pragma;
 #[allow(unused_imports)]
 pub(crate) use pragma::*;
+mod pragma_compile;
+#[allow(unused_imports)]
+pub(crate) use pragma_compile::*;
 mod prepare;
 pub(crate) mod savepoint;
 mod select;
@@ -76,11 +79,25 @@ pub use split::{first_statement_complete, is_blank_sql, split_first_statement, s
 pub(crate) use templates::{bind_statement, template};
 
 pub(crate) fn is_pragma_sql(sql: &str) -> bool {
-    sql.trim_start()
+    // A31: byte-wise case-insensitive prefix check. The previous
+    // implementation called `to_ascii_lowercase()` which heap-allocates
+    // the entire trimmed SQL just to call `.starts_with("pragma")`. This
+    // is invoked once per `prepare_cached_inner` (i.e. per statement
+    // preparation), so the alloc is on the hot path for every prepared
+    // template — wasted on the non-PRAGMA majority.
+    const PRAGMA: &[u8] = b"pragma";
+    let bytes = sql
+        .trim_start()
         .trim_end_matches(';')
         .trim_start()
-        .to_ascii_lowercase()
-        .starts_with("pragma")
+        .as_bytes();
+    if bytes.len() < PRAGMA.len() {
+        return false;
+    }
+    bytes[..PRAGMA.len()]
+        .iter()
+        .zip(PRAGMA.iter())
+        .all(|(a, b)| a.eq_ignore_ascii_case(b))
 }
 
 pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
@@ -326,7 +343,7 @@ fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if has_window_exclude(&out) {
         out = rewrite_window_exclude(&out);
     }
-    if contains_ignore_ascii_case(&out, b" on conflict") {
+    if contains_on_conflict_clause(&out) {
         out = wrap_insert_select_with_upsert(&out);
         out = rewrite_on_conflict_clauses(&out);
     }
@@ -660,7 +677,7 @@ fn find_top_level_on_conflict(lower: &str, bytes: &[u8], from: usize) -> Option<
             b';' if depth == 0 => return None,
             _ => {}
         }
-        if depth == 0 && i + 12 <= lower.len() && &lower[i..i + 12] == " on conflict" {
+        if depth == 0 && on_conflict_keyword_at(lower, bytes, i).is_some() {
             return Some(i);
         }
         i += 1;
@@ -675,14 +692,15 @@ fn find_top_level_on_conflict(lower: &str, bytes: &[u8], from: usize) -> Option<
 ///     by partial-index predicate inside the kernel).
 ///   * Strip the optional `WHERE <pred>` that follows the target and
 ///     precedes `DO` — this is purely an index-disambiguation hint.
-///   * Collapse multiple `ON CONFLICT(...) DO ...` clauses into a
-///     single clause by keeping the first `DO UPDATE` (or, if all
-///     clauses are `DO NOTHING`, keeping the first).
+///   * Collapse chained `ON CONFLICT(...) DO ...` clauses only in the
+///     SQL text fed to sqlparser. The DML binder reconstructs the ordered
+///     arms from the original statement text so runtime conflict handling
+///     still follows SQLite's first-matching-arm semantics.
 fn rewrite_on_conflict_clauses(sql: &str) -> String {
     let mut buf = sql.to_owned();
     // Collect all `ON CONFLICT(...) [WHERE ...] DO {NOTHING|UPDATE ...}`
-    // segments. For each segment we record byte range and the action
-    // type so we can choose which one wins under multiple-clauses.
+    // segments. The rewritten SQL must keep one parser-compatible arm,
+    // but semantic arm ordering is recovered later from the original SQL.
     let segments = collect_on_conflict_segments(&buf);
     if segments.is_empty() {
         return buf;
@@ -714,7 +732,7 @@ fn rewrite_on_conflict_clauses(sql: &str) -> String {
         let prev_end = segs[i - 1].end;
         let this_start = segs[i].start;
         let gap = &buf[prev_end..this_start];
-        if gap.trim().is_empty() {
+        if sql_gap_is_trivia(gap) {
             current.push(i);
         } else {
             runs.push(std::mem::take(&mut current));
@@ -725,7 +743,7 @@ fn rewrite_on_conflict_clauses(sql: &str) -> String {
         runs.push(current);
     }
     // For each run with >= 2 segments, keep the first DO UPDATE if any,
-    // otherwise the last clause. Strip the rest.
+    // otherwise the last clause. Strip the rest from parser input only.
     let mut deletions: Vec<(usize, usize)> = Vec::new();
     for run in runs.iter().filter(|r| r.len() >= 2) {
         let mut keep_idx: Option<usize> = None;
@@ -758,21 +776,19 @@ struct OnConflictSegment {
     is_update: bool,
 }
 
-/// Locate every ` ON CONFLICT(...) [WHERE ...] DO {NOTHING|UPDATE ...}`
-/// chunk in `sql`. Whitespace before `ON` is included in `start` so
-/// chained clauses can be merged cleanly.
+/// Locate every `ON CONFLICT(...) [WHERE ...] DO {NOTHING|UPDATE ...}`
+/// chunk in `sql`. Trivia before `ON` stays outside the segment so
+/// adjacent arms can be merged by checking the gap between segments.
 fn collect_on_conflict_segments(sql: &str) -> Vec<OnConflictSegment> {
     let lower = sql.to_ascii_lowercase();
     let bytes = sql.as_bytes();
     let mut out = Vec::new();
     let mut i = 0usize;
     while i < bytes.len() {
-        let Some(idx) = find_keyword(&lower, " on conflict", i) else {
+        let Some((kw_start, after_conflict)) = find_on_conflict_keyword(&lower, bytes, i) else {
             break;
         };
-        let kw_start = idx + 1; // skip the leading space
-        // Skip "on conflict"
-        let mut j = idx + " on conflict".len();
+        let mut j = after_conflict;
         // Optional target: '(' ... ')'
         while j < bytes.len() && bytes[j].is_ascii_whitespace() {
             j += 1;
@@ -851,11 +867,72 @@ fn collect_on_conflict_segments(sql: &str) -> Vec<OnConflictSegment> {
     out
 }
 
-fn find_keyword(lower: &str, kw: &str, from: usize) -> Option<usize> {
-    if from >= lower.len() {
+fn contains_on_conflict_clause(sql: &str) -> bool {
+    let lower = sql.to_ascii_lowercase();
+    find_on_conflict_keyword(&lower, sql.as_bytes(), 0).is_some()
+}
+
+fn find_on_conflict_keyword(lower: &str, bytes: &[u8], from: usize) -> Option<(usize, usize)> {
+    let mut i = from;
+    let mut in_str: Option<u8> = None;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = in_str {
+            if b == q {
+                if q == b'\'' && i + 1 < bytes.len() && bytes[i + 1] == q {
+                    i += 2;
+                    continue;
+                }
+                in_str = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'\'' | b'"' => {
+                in_str = Some(b);
+                i += 1;
+                continue;
+            }
+            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
+                i += 2;
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
+                i += 2;
+                while i + 1 < bytes.len() && &bytes[i..i + 2] != b"*/" {
+                    i += 1;
+                }
+                if i + 1 < bytes.len() {
+                    i += 2;
+                }
+                continue;
+            }
+            _ => {}
+        }
+        if let Some(end) = on_conflict_keyword_at(lower, bytes, i) {
+            return Some((i, end));
+        }
+        i += 1;
+    }
+    None
+}
+
+fn on_conflict_keyword_at(lower: &str, bytes: &[u8], at: usize) -> Option<usize> {
+    if !keyword_at_boundary(lower, bytes, at, "on") {
         return None;
     }
-    lower[from..].find(kw).map(|p| from + p)
+    let after_on = at + "on".len();
+    if let Some(conflict_at) = skip_sql_trivia(bytes, after_on)
+        && conflict_at > after_on
+        && keyword_at_boundary(lower, bytes, conflict_at, "conflict")
+    {
+        return Some(conflict_at + "conflict".len());
+    }
+    None
 }
 
 fn skip_until_keyword(lower: &str, bytes: &[u8], from: usize, kw: &str) -> usize {
@@ -894,16 +971,55 @@ fn scan_to_clause_boundary(lower: &str, bytes: &[u8], from: usize) -> usize {
             _ => {}
         }
         if depth == 0 {
-            if j + 12 <= lower.len() && &lower[j..j + 12] == " on conflict" {
+            if on_conflict_keyword_at(lower, bytes, j).is_some() {
                 return j;
             }
-            if j + 11 <= lower.len() && &lower[j..j + 11] == " returning " {
+            if keyword_at_boundary(lower, bytes, j, "returning") {
                 return j;
             }
         }
         j += 1;
     }
     j
+}
+
+fn keyword_at_boundary(_lower: &str, bytes: &[u8], at: usize, keyword: &str) -> bool {
+    let end = at + keyword.len();
+    end <= bytes.len()
+        && bytes[at..end].eq_ignore_ascii_case(keyword.as_bytes())
+        && (at == 0 || !is_identifier_char(bytes[at - 1]))
+        && (end >= bytes.len() || !is_identifier_char(bytes[end]))
+}
+
+fn sql_gap_is_trivia(gap: &str) -> bool {
+    skip_sql_trivia(gap.as_bytes(), 0) == Some(gap.len())
+}
+
+fn skip_sql_trivia(bytes: &[u8], mut i: usize) -> Option<usize> {
+    loop {
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i + 2 <= bytes.len() && &bytes[i..i + 2] == b"--" {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if i + 2 <= bytes.len() && &bytes[i..i + 2] == b"/*" {
+            i += 2;
+            while i + 1 < bytes.len() && &bytes[i..i + 2] != b"*/" {
+                i += 1;
+            }
+            if i + 1 >= bytes.len() {
+                return None;
+            }
+            i += 2;
+            continue;
+        }
+        return Some(i);
+    }
 }
 
 fn strip_on_conflict_extras(segment: &str) -> String {
@@ -2199,20 +2315,125 @@ fn collect_jsonb_rhs(bytes: &[u8], start: usize, is_array: bool) -> Option<(Stri
 }
 
 fn rewrite_strict_without_rowid_combo(sql: &str) -> String {
-    let mut s = sql.to_owned();
-    for pat in [
-        (", STRICT", " STRICT"),
-        (",STRICT", " STRICT"),
-        (", strict", " strict"),
-        (",strict", " strict"),
-        (", WITHOUT ROWID", " WITHOUT ROWID"),
-        (",WITHOUT ROWID", " WITHOUT ROWID"),
-        (", without rowid", " without rowid"),
-        (",without rowid", " without rowid"),
-    ] {
-        s = s.replace(pat.0, pat.1);
+    if !contains_ignore_ascii_case(sql, b"strict")
+        || !contains_ignore_ascii_case(sql, b"without rowid")
+    {
+        return sql.to_owned();
     }
-    s
+
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut last = 0usize;
+    let mut i = 0usize;
+    let mut changed = false;
+
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' | b'"' | b'`' => {
+                i = scan_quoted(bytes, i, bytes[i]);
+                continue;
+            }
+            b'-' if bytes.get(i + 1) == Some(&b'-') => {
+                i += 2;
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                i += 2;
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                i = (i + 2).min(bytes.len());
+                continue;
+            }
+            _ => {}
+        }
+
+        if let Some(end) = parse_strict_without_rowid_options(bytes, i) {
+            out.push_str(&sql[last..i]);
+            out.push_str("WITHOUT ROWID STRICT");
+            last = end;
+            i = end;
+            changed = true;
+            continue;
+        }
+        if let Some(end) = parse_without_rowid_strict_options(bytes, i) {
+            out.push_str(&sql[last..i]);
+            out.push_str("WITHOUT ROWID STRICT");
+            last = end;
+            i = end;
+            changed = true;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    if changed {
+        out.push_str(&sql[last..]);
+        out
+    } else {
+        sql.to_owned()
+    }
+}
+
+fn parse_strict_without_rowid_options(bytes: &[u8], pos: usize) -> Option<usize> {
+    let mut i = parse_strict_option(bytes, pos)?;
+    i = skip_ascii_ws(bytes, i);
+    if bytes.get(i) != Some(&b',') {
+        return None;
+    }
+    i = skip_ascii_ws(bytes, i + 1);
+    parse_without_rowid_option(bytes, i)
+}
+
+fn parse_without_rowid_strict_options(bytes: &[u8], pos: usize) -> Option<usize> {
+    let mut i = parse_without_rowid_option(bytes, pos)?;
+    i = skip_ascii_ws(bytes, i);
+    if bytes.get(i) != Some(&b',') {
+        return None;
+    }
+    i = skip_ascii_ws(bytes, i + 1);
+    parse_strict_option(bytes, i)
+}
+
+fn parse_strict_option(bytes: &[u8], pos: usize) -> Option<usize> {
+    if matches_keyword_ci_bounded(bytes, pos, b"STRICT") {
+        Some(pos + b"STRICT".len())
+    } else {
+        None
+    }
+}
+
+fn parse_without_rowid_option(bytes: &[u8], pos: usize) -> Option<usize> {
+    if !matches_keyword_ci_bounded(bytes, pos, b"WITHOUT") {
+        return None;
+    }
+    let after_without = pos + b"WITHOUT".len();
+    let rowid_pos = skip_ascii_ws(bytes, after_without);
+    if rowid_pos == after_without || !matches_keyword_ci_bounded(bytes, rowid_pos, b"ROWID") {
+        return None;
+    }
+    Some(rowid_pos + b"ROWID".len())
+}
+
+fn matches_keyword_ci_bounded(bytes: &[u8], pos: usize, keyword: &[u8]) -> bool {
+    matches_keyword_ci(bytes, pos, keyword)
+        && pos
+            .checked_sub(1)
+            .is_none_or(|prev| !is_word_char(bytes[prev]))
+        && bytes
+            .get(pos + keyword.len())
+            .is_none_or(|next| !is_word_char(*next))
+}
+
+fn skip_ascii_ws(bytes: &[u8], mut pos: usize) -> usize {
+    while pos < bytes.len() && bytes[pos].is_ascii_whitespace() {
+        pos += 1;
+    }
+    pos
 }
 // ---------------------------------------------------------------------------
 // Track H — beyond-SQLite (Postgres parity) pre-parse rewrites.
@@ -3223,8 +3444,12 @@ fn rewrite_at_time_zone(sql: &str) -> String {
 ///
 /// Returns `None` if no rewrite is needed, so the caller can short-circuit.
 fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) -> Option<String> {
-    let lower = sql.to_ascii_lowercase();
-    if !lower.contains('.') {
+    // A20: fast-reject without allocating the lowercase clone. `.` is
+    // case-invariant so checking the raw SQL directly is equivalent to
+    // checking the lowercased one. Most parity-corpus statements have no
+    // schema-qualified identifier, so this bails before paying the clone
+    // OR the session-mutex round-trip.
+    if !sql.contains('.') {
         return None;
     }
     // Use the re-entrant session accessor so trigger-body parses, which
@@ -3234,6 +3459,7 @@ fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) -> Option<S
     if schemas.is_empty() {
         return None;
     }
+    let lower = sql.to_ascii_lowercase();
     // Built-in `main` / `temp` aliases are handled elsewhere; the `public`
     // / `pg_catalog` entries are seeded in the session so the rewrite
     // covers them. We exclude the bare `main` / temp aliases because the
@@ -3459,6 +3685,13 @@ fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
 /// identifier strings (e.g. `'mig_t'::regclass`); RedlineDB has no need
 /// to evaluate them. Returns None when no cast is present.
 fn strip_pg_cast_suffixes(sql: &str) -> Option<String> {
+    // A19 fast-reject: bytewise case-insensitive scan for the shared
+    // "::reg" prefix all four suffixes start with. Avoids the
+    // `to_ascii_lowercase()` clone for the vast majority of queries that
+    // have no PG cast suffix at all. Same A7/A8/A9 hygiene pattern.
+    if !contains_token_ci_bytes(sql.as_bytes(), b"::reg") {
+        return None;
+    }
     let lower = sql.to_ascii_lowercase();
     let suffixes = ["::regclass", "::regproc", "::regtype", "::regnamespace"];
     if !suffixes.iter().any(|s| lower.contains(s)) {
@@ -3475,6 +3708,22 @@ fn strip_pg_cast_suffixes(sql: &str) -> Option<String> {
         }
     }
     if out == sql { None } else { Some(out) }
+}
+
+/// A19 helper: allocation-free case-insensitive substring scan over
+/// bytes. Shared with future parser-hygiene fixes; mirrors the
+/// `contains_token_ci` byte-scans in `exec::index_access` / `coerce::cast`.
+#[inline]
+fn contains_token_ci_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    if haystack.len() < needle.len() {
+        return false;
+    }
+    haystack.windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
 }
 
 /// Case-insensitive replacement of a bare table identifier (surrounded by

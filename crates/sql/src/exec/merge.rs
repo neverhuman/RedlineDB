@@ -30,7 +30,7 @@ pub(crate) fn execute_merge(
     plan: &MergePlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<ExecutionResult> {
-    with_write_tx(conn, |_session, tx| {
+    with_write_tx(conn, |session, tx| {
         // Materialise both sides up front. The target is mutated in
         // place; we re-read freshly per source row to avoid acting on
         // stale tuples after earlier clauses delete/update them.
@@ -137,7 +137,9 @@ pub(crate) fn execute_merge(
                             continue;
                         }
                     }
-                    apply_not_matched_insert(conn, tx, plan, columns, values, &ctx, bindings)?;
+                    apply_not_matched_insert(
+                        conn, session, tx, plan, columns, values, &ctx, bindings,
+                    )?;
                     affected += 1;
                     break;
                 }
@@ -156,6 +158,7 @@ fn joined_from(table: &Arc<TableDef>, alias: Option<Arc<str>>, row: Option<Table
         table: Arc::clone(table),
         alias,
         row,
+        hidden_columns: Arc::from([]),
     }
 }
 
@@ -230,6 +233,7 @@ fn apply_matched_delete(
 
 fn apply_not_matched_insert(
     conn: &Connection,
+    session: &mut crate::session::SessionState,
     tx: &mut redlinedb_kernel::engine::Txn,
     plan: &MergePlan,
     columns: &[usize],
@@ -254,7 +258,8 @@ fn apply_not_matched_insert(
     row_values = super::compute_stored_generated_columns(&plan.target, row_values)?;
     super::apply_constraints(&plan.target, &row_values)?;
 
-    let new_rowid = super::choose_rowid_for_insert(conn.engine(), &plan.target, &mut row_values)?;
+    let new_rowid =
+        super::choose_rowid_for_insert(session, conn.engine(), tx, &plan.target, &mut row_values)?;
     let payload = encode_sql_row(plan.target.table_id.0, &row_values)?;
     conn.engine()
         .insert_for_relation(tx, plan.target.relation_id, new_rowid, payload)?;
@@ -265,6 +270,7 @@ fn apply_not_matched_insert(
         &row_values,
         new_rowid,
     )?;
+    super::record_sqlite_sequence_rowid(session, &plan.target, new_rowid);
     Ok(())
 }
 
