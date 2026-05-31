@@ -1,0 +1,34 @@
+# Autonomy freeze + hard-stop policy — RedlineDB (jeryu onboarding prep)
+#
+# The safety floor. Even with R0–R4 full-auto, ANY of these conditions makes a
+# change fail-closed: it escalates to R5 (human_required=true) and is never
+# auto-merged. These are the invariants the autonomy expansion must not erode.
+schema_version: 1
+mode: full-auto
+
+# protect_main mirrors .jeryu/policy.toml — the default branch's history is
+# protected; no force-push / non-fast-forward / direct unreviewed rewrite.
+protect_main: true
+protected_branches: ["main"]
+protected_tags: ["v*"]
+
+# no-self-approval is part of the floor (also enforced in approvals.yml).
+no_self_approval: true
+
+# Hard stops — match ANY and the change is forced to R5 (human_required),
+# auto_merge=false, regardless of nominal risk tier.
+hard_stops:
+  - protected_branch_force_push          # rewriting protected branch history
+  - protected_tag_mutation               # moving/deleting a v* tag
+  - protected_path_edit                  # see protected-paths.yml
+  - safety_floor_config_edit             # editing this freeze/approvals/risk bundle
+  - security_policy_downgrade            # weakening security/audit policy
+  - generated_zone_hand_edit             # editing .jankurai/generated-zones.toml paths
+  - secret_or_credential_exposure        # introducing secrets/credentials
+  - ci_required_check_removal            # dropping a required GitHub Actions check
+
+# Freeze windows — while active, all merges/releases escalate to R5 (human).
+# Empty by default; populated by operators ahead of a release freeze.
+freeze:
+  active: false
+  windows: []   # e.g. - { from: "2026-06-01T00:00Z", to: "2026-06-02T00:00Z", reason: "release freeze" }

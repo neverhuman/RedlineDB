@@ -1,0 +1,34 @@
+# Autonomy protected-paths policy — RedlineDB (jeryu onboarding prep)
+#
+# Part of the safety floor. A change that modifies any of these paths is a
+# hard stop: it escalates to R5 (human_required=true) and is never auto-merged,
+# even though R0–R4 are otherwise full-auto. This keeps the autonomy expansion
+# fail-closed around the controls that govern autonomy itself, the security
+# posture, the protected git surfaces, and generated zones.
+schema_version: 1
+mode: full-auto
+
+# Editing these paths forces R5 / human review.
+protected_paths:
+  # The autonomy + governance configuration itself.
+  - ".jeryu/**"
+  - ".autonomy/**"
+  - ".autonomy/policies/**"
+  # Security / audit policy surfaces.
+  - ".jankurai/security-policy.toml"
+  - ".jankurai/audit-policy.toml"
+  - "agent/audit-policy.toml"
+  - ".jankurai/boundaries.toml"
+  # CI / supply-chain definitions.
+  - ".github/workflows/**"
+  - ".gitlab-ci.yml"
+  - ".gitlab/**"
+  # Generated zones must never be hand-edited (see .jankurai/generated-zones.toml).
+  - ".jankurai/generated-zones.toml"
+  # Dependency manifests / lockfile (supply-chain).
+  - "Cargo.lock"
+  - "deny.toml"
+
+# Generated zones are sourced dynamically from this ledger and always treated
+# as protected for hand edits.
+generated_zone_ledger: ".jankurai/generated-zones.toml"

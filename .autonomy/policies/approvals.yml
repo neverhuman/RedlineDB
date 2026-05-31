@@ -1,0 +1,30 @@
+# Autonomy approvals policy — RedlineDB (jeryu onboarding prep)
+#
+# Full-auto: R0–R4 require zero human approvals and may be auto-merged by the
+# jeryu relay once required CI checks are green. R5 requires one human
+# approver. The no-self-approval rule is part of the safety floor and remains
+# enforced for every tier that needs a human (R5).
+schema_version: 1
+mode: full-auto
+
+defaults:
+  require_human_approval: false
+  required_human_approvals: 0
+  # Safety floor — the author of a change can never satisfy that change's own
+  # human-approval requirement. Applies wherever a human approval is required.
+  allow_self_approval: false
+
+by_tier:
+  R0: { required_human_approvals: 0, auto_merge: true }
+  R1: { required_human_approvals: 0, auto_merge: true }
+  R2: { required_human_approvals: 0, auto_merge: true }
+  R3: { required_human_approvals: 0, auto_merge: true }
+  R4: { required_human_approvals: 0, auto_merge: true }
+  R5: { required_human_approvals: 1, auto_merge: false, human_required: true }
+
+# Auto-merge is gated on the GitHub Actions required checks being green.
+# (Mirrors .jeryu/ci.toml github_actions_required=true.)
+auto_merge:
+  enabled: true
+  require_ci_green: true
+  require_admission_receipt: false   # mirrors .jeryu/policy.toml [main_relay]

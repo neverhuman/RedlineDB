@@ -1,0 +1,46 @@
+# Autonomy risk-tier policy — RedlineDB (jeryu onboarding prep)
+#
+# Defines the risk tiers R0–R5 and their merge disposition. Tiers R0–R4 are
+# full-auto (auto_merge=true / human_required=false). R5 stays fail-closed
+# (human_required=true) — the single human gate the safety floor keeps.
+#
+# The safety floor (hard_stops, freeze, protect_main, no-self-approval) is
+# defined in freeze.yml / approvals.yml / protected-paths.yml and is NOT
+# overridden by full-auto: any change that touches a hard-stop path or matches
+# a hard_stop condition is escalated to R5 regardless of its nominal tier.
+schema_version: 1
+mode: full-auto
+
+tiers:
+  R0:
+    description: "Docs, comments, generated-metrics refresh, formatting-only."
+    auto_merge: true
+    human_required: false
+  R1:
+    description: "Low-risk code: tests, non-API internal refactors, lint fixes."
+    auto_merge: true
+    human_required: false
+  R2:
+    description: "Standard feature work within a single crate / package scope."
+    auto_merge: true
+    human_required: false
+  R3:
+    description: "Cross-crate changes, public API surface, contract-adjacent edits."
+    auto_merge: true
+    human_required: false
+  R4:
+    description: "Security/concurrency/unsafe-adjacent or release-mechanics changes that still pass all gates."
+    auto_merge: true
+    human_required: false
+  R5:
+    description: "Hard-stop tier — protected paths, safety-floor violations, freeze-window breaks. Fail-closed."
+    auto_merge: false
+    human_required: true
+
+# Any condition here forces escalation to R5 (fail-closed) no matter the
+# computed tier. Mirrors the safety floor; never auto-merged.
+escalate_to_r5_when:
+  - touches_protected_path        # see protected-paths.yml
+  - matches_hard_stop             # see freeze.yml hard_stops
+  - during_freeze_window          # see freeze.yml
+  - targets_protected_branch_history_rewrite

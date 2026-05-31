@@ -1,0 +1,24 @@
+# Autonomy release policy — RedlineDB (jeryu onboarding prep)
+#
+# Releases (tag pushes / release publishes) follow the same full-auto risk
+# disposition: routine release mechanics ride R0–R4 (auto). The safety floor
+# still applies — protected tags (v*) keep their protection, and a release
+# that trips a hard stop or runs during a freeze escalates to R5 (human).
+schema_version: 1
+mode: full-auto
+
+auto_release:
+  enabled: true
+  # Tag/branch protection is preserved (see .jeryu/policy.toml protected_tags).
+  protected_tags: ["v*"]
+  protected_branches: ["main"]
+  # Release build/upload is driven by .github/workflows/release-build.yml.
+  require_ci_green: true
+  require_human_approval: false
+
+# A release operation escalates to R5 (human_required) when it would rewrite
+# protected history, mutate a hard-stop path, or fire inside a freeze window.
+escalate_to_r5_when:
+  - touches_protected_path
+  - matches_hard_stop
+  - during_freeze_window
