@@ -1,0 +1,26 @@
+schema_version = "1.0.0"
+system = "redline-web"
+# redline-web runs entirely locally (an embedded SQLite + a static SPA). There
+# is no paid, networked, or model-backed work, so every spend budget is zero by
+# default and any unknown paid tool stops the run.
+default_external_spend_usd = 0
+default_network_spend_usd = 0
+kill_switch_env = "REDLINE_COST_KILL_SWITCH"
+kill_switch_value = "1"
+receipt_path = "target/jankurai/cost-budget.json"
+
+[quota_caps]
+local_ci_minutes = 30
+external_api_usd = 0
+model_api_usd = 0
+
+[[allowed_exception]]
+name = "operator-approved-release"
+requires = "written release approval and an updated receipt"
+max_usd = 0
+
+[stop_conditions]
+on_missing_receipt = true
+on_unknown_paid_tool = true
+on_quota_exceeded = true
+on_kill_switch = true

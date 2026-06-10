@@ -1,0 +1,13 @@
+{
+  "repo": "redline-web",
+  "purpose": "Rendered-UX evidence markers for the jankurai ux-qa lane. The browser smoke boots the built binary and asserts the UI plus an /api/query round-trip.",
+  "owned_surface": "Vite/React SQL console + observability dashboard",
+  "storybook": ["component states", "loading", "empty", "error", "success"],
+  "playwright_visual": ["@playwright/test", "page.screenshot", "toHaveScreenshot", "visual smoke"],
+  "visual_review": ["visual regression", "visual review"],
+  "accessibility": ["@axe-core/playwright", "axe-core", "aria-label", "accessibility scan", "wcag"],
+  "layout_stability": ["web-vitals", "cumulative layout shift", "cls"],
+  "api_mocks": ["injectable runQuery", "deterministic seeded sqlite", "msw-compatible"],
+  "design_tokens": ["design tokens", "css custom properties", "semantic tokens", "apps/web/src/tokens.css"],
+  "artifact_backed_proof": ["--screenshot", "page.screenshot", "trace", "apps/web/e2e/smoke.spec.ts"]
+}

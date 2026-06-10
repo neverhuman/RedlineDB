@@ -1,0 +1,196 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Bootstrap mode: lanes skip tools the runner lacks instead of hard-failing.
+  REDLINE_STRICT_TOOLS: "0"
+
+jobs:
+  # Frontend lane — identical to `bash ops/ci/web.sh` (see ops/ci/pr-ci.sh).
+  frontend:
+    name: frontend (vite/ts/react)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: bash ops/ci/web.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: redline-web-dist
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  # Backend lane — identical to `bash ops/ci/backend.sh`. Pulls the built
+  # frontend so the rust-embed of apps/web/dist is real.
+  backend:
+    name: backend (rust/axum)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: frontend
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: redline-web-dist
+          path: apps/web/dist
+      - run: bash ops/ci/backend.sh
+      - name: Contract drift (OpenAPI <-> Rust DTOs <-> TS DTOs)
+        run: bash ops/ci/contract-drift.sh
+
+  # Security lane — a required, blocking gate: secret scan, dependency
+  # advisories, license/source policy, npm audit, workflow lint, SBOM.
+  security:
+    name: security (scan + supply-chain)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+      - name: Install Rust security tooling
+        run: cargo install cargo-audit cargo-deny --locked
+      - name: "Security evidence: gitleaks cargo-audit cargo-deny npm-audit zizmor"
+        run: bash ops/ci/security.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: redline-web-security
+          path: .artifacts/security
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Jankurai tool-suite evidence + advisory audit. Mirrors `just jankurai`
+  # (ops/ci/jankurai.sh). The evidence catalog below is the canonical command +
+  # artifact map for every applicable jankurai tool.
+  jankurai:
+    name: jankurai audit + tool evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: backend
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: redline-web-dist
+          path: apps/web/dist
+      - name: Jankurai tool suite (audit-ci, copy-code, security, language, rust-witness, authz, input-boundary, ux-qa, release-readiness, cost-budget)
+        run: bash ops/ci/jankurai.sh
+      - name: Jankurai CI evidence catalog
+        run: |
+          mkdir -p target/jankurai
+          cat > target/jankurai/ci-evidence-catalog.txt <<'EOF'
+          jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md
+          jankurai proof . --changed-from origin/main --out target/jankurai/proof-routing.json --md target/jankurai/proof-routing.md
+          jankurai proofbind verify . --changed-from origin/main --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
+          jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json --out target/jankurai/proofmark/proofmark-receipt.json
+          jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+          jankurai security run . --script ops/ci/security.sh --out target/jankurai/security/evidence.json
+          jankurai ci-bad-behavior . --out target/jankurai/language-bad-behavior.log
+          jankurai git-bad-behavior . --out target/jankurai/language-bad-behavior.log
+          jankurai release-bad-behavior . --out target/jankurai/language-bad-behavior.log
+          jankurai ux audit --config agent/ux-qa.toml --out target/jankurai/ux-qa.json
+          jankurai rust witness build . --out target/jankurai/rust/witness-graph.json
+          jankurai authz-matrix . --out target/jankurai/authz-matrix.json
+          jankurai input-boundary . --out target/jankurai/input-boundary.json
+          jankurai agent-tool-supply . --out target/jankurai/agent-tool-supply.json
+          jankurai release-readiness . --out target/jankurai/release-readiness-tool.json
+          jankurai cost-budget . --out target/jankurai/cost-budget.json
+          EOF
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: redline-web-jankurai
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            target/jankurai/repo-score.json
+            target/jankurai/repo-score.md
+            target/jankurai/repair-queue.jsonl
+            target/jankurai/proof-routing.json
+            target/jankurai/proofbind/surface-witness.json
+            target/jankurai/proofbind/obligations.json
+            target/jankurai/proofmark/proofmark-receipt.json
+            target/jankurai/copy-code.json
+            target/jankurai/copy-code.md
+            target/jankurai/security/evidence.json
+            target/jankurai/language-bad-behavior.log
+            target/jankurai/ux-qa.json
+            target/jankurai/rust/witness-graph.json
+            target/jankurai/authz-matrix.json
+            target/jankurai/input-boundary.json
+            target/jankurai/agent-tool-supply.json
+            target/jankurai/release-readiness.json
+            target/jankurai/cost-budget.json
+            target/jankurai/ci-evidence-catalog.txt
+
+  # Web e2e smoke — Playwright boots the built binary and drives the UI +
+  # /api/query round-trip. Mirrors `bash ops/ci/e2e.sh`.
+  e2e:
+    name: web e2e (playwright)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: backend
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: redline-web-dist
+          path: apps/web/dist
+      - name: Build release binary (embeds apps/web/dist)
+        run: cargo build --release --locked
+      - name: Playwright smoke
+        run: bash ops/ci/e2e.sh
+        env:
+          REDLINE_STRICT_TOOLS: "1"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: redline-web-e2e-report
+          path: apps/web/playwright-report
+          if-no-files-found: warn
+          retention-days: 7

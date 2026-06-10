@@ -1,0 +1,19 @@
+# Rust
+/target
+**/target
+
+# Node
+node_modules
+web/node_modules
+web/dist/assets
+web/dist/*.js
+web/dist/*.css
+*.tsbuildinfo
+
+# Local
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+.env
+.DS_Store

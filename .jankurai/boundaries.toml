@@ -1,0 +1,43 @@
+[stack]
+id = "rust-ts-vite-react-postgres-bounded-python"
+version = "0.1.0"
+
+[rust]
+# The backend owns all database access through the Connector adapter.
+domain_paths = ["apps/api/src"]
+adapter_paths = ["apps/api/src/connector"]
+forbidden_domain_imports = [
+  "std::env",
+  "reqwest::",
+]
+
+[typescript]
+web_paths = ["apps/web/src"]
+# The web layer talks to the backend over HTTP only. It must never import a
+# database client: SQL it sends is user-authored query text, not direct DB
+# access. This is the data-isolation boundary.
+forbidden_web_imports = [
+  "rusqlite",
+  "better-sqlite3",
+  "sqlite3",
+  "pg",
+  "postgres",
+  "mysql",
+  "sqlx",
+]
+generated_contract_paths = ["contracts/openapi"]
+
+[db]
+# redline-web serves whatever SQLite database is supplied at runtime; there are
+# no checked-in migrations. Durable truth lives in the supplied database, and
+# the only code that touches it is the Connector adapter.
+root_paths = ["db", "apps/api/src/connector"]
+adapter_paths = ["apps/api/src/connector"]
+seed_paths = ["apps/api/src/connector/seed_demo.sql"]
+
+[http]
+contract = "CONTRACT.md"
+openapi = "contracts/openapi/redline-web.openapi.json"
+rust_dto = "apps/api/src/model.rs"
+ts_dto = "apps/web/src/api/types.ts"
+drift_check = "bash ops/ci/contract-drift.sh"

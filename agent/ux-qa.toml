@@ -1,0 +1,13 @@
+outputRoot = "."
+artifactRoot = "target/jankurai/ux-qa"
+readyState = "domcontentloaded"
+timeoutMs = 15000
+screenshotRequired = true
+ariaSnapshotRequired = true
+accessibilityScanRequired = true
+requiredStates = ["loading", "empty", "error", "success"]
+
+[[surface]]
+name = "workbench"
+url = "http://127.0.0.1:7801/"
+description = "SQL console + schema browser + observability dashboard"

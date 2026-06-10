@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Mandatory pre-push gate: run the fast quality lane before any push so broken
+# code never reaches CI first. Wire it with:
+#   git config core.hooksPath ops/git-hooks
+# Bypass for emergencies with REDLINE_SKIP_HOOKS=1.
+set -euo pipefail
+
+if [[ "${REDLINE_SKIP_HOOKS:-}" == "1" ]]; then
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$repo_root"
+
+bash ops/ci/quality-gates.sh
