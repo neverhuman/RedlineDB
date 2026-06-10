@@ -1,6 +1,0 @@
-PRAGMA foreign_keys = ON;
-CREATE TABLE parent(id INTEGER PRIMARY KEY);
-CREATE TABLE child(id INTEGER, pid INTEGER REFERENCES parent(id));
-INSERT INTO parent VALUES (1);
-INSERT INTO child VALUES (10, 1);
-SELECT pid FROM child
