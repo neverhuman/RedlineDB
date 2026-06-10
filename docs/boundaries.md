@@ -33,7 +33,7 @@ can detect new violations.
    ABI. C-side symbols keep their `sqlite3_*` names (see
    `docs/language-bad-behavior.md` for the `compat → sqlite3_api`
    convention). The C header at
-   `crates/ffi/include/redlinedb.h` is listed in
+   `contracts/c-abi/redlinedb.h` is listed in
    `.jankurai/generated-zones.toml` as an authored ABI surface.
 4. **Bench reaches in, nothing reaches out**: `crates/bench/`
    may depend on any product crate. No product crate may depend

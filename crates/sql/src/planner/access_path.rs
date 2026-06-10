@@ -19,7 +19,7 @@
 //!
 //! Adding a new variant requires extending both the enum here AND the
 //! eventual executor router; until that wave lands, every variant
-//! produced today must round-trip through the legacy
+//! produced today must round-trip through the existing
 //! `IndexAccessMatch` shape so the executor stays in sync.
 
 use std::cell::Cell;
@@ -40,18 +40,18 @@ use crate::value::SqlValue;
 //
 // W5 (default-on as of 2026-05-28): the AccessPath IR is now the default
 // planner path. `PRAGMA redline_planner_use_access_path = OFF` or
-// `REDLINEDB_ACCESS_PATH=legacy` can force the legacy path for emergency
-// rollback. The flag remains thread-local so individual tests can still
-// toggle it independently via `set_planner_use_access_path`.
+// `REDLINEDB_ACCESS_PATH=0|off|false` can force the executor-shape path for
+// emergency rollback. The flag remains thread-local so individual tests can
+// still toggle it independently via `set_planner_use_access_path`.
 //
 // Corpus evidence: 2441/2445 passed (4 skipped virtual-table-optional)
 // with `REDLINEDB_ACCESS_PATH=access_path` against sqlite3 3.53.1,
-// byte-for-byte identical to the legacy-path run. Promoted from opt-in
+// byte-for-byte identical to the old-path run. Promoted from opt-in
 // to default-on after this confirmation.
 //
-// The former opt-in env var `REDLINEDB_PLANNER_USE_ACCESS_PATH` is
-// still accepted for scripts that set it explicitly; it now overrides
-// the new default (to OFF when unset/0, or to ON when 1/on/true).
+// The former opt-in env var `REDLINEDB_PLANNER_USE_ACCESS_PATH` is still
+// accepted for scripts that set it explicitly; it now overrides the new
+// default (to OFF when unset/0, or to ON when 1/on/true).
 // ---------------------------------------------------------------------------
 
 thread_local! {
@@ -60,14 +60,12 @@ thread_local! {
 
 fn env_default_planner_use_access_path() -> bool {
     if let Ok(mode) = std::env::var("REDLINEDB_ACCESS_PATH") {
-        // `legacy` forces the old path; anything else (or absent) → IR.
-        return !matches!(
-            mode.as_str(),
-            "legacy" | "LEGACY" | "0" | "off" | "OFF" | "false" | "FALSE"
-        );
+        // Explicit falsey values force the old path; anything else (or absent)
+        // routes through the IR.
+        return !matches!(mode.as_str(), "0" | "off" | "OFF" | "false" | "FALSE");
     }
     if let Ok(v) = std::env::var("REDLINEDB_PLANNER_USE_ACCESS_PATH") {
-        // Legacy boolean env var: explicit false → legacy, explicit true → IR.
+        // Boolean env var: explicit false → old path, explicit true → IR.
         return matches!(v.as_str(), "1" | "on" | "ON" | "true" | "TRUE");
     }
     // W5 default: AccessPath IR on.
@@ -77,10 +75,10 @@ fn env_default_planner_use_access_path() -> bool {
 /// True when the planner should route every index/scan decision
 /// through the `AccessPath` IR. Defaults to true (W5 default-on);
 /// can be overridden per-thread via `set_planner_use_access_path` or
-/// `REDLINEDB_ACCESS_PATH=legacy`. Tests that explicitly set the gate
+/// `REDLINEDB_ACCESS_PATH=0|off|false`. Tests that explicitly set the gate
 /// via `set_planner_use_access_path` are unaffected.
 ///   * `set_planner_use_access_path(value)` overrides for this thread, or
-///   * `REDLINEDB_ACCESS_PATH=legacy|0|off|false` forces the old path, or
+///   * `REDLINEDB_ACCESS_PATH=0|off|false` forces the old path, or
 ///   * `REDLINEDB_PLANNER_USE_ACCESS_PATH=0|off|false` forces the old path.
 pub(crate) fn planner_use_access_path() -> bool {
     PLANNER_USE_ACCESS_PATH.with(|c| match c.get() {
@@ -209,7 +207,7 @@ pub(crate) enum OrderSatisfies {
 // `optimize.rs`) reason about an `AccessPath` without re-deriving
 // pre-computed facts. The IR carries the decisions; downstream code
 // asks the IR for them. This is the contract that lets the PRAGMA-on
-// path skip the legacy ad-hoc `output_order` and
+// path skip the previous ad-hoc `output_order` and
 // `ordered_index_scan_limit` matches in `build.rs`/`optimize.rs`.
 // ---------------------------------------------------------------------------
 
@@ -286,7 +284,7 @@ impl AccessPath {
     }
 
     /// EXPLAIN-facing rendering of the predicates consumed by the
-    /// access. Mirrors the strings the legacy `IndexAccessMatch`
+    /// access. Mirrors the strings the existing `IndexAccessMatch`
     /// carries. For the IR we synthesise from the index shape so the
     /// planner adapter does not have to keep the original match around.
     pub(crate) fn predicates_render(&self) -> Vec<String> {
@@ -313,16 +311,16 @@ impl AccessPath {
     }
 }
 
-/// Translate the IR into the legacy `super::AccessPath` shape that
-/// `build.rs` already consumes. This is the bridge that lets the
-/// PRAGMA-on path slot the IR-driven decision into the existing
-/// cost/leaf builder without a wider rewrite.
+/// Translate the IR into the executor-shape `super::AccessPath` value that
+/// `build.rs` already consumes. This is the bridge that lets the PRAGMA-on
+/// path slot the IR-driven decision into the existing cost/leaf builder
+/// without a wider rewrite.
 ///
-/// The IR carries information the legacy enum cannot represent
+/// The IR carries information the executor-shape enum cannot represent
 /// (residuals, equality_prefix_len, order_satisfies, hard_limit); the
 /// caller pulls those out separately when needed via
 /// `order_satisfies()` and `hard_limit()`.
-pub(crate) fn lower_to_legacy(path: &AccessPath) -> super::AccessPath {
+pub(crate) fn lower_to_executor_shape(path: &AccessPath) -> super::AccessPath {
     match path {
         AccessPath::TableScan { .. } => super::AccessPath::TableScan,
         AccessPath::RowIdGet { rowid, .. } => {
@@ -345,7 +343,7 @@ pub(crate) fn lower_to_legacy(path: &AccessPath) -> super::AccessPath {
     }
 }
 
-/// Translate the legacy `IndexAccessMatch` + rowid-PK shortcut into
+/// Translate the existing `IndexAccessMatch` + rowid-PK shortcut into
 /// the new `AccessPath` IR. This is the planner's single entry point
 /// for picking an access path on a `(table, WHERE)` pair.
 ///
@@ -379,7 +377,7 @@ pub(crate) fn choose_access_path(
     {
         // Residuals: rowid PK match consumes the full top-level `id=?`
         // conjunct but leaves any other AND conjuncts behind. The
-        // legacy detector only looks at the whole WHERE shape, so any
+        // detector only looks at the whole WHERE shape, so any
         // additional conjunct shape disqualifies the shortcut and
         // returns None — meaning we only reach this branch when the
         // entire WHERE was the rowid equality, hence no residuals.
@@ -392,7 +390,7 @@ pub(crate) fn choose_access_path(
         return path;
     }
 
-    // Step 2: legacy `try_match_index_access_hinted` -> Point/Range.
+    // Step 2: `try_match_index_access_hinted` -> Point/Range.
     if let Some(matched) = try_match_index_access_hinted(engine, table, selection, bindings, hint) {
         let path = translate_index_access_match(
             matched,
@@ -1211,7 +1209,7 @@ mod tests {
 
     /// `AccessPath::predicates_render` produces a non-empty string
     /// vector for the indexed variants — the planner adapter uses it
-    /// to populate the legacy `AccessPath::IndexPointLookup` /
+    /// to populate the existing `AccessPath::IndexPointLookup` /
     /// `IndexRangeScan` `predicates` field.
     #[test]
     fn predicates_render_for_indexed_variants() {
@@ -1228,11 +1226,11 @@ mod tests {
         assert!(preds[0].contains("PointLookup"));
     }
 
-    /// `lower_to_legacy` round-trips an IR `AccessPath` into the
-    /// legacy `super::AccessPath` enum that `build.rs` consumes. The
+    /// `lower_to_executor_shape` round-trips an IR `AccessPath` into the
+    /// executor-shape `super::AccessPath` enum that `build.rs` consumes. The
     /// variant kind survives the conversion.
     #[test]
-    fn lower_to_legacy_preserves_variant_kind() {
+    fn lower_to_executor_shape_preserves_variant_kind() {
         let (_dir, conn) = fresh_conn();
         exec_sql(
             &conn,
@@ -1244,7 +1242,7 @@ mod tests {
         let rg_ir = choose(&conn, &rg, None);
         assert!(matches!(rg_ir, AccessPath::RowIdGet { .. }));
         assert!(matches!(
-            lower_to_legacy(&rg_ir),
+            lower_to_executor_shape(&rg_ir),
             super::super::AccessPath::RowIdGet { .. }
         ));
         // IndexPointLookup
@@ -1252,7 +1250,7 @@ mod tests {
         let pt_ir = choose(&conn, &pt, None);
         assert!(matches!(pt_ir, AccessPath::IndexPointLookup { .. }));
         assert!(matches!(
-            lower_to_legacy(&pt_ir),
+            lower_to_executor_shape(&pt_ir),
             super::super::AccessPath::IndexPointLookup { .. }
         ));
         // IndexRange
@@ -1260,7 +1258,7 @@ mod tests {
         let rg_ir = choose(&conn, &rg, None);
         assert!(matches!(rg_ir, AccessPath::IndexRange { .. }));
         assert!(matches!(
-            lower_to_legacy(&rg_ir),
+            lower_to_executor_shape(&rg_ir),
             super::super::AccessPath::IndexRangeScan { .. }
         ));
         // TableScan
@@ -1268,18 +1266,18 @@ mod tests {
         let ts_ir = choose(&conn, &ts, None);
         assert!(matches!(ts_ir, AccessPath::TableScan { .. }));
         assert!(matches!(
-            lower_to_legacy(&ts_ir),
+            lower_to_executor_shape(&ts_ir),
             super::super::AccessPath::TableScan
         ));
     }
 
-    /// PRAGMA OFF (default) leaves the legacy planner adapter
+    /// PRAGMA OFF (default) leaves the executor-shape planner adapter
     /// untouched: `access::choose_access_path` returns the v4.0.3
     /// shape. We exercise the public EXPLAIN path through a regular
     /// `conn.prepare`; the absence of a PRAGMA flip MUST not perturb
     /// the EXPLAIN output for a representative single-key equality.
     #[test]
-    fn pragma_off_default_preserves_legacy_plan() {
+    fn pragma_off_default_preserves_executor_shape_plan() {
         set_planner_use_access_path(false);
         assert!(!planner_use_access_path());
         let (_dir, conn) = fresh_conn();
@@ -1287,7 +1285,7 @@ mod tests {
             &conn,
             "CREATE TABLE t(k INTEGER, v INTEGER); CREATE INDEX ix ON t(k);",
         );
-        // The IR's own decision matches the legacy planner's decision
+        // The IR's own decision matches the planner's decision
         // for this shape: an IndexPointLookup. We assert via the
         // `choose` helper that picks the IR directly; the
         // PhysicalPlan adapter would emit the same shape.
@@ -1296,13 +1294,13 @@ mod tests {
         assert_eq!(ir.kind_label(), "IndexPointLookup");
     }
 
-    /// PRAGMA ON routes the legacy `access::choose_access_path` into
-    /// the IR. The lowered legacy variant must match the IR's
+    /// PRAGMA ON routes the executor-shape `access::choose_access_path`
+    /// into the IR. The lowered executor-shape variant must match the IR's
     /// variant. This is the contract that lets `build.rs` keep
-    /// operating on the legacy enum while the planner decision moves
-    /// to the IR.
+    /// operating on the executor-shape enum while the planner decision
+    /// moves to the IR.
     #[test]
-    fn pragma_on_routes_legacy_adapter_through_ir() {
+    fn pragma_on_routes_executor_shape_through_ir() {
         // Save / restore the gate so other tests don't see a leaked
         // ON setting (thread-local; tests in the same module may share
         // a worker thread depending on the harness).
@@ -1316,22 +1314,22 @@ mod tests {
              CREATE INDEX ix_k ON t(k);",
         );
 
-        // The legacy planner adapter is `crate::planner::access::choose_access_path`,
+        // The planner adapter is `crate::planner::access::choose_access_path`,
         // which now routes through `choose_access_path_ir` +
-        // `lower_to_legacy` when the gate is ON. The variant the IR
+        // `lower_to_executor_shape` when the gate is ON. The variant the IR
         // picks for `WHERE id=1` is `RowIdGet`; after lowering, the
-        // legacy enum should be `RowIdGet` too.
+        // executor-shape enum should be `RowIdGet` too.
         let pk = select_plan_for(&conn, "SELECT v FROM t WHERE id = 1");
         let ir = choose(&conn, &pk, None);
         assert_eq!(ir.kind_label(), "RowIdGet");
-        let lowered = lower_to_legacy(&ir);
+        let lowered = lower_to_executor_shape(&ir);
         assert!(matches!(lowered, super::super::AccessPath::RowIdGet { .. }));
 
         // `WHERE k=5` should lower to `IndexPointLookup`.
         let pt = select_plan_for(&conn, "SELECT v FROM t WHERE k = 5");
         let pt_ir = choose(&conn, &pt, None);
         assert_eq!(pt_ir.kind_label(), "IndexPointLookup");
-        let pt_lowered = lower_to_legacy(&pt_ir);
+        let pt_lowered = lower_to_executor_shape(&pt_ir);
         assert!(matches!(
             pt_lowered,
             super::super::AccessPath::IndexPointLookup { .. }

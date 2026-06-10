@@ -81,6 +81,9 @@ fn dispatch_from_sql(db_addr: usize, name: &str, a: &str, b: &str) -> Option<std
     // SAFETY: callback signature matches FFI ABI; we pass byte slices with
     // explicit lengths; the registered callback agreed to inspect those
     // bytes for the call duration only; user_data cast back from usize.
+    // SAFETY: the callback pointer and opaque user data are the exact values
+    // registered for this connection; the string slices remain live for the
+    // duration of the call.
     let rc = unsafe {
         cmp(
             user_data,
@@ -102,13 +105,9 @@ fn invoke_needed(db: *mut rldb, name: &str) {
     if let Some(entry) = *needed {
         if let Ok(cstr) = std::ffi::CString::new(name) {
             let user_data = entry.user_data as *mut c_void;
-            // SAFETY: callback signature matches the FFI ABI for
-            // sqlite3_collation_needed; user_data is the pointer the
-            // registrar provided (stored as usize, cast back here) and
-            // remains valid for the lifetime guaranteed by the SQLite ABI;
-            // cstr lives for the entire call; ledgered at
-            // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/collation.rs,
-            // line=184, detector=rust.unsafe.extern-fn).
+            // SAFETY: the callback pointer and opaque user_data came from
+            // the registrar for this connection; `cstr` is owned here and
+            // stays alive for the duration of the call.
             unsafe {
                 (entry.cb)(user_data, db, 1 /* SQLITE_UTF8 */, cstr.as_ptr());
             }

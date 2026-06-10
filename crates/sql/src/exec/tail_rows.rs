@@ -164,7 +164,7 @@ fn prefix_shape_for_unmatched_right(joined: &[Vec<JoinedRow>]) -> Vec<JoinedRow>
                 })
                 .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_else(Vec::new)
 }
 
 fn joined_row_from_table_row(

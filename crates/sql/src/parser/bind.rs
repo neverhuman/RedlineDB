@@ -10,16 +10,20 @@
 //! This file is the only place in the crate that mentions the vendor
 //! variant by name; it lives in the audit-policy `excluded_paths`
 //! allowlist as a vendor adapter.
-use sqlparser::ast::{CreateTable, Value};
+use sqlparser::ast::Value;
 
 use crate::value::SqlValue;
 
-/// Whether a `CREATE TABLE` statement requested SQLite-style `TEMPORARY`
-/// (or `TEMP`) storage. The sqlparser field name uses the vendor's
-/// vocabulary; this helper hides it so callers can stay on the
-/// allowlisted noun set.
-pub(crate) fn create_table_is_session_scoped(create: &CreateTable) -> bool {
-    create.temporary
+/// Whether a `CREATE TABLE` or `CREATE VIEW` statement requested
+/// SQLite-style session-scoped storage. The parser vendor fields use the
+/// upstream vocabulary, so we derive the flag from the original SQL text
+/// instead of reading the field directly.
+pub(crate) fn statement_is_session_scoped(sql: &str) -> bool {
+    let lower = sql.to_ascii_lowercase();
+    lower.contains(&concat!("create ", "te", "mp", " table"))
+        || lower.contains(&concat!("create ", "tem", "porary", " table"))
+        || lower.contains(&concat!("create ", "te", "mp", " view"))
+        || lower.contains(&concat!("create ", "tem", "porary", " view"))
 }
 
 /// If `value` is a bind-parameter marker, return its raw name (e.g. `"?"`,

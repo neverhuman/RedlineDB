@@ -82,7 +82,7 @@ pub unsafe extern "C" fn sqlite3_result_text(
     } else {
         // SAFETY: caller obligation — text is valid for reads of `nbytes`
         // consecutive bytes; routed through caller_buffer per its contract.
-        unsafe { caller_buffer(text as *const u8, nbytes as usize).to_vec() }
+        unsafe { caller_buffer(text as *const u8, nbytes as usize) }
     };
     let s = match String::from_utf8(bytes) {
         Ok(s) => s,
@@ -113,7 +113,7 @@ pub unsafe extern "C" fn sqlite3_result_blob(
     } else {
         // SAFETY: caller obligation — data is valid for reads of `nbytes`
         // consecutive bytes; routed through caller_buffer per its contract.
-        unsafe { caller_buffer(data as *const u8, nbytes as usize).to_vec() }
+        unsafe { caller_buffer(data as *const u8, nbytes as usize) }
     };
     // SAFETY: caller obligation; non-null ctx checked above.
     let ctx = unsafe { &*ctx };
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn sqlite3_result_error(
     } else {
         // SAFETY: caller obligation — msg valid for reads of `nbytes` bytes.
         let bytes = unsafe { caller_buffer(msg as *const u8, nbytes as usize) };
-        String::from_utf8_lossy(bytes).into_owned()
+        String::from_utf8_lossy(&bytes).into_owned()
     };
     // SAFETY: caller obligation; non-null ctx checked above.
     let ctx = unsafe { &*ctx };

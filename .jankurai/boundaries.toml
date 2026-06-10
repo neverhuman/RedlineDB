@@ -19,6 +19,8 @@ forbidden_domain_imports = [
 ]
 
 [typescript]
+# RedlineDB has no in-tree web product surface. Keep this empty so the web
+# cell stays disallowed rather than being tolerated as a baseline in audits.
 web_paths = []
 forbidden_web_imports = ["sqlx", "pg", "postgres", "mysql", "better-sqlite3", "@aws-sdk/client-s3"]
 generated_contract_paths = ["contracts/generated"]

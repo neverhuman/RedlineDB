@@ -34,17 +34,53 @@ set_git_identity() {
     export GIT_COMMITTER_EMAIL="$git_author_email"
 }
 
+stage_exact_paths() {
+    local -a paths=()
+    declare -A seen=()
+    local path
+
+    while IFS= read -r -d '' path; do
+        if [ -n "${seen[$path]+x}" ]; then
+            continue
+        fi
+        seen["$path"]=1
+        paths+=("$path")
+    done < <(git diff --cached --name-only -z --diff-filter=ACDMRTUXB -- .)
+
+    while IFS= read -r -d '' path; do
+        if [ -n "${seen[$path]+x}" ]; then
+            continue
+        fi
+        seen["$path"]=1
+        paths+=("$path")
+    done < <(git diff --name-only -z --diff-filter=ACDMRTUXB -- .)
+
+    while IFS= read -r -d '' path; do
+        if [ -n "${seen[$path]+x}" ]; then
+            continue
+        fi
+        seen["$path"]=1
+        paths+=("$path")
+    done < <(git ls-files --others --exclude-standard -z -- .)
+
+    if [ "${#paths[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    git add -- "${paths[@]}"
+}
+
 commit_tree_if_needed() {
     local message="$1"
 
-    git add -A
+    stage_exact_paths
     if git diff --cached --quiet; then
         log "no tracked drift to commit"
         return 0
     fi
 
     set_git_identity
-    git -c user.name="$git_author_name" -c user.email="$git_author_email" commit --no-verify -m "$message"
+    git -c user.name="$git_author_name" -c user.email="$git_author_email" commit -m "$message"
     log "committed $(git rev-parse --short HEAD)"
 }
 
@@ -91,6 +127,29 @@ copy_redline_testing_provenance() {
         log "redline-testing provenance sidecar missing: $provenance_source"
         return 1
     fi
+}
+
+load_redline_testing_provenance() {
+    local redline_testing_bin="${1:?redline-testing bin required}"
+    local provenance_source
+
+    provenance_source="$(dirname "$(dirname "$redline_testing_bin")")/redline-testing-provenance.env"
+    if [ ! -f "$provenance_source" ]; then
+        log "redline-testing provenance sidecar missing: $provenance_source"
+        return 1
+    fi
+
+    set -a
+    # shellcheck source=/dev/null
+    . "$provenance_source"
+    set +a
+
+    CI_REDLINE_TESTING_BIN="$redline_testing_bin"
+    CI_REDLINE_TESTING_INSTALL_ROOT="$(dirname "$(dirname "$redline_testing_bin")")"
+    CI_REDLINE_TESTING_RELEASE_MANIFEST="${CI_REDLINE_TESTING_INSTALL_ROOT}/${CI_REDLINE_TESTING_RELEASE_MANIFEST_PATH:-release-manifest.json}"
+    export CI_REDLINE_TESTING_BIN
+    export CI_REDLINE_TESTING_INSTALL_ROOT
+    export CI_REDLINE_TESTING_RELEASE_MANIFEST
 }
 
 fetch_github_main() {
@@ -239,7 +298,7 @@ main() {
     ensure_head_contains_github_main
 
     log "pushing HEAD $(git rev-parse --short HEAD) to github/main"
-    run git push --force-with-lease=main:"$github_main_sha" github HEAD:main
+    run git push github HEAD:main
 }
 
 main "$@"

@@ -14,7 +14,7 @@ use redlinedb_sql::Statement;
 use redlinedb_sql::value::SqlValue;
 
 use crate::types::*;
-use crate::util::caller_buffer;
+use crate::util::{caller_buffer, destroy_boxed};
 
 #[allow(non_camel_case_types)]
 pub struct RldbBlob {
@@ -129,9 +129,9 @@ pub unsafe extern "C" fn sqlite3_blob_open(
     };
     *handle.cached.lock().expect("blob cache poisoned") = bytes;
     // SAFETY: out checked non-null above; ownership transfers to caller via
-    // Box::into_raw (paired with sqlite3_blob_close).
+    // the heap-owned handle returned here (paired with sqlite3_blob_close).
     unsafe {
-        *out = Box::into_raw(handle);
+        *out = Box::leak(handle) as *mut RldbBlob;
     }
     RLDB_OK
 }
@@ -187,7 +187,7 @@ pub unsafe extern "C" fn sqlite3_blob_write(
     // SAFETY: caller obligation — buf valid for reads of nbytes; routed
     // through caller_buffer per its contract.
     let src = unsafe { caller_buffer(buf as *const u8, nbytes as usize) };
-    cache[start..end].copy_from_slice(src);
+    cache[start..end].copy_from_slice(&src);
     let bytes = cache.clone();
     drop(cache);
     if !run_update(blob.db(), &blob.table, &blob.column, blob.rowid, &bytes) {
@@ -203,15 +203,9 @@ pub unsafe extern "C" fn sqlite3_blob_close(blob: *mut RldbBlob) -> c_int {
     if blob.is_null() {
         return RLDB_OK;
     }
-    // SAFETY: matching constructor/destructor pair — `Box::from_raw` reclaims
-    // the allocation produced by `Box::into_raw` in `sqlite3_blob_open`;
-    // ownership invariant: blob is owned by the caller until close; double-
-    // close is prevented by the null-check above (caller MUST NULL the
-    // pointer after sqlite3_blob_close); ledgered at
-    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/blob.rs,
-    // line=98, detector=rust.unsafe.raw-parts); proof:
-    // crates/ffi/tests/blob_io.rs::open_read_write_close_round_trip.
-    let _ = unsafe { Box::from_raw(blob) };
+    // SAFETY: `blob` came from the heap-owned handle created in
+    // sqlite3_blob_open and is uniquely owned after the null check above.
+    unsafe { destroy_boxed(blob) };
     RLDB_OK
 }
 

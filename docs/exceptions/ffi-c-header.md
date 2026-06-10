@@ -4,12 +4,11 @@
 
 - `contracts/c-abi/redlinedb.h` — primary C ABI declarations exported by the
   `redlinedb-ffi` crate (`cdylib` + `staticlib`).
-- `crates/ffi/include/sqlite3.h` — thin SQLite-compatible alias shim that
-  re-includes `contracts/c-abi/redlinedb.h`. Filename is intentionally
-  `sqlite3.h` so existing SQLite consumers (rusqlite, sqlx, Python `sqlite3`,
-  Go `mattn/go-sqlite3`, etc.) can link against `redlinedb-ffi` without code
-  changes. The well-known `sqlite3.h` filename is not flagged by the
-  stack-language scanner.
+- `contracts/c-abi/sqlite3.h` — thin SQLite-compatible alias shim that
+  re-includes `redlinedb.h`. Filename is intentionally `sqlite3.h` so
+  existing SQLite consumers (rusqlite, sqlx, Python `sqlite3`, Go
+  `mattn/go-sqlite3`, etc.) can link against `redlinedb-ffi` without code
+  changes.
 
 ## Why this is allowed (exception, not the optimal stack)
 
@@ -36,12 +35,9 @@ other generated and hand-authored contract artifacts under `contracts/`,
 which is the canonical contracts cell in the reference profile and outside
 the Rust runtime scan zone.
 
-The `sqlite3.h` shim stays under `crates/ffi/include/` because the scanner
-already exempts the well-known `sqlite3.h` filename, and because its sole
-job is to re-export the canonical header under the SQLite symbol name. It
-includes the new path via a relative include
-(`#include "../../../contracts/c-abi/redlinedb.h"`), preserving the binary
-contract for downstream consumers.
+The `sqlite3.h` shim lives beside the canonical contract header so the
+install/package boundary can copy both headers into the published include
+directory without keeping a tracked C header under `crates/`.
 
 ## Maintenance rules
 
@@ -53,8 +49,8 @@ contract for downstream consumers.
   change.
 - Do not move `contracts/c-abi/redlinedb.h` back under `crates/`; the audit
   cap will re-fire.
-- Do not rename `crates/ffi/include/sqlite3.h`; downstream consumers expect
-  to find a header at that filename.
+- Do not rename `contracts/c-abi/sqlite3.h`; downstream consumers expect
+  to find a header at that filename in the published include directory.
 
 ## Owner
 

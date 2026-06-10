@@ -9,8 +9,8 @@ use redlinedb_sql::Step;
 
 use crate::types::*;
 use crate::util::{
-    api, caller_buffer, flatten_code, map_error, record_status_with_message, refresh_text_cache,
-    sql_result,
+    api, caller_buffer, destroy_boxed, flatten_code, map_error, record_status_with_message,
+    refresh_text_cache, sql_result,
 };
 
 #[unsafe(no_mangle)]
@@ -38,7 +38,7 @@ pub extern "C" fn rldb_prepare_v2(
         } else {
             // SAFETY: `sql` non-null (checked); per sqlite3_prepare_v2 contract when nbytes>=0 it is the explicit byte length of the caller-owned buffer; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned String below.
             let bytes = unsafe { caller_buffer(sql_cstr.as_ptr() as *const u8, nbytes as usize) };
-            std::str::from_utf8(bytes)
+            std::str::from_utf8(&bytes)
                 .map_err(|_| RLDB_MISMATCH)?
                 .to_owned()
         };
@@ -95,10 +95,10 @@ pub extern "C" fn rldb_prepare_v2(
             .resize_with(boxed.stmt.column_count(), || CString::new("").unwrap());
         db_ref.active_statements.fetch_add(1, Ordering::Relaxed);
         // SAFETY: `out_stmt` non-null (checked at top); per C ABI it is a
-        // writable rldb_stmt**; Box::into_raw transfers ownership to caller
-        // (paired with rldb_finalize's Box::from_raw).
+        // writable rldb_stmt**; the heap-owned statement handle transfers to
+        // the caller here (paired with rldb_finalize).
         unsafe {
-            *out_stmt = Box::into_raw(boxed);
+            *out_stmt = Box::leak(boxed) as *mut rldb_stmt;
         }
         Ok(RLDB_OK)
     }))
@@ -165,24 +165,18 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
         }
-        // SAFETY: matching constructor/destructor pair — `stmt` originates from
-        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:100);
-        // ownership invariant: the C caller may not free this pointer directly
-        // per redlinedb.h:99; exclusive access because rldb_stmt is documented
-        // as single-thread-owned in redlinedb.h:99; double-finalize guarded by
-        // the null check above (caller must NULL stmt after rldb_finalize per
-        // redlinedb.h:99); ledgered at .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/stmt.rs, line=169, detector=rust.unsafe.raw-parts);
-        // proof: crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully
-        // and ::parameter_index_out_of_range_returns_range.
-        let boxed = unsafe { Box::from_raw(stmt) };
-        // SAFETY: boxed.db is the *mut rldb recorded at prepare time;
-        // rldb_close waits for active_statements==0 so the parent db is
-        // still alive when we decrement here.
+        // SAFETY: `stmt` came from the heap-owned handle created in
+        // rldb_prepare_v2 and is uniquely owned at this point; we drop it
+        // through the shared helper after decrementing the parent db's
+        // active-statement counter.
+        // SAFETY: `stmt` still names the live heap-owned statement, so
+        // reading its `db` back-pointer is sound before we destroy it.
+        let db = unsafe { (*stmt).db };
         unsafe {
-            (*boxed.db)
-                .active_statements
-                .fetch_sub(1, Ordering::Relaxed);
+            // SAFETY: `db` is the parent handle recorded in the statement and
+            // remains live until the counter reaches zero.
+            (*db).active_statements.fetch_sub(1, Ordering::Relaxed);
+            destroy_boxed(stmt);
         }
         Ok(RLDB_OK)
     }))

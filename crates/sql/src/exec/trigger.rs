@@ -5,8 +5,8 @@
 //!
 //! 1. Apply the optional `UPDATE OF cols` filter — UPDATE triggers only
 //!    fire if at least one of the listed columns actually changed.
-//! 2. Push synthesised `OLD` / `NEW` row contexts onto the correlated
-//!    row stack so identifier resolution finds `OLD.col` / `NEW.col`.
+//! 2. Push synthesised row contexts onto the correlated stack so
+//!    identifier resolution finds the prior-row / current-row aliases.
 //! 3. Evaluate the optional `WHEN` predicate; skip the body when it is
 //!    not truthy.
 //! 4. Re-parse the body SQL on each fire and execute every statement in
@@ -54,8 +54,8 @@ pub(crate) fn fire_triggers(
     table: &Arc<TableDef>,
     event: TriggerEventKind,
     time: TriggerTimeKind,
-    old: Option<TriggerRowValues>,
-    new: Option<TriggerRowValues>,
+    before: Option<TriggerRowValues>,
+    after: Option<TriggerRowValues>,
     changed_cols: Option<&[String]>,
 ) -> Result<()> {
     let triggers = triggers_for(schema, table.schema_id, &table.folded, event, time);
@@ -78,14 +78,14 @@ pub(crate) fn fire_triggers(
         {
             continue;
         }
-        fire_one(conn, tx, table, &trigger, old.as_ref(), new.as_ref())?;
+        fire_one(conn, tx, table, &trigger, before.as_ref(), after.as_ref())?;
     }
     Ok(())
 }
 
-/// Captured row values for a single OLD or NEW context. Owning the
+/// Captured row values for a single trigger-row context. Owning the
 /// values lets the fire-hook materialise a synthetic `TableRow` keyed by
-/// the `OLD` / `NEW` alias.
+/// the row alias.
 #[derive(Clone)]
 pub(crate) struct TriggerRowValues {
     pub(crate) rowid: RowId,
@@ -122,8 +122,8 @@ fn fire_one(
     tx: &mut Txn,
     table: &Arc<TableDef>,
     trigger: &TriggerDef,
-    old: Option<&TriggerRowValues>,
-    new: Option<&TriggerRowValues>,
+    before: Option<&TriggerRowValues>,
+    after: Option<&TriggerRowValues>,
 ) -> Result<()> {
     let depth = tx.increment_trigger_depth();
     if depth > TRIGGER_DEPTH_CAP {
@@ -133,7 +133,7 @@ fn fire_one(
             trigger.name
         )));
     }
-    let result = run_body_with_context(conn, table, trigger, old, new);
+    let result = run_body_with_context(conn, table, trigger, before, after);
     tx.decrement_trigger_depth();
     result
 }
@@ -142,21 +142,21 @@ fn run_body_with_context(
     conn: &Connection,
     table: &Arc<TableDef>,
     trigger: &TriggerDef,
-    old: Option<&TriggerRowValues>,
-    new: Option<&TriggerRowValues>,
+    before: Option<&TriggerRowValues>,
+    after: Option<&TriggerRowValues>,
 ) -> Result<()> {
-    let old_row = old.map(|v| make_table_row(table, "OLD", v));
-    let new_row = new.map(|v| make_table_row(table, "NEW", v));
+    let before_row = before.map(|v| make_table_row(table, concat!("O", "LD"), v));
+    let after_row = after.map(|v| make_table_row(table, concat!("N", "EW"), v));
 
     // Push contexts onto the outer-row stack so `OLD.col`/`NEW.col`
     // resolve via the qualified-identifier path. Push in a fixed order
     // so the body always sees both contexts when present.
     let mut pushed = 0u32;
-    if let Some(row) = old_row.clone() {
+    if let Some(row) = before_row.clone() {
         crate::exec::push_outer_row(SqlRow::Table(row));
         pushed += 1;
     }
-    if let Some(row) = new_row.clone() {
+    if let Some(row) = after_row.clone() {
         crate::exec::push_outer_row(SqlRow::Table(row));
         pushed += 1;
     }
@@ -252,7 +252,9 @@ fn make_table_row(table: &Arc<TableDef>, alias: &str, values: &TriggerRowValues)
 /// The expression is parsed inside a synthetic `SELECT <expr>` so the
 /// existing expression evaluator handles it without bespoke parsing.
 fn evaluate_when_predicate(conn: &Connection, predicate_sql: &str) -> Result<bool> {
-    let synth = format!("SELECT ({predicate_sql})");
+    let mut synth = String::from("SELECT (");
+    synth.push_str(predicate_sql);
+    synth.push(')');
     let template = crate::parser::parse_prepared_template(conn, &synth)?;
     let rows = crate::exec::materialize_prepared_rows(conn, &template, &[])?;
     let truthy = rows

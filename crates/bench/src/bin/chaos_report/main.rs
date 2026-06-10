@@ -152,16 +152,15 @@ fn run() -> Result<(), String> {
     workloads.dedup();
     let mut source_paths: Vec<String> = normalized_records
         .iter()
-        .flat_map(|r| {
-            r.get("test_code_paths")
-                .and_then(Value::as_array)
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|s| s.as_str().map(|s| s.to_string()))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default()
-        })
+        .flat_map(
+            |r| match r.get("test_code_paths").and_then(Value::as_array) {
+                Some(a) => a
+                    .iter()
+                    .filter_map(|s| s.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<_>>(),
+                None => Vec::new(),
+            },
+        )
         .collect();
     source_paths.sort();
     source_paths.dedup();

@@ -70,8 +70,8 @@ impl RldbValue {
 }
 
 /// # Safety
-/// `value` must be a non-NULL `*mut RldbValue` originating from a
-/// `Box::into_raw` in this crate, valid for shared read for the call.
+/// `value` must be a non-NULL `*mut RldbValue` originating from a heap-owned
+/// allocation in this crate, valid for shared read for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_value_type(value: *mut RldbValue) -> c_int {
     if value.is_null() {

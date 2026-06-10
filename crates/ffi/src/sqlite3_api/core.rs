@@ -79,8 +79,8 @@ pub extern "C" fn sqlite3_open_v2(
         // NUL-terminated C string; open_handle copies it into owned PathBuf.
         let handle = open_handle(unsafe { CStr::from_ptr(path) }, None, create_if_missing)?;
         // SAFETY: `out_db` non-null (checked); per redlinedb.h:147 it is a
-        // writable sqlite3**; open_handle returned a Box::into_raw pointer
-        // whose ownership transfers to the C caller (paired with sqlite3_close).
+        // writable sqlite3**; open_handle returned a heap-owned handle whose
+        // ownership transfers to the C caller (paired with sqlite3_close).
         unsafe {
             *out_db = handle;
         }

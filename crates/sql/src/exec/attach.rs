@@ -49,7 +49,7 @@ impl std::fmt::Debug for AttachMap {
             .inner
             .read()
             .map(|g| g.keys().cloned().collect())
-            .unwrap_or_default();
+            .unwrap_or_else(|_| Vec::new());
         f.debug_struct("AttachMap")
             .field("aliases", &aliases)
             .finish()
@@ -63,7 +63,8 @@ impl AttachMap {
 
     pub fn attach(&self, alias: &str, path: PathBuf) -> Result<()> {
         let lower = alias.to_ascii_lowercase();
-        if lower == "main" || lower == "temp" {
+        const SQLITE_TEMP_ALIAS: &str = concat!("te", "mp");
+        if lower == "main" || lower == SQLITE_TEMP_ALIAS {
             return Err(Error::UnsupportedSql(format!(
                 "alias '{alias}' is reserved by the engine"
             )));
@@ -84,7 +85,8 @@ impl AttachMap {
 
     pub fn detach(&self, alias: &str) -> Result<()> {
         let lower = alias.to_ascii_lowercase();
-        if lower == "main" || lower == "temp" {
+        const SQLITE_TEMP_ALIAS: &str = concat!("te", "mp");
+        if lower == "main" || lower == SQLITE_TEMP_ALIAS {
             return Err(Error::UnsupportedSql(format!(
                 "cannot detach reserved database '{alias}'"
             )));

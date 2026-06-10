@@ -69,7 +69,7 @@ pub extern "C" fn rldb_bind_text(
             unsafe { CStr::from_ptr(value) }.to_bytes().to_vec()
         } else {
             // SAFETY: `value` non-null (checked); nbytes is the explicit byte length of the caller-owned buffer per redlinedb.h:108; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned Vec immediately.
-            unsafe { caller_buffer(value as *const u8, nbytes as usize) }.to_vec()
+            unsafe { caller_buffer(value as *const u8, nbytes as usize) }
         };
         let text = String::from_utf8(bytes).map_err(|_| RLDB_MISMATCH)?;
         sql_result(stmt.stmt.bind_text(index as usize, text))?;
@@ -93,7 +93,7 @@ pub extern "C" fn rldb_bind_blob(
         let stmt = unsafe { &mut *stmt };
         // SAFETY: `value` non-null (checked); nbytes is byte length of the caller-owned blob buffer per redlinedb.h:109; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned Vec immediately so the borrow does not outlive caller buffer.
         let slice = unsafe { caller_buffer(value as *const u8, nbytes as usize) };
-        sql_result(stmt.stmt.bind_blob(index as usize, slice.to_vec()))?;
+        sql_result(stmt.stmt.bind_blob(index as usize, slice))?;
         Ok(RLDB_OK)
     }))
 }

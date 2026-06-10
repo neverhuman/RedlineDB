@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Map, Value, json};
 
@@ -79,7 +79,7 @@ pub(crate) fn refresh_index(version_dir: &Path, git_sha: &str) -> Result<PathBuf
             Value::String(
                 p.file_name()
                     .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
+                    .unwrap_or_else(String::new),
             ),
         );
         entry.insert(
@@ -120,9 +120,10 @@ pub(crate) fn refresh_index(version_dir: &Path, git_sha: &str) -> Result<PathBuf
 /// precision and a `+00:00` suffix, matching Python's
 /// `datetime.now(timezone.utc).isoformat()`.
 pub(crate) fn iso_utc_now() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
+    let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration,
+        Err(_) => Duration::from_secs(0),
+    };
     let total_secs = now.as_secs() as i64;
     let micros = (now.subsec_micros()) as u32;
     iso_utc_format(total_secs, micros)

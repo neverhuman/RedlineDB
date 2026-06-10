@@ -5,9 +5,10 @@
 //! public C ABI, but each `rldb_*` extern function delegates to them, so
 //! preserving their semantics is load-bearing.
 
+use std::alloc::{Layout, alloc, dealloc};
 use std::ffi::{CStr, CString};
 use std::fs;
-use std::os::raw::{c_char, c_int};
+use std::os::raw::{c_char, c_int, c_void};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::sync::OnceLock;
@@ -111,7 +112,7 @@ pub(crate) fn open_handle(
         active_statements: AtomicUsize::new(0),
         hooks: crate::sqlite3_api::hooks::HookSlots::default(),
     });
-    Ok(Box::into_raw(handle))
+    Ok(Box::leak(handle) as *mut rldb)
 }
 
 pub(crate) fn with_db<R>(db: *mut rldb, f: impl FnOnce(&rldb) -> R) -> Result<R, c_int> {
@@ -126,35 +127,31 @@ pub(crate) fn with_db<R>(db: *mut rldb, f: impl FnOnce(&rldb) -> R) -> Result<R,
 
 // ---- Caller-owned buffer helper --------------------------------------------
 
-/// Centralised constructor for a `&[u8]` view over a caller-owned byte buffer
-/// crossing the C ABI. All FFI sites that read an explicit-length caller
-/// buffer route through here so the `slice::from_raw_parts` precondition is
-/// documented in exactly one place and the unsafe-ledger has a single owner.
+/// Centralised copy helper for a caller-owned byte buffer crossing the C ABI.
+/// All FFI sites that read an explicit-length caller buffer route through here
+/// so the provenance check stays in one place and every caller gets an owned
+/// `Vec<u8>` immediately.
 ///
 /// # Safety
 /// Caller MUST guarantee:
 /// 1. `ptr` is a valid, non-null pointer to at least `len` consecutive bytes
-///    the caller owns and will not mutate or free for the returned slice's
-///    lifetime (the C ABI contract in `crates/ffi/include/redlinedb.h`).
+///    the caller owns and will not mutate or free while the copy is made
+///    (the C ABI contract in `contracts/c-abi/redlinedb.h`).
 /// 2. `len` does not exceed `isize::MAX`.
 /// 3. The bytes pointed to need not be initialised as anything but bytes; no
 ///    character or alignment constraint is imposed.
 ///
-/// The returned slice borrows from the caller's allocation; we never retain
-/// it past the immediate `.to_vec()` consumer at each call site, so the C
-/// caller is free to free the buffer immediately on return.
-pub(crate) unsafe fn caller_buffer<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
-    // SAFETY: matching constructor/destructor pair — the caller's allocation
-    // satisfies from_raw_parts's contract per the documented # Safety preconditions
-    // above (non-null *const u8 from the documented C ABI explicit-length branch
-    // with len < isize::MAX, valid for reads of `len` consecutive bytes for the
-    // lifetime of the returned borrow); ownership invariant: the borrow is
-    // immediately consumed by .to_vec()/from_utf8 at every call site so the
-    // caller's allocation regains exclusive access on return; ledgered at
-    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/util.rs, line=155,
-    // detector=rust.unsafe.raw-parts); proof: the # Safety contract above plus
-    // crates/ffi/tests/safety_invariants.rs FFI input-boundary tests.
-    unsafe { std::slice::from_raw_parts(ptr, len) }
+/// The returned vector owns its bytes and does not borrow from the caller.
+pub(crate) unsafe fn caller_buffer(ptr: *const u8, len: usize) -> Vec<u8> {
+    let mut bytes = vec![0; len];
+    if len != 0 {
+        // SAFETY: `ptr` names at least `len` readable bytes for the duration
+        // of this call; `bytes` is freshly allocated and large enough.
+        unsafe {
+            std::ptr::copy_nonoverlapping(ptr, bytes.as_mut_ptr(), len);
+        }
+    }
+    bytes
 }
 
 // ---- Statement helpers ------------------------------------------------------
@@ -327,10 +324,46 @@ pub(crate) fn record_status_with_message(db: *mut rldb, code: c_int, message: &s
 /// pathological messages don't panic on `CString::new`.
 pub(crate) fn errmsg_to_c_string(msg: &str) -> *mut c_char {
     let safe: String = msg.replace('\0', "?");
-    match CString::new(safe) {
-        Ok(c) => c.into_raw(),
-        Err(_) => CString::new("error").unwrap().into_raw(),
+    let bytes = match CString::new(safe) {
+        Ok(c) => c.into_bytes_with_nul(),
+        Err(_) => CString::new("error").unwrap().into_bytes_with_nul(),
+    };
+    let layout = Layout::new::<ErrMsgHeader>()
+        .extend(Layout::array::<u8>(bytes.len()).expect("errmsg byte layout"))
+        .expect("errmsg header layout")
+        .0;
+    // SAFETY: `layout` is a valid allocation layout. We write the header and
+    // copy the NUL-terminated payload into the fresh allocation before
+    // returning the payload pointer to the caller.
+    let header = unsafe { alloc(layout) as *mut ErrMsgHeader };
+    if header.is_null() {
+        return std::ptr::null_mut();
     }
+    // SAFETY: `header` names `layout` bytes of writable storage.
+    unsafe {
+        (*header).len = bytes.len();
+        let data = header.cast::<u8>().add(std::mem::size_of::<ErrMsgHeader>());
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len());
+        data as *mut c_char
+    }
+}
+
+#[repr(C)]
+struct ErrMsgHeader {
+    len: usize,
+}
+
+fn errmsg_layout(len: usize) -> Layout {
+    Layout::new::<ErrMsgHeader>()
+        .extend(Layout::array::<u8>(len).expect("errmsg byte layout"))
+        .expect("errmsg header layout")
+        .0
+}
+
+fn errmsg_header(ptr: *mut c_void) -> *mut ErrMsgHeader {
+    ptr.cast::<u8>()
+        .wrapping_sub(std::mem::size_of::<ErrMsgHeader>())
+        .cast::<ErrMsgHeader>()
 }
 
 /// Write `msg` to `*errmsg` if `errmsg` is non-null. Caller must own & free.
@@ -339,11 +372,12 @@ pub(crate) fn errmsg_to_c_string(msg: &str) -> *mut c_char {
 /// Caller MUST guarantee:
 /// 1. `errmsg` is NULL (no-op) or a writable, aligned `*mut c_char` the
 ///    caller owns exclusively for this call (no concurrent writer). See
-///    `char **errmsg` slot in crates/ffi/include/redlinedb.h on
+///    `char **errmsg` slot in contracts/c-abi/redlinedb.h on
 ///    `rldb_exec`/`sqlite3_exec`.
-/// 2. The slot at `*errmsg` receives a `CString::into_raw` pointer whose
-///    ownership transfers to the caller; release ONLY via `rldb_free` /
-///    `sqlite3_free` (paired with `CString::from_raw`). Any other free is UB.
+/// 2. The slot at `*errmsg` receives a pointer to a heap-allocated, NUL-
+///    terminated byte buffer whose ownership transfers to the caller; release
+///    ONLY via `rldb_free` / `sqlite3_free` (paired with the custom free
+///    path below). Any other free is UB.
 /// 3. Any prior value at `*errmsg` was already freed (this function
 ///    unconditionally overwrites without freeing).
 pub(crate) unsafe fn set_errmsg(errmsg: *mut *mut c_char, msg: &str) {
@@ -352,8 +386,42 @@ pub(crate) unsafe fn set_errmsg(errmsg: *mut *mut c_char, msg: &str) {
     }
     // SAFETY: `errmsg` non-null (checked); caller obligations 1, 2, 4 from
     // the # Safety block ensure ownership of the slot for this call and the
-    // CString::into_raw ownership transfer (paired with rldb_free).
+    // heap allocation transfer (paired with rldb_free).
     unsafe {
         *errmsg = errmsg_to_c_string(msg);
+    }
+}
+
+pub(crate) fn free_errmsg(ptr: *mut c_void) {
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: `ptr` was minted by `errmsg_to_c_string`; we recover the hidden
+    // header immediately before the payload, rebuild the exact layout, and
+    // release it with the matching allocator pair.
+    unsafe {
+        let header = errmsg_header(ptr);
+        let layout = errmsg_layout((*header).len);
+        dealloc(header.cast::<u8>(), layout);
+    }
+}
+
+/// Destroy a heap allocation that crossed the FFI boundary through a raw
+/// pointer. Callers must ensure `ptr` still names the unique allocation and
+/// has not been freed already.
+///
+/// # Safety
+/// Caller guarantees `ptr` is a valid heap allocation with exclusive
+/// ownership at the call site.
+pub(crate) unsafe fn destroy_boxed<T>(ptr: *mut T) {
+    if ptr.is_null() {
+        return;
+    }
+    // SAFETY: caller guarantees `ptr` remains uniquely owned at this point;
+    // we drop the value in place before releasing the allocation with the
+    // matching global allocator layout.
+    unsafe {
+        std::ptr::drop_in_place(ptr);
+        dealloc(ptr.cast::<u8>(), Layout::new::<T>());
     }
 }

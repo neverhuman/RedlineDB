@@ -1106,7 +1106,10 @@ fn execute_create_table_as_select(
             if step_select_runtime(conn, &mut runtime, bindings, &mut current_row)? {
                 break;
             }
-            let values = current_row.take().unwrap_or_default();
+            let values = match current_row.take() {
+                Some(values) => values,
+                None => Vec::new(),
+            };
             let values = apply_row_affinity(&table, values)?;
             let rowid = RowId::new((inserted + 1) as u64);
             let payload = encode_sql_row(table.table_id.0, &values)?;
@@ -1415,7 +1418,11 @@ fn with_write_tx<T>(
         // `with_write_tx` call below and live for the closure's
         // lifetime. The trigger fire-hook is strictly synchronous with
         // the parent — no other writer can observe these references.
+        // SAFETY: `session_ptr` names the active SessionState for this
+        // synchronous callback and remains uniquely borrowed here.
         let session_ref: &mut SessionState = unsafe { &mut *session_ptr };
+        // SAFETY: `tx_ptr` points to the current transaction local and is
+        // not aliased while the closure runs.
         let tx_ref: &mut Txn = unsafe { &mut *tx_ptr };
         return f(session_ref, tx_ref);
     }
@@ -1471,6 +1478,9 @@ fn with_write_tx<T>(
                         // entry violates referential integrity we roll
                         // the tx back and surface the violation.
                         let drain_result = with_current_tx(tx_ptr, || {
+                            // SAFETY: same lifetime and exclusivity as the
+                            // borrow above; the pointer still names the same
+                            // stack-local transaction.
                             let tx_ref = unsafe { &mut *tx_ptr };
                             crate::exec::fk::drain_deferred_fk_checks(conn, session, tx_ref)
                         });

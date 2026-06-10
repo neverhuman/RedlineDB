@@ -121,72 +121,38 @@ fn aggregate_run_from_sql(
     // called once on the same context. The accumulator lives via the
     // context's `agg_state_*` slot or via `sqlite3_result_*` set on the
     // last xStep — the latter is what we surface here.
-    let ctx = Box::new(RldbContext::new(db_addr as *mut rldb, user_data));
-    let ctx_ptr = Box::into_raw(ctx);
+    let mut ctx = Box::new(RldbContext::new(db_addr as *mut rldb, user_data));
+    let ctx_ptr: *mut RldbContext = &mut *ctx;
     for row in rows {
-        let mut boxed: Vec<*mut RldbValue> = row
-            .iter()
-            .map(|v| Box::into_raw(Box::new(RldbValue::from_sql(v))))
+        let mut values: Vec<RldbValue> = row.iter().map(RldbValue::from_sql).collect();
+        let mut boxed: Vec<*mut RldbValue> = values
+            .iter_mut()
+            .map(|value| value as *mut RldbValue)
             .collect();
         // SAFETY: callback signature matches the FFI ABI for an aggregate
-        // step; ctx_ptr is the Box::into_raw allocation we just made
-        // above; boxed.as_mut_ptr names the argv buffer of Box::into_raw
-        // RldbValue pointers; the corresponding Box::from_raw block below
-        // reclaims every allocation we hand to the callback; ledgered at
-        // .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
-        // detector=rust.unsafe.extern-fn).
+        // step; `ctx_ptr` names the live Box-backed context above; and the
+        // argv buffer points at stack-owned `RldbValue`s that remain alive for
+        // the duration of the call.
+        // SAFETY: `ctx_ptr` names the live context and the argv pointers are
+        // borrowed from stack-owned values that remain alive for the call.
         unsafe {
             step(ctx_ptr, boxed.len() as c_int, boxed.as_mut_ptr());
         }
-        for ptr in boxed.drain(..) {
-            // SAFETY: matching constructor/destructor pair — each ptr
-            // originates from Box::into_raw above; the FFI ABI for
-            // sqlite3_value* never transfers ownership to the callback
-            // (read-only inspection only); ledgered at
-            // .jankurai/unsafe-ledger.toml
-            // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
-            // detector=rust.unsafe.raw-parts).
-            let _ = unsafe { Box::from_raw(ptr) };
-        }
-        // SAFETY: read-only borrow of the ctx allocation we just made
-        // (Box::into_raw above); short-lived borrow used only for the
-        // error check between rows; matched by Box::from_raw at the end
-        // of this function; ledgered at .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
-        // detector=rust.unsafe.raw-parts).
-        let ctx_ref = unsafe { &*ctx_ptr };
-        if let Some(err) = ctx_ref.take_error() {
-            // SAFETY: matching constructor/destructor pair — ctx_ptr
-            // originates from Box::into_raw above; we reclaim it here so
-            // the Box drops before we return; ledgered at
-            // .jankurai/unsafe-ledger.toml
-            // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
-            // detector=rust.unsafe.raw-parts).
-            let _ = unsafe { Box::from_raw(ctx_ptr) };
+        if let Some(err) = ctx.take_error() {
             return Some(Err(err));
         }
     }
     // SAFETY: callback signature matches the FFI ABI for an aggregate
-    // final; ctx_ptr is the Box::into_raw allocation we made above;
-    // ledgered at .jankurai/unsafe-ledger.toml
-    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
-    // detector=rust.unsafe.extern-fn).
+    // final; `ctx_ptr` points at the live Box-backed context above.
+    // SAFETY: `ctx_ptr` names the live context and `final_fn` is the
+    // registered callback for this aggregate group.
     unsafe {
         final_fn(ctx_ptr);
     }
-    // SAFETY: matching constructor/destructor pair — ctx_ptr originates
-    // from Box::into_raw above; ownership invariant: the FFI ABI for
-    // sqlite3_context* never transfers ownership to the callback (the
-    // SQLite docs bound context lifetime to the UDF invocation);
-    // ledgered at .jankurai/unsafe-ledger.toml
-    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
-    // detector=rust.unsafe.raw-parts).
-    let ctx_box = unsafe { Box::from_raw(ctx_ptr) };
-    if let Some(err) = ctx_box.take_error() {
+    if let Some(err) = ctx.take_error() {
         return Some(Err(err));
     }
-    Some(Ok(ctx_box.take_result().to_sql()))
+    Some(Ok(ctx.take_result().to_sql()))
 }
 
 /// Hook invoked from `redlinedb_sql` for every unrecognised function call.
@@ -217,44 +183,27 @@ fn dispatch_from_sql(
     let callback = entry.callback;
     let user_data = entry.user_data as *mut c_void;
     drop(registry);
-    // Build argv as boxed RldbValues.
-    let mut boxed: Vec<*mut RldbValue> = args
-        .iter()
-        .map(|v| Box::into_raw(Box::new(RldbValue::from_sql(v))))
+    // Build argv as stack-owned RldbValues for the duration of the call.
+    let mut values: Vec<RldbValue> = args.iter().map(RldbValue::from_sql).collect();
+    let mut boxed: Vec<*mut RldbValue> = values
+        .iter_mut()
+        .map(|value| value as *mut RldbValue)
         .collect();
-    let ctx = Box::new(RldbContext::new(db_addr as *mut rldb, user_data));
-    let ctx_ptr = Box::into_raw(ctx);
+    let mut ctx = Box::new(RldbContext::new(db_addr as *mut rldb, user_data));
+    let ctx_ptr: *mut RldbContext = &mut *ctx;
     // SAFETY: callback signature matches the FFI ABI for a scalar UDF;
-    // ctx_ptr is a Box::into_raw allocation we just made; boxed.as_mut_ptr
-    // names the argv buffer of Box::into_raw RldbValue pointers; we reclaim
-    // every allocation in the matching Box::from_raw block directly below;
-    // ledgered at .jankurai/unsafe-ledger.toml
-    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
-    // detector=rust.unsafe.extern-fn).
+    // `ctx_ptr` points at the live Box-backed context and the argv
+    // pointers reference stack-owned values that remain alive for the
+    // duration of the call.
+    // SAFETY: `ctx_ptr` names the live context and the argv pointers are
+    // borrowed from stack-owned values that remain alive for the call.
     unsafe {
         callback(ctx_ptr, boxed.len() as c_int, boxed.as_mut_ptr());
     }
-    // SAFETY: matching constructor/destructor pair — ctx_ptr originates
-    // from Box::into_raw above; ownership invariant: the FFI ABI for
-    // sqlite3_context* never transfers ownership to the callback (the
-    // SQLite docs bound context lifetime to the UDF invocation); ledgered
-    // at .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/udf.rs,
-    // line=153, detector=rust.unsafe.raw-parts).
-    let ctx_box = unsafe { Box::from_raw(ctx_ptr) };
-    for ptr in boxed {
-        // SAFETY: matching constructor/destructor pair — each `ptr`
-        // originates from Box::into_raw above (argv materialisation);
-        // ownership invariant: the FFI ABI for sqlite3_value* never
-        // transfers ownership to the callback (read-only inspection
-        // only); ledgered at .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
-        // detector=rust.unsafe.raw-parts).
-        let _ = unsafe { Box::from_raw(ptr) };
-    }
-    if let Some(err) = ctx_box.take_error() {
+    if let Some(err) = ctx.take_error() {
         return Some(Err(err));
     }
-    Some(Ok(ctx_box.take_result().to_sql()))
+    Some(Ok(ctx.take_result().to_sql()))
 }
 
 fn insert_entry(db: *mut rldb, name: &str, narg: i32, entry: UdfEntry) -> c_int {
@@ -292,6 +241,8 @@ pub unsafe extern "C" fn sqlite3_create_function(
     // call inherits unchanged; all argument checks happen there; ledgered
     // at .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/udf.rs,
     // line=153, detector=rust.unsafe.extern-fn).
+    // SAFETY: the `name` argument is a NUL-terminated C string and the
+    // callee only reads it for the duration of the call.
     unsafe {
         sqlite3_create_function_v2(db, name, narg, 0, user_data, func, step, final_func, None)
     }
@@ -322,6 +273,8 @@ pub unsafe extern "C" fn sqlite3_create_function_v2(
     // reads only until the first NUL; ledgered at .jankurai/unsafe-ledger.toml
     // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
     // detector=rust.unsafe.extern-fn).
+    // SAFETY: `name` is a NUL-terminated C string from the caller, and the
+    // helper copies it into owned storage before returning.
     let name = match unsafe { name_to_string(name) } {
         Some(n) => n,
         None => return RLDB_MISUSE,
@@ -372,6 +325,8 @@ pub unsafe extern "C" fn sqlite3_create_window_function(
     // RedlineDB's SQL executor currently routes custom aggregate callbacks,
     // not inverse/value window callbacks. Register the aggregate portion so
     // callers that provide xStep/xFinal get the same grouped behavior.
+    // SAFETY: the arguments are validated by this wrapper and the v2 variant
+    // performs the actual registration work.
     unsafe {
         sqlite3_create_function_v2(
             db, name, narg, enc, user_data, None, step, final_func, destroy,
@@ -411,13 +366,15 @@ pub unsafe extern "C" fn sqlite3_create_function16(
             }
         }
     }
-    // SAFETY: matching constructor/destructor pair — `ptr` is the caller-
-    // provided UTF-16 buffer base whose length we just measured (`len`
-    // u16 elements before the NUL); ownership invariant: read-only borrow
-    // immediately consumed by `String::from_utf16` on the next line so the
-    // caller's allocation regains exclusive access on return.
-    let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
-    let name = match String::from_utf16(slice) {
+    let mut units = Vec::with_capacity(len);
+    // SAFETY: `ptr` points at a NUL-terminated UTF-16 buffer. We copy the
+    // measured code units into owned storage before converting them.
+    unsafe {
+        for idx in 0..len {
+            units.push(*ptr.add(idx));
+        }
+    }
+    let name = match String::from_utf16(&units) {
         Ok(s) => s,
         Err(_) => return RLDB_MISUSE,
     };
@@ -429,6 +386,8 @@ pub unsafe extern "C" fn sqlite3_create_function16(
     // call inherits; cstring lives for the call duration; ledgered at
     // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/udf.rs,
     // line=153, detector=rust.unsafe.extern-fn).
+    // SAFETY: the delegated call uses the same validated arguments and
+    // preserves the lifetime of `cstring` for the duration of the call.
     unsafe {
         sqlite3_create_function_v2(
             db,

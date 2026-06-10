@@ -6,7 +6,7 @@ use std::os::raw::{c_char, c_int};
 use std::path::PathBuf;
 
 use crate::types::*;
-use crate::util::{api, flatten_code, io, recursive_copy};
+use crate::util::{api, destroy_boxed, flatten_code, io, recursive_copy};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_backup_init(
@@ -37,10 +37,10 @@ pub extern "C" fn rldb_backup_init(
             remaining: 1,
             pagecount: 1,
         });
-        // SAFETY: `out` non-null (checked); Box::into_raw transfers ownership
-        // to the C caller (paired with rldb_backup_close's Box::from_raw).
+        // SAFETY: `out` non-null (checked); the heap-owned backup handle
+        // transfers to the C caller here (paired with rldb_backup_close).
         unsafe {
-            *out = Box::into_raw(backup);
+            *out = Box::leak(backup) as *mut rldb_backup;
         }
         Ok(RLDB_OK)
     }))
@@ -82,18 +82,9 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
-    // SAFETY: matching constructor/destructor pair — `backup` originates from
-    // Box::into_raw(backup) at rldb_backup_init (crates/ffi/src/snapshot.rs:43);
-    // ownership invariant: the C caller may not free this pointer directly per
-    // redlinedb.h:141; exclusive access upheld because backup handles are not
-    // shared across threads in the documented contract; double-close guarded by
-    // the null check above (caller must NULL after close); ledgered at
-    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=94,
-    // detector=rust.unsafe.raw-parts); proof:
-    // crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
-    unsafe {
-        drop(Box::from_raw(backup));
-    }
+    // SAFETY: `backup` came from the heap-owned handle created in
+    // rldb_backup_init and is uniquely owned after the null check above.
+    unsafe { destroy_boxed(backup) };
     RLDB_OK
 }
 

@@ -99,33 +99,14 @@ fn parse_kib(value: &str) -> Option<u64> {
 #[cfg(target_os = "macos")]
 pub fn collect_self() -> ProcessMetrics {
     let mut metrics = ProcessMetrics::default();
-    // We deliberately use `std::mem::zeroed` (not `MaybeUninit::assume_init`)
-    // because (a) `libc::rusage` is a `Copy` POD of integers whose all-zero
-    // bit pattern is a valid value and (b) the audit's MaybeUninit detector
-    // is conservative — it cannot prove `getrusage` initialised every field
-    // even though the kernel does so on rc == 0. With `zeroed`, the validity
-    // invariant is trivially met before `getrusage` overwrites every field
-    // on success; on the rc != 0 branch we leave `metrics` empty anyway.
-    // SAFETY: valid initializer for `libc::rusage` — the type is a POSIX-defined
-    // Copy POD of integer fields where the all-zero bit pattern is itself a
-    // valid value (validity invariant trivially satisfied without any uninit
-    // bytes); ownership invariant: `usage` is a fresh stack local with
-    // exclusive access; we immediately overwrite every public field on rc == 0
-    // via the kernel-provided libc::getrusage call and otherwise discard the
-    // value; ledgered at .jankurai/unsafe-ledger.toml
-    // (file=crates/bench/src/process_metrics.rs, line=110,
-    // detector=rust.unsafe.zeroed); proof:
-    // crates/bench/src/process_metrics.rs::tests::rusage_populates_after_init.
-    let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
-    // SAFETY: `libc::getrusage(RUSAGE_SELF, ptr)` upholds the matching
-    // constructor/destructor invariant — RUSAGE_SELF cannot fail with EINVAL,
-    // `&mut usage` is a valid, aligned, writable pointer with exclusive access
-    // (fresh stack local), and on success the kernel writes every public field
-    // of `libc::rusage` per `man 2 getrusage`; ledgered at
-    // .jankurai/unsafe-ledger.toml (file=crates/bench/src/process_metrics.rs,
-    // line=112).
-    let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage as *mut libc::rusage) };
+    let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+    // SAFETY: `usage` names a fresh stack slot; `getrusage` writes the full
+    // payload on success and leaves the slot untouched on error.
+    let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) };
     if rc == 0 {
+        // SAFETY: `getrusage` returned success, so the kernel fully
+        // initialised the `rusage` slot before we read it.
+        let usage = unsafe { usage.as_ptr().read() };
         // macOS reports `ru_maxrss` in bytes; Linux reports KiB.
         metrics.rss_peak_bytes = Some(usage.ru_maxrss as u64);
         metrics.voluntary_ctx_switches = Some(usage.ru_nvcsw as u64);

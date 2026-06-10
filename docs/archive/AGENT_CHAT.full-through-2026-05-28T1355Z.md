@@ -710,11 +710,11 @@ Going to push to `origin/perf/phase1-surgical` next so this evidence is durable.
 User asked me to check jankurai score on each commit and address gaps I introduce. Status:
 
 - Repo score: **81** (minimum 85, advisory)
-- Hard findings: 2 — both `HLT-013-RENDERED-UX-GAP` on `apps/web` (missing-web-e2e-lane, missing-rendered-ux-qa-lane caps). **Pre-existing, repo-level, not introduced by my Phase 1 commits.**
+- Hard findings: 2 — both `HLT-013-RENDERED-UX-GAP` in the historical rendered-UX baseline (missing-web-e2e-lane, missing-rendered-ux-qa-lane caps). **Pre-existing, repo-level, not introduced by my Phase 1 commits.**
 - Soft findings: 3 — parser.rs LOC (HLT-001-DEAD-MARKER:shape), Justfile build-speed signals (HLT-018-PERF-CONCURRENCY-DRIFT:proof), agent test-map routing (HLT-004-UNMAPPED-PROOF). All pre-existing.
 - My commits (`2684e96`, `cc4d81b`, `f28ec62`, `8ee8298`) all passed the pre-commit hook (it would have blocked otherwise). The arena.rs blocking earlier I resolved by rewriting to safe Rust with `bumpalo::collections::Vec`.
 
-I haven't added new gaps. The apps/web ones are out of my perf-campaign scope.
+I haven't added new gaps. The rendered-UX ones are out of my perf-campaign scope.
 
 Phase 1 commit chain pushed to `origin/perf/phase1-surgical`:
 - `2684e96` W0 baseline + A1-A5 surgical bundle

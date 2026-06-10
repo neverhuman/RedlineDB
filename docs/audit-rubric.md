@@ -34,7 +34,8 @@ repair. Pair this with `.jankurai/owner-map.json` (who owns the file) and
 ### 5. Non-optimal product language
 - Evidence: stack profile declares Rust as the product-truth language;
   generated/ABI surfaces are listed in `.jankurai/generated-zones.toml`
-  (`crates/ffi/include/redlinedb.h` is the canonical C-ABI carve-out).
+  (`contracts/c-abi/redlinedb.h` is the canonical C-ABI carve-out,
+  with `contracts/c-abi/sqlite3.h` as the SQLite compatibility alias).
 - Proof lane: `just fast`.
 
 ### 6. Python containment
@@ -86,7 +87,7 @@ hop.
 | application   | `crates/sql/`, `crates/redlinedb/`                    | `just fast`                   | `sql-parser-planner-executor` |
 | adapters      | `crates/ffi/`, `crates/cli/`                          | `just fast`                   | `c-abi` / `cli-shell`         |
 | workers       | `crates/bench/`                                       | `phase9-smoke`, `just fast`   | `bench-harness`               |
-| contracts     | `crates/ffi/include/redlinedb.h`, `crates/bench/compat/` | `phase9-compat-full`       | `c-abi`                       |
+| contracts     | `contracts/c-abi/redlinedb.h`, `contracts/c-abi/sqlite3.h`, `crates/bench/compat/` | `phase9-compat-full`       | `c-abi`                       |
 | db            | `crates/kernel/src/{storage,wal,heap,index}/`         | `phase9-recovery-matrix`      | `storage-and-catalog`         |
 | python-ai     | `scripts/`, `python/` (when present)                  | `just score`                  | `agent`                       |
 | ops           | `.github/workflows/`, `justfile`, `.jankurai/`            | `just check`, `just security` | `ops` / `agent`               |

@@ -25,10 +25,10 @@ pub(crate) fn choose_access_path(
     // defined in `planner::access_path`. The IR carries pre-computed
     // `order_satisfies` / `hard_limit` facts the caller can read
     // without re-pattern-matching the raw `IndexAccessMatch`. We then
-    // lower back to the legacy `super::AccessPath` enum so `build.rs`
+    // lower back to the executor-shape `super::AccessPath` enum so `build.rs`
     // can build the `PhysicalPlan` leaf unchanged.
     //
-    // The legacy default-OFF path below is byte-for-byte identical to
+    // The default-OFF path below is byte-for-byte identical to
     // v4.0.3: when the PRAGMA is OFF, NOTHING in this function's
     // output changes, so parity remains intact for every consumer
     // that did not opt in. Tests in `tests/access_path_ir.rs` assert
@@ -44,7 +44,7 @@ pub(crate) fn choose_access_path(
             order_by,
             None,
         );
-        return lower_access_path_to_legacy(&ir);
+        return lower_access_path_to_executor_shape(&ir);
     }
     // Order matters and mirrors the executor in `exec.rs`:
     //   1. The integer-PK rowid alias (if the predicate is `id = ?` on

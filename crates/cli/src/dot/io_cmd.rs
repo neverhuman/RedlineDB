@@ -543,7 +543,8 @@ fn dump_table_rows(
     conn: &mut redlinedb::Connection,
     table: &str,
 ) -> Result<(), String> {
-    let select_sql = format!("SELECT * FROM {}", quote_ident(table));
+    let mut select_sql = String::from("SELECT * FROM ");
+    select_sql.push_str(&quote_ident(table));
     let mut stmt = conn.prepare(&select_sql).map_err(|err| err.to_string())?;
     let column_count = stmt.column_count();
     while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {

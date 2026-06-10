@@ -41,7 +41,7 @@ pub(crate) fn bind_create_table(
         return bind_create_table_as_select(conn, schema, schema_epoch, sql, create_table);
     }
 
-    let session_scoped = crate::parser::bind::create_table_is_session_scoped(&create_table);
+    let session_scoped = crate::parser::bind::statement_is_session_scoped(sql);
     let (schema, name) = split_name(create_table.name)?;
     // SQLite rejects `AUTOINCREMENT` on a `WITHOUT ROWID` table — the
     // sqlite_sequence machinery is rowid-based by design. Detect the
@@ -367,7 +367,7 @@ fn source_output_names(source: &SelectSource) -> Vec<String> {
             branches
                 .first()
                 .map(select_plan_output_names)
-                .unwrap_or_default()
+                .unwrap_or_else(Vec::new)
         }
         SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => [
             "type".to_owned(),
@@ -413,12 +413,12 @@ fn source_output_affinities(source: &SelectSource) -> Vec<redlinedb_kernel::cata
                     .map(|(idx, _)| infer_affinity(rows.as_ref(), idx))
                     .collect()
             })
-            .unwrap_or_default(),
+            .unwrap_or_else(Vec::new),
         SelectSource::CompoundAll(branches) | SelectSource::CompoundSet { branches, .. } => {
             branches
                 .first()
                 .map(|plan| ctas_projection_affinities(plan))
-                .unwrap_or_default()
+                .unwrap_or_else(Vec::new)
         }
         SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => vec![
             redlinedb_kernel::catalog::Affinity::Text,
@@ -932,8 +932,8 @@ pub(crate) fn bind_create_view(
             schema,
             name,
             if_not_exists: create_view.if_not_exists,
-            // SQLite `TEMP VIEW` modifier flag.
-            session_scoped: create_view.temporary,
+            // SQLite `TEMP VIEW` modifier flag derived from the original SQL.
+            session_scoped: crate::parser::bind::statement_is_session_scoped(sql),
             columns,
             body_sql,
             normalized_sql: Some(strip_trailing_semicolon(sql)),

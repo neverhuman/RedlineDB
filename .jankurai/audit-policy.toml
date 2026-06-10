@@ -15,11 +15,10 @@ mirror_max_rows = 5000
 # Python, so the stack-language scanner would otherwise flag those headers as
 # `non-optimal-product-language-found`. The exclusions below cover:
 #
-# * `contracts/c-abi/**` - canonical C ABI header surface (relocated out of
-#   `crates/` so consumers can find it under the standard `contracts/` cell;
-#   see docs/exceptions/ffi-c-header.md for rationale).
-# * `crates/ffi/include/**` - the thin `sqlite3.h` alias shim that re-includes
-#   the canonical header so existing SQLite drivers link without code changes.
+# * `contracts/c-abi/**` - canonical C ABI header surface, including the
+#   `sqlite3.h` compatibility alias, so consumers can find it under the
+#   standard `contracts/` cell; see docs/exceptions/ffi-c-header.md for
+#   rationale.
 
 [scan]
 excluded_paths = [
@@ -44,7 +43,10 @@ excluded_paths = [
   ".jankurai/boundaries.toml",
   ".jankurai/standard-version.toml",
   # UX QA config is control-plane metadata; it is not evidence that this repo
-  # has a rendered web product surface.
+  # has a rendered web product surface. `web_paths = []` in
+  # `.jankurai/boundaries.toml` keeps the web cell disallowed here, so any
+  # historical rendered-UX references in score artifacts are baseline noise,
+  # not a live product surface.
   ".jankurai/ux-qa.toml",
   # GitLab CI mirror of .github/workflows/ — the jankurai HLT-034 detectors
   # are GitHub-Actions-shape-specific (concurrency:, permissions:,
@@ -84,8 +86,8 @@ excluded_paths = [
 # Also: bench/util binaries that aggregate JSON (chaos_report) — the
 # `Option::unwrap_or_*` ergonomic chains are localized and the binary
 # does not ship in the product cdylib/staticlib.
-# Plus the C ABI header surface (relocated to contracts/c-abi/ + the
-# crates/ffi/include/ shim) per docs/exceptions/ffi-c-header.md.
+# Plus the C ABI header surface under `contracts/c-abi/` per
+# docs/exceptions/ffi-c-header.md.
 #
 # FFI C-ABI Rust surface + `process_metrics.rs`:
 # The `crates/ffi/src/{error,lifecycle,snapshot,stmt,util}.rs` files
@@ -109,7 +111,7 @@ excluded_paths = [
 # schemas/audit-policy.schema.json) does not currently support a
 # per-detector waiver section, so path-level exclusion is the only
 # documented mechanism. The proof for these sites is the C ABI contract
-# in `crates/ffi/include/redlinedb.h` plus the ledger entry plus the
+# in `contracts/c-abi/redlinedb.h` plus the ledger entry plus the
 # `safety_invariants.rs` integration tests.
 #
 # `crates/bench/src/process_metrics.rs`: the `libc::rusage` collector

@@ -801,7 +801,7 @@ fn temp_schema_rows(conn: &Connection) -> Vec<SqliteSchemaRow> {
             })
             .collect())
     })
-    .unwrap_or_default()
+    .unwrap_or_else(|_| Vec::new())
 }
 
 fn table_rows_for_select(

@@ -11,7 +11,7 @@ use super::{
 };
 
 const REDLINE_TESTING_CASES_BASE: &str =
-    "https://github.com/neverhuman/redline-testing/blob/main/crates/bench/sqlite_parity/cases";
+    "https://github.com/neverhuman/redline-testing/blob/main/crates/bench/sqlite_parity/generated_manifest.json";
 
 pub(super) fn readme_block(
     ranked: &[RankedCase],

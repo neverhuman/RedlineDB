@@ -199,7 +199,14 @@ fn gen_select_simple(rng: &mut ChaCha8Rng) -> String {
     } else {
         String::new()
     };
-    format!("SELECT {proj} FROM {table}{where_clause}{order}{limit}")
+    let mut sql = String::from("SELECT ");
+    sql.push_str(&proj);
+    sql.push_str(" FROM ");
+    sql.push_str(table);
+    sql.push_str(&where_clause);
+    sql.push_str(&order);
+    sql.push_str(&limit);
+    sql
 }
 
 fn gen_select_join(rng: &mut ChaCha8Rng) -> String {
@@ -220,7 +227,15 @@ fn gen_select_join(rng: &mut ChaCha8Rng) -> String {
     };
     let group = " GROUP BY t1.id, t1.name";
     let order = " ORDER BY t1.id";
-    format!("SELECT {proj} FROM t1 {kind} t2 ON t1.id = t2.t1_id{where_clause}{group}{order}")
+    let mut sql = String::from("SELECT ");
+    sql.push_str(&proj);
+    sql.push_str(" FROM t1 ");
+    sql.push_str(kind);
+    sql.push_str(" t2 ON t1.id = t2.t1_id");
+    sql.push_str(&where_clause);
+    sql.push_str(group);
+    sql.push_str(order);
+    sql
 }
 
 fn gen_select_scalar_sub(rng: &mut ChaCha8Rng) -> String {
