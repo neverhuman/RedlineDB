@@ -1,66 +1,26 @@
 #!/usr/bin/env bash
-# Security lane: supply-chain + secret-scan evidence.
-#
-# Mirrors the `security` recipe in `justfile` and the `security` job in
-# `.github/workflows/jankurai.yml`, so the same three commands run
-# locally (`just security`, `scripts/ci-local.sh security`) and in CI.
-# Audit reference: HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
-#
-# Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check
-# The workflow YAML carries NO `continue-on-error: true`. The cargo-deny
-# soft-gate semantics live in this script via `ci_soft_gate`, which
-# always returns 0 for the wrapped command while writing an explicit
-# `soft-gate=cargo-deny-check status=...` marker line to the audit log.
-# cargo-audit and gitleaks remain hard-gated end-to-end.
-#
-# Usage:
-#   bash ops/ci/security.sh
+# Security + supply-chain lane for the RedlineDB hub. The installer pipes to bash,
+# so the shell surface and secret hygiene are the security-relevant artifacts here.
+set -Eeuo pipefail
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+strict="${REDLINE_STRICT_TOOLS:-1}"
 
-set -euo pipefail
+run_or_note() { # tool... ; in strict mode missing tool fails, else warns
+  local tool="$1"
+  if command -v "$tool" >/dev/null 2>&1; then "$@"; return; fi
+  if [ "$strict" = "1" ]; then echo "security: required tool '$tool' missing"; return 1; fi
+  echo "security: '$tool' not installed; skipped (non-strict)"
+}
 
-# shellcheck source=ops/ci/lib.sh
-. "$(dirname "$0")/lib.sh"
+echo "==> shellcheck (installer + lanes)"
+run_or_note shellcheck install.sh ops/ci/*.sh scripts/*.sh
 
-mkdir -p .jankurai/security
+echo "==> gitleaks (secret scan)"
+run_or_note gitleaks detect --no-banner --redact --source .
 
-if ! command -v gitleaks >/dev/null 2>&1 \
-    || [ "$(gitleaks version 2>/dev/null || true)" != "$CI_GITLEAKS_VERSION" ]; then
-    ci_install_gitleaks
+echo "==> no checked-in binaries / archives that should be releases"
+if git ls-files | grep -E '\.(tar\.gz|zip|exe)$|/redline$' ; then
+  echo "release artifacts must not be committed"; exit 1
 fi
 
-# Hard gate: cargo-audit must succeed for the lane to pass.
-cargo audit
-
-# Soft gate: cargo-deny `cargo metadata` JSON parser drift against
-# rust 1.95.0 on the current workspace. See ledger for unblock.
-ci_soft_gate \
-    cargo-deny-check \
-    .jankurai/security/cargo-deny.log \
-    -- cargo deny --all-features check
-
-# Hard gate: gitleaks must succeed for the lane to pass.
-gitleaks detect --source . --redact --no-banner
-
-# Provenance/SBOM evidence — capture the workspace dependency
-# manifest so the supply-chain lane writes a reviewable artifact
-# alongside the audit/deny/gitleaks outputs. Hard gate: must succeed.
-cargo metadata --format-version 1 --locked \
-    > .jankurai/security/sbom-cargo-metadata.json
-
-# SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
-# artifact alongside the cargo-metadata evidence. Requires syft in PATH;
-# installed in CI by the jankurai.yml security job.
-# See ledger: .jankurai/ci-soft-gate-ledger.toml#syft-sbom.
-ci_soft_gate \
-    syft-sbom \
-    .jankurai/security/syft.log \
-    -- syft . -o cyclonedx-json=.jankurai/security/sbom-syft.json
-
-# Workflow linting via actionlint — soft-gated; validates CI YAML for
-# schema correctness and security best practices. Requires actionlint
-# in PATH; installed in CI by the jankurai.yml security job.
-# See ledger: .jankurai/ci-soft-gate-ledger.toml#actionlint-workflow-lint.
-ci_soft_gate \
-    actionlint-workflow-lint \
-    .jankurai/security/actionlint.log \
-    -- actionlint .github/workflows/*.yml
+echo "==> security lane OK"

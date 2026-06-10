@@ -1,0 +1,75 @@
+name: release
+
+# Build the RedlineDB binary from a pinned redline-core ref and publish it to this
+# hub's GitHub Releases. Trigger by pushing a tag (vX.Y.Z) or manually with a ref.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: "redline-core git ref to build (tag/branch/sha)"
+        required: true
+        default: "main"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, runner: ubuntu-24.04, rust_target: x86_64-unknown-linux-gnu }
+          - { target: linux-aarch64, runner: ubuntu-24.04-arm, rust_target: aarch64-unknown-linux-gnu }
+    steps:
+      - name: Resolve refs
+        id: refs
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "core_ref=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=manual-$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+            echo "core_ref=${{ github.event.inputs.core_ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout redline-core (the engine)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          repository: neverhuman/redline-core
+          ref: ${{ steps.refs.outputs.core_ref }}
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+
+      - name: Build the redline CLI
+        run: cargo build --release --locked -p cli || cargo build --release --locked
+
+      - name: Package
+        id: pkg
+        run: |
+          tag="${{ steps.refs.outputs.tag }}"; target="${{ matrix.target }}"
+          bin="$(find target/release -maxdepth 1 -type f -name redline -perm -u+x | head -1)"
+          [ -n "$bin" ] || { echo "redline binary not found"; exit 1; }
+          dist="redline-$tag-$target"
+          mkdir -p "$dist"; cp "$bin" "$dist/redline"; cp LICENSE "$dist/" 2>/dev/null || true
+          tar -czf "$dist.tar.gz" "$dist"
+          sha256sum "$dist.tar.gz" > "$dist.tar.gz.sha256"
+          echo "artifact=$dist.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to RedlineDB releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.refs.outputs.tag }}"
+          gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1 \
+            || gh release create "$tag" --repo "${{ github.repository }}" \
+                 --title "$tag" --notes "RedlineDB $tag — built from redline-core@${{ steps.refs.outputs.core_ref }}"
+          gh release upload "$tag" --repo "${{ github.repository }}" --clobber \
+            "${{ steps.pkg.outputs.artifact }}" "${{ steps.pkg.outputs.artifact }}.sha256"

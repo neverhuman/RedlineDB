@@ -1,3 +1,0 @@
-CREATE TABLE nums(v INTEGER);
-INSERT INTO nums VALUES (10), (20), (30), (40), (50);
-SELECT v FROM nums WHERE v > 20 ORDER BY v

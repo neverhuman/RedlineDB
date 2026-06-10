@@ -1,0 +1,9 @@
+repo = "root/RedlineDB"
+default_branch = "main"
+
+[shadow_main]
+enabled = true
+remote_url = "git@github.com:neverhuman/RedlineDB.git"
+refs = ["refs/heads/main"]
+trigger = "main_pipeline_success"
+fallback_review = true

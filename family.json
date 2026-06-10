@@ -1,0 +1,39 @@
+{
+  "family": "redline-split",
+  "hub": {
+    "name": "RedlineDB",
+    "role": "front-door: project landing, binary distribution, pointers",
+    "github": "https://github.com/neverhuman/RedlineDB",
+    "jeryu": "http://127.0.0.1:8787/jeryu/redlineDB"
+  },
+  "audience": "public (GitHub neverhuman is primary); jeryu is the internal mirror source",
+  "repos": [
+    {
+      "name": "redline-core",
+      "role": "engine",
+      "summary": "RedlineDB embedded SQL engine: MVCC storage core, SQL + RQL, CLI, server, FFI.",
+      "github": "https://github.com/neverhuman/redline-core",
+      "github_clone": "https://github.com/neverhuman/redline-core.git",
+      "jeryu": "http://127.0.0.1:8787/jeryu/redline-core",
+      "jeryu_clone": "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+    },
+    {
+      "name": "redline-testing",
+      "role": "harness",
+      "summary": "SQLite-parity, RQL, and beyond-SQLite conformance + benchmark harness.",
+      "github": "https://github.com/neverhuman/redline-testing",
+      "github_clone": "https://github.com/neverhuman/redline-testing.git",
+      "jeryu": "http://127.0.0.1:8787/jeryu/redline-testing",
+      "jeryu_clone": "http://127.0.0.1:8787/git/jeryu/redline-testing.git"
+    },
+    {
+      "name": "redline-web",
+      "role": "observability",
+      "summary": "SQL console + live observability dashboard (Rust/Axum + Vite/TS/React) for a running RedlineDB or any SQLite database.",
+      "github": "https://github.com/neverhuman/redline-web",
+      "github_clone": "https://github.com/neverhuman/redline-web.git",
+      "jeryu": "http://127.0.0.1:8787/jeryu/redline-web",
+      "jeryu_clone": "http://127.0.0.1:8787/git/jeryu/redline-web.git"
+    }
+  ]
+}
