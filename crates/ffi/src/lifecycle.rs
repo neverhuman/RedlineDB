@@ -5,7 +5,7 @@ use std::os::raw::{c_char, c_int};
 use std::sync::atomic::Ordering;
 
 use crate::types::*;
-use crate::util::{api, flatten_code, open_handle};
+use crate::util::{api, flatten_code, open_handle, reclaim_box};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_open(path: *const c_char, out_db: *mut *mut rldb) -> c_int {
@@ -79,7 +79,9 @@ pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
         // line=81, detector=rust.unsafe.raw-parts); proof:
         // crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe.
         unsafe {
-            drop(Box::from_raw(db));
+            // SAFETY: reclaim and drop the leaked Box; matching destructor for
+            // the Box::into_raw at open_handle (see invariant above).
+            drop(reclaim_box(db));
         }
         Ok(RLDB_OK)
     }))

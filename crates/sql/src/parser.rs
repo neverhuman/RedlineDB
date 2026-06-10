@@ -4653,7 +4653,7 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         } else {
             break;
         };
-        let body_after_select = &trimmed[select_offset + "SELECT ".len()..];
+        let body_after_select = &trimmed[select_offset + "SELECT ".len()..]; // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=string-offset-arithmetic-into-already-parsed-text-not-sql-string-construction expires=2027-06-01
         let upper_body = body_after_select.to_ascii_uppercase();
         let from_rel =
             find_top_level_keyword(&upper_body, body_after_select.as_bytes(), 0, " FROM ");
@@ -4680,7 +4680,7 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         //   " FROM "
         //   <FROM up to join_pos>
         //   <FROM from after_alias onward>
-        let projection_start_abs = leading_ws_len + select_offset + "SELECT ".len();
+        let projection_start_abs = leading_ws_len + select_offset + "SELECT ".len(); // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=string-offset-arithmetic-into-already-parsed-text-not-sql-string-construction expires=2027-06-01
         let from_kw_abs = projection_start_abs + from_rel;
         // join_pos is relative to `out` (lowercase has same indexing).
         // Everything strictly before join_pos in the FROM clause is

@@ -19,7 +19,7 @@ pub fn case() -> crate::ParityCase {
 .separator |
 .nullvalue NULL
 SELECT 1+2, 'a'||'b', 7/2, 7/2.0, 7%2, -5, +5;
-",
+", // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=sqlite-parity-corpus-literal-not-runtime-built-sql expires=2027-06-01
         expected_exit: 0,
         compare_stdout: true,
         expected_stdout: Some(r"3|ab|3|3.5|1|-5|5

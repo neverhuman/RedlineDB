@@ -1415,8 +1415,8 @@ fn with_write_tx<T>(
         // `with_write_tx` call below and live for the closure's
         // lifetime. The trigger fire-hook is strictly synchronous with
         // the parent — no other writer can observe these references.
-        let session_ref: &mut SessionState = unsafe { &mut *session_ptr };
-        let tx_ref: &mut Txn = unsafe { &mut *tx_ptr };
+        let session_ref: &mut SessionState = unsafe { &mut *session_ptr }; // SAFETY: installed by the parent with_write_tx, synchronous trigger hook, no aliasing (see above).
+        let tx_ref: &mut Txn = unsafe { &mut *tx_ptr }; // SAFETY: installed by the parent with_write_tx, synchronous trigger hook, no aliasing (see above).
         return f(session_ref, tx_ref);
     }
     conn.with_session(|session| {
@@ -1471,7 +1471,7 @@ fn with_write_tx<T>(
                         // entry violates referential integrity we roll
                         // the tx back and surface the violation.
                         let drain_result = with_current_tx(tx_ptr, || {
-                            let tx_ref = unsafe { &mut *tx_ptr };
+                            let tx_ref = unsafe { &mut *tx_ptr }; // SAFETY: tx_ptr installed by with_current_tx for this synchronous slice, no aliasing.
                             crate::exec::fk::drain_deferred_fk_checks(conn, session, tx_ref)
                         });
                         if let Err(err) = drain_result {
