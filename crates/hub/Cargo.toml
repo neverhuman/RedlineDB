@@ -1,0 +1,20 @@
+[package]
+name = "hub"
+version = "0.1.0"
+edition = "2021"
+description = "Typed exception surface and hub utilities for RedlineDB hub operations"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+path = "src/exceptions.rs"
+
+[[test]]
+name = "exceptions_integration"
+path = "tests/exceptions_integration.rs"
+
+[dependencies]
+tracing = { version = "0.1", default-features = false }
+
+[dev-dependencies]
+proptest = "1"

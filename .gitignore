@@ -1,0 +1,50 @@
+# RedlineDB hub — thin front-door. No build tree lives here.
+/target/
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tmp
+*.log
+
+# downloaded / packaged binaries
+/bin/
+dist/
+*.tar.gz
+*.tar.gz.sha256
+*.sqlite
+*.db
+
+# jankurai: track source manifests; ignore audit output artifacts
+agent/*
+!agent/audit-policy.toml
+!agent/owner-map.json
+!agent/generated-zones.toml
+!agent/tool-adoption.toml
+!agent/exceptions.json
+.jankurai/
+target/jankurai/
+
+# Local jeryu daemon runtime artifacts stay out, but the direct-mode onboarding +
+# shadow_main (mirror-on-merge) config travels with the repo.
+.jeryu/*
+!.jeryu/repo.toml
+!.jeryu/ci.toml
+!.jeryu/policy.toml
+!.jeryu/backup.toml
+!.jeryu/local/
+.jeryu/local/*
+!.jeryu/local/repos/
+.jeryu/local/repos/*
+!.jeryu/local/repos/*.toml
+
+# claude-code agent runtime
+.claude/
+.scratch/
+
+# Rust build artifacts
+crates/hub/target/
+
+# cross-repo dev fusion tree (scripts/fuse.sh) — never tracked; this repo stays thin
+/.fusion/

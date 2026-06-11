@@ -1,0 +1,22 @@
+# Generated-zone ownership manifest (read by jankurai at `agent/generated-zones.toml`).
+#
+# Declares non-protected derived artifacts. Files under inventory-protected roots
+# (.github/, agent/, crates/) MUST NOT be declared as zones.
+
+[[zone]]
+path = ".jankurai/repo-score.json"
+source = "installed jankurai binary"
+command = "~/.cargo/bin/jankurai audit . --mode advisory --policy agent/audit-policy.toml --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
+read_only = false
+
+[[zone]]
+path = ".jankurai/repo-score.md"
+source = "installed jankurai binary"
+command = "~/.cargo/bin/jankurai audit . --mode advisory --policy agent/audit-policy.toml --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
+read_only = false
+
+[[zone]]
+path = "scripts/install-url.sh"
+source = "contracts/hub-install.json"
+command = "bash ops/ci/contract-drift.sh --regen"
+read_only = false

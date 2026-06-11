@@ -1,0 +1,88 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # One job that runs the SAME command as local: `bash ops/ci/pr-ci.sh`
+  # (installer shellcheck + pointer checks + thin-hub invariant + security/secret
+  # scan + jankurai advisory). This is the ci-local parity gate.
+  pr-ci:
+    name: pr-ci (lint + pointers + security)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      REDLINE_STRICT_TOOLS: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install gitleaks (pinned)
+        run: |
+          ver=8.21.2
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - uses: dtolnay/rust-toolchain@4305c38b25d97ef3a8ca9fc7cef5e4b4e5f17a0c # stable (2025-05)
+        with:
+          toolchain: stable
+
+      - uses: swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd4d45 # v2.7.8
+        with:
+          workspaces: crates/hub
+
+      - name: Install cargo-nextest (pinned)
+        run: |
+          ver=0.9.98
+          curl -fsSL "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${ver}/cargo-nextest-${ver}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C ~/.cargo/bin cargo-nextest
+          cargo nextest --version
+
+      - name: Hub crate tests (nextest)
+        run: cargo nextest run --manifest-path crates/hub/Cargo.toml
+
+      - name: Contract drift check
+        run: bash ops/ci/contract-drift.sh
+
+      - name: pr-ci gate (local == CI)
+        run: bash ops/ci/pr-ci.sh
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: redlinedb-hub-jankurai
+          path: target/jankurai
+          if-no-files-found: warn
+          retention-days: 14
+
+  security:
+    name: security scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install gitleaks (pinned)
+        run: |
+          ver=8.21.2
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Security lane
+        run: bash ops/ci/security.sh

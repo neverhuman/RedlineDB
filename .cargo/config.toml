@@ -1,0 +1,20 @@
+# Cargo workspace configuration for redlineDB hub crate.
+# Speeds up incremental rebuilds during CI and local iteration.
+
+[build]
+incremental = true
+
+[profile.dev]
+incremental = true
+# Split debuginfo out of the binary — faster linking on Linux.
+split-debuginfo = "unpacked"
+
+[profile.test]
+incremental = true
+
+[net]
+retry = 3
+
+[term]
+quiet = false
+verbose = false
