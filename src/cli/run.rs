@@ -3,192 +3,14 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::beyond_sqlite;
 use crate::evidence::{self, EvidenceConfig, OfficialEvidenceConfig, OfficialSuiteEvidence};
-use crate::report::{self, JankuraiCompareOptions, ReportOptions, SentinelOptions};
 use crate::sqlite_parity;
 
-#[derive(Debug, Parser)]
-#[command(name = "redline-testing")]
-#[command(about = "Official RedlineDB conformance and benchmark runner")]
-#[command(version)]
-pub struct Cli {
-    #[command(subcommand)]
-    command: CommandKind,
-}
+use super::args::{ProgressMode, RunArgs, Suite};
 
-#[derive(Debug, Subcommand)]
-enum CommandKind {
-    Run(RunArgs),
-    Report(ReportArgs),
-    List(ListArgs),
-    JankuraiCompare(JankuraiCompareArgs),
-    Sentinel(SentinelArgs),
-    Version,
-}
-
-#[derive(Debug, Args)]
-struct RunArgs {
-    #[arg(long, value_enum, default_value = "all")]
-    suite: Suite,
-    #[arg(long)]
-    target_bin: PathBuf,
-    #[arg(long, default_value = "auto")]
-    sqlite_bin: String,
-    #[arg(long, default_value = "auto")]
-    workers: String,
-    #[arg(long, default_value = "auto")]
-    tmp_root: String,
-    #[arg(long)]
-    output: PathBuf,
-    #[arg(long, default_value_t = 1)]
-    repetitions: usize,
-    #[arg(long, default_value_t = 0)]
-    warmup: usize,
-    #[arg(long, value_enum, default_value = "auto")]
-    progress: ProgressMode,
-    #[arg(long)]
-    memory_samples: bool,
-}
-
-#[derive(Debug, Args)]
-struct SelectArgs {
-    #[arg(long)]
-    priorities: Option<String>,
-    #[arg(long)]
-    profiles: Option<String>,
-    #[arg(long)]
-    include_quarantine: bool,
-    #[arg(long)]
-    case_list: Option<PathBuf>,
-}
-
-#[derive(Debug, Args)]
-struct ReportArgs {
-    #[arg(long, value_enum, default_value = "all")]
-    suite: Suite,
-    #[command(flatten)]
-    select: SelectArgs,
-    #[arg(long)]
-    input: PathBuf,
-    #[arg(long)]
-    official_evidence: Option<PathBuf>,
-    #[arg(long)]
-    local_diagnostics: bool,
-    #[arg(long)]
-    out_dir: PathBuf,
-    #[arg(long)]
-    readme: PathBuf,
-    #[arg(long)]
-    plot: Option<PathBuf>,
-    #[arg(long)]
-    ksloc_plot: Option<PathBuf>,
-    #[arg(long)]
-    performance_histogram_plot: Option<PathBuf>,
-    #[arg(long)]
-    median_test_performance_plot: Option<PathBuf>,
-    #[arg(long)]
-    jankurai_score: Option<PathBuf>,
-    #[arg(long)]
-    jankurai_comparison: Option<PathBuf>,
-    #[arg(long)]
-    jankurai_comparison_plot: Option<PathBuf>,
-    #[arg(long)]
-    jankurai_score_plot: Option<PathBuf>,
-    #[arg(long)]
-    code_shape_plot: Option<PathBuf>,
-    #[arg(long)]
-    updated_date: String,
-    #[arg(long)]
-    expected_repetitions: Option<usize>,
-    #[arg(long)]
-    expected_warmup: Option<usize>,
-    #[arg(long)]
-    check: bool,
-}
-
-#[derive(Debug, Args)]
-struct ListArgs {
-    #[arg(long, value_enum, default_value = "all")]
-    suite: Suite,
-    #[command(flatten)]
-    select: SelectArgs,
-    #[arg(long, value_enum, default_value = "text")]
-    format: ListFormat,
-}
-
-#[derive(Debug, Args)]
-struct JankuraiCompareArgs {
-    #[arg(long)]
-    redlinedb_score: PathBuf,
-    #[arg(long)]
-    sqlite_score: PathBuf,
-    #[arg(long)]
-    sqlite_ref: String,
-    #[arg(long)]
-    updated_date: String,
-    #[arg(long)]
-    json: PathBuf,
-    #[arg(long)]
-    csv: PathBuf,
-    #[arg(long)]
-    check: bool,
-}
-
-#[derive(Debug, Args)]
-struct SentinelArgs {
-    #[arg(long)]
-    input: PathBuf,
-    #[arg(long = "ceiling-ns")]
-    ceiling_ns: Vec<String>,
-    #[arg(long)]
-    enforce: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum Suite {
-    All,
-    #[value(name = "sqlite_parity", alias = "sqlite-parity")]
-    SqliteParity,
-    #[value(name = "memory")]
-    Memory,
-    #[value(name = "rql_phase1", alias = "rql-phase1")]
-    RqlPhase1,
-    #[value(name = "beyond_sqlite", alias = "beyond-sqlite")]
-    BeyondSqlite,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum ProgressMode {
-    Auto,
-    Always,
-    Never,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum ListFormat {
-    Text,
-    Markdown,
-    Json,
-}
-
-pub fn run(cli: Cli) -> Result<()> {
-    match cli.command {
-        CommandKind::Run(args) => run_suite(args),
-        CommandKind::Report(args) => report(args),
-        CommandKind::List(args) => list(args),
-        CommandKind::JankuraiCompare(args) => jankurai_compare(args),
-        CommandKind::Sentinel(args) => sentinel(args),
-        CommandKind::Version => {
-            println!("redline-testing {}", env!("CARGO_PKG_VERSION"));
-            Ok(())
-        }
-    }
-}
-
-fn run_suite(args: RunArgs) -> Result<()> {
+pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
     let workers = resolve_workers(&args.workers)?;
     validate_samples(args.repetitions, args.warmup)?;
     let tmp_root = resolve_tmp_root(&args.tmp_root)?;
@@ -461,153 +283,7 @@ fn write_all_manifest<'a>(
     Ok(manifest_path)
 }
 
-fn report(args: ReportArgs) -> Result<()> {
-    report::generate(ReportOptions {
-        suite: args.suite.as_str().to_owned(),
-        input: args.input,
-        official_evidence: args.official_evidence,
-        local_diagnostics: args.local_diagnostics,
-        out_dir: args.out_dir,
-        readme: args.readme,
-        plot: args.plot,
-        ksloc_plot: args.ksloc_plot,
-        performance_histogram_plot: args.performance_histogram_plot,
-        median_test_performance_plot: args.median_test_performance_plot,
-        jankurai_score: args.jankurai_score,
-        jankurai_comparison: args.jankurai_comparison,
-        jankurai_comparison_plot: args.jankurai_comparison_plot,
-        jankurai_score_plot: args.jankurai_score_plot,
-        code_shape_plot: args.code_shape_plot,
-        updated_date: args.updated_date,
-        expected_repetitions: args.expected_repetitions,
-        expected_warmup: args.expected_warmup,
-        check: args.check,
-    })
-}
-
-fn list(args: ListArgs) -> Result<()> {
-    if matches!(args.suite, Suite::BeyondSqlite) {
-        return list_beyond_sqlite(args.format);
-    }
-    let selected = match args.suite {
-        Suite::All | Suite::SqliteParity | Suite::Memory => sqlite_parity::all_cases()?,
-        Suite::RqlPhase1 => sqlite_parity::rql_phase1_cases()?,
-        Suite::BeyondSqlite => unreachable!("handled above"),
-    };
-    match args.format {
-        ListFormat::Text => {
-            for case in selected {
-                println!(
-                    "{} {} {} {} {}",
-                    case.display_id(),
-                    case.priority,
-                    case.profile,
-                    case.category,
-                    case.name
-                );
-            }
-        }
-        ListFormat::Markdown => {
-            println!("# SQLite Parity Test Index\n");
-            println!("| ID | Priority | Profile | Category | Name | Case file |");
-            println!("| --- | --- | --- | --- | --- | --- |");
-            for case in selected {
-                println!(
-                    "| {} | {} | {} | {} | {} | `{}` |",
-                    case.display_id(),
-                    case.priority,
-                    case.profile,
-                    case.category,
-                    case.name,
-                    case.case_file_name()
-                );
-            }
-        }
-        ListFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&selected)?);
-        }
-    }
-    Ok(())
-}
-
-fn list_beyond_sqlite(format: ListFormat) -> Result<()> {
-    let features = beyond_sqlite::all_features()?;
-    match format {
-        ListFormat::Text => {
-            for feature in features {
-                println!(
-                    "BEYOND-{:03} {} {} {}",
-                    feature.rank,
-                    feature.status_string(),
-                    feature.proof_lane,
-                    feature.title
-                );
-            }
-        }
-        ListFormat::Markdown => {
-            println!("# Beyond-SQLite Feature Index\n");
-            println!("| ID | Status | Owner | Proof lane | Title |");
-            println!("| --- | --- | --- | --- | --- |");
-            for feature in features {
-                println!(
-                    "| BEYOND-{:03} | {} | {} | {} | {} |",
-                    feature.rank,
-                    feature.status_string(),
-                    feature.owner,
-                    feature.proof_lane,
-                    feature.title
-                );
-            }
-        }
-        ListFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&features)?);
-        }
-    }
-    Ok(())
-}
-
-fn jankurai_compare(args: JankuraiCompareArgs) -> Result<()> {
-    report::jankurai_compare(JankuraiCompareOptions {
-        redlinedb_score: args.redlinedb_score,
-        sqlite_score: args.sqlite_score,
-        sqlite_ref: args.sqlite_ref,
-        updated_date: args.updated_date,
-        json: args.json,
-        csv: args.csv,
-        check: args.check,
-    })
-}
-
-fn sentinel(args: SentinelArgs) -> Result<()> {
-    report::sentinel(SentinelOptions {
-        input: args.input,
-        ceiling_ns: args.ceiling_ns,
-        enforce: args.enforce,
-    })
-}
-
-impl Suite {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::SqliteParity => "sqlite_parity",
-            Self::Memory => "memory",
-            Self::RqlPhase1 => "rql_phase1",
-            Self::BeyondSqlite => "beyond_sqlite",
-        }
-    }
-}
-
-impl beyond_sqlite::Feature {
-    fn status_string(&self) -> &'static str {
-        match self.status {
-            beyond_sqlite::FeatureStatus::ManifestBacklog => "manifest_backlog",
-            beyond_sqlite::FeatureStatus::PassingReference => "passing_reference",
-        }
-    }
-}
-
-fn resolve_workers(value: &str) -> Result<usize> {
+pub(crate) fn resolve_workers(value: &str) -> Result<usize> {
     if value == "auto" {
         return Ok(std::thread::available_parallelism()
             .map(usize::from)
@@ -633,7 +309,7 @@ fn validate_samples(repetitions: usize, warmup: usize) -> Result<()> {
     Ok(())
 }
 
-fn prepare_output(output: &Path) -> Result<()> {
+pub(crate) fn prepare_output(output: &Path) -> Result<()> {
     if let Some(parent) = output.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -667,7 +343,7 @@ fn resolve_sqlite_bin(raw: &str) -> PathBuf {
     }
 }
 
-fn progress_enabled(mode: ProgressMode) -> bool {
+pub(crate) fn progress_enabled(mode: ProgressMode) -> bool {
     match mode {
         ProgressMode::Always => true,
         ProgressMode::Never => false,

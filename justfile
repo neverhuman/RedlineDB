@@ -7,6 +7,12 @@ default: pr-ci
 setup:
     bash scripts/setup.sh
 
+# Fast iteration loop: fmt check + compile check + nextest (no release packaging).
+fast:
+    cargo fmt --check
+    cargo check --locked --all-targets
+    cargo nextest run --workspace --no-fail-fast
+
 # Fast format + compile check (matches the start of pr-ci, no test run).
 check:
     cargo fmt --check
