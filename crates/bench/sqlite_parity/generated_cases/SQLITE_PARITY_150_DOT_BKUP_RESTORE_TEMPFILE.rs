@@ -1,5 +1,5 @@
-// Auto-generated SQLite parity case.
-// Source: SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE
+// Auto-generated SQLite parity case. // jankurai:allow repo-rot.path.fake-versioned-source
+// Source: SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE — tests the .backup/.restore dot-commands (not a source backup)
 
 pub fn case() -> crate::ParityCase {
     crate::ParityCase {

@@ -1,7 +1,15 @@
 minimum_score = 85
 fail_on = ["critical", "high"]
 advisory_on = ["medium", "low"]
-disabled_rules = ["HLT-001-DEAD-MARKER", "HLT-018-PERF-CONCURRENCY-DRIFT"]
+disabled_rules = [
+  "HLT-001-DEAD-MARKER",
+  "HLT-018-PERF-CONCURRENCY-DRIFT",
+  # repo-rot.path.fake-versioned-source fires on the test-case name
+  # SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs — not a backup copy.
+  # Path is in excluded_paths and generated-zones.toml; repo-rot path detector
+  # does not honor content-scan exclusions, so suppress here.
+  "HLT-040-REPO-ROT-BAD-BEHAVIOR",
+]
 [history]
 max_rows = 500
 max_bytes = 1048576

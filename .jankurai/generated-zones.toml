@@ -26,7 +26,9 @@ source = "C ABI surface for the redlinedb sqlite3-compatible API; relocated from
 command = "managed by verified neverhuman/redline-testing release artifact; do not regenerate in RedlineDB"
 path = "crates/bench/sqlite_parity/generated_cases/"
 read_only = true
-source = "Auto-generated SQLite parity case wrappers retained for developer diagnostics only (not compiled; runtime loads generated_manifest.json); official corpus ownership moved to neverhuman/redline-testing. Renamed cases/ -> generated_cases/ so the auditor recognises the generated path segment."
+owner = "runner"
+proof_lane = "sqlite-parity"
+source = "Auto-generated SQLite parity case wrappers retained for developer diagnostics only (not compiled; runtime loads generated_manifest.json); official corpus ownership moved to neverhuman/redline-testing. Renamed cases/ -> generated_cases/ so the auditor recognises the generated path segment. Path segment BACKUP_RESTORE in case 150 encodes the SQLite test identifier (.backup/.restore dot-commands), not a backup copy of source."
 
 [[zone]]
 command = "just sqlite-parity-report-update"
