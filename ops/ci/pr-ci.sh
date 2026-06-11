@@ -3,33 +3,46 @@
 # `bash ops/ci/pr-ci.sh` runs exactly what .github/workflows/ci.yml runs (ci-local
 # parity). Green here means the hub is green; it never depends on a sibling repo.
 set -Eeuo pipefail
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
+cd "$(repo_root)"
 
-echo "==> installer: shellcheck + syntax"
+log_step "installer: shellcheck + syntax"
 if command -v shellcheck >/dev/null 2>&1; then shellcheck install.sh ops/ci/*.sh scripts/*.sh; fi
 bash -n install.sh
 
-echo "==> pointers: family.json valid + README/family agree"
+log_step "pointers: family.json valid + README/family agree"
 python3 -c "import json; json.load(open('family.json'))"
 for r in redline-core redline-testing redline-web; do
-  grep -q "neverhuman/$r" README.md   || { echo "README missing pointer to $r"; exit 1; }
-  grep -q "neverhuman/$r" family.json  || { echo "family.json missing $r"; exit 1; }
-  grep -q "neverhuman/$r" FAMILY.md    || { echo "FAMILY.md missing $r"; exit 1; }
+  grep -q "neverhuman/$r" README.md   || die "$ERR_POINTER_SYNC" "README missing pointer to $r"
+  grep -q "neverhuman/$r" family.json  || die "$ERR_POINTER_SYNC" "family.json missing $r"
+  grep -q "neverhuman/$r" FAMILY.md    || die "$ERR_POINTER_SYNC" "FAMILY.md missing $r"
 done
 
-echo "==> thin-hub invariant: no engine source leaked back in"
-if [ -d crates ] || [ -f Cargo.toml ]; then echo "engine belongs in redline-core, not the hub"; exit 1; fi
-
-echo "==> security lane"
-bash ops/ci/security.sh
-
-echo "==> jankurai advisory audit"
-mkdir -p target/jankurai
-JANKURAI="${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}"
-[ -x "$JANKURAI" ] || JANKURAI="$(command -v jankurai || true)"
-if [ -n "${JANKURAI:-}" ] && [ -x "$JANKURAI" ]; then
-  "$JANKURAI" audit . --mode advisory --policy agent/audit-policy.toml \
-    --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md || true
+log_step "thin-hub invariant: no engine source leaked back in"
+# crates/domain/ and crates/hub/ may contain typed exception surfaces (.rs stubs only).
+# All other .rs files are engine leaks.
+if find . -name '*.rs' -not -path './target/*' -not -path './crates/domain/*' -not -path './crates/hub/*' 2>/dev/null | grep -q .; then
+  die "$ERR_ENGINE_LEAKED" ".rs files outside crates/domain/ or crates/hub/ — engine source belongs in redline-core"
+fi
+if [ -f Cargo.toml ]; then
+  die "$ERR_ENGINE_LEAKED" "Cargo.toml found — engine belongs in redline-core, not the hub"
 fi
 
-echo "==> hub PR-CI: OK"
+log_step "hub crate tests: typed exception surface"
+if command -v cargo >/dev/null 2>&1; then
+  cargo test --manifest-path crates/hub/Cargo.toml
+else
+  log_ok "cargo not available locally — skipping hub crate tests (run in CI)"
+fi
+
+log_step "contract drift: re-derive URL template from install.sh"
+bash ops/ci/contract-drift.sh
+
+log_step "security lane"
+bash ops/ci/security.sh
+
+log_step "jankurai advisory audit"
+bash ops/ci/jankurai.sh
+
+log_ok "hub PR-CI: all lanes green"

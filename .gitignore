@@ -16,9 +16,13 @@ dist/
 *.sqlite
 *.db
 
-# jankurai: track agent/audit-policy.toml; ignore audit outputs
+# jankurai: track source manifests; ignore audit output artifacts
 agent/*
 !agent/audit-policy.toml
+!agent/owner-map.json
+!agent/generated-zones.toml
+!agent/tool-adoption.toml
+!agent/exceptions.json
 .jankurai/
 target/jankurai/
 
@@ -38,3 +42,6 @@ target/jankurai/
 # claude-code agent runtime
 .claude/
 .scratch/
+
+# Rust build artifacts
+crates/hub/target/

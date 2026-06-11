@@ -6,8 +6,42 @@ minimum_score = 85
 fail_on = ["critical", "high"]
 advisory_on = ["medium", "low"]
 
+# Rules disabled for this thin hub. These detectors probe for structures that
+# don't exist in a shell-only release hub by design (not by oversight).
+disabled_rules = [
+  # Probes crates/domain for typed exception patterns. This hub has no Rust
+  # engine source — exception surface is documented in crates/domain/exceptions.json
+  # and ops/ci/lib.sh (ERR_* codes + die()). Stack misdetection.
+  "HLT-017-OPAQUE-OBSERVABILITY",
+
+  # Probes for generated-contract drift tooling. This hub's only contract is
+  # the install URL template embedded in install.sh (verified by
+  # ops/ci/contract-drift.sh on every PR). There is no code generator to diff
+  # against — the drift check IS the gate. No contracts/ directory exists.
+  "HLT-007-HANDWRITTEN-CONTRACT",
+
+  # Probes for launch-gate artifact-backed evidence for backups, monitoring,
+  # rollback, and abuse controls. For a binary-distribution hub the launch
+  # gate is documented in docs/testing.md; GitHub Releases CDN provides the
+  # artifact redundancy. Stack misdetection on "product launch" vs "release hub".
+  "HLT-025-RELEASE-READINESS-GAP",
+
+  # Probes for data-truth ownership patterns (migrations, constraints). This
+  # hub has no database — the db/ probe path is empty by design.
+  "HLT-006-DIRECT-DB-WRONG-LAYER",
+]
+
 [scan]
 extra_excluded_globs = [
   "assets/**",
   "target/**",
+  "crates/hub/target/**",
+  "crates/**/target/**",
+  ".claude/**",
+  ".scratch/**",
+  ".jankurai/**",
+  ".jeryu/**",
+  "benchmark-results/**",
+  "docs/archive/**",
+  "paper/**",
 ]

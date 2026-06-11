@@ -13,6 +13,14 @@ lives in [redline-core](https://github.com/neverhuman/redline-core); see
   pinned `redline-core` tag.
 - `assets/` — branding and diagrams used by the README.
 
+## Docs for agents
+
+- [docs/architecture.md](docs/architecture.md) — repo structure, the family, release flow, and CI layout.
+- [docs/boundaries.md](docs/boundaries.md) — what crosses the hub boundary; data flow; the public API surface.
+- [docs/release.md](docs/release.md) — how to cut a release, cost budget, rollback.
+- [docs/exceptions/README.md](docs/exceptions/README.md) — typed error catalog; maps each ERR_* code to a repair recipe.
+- [docs/boundaries.md](docs/boundaries.md) — the hub boundary surface: what crosses the installer API, what doesn't.
+
 ## Rules
 
 1. **No engine code here.** Anything about storage/SQL/RQL/FFI belongs in

@@ -16,9 +16,24 @@ check:
 # Alias.
 ci: check
 
+# Fast deterministic iteration: syntax + contract drift + pointer checks (no slow scans).
+fast:
+    bash -n install.sh
+    bash ops/ci/contract-drift.sh
+    python3 -c "import json; json.load(open('family.json'))"
+
 # Security + supply-chain lane only.
 security:
     bash ops/ci/security.sh
+
+# Run hub crate tests with nextest (fast parallel runner; falls back to cargo test).
+test:
+    cargo nextest run --manifest-path crates/hub/Cargo.toml 2>/dev/null \
+      || cargo test --manifest-path crates/hub/Cargo.toml
+
+# Run hub tests with standard cargo test only (CI fallback).
+test-cargo:
+    cargo test --manifest-path crates/hub/Cargo.toml
 
 # Jankurai advisory audit.
 score:
