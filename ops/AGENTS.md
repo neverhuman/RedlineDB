@@ -1,10 +1,24 @@
-# ops/AGENTS.md
+# ops/ — agent guide
 
-<!-- jankurai generated adapter -->
-<!-- jankurai agent request v1 sha256:REPLACE_WITH_HASH -->
-Read `AGENTS.md` first. Use `.jankurai/JANKURAI_STANDARD.md` as the canonical jankurai standard.
-When a user provides a paper, release, implementation, or handoff plan in the conversation, treat that plan as the controlling plan. Do not route such plans through the separate local phase workflow unless the user explicitly names MASTER_PLAN phase work.
-Owns `ops/`.
-Forbidden: product feature code, domain policy, and direct DB writes.
-Proof lane: `security lane / workflow lint`.
-If jankurai is installed, run `jankurai update --client-start --quiet` before work; do not apply updates unless the user asks.
+This directory contains all CI and operations scripts for the RedlineDB hub.
+
+## Owns
+
+- `ops/ci/lib.sh` — shared bash helpers sourced by all CI scripts
+- `ops/ci/pr-ci.sh` — the full PR gate (mirrors `.github/workflows/ci.yml`)
+- `ops/ci/security.sh` — secret scan and supply-chain checks
+- `ops/ci/release.sh` — build, package, and publish binary assets
+- `ops/git-hooks/pre-push` — pre-push hook that runs the PR gate locally
+
+## Forbidden
+
+- No engine source (Rust/SQL/RQL). All engine code belongs in `redline-core`.
+- Do not inline CI logic in workflows; delegate to these scripts instead.
+- Do not store credentials or tokens here.
+
+## Proof lane
+
+The `just check` / `bash ops/ci/pr-ci.sh` command is the single authoritative gate.
+Run it before every push. The `ops/git-hooks/pre-push` hook automates this.
+
+See [docs/architecture.md](../docs/architecture.md) for the full CI layout.

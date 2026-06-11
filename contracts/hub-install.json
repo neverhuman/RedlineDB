@@ -1,0 +1,10 @@
+{
+  "_comment": "Generated from install.sh by ops/ci/contract-drift.sh. Do not edit by hand.",
+  "schema_version": "1.0.0",
+  "contract": "hub-install-url",
+  "surface": "public-api",
+  "url_template": "https://github.com/{repo}/releases/download/{tag}/redline-{tag}-{target}.tar.gz",
+  "url_pattern": "releases/download",
+  "version_variable": "${tag}",
+  "verified_by": "ops/ci/contract-drift.sh"
+}

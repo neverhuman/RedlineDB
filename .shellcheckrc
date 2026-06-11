@@ -1,0 +1,12 @@
+# ShellCheck config for the RedlineDB hub CI scripts.
+#
+# SC1091: the ops/ci/*.sh lanes source "$SCRIPT_DIR/lib.sh" at runtime; the path
+#         is dynamic, so ShellCheck can't follow it during a per-file lint. The
+#         source is real and tested by `bash ops/ci/pr-ci.sh`.
+disable=SC1091
+#
+# SC2034: ops/ci/lib.sh and scripts/install-url.sh are *libraries* — they define
+#         ERR_* exit codes, tool-version pins, and INSTALL_URL_* constants that
+#         are consumed by other scripts that source them (and by humans). They
+#         are intentionally "unused" within their own file.
+disable=SC2034

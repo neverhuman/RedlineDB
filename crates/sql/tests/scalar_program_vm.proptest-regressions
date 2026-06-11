@@ -1,7 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc 40be913ad3d1f9d269fab8470eab7e63b6e7cab53ff7d3f61b19f0e966882d9e # shrinks to shape = Case { whens: [(Atom(LitInt(-1)), Neg(Atom(LitInt(-1))))], else_: None }

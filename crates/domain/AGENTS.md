@@ -1,10 +1,22 @@
-# crates/domain/AGENTS.md
+# crates/domain — Hub Exception Surface
 
-<!-- jankurai generated adapter -->
-<!-- jankurai agent request v1 sha256:REPLACE_WITH_HASH -->
-Read `AGENTS.md` first. Use `.jankurai/JANKURAI_STANDARD.md` as the canonical jankurai standard.
-When a user provides a paper, release, implementation, or handoff plan in the conversation, treat that plan as the controlling plan. Do not route such plans through the separate local phase workflow unless the user explicitly names MASTER_PLAN phase work.
-Owns `crates/domain/`.
-Forbidden: I/O glue, transport routing, and persistence code.
-Proof lane: `unit / property tests`.
-If jankurai is installed, run `jankurai update --client-start --quiet` before work; do not apply updates unless the user asks.
+**Owns:** Typed error definitions and repair manifests for the RedlineDB hub.
+
+**This cell contains no engine source.** Engine code (Rust, SQL) lives in `redline-core`.
+This cell holds only the exception/error manifest that documents every failure mode
+an agent or operator can encounter when working with this hub.
+
+**Forbidden:** `.rs` files, `Cargo.toml`, schema files, migration SQL.
+Those belong in `redline-core`.
+
+**Proof lane:** `bash ops/ci/pr-ci.sh` validates the thin-hub invariant (no `.rs` files
+or `Cargo.toml` in this repo). The `exceptions.json` file must remain in sync with the
+`ERR_*` codes defined in `ops/ci/lib.sh`.
+
+**Exception manifest:** `exceptions.json`
+Each entry declares:
+- `purpose` — the error kind (matches `ERR_*` constant in `ops/ci/lib.sh`)
+- `reason` — root cause in plain language
+- `common_fixes` — ordered list of repair steps
+- `docs_url` — local doc anchor with more detail
+- `repair_hint` — single command an agent can run to reproduce and diagnose

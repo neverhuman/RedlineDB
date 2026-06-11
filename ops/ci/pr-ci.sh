@@ -1,40 +1,49 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# RedlineDB hub PR-CI gate — the single authoritative local + CI validate command.
+# `bash ops/ci/pr-ci.sh` runs exactly what .github/workflows/ci.yml runs (ci-local
+# parity). Green here means the hub is green; it never depends on a sibling repo.
+set -Eeuo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
+cd "$(repo_root)"
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$repo_root"
+log_step "installer: shellcheck + syntax"
+if command -v shellcheck >/dev/null 2>&1; then shellcheck install.sh ops/ci/*.sh scripts/*.sh; fi
+bash -n install.sh
 
-run() {
-  printf '[pr-ci] %s\n' "$*" >&2
-  "$@"
-}
+log_step "pointers: family.json valid + README/family agree"
+python3 -c "import json; json.load(open('family.json'))"
+for r in redline-core redline-testing redline-web; do
+  grep -q "neverhuman/$r" README.md   || die "$ERR_POINTER_SYNC" "README missing pointer to $r"
+  grep -q "neverhuman/$r" family.json  || die "$ERR_POINTER_SYNC" "family.json missing $r"
+  grep -q "neverhuman/$r" FAMILY.md    || die "$ERR_POINTER_SYNC" "FAMILY.md missing $r"
+done
 
-just_has() {
-  command -v just >/dev/null 2>&1 || return 1
-  [[ -f justfile || -f Justfile || -f .justfile ]] || return 1
-  just --summary 2>/dev/null | tr ' ' '\n' | grep -qx "$1"
-}
-
-if just_has fast-test; then
-  run just fast-test
-elif just_has fast; then
-  run just fast
-elif just_has check; then
-  run just check
-elif just_has test; then
-  run just test
-elif [[ -f Cargo.toml ]]; then
-  if cargo nextest --version >/dev/null 2>&1; then
-    run cargo nextest run --workspace --no-fail-fast
-  else
-    run cargo test --workspace --no-fail-fast
-  fi
-elif [[ -f package.json ]]; then
-  if [[ -f package-lock.json ]]; then
-    run npm ci --no-audit --no-fund
-  fi
-  run npm test
-else
-  printf '[pr-ci] no supported CI entrypoint found\n' >&2
-  exit 91
+log_step "thin-hub invariant: no engine source leaked back in"
+# crates/domain/ and crates/hub/ may contain typed exception surfaces (.rs stubs only).
+# .fusion/ is the gitignored dev-fusion checkout of the sibling repos (scripts/fuse.sh);
+# it is never tracked, so its engine sources are not a leak. All other .rs files are.
+if find . -name '*.rs' -not -path './target/*' -not -path './.fusion/*' -not -path './crates/domain/*' -not -path './crates/hub/*' 2>/dev/null | grep -q .; then
+  die "$ERR_ENGINE_LEAKED" ".rs files outside crates/domain/ or crates/hub/ — engine source belongs in redline-core"
 fi
+if [ -f Cargo.toml ]; then
+  die "$ERR_ENGINE_LEAKED" "Cargo.toml found — engine belongs in redline-core, not the hub"
+fi
+
+log_step "hub crate tests: typed exception surface"
+if command -v cargo >/dev/null 2>&1; then
+  cargo test --manifest-path crates/hub/Cargo.toml
+else
+  log_ok "cargo not available locally — skipping hub crate tests (run in CI)"
+fi
+
+log_step "contract drift: re-derive URL template from install.sh"
+bash ops/ci/contract-drift.sh
+
+log_step "security lane"
+bash ops/ci/security.sh
+
+log_step "jankurai advisory audit"
+bash ops/ci/jankurai.sh
+
+log_ok "hub PR-CI: all lanes green"

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neverhuman/redlineDB/blob/main/schemas/hub-exception.schema.json",
+  "title": "HubException",
+  "description": "A single diagnostic entry in the redlineDB hub exception catalog. Matches crates/hub/src/exceptions.rs::HubException and db/migrations/001_hub_exceptions.sql.",
+  "type": "object",
+  "required": ["id", "purpose", "reason", "common_fixes", "docs_url", "repair_hint"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique ERR_* identifier matching the catalog constant.",
+      "pattern": "^ERR_[A-Z_]+$",
+      "minLength": 5
+    },
+    "purpose": {
+      "type": "string",
+      "description": "One-line human-readable description of what this exception guards.",
+      "minLength": 4
+    },
+    "reason": {
+      "type": "string",
+      "description": "Why this exception fires — the triggering condition.",
+      "minLength": 4
+    },
+    "common_fixes": {
+      "type": "array",
+      "description": "Ordered list of repair actions an agent or maintainer should try.",
+      "items": {
+        "type": "string",
+        "minLength": 4
+      },
+      "minItems": 1
+    },
+    "docs_url": {
+      "type": "string",
+      "description": "Relative path to the documentation page for this exception (relative to repo root).",
+      "pattern": "^docs/"
+    },
+    "repair_hint": {
+      "type": "string",
+      "description": "Machine-parseable single repair hint in 'run: <cmd>' or 'grep <pattern> <file>' form.",
+      "pattern": "^(run:|grep)"
+    }
+  },
+  "examples": [
+    {
+      "id": "ERR_MISSING_TOOL",
+      "purpose": "locate required tool on PATH",
+      "reason": "a required CLI tool was not found on PATH",
+      "common_fixes": [
+        "run: bash scripts/ci-doctor.sh",
+        "install the missing tool per docs/testing.md#prerequisites"
+      ],
+      "docs_url": "docs/testing.md#agent-repair-hints",
+      "repair_hint": "run: bash scripts/ci-doctor.sh"
+    }
+  ]
+}

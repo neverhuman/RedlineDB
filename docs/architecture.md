@@ -1,65 +1,52 @@
-# Architecture — RedlineDB
+# RedlineDB Hub — Architecture
 
-This is a one-screen agent-readable map of the RedlineDB workspace.
-Pair with `.jankurai/owner-map.json` for ownership, `.jankurai/proof-lanes.toml`
-for how to rerun proofs, and `docs/audit-rubric.md` for the dimension
-mapping the audit scores.
+## Overview
 
-## Crate map
+This repository is the **fusion hub** (front-door) for RedlineDB. It holds no engine
+code; its job is distribution, documentation, and release orchestration.
 
-| Crate                       | Path                  | Owner                         | Role                                                                 |
-|-----------------------------|-----------------------|-------------------------------|----------------------------------------------------------------------|
-| `redlinedb-domain`          | `crates/domain/`      | `storage-and-catalog`         | Policy-free cross-crate types (typed `DomainError`).                 |
-| `redlinedb-kernel`          | `crates/kernel/`      | `storage-and-catalog`         | Pages, WAL, MVCC, catalogs, integrity, vector, JSONB.                |
-| `redlinedb-sql`             | `crates/sql/`         | `sql-parser-planner-executor` | Parser, planner, executor, vectorized exec, dialect surfaces.        |
-| `redlinedb`                 | `crates/redlinedb/`   | `public-rust-facade`          | Stable Rust user-facing API (Database, Connection, backup).          |
-| `redlinedb-ffi`             | `crates/ffi/`         | `c-abi`                       | SQLite-shaped C ABI (`sqlite3_api`) plus the public C header.        |
-| `redlinedb-cli`             | `crates/cli/`         | `cli-shell`                   | Command-line shell and admin commands (backup/restore).              |
-| `redlinedb-server`          | `crates/server/`      | `framed-server`               | Network-facing framed server.                                        |
-| `redlinedb-bench`           | `crates/bench/`       | `bench-harness`               | Certify, compat, recovery-matrix, failpoint, OLTP-gap workloads.     |
+```
+neverhuman/RedlineDB  (this repo — hub)
+  install.sh          one-line installer, fetches binary from Releases
+  family.json         machine-readable family manifest
+  FAMILY.md           human-readable family map
+  .github/workflows/
+    ci.yml            lint + shellcheck + security scan on every PR
+    release.yml       builds binary from a pinned redline-core tag, publishes here
+  ops/ci/             shell CI scripts mirrored to CI (ci-local parity)
+  docs/               agent-readable documentation
+  assets/             branding and diagrams
+```
 
-The dependency graph is a strict DAG: `domain → kernel → sql →
-redlinedb → {ffi, cli, server}`, with `bench` reaching into the
-workspace as a top-level consumer for measurement only. Nothing
-under `crates/` depends on `crates/bench`.
+## The family
 
-## Layering rule
+| Repo | Role | Public URL |
+|------|------|-----------|
+| `redline-core` | SQL/RQL engine, benchmarks, conformance test suite | `neverhuman/redline-core` |
+| `redline-testing` | Official performance evidence runner | `neverhuman/redline-testing` |
+| `redline-web` | Observability dashboard and web console | `neverhuman/redline-web` |
+| `RedlineDB` | Hub / front-door (this repo) | `neverhuman/RedlineDB` |
 
-Higher layers may depend on lower layers; lower layers must not
-reach upward. The audit enforces this via `.jankurai/boundaries.toml`
-and `docs/boundaries.md`. Domain types (`DomainError`,
-`storage::PageId`, vector types) live in the lowest layer so every
-layer above can produce structured failures without a backward
-dependency.
+See [FAMILY.md](../FAMILY.md) and [family.json](../family.json) for the full map including
+internal jeryu mirrors.
 
-## On-disk surfaces
+## Release flow
 
-- Page file: `crates/kernel/src/storage/page_file.rs`. Checksummed
-  per page; corruption produces `Error::InvalidChecksum`, which
-  escalates to `DomainError` via `Error::into_domain`.
-- WAL: `crates/kernel/src/wal/`. Group commit lanes, semantic
-  combiner, archive/retention.
-- Catalog: `crates/kernel/src/catalog/`.
-- Vector indexes: `crates/kernel/src/vector/{flat,hnsw,diskann}/`.
-- JSONB: `crates/kernel/src/json/`.
+1. A maintainer tags `redline-core` (e.g. `v1.2.3`) after passing its CI gate.
+2. The tag is pushed to `RedlineDB` with the same version string.
+3. `.github/workflows/release.yml` triggers, checks out `redline-core@v1.2.3`, builds
+   the `redline` CLI binary for each target platform via `ops/ci/release.sh`.
+4. `install.sh` fetches the asset from this repo's GitHub Releases.
 
-## Build, test, repair
+## CI structure
 
-- Build: `rtk cargo build --workspace`.
-- Default proof: `just fast` (fmt + file-size + check + test).
-- Wider proof: `just check`, `just security`, lane-specific commands
-  in `.jankurai/proof-lanes.toml`.
-- Failure repair: read the `DomainError` displayed by the failing
-  test or run; follow `docs_url` and `repair_hint` to the named
-  proof lane.
+All CI logic lives in `ops/ci/*.sh` so that local runs are identical to GitHub Actions:
 
-## Where to start (agent router)
+| Script | Purpose |
+|--------|---------|
+| `ops/ci/lib.sh` | Shared helpers (require_tool, log_step, repo_root) |
+| `ops/ci/pr-ci.sh` | Full PR gate: shellcheck, pointer checks, security, jankurai |
+| `ops/ci/security.sh` | Secret/supply-chain scan (gitleaks + install.sh URL audit) |
+| `ops/ci/release.sh` | Build, package, and publish binary assets |
 
-1. `AGENTS.md` (root) for the rules.
-2. `.jankurai/owner-map.json` for who owns what.
-3. `.jankurai/proof-lanes.toml` for how to rerun.
-4. `docs/audit-rubric.md` for dimension-to-evidence mapping.
-5. `docs/boundaries.md` for cross-crate edges.
-6. `docs/language-bad-behavior.md` for the detector terms.
-7. `docs/testing.md` for the proof-lane index and repair-receipt
-   protocol.
+Run locally: `just check` (same as CI) or `bash scripts/ci-local.sh [lane]`.
