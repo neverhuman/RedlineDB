@@ -1453,7 +1453,10 @@ mod tests {
             find_ignore_ascii_case("SELECT WINDOW win AS (x)", b" window win as ("),
             Some(6)
         );
-        assert_eq!(find_ignore_ascii_case("SELECT 1", b" window win as ("), None);
+        assert_eq!(
+            find_ignore_ascii_case("SELECT 1", b" window win as ("),
+            None
+        );
     }
 
     #[test]
