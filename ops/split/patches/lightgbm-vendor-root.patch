@@ -1,0 +1,16 @@
+diff --git a/crates/lightgbm/build.rs b/crates/lightgbm/build.rs
+--- a/crates/lightgbm/build.rs
++++ b/crates/lightgbm/build.rs
+@@ -7,7 +7,10 @@ use std::process::Command;
+ fn main() {
+     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+-    let vendor = manifest
+-        .join("../../vendor/lightgbm")
++    println!("cargo:rerun-if-env-changed=JAIN_VENDOR_ROOT");
++    let vendor = env::var_os("JAIN_VENDOR_ROOT")
++        .map(PathBuf::from)
++        .map(|root| root.join("lightgbm"))
++        .unwrap_or_else(|| manifest.join("../../vendor/lightgbm"))
+         .canonicalize()
+         .expect("vendor/lightgbm missing — git clone --recursive microsoft/LightGBM");
+     let header = vendor.join("include/LightGBM/c_api.h");

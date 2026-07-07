@@ -1,0 +1,8 @@
+# Ephemerals — the control-plane is source; regenerated artifacts are not tracked.
+__pycache__/
+*.pyc
+.pytest_cache/
+ops/split/__pycache__/
+ops/split/.pytest_cache/
+.work/
+target/

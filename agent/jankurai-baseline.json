@@ -1,0 +1,15 @@
+{
+  "schema": "jain.split.jankurai-baseline/v1",
+  "score": 54,
+  "caps": [
+    "missing-agent-readable-docs",
+    "no-deterministic-fast-lane",
+    "no-one-command-setup-or-validation",
+    "release-readiness-gap",
+    "secret-like-content-detected"
+  ],
+  "hard_findings": 0,
+  "auditor": "jankurai 1.6.11",
+  "posture": "monorepo-ratchet",
+  "note": "Operator/infra control-plane repo (materializer + host-CI + manifest). NOT a family product member and NOT held to the >=78 product bar. Gate = ratchet: no hard findings, no regression, no new caps. Caps are infra-expected: no product build/test lanes (fast-lane/one-command/release), and secret-like-content is the token-HANDLING code in ops/lib.sh github_token() (a grep pattern, not a secret)."
+}

@@ -1,0 +1,31 @@
+[lanes.required]
+required = ["just required"]
+blocks_merge = true
+
+[lanes.fast]
+required = ["just fast"]
+blocks_merge = true
+
+[lanes.check]
+required = ["just check"]
+blocks_merge = true
+
+[lanes.score]
+required = ["just score"]
+blocks_merge = true
+
+[lanes.security]
+required = ["just security"]
+blocks_merge = true
+
+[lanes.artifact-support]
+required = ["just artifact-support"]
+blocks_merge = false
+
+[lanes.tool-adoption]
+required = ["just tool-adoption"]
+blocks_merge = true
+
+[lanes.contract-drift]
+required = ["just contract-drift"]
+blocks_merge = true

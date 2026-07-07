@@ -1,0 +1,65 @@
+schema_version = "1.0.0"
+
+[[tools]]
+id = "audit-ci"
+mode = "auto"
+
+[[tools]]
+id = "proof-routing"
+mode = "auto"
+
+[[tools]]
+id = "proofbind"
+mode = "auto"
+
+[[tools]]
+id = "proofmark-rust"
+mode = "advisory"
+
+[[tools]]
+id = "copy-code"
+mode = "advisory"
+
+[[tools]]
+id = "security"
+mode = "auto"
+
+[[tools]]
+id = "ci-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "git-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "release-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "contract-drift"
+mode = "auto"
+
+[[tools]]
+id = "rust-witness"
+mode = "advisory"
+
+[[tools]]
+id = "authz-matrix"
+mode = "advisory"
+
+[[tools]]
+id = "input-boundary"
+mode = "advisory"
+
+[[tools]]
+id = "agent-tool-supply"
+mode = "auto"
+
+[[tools]]
+id = "release-readiness"
+mode = "auto"
+
+[[tools]]
+id = "cost-budget"
+mode = "auto"

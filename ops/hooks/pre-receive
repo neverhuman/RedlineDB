@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# jeryu PR-only guard (git-native pre-receive hook for jeryu bare repos).
+#
+# Rejects ALL pushes to refs/heads/main over the wire (HTTP/SSH receive-pack). main is advanced
+# ONLY by the gated host automerge (automerge-jeryu.sh) via a server-side `git update-ref`, which
+# does NOT run this hook. Humans/agents must open a PR; jeryu CI + agent-review auto-merge advances main.
+#
+# (jeryu's gitd does not advertise push-options over HTTP, so a marker-bypass is unreachable on the
+# wire — hence the clean rule: deny all wire main updates, advance main server-side via update-ref.)
+#
+# Install: copy to <bare>/hooks/pre-receive (chmod +x). Reads "<old> <new> <ref>" lines on stdin.
+set -u
+deny=0
+while read -r _old new ref; do
+  [[ "$ref" == "refs/heads/main" ]] || continue
+  [[ "$new" =~ ^0+$ ]] && continue   # deletion is handled by jeryu's own delete protection
+  deny=1
+done
+if [[ "$deny" -eq 1 ]]; then
+  echo "── jeryu PR-only guard ─────────────────────────────────────────────" >&2
+  echo "  refs/heads/main is PR-ONLY on jeryu. Direct pushes to main are denied." >&2
+  echo "  Open a PR; jeryu CI + agent-review auto-merge advances main for you." >&2
+  echo "────────────────────────────────────────────────────────────────────" >&2
+  exit 1
+fi
+exit 0

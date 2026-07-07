@@ -1,0 +1,16 @@
+diff --git a/crates/xgboost/build.rs b/crates/xgboost/build.rs
+--- a/crates/xgboost/build.rs
++++ b/crates/xgboost/build.rs
+@@ -6,7 +6,10 @@ use std::process::Command;
+ fn main() {
+     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+-    let vendor = manifest
+-        .join("../../vendor/xgboost")
++    println!("cargo:rerun-if-env-changed=JAIN_VENDOR_ROOT");
++    let vendor = env::var_os("JAIN_VENDOR_ROOT")
++        .map(PathBuf::from)
++        .map(|root| root.join("xgboost"))
++        .unwrap_or_else(|| manifest.join("../../vendor/xgboost"))
+         .canonicalize()
+         .expect("vendor/xgboost missing — git clone --recursive dmlc/xgboost");
+     let header = vendor.join("include/xgboost/c_api.h");

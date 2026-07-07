@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+workspace = "jain"
+minimum_score = 85
+hard_findings_allowed = 0
+required_tool = "jankurai"
+required_tool_version = "1.6.10"
+
+
+[inherited_source_caps]
+documented_in = "SPLIT.md#inherited-source-cap-policy"
+allowed = [
+
+]

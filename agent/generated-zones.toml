@@ -1,0 +1,20 @@
+[[zone]]
+path = "target/"
+source = "Cargo, Jankurai, and local CI lanes"
+command = "regenerate from the owning proof lane"
+read_only = true
+write_policy = "auditor_output"
+
+[[zone]]
+path = ".ci-status/"
+source = "local CI and split proof lanes"
+command = "just required"
+read_only = true
+write_policy = "auditor_output"
+
+[[zone]]
+path = ".jankurai/"
+source = "jankurai audit"
+command = "just score"
+read_only = true
+write_policy = "auditor_output"

@@ -1,0 +1,15 @@
+diff --git a/crates/catboost-sys/build.rs b/crates/catboost-sys/build.rs
+--- a/crates/catboost-sys/build.rs
++++ b/crates/catboost-sys/build.rs
+@@ -17,6 +17,10 @@ const YASM_1_3_0_SHA256: &str = "3dce6601b495f5b3d45b59f7d2492a340ee7e84b5beca
+ fn main() {
+     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+-    let vendor = manifest.join("../../vendor/catboost");
++    println!("cargo:rerun-if-env-changed=JAIN_VENDOR_ROOT");
++    let vendor = env::var_os("JAIN_VENDOR_ROOT")
++        .map(PathBuf::from)
++        .map(|root| root.join("catboost"))
++        .unwrap_or_else(|| manifest.join("../../vendor/catboost"));
+     let abi_h = manifest.join("abi/catboost_c_api.abi");
+     let abi_cpp = manifest.join("abi/catboost_c_api.inc");
+     let cbtool_dir = manifest.join("cbtool");

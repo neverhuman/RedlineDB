@@ -1,0 +1,20 @@
+schema_version = "1.0.0"
+workspace = "jain"
+profile = "public-portal"
+required_check = "jain/required"
+
+[split]
+cross_repo_dependency_policy = "pinned-public-git-tags"
+local_path_patches = false
+
+cargo_members = [
+
+]
+
+[contracts]
+role = "none"
+canonical_repo = "jain-core"
+mirror_check = "just contract-drift"
+
+[python]
+allowed_non_product_paths = ["ops/split/"]

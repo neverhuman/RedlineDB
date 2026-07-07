@@ -1,0 +1,450 @@
+schema_version = "1"
+workers = 40
+source_root = "/home/ubuntu/jain_small"
+source_branch = "apex"
+source_sha = "cc27936eb45006bda0cae85b0f578f4d5985991d"
+split_root = "/home/ubuntu/jain-split"
+repo_family = "jain-split"
+umbrella_repo = "jain"
+dependency_tag_suffix = "v7.0.1-split.0"
+rollout_wave_order = [0, 1, 2, 3, 4]
+required_repos = [
+  "jain",
+  "jain-domain",
+  "jain-math",
+  "jain-contracts",
+  "jain-catboost",
+  "jain-xgboost",
+  "jain-lightgbm",
+  "jain-battle-gpu",
+  "jain-starforge",
+  "jain-core",
+  "jain-report",
+  "jain-tui",
+  "jain-cli",
+  "jain-web",
+  "jain-python",
+  "jain-deploy",
+]
+
+retired_paths = [
+  ".cargo/**",
+  ".dockerignore",
+  ".gitattributes",
+  ".github/**",
+  ".gitignore",
+  ".grype.yaml",
+  "AGENTS.md",
+  "Cargo.lock",
+  "Cargo.toml",
+  "CHANGELOG.md",
+  "Justfile",
+  "README.md",
+  "RELEASE.md",
+  "RELEASE_PROCESS.md",
+  "RESULTS.md",
+  "ROLLBACK.md",
+  "agent/AGENTS.md",
+  "agent/JANKURAI_STANDARD.md",
+  "agent/audit-policy.toml",
+  "agent/boundaries.toml",
+  "agent/generated-zones.toml",
+  "agent/jankurai-badge.json",
+  "agent/jankurai-badge.svg",
+  "agent/owner-map.json",
+  "agent/proof-lanes.toml",
+  "agent/repair-patterns.toml",
+  "agent/security-policy.toml",
+  "agent/standard-version.toml",
+  "agent/test-map.json",
+  "agent/tool-adoption.toml",
+  "ops/AGENTS.md",
+  "ops/ci/**",
+  "ops/git-hooks/pre-push",
+  "reference/vendor",
+  "renovate.json",
+  "rust-toolchain.toml",
+  "scripts/ci-*.sh",
+  "scripts/prune_vendor.sh",
+  "tools/security-lane.sh",
+]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain"
+name = "jain"
+github_slug = "neverhuman/jain"
+jeryu_slug = "jeryu/jain-portal-preview"
+profile = "public-portal"
+role = "portal"
+default_branch = "main"
+rollout_wave = 0
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-v7.0.1-split.0"
+required_check = "jain/required"
+note = "Split-family portal and orchestration surface."
+cargo_members = []
+copy_paths = []
+source_paths = []
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-docs"
+name = "jain-docs"
+github_slug = "neverhuman/jain-docs"
+jeryu_slug = "jeryu/jain-docs"
+profile = "custom"
+role = "docs"
+default_branch = "main"
+rollout_wave = 0
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-docs-v7.0.1-split.0"
+required_check = "jain-docs/required"
+note = "Product documentation and manual sources."
+cargo_members = []
+copy_paths = ["docs"]
+source_paths = ["docs/**"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-domain"
+name = "jain-domain"
+github_slug = "neverhuman/jain-domain"
+jeryu_slug = "jeryu/jain-domain"
+profile = "rust-workspace"
+role = "domain"
+default_branch = "main"
+rollout_wave = 0
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-domain-v7.0.1-split.0"
+required_check = "jain-domain/required"
+note = "Shared domain error and repair-hint contract."
+cargo_members = ["crates/domain"]
+copy_paths = ["crates/domain"]
+source_paths = ["crates/domain/**"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-math"
+name = "jain-math"
+github_slug = "neverhuman/jain-math"
+jeryu_slug = "jeryu/jain-math"
+profile = "rust-workspace"
+role = "math"
+default_branch = "main"
+rollout_wave = 0
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-math-v7.0.1-split.0"
+required_check = "jain-math/required"
+note = "Feature DSL and pure math utilities."
+cargo_members = ["crates/feat-math"]
+copy_paths = ["crates/feat-math"]
+source_paths = ["crates/feat-math/**"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-contracts"
+name = "jain-contracts"
+github_slug = "neverhuman/jain-contracts"
+jeryu_slug = "jeryu/jain-contracts"
+profile = "mirror"
+role = "contracts"
+default_branch = "main"
+rollout_wave = 0
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-contracts-v7.0.1-split.0"
+required_check = "jain-contracts/required"
+note = "Published mirror of jain-core contracts."
+cargo_members = []
+copy_paths = ["contracts"]
+source_paths = []
+cross_repo_deps = ["jain-core"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-catboost"
+name = "jain-catboost"
+github_slug = "neverhuman/jain-catboost"
+jeryu_slug = "jeryu/jain-catboost"
+profile = "rust-workspace"
+role = "native-learner"
+default_branch = "main"
+rollout_wave = 1
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-catboost-v7.0.1-split.0"
+required_check = "jain-catboost/required"
+note = "CatBoost FFI binding and safe Rust wrapper."
+cargo_members = ["crates/catboost-sys", "crates/catboost"]
+copy_paths = ["crates/catboost-sys", "crates/catboost", "tests/cbtest.c", "scripts/prune_vendor.sh"]
+source_paths = ["crates/catboost-sys/**", "crates/catboost/**", "tests/cbtest.c"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-xgboost"
+name = "jain-xgboost"
+github_slug = "neverhuman/jain-xgboost"
+jeryu_slug = "jeryu/jain-xgboost"
+profile = "rust-workspace"
+role = "native-learner"
+default_branch = "main"
+rollout_wave = 1
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-xgboost-v7.0.1-split.0"
+required_check = "jain-xgboost/required"
+note = "XGBoost FFI binding."
+cargo_members = ["crates/xgboost"]
+copy_paths = ["crates/xgboost", "scripts/prune_vendor.sh"]
+source_paths = ["crates/xgboost/**"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-lightgbm"
+name = "jain-lightgbm"
+github_slug = "neverhuman/jain-lightgbm"
+jeryu_slug = "jeryu/jain-lightgbm"
+profile = "rust-workspace"
+role = "native-learner"
+default_branch = "main"
+rollout_wave = 1
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-lightgbm-v7.0.1-split.0"
+required_check = "jain-lightgbm/required"
+note = "LightGBM FFI binding."
+cargo_members = ["crates/lightgbm"]
+copy_paths = ["crates/lightgbm", "scripts/prune_vendor.sh"]
+source_paths = ["crates/lightgbm/**"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-battle-gpu"
+name = "jain-battle-gpu"
+github_slug = "neverhuman/jain-battle-gpu"
+jeryu_slug = "jeryu/jain-battle-gpu"
+profile = "rust-workspace"
+role = "gpu"
+default_branch = "main"
+rollout_wave = 1
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-battle-gpu-v7.0.1-split.0"
+required_check = "jain-battle-gpu/required"
+note = "Optional GPU kernel factory over feat-math."
+cargo_members = ["crates/battle-gpu"]
+copy_paths = ["crates/battle-gpu"]
+source_paths = ["crates/battle-gpu/**"]
+cross_repo_deps = ["jain-math"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-starforge"
+name = "jain-starforge"
+github_slug = "neverhuman/jain-starforge"
+jeryu_slug = "jeryu/jain-starforge"
+profile = "rust-workspace-lfs"
+role = "starforge"
+default_branch = "main"
+rollout_wave = 1
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = false
+current_tag = "jain-starforge-v7.0.1-split.0"
+required_check = "jain-starforge/required"
+note = "Starforge inference code and all required safetensors weights."
+cargo_members = ["crates/starforge"]
+copy_paths = ["crates/starforge", "artifacts/starforge", "artifacts/foundation", "scripts/compress-starforge-weights.sh", "scripts/prepare-starforge-artifacts.sh"]
+source_paths = ["crates/starforge/**", "artifacts/starforge/**", "artifacts/foundation/**", "scripts/compress-starforge-weights.sh", "scripts/prepare-starforge-artifacts.sh"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-core"
+name = "jain-core"
+github_slug = "neverhuman/jain-core"
+jeryu_slug = "jeryu/jain-core"
+profile = "rust-workspace"
+role = "core"
+default_branch = "main"
+rollout_wave = 2
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-core-v7.0.1-split.0"
+required_check = "jain-core/required"
+note = "Pipeline hub and canonical progress-event contract producer."
+cargo_members = ["crates/feat-core"]
+copy_paths = ["crates/feat-core", "contracts"]
+source_paths = ["crates/feat-core/**", "contracts/**"]
+cross_repo_deps = ["jain-domain", "jain-math", "jain-catboost", "jain-xgboost", "jain-lightgbm", "jain-starforge"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-report"
+name = "jain-report"
+github_slug = "neverhuman/jain-report"
+jeryu_slug = "jeryu/jain-report"
+profile = "rust-workspace"
+role = "report"
+default_branch = "main"
+rollout_wave = 3
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-report-v7.0.1-split.0"
+required_check = "jain-report/required"
+note = "Executive report rendering and templates."
+cargo_members = ["crates/feat-report"]
+copy_paths = ["crates/feat-report"]
+source_paths = ["crates/feat-report/**"]
+cross_repo_deps = ["jain-core", "jain-math"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-tui"
+name = "jain-tui"
+github_slug = "neverhuman/jain-tui"
+jeryu_slug = "jeryu/jain-tui"
+profile = "rust-workspace"
+role = "tui"
+default_branch = "main"
+rollout_wave = 3
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-tui-v7.0.1-split.0"
+required_check = "jain-tui/required"
+note = "Terminal dashboard presentation layer."
+cargo_members = ["crates/feat-tui"]
+copy_paths = ["crates/feat-tui"]
+source_paths = ["crates/feat-tui/**"]
+cross_repo_deps = ["jain-core"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-cli"
+name = "jain-cli"
+github_slug = "neverhuman/jain-cli"
+jeryu_slug = "jeryu/jain-cli"
+profile = "rust-workspace"
+role = "cli"
+default_branch = "main"
+rollout_wave = 3
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-cli-v7.0.1-split.0"
+required_check = "jain-cli/required"
+note = "Product CLI and SageMaker entrypoint binaries."
+cargo_members = ["crates/feat-cli"]
+copy_paths = ["crates/feat-cli"]
+source_paths = ["crates/feat-cli/**"]
+cross_repo_deps = ["jain-core", "jain-math", "jain-report", "jain-tui", "jain-battle-gpu"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-web"
+name = "jain-web"
+github_slug = "neverhuman/jain-web"
+jeryu_slug = "jeryu/jain-web"
+profile = "rust-node-hybrid"
+role = "web"
+default_branch = "main"
+rollout_wave = 3
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-web-v7.0.1-split.0"
+required_check = "jain-web/required"
+note = "Local web server and React cockpit."
+cargo_members = ["crates/feat-web"]
+copy_paths = ["crates/feat-web", "apps/web", "contracts", "db"]
+source_paths = ["crates/feat-web/**", "apps/web/**", "db/**"]
+cross_repo_deps = ["jain-core", "jain-report", "jain-battle-gpu"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-python"
+name = "jain-python"
+github_slug = "neverhuman/jain-python"
+jeryu_slug = "jeryu/jain-python"
+profile = "python"
+role = "python"
+default_branch = "main"
+rollout_wave = 3
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-python-v7.0.1-split.0"
+required_check = "jain-python/required"
+note = "Transport-only Python SDK and SageMaker helpers."
+cargo_members = []
+copy_paths = ["python/ai-service", "contracts"]
+source_paths = ["python/ai-service/**"]
+cross_repo_deps = ["jain-contracts"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-model-zoo"
+name = "jain-model-zoo"
+github_slug = "neverhuman/jain-model-zoo"
+jeryu_slug = "jeryu/jain-model-zoo"
+profile = "custom"
+role = "model-zoo"
+default_branch = "main"
+rollout_wave = 4
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = false
+current_tag = "jain-model-zoo-v7.0.1-split.0"
+required_check = "jain-model-zoo/required"
+note = "Frozen reference ports, oracle fixtures, and parity harness."
+cargo_members = []
+copy_paths = ["reference/ported", "ops/parity"]
+source_paths = ["reference/ported/**", "ops/parity/**"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-ops"
+name = "jain-ops"
+github_slug = "neverhuman/jain-ops"
+jeryu_slug = "jeryu/jain-ops"
+profile = "custom"
+role = "ops"
+default_branch = "main"
+rollout_wave = 4
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-ops-v7.0.1-split.0"
+required_check = "jain-ops/required"
+note = "Apex research campaigns, zyal templates, and bench manifests."
+cargo_members = []
+copy_paths = ["ops/apex", "agent/zyal", "scripts/global_bench.sh", "scripts/manifest_reg_mini.txt", "scripts/manifest_reg_smalln.txt", "scripts/manifest_regression.txt"]
+source_paths = ["ops/apex/**", "agent/zyal/**", "scripts/global_bench.sh", "scripts/manifest_reg_mini.txt", "scripts/manifest_reg_smalln.txt", "scripts/manifest_regression.txt"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-deploy"
+name = "jain-deploy"
+github_slug = "neverhuman/jain-deploy"
+jeryu_slug = "jeryu/jain-deploy"
+profile = "deploy"
+role = "deploy"
+default_branch = "main"
+rollout_wave = 4
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+current_tag = "jain-deploy-v7.0.1-split.0"
+required_check = "jain-deploy/required"
+note = "Release authority and integration home."
+cargo_members = ["deployment/ops/sagemaker-ci", "deployment/product"]
+copy_paths = ["deployment/ops", "contracts", "scripts/get_data.sh", "scripts/sync-base-digests.sh"]
+source_paths = ["deployment/ops/**", "scripts/get_data.sh", "scripts/sync-base-digests.sh"]
+cross_repo_deps = ["jain-cli"]

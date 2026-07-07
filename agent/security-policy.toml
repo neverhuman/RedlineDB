@@ -1,0 +1,28 @@
+schema_version = "1.0.0"
+workspace = "jain"
+
+enabled_tools = [
+  "gitleaks",
+  "cargo-audit",
+  "zizmor",
+  "syft",
+  "cargo-deny",
+  "grype",
+  "trivy"
+]
+
+required_tools = ["gitleaks"]
+advisory_tools = ["cargo-audit", "zizmor", "syft", "cargo-deny", "grype", "trivy"]
+
+[severity_thresholds]
+fail_lane_on = "high"
+
+[profiles.local]
+enabled_tools = ["gitleaks", "cargo-audit", "zizmor", "syft"]
+required_tools = ["gitleaks"]
+advisory_tools = ["cargo-audit", "zizmor", "syft"]
+
+[profiles.ci]
+enabled_tools = ["gitleaks", "cargo-audit", "zizmor", "syft", "cargo-deny"]
+required_tools = ["gitleaks"]
+advisory_tools = ["cargo-audit", "zizmor", "syft", "cargo-deny"]

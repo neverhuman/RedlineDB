@@ -1,0 +1,23 @@
+version = 1
+
+[[source]]
+id = "rust-lcov"
+kind = "line_coverage"
+format = "lcov"
+mode = "advisory"
+owner = "tools"
+lane = "coverage-audit"
+artifacts = ["target/llvm-cov/lcov.info", "target/jankurai/coverage/rust-lcov.info"]
+applies_to = ["crates/**/*.rs"]
+rules = ["HLT-008-FALSE-GREEN-RISK"]
+
+[[source]]
+id = "security-evidence"
+kind = "supply_chain"
+format = "generic-json-summary"
+mode = "auto"
+owner = "ops"
+lane = "security"
+artifacts = ["target/jankurai/security/evidence.json", "target/security/evidence.json"]
+applies_to = [".github/**", "Cargo.toml", "Cargo.lock", "package.json", "apps/web/package.json"]
+rules = ["HLT-016-SUPPLY-CHAIN-DRIFT"]

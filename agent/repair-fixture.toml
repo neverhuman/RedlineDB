@@ -1,0 +1,9 @@
+schema_version = "1.0.0"
+workspace = "jain"
+queue = "target/jankurai/repair-queue.jsonl"
+
+[[fixtures]]
+id = "split-required-lane"
+lane = "required"
+command = "just required"
+expected_artifact = "target/jankurai/repair-queue.jsonl"
