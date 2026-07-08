@@ -10,6 +10,15 @@ usage() {
   printf 'usage: %s [--manifest PATH] [--base URL] [--family NAME] [--check-only]\n' "$0" >&2
 }
 
+jeryu_token() {
+  if [[ -n "${JERYU_MERGE_TOKEN:-}" ]]; then
+    printf '%s' "$JERYU_MERGE_TOKEN"
+    return
+  fi
+  local f="${JERYU_MERGE_TOKEN_FILE:-$HOME/.jeryu/secrets/merge-token}"
+  [[ -r "$f" ]] && tr -d '\n' < "$f"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --manifest)
@@ -66,19 +75,25 @@ PY
 
 [[ "${#rows[@]}" -gt 0 ]] || { printf 'manifest has no repo entries\n' >&2; exit 1; }
 family="${rows[0]%%|*}"
+auth_args=()
+token="$(jeryu_token)"
+if [[ -n "$token" ]]; then
+  auth_args=(-H "Authorization: Bearer $token")
+fi
 
 if [[ "$check_only" != "1" ]]; then
   for row in "${rows[@]}"; do
     IFS='|' read -r row_family owner name <<<"$row"
     body="$(python3 -c 'import json,sys; print(json.dumps({"family": sys.argv[1]}))' "$row_family")"
     curl -fsS -X PATCH "$base/api/v1/repos/${owner}%2F${name}" \
+      "${auth_args[@]}" \
       -H 'content-type: application/json' \
       -d "$body" >/dev/null
     printf 'registered %s/%s -> %s\n' "$owner" "$name" "$row_family"
   done
 fi
 
-repos_json="$(curl -fsS "$base/api/v1/repos?host=jeryu")"
+repos_json="$(curl -fsS "${auth_args[@]}" "$base/api/v1/repos?host=jeryu")"
 REPOS_JSON="$repos_json" python3 - "$family" "${rows[@]}" <<'PY'
 import json
 import os

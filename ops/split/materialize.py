@@ -2847,6 +2847,11 @@ def capture_dirty_patch(source_root: Path, split_root: Path) -> Path | None:
     return out
 
 
+def write_root_manifest_copy(manifest: Path, split_root: Path) -> None:
+    target = split_root / "repos.manifest.toml"
+    write(target, manifest.read_text(encoding="utf-8"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", default=str(MANIFEST))
@@ -2855,7 +2860,8 @@ def main() -> int:
     parser.add_argument("--capture-dirty-patch", action="store_true")
     args = parser.parse_args()
 
-    data, repos = load_manifest(Path(args.manifest))
+    manifest_path = Path(args.manifest)
+    data, repos = load_manifest(manifest_path)
     source_root = Path(str(data["source_root"]))
     split_root = Path(str(data["split_root"]))
     source_sha = str(data["source_sha"])
@@ -2866,10 +2872,15 @@ def main() -> int:
     repos_by_name = {repo.name: repo for repo in repos}
     package_to_repo, member_to_package = cargo_member_packages(source_root, repos)
 
+    if not args.force:
+        for repo in repos:
+            if repo.path.exists():
+                raise SystemExit(f"{repo.path} exists; use --force to replace generated repo")
+
+    write_root_manifest_copy(manifest_path, split_root)
+
     for repo in repos:
         if repo.path.exists():
-            if not args.force:
-                raise SystemExit(f"{repo.path} exists; use --force to replace generated repo")
             if split_root not in repo.path.parents:
                 raise SystemExit(f"refusing to remove path outside split root: {repo.path}")
             shutil.rmtree(repo.path)
