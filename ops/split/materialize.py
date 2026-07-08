@@ -2118,10 +2118,12 @@ hard_count = len(hard) if isinstance(hard, list) else int(hard or 0)
 errors = []
 if hard_count:
     errors.append(f"hard findings present: {hard_count}")
-# Monorepo posture: committed-baseline ratchet (no absolute floor). The source
-# monorepo itself scores below 85 and gates on no-regression vs an accepted
-# baseline. A repo passes when it has no hard findings, does not regress below
-# its committed baseline score, and introduces no cap not already accepted.
+# Split posture: committed-baseline ratchet + enforced absolute floor. A repo
+# passes when it has no hard findings, does not regress below its committed
+# baseline score, introduces no cap not already accepted, and scores at or
+# above the policy floor (minimum_score, default 85). Setting
+# floor_enforced = false in agent/audit-policy.toml is the documented infra
+# exemption (operator/infra control-plane repos only).
 baseline_path = Path("agent/jankurai-baseline.json")
 if baseline_path.exists():
     baseline = json.loads(baseline_path.read_text())
@@ -2139,6 +2141,9 @@ else:
         errors.append(f"score {score} below minimum {minimum} with no committed baseline and no documented caps")
     if undocumented:
         errors.append("undocumented caps present: " + ", ".join(sorted(undocumented)))
+floor = int(policy.get("minimum_score", 85))
+if bool(policy.get("floor_enforced", True)) and score < floor:
+    errors.append(f"score {score} below enforced absolute floor {floor}")
 if errors:
     print("score check failed: " + "; ".join(errors), file=sys.stderr)
     sys.exit(1)
