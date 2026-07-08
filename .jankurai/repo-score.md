@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1783395548`
-- Started at: `1783395548`
-- Elapsed: `1092` ms
+- Run ID: `1783498096`
+- Started at: `1783498096`
+- Elapsed: `861` ms
 - Scope: `full`
 - Raw score: `54`
 - Final score: `54`
@@ -81,10 +81,10 @@
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
-| `ExactUnitDifferentName` | `Warning` | `python` | 1 | 5 | `ops/split/materialize.py:530-531, ops/split/materialize.py:590-591, ops/split/materialize.py:654-655, ops/split/materialize.py:736-737, ops/split/materialize.py:782-783, ops/split/materialize.py:803-804, ops/split/materialize.py:858-859, ops/split/materialize.py:893-894, ops/split/materialize.py:931-932, ops/split/materialize.py:1591-1592, ops/split/materialize.py:1610-1611, ops/split/materialize.py:1619-1620, ops/split/materialize.py:1661-1662` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `python` | 1 | 5 | `ops/split/materialize.py:554-555, ops/split/materialize.py:614-615, ops/split/materialize.py:678-679, ops/split/materialize.py:760-761, ops/split/materialize.py:806-807, ops/split/materialize.py:827-828, ops/split/materialize.py:882-883, ops/split/materialize.py:917-918, ops/split/materialize.py:955-956, ops/split/materialize.py:1617-1618, ops/split/materialize.py:1636-1637, ops/split/materialize.py:1645-1646, ops/split/materialize.py:1687-1688` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `python` | 2 | 10 | `ops/split/bump-family-version.py:24-28, ops/split/reconcile.py:28-32, ops/split/source_coverage.py:17-21` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `python` | 2 | 10 | `ops/split/reconcile.py:28-32, ops/split/source_coverage.py:17-21` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `python` | 1 | 6 | `ops/split/materialize.py:514-516, ops/split/materialize.py:978-980` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `python` | 1 | 6 | `ops/split/materialize.py:536-538, ops/split/materialize.py:1002-1004` | `same body appears under different names across files` |
 
 ## Dimensions
 
@@ -298,7 +298,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just security`
    Fingerprint: `sha256:8628841209a56c44ffcd0e024981ce40454a9d48982668c1ec12ecec20a31bd1`
    Evidence: tok="$(grep -m1 'x-access-token:' "$f" 2>/dev/null | sed -E 's#https://x-access-token:([^@]+)@.*#\1#')"
-14. `medium` `proof` `ops/split/materialize.py:2229`
+14. `medium` `proof` `ops/split/materialize.py:2255`
    Rule: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP`
    Check: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof` `soft` confidence `0.88`
    Route: TLR `Repair`, lane `audit`, owner `split`
