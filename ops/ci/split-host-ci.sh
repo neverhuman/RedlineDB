@@ -22,9 +22,20 @@ SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
 [ -d "$SPLIT_ROOT/jain-core" ] || { printf '[split-host-ci] JAIN_SPLIT_ROOT=%s is not a split family root (no jain-core/)\n' "$SPLIT_ROOT" >&2; exit 2; }
 
 say() { printf '[split-host-ci] %s\n' "$*" >&2; }
+# Posting a check-run is a WRITE, so the forge requires the local merge token (Bearer).
+# JERYU_MERGE_TOKEN overrides; otherwise read the canonical token file. Without it the POST
+# 401s and the run's status never reaches the forge.
+jeryu_token() {
+  if [ -n "${JERYU_MERGE_TOKEN:-}" ]; then printf '%s' "$JERYU_MERGE_TOKEN"; return; fi
+  local f="${JERYU_MERGE_TOKEN_FILE:-$HOME/.jeryu/secrets/merge-token}"
+  [ -r "$f" ] && tr -d '\n' < "$f"
+}
 post_check() {
-  local conclusion="$1"
+  local conclusion="$1" token
+  token="$(jeryu_token)"
+  if [ -z "$token" ]; then say "WARN: no merge token; cannot post check-run"; return; fi
   curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
+    -H "Authorization: Bearer $token" \
     -H 'content-type: application/json' \
     -d "{\"name\":\"$CHECK\",\"head_sha\":\"$SHA\",\"status\":\"completed\",\"conclusion\":\"$conclusion\"}" \
     >/dev/null && say "posted $CHECK=$conclusion on ${SHA:0:8}" || say "WARN: failed to post check-run"
