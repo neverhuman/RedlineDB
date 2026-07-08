@@ -33,12 +33,23 @@ jeryu_token() {
 post_check() {
   local conclusion="$1" token
   token="$(jeryu_token)"
-  if [ -z "$token" ]; then say "WARN: no merge token; cannot post check-run"; return; fi
+  if [ -z "$token" ]; then say "WARN: no merge token; cannot post status"; return; fi
+  # A check-run is the human-facing run record.
   curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
     -H "Authorization: Bearer $token" \
     -H 'content-type: application/json' \
     -d "{\"name\":\"$CHECK\",\"head_sha\":\"$SHA\",\"status\":\"completed\",\"conclusion\":\"$conclusion\"}" \
-    >/dev/null && say "posted $CHECK=$conclusion on ${SHA:0:8}" || say "WARN: failed to post check-run"
+    >/dev/null && say "posted check-run $CHECK=$conclusion on ${SHA:0:8}" || say "WARN: failed to post check-run"
+  # Branch protection gates on a COMMIT STATUS (required_status_checks.contexts), which is a
+  # DIFFERENT object from a check-run — without it a protected merge fails MissingStatusCheck.
+  # The status must be keyed on the FULL head sha the PR records (short shas do not match).
+  local status_state="failure"
+  [ "$conclusion" = "success" ] && status_state="success"
+  curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/statuses/$SHA" \
+    -H "Authorization: Bearer $token" \
+    -H 'content-type: application/json' \
+    -d "{\"state\":\"$status_state\",\"context\":\"$CHECK\",\"description\":\"$CHECK via split-host-ci\"}" \
+    >/dev/null && say "posted status $CHECK=$status_state on ${SHA:0:8}" || say "WARN: failed to post status"
 }
 
 [ -e "$REPO_PATH/.git" ] || { echo "not a git repo: $REPO_PATH" >&2; exit 2; }
