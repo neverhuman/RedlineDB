@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:947f0b8aecb5e8e5b09b529e4fe3967967ea9ef85e1be00f60767e1dc31de40b",
-  "input_fingerprint": "sha256:3f078a3c589c5e16a400bcfab3d7efe1590011bf857ef488565f8255ea205dcb",
+  "report_fingerprint": "sha256:392940b1ea7370eb1233bd8b8bb466c74d4d5c20dadf4eb2ff0df9d3a16dfbf6",
+  "input_fingerprint": "sha256:dd28c50d40506297e6c5d4b8879cc32c0a98b900528ef0a15385989b64ed4ea7",
   "policy_fingerprint": "sha256:69ae86ce07eebfe8c602bcf7a7f5c72841f9fade91df6d2b54ec4d20aa7a341e",
   "manifest_fingerprints": {
     "owner_map": "sha256:3e6421b4278fb1da648babbd40e280b47a884618ac092bee96ffe2a3f3151657",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:2f8372ad169351387d66865089c612b49a3115432e711bcda03645d6a6f422a8"
   },
   "dirty_worktree": true,
-  "generated_at": "1783498096",
+  "generated_at": "1783499127",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -26,27 +26,26 @@
   "conformance_blockers": [
     "HLT-004-UNMAPPED-PROOF on .",
     "HLT-000-SCORE-DIMENSION:proof on .",
-    "HLT-025-RELEASE-READINESS-GAP on docs/release.md",
-    "HLT-010-SECRET-SPRAWL on ops/lib.sh"
+    "HLT-025-RELEASE-READINESS-GAP on docs/release.md"
   ],
   "repo": ".",
-  "run_id": "1783498096",
-  "started_at": "1783498096",
-  "elapsed_ms": 861,
+  "run_id": "1783499127",
+  "started_at": "1783499127",
+  "elapsed_ms": 1589,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 54,
-  "raw_score": 54,
+  "score": 57,
+  "raw_score": 57,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
-    "soft_findings": 15,
+    "soft_findings": 14,
     "ratchet": {
-      "baseline_score": 54,
+      "baseline_score": 57,
       "allowed_drop": 0,
       "passed": false,
       "score_delta": 0,
@@ -59,7 +58,7 @@
     }
   },
   "git": {
-    "head": "99b047a",
+    "head": "c606700",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -80,7 +79,6 @@
   "caps_applied": [
     "no-one-command-setup-or-validation",
     "no-deterministic-fast-lane",
-    "secret-like-content-detected",
     "release-readiness-gap",
     "missing-agent-readable-docs"
   ],
@@ -291,11 +289,13 @@
     {
       "name": "Contract and boundary integrity",
       "weight": 13,
-      "score": 60,
-      "weighted_points": 7.8,
+      "score": 80,
+      "weighted_points": 10.4,
       "evidence": [
+        "contract surface found",
         "generated contract artifacts found",
-        "boundary manifest present"
+        "boundary manifest present",
+        "all contract sources have generated zone entries"
       ],
       "notes": []
     },
@@ -423,14 +423,18 @@
     "has_rendered_ux_lane": true,
     "missing_categories": [],
     "evidence": {
-      "accessibility": [],
+      "accessibility": [
+        ".jankurai/repo-score.json"
+      ],
       "api_mocks": [],
       "artifact_backed_proof": [],
       "design_tokens": [],
       "geometry_runtime": [],
       "layout_stability": [],
       "playwright_visual": [],
-      "storybook": [],
+      "storybook": [
+        ".jankurai/repo-score.json"
+      ],
       "visual_review": []
     }
   },
@@ -955,7 +959,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-08T08:08:15.978363437+00:00",
+    "generated_at": "2026-07-08T08:25:25.961911900+00:00",
     "repo": ".",
     "auditor_version": "1.6.10",
     "status": "review",
@@ -993,7 +997,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 49,
+      "files_scanned": 51,
       "files_considered": 4,
       "active_files": 4,
       "exact_file_classes": 0,
@@ -1508,6 +1512,30 @@
     },
     {
       "severity": "medium",
+      "category": "proof",
+      "path": ".jankurai/repo-score.json",
+      "problem": "human review or proof claim lacks reproducible evidence",
+      "agent_fix": "attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries",
+      "evidence": [
+        "\"# evidence rather than a fabricated \\\"checked\\\" log.\""
+      ],
+      "check_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "receipt",
+      "rerun_command": "just score",
+      "fingerprint": "sha256:5b55f43ef5b9cb399e5b35dbd162949c853bb1e3088338f2f09cf9a96a0e5e32",
+      "rule_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP",
+      "tlr": "Repair",
+      "lane": "audit",
+      "docs_url": "docs/testing.md",
+      "owner": "audit",
+      "line": 1743,
+      "matched_term": "review evidence",
+      "reason": "proof and review claims need receipts"
+    },
+    {
+      "severity": "medium",
       "category": "context",
       "path": "AGENTS.md",
       "problem": "`Context economy and agent instructions` scored 53 below the standard floor of 85",
@@ -1556,18 +1584,20 @@
       "severity": "medium",
       "category": "boundary",
       "path": "agent/boundaries.toml",
-      "problem": "`Contract and boundary integrity` scored 60 below the standard floor of 85",
+      "problem": "`Contract and boundary integrity` scored 80 below the standard floor of 85",
       "agent_fix": "add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams",
       "evidence": [
+        "contract surface found",
         "generated contract artifacts found",
-        "boundary manifest present"
+        "boundary manifest present",
+        "all contract sources have generated zone entries"
       ],
       "check_id": "HLT-007-HANDWRITTEN-CONTRACT:boundary",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "contract-manifest",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:1e836440225e4203c31f0e8dc92e1941957ee8468d11b126521f4ff7a671bf04",
+      "fingerprint": "sha256:903431346d57fc74372397dbc2f24a8cb6be92064e4afaad562725d6db5d272e",
       "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
       "tlr": "Contracts/data",
       "lane": "contract",
@@ -1712,52 +1742,6 @@
       "owner": "ops"
     },
     {
-      "severity": "critical",
-      "category": "security",
-      "path": "ops/lib.sh",
-      "problem": "secret-like value or credential material appears in repository text",
-      "agent_fix": "remove and rotate the credential, add local and CI secret scanning, and scan transcripts/artifacts/MCP config for related exposure",
-      "evidence": [
-        "tok=\"$(grep -m1 'x-access-token:' \"$f\" 2>/dev/null | sed -E 's#https://x-access-token:([^@]+)@.*#\\1#')\""
-      ],
-      "check_id": "HLT-010-SECRET-SPRAWL:security",
-      "hardness": "hard",
-      "confidence": 0.95,
-      "evidence_kind": "repository-scan",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:8628841209a56c44ffcd0e024981ce40454a9d48982668c1ec12ecec20a31bd1",
-      "rule_id": "HLT-010-SECRET-SPRAWL",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "ops",
-      "line": 137
-    },
-    {
-      "severity": "medium",
-      "category": "proof",
-      "path": "ops/split/materialize.py",
-      "problem": "human review or proof claim lacks reproducible evidence",
-      "agent_fix": "attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries",
-      "evidence": [
-        "# evidence rather than a fabricated \"checked\" log."
-      ],
-      "check_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof",
-      "hardness": "soft",
-      "confidence": 0.88,
-      "evidence_kind": "receipt",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:9c192cecd69293f9f6181d5407ec996b577880380c2dc940b447de2315029aa2",
-      "rule_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP",
-      "tlr": "Repair",
-      "lane": "audit",
-      "docs_url": "docs/testing.md",
-      "owner": "split",
-      "line": 2255,
-      "matched_term": "review evidence",
-      "reason": "proof and review claims need receipts"
-    },
-    {
       "severity": "medium",
       "category": "test",
       "path": "agent/coverage-sources.toml",
@@ -1790,7 +1774,7 @@
       "lane": "contract",
       "owner": "agent",
       "task": "add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams",
-      "why": "`Contract and boundary integrity` scored 60 below the standard floor of 85"
+      "why": "`Contract and boundary integrity` scored 80 below the standard floor of 85"
     },
     {
       "path": "db/",
@@ -1861,6 +1845,16 @@
       "why": "`Proof lanes and test routing` scored 40 below the standard floor of 85"
     },
     {
+      "path": ".jankurai/repo-score.json",
+      "priority": "medium",
+      "rule_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP",
+      "tlr": "Repair",
+      "lane": "audit",
+      "owner": "audit",
+      "task": "attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries",
+      "why": "human review or proof claim lacks reproducible evidence"
+    },
+    {
       "path": "docs/testing.md",
       "priority": "medium",
       "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
@@ -1869,16 +1863,6 @@
       "owner": "docs",
       "task": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
       "why": "`Observability and repair evidence` scored 49 below the standard floor of 85"
-    },
-    {
-      "path": "ops/split/materialize.py",
-      "priority": "medium",
-      "rule_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP",
-      "tlr": "Repair",
-      "lane": "audit",
-      "owner": "split",
-      "task": "attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries",
-      "why": "human review or proof claim lacks reproducible evidence"
     },
     {
       "path": "AGENTS.md",
@@ -1908,16 +1892,6 @@
       "owner": "ops",
       "task": "add `ops/AGENTS.md` with owns / forbidden / proof lane guidance",
       "why": "reference-profile cell `ops` lacks local AGENTS.md guidance"
-    },
-    {
-      "path": "ops/lib.sh",
-      "priority": "critical",
-      "rule_id": "HLT-010-SECRET-SPRAWL",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "remove and rotate the credential, add local and CI secret scanning, and scan transcripts/artifacts/MCP config for related exposure",
-      "why": "secret-like value or credential material appears in repository text"
     },
     {
       "path": ".github/workflows/jankurai.yml",

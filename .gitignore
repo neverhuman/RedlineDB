@@ -6,3 +6,6 @@ ops/split/__pycache__/
 ops/split/.pytest_cache/
 .work/
 target/
+
+# jankurai audit append-log (grows per audit; bounded to 500 rows, not source of truth)
+.jankurai/score-history.jsonl
