@@ -7,15 +7,15 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1783498096`
-- Started at: `1783498096`
-- Elapsed: `861` ms
+- Run ID: `1783499127`
+- Started at: `1783499127`
+- Elapsed: `1589` ms
 - Scope: `full`
-- Raw score: `54`
-- Final score: `54`
+- Raw score: `57`
+- Final score: `57`
 - Decision: `advisory`
 - Minimum score: `85`
-- Caps applied: `no-one-command-setup-or-validation, no-deterministic-fast-lane, secret-like-content-detected, release-readiness-gap, missing-agent-readable-docs`
+- Caps applied: `no-one-command-setup-or-validation, no-deterministic-fast-lane, release-readiness-gap, missing-agent-readable-docs`
 
 ## Hard Rule Caps
 
@@ -43,7 +43,7 @@
 | `missing-rendered-ux-qa-lane` | 84 | no |
 | `prompt-injection-risk` | 78 | no |
 | `overbroad-agent-agency` | 65 | no |
-| `secret-like-content-detected` | 60 | yes |
+| `secret-like-content-detected` | 60 | no |
 | `false-green-test-risk` | 76 | no |
 | `destructive-migration-risk` | 70 | no |
 | `authz-or-data-isolation-gap` | 78 | no |
@@ -91,7 +91,7 @@
 | Dimension | Weight | Score | Weighted | Evidence |
 | --- | ---: | ---: | ---: | --- |
 | Ownership and navigation surface | 13 | 88 | 11.44 | root `AGENTS.md` present; owner map present |
-| Contract and boundary integrity | 13 | 60 | 7.80 | generated contract artifacts found; boundary manifest present |
+| Contract and boundary integrity | 13 | 80 | 10.40 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 40 | 4.80 | test/proof routing map present; web e2e lane present or no web surface |
 | Security and supply-chain posture | 12 | 14 | 1.68 | git bad-behavior advisory signals: 1 |
 | Code shape and semantic surface | 12 | 90 | 10.80 | no authored adopter product code files in scope |
@@ -199,7 +199,18 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just security`
    Fingerprint: `sha256:b723f587f079b9bcafd978d4da66f53f3dd5977c366abe6683621ebebee67dd9`
    Evidence: git bad-behavior advisory signals: 1, no explicit security lane found, CI does not run the jankurai audit
-4. `medium` `context` `AGENTS.md`
+4. `medium` `proof` `.jankurai/repo-score.json:1743`
+   Rule: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP`
+   Check: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof` `soft` confidence `0.88`
+   Route: TLR `Repair`, lane `audit`, owner `audit`
+   Docs: `docs/testing.md`
+   Matched term: `review evidence`
+   Reason: proof and review claims need receipts
+   Fix: attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
+   Rerun: `just score`
+   Fingerprint: `sha256:5b55f43ef5b9cb399e5b35dbd162949c853bb1e3088338f2f09cf9a96a0e5e32`
+   Evidence: "# evidence rather than a fabricated \"checked\" log."
+5. `medium` `context` `AGENTS.md`
    Rule: `HLT-015-CONTEXT-SETUP-GAP`
    Check: `HLT-015-CONTEXT-SETUP-GAP:context` `soft` confidence `0.76`
    Route: TLR `Context/setup`, lane `fast`, owner `split`
@@ -209,7 +220,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:1f5ed0a8668b1fcdb92bfe0ca907cd220a718aa2504964b369ebe6b480ba01bc`
    Evidence: root `AGENTS.md` present, root `AGENTS.md` stays short, machine-readable routing artifacts present, missing agent-readable docs: README.md, docs/architecture.md or docs/boundaries.md
-5. `medium` `proof` `Justfile`
+6. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `fast`, owner `workspace`
@@ -219,17 +230,17 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:0cf9476a83002d0f15381836511b813d73708c221d9dfc8a5f807059e514534d`
    Evidence: missing one-command setup/validation, missing deterministic fast lane
-6. `medium` `boundary` `agent/boundaries.toml`
+7. `medium` `boundary` `agent/boundaries.toml`
    Rule: `HLT-007-HANDWRITTEN-CONTRACT`
    Check: `HLT-007-HANDWRITTEN-CONTRACT:boundary` `soft` confidence `0.76`
    Route: TLR `Contracts/data`, lane `contract`, owner `agent`
    Docs: `docs/audit-rubric.md#known-vibe-coding-insults`
-   Reason: `Contract and boundary integrity` scored 60 below the standard floor of 85
+   Reason: `Contract and boundary integrity` scored 80 below the standard floor of 85
    Fix: add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams
    Rerun: `just fast`
-   Fingerprint: `sha256:1e836440225e4203c31f0e8dc92e1941957ee8468d11b126521f4ff7a671bf04`
-   Evidence: generated contract artifacts found, boundary manifest present
-7. `medium` `proof` `agent/test-map.json`
+   Fingerprint: `sha256:903431346d57fc74372397dbc2f24a8cb6be92064e4afaad562725d6db5d272e`
+   Evidence: contract surface found, generated contract artifacts found, boundary manifest present, all contract sources have generated zone entries
+8. `medium` `proof` `agent/test-map.json`
    Rule: `HLT-004-UNMAPPED-PROOF`
    Check: `HLT-004-UNMAPPED-PROOF:proof` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `fast`, owner `agent`
@@ -239,7 +250,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:06d368e66fae00d47a778c1f0c4f495dcb8d12a4effdd09cdd560b16c04fb815`
    Evidence: test/proof routing map present, web e2e lane present or no web surface, rendered UX QA lane present or no web surface, Rust property/integration tests present or no Rust surface
-8. `medium` `data` `db/`
+9. `medium` `data` `db/`
    Rule: `HLT-006-DIRECT-DB-WRONG-LAYER`
    Check: `HLT-006-DIRECT-DB-WRONG-LAYER:data` `soft` confidence `0.76`
    Route: TLR `Contracts/data`, lane `db`, owner `tools`
@@ -249,7 +260,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:6dc277f838aa42b508c136f6ba666d602ecefe226bc4c238b24388640ee21f82`
    Evidence: Data truth and workflow safety scored 50
-9. `medium` `docs` `docs/`
+10. `medium` `docs` `docs/`
    Check: `HLT-000-SCORE-DIMENSION:docs` `soft` confidence `0.76`
    Route: TLR `Context/setup`, lane `audit`, owner `docs`
    Reason: agent-readable documentation is incomplete
@@ -257,7 +268,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:fb48933eb532f63be52604fcb6cffc8a5bf25cd4fb4c1a66c86445ba4fa1017b`
    Evidence: README.md, docs/architecture.md or docs/boundaries.md
-10. `high` `release` `docs/release.md`
+11. `high` `release` `docs/release.md`
    Rule: `HLT-025-RELEASE-READINESS-GAP`
    Check: `HLT-025-RELEASE-READINESS-GAP:release` `hard` confidence `0.88`
    Route: TLR `Verification`, lane `release`, owner `docs`
@@ -268,7 +279,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just check`
    Fingerprint: `sha256:c7eefce130f9057e693ec4f1e52a32ae746bb45e440d5f623037f50ad020472e`
    Evidence: release structure missing: changelog, release process doc
-11. `medium` `observability` `docs/testing.md`
+12. `medium` `observability` `docs/testing.md`
    Rule: `HLT-017-OPAQUE-OBSERVABILITY`
    Check: `HLT-017-OPAQUE-OBSERVABILITY:observability` `soft` confidence `0.76`
    Route: TLR `Repair`, lane `observability`, owner `docs`
@@ -278,7 +289,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:277f6c3e13b5b169dafcbc2723092aae7fd5a6881d4d80c40f399f3d1cd8eed1`
    Evidence: ops/observability directory present, repair receipts or raw artifact language found, repair receipt guidance is documented, no agent-friendly exception pattern found
-12. `medium` `context` `ops/`
+13. `medium` `context` `ops/`
    Rule: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP`
    Check: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP:context` `soft` confidence `0.88`
    Route: TLR `Context/setup`, lane `fast`, owner `ops`
@@ -288,28 +299,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:197b917ee375c1b861069568a8977bd8fb2f0322911c4599fd66b26013bf7cd6`
    Evidence: canonical_path=ops/, detected_paths=ops, guidance_status=missing, owner=ops, proof_lane=security lane / workflow lint
-13. `critical` `security` `ops/lib.sh:137`
-   Rule: `HLT-010-SECRET-SPRAWL`
-   Check: `HLT-010-SECRET-SPRAWL:security` `hard` confidence `0.95`
-   Route: TLR `Security, secrets, agency`, lane `security`, owner `ops`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Reason: secret-like value or credential material appears in repository text
-   Fix: remove and rotate the credential, add local and CI secret scanning, and scan transcripts/artifacts/MCP config for related exposure
-   Rerun: `just security`
-   Fingerprint: `sha256:8628841209a56c44ffcd0e024981ce40454a9d48982668c1ec12ecec20a31bd1`
-   Evidence: tok="$(grep -m1 'x-access-token:' "$f" 2>/dev/null | sed -E 's#https://x-access-token:([^@]+)@.*#\1#')"
-14. `medium` `proof` `ops/split/materialize.py:2255`
-   Rule: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP`
-   Check: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof` `soft` confidence `0.88`
-   Route: TLR `Repair`, lane `audit`, owner `split`
-   Docs: `docs/testing.md`
-   Matched term: `review evidence`
-   Reason: proof and review claims need receipts
-   Fix: attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
-   Rerun: `just score`
-   Fingerprint: `sha256:9c192cecd69293f9f6181d5407ec996b577880380c2dc940b447de2315029aa2`
-   Evidence: # evidence rather than a fabricated "checked" log.
-15. `medium` `test` `agent/coverage-sources.toml`
+14. `medium` `test` `agent/coverage-sources.toml`
    Rule: `HLT-008-FALSE-GREEN-RISK`
    Check: `HLT-008-FALSE-GREEN-RISK:coverage-evidence` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `coverage-audit`, owner `agent`
@@ -345,17 +335,15 @@ No audited runtime boundary reclassifications declared.
    Route: `Verification`/`coverage-audit`
 8. `medium` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - route each owned path to a deterministic proof command and make the lane executable in CI
    Route: `Verification`/`fast`
-9. `medium` `HLT-017-OPAQUE-OBSERVABILITY` `docs/testing.md` - add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof
-   Route: `Repair`/`observability`
-10. `medium` `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP` `ops/split/materialize.py` - attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
+9. `medium` `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP` `.jankurai/repo-score.json` - attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
    Route: `Repair`/`audit`
+10. `medium` `HLT-017-OPAQUE-OBSERVABILITY` `docs/testing.md` - add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof
+   Route: `Repair`/`observability`
 11. `medium` `HLT-015-CONTEXT-SETUP-GAP` `AGENTS.md` - keep root guidance short and route durable detail through agent-readable manifests and docs
    Route: `Context/setup`/`fast`
 12. `medium` `docs/` - add concise docs for architecture, boundaries, tests, generated zones, and audit rules; route them from root `AGENTS.md`
    Route: `Context/setup`/`audit`
 13. `medium` `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP` `ops/` - add `ops/AGENTS.md` with owns / forbidden / proof lane guidance
    Route: `Context/setup`/`fast`
-14. `critical` `HLT-010-SECRET-SPRAWL` `ops/lib.sh` - remove and rotate the credential, add local and CI secret scanning, and scan transcripts/artifacts/MCP config for related exposure
-   Route: `Security, secrets, agency`/`security`
-15. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
+14. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
    Route: `Security, secrets, agency`/`security`

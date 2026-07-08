@@ -126,17 +126,15 @@ post_check() {
     >/dev/null 2>&1
 }
 
-# Resolve a GitHub token for the offsite relay (neverhuman identity).
-# Prefer the LIVE gh-authenticated token; the .git-credentials-jeryu file holds a
-# stale gho_ token that github now rejects.
+# Resolve a GitHub token for the offsite relay (neverhuman identity): the explicit
+# env override, else the live gh-authenticated token. Deliberately NO credential-file
+# scraping — the old third arm grepped /home/ubuntu/.git-credentials-jeryu (a stale
+# gho_ token GitHub already rejects), which is both dead weight and exactly the
+# credential-hunting pattern the access policy forbids. If neither source yields a
+# token, callers fail closed; re-auth with `gh auth login`.
 github_token() {
   if [[ -n "${GH_RELAY_TOKEN:-}" ]]; then printf '%s' "$GH_RELAY_TOKEN"; return; fi
-  local t; t="$(gh auth token 2>/dev/null)"; [[ -n "$t" ]] && { printf '%s' "$t"; return; }
-  local f=/home/ubuntu/.git-credentials-jeryu tok
-  if [[ -r "$f" ]]; then
-    tok="$(grep -m1 'x-access-token:' "$f" 2>/dev/null | sed -E 's#https://x-access-token:([^@]+)@.*#\1#')"
-    [[ -n "$tok" ]] && printf '%s' "$tok"
-  fi
+  gh auth token 2>/dev/null || true
 }
 
 # Abort only if a url.*.insteadOf rewrite points at the DEAD gitea endpoint
