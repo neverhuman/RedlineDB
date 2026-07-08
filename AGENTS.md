@@ -20,3 +20,23 @@ remote; this repo only orchestrates them.
   `ops_root` from `$BASH_SOURCE/../..`) so it is relocatable.
 - Bootstrap: clone this repo, then `python3 ops/split/materialize.py --manifest
   repos.manifest.toml` materializes the family into `JAIN_SPLIT_ROOT`.
+
+## Local Jeryu Forge Workflow
+
+Local Jain/Jeryu remotes use `http://127.0.0.1:8787/git/jeryu/<repo>.git`.
+For that host, do not run `gh auth login` and do not use generic GitHub.com
+connector tools. If `gh` host auth is stale, repair it with:
+
+```bash
+jeryu gh-setup --host http://127.0.0.1:8787 --token-file ~/.jeryu/secrets/merge-token
+```
+
+For PRs, checks, and merges, use `jeryu.*` MCP tools when they are exposed. If
+they are not exposed, use the local Jeryu REST API with `Authorization: Bearer
+<merge-token>` from `~/.jeryu/secrets/merge-token`.
+
+Use `curl http://127.0.0.1:8787/health` for a health check and authenticated
+`GET /.jeryu/capabilities` to inspect local forge policy. Run or post split CI
+through `/home/ubuntu/jain-split/jain-split-ops/ops/ci/split-host-ci.sh`, not
+GitHub Actions, unless an explicit GitHub mirror workflow is requested.
+

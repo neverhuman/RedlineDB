@@ -103,8 +103,12 @@ def test_root_lock_schema_and_stage_context_generation() -> None:
     assert "target/jankurai/accepted-baseline.json" in source
     assert "target/jankurai/accepted-baseline.md" in source
     assert "/.jankurai/" in source
-    assert '"status":"pass"' in source
-    assert '"metrics":{"checks_total":4,"required_failures":0}' in source
+    assert "status=pass; [[ $fail -eq 0 ]] || status=fail" in source
+    assert '"status":"$status"' in source
+    assert (
+        '"metrics":{"tabpfn_hits":$tabpfn_hits,'
+        '"fallback_advisory_files":$fallback_files}'
+    ) in source
 
 
 def test_local_mirror_config_uses_exact_github_urls(tmp_path: Path) -> None:

@@ -511,6 +511,28 @@ rollback evidence are published by `neverhuman/jain-deploy`:
 """
 
 
+def render_local_jeryu_forge_workflow() -> str:
+    return """## Local Jeryu Forge Workflow
+
+Local Jain/Jeryu remotes use `http://127.0.0.1:8787/git/jeryu/<repo>.git`.
+For that host, do not run `gh auth login` and do not use generic GitHub.com
+connector tools. If `gh` host auth is stale, repair it with:
+
+```bash
+jeryu gh-setup --host http://127.0.0.1:8787 --token-file ~/.jeryu/secrets/merge-token
+```
+
+For PRs, checks, and merges, use `jeryu.*` MCP tools when they are exposed. If
+they are not exposed, use the local Jeryu REST API with `Authorization: Bearer
+<merge-token>` from `~/.jeryu/secrets/merge-token`.
+
+Use `curl http://127.0.0.1:8787/health` for a health check and authenticated
+`GET /.jeryu/capabilities` to inspect local forge policy. Run or post split CI
+through `/home/ubuntu/jain-split/jain-split-ops/ops/ci/split-host-ci.sh`, not
+GitHub Actions, unless an explicit GitHub mirror workflow is requested.
+"""
+
+
 def render_portal_agents(repo: Repo) -> str:
     return f"""# {repo.name} Agent Instructions
 
@@ -524,6 +546,8 @@ Before editing, read `README.md`, `agent/owner-map.json`,
 Keep this repository lightweight: installer, clone-family entrypoint, local CI
 wrappers, and audit metadata only. Product source belongs in the split member
 repositories, and release authority belongs in `jain-deploy`.
+
+{render_local_jeryu_forge_workflow()}
 """
 
 
@@ -991,6 +1015,8 @@ on `import/dirty-*` branches or as explicit patches after baseline checks pass.
 Cross-repo Rust dependencies are pinned Git dependencies using
 `*-v7.0.1-split.0` tags. Only `jain-deploy` may use local sibling path patches
 for split-family development.
+
+{render_local_jeryu_forge_workflow()}
 """
 
 

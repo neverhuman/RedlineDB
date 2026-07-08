@@ -87,7 +87,7 @@ Generated: 2026-07-06
 - Local forge `gh` auth is invalid for `127.0.0.1:8787`:
   - active account `jeryu`
   - token in `/home/ubuntu/.config/gh/hosts.yml` is invalid
-  - required repair: `gh auth login -h 127.0.0.1:8787`
+  - required repair: `jeryu gh-setup --host http://127.0.0.1:8787 --token-file ~/.jeryu/secrets/merge-token`
 - GitHub auth is not configured in `gh auth status` output.
 - Git remotes in source:
   - `origin` = `http://127.0.0.1:8787/git/jeryu/jain.git`
@@ -96,7 +96,7 @@ Generated: 2026-07-06
 
 ## Blockers Before Forge/GitHub Proof
 
-- Refresh local forge `gh` auth.
+- Refresh local forge `gh` auth with `jeryu gh-setup --host http://127.0.0.1:8787 --token-file ~/.jeryu/secrets/merge-token`; do not run `gh auth login` for the local Jeryu host.
 - Configure GitHub `gh` auth before mirror creation or trial PR work.
 - Confirm GitHub LFS quota policy for `neverhuman/jain-starforge`; GitHub Starforge LFS upload remains disabled until explicitly approved.
 - Install or vendor the missing runner tools listed above before running full PDF, TOML, Dockerfile, public API, and semver lanes.
