@@ -61,13 +61,18 @@ def bump_manifest(path: Path, old: str, new: str) -> None:
 def bump_repo_files(data: dict, old: str, new: str) -> None:
     old_tag = f"v{old}-split.0"
     new_tag = f"v{new}-split.0"
+    # A dep pin may sit on ANY split revision of the old version, not just `.0`: a repo whose
+    # feat-core pin was refreshed out-of-band carries e.g. `v7.0.1-split.1`. Matching the literal
+    # `.0` would leave that pin behind on the previous version's core — the exact drift this
+    # family bump exists to end. Match every revision.
+    old_tag_any_rev = re.compile(rf"v{re.escape(old)}-split\.\d+")
     for root in repo_paths(data):
         rewrite(root / "VERSION", lambda _: f"{root.name}-{new_tag}\n")
         rewrite(root / "Cargo.toml", lambda text: text.replace(f'version = "{old}"', f'version = "{new}"', 1))
         for toml in root.rglob("Cargo.toml"):
             if "target" in toml.parts:
                 continue
-            rewrite(toml, lambda text: text.replace(old_tag, new_tag))
+            rewrite(toml, lambda text: old_tag_any_rev.sub(new_tag, text))
         changelog = root / "CHANGELOG.md"
         if changelog.exists() and new_tag not in changelog.read_text(encoding="utf-8"):
             entry = f"## {root.name}-{new_tag}\n\n- Split-family release pin refresh.\n\n"

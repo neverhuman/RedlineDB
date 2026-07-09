@@ -7,6 +7,15 @@ cd "$(git rev-parse --show-toplevel)"
 
 lane="${1:-required}"
 case "$lane" in
+  jeryu-doctor) python3 ops/split/jeryu-doctor.py ;;
+  jeryu-ready) python3 ops/split/jeryu-doctor.py --setup-auth --fix-remotes ;;
+  fast) bash ops/ci/fast.sh ;;
+  check) bash ops/ci/check.sh ;;
   required) bash ops/ci/required.sh ;;
-  *) printf 'unknown lane: %s (jain-split-ops has only: required)\n' "$lane" >&2; exit 2 ;;
+  score) bash ops/ci/score.sh ;;
+  security) bash ops/ci/security.sh ;;
+  tool-adoption) bash ops/ci/tool-adoption.sh ;;
+  contract-drift) bash ops/ci/contract-drift.sh ;;
+  artifact-support) bash ops/ci/artifact_support.sh ;;
+  *) printf 'unknown lane: %s (jain-split-ops has: jeryu-doctor, jeryu-ready, fast, check, required, score, security, tool-adoption, contract-drift, artifact-support)\n' "$lane" >&2; exit 2 ;;
 esac

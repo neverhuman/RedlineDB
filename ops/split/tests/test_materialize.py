@@ -25,6 +25,9 @@ def test_manifest_policy_and_source_coverage() -> None:
     data, repos = module.load_manifest(ROOT / "repos.manifest.toml")
     by_name = {repo.name: repo for repo in repos}
     assert len(repos) == 19
+    assert "jain-cli" in by_name
+    assert by_name["jain-cli"].cargo_members == ["crates/feat-cli"]
+    assert by_name["jain-tui"].cargo_members == ["crates/feat-tui"]
     assert data["source_sha"] == "cc27936eb45006bda0cae85b0f578f4d5985991d"
     assert by_name["jain-starforge"].mirror_github_main is False
     assert "contracts" in by_name["jain-deploy"].copy_paths
@@ -89,7 +92,8 @@ def test_root_lock_schema_and_stage_context_generation() -> None:
     assert 'schema_version = "1.0.0"' in lock
     assert 'family = "jain"' in lock
     assert 'repo = "jain-core"' in lock
-    assert 'github = "https://github.com/neverhuman/jain-core.git"' in lock
+    assert 'jeryu = "http://127.0.0.1:8787/git/jeryu/jain-core.git"' in lock
+    assert "github.com/neverhuman" not in lock
     assert 'excluded_paths = [".stage/"]' in module.render_audit_policy(deploy)
     assert 'path = ".stage/"' in module.generated_zones(deploy)
     web_zones = module.generated_zones(web)
@@ -111,10 +115,36 @@ def test_root_lock_schema_and_stage_context_generation() -> None:
     ) in source
 
 
-def test_local_mirror_config_uses_exact_github_urls(tmp_path: Path) -> None:
+def test_local_mirror_config_rewrites_jeryu_and_legacy_github_urls(tmp_path: Path) -> None:
     module = load_materialize()
     _, repos = module.load_manifest(ROOT / "repos.manifest.toml")
     cfg = module.write_git_instead_of_config(tmp_path, repos[:2])
     text = cfg.read_text()
-    assert "insteadOf = https://github.com/neverhuman/jain.git" in text
+    assert "insteadOf = http://127.0.0.1:8787/git/jeryu/jain.git" in text
+    assert "insteadOf = http://127.0.0.1:8787/git/jeryu/jain.git" in text
     assert "target/bare-mirrors/jain.git" in text
+
+
+def test_generated_operational_sources_use_local_jeryu() -> None:
+    module = load_materialize()
+    _, repos = module.load_manifest(ROOT / "repos.manifest.toml")
+    by_name = {repo.name: repo for repo in repos}
+    package_to_repo = {
+        "domain": "jain-domain",
+        "feat-math": "jain-math",
+        "feat-cli": "jain-cli",
+    }
+    member_to_package = {
+        "crates/domain": "domain",
+        "crates/feat-math": "feat-math",
+        "crates/feat-cli": "feat-cli",
+    }
+    patch = module.render_patch_sections(by_name["jain-deploy"], repos, package_to_repo, member_to_package)
+    clone = module.render_clone_family_script()
+    local_patches = module.render_local_patches_example(by_name["jain-core"])
+    assert 'git/jeryu/jain-cli.git' in patch
+    assert 'remote="http://127.0.0.1:8787/git/${jeryu_slug}.git"' in clone
+    assert '[patch."http://127.0.0.1:8787/git/jeryu/jain-core.git"]' in local_patches
+    assert "github.com/neverhuman" not in patch
+    assert "git clone https://github.com/neverhuman" not in clone
+    assert "github.com/neverhuman" not in local_patches

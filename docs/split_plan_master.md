@@ -2,7 +2,7 @@
 
 **Status: authoritative.** This document supersedes `split_plan_claude.md`, `split_plan_codex.md`, and `split_plan_codex_redteam_claude.md` (kept for lineage). It is the single spec an implementing agent (or fleet of agents) executes.
 
-- **Source monorepo**: `/home/ubuntu/jain_small` — forge slug `jeryu/jain`, origin `http://127.0.0.1:8787/git/jeryu/jain.git`, github mirror `git@github.com:neverhuman/jain.git`. Workspace version **7.0.1**. Seed commit **`cc27936eb45006bda0cae85b0f578f4d5985991d`** (branch `apex`). **The monorepo is READ-ONLY for this entire effort.**
+- **Source monorepo**: `/home/ubuntu/jain_small` — forge slug `jeryu/jain`, origin `http://127.0.0.1:8787/git/jeryu/jain.git`, github mirror `http://127.0.0.1:8787/git/jeryu/jain.git`. Workspace version **7.0.1**. Seed commit **`cc27936eb45006bda0cae85b0f578f4d5985991d`** (branch `apex`). **The monorepo is READ-ONLY for this entire effort.**
 - **Split root**: `/home/ubuntu/jain-split/` — 19 sibling repos + split tooling.
 - **Central repo**: `/home/ubuntu/jain-split/jain` — the portal that brings the family together (manifest, family.lock, fleet CI, orchestration Justfile). At cutover it takes the `jeryu/jain` slug.
 - **Family**: `repo_family = "jain-split"`, tag shape `<repo>-v7.0.1-split.N`, default branch `main` everywhere, forge owner `jeryu/*`, github mirror owner `neverhuman/*`.
@@ -131,7 +131,7 @@ just lock-regen        # scripts/regen-family-lock.sh
 
 ### 3.4 `validate-family.sh` checklist (adopted from codex, hardened)
 
-Manifest ↔ disk agreement (all 19 dirs exist, slugs match); every repo has the generated standard files (AGENTS.md, SPLIT.md, agent/owner-map.json, agent/test-map.json, agent/proof-lanes.toml, agent/audit-policy.toml, scripts/ci-local.sh, ops/ci/required.sh, thin workflow); **no `branch =` git deps anywhere**; **no cross-repo `path =` deps outside jain-deploy's `[patch]`**; every Rust repo has a committed root `Cargo.lock`; jain-web has `pnpm-lock.yaml`; workflow actions pinned to 40-char SHAs; remotes: `origin` = `http://127.0.0.1:8787/git/jeryu/<name>.git`, `github` = `git@github.com:neverhuman/<name>.git`; family.lock commits == sibling HEAD ancestry; LFS: jain-starforge safetensors are LFS-tracked AND each smudged file > 1 MB; TabPFN-free + banned-term policy files byte-identical across all 19.
+Manifest ↔ disk agreement (all 19 dirs exist, slugs match); every repo has the generated standard files (AGENTS.md, SPLIT.md, agent/owner-map.json, agent/test-map.json, agent/proof-lanes.toml, agent/audit-policy.toml, scripts/ci-local.sh, ops/ci/required.sh, thin workflow); **no `branch =` git deps anywhere**; **no cross-repo `path =` deps outside jain-deploy's `[patch]`**; every Rust repo has a committed root `Cargo.lock`; jain-web has `pnpm-lock.yaml`; workflow actions pinned to 40-char SHAs; remotes: `origin` = `http://127.0.0.1:8787/git/jeryu/<name>.git`, `github` = `http://127.0.0.1:8787/git/jeryu/<name>.git`; family.lock commits == sibling HEAD ancestry; LFS: jain-starforge safetensors are LFS-tracked AND each smudged file > 1 MB; TabPFN-free + banned-term policy files byte-identical across all 19.
 
 ### 3.5 Portal AGENTS.md (the AI-development contract, family level)
 
@@ -235,7 +235,7 @@ Below, **REQ** = the `<repo>/required` check (runs on the forge host runner via 
 - **AI NOTES**: research campaigns drive a built `jain` binary and external datasets — they run manually against a deploy-built binary (document `JAIN_BIN=~/jain-split/jain-deploy/target/release/jain`), never in CI. The scripts' `ROOT="$(cd "$OPS/../.." && pwd)"` resolution still works (monorepo-relative layout).
 
 ### 4.19 `jain-deploy` (release authority + integration home)
-- **Contents**: `deployment/ops/**` (both Dockerfiles, `assemble-runtime-assets.sh` with its Python-free rootfs guard, `starforge-artifacts.lock` + `.receipt.json`, `container-bases.lock`, `examples/examples.json`), cargo members `deployment/ops/sagemaker-ci` + authored `deployment/product/` (anchor package `jain-product`, `publish = false`, whose sole dependency is `feat-cli = { git = …jain-cli.git, tag = … }` — it puts feat-cli into deploy's graph so `cargo build -p feat-cli` works); **committed `[patch."https://github.com/neverhuman/<X>.git"]` sections for all 9 Rust repos** → `../jain-<x>/crates/<crate>` (`agent/boundaries.toml`: `local_path_patches = true` here ONLY); a committed monorepo-shaped workspace template `deployment/stage/Cargo.workspace.toml` (verbatim copy of the monorepo root Cargo.toml) + `Cargo.lock` for the Docker bundle; scripts `vendor-all.sh`, `stage-context.sh`, `get_data.sh`, `sync-base-digests.sh`.
+- **Contents**: `deployment/ops/**` (both Dockerfiles, `assemble-runtime-assets.sh` with its Python-free rootfs guard, `starforge-artifacts.lock` + `.receipt.json`, `container-bases.lock`, `examples/examples.json`), cargo members `deployment/ops/sagemaker-ci` + authored `deployment/product/` (anchor package `jain-product`, `publish = false`, whose sole dependency is `feat-cli = { git = …jain-cli.git, tag = … }` — it puts feat-cli into deploy's graph so `cargo build -p feat-cli` works); **committed `[patch."http://127.0.0.1:8787/git/jeryu/<X>.git"]` sections for all 9 Rust repos** → `../jain-<x>/crates/<crate>` (`agent/boundaries.toml`: `local_path_patches = true` here ONLY); a committed monorepo-shaped workspace template `deployment/stage/Cargo.workspace.toml` (verbatim copy of the monorepo root Cargo.toml) + `Cargo.lock` for the Docker bundle; scripts `vendor-all.sh`, `stage-context.sh`, `get_data.sh`, `sync-base-digests.sh`.
 - **REQ** (standalone, no siblings, no vendor): fmt + clippy + `cargo test -p sagemaker-ci`; `stage-context.sh --plan` (parses family.lock + prints the staging plan, offline); lock/receipt schema validation.
 - **INTEGRATION LANES** (host, `JAIN_NEEDS_SIBLINGS=1` + `JAIN_NEEDS_ARTIFACTS=1`; dispatch/cron + Stage-8 release evidence):
   - `full-binary` — §6.2 build + `jain --version` + `jain demo` smoke.
@@ -388,7 +388,7 @@ git-lfs; docker; pnpm + node; `npx playwright install` browsers; typst; python3 
 
 ### 7.4 Seed/mirror ordering (kills the tag chicken-and-egg)
 
-Consumer required lanes fetch cargo git deps from `https://github.com/neverhuman/<repo>.git` tags. Therefore: **each wave's seed `main` + tag is pushed to the forge AND GitHub immediately at registration (Stage 6), before the next wave's CI ever runs.** Seeds are pre-review bootstrap commits — pushing them unreviewed is the precedent (fresh-seeded families). `mirror_github_main` gating applies to post-seed merges only. Before any push exists at all, Stage-5 validation uses local mirrors (§8.3).
+Consumer required lanes fetch cargo git deps from `http://127.0.0.1:8787/git/jeryu/<repo>.git` tags. Therefore: **each wave's seed `main` + tag is pushed to the forge AND GitHub immediately at registration (Stage 6), before the next wave's CI ever runs.** Seeds are pre-review bootstrap commits — pushing them unreviewed is the precedent (fresh-seeded families). `mirror_github_main` gating applies to post-seed merges only. Before any push exists at all, Stage-5 validation uses local mirrors (§8.3).
 
 ## §8 Testing matrix
 
@@ -429,7 +429,7 @@ Consumer required lanes fetch cargo git deps from `https://github.com/neverhuman
 
 ### 8.3 The independence acceptance gate (Stage 5)
 
-For each repo, in a scratch `HOME` with **no siblings and no network**: local bare mirrors of all 19 seeds (materializer byproduct) + `git config url."file://$MIRRORS/<repo>.git".insteadOf "https://github.com/neverhuman/<repo>.git"` + cargo `net.git-fetch-with-cli = true` → run the full required lane. **19/19 green in isolation is the definition of "each repo fully testable without the others."** Any repo that can't pass here has a boundary bug — fix the boundary, don't add a sibling dependency.
+For each repo, in a scratch `HOME` with **no siblings and no network**: local bare mirrors of all 19 seeds (materializer byproduct) + `git config url."file://$MIRRORS/<repo>.git".insteadOf "http://127.0.0.1:8787/git/jeryu/<repo>.git"` + cargo `net.git-fetch-with-cli = true` → run the full required lane. **19/19 green in isolation is the definition of "each repo fully testable without the others."** Any repo that can't pass here has a boundary bug — fix the boundary, don't add a sibling dependency.
 
 ## §9 Rollout stages
 
@@ -548,7 +548,7 @@ source_commit = "cc27936eb45006bda0cae85b0f578f4d5985991d"
 repo = "jain-core"
 tag = "jain-core-v7.0.1-split.0"
 commit = "<actual seed/rolled sha — regenerated, never hand-edited>"
-github = "https://github.com/neverhuman/jain-core.git"
+github = "http://127.0.0.1:8787/git/jeryu/jain-core.git"
 jeryu = "http://127.0.0.1:8787/git/jeryu/jain-core.git"
 required_check = "jain-core/required"
 ```

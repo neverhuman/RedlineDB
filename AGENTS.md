@@ -23,20 +23,42 @@ remote; this repo only orchestrates them.
 
 ## Local Jeryu Forge Workflow
 
-Local Jain/Jeryu remotes use `http://127.0.0.1:8787/git/jeryu/<repo>.git`.
-For that host, do not run `gh auth login` and do not use generic GitHub.com
-connector tools. If `gh` host auth is stale, repair it with:
+The Jain workspace is `/home/ubuntu/jain-split`. Do not use `~/jeryu-split` as
+an operational source for Jain work; it is a precedent/product checkout, not a
+member of this family.
+
+Use normal Git commands against the local loopback Jeryu remote. Git credentials
+are already supplied by local Git/HTTP credential storage, so fetch/push should
+be fast and should not require agent-visible token handling.
+
+Canonical repo remote:
+`http://127.0.0.1:8787/git/jeryu/<repo>.git`.
+
+For a quick check:
 
 ```bash
-jeryu gh-setup --host http://127.0.0.1:8787 --token-file ~/.jeryu/secrets/merge-token
+git remote -v
+git ls-remote origin HEAD
 ```
 
-For PRs, checks, and merges, use `jeryu.*` MCP tools when they are exposed. If
-they are not exposed, use the local Jeryu REST API with `Authorization: Bearer
-<merge-token>` from `~/.jeryu/secrets/merge-token`.
+If a repo remote is wrong or Git is slow/failing, run the Jain control-plane
+repair once:
 
-Use `curl http://127.0.0.1:8787/health` for a health check and authenticated
-`GET /.jeryu/capabilities` to inspect local forge policy. Run or post split CI
+```bash
+cd /home/ubuntu/jain-split/jain-split-ops
+just jeryu-ready
+```
+
+That command checks the local forge, removes extra remotes from every live
+checkout, sets `origin` to local Jeryu, registers Jain family metadata, and runs
+the family policy validator. Do not inspect `~/.jeryu`, run `gh auth login`, or
+copy source from Jeryu internals.
+
+For PRs, checks, and merges, use `jeryu.*` MCP tools when they are exposed. If
+they are not exposed, use
+`/home/ubuntu/jain-split/jain-split-ops/ops/split/jeryu-local.py` or the
+`just jeryu-*` recipes from the control-plane repo.
+
+Use `just jeryu-doctor` for a read-only health check. Run or post split CI
 through `/home/ubuntu/jain-split/jain-split-ops/ops/ci/split-host-ci.sh`, not
 GitHub Actions, unless an explicit GitHub mirror workflow is requested.
-

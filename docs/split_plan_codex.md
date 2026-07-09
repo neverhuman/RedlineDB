@@ -202,7 +202,7 @@ The materializer must:
 12. Create annotated tag `<repo>-v7.0.1-split.0`.
 13. Add remotes:
     - `origin = http://127.0.0.1:8787/git/jeryu/<repo>.git`
-    - `github = git@github.com:neverhuman/<repo>.git`
+    - `github = http://127.0.0.1:8787/git/jeryu/<repo>.git`
 
 The materializer should not run `cargo update` casually. If lockfile normalization is needed, run it per repo and record the reason.
 
@@ -213,19 +213,19 @@ Inside a repo, path dependencies may remain path dependencies when both crates a
 Across repos, path dependencies must become pinned Git-tag dependencies:
 
 ```toml
-feat-math = { git = "https://github.com/neverhuman/jain-math.git", tag = "jain-math-v7.0.1-split.0" }
+feat-math = { git = "http://127.0.0.1:8787/git/jeryu/jain-math.git", tag = "jain-math-v7.0.1-split.0" }
 ```
 
 For optional dependencies, preserve the original attributes:
 
 ```toml
-catboost = { git = "https://github.com/neverhuman/jain-catboost.git", tag = "jain-catboost-v7.0.1-split.0", optional = true }
+catboost = { git = "http://127.0.0.1:8787/git/jeryu/jain-catboost.git", tag = "jain-catboost-v7.0.1-split.0", optional = true }
 ```
 
 For dependencies with disabled defaults, preserve them:
 
 ```toml
-battle-gpu = { git = "https://github.com/neverhuman/jain-battle-gpu.git", tag = "jain-battle-gpu-v7.0.1-split.0", default-features = false }
+battle-gpu = { git = "http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git", tag = "jain-battle-gpu-v7.0.1-split.0", default-features = false }
 ```
 
 Forbidden:
@@ -428,7 +428,7 @@ Expected local remotes in each split checkout:
 
 ```bash
 origin  http://127.0.0.1:8787/git/jeryu/<repo>.git
-github  git@github.com:neverhuman/<repo>.git
+github  http://127.0.0.1:8787/git/jeryu/<repo>.git
 ```
 
 Expected `.jeryu/repo.toml`:
@@ -439,12 +439,12 @@ default_branch = "main"
 
 [shadow_main]
 enabled = true
-remote_url = "git@github.com:neverhuman/<repo>.git"
+remote_url = "http://127.0.0.1:8787/git/jeryu/<repo>.git"
 refs = ["refs/heads/main"]
 
 [tag_mirror]
 enabled = true
-remote_url = "git@github.com:neverhuman/<repo>.git"
+remote_url = "http://127.0.0.1:8787/git/jeryu/<repo>.git"
 tag_pattern = "<repo>-v*"
 ```
 
@@ -493,7 +493,7 @@ source_commit = "cc27936eb45006bda0cae85b0f578f4d5985991d"
 repo = "jain-core"
 tag = "jain-core-v7.0.1-split.0"
 commit = "<sha>"
-github = "https://github.com/neverhuman/jain-core.git"
+github = "http://127.0.0.1:8787/git/jeryu/jain-core.git"
 jeryu = "http://127.0.0.1:8787/git/jeryu/jain-core.git"
 required_check = "jain-core/required"
 ```

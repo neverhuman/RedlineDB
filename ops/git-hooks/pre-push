@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bash ops/ci/fast.sh
+bash ops/ci/check.sh
+bash ops/ci/tool-adoption.sh
+

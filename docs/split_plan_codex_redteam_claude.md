@@ -80,7 +80,7 @@ In jeryu-split, `jeryu-release-ops` owns release-ops **product source** (verifie
 
 ## M1. GitHub-tag chicken-and-egg in the rollout ordering
 
-Rewritten cargo deps point at `https://github.com/neverhuman/<repo>.git` tags, but codex Phase 5 mirrors to GitHub only **after** required checks pass — and a consumer's required check cannot build until its dependencies' tags are fetchable from GitHub. The wave order only resolves this if each wave's repos are mirrored **before** the next wave's CI runs, which the plan never states. (jeryu avoided this by pushing seed tags at materialization.) Make it explicit: seed `main`+tag pushed to GitHub per wave, unconditionally, before the dependent wave's CI; `mirror_github_main` gating applies to *subsequent* merges, not the seed.
+Rewritten cargo deps point at `http://127.0.0.1:8787/git/jeryu/<repo>.git` tags, but codex Phase 5 mirrors to GitHub only **after** required checks pass — and a consumer's required check cannot build until its dependencies' tags are fetchable from GitHub. The wave order only resolves this if each wave's repos are mirrored **before** the next wave's CI runs, which the plan never states. (jeryu avoided this by pushing seed tags at materialization.) Make it explicit: seed `main`+tag pushed to GitHub per wave, unconditionally, before the dependent wave's CI; `mirror_github_main` gating applies to *subsequent* merges, not the seed.
 
 ## M2. No reconcile phase and no cutover
 

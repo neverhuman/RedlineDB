@@ -1,0 +1,38 @@
+name: jankurai
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jankurai-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just shellcheck
+      - name: Fast lane
+        run: bash ops/ci/fast.sh
+      - name: Required lane
+        run: bash ops/ci/required.sh
+      - name: Security lane
+        run: bash ops/ci/security.sh
+      - name: Score lane
+        run: bash ops/ci/score.sh
+      - name: Tool adoption lane
+        run: bash ops/ci/tool-adoption.sh
+      - name: Contract drift lane
+        run: bash ops/ci/contract-drift.sh
+      - name: Artifact support
+        run: bash ops/ci/artifact_support.sh

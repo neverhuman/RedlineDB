@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Jain split ops repair queue entry",
+  "type": "object",
+  "required": ["path", "priority", "rule_id", "task"],
+  "properties": {
+    "path": { "type": "string" },
+    "priority": { "type": "string" },
+    "rule_id": { "type": "string" },
+    "task": { "type": "string" }
+  }
+}

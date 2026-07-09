@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Jain split ops repo score",
+  "type": "object",
+  "required": ["score", "caps_applied", "decision"],
+  "properties": {
+    "score": { "type": "integer" },
+    "caps_applied": { "type": "array", "items": { "type": "string" } },
+    "decision": { "type": "object" }
+  }
+}

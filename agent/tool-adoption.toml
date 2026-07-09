@@ -37,6 +37,10 @@ id = "release-bad-behavior"
 mode = "auto"
 
 [[tools]]
+id = "coverage-evidence"
+mode = "auto"
+
+[[tools]]
 id = "contract-drift"
 mode = "auto"
 

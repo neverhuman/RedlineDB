@@ -100,6 +100,16 @@
       "lane": "check",
       "purpose": "verify root navigation remains current"
     },
+    "RELEASE_PROCESS.md": {
+      "command": "just check && just score",
+      "lane": "release",
+      "purpose": "verify release process evidence remains aligned with the audit lane"
+    },
+    "ROLLBACK.md": {
+      "command": "just check && just score",
+      "lane": "release",
+      "purpose": "verify rollback guidance remains aligned with immutable tag policy"
+    },
     "SPLIT.md": {
       "command": "just score",
       "lane": "score",
@@ -124,6 +134,16 @@
       "command": "just security",
       "lane": "security",
       "purpose": "verify security policy metadata remains parseable"
+    },
+    "db/": {
+      "command": "just check && just score",
+      "lane": "db",
+      "purpose": "verify durable-state policy docs remain routed and auditable"
+    },
+    "db/**": {
+      "command": "just check && just score",
+      "lane": "db",
+      "purpose": "verify durable-state policy docs remain routed and auditable"
     },
     "docs/": {
       "command": "just check && just score",

@@ -43,4 +43,7 @@ assert data, 'repos.manifest.toml is empty'
 print(f'[required:jain-split-ops] manifest ok: {len(data)} top-level tables')
 PY
 
+say 'policy: live family uses local Jeryu remotes and sources'
+python3 ops/split/validate-local-jeryu.py --manifest repos.manifest.toml
+
 printf 'required ok: jain-split-ops\n'

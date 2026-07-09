@@ -22,7 +22,7 @@ Read-only preflight confirms the source repo is clean at `cc27936eb45006bda0cae8
    - Fork/adapt split tooling from `~/jeryu-split/ops/split`, `~/jeryu-split/ops/ci/split-host-ci.sh`, `~/veox-split/jeryu-ctl`, and `~/jankurai-split/jankurai/scripts`.
    - Add manifest-driven generation for all 19 repos, source coverage, reconcile, local bare mirrors, offline `insteadOf`, fleet CI, family doctor, and Jankurai gates.
    - Run the deploy anchor spike exactly once. If `cargo build -p feat-cli --bins` cannot build dependency bins from the deploy anchor, implement the fallback build through `--manifest-path ../jain-cli/Cargo.toml` with deploy-owned `--config` patch mappings.
-   - Decide stage-context implementation now: use generated stage-only root `[patch]` entries matching the exact internal git URL form `https://github.com/neverhuman/<repo>.git`.
+   - Decide stage-context implementation now: use generated stage-only root `[patch]` entries matching the exact internal git URL form `http://127.0.0.1:8787/git/jeryu/<repo>.git`.
 
 3. **Stage 2: Templates, Patches, And Interfaces**
    - Generate per-repo standard files: `AGENTS.md`, `SPLIT.md`, `README.md`, `Justfile`, `VERSION`, `Cargo.lock` where applicable, `scripts/ci-local.sh`, `ops/ci/required.sh`, `ops/ci/score.sh`, `agent/test-map.json`, `agent/owner-map.json`, `agent/audit-policy.toml`, and pinned `.github/workflows/ci.yml`.

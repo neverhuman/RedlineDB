@@ -11,6 +11,7 @@ dependency_tag_suffix = "v7.0.1-split.0"
 rollout_wave_order = [0, 1, 2, 3, 4]
 required_repos = [
   "jain",
+  "jain-docs",
   "jain-domain",
   "jain-math",
   "jain-contracts",
@@ -25,6 +26,8 @@ required_repos = [
   "jain-cli",
   "jain-web",
   "jain-python",
+  "jain-model-zoo",
+  "jain-ops",
   "jain-deploy",
 ]
 
@@ -74,7 +77,7 @@ retired_paths = [
 path = "/home/ubuntu/jain-split/jain"
 name = "jain"
 github_slug = "neverhuman/jain"
-jeryu_slug = "jeryu/jain-portal-preview"
+jeryu_slug = "jeryu/jain"
 profile = "public-portal"
 role = "portal"
 default_branch = "main"
@@ -324,7 +327,7 @@ onboarded = false
 mirror_github_main = true
 current_tag = "jain-tui-v7.0.1-split.0"
 required_check = "jain-tui/required"
-note = "Terminal dashboard presentation layer."
+note = "Reusable ratatui dashboard layer."
 cargo_members = ["crates/feat-tui"]
 copy_paths = ["crates/feat-tui"]
 source_paths = ["crates/feat-tui/**"]

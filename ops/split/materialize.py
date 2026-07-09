@@ -49,7 +49,6 @@ SPLIT_PATCHES = {
 INHERITED_SOURCE_CAPS = {
     "jain-battle-gpu": ["missing-rust-property-or-integration-tests", "streaming-runtime-drift"],
     "jain-catboost": ["missing-rust-property-or-integration-tests"],
-    "jain-cli": ["missing-rust-property-or-integration-tests"],
     "jain-core": ["authz-or-data-isolation-gap"],
     "jain-deploy": ["missing-rust-property-or-integration-tests"],
     "jain-domain": ["authz-or-data-isolation-gap", "missing-rust-property-or-integration-tests"],
@@ -213,7 +212,7 @@ def rewrite_dependency_tomls(repo: Repo, repos_by_name: dict[str, Repo], package
             return match.group(0)
         dep_repo = repos_by_name[owner]
         fields = [
-            f'git = "{dep_repo.github_remote}"',
+            f'git = "{dep_repo.jeryu_remote}"',
             f'tag = "{dep_repo.current_tag}"',
             f'package = "{dep_package}"',
         ]
@@ -266,11 +265,11 @@ def render_patch_sections(repo: Repo, repos: list[Repo], package_to_repo: dict[s
         if owner == repo.name or owner == "jain-ops":
             continue
         owner_repo = next(item for item in repos if item.name == owner)
-        sections.setdefault(owner_repo.github_remote, []).append(
+        sections.setdefault(owner_repo.jeryu_remote, []).append(
             f'{package} = {{ path = "../{owner}/{member}" }}'
         )
     lines: list[str] = [
-        "# Local split development patches. Release builds consume the pinned Git tags above.",
+        "# Local split development patches. Release builds consume the pinned local Jeryu tags above.",
     ]
     for remote in sorted(sections):
         lines.append(f'[patch."{remote}"]')
@@ -439,7 +438,12 @@ paths stable where practical so ownership remains auditable.
 
 
 def render_split_repo_map(repos: list[Repo]) -> str:
-    lines = ["| Repository | Role | GitHub | Purpose |", "| --- | --- | --- | --- |"]
+    lines = [
+        "Agent operational remotes are local Jeryu remotes from `repos.manifest.toml`; public mirrors are not development sources.",
+        "",
+        "| Repository | Role | Public mirror | Purpose |",
+        "| --- | --- | --- | --- |",
+    ]
     for item in repos:
         role = "Public portal" if item.profile == "public-portal" else "Split member"
         lines.append(
@@ -477,7 +481,7 @@ verification when `jain.sig`, `jain.pem`, and `cosign` are available.
 ## Clone The Split Family
 
 ```bash
-git clone https://github.com/neverhuman/jain.git
+git clone http://127.0.0.1:8787/git/jeryu/jain.git
 cd jain
 scripts/clone-family.sh "$HOME/jain-split"
 ```
@@ -514,20 +518,43 @@ rollback evidence are published by `neverhuman/jain-deploy`:
 def render_local_jeryu_forge_workflow() -> str:
     return """## Local Jeryu Forge Workflow
 
-Local Jain/Jeryu remotes use `http://127.0.0.1:8787/git/jeryu/<repo>.git`.
-For that host, do not run `gh auth login` and do not use generic GitHub.com
-connector tools. If `gh` host auth is stale, repair it with:
+The Jain workspace is `/home/ubuntu/jain-split`. Do not use `~/jeryu-split` as
+an operational source for Jain work; it is a precedent/product checkout, not a
+member of this family.
+
+Use normal Git commands against the local loopback Jeryu remote. Git credentials
+are already supplied by local Git/HTTP credential storage, so fetch/push should
+be fast and should not require agent-visible token handling.
+
+Canonical repo remote:
+`http://127.0.0.1:8787/git/jeryu/<repo>.git`.
+
+For a quick check:
 
 ```bash
-jeryu gh-setup --host http://127.0.0.1:8787 --token-file ~/.jeryu/secrets/merge-token
+git remote -v
+git ls-remote origin HEAD
 ```
 
-For PRs, checks, and merges, use `jeryu.*` MCP tools when they are exposed. If
-they are not exposed, use the local Jeryu REST API with `Authorization: Bearer
-<merge-token>` from `~/.jeryu/secrets/merge-token`.
+If a repo's remote is wrong or Git is slow/failing, run the Jain control-plane
+repair once:
 
-Use `curl http://127.0.0.1:8787/health` for a health check and authenticated
-`GET /.jeryu/capabilities` to inspect local forge policy. Run or post split CI
+```bash
+cd /home/ubuntu/jain-split/jain-split-ops
+just jeryu-ready
+```
+
+That command checks the local forge, removes extra remotes from every live
+checkout, sets `origin` to local Jeryu, registers Jain family metadata, and runs
+the family policy validator. Do not inspect `~/.jeryu`, run `gh auth login`, or
+copy source from Jeryu internals.
+
+For PRs, checks, and merges, use `jeryu.*` MCP tools when they are exposed. If
+they are not exposed, use
+`/home/ubuntu/jain-split/jain-split-ops/ops/split/jeryu-local.py` or the
+`just jeryu-*` recipes from the control-plane repo.
+
+Use `just jeryu-doctor` for a read-only health check. Run or post split CI
 through `/home/ubuntu/jain-split/jain-split-ops/ops/ci/split-host-ci.sh`, not
 GitHub Actions, unless an explicit GitHub mirror workflow is requested.
 """
@@ -641,20 +668,20 @@ with open(sys.argv[1], "rb") as fh:
 for repo in data.get("repo", []):
     print("|".join([
         str(repo.get("name", "")),
-        str(repo.get("github_slug", "")),
+        str(repo.get("jeryu_slug", "")),
         str(repo.get("profile", "")),
     ]))
 PY
 )
 
 for row in "${rows[@]}"; do
-  IFS='|' read -r name github_slug profile <<<"$row"
-  [[ -n "$name" && -n "$github_slug" ]] || continue
+  IFS='|' read -r name jeryu_slug profile <<<"$row"
+  [[ -n "$name" && -n "$jeryu_slug" ]] || continue
   if [[ "$profile" == "public-portal" && "${JAIN_CLONE_PORTAL:-0}" != "1" ]]; then
     continue
   fi
   target="${dest}/${name}"
-  remote="https://github.com/${github_slug}.git"
+  remote="http://127.0.0.1:8787/git/${jeryu_slug}.git"
   if [[ "$dry_run" == "1" ]]; then
     printf 'would clone/update %s -> %s\\n' "$remote" "$target"
     continue
@@ -685,6 +712,7 @@ manifest="${JAIN_SPLIT_MANIFEST:-${repo_root}/repos.manifest.toml}"
 
 bash "${repo_root}/ops/split/manifest.sh" --manifest "$manifest" --check-paths
 python3 "${repo_root}/ops/split/source_coverage.py" --manifest "$manifest"
+python3 "${repo_root}/ops/split/validate-local-jeryu.py" --manifest "$manifest"
 
 python3 - "$manifest" <<'PY'
 from pathlib import Path
@@ -988,7 +1016,6 @@ for repo in data.get("repo", []):
         f'repo = "{repo["name"]}"',
         f'tag = "{repo["current_tag"]}"',
         f'commit = "{commit}"',
-        f'github = "https://github.com/{repo["github_slug"]}.git"',
         f'jeryu = "http://127.0.0.1:8787/git/{repo["jeryu_slug"]}.git"',
         f'required_check = "{repo["required_check"]}"',
         "",
@@ -1215,7 +1242,7 @@ profile = "{repo.profile}"
 required_check = "{repo.required_check}"
 
 [split]
-cross_repo_dependency_policy = "pinned-public-git-tags"
+cross_repo_dependency_policy = "pinned-local-jeryu-git-tags"
 local_path_patches = {"true" if repo.name == "jain-deploy" else "false"}
 
 cargo_members = [
@@ -1255,7 +1282,8 @@ def render_architecture_doc(repo: Repo) -> str:
 
 The public portal is `neverhuman/jain`. Release authority remains
 `neverhuman/jain-deploy`; split member repositories own bounded product
-surfaces and consume sibling crates from pinned public Git tags.
+surfaces and consume sibling crates from pinned split-family Git tags through
+local Jeryu remotes.
 
 ## Boundaries
 
@@ -1280,8 +1308,9 @@ Use the local CI entrypoints before pushing changes:
 - `just security`
 - `just artifact-support`
 
-`scripts/ci-local.sh` delegates to the same `ops/ci/*.sh` lanes used by the
-GitHub workflow. `scripts/ci-doctor.sh` checks the required local tools.
+`scripts/ci-local.sh` delegates to the same `ops/ci/*.sh` lanes used by local
+required checks and thin public-mirror workflows. `scripts/ci-doctor.sh` checks
+the required local tools.
 
 Agent-readable exception guidance:
 
@@ -1393,7 +1422,8 @@ This directory is the {role} for `{repo.name}`.
 
 {sync}
 
-The split-family canonical source is `neverhuman/jain-core:contracts/`.
+The split-family canonical contract source is `contracts/` in the local Jeryu
+`jeryu/jain-core` repo. `neverhuman/jain-core` is only the public mirror slug.
 Mirrors exist only so web, Python, deploy, and published contracts repos can
 validate local packaging without reaching across repositories at runtime.
 """
@@ -1540,38 +1570,38 @@ def render_local_patches_example(repo: Repo) -> str:
     return """# Copy to .cargo/config.toml for local unpublished sibling work.
 # Do not commit local patch config from this file.
 
-[patch."https://github.com/neverhuman/jain-domain.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-domain.git"]
 domain = { path = "../jain-domain/crates/domain" }
 
-[patch."https://github.com/neverhuman/jain-math.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-math.git"]
 feat-math = { path = "../jain-math/crates/feat-math" }
 
-[patch."https://github.com/neverhuman/jain-catboost.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-catboost.git"]
 catboost = { path = "../jain-catboost/crates/catboost" }
 catboost-sys = { path = "../jain-catboost/crates/catboost-sys" }
 
-[patch."https://github.com/neverhuman/jain-xgboost.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-xgboost.git"]
 xgboost = { path = "../jain-xgboost/crates/xgboost" }
 
-[patch."https://github.com/neverhuman/jain-lightgbm.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git"]
 lightgbm = { path = "../jain-lightgbm/crates/lightgbm" }
 
-[patch."https://github.com/neverhuman/jain-battle-gpu.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git"]
 battle-gpu = { path = "../jain-battle-gpu/crates/battle-gpu" }
 
-[patch."https://github.com/neverhuman/jain-starforge.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-starforge.git"]
 starforge = { path = "../jain-starforge/crates/starforge" }
 
-[patch."https://github.com/neverhuman/jain-core.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-core.git"]
 feat-core = { path = "../jain-core/crates/feat-core" }
 
-[patch."https://github.com/neverhuman/jain-report.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-report.git"]
 feat-report = { path = "../jain-report/crates/feat-report" }
 
-[patch."https://github.com/neverhuman/jain-tui.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-tui.git"]
 feat-tui = { path = "../jain-tui/crates/feat-tui" }
 
-[patch."https://github.com/neverhuman/jain-cli.git"]
+[patch."http://127.0.0.1:8787/git/jeryu/jain-cli.git"]
 feat-cli = { path = "../jain-cli/crates/feat-cli" }
 """
 
@@ -1770,14 +1800,6 @@ else
   log "JAIN_VENDOR_ROOT not set; native release smoke deferred to deploy integration"
 fi
 """
-            elif repo.name == "jain-cli":
-                rust_lane = f"""
-log "cli required lane: no-native ci-smoke"
-cargo metadata --locked --format-version 1 --no-deps >/dev/null
-cargo fmt --all -- --check
-cargo clippy --locked -p feat-cli --all-targets --no-default-features --features ci-smoke{clippy_deny}
-cargo test --locked -p feat-cli --no-default-features --features ci-smoke --jobs "${{JAIN_CI_JOBS:-40}}"
-"""
             elif repo.name == "jain-web":
                 rust_lane = """
 log "web Rust required lane: ci-smoke"
@@ -1785,6 +1807,14 @@ cargo metadata --locked --format-version 1 --no-deps >/dev/null
 cargo fmt --all -- --check
 cargo check --locked -p feat-web --no-default-features --features ci-smoke --jobs "${JAIN_CI_JOBS:-40}"
 cargo test --locked -p feat-web --no-default-features --features ci-smoke --jobs "${JAIN_CI_JOBS:-40}"
+"""
+            elif repo.name == "jain-cli":
+                rust_lane = f"""
+log "cli required lane: no-native ci-smoke"
+cargo metadata --locked --format-version 1 --no-deps >/dev/null
+cargo fmt --all -- --check
+cargo clippy --locked -p feat-cli --all-targets --no-default-features --features ci-smoke{clippy_deny}
+cargo test --locked -p feat-cli --no-default-features --features ci-smoke --jobs "${{JAIN_CI_JOBS:-40}}"
 """
             elif repo.name == "jain-battle-gpu":
                 rust_lane = """
@@ -2457,7 +2487,7 @@ def write_portal_repo(repo: Repo, repos: list[Repo], source_sha: str) -> None:
     write(repo.path / "ops" / "ci" / "lib.sh", render_ci_lib(), executable=True)
     write(repo.path / "ops" / "AGENTS.md", render_ops_agents(repo))
     write(repo.path / "ops" / "git-hooks" / "pre-push", render_pre_push_hook(), executable=True)
-    for rel in ("manifest.sh", "source_coverage.py"):
+    for rel in ("manifest.sh", "source_coverage.py", "validate-local-jeryu.py"):
         source = ROOT / "ops" / "split" / rel
         write(
             repo.path / "ops" / "split" / rel,
@@ -2485,7 +2515,6 @@ def render_root_lock(repos: list[Repo], source_sha: str, commits: dict[str, str]
                 f'repo = "{repo.name}"',
                 f'tag = "{repo.current_tag}"',
                 f'commit = "{commits.get(repo.name, "PENDING")}"',
-                f'github = "{repo.github_remote}"',
                 f'jeryu = "{repo.jeryu_remote}"',
                 f'required_check = "{repo.required_check}"',
                 "",
@@ -2509,7 +2538,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-feat-cli = {{ git = "{cli.github_remote}", tag = "{cli.current_tag}", package = "feat-cli" }}
+feat-cli = {{ git = "{cli.jeryu_remote}", tag = "{cli.current_tag}", package = "feat-cli" }}
 """,
     )
     write(deploy.path / "deployment" / "product" / "src" / "lib.rs", "//! Anchor package for the Jain split deploy graph.\n")
@@ -2614,7 +2643,7 @@ for name in stage_names:
     repo = repos[name]
     if name in {"jain-deploy", "jain-ops"}:
         continue
-    remote = f"https://github.com/{repo['github_slug']}.git"
+    remote = f"http://127.0.0.1:8787/git/{repo['jeryu_slug']}.git"
     for member in repo.get("cargo_members", []):
         pkg = read_package(stage / "repos" / name / member / "Cargo.toml")
         if pkg:
@@ -2640,7 +2669,7 @@ printf 'stage context initialized at %s\\n' "$stage"
 """,
         executable=True,
     )
-    for rel in ("manifest.sh", "source_coverage.py"):
+    for rel in ("manifest.sh", "source_coverage.py", "validate-local-jeryu.py"):
         source = ROOT / "ops" / "split" / rel
         write(deploy.path / "ops" / "split" / rel, source.read_text(encoding="utf-8"), executable=source.stat().st_mode & stat.S_IXUSR != 0)
     write(
@@ -2665,7 +2694,7 @@ for field in ("schema_version", "family", "release", "source", "source_commit"):
         missing.append(f"lock missing {field}")
 for repo in data.get("repo", []):
     name = repo.get("repo") or repo.get("name") or "<unknown>"
-    for field in ("repo", "tag", "commit", "github", "jeryu", "required_check"):
+    for field in ("repo", "tag", "commit", "jeryu", "required_check"):
         if not str(repo.get(field, "")).strip():
             missing.append(f"{name} missing {field}")
     commit = str(repo.get("commit", ""))
@@ -2790,12 +2819,13 @@ def init_git_repo(repo: Repo, source_sha: str) -> str:
     generate_jankurai_baseline(repo)
     run(["git", "add", "."], cwd=repo.path)
     run(["git", "commit", "-m", f"chore: seed jain split repo from {source_sha}"], cwd=repo.path)
-    for remote, url in (("origin", repo.jeryu_remote), ("github", repo.github_remote)):
-        existing = subprocess.run(["git", "remote", "get-url", remote], cwd=repo.path, capture_output=True)
-        if existing.returncode == 0:
-            run(["git", "remote", "set-url", remote, url], cwd=repo.path)
-        else:
-            run(["git", "remote", "add", remote, url], cwd=repo.path)
+    existing = subprocess.run(["git", "remote", "get-url", "origin"], cwd=repo.path, capture_output=True)
+    if existing.returncode == 0:
+        run(["git", "remote", "set-url", "origin", repo.jeryu_remote], cwd=repo.path)
+    else:
+        run(["git", "remote", "add", "origin", repo.jeryu_remote], cwd=repo.path)
+    if subprocess.run(["git", "remote", "get-url", "github"], cwd=repo.path, capture_output=True).returncode == 0:
+        run(["git", "remote", "remove", "github"], cwd=repo.path)
     run(["git", "tag", "-f", repo.current_tag], cwd=repo.path)
     return run(["git", "rev-parse", "HEAD"], cwd=repo.path)
 
@@ -2803,10 +2833,15 @@ def init_git_repo(repo: Repo, source_sha: str) -> str:
 def write_git_instead_of_config(split_root: Path, repos: list[Repo]) -> Path:
     cfg = split_root / "target" / "local-gitconfig"
     cfg.parent.mkdir(parents=True, exist_ok=True)
-    lines: list[str] = []
+    lines: list[str] = [
+        "# CI-only Cargo lock cache.",
+        "# Do not use target/bare-mirrors as an agent checkout or operational source.",
+        "# Canonical agent remotes are local Jeryu remotes.",
+    ]
     for repo in repos:
         mirror = split_root / "target" / "bare-mirrors" / f"{repo.name}.git"
         lines.append(f'[url "file://{mirror}"]')
+        lines.append(f'\tinsteadOf = {repo.jeryu_remote}')
         lines.append(f'\tinsteadOf = {repo.github_remote}')
     cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return cfg

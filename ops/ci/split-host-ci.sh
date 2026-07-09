@@ -111,33 +111,24 @@ if [ -z "${RUSTC_WRAPPER:-}" ] && command -v sccache >/dev/null 2>&1; then
 fi
 export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
 
-# Cross-repo dependency resolution WITHOUT github and WITHOUT sibling checkouts.
-# The split's git-tag deps use canonical github.com/neverhuman URLs, but nothing
-# is published there; each consumer Cargo.lock pins the IMMUTABLE seed-tag SHA of
-# every sibling. We rewrite those URLs (CI-scoped, via GIT_CONFIG_GLOBAL under
-# target/, never ~/.gitconfig) to the local file:// bare mirrors, which carry every
-# repo's seed release tag at exactly the pinned SHA. The mirrors are the primary
-# resolution source because they are auth-free, local, and deterministic (proven:
-# cargo --locked resolves the whole closure incl. all learner crates from them,
-# identical crate graph, zero github). The forge git-http (JERYU_BASE) requires
-# auth for reads, so it is NOT used for CI resolution — it is for human clones and
-# is where main+tags are hosted. Set JAIN_CI_USE_FORGE=1 only if the forge is
-# anonymously git-readable. This replaced the committed vendor-crates/ (which
-# polluted jankurai as duplicated product); canonical source ids are unchanged so
-# cargo tree is identical. guard_no_insteadof only runs on onboard/push, not here.
-ci_gitconfig="$SPLIT_ROOT/target/ci-gitconfig"
-mkdir -p "$SPLIT_ROOT/target"
-if [ "${JAIN_CI_USE_FORGE:-0}" = "1" ] && git ls-remote "$JAIN_BASE/git/jeryu/jain-core.git" HEAD >/dev/null 2>&1; then
-  printf '[url "%s/git/jeryu/"]\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$JAIN_BASE" > "$ci_gitconfig"
-  say "cross-repo resolution: local forge $JAIN_BASE (anonymously readable)"
-else
-  printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
-  say "cross-repo resolution: local bare mirrors (auth-free)"
+# Cross-repo dependency resolution WITHOUT network fetches and WITHOUT sibling
+# checkouts. Local Jeryu is the canonical operational source of truth, but CI
+# resolves the exact same local-Jeryu tag URLs through auth-free file:// bare
+# mirrors. This rewrite is scoped to the temp GIT_CONFIG_GLOBAL under target/;
+# it never mutates repo config or ~/.gitconfig. Legacy GitHub internal URLs are
+# also rewritten here only so older lockfiles fail less noisily while the family
+# is being migrated. Bare mirrors are a credential-free CI cache, not canonical
+# source.
+if [ "$REPO" != "jain-split-ops" ]; then
+  ci_gitconfig="$SPLIT_ROOT/target/ci-gitconfig"
+  mkdir -p "$SPLIT_ROOT/target"
+  printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
+  say "cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)"
+  export GIT_CONFIG_GLOBAL="$ci_gitconfig"
 fi
-export GIT_CONFIG_GLOBAL="$ci_gitconfig"
 
-# Hermetic test env. jain-cli's dispatch tests assert fail-closed behavior when
-# no API URL is configured (dispatch.rs falls back to $JAIN_API_URL). A
+# Hermetic test env. The `jain` CLI asserts fail-closed behavior when no API URL
+# is configured. A
 # forge-operator shell exports JAIN_API_URL=http://127.0.0.1:8787, which leaks
 # into the test process and routes those tests at the LIVE forge (issue #6 not
 # #1, repo-create -> Conflict, `status` exit 0 not 5). Clean GitHub CI never sets

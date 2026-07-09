@@ -1,10 +1,10 @@
 schema_version = "1.0.0"
-workspace = "jain"
-profile = "public-portal"
-required_check = "jain/required"
+workspace = "jain-split-ops"
+profile = "control-plane"
+required_check = "jain-split-ops/required"
 
 [split]
-cross_repo_dependency_policy = "pinned-public-git-tags"
+cross_repo_dependency_policy = "pinned-local-jeryu-git-tags"
 local_path_patches = false
 
 cargo_members = [
@@ -15,6 +15,12 @@ cargo_members = [
 role = "none"
 canonical_repo = "jain-core"
 mirror_check = "just contract-drift"
+
+[db]
+root_paths = ["db/"]
+migration_paths = ["db/migrations/"]
+constraint_paths = ["db/constraints/"]
+owner = "data"
 
 [python]
 allowed_non_product_paths = ["ops/split/"]

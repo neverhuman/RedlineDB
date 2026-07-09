@@ -91,7 +91,7 @@ Generated: 2026-07-06
 - GitHub auth is not configured in `gh auth status` output.
 - Git remotes in source:
   - `origin` = `http://127.0.0.1:8787/git/jeryu/jain.git`
-  - `neverhuman` = `git@github.com:neverhuman/jain.git`
+  - `neverhuman` = `http://127.0.0.1:8787/git/jeryu/jain.git`
 - Git LFS access in the source repo reports `AccessDownload=none` and `AccessUpload=none`.
 
 ## Blockers Before Forge/GitHub Proof
