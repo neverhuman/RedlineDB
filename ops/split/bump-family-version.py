@@ -109,6 +109,14 @@ def main() -> int:
     parser.add_argument("--old", default="7.0.1")
     parser.add_argument("--new", required=False)
     parser.add_argument("--update-lock-shas", action="store_true")
+    parser.add_argument(
+        "--rewrite-split-tags",
+        action="store_true",
+        help=(
+            "dangerous: rewrite split-family tag pins to <repo>-v<new>-split.0. "
+            "Do not use for product/image version bumps."
+        ),
+    )
     args = parser.parse_args()
 
     data = load_manifest(Path(args.manifest))
@@ -117,6 +125,13 @@ def main() -> int:
         return 0
     if not args.new:
         raise SystemExit("--new is required unless --update-lock-shas is used")
+    if not args.rewrite_split_tags:
+        raise SystemExit(
+            "refusing to rewrite split tag pins by default. Product releases must "
+            "bump jain-deploy's runtime/image version only; use --rewrite-split-tags "
+            "only for an intentional family-wide split tag migration after planning "
+            "the new <repo>-v<version>-split.N tags."
+        )
     bump_manifest(Path(args.manifest), args.old, args.new)
     for manifest in (ROOT / "jain" / "repos.manifest.toml", ROOT / "jain-deploy" / "repos.manifest.toml"):
         bump_manifest(manifest, args.old, args.new)
