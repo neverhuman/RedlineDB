@@ -6,7 +6,7 @@ tooling (`ops/split/*`), the host CI runner (`ops/ci/split-host-ci.sh`), forge
 onboarding (`ops/onboard.sh`, `ops/lib.sh`, `ops/hooks/*`), and the planning /
 evidence docs (`docs/`).
 
-It is a SIBLING of the 19 family members under `/home/ubuntu/jain-split/`, not a
+It is a SIBLING of the 22 family members under `/home/ubuntu/jain-split/`, not a
 member of `repos.manifest.toml` (so `materialize.py --force` never touches it).
 Each family member remains an independent git repo with its own CI and forge
 remote; this repo only orchestrates them.

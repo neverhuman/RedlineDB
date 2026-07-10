@@ -22,6 +22,8 @@ required_repos = [
   "jain-battle-gpu",
   "jain-starforge",
   "jain-core",
+  "jain-llm",
+  "jain-research",
   "jain-report",
   "jain-tui",
   "jain-cli",
@@ -146,7 +148,7 @@ rollout_wave = 0
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-math-v7.0.1-split.2"
+current_tag = "jain-math-v7.0.1-split.3"
 required_check = "jain-math/required"
 note = "Feature DSL and pure math utilities."
 cargo_members = ["crates/feat-math"]
@@ -287,7 +289,7 @@ rollout_wave = 1
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = false
-current_tag = "jain-starforge-v7.0.1-split.1"
+current_tag = "jain-starforge-v7.0.1-split.2"
 required_check = "jain-starforge/required"
 note = "Starforge inference code and all required safetensors weights."
 cargo_members = ["crates/starforge"]
@@ -307,13 +309,55 @@ rollout_wave = 2
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-core-v7.0.1-split.6"
+current_tag = "jain-core-v7.0.1-split.7"
 required_check = "jain-core/required"
 note = "Pipeline hub and canonical progress-event contract producer."
 cargo_members = ["crates/feat-core"]
 copy_paths = ["crates/feat-core", "contracts"]
 source_paths = ["crates/feat-core/**", "contracts/**"]
 cross_repo_deps = ["jain-domain", "jain-math", "jain-catboost", "jain-xgboost", "jain-lightgbm", "jain-jable", "jain-starforge"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-llm"
+name = "jain-llm"
+github_slug = "neverhuman/jain-llm"
+jeryu_slug = "jeryu/jain-llm"
+profile = "rust-workspace"
+role = "llm"
+default_branch = "main"
+rollout_wave = 2
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+authored = true
+current_tag = "jain-llm-v7.0.1-split.0"
+required_check = "jain-llm/required"
+note = "Native Jain LLM provider interfaces and routing contracts."
+cargo_members = ["crates/jain-llm"]
+copy_paths = []
+source_paths = ["crates/jain-llm/**"]
+cross_repo_deps = []
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-research"
+name = "jain-research"
+github_slug = "neverhuman/jain-research"
+jeryu_slug = "jeryu/jain-research"
+profile = "rust-workspace"
+role = "research"
+default_branch = "main"
+rollout_wave = 2
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+authored = true
+current_tag = "jain-research-v7.0.1-split.0"
+required_check = "jain-research/required"
+note = "AutoResearch and theory-chase orchestration contracts."
+cargo_members = ["crates/jain-research"]
+copy_paths = []
+source_paths = ["crates/jain-research/**"]
+cross_repo_deps = ["jain-llm", "jain-math"]
 
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-report"
@@ -347,7 +391,7 @@ rollout_wave = 3
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-tui-v7.0.1-split.4"
+current_tag = "jain-tui-v7.0.1-split.5"
 required_check = "jain-tui/required"
 note = "Reusable ratatui dashboard layer."
 cargo_members = ["crates/feat-tui"]
@@ -387,7 +431,7 @@ rollout_wave = 3
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-web-v7.0.1-split.3"
+current_tag = "jain-web-v7.0.1-split.4"
 required_check = "jain-web/required"
 note = "Local web server and React cockpit."
 cargo_members = ["crates/feat-web"]
@@ -467,7 +511,7 @@ rollout_wave = 4
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-deploy-v7.0.1-split.6"
+current_tag = "jain-deploy-v7.0.1-split.7"
 required_check = "jain-deploy/required"
 note = "Release authority and integration home."
 cargo_members = ["deployment/ops/sagemaker-ci", "deployment/product"]

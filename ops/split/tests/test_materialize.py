@@ -24,9 +24,13 @@ def test_manifest_policy_and_source_coverage() -> None:
     module = load_materialize()
     data, repos = module.load_manifest(ROOT / "repos.manifest.toml")
     by_name = {repo.name: repo for repo in repos}
-    assert len(repos) == 20
+    assert len(repos) == 22
     assert "jain-cli" in by_name
     assert by_name["jain-cli"].cargo_members == ["crates/feat-cli"]
+    assert by_name["jain-llm"].cargo_members == ["crates/jain-llm"]
+    assert by_name["jain-research"].cargo_members == ["crates/jain-research"]
+    raw_by_name = {repo["name"]: repo for repo in data["repo"]}
+    assert raw_by_name["jain-research"]["cross_repo_deps"] == ["jain-llm", "jain-math"]
     assert by_name["jain-tui"].cargo_members == ["crates/feat-tui"]
     assert data["source_sha"] == "cc27936eb45006bda0cae85b0f578f4d5985991d"
     assert by_name["jain-starforge"].mirror_github_main is False

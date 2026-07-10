@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:31e5f04d1332e7f7d974863f10a07db21b6c6109f6d72a54d675bf93f70628c0",
-  "input_fingerprint": "sha256:5b40c521b0aaf6a7ea92fdc7833bb3c94466d76b27cd9f2c3730b9dd7c7171b7",
+  "report_fingerprint": "sha256:09b975ca55271edae5749c3dd4a2275452e2544ba066af39fae90ff36de1544c",
+  "input_fingerprint": "sha256:206b0b3c1e1200907ad0169ed4db2ef7f89aa91851ea66a4807cc7b12527a66e",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:9fd304bd01cdb4e72f81b2b1786a3fad71cc30361c57019965c57d0e40e0f941",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:2f8372ad169351387d66865089c612b49a3115432e711bcda03645d6a6f422a8"
   },
   "dirty_worktree": true,
-  "generated_at": "1783717313",
+  "generated_at": "1783722917",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1783717313",
-  "started_at": "1783717313",
-  "elapsed_ms": 922,
+  "run_id": "1783722917",
+  "started_at": "1783722917",
+  "elapsed_ms": 931,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "15f25a4",
+    "head": "c976dd6",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -971,7 +971,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-10T21:01:52.655995436+00:00",
+    "generated_at": "2026-07-10T22:35:16.861556925+00:00",
     "repo": ".",
     "auditor_version": "1.6.10",
     "status": "review",
@@ -1047,92 +1047,92 @@
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 583,
-            "end_line": 584,
+            "start_line": 597,
+            "end_line": 598,
             "unit_name": "render_install_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 643,
-            "end_line": 644,
+            "start_line": 657,
+            "end_line": 658,
             "unit_name": "render_clone_family_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 707,
-            "end_line": 708,
+            "start_line": 721,
+            "end_line": 722,
             "unit_name": "render_validate_family_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 790,
-            "end_line": 791,
+            "start_line": 804,
+            "end_line": 805,
             "unit_name": "render_fleet_ci_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 836,
-            "end_line": 837,
+            "start_line": 850,
+            "end_line": 851,
             "unit_name": "render_family_doctor_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 857,
-            "end_line": 858,
+            "start_line": 871,
+            "end_line": 872,
             "unit_name": "render_contracts_sync_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 912,
-            "end_line": 913,
+            "start_line": 926,
+            "end_line": 927,
             "unit_name": "render_version_consistency_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 947,
-            "end_line": 948,
+            "start_line": 961,
+            "end_line": 962,
             "unit_name": "render_coverage_report_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 985,
-            "end_line": 986,
+            "start_line": 999,
+            "end_line": 1000,
             "unit_name": "render_regen_family_lock_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 1649,
-            "end_line": 1650,
+            "start_line": 1663,
+            "end_line": 1664,
             "unit_name": "render_ci_local_script"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 1668,
-            "end_line": 1669,
+            "start_line": 1682,
+            "end_line": 1683,
             "unit_name": "render_security_lane_wrapper"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 1677,
-            "end_line": 1678,
+            "start_line": 1691,
+            "end_line": 1692,
             "unit_name": "render_ci_lib"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 1719,
-            "end_line": 1720,
+            "start_line": 1733,
+            "end_line": 1734,
             "unit_name": "render_pre_push_hook"
           }
         ]
@@ -1273,15 +1273,15 @@
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 565,
-            "end_line": 567,
+            "start_line": 579,
+            "end_line": 581,
             "unit_name": "render_portal_agents"
           },
           {
             "path": "ops/split/materialize.py",
             "language": "python",
-            "start_line": 1031,
-            "end_line": 1033,
+            "start_line": 1045,
+            "end_line": 1047,
             "unit_name": "render_agents"
           }
         ]
@@ -1601,7 +1601,7 @@
       "lane": "audit",
       "docs_url": "docs/testing.md",
       "owner": "split",
-      "line": 2292,
+      "line": 2312,
       "matched_term": "review evidence",
       "reason": "proof and review claims need receipts"
     },

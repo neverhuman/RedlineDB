@@ -414,11 +414,25 @@ def render_readme(repo: Repo, source_sha: str) -> str:
     cargo = "\n".join(f"- `{member}`" for member in repo.cargo_members) or "- none"
     return f"""# {repo.name}
 
+![local required](https://img.shields.io/badge/local_required-run_just_required-blue)
+![jankurai score](https://img.shields.io/badge/jankurai_score-run_just_score-blue)
+
 {repo.note}
+
+Agents start at [AGENTS.md](AGENTS.md) — the repository entrypoint that routes
+to owner maps, proof lanes, and audit metadata under `agent/`.
 
 This repository was seeded from Jain source commit `{source_sha}` by
 `{GENERATOR}`. It is part of the Jain split family and keeps source
 paths stable where practical so ownership remains auditable.
+
+## Quick Start
+
+```bash
+just fast
+just required
+just score
+```
 
 ## Owned Cargo Packages
 
@@ -1224,7 +1238,7 @@ workspace = "{repo.name}"
 minimum_score = 85
 hard_findings_allowed = 0
 required_tool = "jankurai"
-required_tool_version = "1.6.10"
+required_tool_version = "1.6.11"
 {scan_block}
 
 [inherited_source_caps]
@@ -2128,6 +2142,12 @@ for path in "${required[@]}"; do
   [[ -s "$path" ]] || { printf 'missing split metadata: %s\\n' "$path" >&2; exit 1; }
 done
 mkdir -p .jankurai target/jankurai
+if [[ "${JAIN_SCORE_BOOTSTRAP_TOOL_ADOPTION:-1}" == "1" ]]; then
+  if ! JAIN_SCORE_BOOTSTRAP_TOOL_ADOPTION=0 bash ops/ci/tool-adoption.sh >target/jankurai/tool-adoption-bootstrap.log 2>&1; then
+    cat target/jankurai/tool-adoption-bootstrap.log >&2
+    exit 1
+  fi
+fi
 jankurai audit . --full --mode advisory --policy agent/audit-policy.toml --json .jankurai/repo-score.json --md .jankurai/repo-score.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --no-score-history
 python3 - <<'PY'
 import json
@@ -2273,8 +2293,8 @@ jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.jso
 jankurai audit . --full --mode advisory --policy agent/audit-policy.toml --json .jankurai/repo-score.json --md .jankurai/repo-score.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --no-score-history
 
 log "tool adoption: proofbind"
-jankurai proof . --changed-from origin/main --out target/jankurai/proof-plan.json --md target/jankurai/proof-plan.md || true
-jankurai proofbind verify . --changed-from origin/main --mode advisory --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json --md target/jankurai/proofbind/proofbind.md || true
+jankurai proof . --changed-from origin/main --out target/jankurai/proof-plan.json --md target/jankurai/proof-plan.md 2>target/jankurai/proof-plan.err || true
+jankurai proofbind verify . --changed-from origin/main --mode advisory --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json --md target/jankurai/proofbind/proofbind.md 2>target/jankurai/proofbind/proofbind.err || true
 
 log "tool adoption: proofmark/rust witness"
 {proofmark}
