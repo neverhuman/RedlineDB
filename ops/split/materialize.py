@@ -85,6 +85,7 @@ class Repo:
     required_check: str
     note: str
     mirror_github_main: bool
+    authored: bool
     cargo_members: list[str]
     copy_paths: list[str]
     source_paths: list[str]
@@ -124,6 +125,7 @@ def load_manifest(path: Path) -> tuple[dict[str, Any], list[Repo]]:
             required_check=str(raw["required_check"]),
             note=str(raw.get("note", "")),
             mirror_github_main=bool(raw.get("mirror_github_main", True)),
+            authored=bool(raw.get("authored", False)),
             cargo_members=[str(item) for item in raw.get("cargo_members", [])],
             copy_paths=[str(item) for item in raw.get("copy_paths", [])],
             source_paths=[str(item) for item in raw.get("source_paths", [])],
@@ -2915,6 +2917,11 @@ def main() -> int:
     write_root_manifest_copy(manifest_path, split_root)
 
     for repo in repos:
+        if repo.authored:
+            if not repo.path.exists():
+                raise SystemExit(f"{repo.name}: authored split repo is missing at {repo.path}")
+            write_repo_standard(repo, source_sha)
+            continue
         if repo.path.exists():
             if split_root not in repo.path.parents:
                 raise SystemExit(f"refusing to remove path outside split root: {repo.path}")

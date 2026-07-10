@@ -18,6 +18,7 @@ required_repos = [
   "jain-catboost",
   "jain-xgboost",
   "jain-lightgbm",
+  "jain-jable",
   "jain-battle-gpu",
   "jain-starforge",
   "jain-core",
@@ -145,7 +146,7 @@ rollout_wave = 0
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-math-v7.0.1-split.0"
+current_tag = "jain-math-v7.0.1-split.2"
 required_check = "jain-math/required"
 note = "Feature DSL and pure math utilities."
 cargo_members = ["crates/feat-math"]
@@ -234,6 +235,27 @@ source_paths = ["crates/lightgbm/**"]
 cross_repo_deps = []
 
 [[repo]]
+path = "/home/ubuntu/jain-split/jain-jable"
+name = "jain-jable"
+github_slug = "neverhuman/jain-jable"
+jeryu_slug = "jeryu/jain-jable"
+profile = "rust-workspace"
+role = "native-learner"
+default_branch = "main"
+rollout_wave = 1
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+authored = true
+current_tag = "jain-jable-v7.0.1-split.0"
+required_check = "jain-jable/required"
+note = "Pure-Rust Jable scalar tabular regressor."
+cargo_members = ["crates/jable"]
+copy_paths = []
+source_paths = []
+cross_repo_deps = []
+
+[[repo]]
 path = "/home/ubuntu/jain-split/jain-battle-gpu"
 name = "jain-battle-gpu"
 github_slug = "neverhuman/jain-battle-gpu"
@@ -245,7 +267,7 @@ rollout_wave = 1
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-battle-gpu-v7.0.1-split.0"
+current_tag = "jain-battle-gpu-v7.0.1-split.2"
 required_check = "jain-battle-gpu/required"
 note = "Optional GPU kernel factory over feat-math."
 cargo_members = ["crates/battle-gpu"]
@@ -285,13 +307,13 @@ rollout_wave = 2
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-core-v7.0.1-split.0"
+current_tag = "jain-core-v7.0.1-split.5"
 required_check = "jain-core/required"
 note = "Pipeline hub and canonical progress-event contract producer."
 cargo_members = ["crates/feat-core"]
 copy_paths = ["crates/feat-core", "contracts"]
 source_paths = ["crates/feat-core/**", "contracts/**"]
-cross_repo_deps = ["jain-domain", "jain-math", "jain-catboost", "jain-xgboost", "jain-lightgbm", "jain-starforge"]
+cross_repo_deps = ["jain-domain", "jain-math", "jain-catboost", "jain-xgboost", "jain-lightgbm", "jain-jable", "jain-starforge"]
 
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-report"
@@ -305,7 +327,7 @@ rollout_wave = 3
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-report-v7.0.1-split.0"
+current_tag = "jain-report-v7.0.1-split.3"
 required_check = "jain-report/required"
 note = "Executive report rendering and templates."
 cargo_members = ["crates/feat-report"]
@@ -325,7 +347,7 @@ rollout_wave = 3
 has_jeryu_std = true
 onboarded = false
 mirror_github_main = true
-current_tag = "jain-tui-v7.0.1-split.0"
+current_tag = "jain-tui-v7.0.1-split.3"
 required_check = "jain-tui/required"
 note = "Reusable ratatui dashboard layer."
 cargo_members = ["crates/feat-tui"]

@@ -24,7 +24,7 @@ def test_manifest_policy_and_source_coverage() -> None:
     module = load_materialize()
     data, repos = module.load_manifest(ROOT / "repos.manifest.toml")
     by_name = {repo.name: repo for repo in repos}
-    assert len(repos) == 19
+    assert len(repos) == 20
     assert "jain-cli" in by_name
     assert by_name["jain-cli"].cargo_members == ["crates/feat-cli"]
     assert by_name["jain-tui"].cargo_members == ["crates/feat-tui"]
