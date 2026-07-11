@@ -1,0 +1,42 @@
+# Canonical nested-family manifest. Paths are relative to this file.
+schema_version = "1"
+family = "redline-split"
+parent_family = "jain-split"
+container = "../redline-split"
+lock = "../redline-split/redline.lock.toml"
+
+[[repo]]
+name = "redline"
+path = "../redline-split/redline"
+github_slug = "neverhuman/RedlineDB"
+jeryu_slug = "jeryu/redlineDB"
+role = "public-hub"
+required_check = "redline/required"
+default_branch = "main"
+
+[[repo]]
+name = "redline-core"
+path = "../redline-split/redline-core"
+github_slug = "neverhuman/redline-core"
+jeryu_slug = "jeryu/redline-core"
+role = "canonical-engine"
+required_check = "redline-core/required"
+default_branch = "main"
+
+[[repo]]
+name = "redline-testing"
+path = "../redline-split/redline-testing"
+github_slug = "neverhuman/redline-testing"
+jeryu_slug = "jeryu/redline-testing"
+role = "parity-harness"
+required_check = "redline-testing/required"
+default_branch = "main"
+
+[[repo]]
+name = "redline-web"
+path = "../redline-split/redline-web"
+github_slug = "neverhuman/redline-web"
+jeryu_slug = "jeryu/redline-web"
+role = "observability-console"
+required_check = "redline-web/required"
+default_branch = "main"

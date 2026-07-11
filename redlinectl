@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+workspace_root="${REDLINE_SPLIT_ROOT:-$(cd "$ops_root/.." && pwd)}"
+manifest="${REDLINE_SPLIT_MANIFEST:-$ops_root/repos.manifest.toml}"
+lockfile="${REDLINE_SPLIT_LOCK:-$workspace_root/redline-split/redline.lock.toml}"
+
+die() {
+  printf 'redlinectl: %s\n' "$*" >&2
+  exit 1
+}
+
+[[ -r "$manifest" ]] || die "manifest is not readable: $manifest"
+
+manifest_rows() {
+  python3 - "$manifest" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+path = Path(sys.argv[1])
+data = tomllib.loads(path.read_text())
+for repo in data.get("repo", []):
+    print("\t".join([
+        repo["name"], repo["path"], repo["github_slug"],
+        repo.get("default_branch", "main"), repo.get("required_check", ""),
+    ]))
+PY
+}
+
+repo_path() {
+  local relative="$1"
+  python3 - "$manifest" "$relative" <<'PY'
+import sys
+from pathlib import Path
+print((Path(sys.argv[1]).parent / sys.argv[2]).resolve())
+PY
+}
+
+with_lock() {
+  exec 9>"$workspace_root/.redline-family.lock"
+  flock -x 9
+  "$@"
+}
+
+verify_lock() {
+  [[ -r "$lockfile" ]] || die "lock file is not readable: $lockfile"
+  python3 - "$manifest" "$lockfile" <<'PY'
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+manifest_path, lock_path = map(Path, sys.argv[1:])
+manifest = tomllib.loads(manifest_path.read_text())
+lock = tomllib.loads(lock_path.read_text())
+locked = {entry["name"]: entry for entry in lock.get("repo", [])}
+errors = []
+for repo in manifest.get("repo", []):
+    name = repo["name"]
+    entry = locked.get(name)
+    if entry is None:
+        errors.append(f"{name}: missing lock entry")
+        continue
+    root = (manifest_path.parent / repo["path"]).resolve()
+    if not (root / ".git").exists():
+        errors.append(f"{name}: checkout missing at {root}")
+        continue
+    head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip()
+    if head != entry["commit"]:
+        errors.append(f"{name}: HEAD {head} != lock {entry['commit']}")
+    tag = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", f"{entry['tag']}^{{commit}}"], capture_output=True, text=True, check=False).stdout.strip()
+    if tag != entry["commit"]:
+        errors.append(f"{name}: tag {entry['tag']} does not resolve to lock commit")
+if errors:
+    raise SystemExit("\n".join(errors))
+print(f"redline lock ok: {len(locked)} repositories")
+PY
+}
+
+validate() {
+  python3 - "$manifest" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+path = Path(sys.argv[1])
+data = tomllib.loads(path.read_text())
+if data.get("family") != "redline-split":
+    raise SystemExit("manifest family must be redline-split")
+if data.get("parent_family") != "jain-split":
+    raise SystemExit("manifest parent_family must be jain-split")
+seen = set()
+for repo in data.get("repo", []):
+    name = repo["name"]
+    if name in seen:
+        raise SystemExit(f"duplicate repository: {name}")
+    seen.add(name)
+    raw = repo["path"]
+    if Path(raw).is_absolute() or "/home/ubuntu" in raw:
+        raise SystemExit(f"{name}: manifest path must be relative: {raw}")
+    checkout = (path.parent / raw).resolve()
+    if not (checkout / ".git").exists():
+        raise SystemExit(f"{name}: missing independent git checkout: {checkout}")
+    if checkout == path.parent or checkout == path.parent.parent:
+        raise SystemExit(f"{name}: child path escapes the family boundary")
+if len(seen) != 4:
+    raise SystemExit(f"expected four Redline child repositories, found {len(seen)}")
+if (path.parent / "Cargo.toml").exists():
+    raise SystemExit("redline-split must not become an umbrella Cargo workspace")
+print(f"redline manifest ok: {', '.join(sorted(seen))}")
+PY
+  bash "$(repo_path redline)/scripts/guard-no-duplicate-engine.sh"
+  verify_lock
+}
+
+clone_family() {
+  local dry_run=0
+  if [[ "${1:-}" == "--dry-run" ]]; then dry_run=1; shift; fi
+  while IFS=$'\t' read -r name relative github branch _required; do
+    local checkout
+    checkout="$(repo_path "$relative")"
+    if [[ "$dry_run" == 1 ]]; then
+      printf 'would clone/update %s -> %s\n' "https://github.com/$github.git" "$checkout"
+      continue
+    fi
+    if [[ -d "$checkout/.git" ]]; then
+      git -C "$checkout" fetch --prune origin
+      git -C "$checkout" pull --ff-only origin "$branch"
+    elif [[ -e "$checkout" ]]; then
+      die "$name checkout path exists but is not a Git repository: $checkout"
+    else
+      mkdir -p "$(dirname "$checkout")"
+      git clone "https://github.com/$github.git" "$checkout"
+    fi
+  done < <(manifest_rows)
+}
+
+family_ci() {
+  local name relative _github _branch required checkout
+  while IFS=$'\t' read -r name relative _github _branch required; do
+    checkout="$(repo_path "$relative")"
+    printf 'redline family CI: %s (%s)\n' "$name" "$required"
+    if [[ -x "$checkout/ops/ci/pr-ci.sh" ]]; then
+      (cd "$checkout" && bash ops/ci/pr-ci.sh)
+    elif [[ -x "$checkout/scripts/ci-local.sh" ]]; then
+      (cd "$checkout" && bash scripts/ci-local.sh pr-ci)
+    else
+      die "$name has no independent CI entrypoint"
+    fi
+  done < <(manifest_rows)
+}
+
+doctor() {
+  command -v git >/dev/null || die "git is required"
+  command -v python3 >/dev/null || die "python3 is required for TOML validation"
+  command -v flock >/dev/null || die "flock is required for family locking"
+  validate
+  printf 'redline doctor: ok (%s)\n' "$workspace_root"
+}
+
+case "${1:-doctor}" in
+  clone) shift; with_lock clone_family "$@" ;;
+  update) with_lock clone_family ;;
+  validate) validate ;;
+  lock-verify) verify_lock ;;
+  family-ci|ci) with_lock family_ci ;;
+  doctor) doctor ;;
+  *) die "usage: $0 {clone [--dry-run]|update|validate|lock-verify|family-ci|doctor}" ;;
+esac
