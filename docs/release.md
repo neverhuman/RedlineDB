@@ -1,8 +1,8 @@
 # Release process
 
 `redline-testing` ships as a single tarball that RedlineDB CI consumes as a
-pinned artifact. GitLab remains the pre-merge validation surface; GitHub
-Releases is the public download host. The release workflow is:
+pinned artifact. GitHub Actions is the pre-merge validation and release
+surface; GitHub Releases is the public download host. The release workflow is:
 
 1. **Version source.** `Cargo.toml` `[package].version` is the canonical
    version. `CHANGELOG.md` is the human-facing log of what changed.
@@ -25,10 +25,8 @@ Releases is the public download host. The release workflow is:
    v<version>`. The GitHub release workflow in
    `.github/workflows/release.yml` triggers on tag push and can also be
    started manually against an existing tag ref.
-5. **CI build + attestation.** GitLab continues to run `pr-ci` on merge
-   requests and the default branch, and its tag-only packaging job keeps the
-   tarball path exercised before publish. The GitHub release workflow re-runs
-   `pr-ci`, rebuilds the tarball via `just release-local`, requests
+5. **CI build + attestation.** The GitHub release workflow re-runs `pr-ci`,
+   rebuilds the tarball via `just release-local`, requests
    `actions/attest-build-provenance` for the tarball + `.sha256` +
    `release-manifest.json`, and publishes the assets with `gh release create
    --verify-tag`.

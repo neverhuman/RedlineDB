@@ -32,13 +32,9 @@
       "command": "rtk cargo run --locked -p xtask -- generate --check",
       "purpose": "verify the corpus generator builds and produces drift-free shards"
     },
-    ".gitlab-ci.yml": {
-      "command": "rtk scripts/ci-local.sh doctor",
-      "purpose": "verify the GitLab pipeline stays aligned with the local CI and release validation surface"
-    },
     ".github/workflows/ci.yml": {
       "command": "rtk scripts/ci-local.sh doctor",
-      "purpose": "verify the GitHub CI workflow stays aligned with the local CI mirror and badge/oracle lanes"
+      "purpose": "verify the GitHub CI workflow stays aligned with the local CI, badge, and oracle lanes"
     },
     ".github/workflows/release.yml": {
       "command": "rtk scripts/ci-local.sh doctor",

@@ -1,7 +1,6 @@
 # redline-testing
 
-Primary CI runs in GitLab via [.gitlab-ci.yml](.gitlab-ci.yml).
-GitHub also mirrors the CI lanes via [.github/workflows/ci.yml](.github/workflows/ci.yml).
+Primary CI runs on GitHub via [.github/workflows/ci.yml](.github/workflows/ci.yml).
 Public release artifacts are published on GitHub via [.github/workflows/release.yml](.github/workflows/release.yml).
 <!-- jankurai-score-badge:begin -->
 [![Jankurai score: 38/100 advisory](https://img.shields.io/badge/jankurai-38%2F100%20advisory-red)](agent/repo-score.json)

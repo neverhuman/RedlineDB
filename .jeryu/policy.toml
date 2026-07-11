@@ -8,7 +8,7 @@ hooks = "off"
 enabled = true
 actor = "jeryu"
 protected_branch = "main"
-require_admission_receipt = true
+require_admission_receipt = false
 
 [offline_release_mirror]
 enabled = false

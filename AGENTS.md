@@ -5,6 +5,8 @@
 Mission: keep the external RedlineDB conformance runner deterministic,
 release-packaged, and compatible with RedlineDB's pinned artifact consumer.
 
+Access contract: local agent workspaces use `~/.jeryu/access.toml`, `jeryu access doctor`, and `jeryu access repair --repo . --yes`; do not install/use `glab`, scrape credential stores, or keep HTTP local GitLab origins.
+
 Start here:
 - `docs/architecture.md` — layers, data-access boundary, output contract
 - `docs/boundaries.md` — adapter seam, generated zones, ownership

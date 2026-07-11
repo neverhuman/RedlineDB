@@ -6,7 +6,6 @@
       "build.rs",
       ".github/workflows/ci.yml",
       ".github/workflows/release.yml",
-      ".gitlab-ci.yml",
       "src/**",
       "tests/**",
       "xtask/**",

@@ -1,0 +1,68 @@
+name: security-audit
+
+# Ported from .gitlab-ci.yml `security` and `audit` jobs (stage: validate).
+# Both were GitLab `when: manual` + `allow_failure: true` jobs gated to the
+# default branch. GitHub has no per-job manual gate, so the manual nature is
+# preserved via `workflow_dispatch` (operator-triggered) and the
+# `allow_failure: true` semantic is preserved via `continue-on-error: true`.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: security-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # GitLab `security` job:
+  #   before_script: apt-get install ca-certificates curl git jq sqlite3
+  #   script:        bash scripts/ci-local.sh security
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (marketplace-free)
+        run: |
+          git init
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          rustup default 1.95.0
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates curl git jq sqlite3
+      - name: Run security lane
+        run: bash scripts/ci-local.sh security
+
+  # GitLab `audit` job:
+  #   before_script: apt-get install ca-certificates curl git jq sqlite3
+  #   script:        bash scripts/ci-local.sh audit
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (marketplace-free)
+        run: |
+          git init
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          rustup default 1.95.0
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates curl git jq sqlite3
+      - name: Run audit lane
+        run: bash scripts/ci-local.sh audit

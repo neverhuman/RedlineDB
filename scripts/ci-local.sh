@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Local CI dispatcher for the same proof surface used by GitLab CI and the
-# GitHub CI mirror.
+# Local CI dispatcher for the same proof surface used by GitHub CI.
 
 set -euo pipefail
 
