@@ -18,8 +18,9 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-/home/ubuntu/redline-testing/target/release/redline-testing}"
-SQLITE_REF_BIN="${SQLITE_REF_BIN:-/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3}"
+REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd ".." && pwd)}"
+REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing}"
+SQLITE_REF_BIN="${SQLITE_REF_BIN:-${REDLINE_SPLIT_ROOT}/sqlite-reference/bin/sqlite3}"
 BASELINE_RANKED="${BASELINE_RANKED:-benchmark-results/sqlite-parity/gap-closure-deltas/baseline-c92b1d3-ranked.csv}"
 OUT_DIR="${OUT_DIR:-target/redline-testing-gap-closure}"
 

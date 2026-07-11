@@ -88,8 +88,9 @@ if [ -n "$REDLINE_CARGO_FEATURE_ARGS_STR" ]; then
     # shellcheck disable=SC2206
     REDLINE_CARGO_FEATURE_ARGS=($REDLINE_CARGO_FEATURE_ARGS_STR)
 fi
-REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-/home/ubuntu/redline-testing/target/release/redline-testing}"
-SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3")}"
+REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd ".." && pwd)}"
+REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing}"
+SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "${REDLINE_SPLIT_ROOT}/sqlite-reference/bin/sqlite3")}" 
 PERF_CASES_DIR="${PERF_CASES_DIR:-bench/perf/cases}"
 PERF_ROOT="${PERF_ROOT:-target/perf}"
 
@@ -126,7 +127,7 @@ fi
 
 if [ ! -x "$REDLINE_TESTING_BIN" ]; then
     echo "redline-testing binary not found at $REDLINE_TESTING_BIN" >&2
-    echo "Build it: cd /home/ubuntu/redline-testing && cargo build --release --locked --bin redline-testing" >&2
+    echo "Build it in the sibling redline-testing checkout: cargo build --release --locked --bin redline-testing" >&2
     [ "$DRY_RUN" = "1" ] || exit 1
 fi
 if [ ! -x "$SQLITE_REF_BIN" ]; then

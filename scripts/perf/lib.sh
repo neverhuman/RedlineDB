@@ -24,10 +24,11 @@ PERF_ROOT="${PERF_ROOT:-target/perf}"
 # Output JSONLs and per-run scratch live under PERF_ROOT (target/perf).
 PERF_CASES_DIR="${PERF_CASES_DIR:-bench/perf/cases}"
 
-REDLINE_TESTING_BIN_DEFAULT="/home/ubuntu/redlineDB/target/ci/redline-testing/0.1.3-redline-testing-0.1.3-linux-x86_64/bin/redline-testing"
+REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+REDLINE_TESTING_BIN_DEFAULT="${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing"
 REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-$REDLINE_TESTING_BIN_DEFAULT}"
 
-SQLITE_REF_BIN_DEFAULT="/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3"
+SQLITE_REF_BIN_DEFAULT="${SQLITE_REF_BIN_DEFAULT:-${REDLINE_SPLIT_ROOT}/sqlite-reference/bin/sqlite3}"
 SQLITE_REF_BIN="${SQLITE_REF_BIN:-$SQLITE_REF_BIN_DEFAULT}"
 
 # CI overrides everything (ops/ci/lib.sh::ci_resolve_redline_testing_release

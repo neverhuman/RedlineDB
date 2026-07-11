@@ -79,8 +79,9 @@ if ! readelf -S "$INPUT_BIN" 2>/dev/null | grep -q '\.rela\.text\|\.rel\.text'; 
     exit 2
 fi
 
-REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-/home/ubuntu/redline-testing/target/release/redline-testing}"
-SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3")}"
+REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd ".." && pwd)}"
+REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing}"
+SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "${REDLINE_SPLIT_ROOT}/sqlite-reference/bin/sqlite3")}" 
 if [ ! -x "$REDLINE_TESTING_BIN" ]; then
     echo "bolt.sh: redline-testing not at $REDLINE_TESTING_BIN" >&2
     exit 2
