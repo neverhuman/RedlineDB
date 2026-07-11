@@ -8,7 +8,7 @@ umbrella Cargo workspace.
 ```text
 redline-split-ops/              # this repository
 redline-split/repos.manifest.toml  # compatibility mirror for the container
-redline-split/redline.lock.toml   # immutable child pins and proof hashes
+redline-split-ops/redline.lock.toml # immutable child pins and proof hashes
 redline-split/{redline,redline-core,redline-testing,redline-web}/
 ```
 

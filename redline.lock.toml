@@ -1,0 +1,43 @@
+schema_version = "1"
+family = "redline-split"
+parent_family = "jain-split"
+engine_package = "redlinedb"
+engine_version = "4.1.0"
+parity_harness_commit = "e87cf01ab9386e0f49b7523343119b2532a6e717"
+
+[proof]
+parity_status = "historical-only-until-refreshed"
+accepted_core_evidence_sha256 = "8e811b14306795b82f8422d7a1522e1cddd026ce8b5a96e1987c91c4c43f2ccf"
+accepted_testing_manifest_sha256 = "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3"
+
+[[repo]]
+name = "redline"
+tag = "redline-v4.1.0-jain.1"
+commit = "c944e796f5a4fc725bd91420eebaec947c611515"
+github = "https://github.com/neverhuman/RedlineDB.git"
+jeryu = "http://127.0.0.1:8787/git/jeryu/redlineDB.git"
+required_check = "redline/required"
+
+[[repo]]
+name = "redline-core"
+tag = "redline-core-v4.1.0-jain.1"
+commit = "9c72c26fac280ebf861eef43aa406c04ecbcf024"
+github = "https://github.com/neverhuman/redline-core.git"
+jeryu = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+required_check = "redline-core/required"
+
+[[repo]]
+name = "redline-testing"
+tag = "redline-testing-v1.0.1-jain.0"
+commit = "e87cf01ab9386e0f49b7523343119b2532a6e717"
+github = "https://github.com/neverhuman/redline-testing.git"
+jeryu = "http://127.0.0.1:8787/git/jeryu/redline-testing.git"
+required_check = "redline-testing/required"
+
+[[repo]]
+name = "redline-web"
+tag = "redline-web-v0.1.0-jain.0"
+commit = "7b893f0d75df8d0ccf45855584d09c03576a0450"
+github = "https://github.com/neverhuman/redline-web.git"
+jeryu = "http://127.0.0.1:8787/git/jeryu/redline-web.git"
+required_check = "redline-web/required"

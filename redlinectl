@@ -111,7 +111,7 @@ if (path.parent / "Cargo.toml").exists():
     raise SystemExit("redline-split must not become an umbrella Cargo workspace")
 print(f"redline manifest ok: {', '.join(sorted(seen))}")
 PY
-  bash "$(repo_path redline)/scripts/guard-no-duplicate-engine.sh"
+  bash "$(repo_path ../redline-split/redline)/scripts/guard-no-duplicate-engine.sh"
   verify_lock
 }
 

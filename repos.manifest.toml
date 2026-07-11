@@ -3,7 +3,7 @@ schema_version = "1"
 family = "redline-split"
 parent_family = "jain-split"
 container = "../redline-split"
-lock = "../redline-split/redline.lock.toml"
+lock = "redline.lock.toml"
 
 [[repo]]
 name = "redline"
