@@ -1,0 +1,28 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+    "remote": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+  "commit_input": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [],
+    "expected_product_version": "8.0.0",
+    "status": "pass",
+    "version_file": "jain-model-zoo-v8.0.0-split.0"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-model-zoo.git",
+  "remote_main": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+  "repository": "/home/ubuntu/jain-split/jain-model-zoo",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-model-zoo-v8.0.0-split.0",
+  "timestamp_unix": 1783854271
+}
