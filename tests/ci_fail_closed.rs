@@ -56,11 +56,11 @@ fn security_workflow_is_blocking_and_delegates_to_the_local_lane() {
 }
 
 #[test]
-fn release_workflow_delegates_to_the_local_dispatcher() {
+fn release_workflow_delegates_to_the_canonical_ops_lanes() {
     let workflow = repo_file(".github/workflows/release.yml");
 
-    assert!(workflow.contains("run: scripts/ci-local.sh pr-ci"));
-    assert!(workflow.contains("run: scripts/ci-local.sh release"));
+    assert!(workflow.contains("run: bash ops/ci/pr-ci.sh"));
+    assert!(workflow.contains("run: bash ops/ci/release.sh"));
 }
 
 #[test]

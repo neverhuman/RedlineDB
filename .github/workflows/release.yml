@@ -34,9 +34,9 @@ jobs:
           test -n "${GITHUB_REF_NAME:-}"
           git describe --tags --exact-match >/dev/null
       - name: Test
-        run: scripts/ci-local.sh pr-ci
+        run: bash ops/ci/pr-ci.sh
       - name: Build package
-        run: scripts/ci-local.sh release
+        run: bash ops/ci/release.sh
       - name: Attest package
         uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
         with:
