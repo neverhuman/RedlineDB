@@ -561,12 +561,15 @@ fn run_command(
     }
     Ok(CapturedOutput {
         status,
-        stdout: fs::read_to_string(&stdout_path)
-            .with_context(|| format!("read {}", stdout_path.display()))?,
-        stderr: fs::read_to_string(&stderr_path)
-            .with_context(|| format!("read {}", stderr_path.display()))?,
+        stdout: read_output_lossy(&stdout_path)?,
+        stderr: read_output_lossy(&stderr_path)?,
         memory,
     })
+}
+
+fn read_output_lossy(path: &Path) -> Result<String> {
+    let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 pub fn binary_identity(bin: &Path) -> Result<BinaryIdentity> {
@@ -738,4 +741,22 @@ fn make_removable(path: &Path) -> Result<()> {
 #[cfg(not(unix))]
 fn make_removable(_path: &Path) -> Result<()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_output_lossy;
+    use std::fs;
+
+    #[test]
+    fn captured_binary_output_is_decoded_lossily() {
+        let path = std::env::temp_dir().join(format!(
+            "redline-testing-lossy-output-{}",
+            std::process::id()
+        ));
+        fs::write(&path, [b'a', 0xff, b'b']).expect("write binary output fixture");
+        let decoded = read_output_lossy(&path).expect("decode binary output");
+        fs::remove_file(path).expect("remove binary output fixture");
+        assert_eq!(decoded, "a\u{fffd}b");
+    }
 }

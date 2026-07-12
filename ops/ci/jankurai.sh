@@ -31,6 +31,15 @@ proofbind_changed_args=()
 if ! git diff --diff-filter=d --name-only -z "${base_ref}...HEAD" >"$proofbind_changed_file"; then
     fail "cannot resolve proof paths from ${base_ref}...HEAD"
 fi
+if [ ! -s "$proofbind_changed_file" ]; then
+    # Detached release CI intentionally runs the exact reviewed main commit, so
+    # origin/main...HEAD has no delta. Verify the reviewed commit's own paths in
+    # that case instead of treating a clean release snapshot as an error.
+    if ! git diff-tree --no-commit-id --name-only -r -z --diff-filter=d HEAD \
+        >"$proofbind_changed_file"; then
+        fail "cannot resolve proof paths from reviewed commit HEAD"
+    fi
+fi
 while IFS= read -r -d '' changed_path; do
     proofbind_changed_args+=(--changed "$changed_path")
 done <"$proofbind_changed_file"
@@ -96,7 +105,7 @@ run_step "jankurai: release readiness" \
     bash ops/ci/release-readiness.sh
 
 run_step_soft "jankurai: proof routing" \
-    "$JANKURAI" proof . --changed-from "$base_ref" \
+    "$JANKURAI" proof . "${proofbind_changed_args[@]}" \
     --out target/jankurai/proof-routing.json \
     --md target/jankurai/proof-routing.md
 

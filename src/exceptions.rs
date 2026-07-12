@@ -144,7 +144,10 @@ const CATALOG: &[Classified] = &[
 
 /// Render an `anyhow` error as a classified repair receipt for stderr.
 pub fn render(error: &anyhow::Error) -> String {
-    HarnessException::classify(error).receipt()
+    format!(
+        "{}\n  detail: {error:#}",
+        HarnessException::classify(error).receipt()
+    )
 }
 
 #[cfg(test)]
@@ -168,8 +171,10 @@ mod tests {
 
     #[test]
     fn falls_back_to_generic() {
-        let exc = HarnessException::classify(&anyhow!("something unexpected happened"));
+        let error = anyhow!("something unexpected happened");
+        let exc = HarnessException::classify(&error);
         assert_eq!(exc.code, "UNCLASSIFIED");
         assert!(!exc.common_fixes.is_empty());
+        assert!(render(&error).contains("detail: something unexpected happened"));
     }
 }
