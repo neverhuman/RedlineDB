@@ -48,12 +48,17 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # zizmor: ignore[artipacked]
         with:
           fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: 1.95.0
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
       - name: Update jankurai score badge in README
         # agent/jankurai-badge.json is the tracked source of truth for the
         # jankurai score. When a developer updates the score (after re-running
         # jankurai), this step syncs the README badge to match. The badge JSON
         # format: .message = "38/100 advisory", .color = "red"|"orange"|etc.
-        run: python3 scripts/update-badge.py
+        run: cargo run --locked --quiet -p xtask -- update-badge
       - name: Commit badge update if changed
         run: |
           git config user.name "github-actions[bot]"

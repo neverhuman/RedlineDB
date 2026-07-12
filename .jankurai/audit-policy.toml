@@ -17,8 +17,8 @@ mode = "advisory"
 
 # Rules disabled at the source. The detectors below either fire on paths /
 # components that don't exist in this Rust-only CLI repo (stack misdetection
-# — the auditor defaults to `rust-ts-vite-react-postgres-bounded-python` and
-# probes for apps/web, crates/domain, etc.) or flag terminology that IS the
+# — the auditor's full-stack profile probes for apps/web, crates/domain, etc.)
+# or flag terminology that IS the
 # right name for what the code does.
 disabled_rules = [
   # Flags the term `legacy` in module names. The taxonomy emitter formerly
@@ -173,8 +173,6 @@ extra_excluded_paths = [
   "src/sqlite_parity/engine.rs",
   "src/sqlite_parity/rql_phase1.rs",
 
-  # Badge update utility — CI tooling, not product code
-  "scripts/update-badge.py",
 ]
 
 # Future-hostile / dead-language marker allowlist. These terms are precise

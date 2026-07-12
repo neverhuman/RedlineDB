@@ -1,6 +1,6 @@
 //! xtask — internal dev tools for redline-testing.
 //!
-//! Two subcommands:
+//! Subcommands include:
 //!
 //!   * `generate` writes the matrix-product shards under
 //!     `corpus/sqlite_parity/cases/gen_*.json`. Each shard is produced by a
@@ -19,8 +19,13 @@
 //!     code, and substring contains-checks match. Failing case IDs are
 //!     printed so they can be removed from the shard. This is the
 //!     authoritative ship contract for the SQLite-parity corpus.
+//!
+//!   * Repository CI helpers update the score badge and emit the cost,
+//!     readiness, artifact-support, and canary-telemetry JSON contracts.
 
+mod badge;
 mod generators;
+mod repo_ops;
 mod sqlite_runner;
 
 use std::fs;
@@ -38,6 +43,41 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Update the marked Jankurai badge block in README.md from the tracked
+    /// agent/jankurai-badge.json source of truth.
+    UpdateBadge,
+    /// Validate the zero-spend policy and emit its machine-readable receipt.
+    CostBudget,
+    /// Validate launch-gate documentation and emit its readiness receipt.
+    ReleaseReadiness,
+    /// Write the artifact-support context, manifest, and local-CI receipt.
+    ArtifactSupportJson {
+        #[arg(long)]
+        out_dir: PathBuf,
+        #[arg(long)]
+        entrypoint: String,
+        #[arg(long)]
+        sha: String,
+        #[arg(long)]
+        tree: String,
+        #[arg(long)]
+        generated_at: String,
+        #[arg(long)]
+        workers: usize,
+    },
+    /// Probe SignRail receipts and emit Jeryu canary telemetry as JSON.
+    Telemetry {
+        #[arg(long)]
+        repo: String,
+        #[arg(long)]
+        sha: String,
+        #[arg(long)]
+        ring_percent: u8,
+        #[arg(long)]
+        slug: String,
+        #[arg(long)]
+        store_root: PathBuf,
+    },
     /// Regenerate the matrix-product SQLite-parity shards into
     /// corpus/sqlite_parity/cases/gen_*.json. With --check, refuses to
     /// write and instead fails if the on-disk shard differs.
@@ -67,6 +107,32 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let repo_root = find_repo_root()?;
     match cli.command {
+        Command::UpdateBadge => badge::run(&repo_root),
+        Command::CostBudget => repo_ops::cost_budget(&repo_root),
+        Command::ReleaseReadiness => repo_ops::release_readiness(&repo_root),
+        Command::ArtifactSupportJson {
+            out_dir,
+            entrypoint,
+            sha,
+            tree,
+            generated_at,
+            workers,
+        } => repo_ops::artifact_support_json(
+            &repo_root,
+            &out_dir,
+            &entrypoint,
+            &sha,
+            &tree,
+            &generated_at,
+            workers,
+        ),
+        Command::Telemetry {
+            repo,
+            sha,
+            ring_percent,
+            slug,
+            store_root,
+        } => repo_ops::telemetry(&repo, &sha, ring_percent, &slug, &store_root),
         Command::Generate {
             check,
             only,

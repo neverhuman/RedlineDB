@@ -235,6 +235,9 @@ cargo run -p xtask --release -- ship-gate
 
 # Detect drift in matrix-generated shards
 cargo run -p xtask --release -- generate --check
+
+# Sync the README score badge from agent/jankurai-badge.json
+cargo run --locked --quiet -p xtask -- update-badge
 ```
 
 ### Adding test cases

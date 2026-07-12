@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Command};
 
 fn repo_file(path: &str) -> String {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -61,6 +61,56 @@ fn release_workflow_delegates_to_the_canonical_ops_lanes() {
 
     assert!(workflow.contains("run: bash ops/ci/pr-ci.sh"));
     assert!(workflow.contains("run: bash ops/ci/release.sh"));
+}
+
+#[test]
+fn badge_lane_uses_the_tested_rust_updater() {
+    let workflow = repo_file(".github/workflows/ci.yml");
+
+    assert!(workflow.contains("cargo run --locked --quiet -p xtask -- update-badge"));
+    assert!(!workflow.contains("scripts/update-badge.py"));
+}
+
+#[test]
+fn repository_has_no_python_runtime_surface() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let output = Command::new("git")
+        .args(["ls-files", "-z"])
+        .current_dir(&root)
+        .output()
+        .expect("run git ls-files");
+    assert!(output.status.success(), "git ls-files must succeed");
+
+    for relative in output.stdout.split(|byte| *byte == 0) {
+        if relative.is_empty() {
+            continue;
+        }
+        let relative = std::str::from_utf8(relative).expect("tracked path is UTF-8");
+        let path = root.join(relative);
+        if !path.is_file() {
+            continue;
+        }
+        assert_ne!(
+            path.extension().and_then(|extension| extension.to_str()),
+            Some("py"),
+            "tracked Python file remains: {relative}"
+        );
+
+        if relative.starts_with("ops/")
+            || relative.starts_with("scripts/")
+            || relative.starts_with(".github/workflows/")
+        {
+            let Ok(body) = fs::read_to_string(&path) else {
+                continue;
+            };
+            for invocation in ["python3", "python -", "env python"] {
+                assert!(
+                    !body.contains(invocation),
+                    "Python runtime invocation `{invocation}` remains in {relative}"
+                );
+            }
+        }
+    }
 }
 
 #[test]

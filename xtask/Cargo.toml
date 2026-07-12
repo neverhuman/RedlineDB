@@ -5,7 +5,7 @@ edition = "2024"
 license = "Apache-2.0"
 publish = false
 rust-version = "1.95"
-description = "Internal dev tools: corpus generator and ship-gate for redline-testing."
+description = "Internal dev tools for redline-testing corpus, CI, and release support."
 
 [[bin]]
 name = "xtask"

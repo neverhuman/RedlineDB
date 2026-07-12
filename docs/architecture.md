@@ -22,7 +22,7 @@ src/beyond_sqlite/    PostgreSQL-class oracle suite
   ├── engine.rs       subprocess psql driver (adapter seam)
   ├── oracle.rs       psql ↔ psql self-compare oracle
   └── taxonomy.rs     feature rank/owner taxonomy
-xtask/                dev-only corpus generator + ship-gate (not shipped)
+xtask/                dev-only corpus, badge, and receipt tooling (not shipped)
 ```
 
 ## Data-access boundary

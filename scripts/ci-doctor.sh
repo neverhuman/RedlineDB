@@ -27,7 +27,7 @@ grep -q 'merge_group' "$ci_workflow" || fail "github ci workflow must support me
 grep -q 'branches: \[main\]' "$ci_workflow" || fail "github ci workflow must run on main pushes"
 grep -q 'scripts/ci-local.sh pr-ci' "$ci_workflow" || fail "github ci workflow must run the pr-ci lane"
 grep -q 'beyond-postgres:' "$ci_workflow" || fail "github ci workflow must keep the beyond-postgres lane"
-grep -q 'python3 scripts/update-badge.py' "$ci_workflow" || fail "github ci workflow must keep the badge update lane"
+grep -q 'cargo run --locked --quiet -p xtask -- update-badge' "$ci_workflow" || fail "github ci workflow must keep the Rust badge update lane"
 grep -q 'actions/upload-artifact' "$ci_workflow" || fail "github ci workflow must upload the beyond-SQLite artifact"
 grep -q 'workflow_dispatch' "$release_workflow" || fail "github release workflow must support workflow_dispatch"
 grep -q 'tags:' "$release_workflow" || fail "github release workflow must trigger on tags"

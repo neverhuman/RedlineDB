@@ -20,6 +20,7 @@ ci_run scripts/check_audit_policy_mirror.sh
 ci_run cargo fmt --check
 ci_run cargo check --locked
 ci_run cargo test --locked
+ci_run cargo test --locked -p xtask
 ci_run scripts/release-package.sh
 
 # Security evidence is part of the required lane. Missing scanners fail closed

@@ -7,7 +7,7 @@
 # repo — there is no separate pure-domain layer to keep DB vocabulary out of.
 
 [stack]
-id = "rust-ts-vite-react-postgres-bounded-python"
+id = "rust-ts-postgres"
 version = "0.4.0"
 
 [rust]

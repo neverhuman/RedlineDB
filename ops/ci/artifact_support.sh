@@ -113,40 +113,15 @@ repo_slug_from_remote() {
 write_json_files() {
   local entrypoint="$1" sha tree generated_at
   sha="$(current_sha)"
-  tree="$(git rev-parse HEAD^{tree})"
+  tree="$(git rev-parse 'HEAD^{tree}')"
   generated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  python3 - "$out_dir" "$entrypoint" "$sha" "$tree" "$generated_at" "$workers" <<'PY'
-import json
-import pathlib
-import subprocess
-import sys
-
-out_dir, entrypoint, sha, tree, generated_at, workers = sys.argv[1:7]
-out = pathlib.Path(out_dir)
-files = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
-(out / "context.json").write_text(json.dumps({
-    "schema_version": 1,
-    "generated_by": "ops/ci/artifact_support.sh",
-    "repo": pathlib.Path.cwd().name,
-    "sha": sha,
-    "tree": tree,
-    "generated_at": generated_at,
-    "workers": int(workers),
-    "ci_entrypoint": entrypoint,
-}, indent=2, sort_keys=True) + "\n")
-(out / "manifest.json").write_text(json.dumps({
-    "schema_version": 1,
-    "sha": sha,
-    "tracked_file_count": len(files),
-    "tracked_files": files,
-}, indent=2, sort_keys=True) + "\n")
-(out / "receipts" / "local-ci.json").write_text(json.dumps({
-    "schema_version": 1,
-    "sha": sha,
-    "entrypoint": entrypoint,
-    "status": "success",
-}, indent=2, sort_keys=True) + "\n")
-PY
+  cargo run --locked --quiet -p xtask -- artifact-support-json \
+    --out-dir "$out_dir" \
+    --entrypoint "$entrypoint" \
+    --sha "$sha" \
+    --tree "$tree" \
+    --generated-at "$generated_at" \
+    --workers "$workers"
 }
 
 bundle_evidence() {
@@ -181,7 +156,7 @@ sign_bundle() {
   sha="$(current_sha)"
   version="${SIGNRAIL_RELEASE_VERSION:-$sha}"
   rollback_target="${SIGNRAIL_ROLLBACK_TARGET:-$(git rev-parse HEAD^ 2>/dev/null || printf '%s' "$sha")}"
-  tree_sha="$(git rev-parse HEAD^{tree})"
+  tree_sha="$(git rev-parse 'HEAD^{tree}')"
   ci_ir_hash="$(sha256_file_prefixed "$out_dir/manifest.json")"
   runner_rootfs_digest="$(sha256_text "$(uname -a)|${ImageOS:-local}|${ImageVersion:-local}")"
   toolchain_material="$(rustc -Vv 2>/dev/null || true; cargo -V 2>/dev/null || true; node --version 2>/dev/null || true; npm --version 2>/dev/null || true)"

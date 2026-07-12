@@ -9,7 +9,7 @@ drives local `sqlite3` / `psql` subprocess shells and writes JSONL + artifacts.
 - **Artifact drift**: `cargo test --locked --test release_manifest_integrity`
   recomputes every bundled file's SHA-256 against `release-manifest.json`.
 - **Score drift**: `jankurai audit` writes `.jankurai/score-history.jsonl`; the
-  README badge tracks the current score.
+  Rust `xtask update-badge` command keeps the README badge synchronized.
 - **Downstream**: RedlineDB CI consumes the pinned tarball and surfaces any
   conformance regression against the published corpus.
 
