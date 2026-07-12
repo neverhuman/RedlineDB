@@ -36,5 +36,6 @@ grep -q 'bash ops/ci/release.sh' "$release_workflow" || fail "github release wor
 grep -q 'actions/attest-build-provenance' "$release_workflow" || fail "github release workflow must attest release artifacts"
 grep -q 'gh release create' "$release_workflow" || fail "github release workflow must publish a GitHub release"
 grep -q -- '--verify-tag' "$release_workflow" || fail "github release workflow must bind the release to a verified tag (--verify-tag)"
+grep -Fq 'required|pr-ci)' "$repo_root/scripts/ci-local.sh" || fail "ci-local must alias required to pr-ci"
 grep -q 'ops/ci/pr-ci.sh' "$repo_root/scripts/ci-local.sh" || fail "ci-local must dispatch to ops/ci/pr-ci.sh"
 grep -q 'ops/ci/release.sh' "$repo_root/scripts/ci-local.sh" || fail "ci-local must dispatch to ops/ci/release.sh"

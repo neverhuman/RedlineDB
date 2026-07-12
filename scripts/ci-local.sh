@@ -14,8 +14,9 @@ fi
 
 usage() {
     cat >&2 <<'USAGE'
-usage: scripts/ci-local.sh {pr-ci|security|jankurai|audit|release|doctor}
+usage: scripts/ci-local.sh {required|pr-ci|security|jankurai|audit|release|doctor}
 
+  required alias for the pr-ci validation surface
   pr-ci    run the exact local mirror of the CI validation surface
   security run the repository security lane
   jankurai run the jankurai tool-suite evidence lane
@@ -31,7 +32,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 case "$1" in
-    pr-ci)
+    required|pr-ci)
         bash "$repo_root/ops/ci/pr-ci.sh"
         ;;
     security)
