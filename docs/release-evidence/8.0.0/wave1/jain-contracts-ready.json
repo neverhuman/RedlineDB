@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/jain-contracts",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-contracts/pulls/6"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-contracts"
+      },
+      "sha": "3878cb9854311da9c8511da9aec8a34a867dd2ca"
+    },
+    "body": "Review the exact v8.0.0 contracts split metadata, schema v11 consistency, and release controls on commit 0e6310bec7f06b5791d75305b13467095c069e4b. Detached governed release CI and Jankurai proof are required before ready, approval, and merge.",
+    "created_at": "2026-07-12T07:42:42.244128082Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-contracts"
+      },
+      "sha": "3640d85291fe396755689f7388452268a9f8be48"
+    },
+    "html_url": "/jeryu/jain-contracts/pull/6",
+    "id": "3bb299be-8893-4cac-9b86-69477e2369e9",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 6,
+    "source_repository": "jeryu/jain-contracts",
+    "state": "open",
+    "title": "release: prepare jain-contracts 8.0.0 candidate",
+    "updated_at": "2026-07-12T08:03:53.199790761Z",
+    "url": "/repos/jeryu/jain-contracts/pulls/6",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783843431
+}

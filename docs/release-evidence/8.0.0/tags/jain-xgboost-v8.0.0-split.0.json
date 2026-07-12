@@ -1,0 +1,22 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "acd712907f1dfd3b7d50811e2d6edf8c5d7850c4",
+    "remote": "acd712907f1dfd3b7d50811e2d6edf8c5d7850c4"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "acd712907f1dfd3b7d50811e2d6edf8c5d7850c4",
+  "commit_input": "acd712907f1dfd3b7d50811e2d6edf8c5d7850c4",
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-xgboost.git",
+  "remote_main": "acd712907f1dfd3b7d50811e2d6edf8c5d7850c4",
+  "repository": "/home/ubuntu/jain-split/jain-xgboost",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-xgboost-v8.0.0-split.0",
+  "timestamp_unix": 1783844137
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": "jain.wave-release-ci/v1",
+  "repository": "jain-contracts",
+  "head_sha": "3640d85291fe396755689f7388452268a9f8be48",
+  "detached_snapshot": true,
+  "release_ci": true,
+  "checks": {
+    "jain-contracts/required": "success",
+    "jankurai/proof": "success"
+  },
+  "jankurai_score": 86,
+  "hard_findings": 0,
+  "contract_schema_count": 6,
+  "package_api_status": "not-applicable",
+  "status": "pass",
+  "observed_at": "2026-07-12T08:08:00Z"
+}

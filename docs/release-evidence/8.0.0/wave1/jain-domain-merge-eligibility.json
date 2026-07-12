@@ -1,0 +1,13 @@
+{
+  "schema_version": "jain.jeryu-merge-eligibility/v1",
+  "source_operation": "jeryu-local pr-list",
+  "repository": "jeryu/jain-domain",
+  "pull_request": 4,
+  "head_sha": "2faf3fd7d27fc37546fef03e674016ff8363d10a",
+  "draft": false,
+  "state": "open",
+  "mergeable": true,
+  "mergeable_state": "clean",
+  "status": "pass",
+  "observed_at": "2026-07-12T08:08:00Z"
+}

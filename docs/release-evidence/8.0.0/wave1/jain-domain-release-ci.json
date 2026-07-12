@@ -1,0 +1,15 @@
+{
+  "schema_version": "jain.wave-release-ci/v1",
+  "repository": "jain-domain",
+  "head_sha": "2faf3fd7d27fc37546fef03e674016ff8363d10a",
+  "detached_snapshot": true,
+  "release_ci": true,
+  "checks": {
+    "jain-domain/required": "success",
+    "jankurai/proof": "success"
+  },
+  "jankurai_score": 86,
+  "hard_findings": 0,
+  "status": "pass",
+  "observed_at": "2026-07-12T08:08:00Z"
+}

@@ -1,0 +1,22 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "4f651fc6cf877b61f78752dc38af095a921100fc",
+    "remote": "4f651fc6cf877b61f78752dc38af095a921100fc"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "4f651fc6cf877b61f78752dc38af095a921100fc",
+  "commit_input": "4f651fc6cf877b61f78752dc38af095a921100fc",
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git",
+  "remote_main": "4f651fc6cf877b61f78752dc38af095a921100fc",
+  "repository": "/home/ubuntu/jain-split/jain-lightgbm",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-lightgbm-v8.0.0-split.0",
+  "timestamp_unix": 1783844137
+}

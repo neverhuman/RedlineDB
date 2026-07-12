@@ -1,0 +1,13 @@
+{
+  "schema_version": "jain.smartcluster.release-lane/v1",
+  "release": "8.0.0",
+  "tag": "jain-smartcluster-v8.0.0-split.0",
+  "commit": "886c8468a8264777c9955c81009a7f0799c2925a",
+  "lane": "linux-integration",
+  "status": "blocked",
+  "reason": "target-host capability was unavailable; SKIP is not release evidence",
+  "command": "cargo test --locked -p jain-smartcluster-daemon --test linux_cgroup -- --ignored --nocapture",
+  "exit_code": 0,
+  "started_at": "2026-07-12T07:53:34Z",
+  "completed_at": "2026-07-12T07:53:35Z"
+}

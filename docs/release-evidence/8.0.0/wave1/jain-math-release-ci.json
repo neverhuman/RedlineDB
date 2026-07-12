@@ -1,0 +1,19 @@
+{
+  "schema_version": "jain.wave-release-ci/v1",
+  "repository": "jain-math",
+  "head_sha": "9f38b29def4c17c3b4c610ec7fc6edfe85ef6c08",
+  "detached_snapshot": true,
+  "release_ci": true,
+  "checks": {
+    "all_features_tests": "success",
+    "security": "success",
+    "jain-math/required": "failure",
+    "jankurai/proof": "not-run"
+  },
+  "jankurai_score": 85,
+  "required_baseline_score": 86,
+  "hard_findings": 0,
+  "blocker": "score regression: 85 < baseline 86 (allowed_drop=0)",
+  "status": "fail",
+  "observed_at": "2026-07-12T08:08:00Z"
+}

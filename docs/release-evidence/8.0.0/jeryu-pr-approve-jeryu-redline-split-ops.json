@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Reviewable nested-family control-plane repair: declare profiles, Jeryu slugs, immutable tags, and the control-plane entry in the Redline manifest; run the hub guard lane without violating the duplicate-engine invariant.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T09:46:54.126320748+00:00",
+      "head_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:d1b309b2a33e2f3140f8bffb671aac07180ccb62:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "base",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-control-plane",
+      "head_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:d1b309b2a33e2f3140f8bffb671aac07180ccb62:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: manage nested Redline family from control plane",
+      "updated_at": "2026-07-12T09:46:34.854473782+00:00"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact Rust-only control-plane head; detached required, strict security, ratchet score, and release-readiness passed.",
+      "evidence": null,
+      "expected_head_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/1/reviews"
+  },
+  "response": {
+    "description": "Reviewable nested-family control-plane repair: declare profiles, Jeryu slugs, immutable tags, and the control-plane entry in the Redline manifest; run the hub guard lane without violating the duplicate-engine invariant.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T09:46:54.117258430+00:00",
+      "head_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:d1b309b2a33e2f3140f8bffb671aac07180ccb62:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "base",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-control-plane",
+      "head_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:d1b309b2a33e2f3140f8bffb671aac07180ccb62:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: manage nested Redline family from control plane",
+      "updated_at": "2026-07-12T09:46:34.854473782+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783849612
+}

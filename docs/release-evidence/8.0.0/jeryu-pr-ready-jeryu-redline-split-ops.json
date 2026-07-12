@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/redline-split-ops/pulls/1"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "base"
+    },
+    "body": "Reviewable nested-family control-plane repair: declare profiles, Jeryu slugs, immutable tags, and the control-plane entry in the Redline manifest; run the hub guard lane without violating the duplicate-engine invariant.",
+    "created_at": "2026-07-12T05:00:41.035331291Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-redline-control-plane",
+      "ref": "codex/v8-redline-control-plane",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/1",
+    "id": "a3e90e0e-892d-4472-9443-4cfeb300f684",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "ci: manage nested Redline family from control plane",
+    "updated_at": "2026-07-12T09:46:34.854473782Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783849594
+}

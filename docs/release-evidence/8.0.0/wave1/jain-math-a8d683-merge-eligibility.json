@@ -1,0 +1,13 @@
+{
+  "schema_version": "jain.jeryu-merge-eligibility/v1",
+  "source_operation": "jeryu-local pr-list",
+  "repository": "jeryu/jain-math",
+  "pull_request": 8,
+  "head_sha": "a8d683aec6843d0becab2184206354ba774317ac",
+  "draft": false,
+  "state": "open",
+  "mergeable": true,
+  "mergeable_state": "clean",
+  "status": "pass",
+  "observed_at": "2026-07-12T08:37:47Z"
+}

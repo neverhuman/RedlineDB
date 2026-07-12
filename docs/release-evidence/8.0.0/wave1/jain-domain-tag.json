@@ -1,0 +1,22 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "2faf3fd7d27fc37546fef03e674016ff8363d10a",
+    "remote": "2faf3fd7d27fc37546fef03e674016ff8363d10a"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "2faf3fd7d27fc37546fef03e674016ff8363d10a",
+  "commit_input": "2faf3fd7d27fc37546fef03e674016ff8363d10a",
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-domain.git",
+  "remote_main": "2faf3fd7d27fc37546fef03e674016ff8363d10a",
+  "repository": "/home/ubuntu/jain-split/jain-domain",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-domain-v8.0.0-split.0",
+  "timestamp_unix": 1783843761
+}

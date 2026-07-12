@@ -1,0 +1,56 @@
+{
+  "family": "redline-split",
+  "generated_at": "2026-07-12T08:57:39Z",
+  "manifest": "../../../../../redline-split-ops/repos.manifest.toml",
+  "manifest_sha256": "3468502ec05c369491d2f0afd74ba3ac8cc58c91019758b5562c90327079b192",
+  "repositories": [
+    {
+      "commands": [],
+      "failure": "redline: existing immutable tag redline-v4.1.0-jain.1 points to c944e796f5a4fc725bd91420eebaec947c611515, not reviewed main adc8b11a0968c06a1ca673ed719ea966b4067f5f",
+      "log": null,
+      "log_sha256": null,
+      "name": "redline",
+      "path": "../redline-split/redline",
+      "required_check": "redline/required",
+      "status": "fail",
+      "tag": "redline-v4.1.0-jain.1"
+    },
+    {
+      "commands": [],
+      "failure": "redline-core: branch is codex/v8-redline-core-ci, expected main",
+      "log": null,
+      "log_sha256": null,
+      "name": "redline-core",
+      "path": "../redline-split/redline-core",
+      "required_check": "redline-core/required",
+      "status": "fail",
+      "tag": "redline-core-v4.1.0-jain.1"
+    },
+    {
+      "commands": [],
+      "failure": "redline-testing: branch is codex/v8-redline-testing-ci, expected main",
+      "log": null,
+      "log_sha256": null,
+      "name": "redline-testing",
+      "path": "../redline-split/redline-testing",
+      "required_check": "redline-testing/required",
+      "status": "fail",
+      "tag": "redline-testing-v1.0.1-jain.0"
+    },
+    {
+      "commands": [],
+      "failure": "redline-web: branch is codex/v8-redline-web-ci, expected main",
+      "log": null,
+      "log_sha256": null,
+      "name": "redline-web",
+      "path": "../redline-split/redline-web",
+      "required_check": "redline-web/required",
+      "status": "fail",
+      "tag": "redline-web-v0.1.0-jain.0"
+    }
+  ],
+  "schema_version": "redline.family-ci/v1",
+  "started_at": "2026-07-12T08:57:39Z",
+  "status": "fail",
+  "strict_tools": true
+}

@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/jain-math",
+  "request": {
+    "body": {
+      "body_markdown": "Independent release review verified package 8.0.0, pinned cargo-public-api compatibility evidence, score 86 with zero hard findings, and detached required plus jankurai/proof checks on this exact SHA.",
+      "evidence": null,
+      "expected_head_sha": "a8d683aec6843d0becab2184206354ba774317ac",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-math/pulls/8/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783845397
+}

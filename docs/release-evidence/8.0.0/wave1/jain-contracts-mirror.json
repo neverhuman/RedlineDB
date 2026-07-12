@@ -1,0 +1,22 @@
+{
+  "manifest": "repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-contracts.git",
+      "mirror_existed": true,
+      "name": "jain-contracts",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-contracts",
+      "source_head": "3640d85291fe396755689f7388452268a9f8be48"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-contracts"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783843769
+}

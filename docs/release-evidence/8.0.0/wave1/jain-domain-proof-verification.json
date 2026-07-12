@@ -1,0 +1,10 @@
+{
+  "schema_version": "jain.jeryu-proof-verification/v1",
+  "repository": "jain-domain",
+  "head_sha": "2faf3fd7d27fc37546fef03e674016ff8363d10a",
+  "admissible": true,
+  "plan_hash": "0d5ff2a5a8e2a8a4",
+  "blockers": [],
+  "status": "pass",
+  "observed_at": "2026-07-12T08:08:00Z"
+}

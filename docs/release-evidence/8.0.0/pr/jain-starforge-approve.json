@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Reviewed mainline-only Starforge v8 release candidate. Exact detached SHA passed non-advisory diff score 85 (hard=0, caps=0), clean release all-features/all-targets plus foundation parity, six exact LFS OID/SHA256 checks, committed regression golden, current Chimera regression/classifier real-weight smokes, score 87, security/SBOM, contract, and artifact lanes. The absent legacy single-head classifier weight remains explicitly optional and is not claimed as passed.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-12T08:58:38.220095034+00:00",
+      "head_sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33",
+      "status": "pass"
+    },
+    "passport_hash": "passport:e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "de32385a21f451422899fc5815b0a73cfbe9e7ef",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "456babe5-8c52-4e63-82cb-6596fb125ce5#5",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8.0.0-release-review",
+      "head_sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 5,
+      "passport_hash": "passport:e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "456babe5-8c52-4e63-82cb-6596fb125ce5",
+        "name": "jain-starforge",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Release jain-starforge 8.0.0 split.0",
+      "updated_at": "2026-07-12T08:58:23.816061710+00:00"
+    }
+  },
+  "repository": "jeryu/jain-starforge",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact Starforge v8 SHA after clean detached diff, required, all-feature, foundation, six-file LFS OID/SHA256, regression golden, current Chimera real-weight, security/SBOM, score, contract, and artifact gates passed. The absent legacy single-head classifier artifact remains optional and is not claimed.",
+      "evidence": null,
+      "expected_head_sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-starforge/pulls/5/reviews"
+  },
+  "response": {
+    "description": "Reviewed mainline-only Starforge v8 release candidate. Exact detached SHA passed non-advisory diff score 85 (hard=0, caps=0), clean release all-features/all-targets plus foundation parity, six exact LFS OID/SHA256 checks, committed regression golden, current Chimera regression/classifier real-weight smokes, score 87, security/SBOM, contract, and artifact lanes. The absent legacy single-head classifier weight remains explicitly optional and is not claimed as passed.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-12T08:58:38.210824163+00:00",
+      "head_sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33",
+      "status": "pass"
+    },
+    "passport_hash": "passport:e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "de32385a21f451422899fc5815b0a73cfbe9e7ef",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "456babe5-8c52-4e63-82cb-6596fb125ce5#5",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8.0.0-release-review",
+      "head_sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 5,
+      "passport_hash": "passport:e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "456babe5-8c52-4e63-82cb-6596fb125ce5",
+        "name": "jain-starforge",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Release jain-starforge 8.0.0 split.0",
+      "updated_at": "2026-07-12T08:58:23.816061710+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783846716
+}

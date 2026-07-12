@@ -1,0 +1,32 @@
+{
+  "manifest": "repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jable.git",
+      "mirror_existed": true,
+      "name": "jain-jable",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-jable",
+      "source_head": "15c7cc75bcbc1b3ac7580a68a04a0944880baf14"
+    },
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-starforge.git",
+      "mirror_existed": true,
+      "name": "jain-starforge",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-starforge",
+      "source_head": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-jable",
+    "jain-starforge"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783846803
+}

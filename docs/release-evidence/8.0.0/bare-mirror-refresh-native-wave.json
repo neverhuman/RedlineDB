@@ -1,0 +1,32 @@
+{
+  "manifest": "repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-xgboost.git",
+      "mirror_existed": true,
+      "name": "jain-xgboost",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-xgboost",
+      "source_head": "acd712907f1dfd3b7d50811e2d6edf8c5d7850c4"
+    },
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-lightgbm.git",
+      "mirror_existed": true,
+      "name": "jain-lightgbm",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-lightgbm",
+      "source_head": "4f651fc6cf877b61f78752dc38af095a921100fc"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-xgboost",
+    "jain-lightgbm"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783844169
+}

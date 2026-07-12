@@ -1,0 +1,67 @@
+{
+  "schema_version": "jain.redline-hub-cutover/v1",
+  "generated_at": "2026-07-12T08:33:58Z",
+  "repository": "jeryu/redlineDB",
+  "checkout": "redline-split/redline",
+  "commit": "adc8b11a0968c06a1ca673ed719ea966b4067f5f",
+  "version": "4.1.0-jain.1",
+  "pull_request": {
+    "number": 3,
+    "merged": true,
+    "merge_commit": "adc8b11a0968c06a1ca673ed719ea966b4067f5f",
+    "required_status": {
+      "context": "redline/required",
+      "state": "success",
+      "id": "189d6696-e1f5-4484-9de3-de84daee1bde"
+    }
+  },
+  "audit": {
+    "jankurai_version": "1.6.10",
+    "jankurai_commit": "3c804453e6c7a6e0e4028d95cc3bccea467277ef",
+    "score": 86,
+    "raw_score": 86,
+    "hard_findings": 0,
+    "caps": [],
+    "ratchet_baseline": 64,
+    "ratchet_delta": 22,
+    "language_bad_behavior_tests": {
+      "passed": 34,
+      "failed": 0
+    },
+    "security": {
+      "strict": true,
+      "exit_code": 0,
+      "elapsed_ms": 20163
+    }
+  },
+  "proofbind": {
+    "status": "blocked",
+    "mode": "advisory",
+    "changed_paths": 19,
+    "obligations": 19,
+    "unbound_receipts": 19,
+    "high_or_critical_unbound_receipts": 12,
+    "forge_status": {
+      "context": "jankurai/proof",
+      "state": "failure",
+      "id": "51aef866-327e-4adc-9d93-99a2419f579e"
+    }
+  },
+  "not_applicable": {
+    "rust_proofmark": "thin hub has no Rust source",
+    "rust_witness": "thin hub has no Rust source"
+  },
+  "artifact_sha256": {
+    "repo_score": "fe9c8ac3a896e0751e6b62478d8c9a70fd40abd257658d54b3e43ad47ad082dc",
+    "security_evidence": "272c185e932bb1ae370c6e7ac00d14823fdfba9e761899fac6879a0223a6c9c1",
+    "proofbind_surface_witness": "b9bf398a093fbd5905d1ee026a28f5b354b9a26d4ebfecb509565da4390859a2",
+    "language_bad_behavior_log": "f83ae64b3aeb9d4bedaa6642118780c0be61e977a1573522b4fc58c906029c20",
+    "rust_not_applicable": "9df85e5576f3d10a81033113c11947ca9eae2bc8eb185503df487767790fd57b"
+  },
+  "tag_operation": "not_authorized_for_hub",
+  "existing_hub_tags_moved": false,
+  "production_writes": false,
+  "release_status": "candidate",
+  "formal_ga": false,
+  "cutover_eligible": false
+}

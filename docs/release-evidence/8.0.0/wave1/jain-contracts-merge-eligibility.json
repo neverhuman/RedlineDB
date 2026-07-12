@@ -1,0 +1,13 @@
+{
+  "schema_version": "jain.jeryu-merge-eligibility/v1",
+  "source_operation": "jeryu-local pr-list",
+  "repository": "jeryu/jain-contracts",
+  "pull_request": 6,
+  "head_sha": "3640d85291fe396755689f7388452268a9f8be48",
+  "draft": false,
+  "state": "open",
+  "mergeable": true,
+  "mergeable_state": "clean",
+  "status": "pass",
+  "observed_at": "2026-07-12T08:08:00Z"
+}

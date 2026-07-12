@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/jain-starforge",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact Starforge v8 SHA after clean detached diff, required, all-feature, foundation, six-file LFS OID/SHA256, regression golden, current Chimera real-weight, security/SBOM, score, contract, and artifact gates passed. The absent legacy single-head classifier artifact remains optional and is not claimed.",
+      "evidence": null,
+      "expected_head_sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-starforge/pulls/5/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783846716
+}

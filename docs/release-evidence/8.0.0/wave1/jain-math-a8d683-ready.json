@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/jain-math",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-math/pulls/8"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-math"
+      },
+      "sha": "2ef77cebef4f52fe68df40a020963836d7629124"
+    },
+    "body": "Review the exact v8.0.0 math package and bounded algorithm-test release controls on commit 8043101f188ded3018c0f3bb557386d8a6b7e249. Detached governed release CI and Jankurai proof are required before ready, approval, and merge.",
+    "created_at": "2026-07-12T07:42:41.185329460Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-math"
+      },
+      "sha": "a8d683aec6843d0becab2184206354ba774317ac"
+    },
+    "html_url": "/jeryu/jain-math/pull/8",
+    "id": "0188684f-509e-4c0f-8c19-69fab301aeed",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 8,
+    "source_repository": "jeryu/jain-math",
+    "state": "open",
+    "title": "release: prepare jain-math 8.0.0 candidate",
+    "updated_at": "2026-07-12T08:36:26.156802669Z",
+    "url": "/repos/jeryu/jain-math/pulls/8",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783845386
+}

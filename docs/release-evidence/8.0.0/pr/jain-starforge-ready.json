@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/jain-starforge",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-starforge/pulls/5"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-starforge"
+      },
+      "sha": "de32385a21f451422899fc5815b0a73cfbe9e7ef"
+    },
+    "body": "Reviewed mainline-only Starforge v8 release candidate. Exact detached SHA passed non-advisory diff score 85 (hard=0, caps=0), clean release all-features/all-targets plus foundation parity, six exact LFS OID/SHA256 checks, committed regression golden, current Chimera regression/classifier real-weight smokes, score 87, security/SBOM, contract, and artifact lanes. The absent legacy single-head classifier weight remains explicitly optional and is not claimed as passed.",
+    "created_at": "2026-07-12T08:57:40.879587693Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-starforge"
+      },
+      "sha": "e9f624972b60a0f9c26f4a0e3b3a00ca2e471e33"
+    },
+    "html_url": "/jeryu/jain-starforge/pull/5",
+    "id": "ba2ff32b-36cc-41f7-9819-b6bc2d932762",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 5,
+    "source_repository": "jeryu/jain-starforge",
+    "state": "open",
+    "title": "Release jain-starforge 8.0.0 split.0",
+    "updated_at": "2026-07-12T08:58:23.816061710Z",
+    "url": "/repos/jeryu/jain-starforge/pulls/5",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783846703
+}

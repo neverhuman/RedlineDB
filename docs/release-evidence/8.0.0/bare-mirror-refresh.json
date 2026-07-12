@@ -1,248 +1,248 @@
 {
   "manifest": "repos.manifest.toml",
-  "mode": "dry-run",
+  "mode": "apply",
   "operation": "refresh-bare-mirrors",
   "repositories": [
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain.git",
       "mirror_existed": true,
       "name": "jain",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain",
       "source_head": "5aa554d9430030a9e221d888cdef9ea777f0d793"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-docs.git",
       "mirror_existed": true,
       "name": "jain-docs",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-docs",
       "source_head": "bcc010b537af659ee3e8fcfd81f73d5ff73e90a9"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-domain.git",
       "mirror_existed": true,
       "name": "jain-domain",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-domain",
       "source_head": "2faf3fd7d27fc37546fef03e674016ff8363d10a"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-math.git",
       "mirror_existed": true,
       "name": "jain-math",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-math",
       "source_head": "8043101f188ded3018c0f3bb557386d8a6b7e249"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-contracts.git",
       "mirror_existed": true,
       "name": "jain-contracts",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-contracts",
       "source_head": "0e6310bec7f06b5791d75305b13467095c069e4b"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-catboost.git",
       "mirror_existed": true,
       "name": "jain-catboost",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-catboost",
       "source_head": "4717dee649d4ebeb70b5af945b9ec177d49ad2d9"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-xgboost.git",
       "mirror_existed": true,
       "name": "jain-xgboost",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-xgboost",
       "source_head": "d5fbd32ff004fca754668e96b9988cd8ca6b0ded"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-lightgbm.git",
       "mirror_existed": true,
       "name": "jain-lightgbm",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-lightgbm",
       "source_head": "683055e356ee7b43d24a14ee4cbd227833b7fba2"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jable.git",
       "mirror_existed": true,
       "name": "jain-jable",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-jable",
       "source_head": "15c7cc75bcbc1b3ac7580a68a04a0944880baf14"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-battle-gpu.git",
       "mirror_existed": true,
       "name": "jain-battle-gpu",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-battle-gpu",
       "source_head": "f447efa9f85f8e59d711f1b81964e54722426b71"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-starforge.git",
       "mirror_existed": true,
       "name": "jain-starforge",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-starforge",
       "source_head": "da440aaa57987445793e292c1bd471f308da275c"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-core.git",
       "mirror_existed": true,
       "name": "jain-core",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-core",
       "source_head": "07893be2d63add260ad76bb2d02d6dc18ede39e5"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-llm.git",
       "mirror_existed": true,
       "name": "jain-llm",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-llm",
       "source_head": "660b634a55eb9b40b09642abfacd195540d1832e"
     },
     {
-      "action": "would-create",
+      "action": "created",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-agent.git",
       "mirror_existed": false,
       "name": "jain-agent",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-agent",
       "source_head": "8e37d46d054144ddabd6251f218bc272f4a89db6"
     },
     {
-      "action": "would-create",
+      "action": "created",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jnoccio.git",
       "mirror_existed": false,
       "name": "jain-jnoccio",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-jnoccio",
       "source_head": "df9da7ea976d1047e28a44a0eb1f23dea0ea83dd"
     },
     {
-      "action": "would-create",
+      "action": "created",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-zyal.git",
       "mirror_existed": false,
       "name": "jain-zyal",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-zyal",
       "source_head": "815ba81c7654a8b08b76e91a8197e571f6b7cd08"
     },
     {
-      "action": "would-create",
+      "action": "created",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jailgun.git",
       "mirror_existed": false,
       "name": "jain-jailgun",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-jailgun",
       "source_head": "f9ebf1b380227f89ff34bb538182b4113a4a90f9"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-research.git",
       "mirror_existed": true,
       "name": "jain-research",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-research",
       "source_head": "28ffffc61c15004c7647ef8b8ad6aa6ecdad4bc5"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-report.git",
       "mirror_existed": true,
       "name": "jain-report",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-report",
       "source_head": "5cef1d0079908485857009ff18db79d8e4078068"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-tui.git",
       "mirror_existed": true,
       "name": "jain-tui",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-tui",
       "source_head": "b96010d56b07c54972dd9f2d29f691b2cb1cb375"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-cli.git",
       "mirror_existed": true,
       "name": "jain-cli",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-cli",
       "source_head": "485b30a56cfaf6a23328a94d05a32e6d0ae16fee"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-web.git",
       "mirror_existed": true,
       "name": "jain-web",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-web",
       "source_head": "8c091829a3fc2b3f2e276806253f7cf90485636f"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-python.git",
       "mirror_existed": true,
       "name": "jain-python",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-python",
       "source_head": "fb64cafb1f109bad4d2bc4f76c84e132b57c882f"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-model-zoo.git",
       "mirror_existed": true,
       "name": "jain-model-zoo",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-model-zoo",
       "source_head": "3f4443d75cc27df14f6e279f76e16c365cf2de96"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-ops.git",
       "mirror_existed": true,
       "name": "jain-ops",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-ops",
       "source_head": "6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d"
     },
     {
-      "action": "would-refresh",
+      "action": "refreshed",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-deploy.git",
       "mirror_existed": true,
       "name": "jain-deploy",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-deploy",
       "source_head": "dbf9e6bf5fd17a6630254c92607ba642518ce929"
     },
     {
-      "action": "would-create",
+      "action": "created",
       "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-smartcluster.git",
       "mirror_existed": false,
       "name": "jain-smartcluster",
-      "refs_verified": false,
+      "refs_verified": true,
       "source": "/home/ubuntu/jain-split/jain-smartcluster",
       "source_head": "eda63ace6da63a7ee80c3ce381c2ccfb4fe8ff50"
     }
@@ -250,5 +250,5 @@
   "schema_version": "jain.bare-mirror-refresh/v1",
   "selected_repositories": [],
   "status": "pass",
-  "timestamp_unix": 1783840588
+  "timestamp_unix": 1783841319
 }

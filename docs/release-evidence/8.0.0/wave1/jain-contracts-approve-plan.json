@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/jain-contracts",
+  "request": {
+    "body": {
+      "body_markdown": "Independent release review verified schema registry and drift receipt, package API N/A, detached required and jankurai/proof checks, security, score, contract, and artifact lanes on this exact SHA.",
+      "evidence": null,
+      "expected_head_sha": "3640d85291fe396755689f7388452268a9f8be48",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-contracts/pulls/6/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783843445
+}

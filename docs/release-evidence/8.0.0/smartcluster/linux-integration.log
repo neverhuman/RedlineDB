@@ -1,0 +1,11 @@
+   Compiling jain-smartcluster-daemon v8.0.0 (/tmp/jain-smartcluster-proof-886c8468/crates/jain-smartcluster-daemon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.54s
+     Running tests/linux_cgroup.rs (target/debug/deps/linux_cgroup-1259135d6dd05cdd)
+
+running 2 tests
+SKIP: cgroup delegation unavailable: cannot create cgroup /sys/fs/cgroup/jain-smartcluster-test.slice: Permission denied (os error 13)
+SKIP: PSI triggers unavailable: cannot open PSI source /sys/fs/cgroup/cpu.pressure: Permission denied (os error 13)
+test real_delegated_cgroup_controls_are_writable ... ok
+test real_psi_trigger_registers_when_delegated ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
