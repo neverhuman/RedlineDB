@@ -58,6 +58,7 @@ jobs:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c
         with:
           go-version: 1.25.5
@@ -74,7 +75,9 @@ jobs:
           jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json --script ops/ci/security.sh
           jankurai security run . --out target/jankurai/security/evidence.json --strict --profile ci --script ops/ci/security.sh
       - name: Bind changed surfaces to proof obligations
-        run: jankurai proofbind verify . --changed-from origin/main --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          jankurai proofbind verify . --changed-from origin/main --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
       - name: Run exact language bad-behavior suite
         run: |
           set -o pipefail
