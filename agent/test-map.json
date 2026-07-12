@@ -160,11 +160,6 @@
       "lane": "required",
       "purpose": "verify family lock parses and records split pins"
     },
-    "infrastructure.lock.toml": {
-      "command": "just required",
-      "lane": "required",
-      "purpose": "verify required infrastructure remains manifest-bound"
-    },
     "ops/": {
       "command": "just check && just tool-adoption",
       "lane": "ci",
@@ -224,6 +219,11 @@
       "command": "just check",
       "lane": "check",
       "purpose": "verify split helper scripts parse and stay manifest-driven"
+    },
+    "python-parity-exceptions.toml": {
+      "command": "just fast && just required",
+      "lane": "required",
+      "purpose": "verify every frozen Python parity exception has current hashes and named Rust ownership"
     },
     "repos.manifest.toml": {
       "command": "just check && just score",

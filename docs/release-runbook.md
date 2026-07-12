@@ -11,7 +11,9 @@ the four Redline repositories, and `redline-split-ops` are managed repositories 
 manifest remains `../redline-split-ops/repos.manifest.toml`.
 
 All receipts belong under `docs/release-evidence/8.0.0/`. Product, package, CLI, deploy, and image
-metadata use `8.0.0`; immutable repository tags retain the separate `*-v8.0.0-split.0` form.
+metadata use `8.0.0`; immutable repository tags use the exact per-repository identity declared by
+the canonical manifest. Most Jain repositories use `*-v8.0.0-split.0`; Battle GPU and Contracts
+use their authorized corrective `split.1` identities.
 
 ## Non-negotiable safety rules
 
@@ -133,10 +135,11 @@ just test
 ```
 
 `proof-refresh` accepts only fresh, checksummed successful family CI plus accepted consumer
-evidence and must leave both lock mirrors byte-identical. Create
-`redline-core-v4.1.0-jain.1` only when the local and remote tag are absent and the reviewed core
-`main` is the exact eligible commit. If an existing local tag points elsewhere, stop for reviewed
-resolution; never delete or move it manually.
+evidence and must leave both lock mirrors byte-identical. The authorized corrective family
+identities are `redline-core-v4.1.0-jain.2`, `redline-v4.1.0-jain.2`,
+`redline-testing-v1.0.1-jain.1`, and `redline-web-v0.1.0-jain.1`. Create each only when the local
+and remote tag are absent and reviewed `main` is the exact manifest-bound eligible commit. If an
+existing tag points elsewhere, stop for reviewed resolution; never delete or move it manually.
 
 ## 4. Jain dependency waves
 
@@ -161,8 +164,8 @@ v8 metadata/tag through separate release PRs.
 Create a repository tag with an inspectable dry run followed by the explicit apply operation:
 
 ```bash
-just immutable-tag /absolute/checkout REMOTE_URL REPO-v8.0.0-split.0 REVIEWED_MAIN_SHA
-just immutable-tag-apply /absolute/checkout REMOTE_URL REPO-v8.0.0-split.0 REVIEWED_MAIN_SHA
+just immutable-tag /absolute/checkout REMOTE_URL EXACT_MANIFEST_TAG REVIEWED_MAIN_SHA
+just immutable-tag-apply /absolute/checkout REMOTE_URL EXACT_MANIFEST_TAG REVIEWED_MAIN_SHA
 ```
 
 The operation reads metadata from the exact reviewed commit before touching refs. It refuses a
@@ -223,7 +226,8 @@ Run the audited wrapper from `jain-deploy` after the dependency graph resolves:
 
 ```bash
 cd /home/ubuntu/jain-split/jain-deploy
-JAIN_RELEASE_VERSION=8.0.0 ATOMICSOUL_PUSH=0 ./scripts/atomicsoul-dry-run.sh
+JAIN_RELEASE_VERSION=8.0.0 ATOMICSOUL_PUSH=0 ./scripts/atomicsoul-dry-run.sh \
+  --evidence-dir ../jain-split-ops/docs/release-evidence/8.0.0/atomicsoul
 ```
 
 It performs the local `BuildLocal` gate and plans image publish, canary, public-route, promotion,

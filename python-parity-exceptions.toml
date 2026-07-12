@@ -1,0 +1,179 @@
+schema_version = "1"
+policy = "frozen Python reference data may exist only when a named Rust owner verifies its hashed output"
+
+[[exception]]
+path = "jain-deploy/ops/ci/testdata/invention-export/model.py"
+justification = "Frozen export fixture exercised by the Rust compatibility implementation."
+rust_owner = "jain-deploy/release-engineering"
+rust_evidence = "jain-deploy/ops/ci/testdata/invention-export/model.rs"
+output_path = "jain-deploy/ops/ci/testdata/invention-export/reference_predictions.txt"
+input_sha256 = "e3bf5349e78f09bf31e696830d411d80c04849281346bd3c0db9573757daa49b"
+output_sha256 = "0b9b9a1cd0b25b3ff3d92ea5e35b973f52cdab18d3f51f95d1a3672f24c8a0e0"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/ops/parity/parity_suite.py"
+justification = "Frozen cross-model reference driver whose recorded result is consumed by Rust release validation."
+rust_owner = "jain-model-zoo/model-parity"
+rust_evidence = "jain-model-zoo/tools/model-zoo-ops/src/main.rs"
+output_path = "jain-model-zoo/ops/parity/parity_errors.json"
+input_sha256 = "d1ef84935bbad864a8bd36c79658e95349eb29f32ce82216e8883b8f74d2839f"
+output_sha256 = "e0cf0965edb49fe6fce0d760330244bd4fbdbe6a8005c891f6a05e43ec7ade58"
+comparison = "normalized-semantic"
+invocation_paths = ["jain-model-zoo/ops/parity/run.sh"]
+
+[[exception]]
+path = "jain-model-zoo/ops/parity/plot_errors.py"
+justification = "Frozen renderer retained only to explain the checksummed parity report image."
+rust_owner = "jain-model-zoo/model-parity"
+rust_evidence = "jain-model-zoo/tools/model-zoo-ops/src/main.rs"
+output_path = "jain-model-zoo/ops/parity/parity_errors.png"
+input_sha256 = "f0859005fae4242b0eb88afad33f253fcb17323e9c8acd2140f2242349e3239b"
+output_sha256 = "c7d63fcb5346742961681a36f143859264db8119ed79aced43704c34563cdff1"
+comparison = "byte-identical"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py"
+justification = "Frozen TabICL oracle source for the committed probability fixture."
+rust_owner = "jain-model-zoo/tabicl-port"
+rust_evidence = "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs"
+output_path = "jain-model-zoo/reference/ported/tabicl/oracle/dump/proba.npy"
+input_sha256 = "6c5a799f55cde924c4c6e8a9059fd62ca0a4af6e8f18b507c9720ae9cfcd2ff0"
+output_sha256 = "daa40b29b04740e7e77c7adc04b866f3d5b0aac0532e8c537c97d2324eba2116"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py"
+justification = "Frozen TabDPT classifier oracle source for the committed probability fixture."
+rust_owner = "jain-model-zoo/tabdpt-classifier-port"
+rust_evidence = "jain-model-zoo/reference/ported/tabdpt_classifier/src/bin/verify_oracle.rs"
+output_path = "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump/p1.npy"
+input_sha256 = "115bf2fa7847d8b33f6c19fecaacd045e36f18464084cbef310fb0fff6963619"
+output_sha256 = "5dd1c10c80361c60c4ac02ccc706f120357b622fff5ced610fb2295bb6af7550"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py"
+justification = "Frozen TabDPT regressor oracle source for the committed prediction fixture."
+rust_owner = "jain-model-zoo/tabdpt-regressor-port"
+rust_evidence = "jain-model-zoo/reference/ported/tabdpt_regressor/src/bin/verify_oracle.rs"
+output_path = "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump/yhat.npy"
+input_sha256 = "eab410657cada0c0490a7438d6e9b27b02ed2f352746f3b8a3e6ced5d31596d4"
+output_sha256 = "b7e3d30e532aaaae40081777bc673e6058b60b195e92cd2b54f65586a06ea5ff"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py"
+justification = "Frozen NewMath oracle whose constants are asserted by the named Rust test."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs"
+output_path = "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs"
+input_sha256 = "53abd3b8e51cdb8153c5504bfa098711f5117120d84d8251c6fe202fa4660e9d"
+output_sha256 = "a6235b561e6bf93dc1c11b8df964238b66b0b123e923fbb10604e13cd411b751"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py"
+justification = "Frozen NewMath oracle whose constants are asserted by the named Rust test."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs"
+output_path = "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs"
+input_sha256 = "4052fcbc07fc3b82dae53472a6b8cf62c354870bf5690d9c5d4972959362b3aa"
+output_sha256 = "8642081ea681c9780e5fa7569f6768d624b6f0410074fc2129d9f9682efa8c46"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py"
+justification = "Frozen NewMath regression oracle bound to the Rust regression report tests."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs"
+input_sha256 = "89963f2fdc511055d0592ec21c3f5bf6492c143103e46240085f4d7d51ebf3d1"
+output_sha256 = "2097bd7fd27c77a7ad473a197b54da67ebb7ac865c9f2fc593e49321be511b5f"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/oracle.py"
+justification = "Frozen NewMath classification oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs"
+input_sha256 = "1229906a5766c04b38f1e1e159c4770d50309a2e03e31505978a6662e98b8e7f"
+output_sha256 = "89793636db12c47e700c7642f333e71897d599d60572ebc07f0aec88fb4413ad"
+comparison = "normalized-semantic"
+invocation_paths = [
+  "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh",
+  "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh",
+]
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py"
+justification = "Frozen NewMath transform oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs"
+input_sha256 = "78f8d6d05f2b7b8ee0a7e4bb141d5587dbf85a21d6f628b59e022b93853e220f"
+output_sha256 = "8162dda92170d093883bb3b8ca35c99d1cbf8264774ad535828f4987c8deb0a3"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py"
+justification = "Frozen NewMath transform oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs"
+input_sha256 = "5668e1ad1cb317706b62eda0b8b38d340171b0cec048f47e481998d077f6a08b"
+output_sha256 = "5c4f892f3a79d0fe26c060d817c1da484131ceb4efd60a32a1b28696bccb0bd5"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py"
+justification = "Frozen NewMath transform oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs"
+input_sha256 = "48352edad011addd7366b19f5191e80accd2670554a52df65cf45c4f22e9a7a1"
+output_sha256 = "fbe6c82b5b4f312fe3fe98deea6bacc5d87e6dcd6dd59569276c698cb979692b"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py"
+justification = "Frozen NewMath transform oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs"
+input_sha256 = "788be280714fa2c99978cc77313723bd5ff1c47ddb3792b8516c51a868e79d3c"
+output_sha256 = "7199f0694ba2885656a18ca36fa1886a81741b536c92ba130edb6ac92e5a9eed"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[inline_exception]]
+rust_evidence = "jain-math/crates/feat-math/tests/golden.rs"
+justification = "Rust parity tests generate deterministic Python and Rust artifacts from one genome and compare their predictions byte-for-byte."
+rust_owner = "jain-math/feat-math"
+input_path = "jain-math/crates/feat-math/tests/golden.rs"
+output_path = "jain-math/crates/feat-math/tests/golden.rs"
+input_sha256 = "41a840102209fca342e1483b2e4cfda78dfd13acdcfcbeaf22ac40e2ecf34b8a"
+output_sha256 = "41a840102209fca342e1483b2e4cfda78dfd13acdcfcbeaf22ac40e2ecf34b8a"
+comparison = "byte-identical"
+
+[[inline_exception]]
+rust_evidence = "jain-math/crates/feat-math/tests/champion_parity.rs"
+justification = "Rust parity tests execute the deterministically emitted Python reference and compare predictions to the Rust interpreter."
+rust_owner = "jain-math/feat-math"
+input_path = "jain-math/crates/feat-math/tests/champion_parity.rs"
+output_path = "jain-math/crates/feat-math/tests/champion_parity.rs"
+input_sha256 = "cb79da4b7f64555ba51ec60b6a6ffcf72ac9325ea03bedc8d8130472fd8d1e85"
+output_sha256 = "cb79da4b7f64555ba51ec60b6a6ffcf72ac9325ea03bedc8d8130472fd8d1e85"
+comparison = "normalized-semantic"

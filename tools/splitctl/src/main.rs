@@ -12,6 +12,7 @@ const RELEASE_VERSION: &str = "8.0.0";
 const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787";
 const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
 const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
+const RELEASE_PROTECTION_POLICY: &str = "immutable-main-v1";
 
 #[derive(Debug, Clone)]
 struct Repo {
@@ -48,6 +49,31 @@ struct JeryuRequest {
 struct ReleaseFeatureMatrix {
     package: String,
     feature_sets: Vec<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PythonParityException {
+    path: String,
+    justification: String,
+    rust_owner: String,
+    rust_evidence: String,
+    output_path: String,
+    input_sha256: String,
+    output_sha256: String,
+    comparison: String,
+    invocation_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PythonInlineParityException {
+    rust_evidence: String,
+    justification: String,
+    rust_owner: String,
+    input_path: String,
+    output_path: String,
+    input_sha256: String,
+    output_sha256: String,
+    comparison: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -155,7 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --manifest PATH --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -525,7 +551,9 @@ fn managed_repositories(
         .get("control_plane")
         .ok_or("manifest is missing its control_plane")?;
     let control_name = string(control, "name").ok_or("control plane is missing its name")?;
-    let release = string(data, "release_version").unwrap_or_else(|| RELEASE_VERSION.to_owned());
+    let control_tag = string(control, "immutable_tag")
+        .or_else(|| string(control, "current_tag"))
+        .ok_or("control plane is missing its exact release tag")?;
     managed.push(ManagedRepo {
         name: control_name.clone(),
         path: PathBuf::from(string(control, "path").ok_or("control plane is missing its path")?),
@@ -533,9 +561,7 @@ fn managed_repositories(
         required_check: string(control, "required_check")
             .ok_or("control plane is missing its required check")?,
         branch: string(control, "branch").unwrap_or_else(|| "main".to_owned()),
-        tag: string(control, "immutable_tag")
-            .or_else(|| string(control, "current_tag"))
-            .or_else(|| Some(format!("{control_name}-v{release}-split.0"))),
+        tag: Some(control_tag),
         kind: "control-plane".to_owned(),
         family: family.clone(),
         family_registered: true,
@@ -842,6 +868,15 @@ fn validate_manifest_data(
     if string(data, "release_version").as_deref() != Some(RELEASE_VERSION) {
         errors.push(format!("release_version must be {RELEASE_VERSION}"));
     }
+    if string(data, "status").as_deref() != Some("candidate") {
+        errors.push("status must be candidate".to_owned());
+    }
+    if data.get("formal_ga").and_then(toml::Value::as_bool) != Some(false) {
+        errors.push("formal_ga must be false".to_owned());
+    }
+    if string(data, "sagemaker").as_deref() != Some("N/A") {
+        errors.push("sagemaker must be N/A".to_owned());
+    }
     if string(data, "repo_family").as_deref() != Some("jain-split") {
         errors.push("repo_family must be jain-split".to_owned());
     }
@@ -889,13 +924,23 @@ fn validate_manifest_data(
         for field in [
             "github_slug",
             "jeryu_slug",
+            "remote",
             "profile",
             "role",
             "default_branch",
+            "product_version",
+            "tag_revision",
             "current_tag",
+            "release_commit",
+            "release_checksum_sha256",
+            "protection_policy",
             "required_check",
         ] {
-            if string(raw, field).is_none() {
+            if field == "tag_revision" {
+                if raw.get(field).and_then(toml::Value::as_integer).is_none() {
+                    errors.push(format!("{name}: missing {field}"));
+                }
+            } else if string(raw, field).is_none() {
                 errors.push(format!("{name}: missing {field}"));
             }
         }
@@ -905,13 +950,7 @@ fn validate_manifest_data(
         if string(raw, "required_check").as_deref() != Some(format!("{name}/required").as_str()) {
             errors.push(format!("{name}: required_check must be {name}/required"));
         }
-        if string(raw, "current_tag").as_deref()
-            != Some(format!("{name}-v{RELEASE_VERSION}-split.0").as_str())
-        {
-            errors.push(format!(
-                "{name}: current_tag must be {name}-v{RELEASE_VERSION}-split.0"
-            ));
-        }
+        validate_release_metadata(data, raw, &name, "split", Some(&path), &mut errors);
         if raw.get("has_jeryu_std").and_then(toml::Value::as_bool) != Some(true) {
             errors.push(format!("{name}: has_jeryu_std must be true"));
         }
@@ -919,7 +958,7 @@ fn validate_manifest_data(
             errors.push(format!("{name}: {error}"));
         }
         let expected_remote = format!("{FAMILY_REMOTE_PREFIX}{name}.git");
-        if declared_remote(raw).as_deref() != Some(expected_remote.as_str()) {
+        if string(raw, "remote").as_deref() != Some(expected_remote.as_str()) {
             errors.push(format!("{name}: remote must be {expected_remote}"));
         }
         if check_paths {
@@ -980,16 +1019,24 @@ fn validate_manifest_data(
             ("forge_slug", "jain-split/jain-smartcluster"),
             ("required_check", "jain-smartcluster/required"),
             ("default_branch", "main"),
-            ("immutable_tag", "jain-smartcluster-v8.0.0-split.0"),
         ] {
             if string(raw, key).as_deref() != Some(expected) {
                 errors.push(format!("jain-smartcluster: {key} must be {expected}"));
             }
         }
         let expected_infra_remote = format!("{INFRA_REMOTE_PREFIX}jain-smartcluster.git");
-        if declared_remote(raw).as_deref() != Some(expected_infra_remote.as_str()) {
+        if string(raw, "remote").as_deref() != Some(expected_infra_remote.as_str()) {
             errors.push("jain-smartcluster: remote must use the jain-split namespace".to_owned());
         }
+        let path = string(raw, "path").map(PathBuf::from);
+        validate_release_metadata(
+            data,
+            raw,
+            "jain-smartcluster",
+            "split",
+            path.as_deref(),
+            &mut errors,
+        );
         if raw.get("family_registered").and_then(toml::Value::as_bool) != Some(true) {
             errors.push("jain-smartcluster: family_registered must be true".to_owned());
         }
@@ -1003,16 +1050,29 @@ fn validate_manifest_data(
     if string(control, "required_check").as_deref() != Some("jain-split-ops/required") {
         errors.push("control_plane.required_check must be jain-split-ops/required".to_owned());
     }
+    let control_path = string(control, "path").map(PathBuf::from);
+    validate_release_metadata(
+        data,
+        control,
+        "jain-split-ops",
+        "split",
+        control_path.as_deref(),
+        &mut errors,
+    );
     let redline = data
         .get("external_dependencies")
         .and_then(|value| value.get("redline"))
         .ok_or("manifest must declare external_dependencies.redline")?;
-    if string(redline, "immutable_tag").as_deref() != Some("redline-core-v4.1.0-jain.1")
+    if string(redline, "immutable_tag").as_deref() != Some("redline-core-v4.1.0-jain.2")
         || string(redline, "remote").as_deref()
             != Some("http://127.0.0.1:8787/git/jeryu/redline-core.git")
+        || string(redline, "required_check").as_deref() != Some("redline-core/required")
     {
-        errors.push("redline dependency must use the immutable local-Jeryu v4.1.0 tag".to_owned());
+        errors.push(
+            "redline dependency must use redline-core-v4.1.0-jain.2 from local Jeryu".to_owned(),
+        );
     }
+    validate_release_metadata(data, redline, "redline-core", "jain", None, &mut errors);
     let nested = data
         .get("nested_families")
         .and_then(|value| value.get("redline"))
@@ -1030,7 +1090,7 @@ fn validate_manifest_data(
             "engine_remote",
             "http://127.0.0.1:8787/git/jeryu/redline-core.git",
         ),
-        ("engine_tag", "redline-core-v4.1.0-jain.1"),
+        ("engine_tag", "redline-core-v4.1.0-jain.2"),
     ] {
         if string(nested, key).as_deref() != Some(expected) {
             errors.push(format!("nested_families.redline.{key} must be {expected}"));
@@ -1048,6 +1108,128 @@ fn validate_manifest_data(
         .into());
     }
     Ok(())
+}
+
+fn validate_release_metadata(
+    manifest: &toml::Value,
+    raw: &toml::Value,
+    name: &str,
+    revision_namespace: &str,
+    checkout: Option<&Path>,
+    errors: &mut Vec<String>,
+) {
+    let product_version = string(raw, "product_version");
+    let revision = raw.get("tag_revision").and_then(toml::Value::as_integer);
+    let tag = string(raw, "immutable_tag").or_else(|| string(raw, "current_tag"));
+    match (&product_version, revision, &tag) {
+        (Some(product_version), Some(revision), Some(tag)) if revision >= 0 => {
+            let expected = format!("{name}-v{product_version}-{revision_namespace}.{revision}");
+            if tag != &expected {
+                errors.push(format!(
+                    "{name}: release tag must be {expected}, found {tag}"
+                ));
+            }
+            if revision_namespace == "split" && product_version != RELEASE_VERSION {
+                errors.push(format!(
+                    "{name}: product_version must be {RELEASE_VERSION}, found {product_version}"
+                ));
+            }
+        }
+        (None, _, _) => errors.push(format!("{name}: product_version is required")),
+        (_, None, _) => errors.push(format!("{name}: tag_revision is required")),
+        (_, Some(revision), _) if revision < 0 => {
+            errors.push(format!("{name}: tag_revision must be non-negative"))
+        }
+        (_, _, None) => errors.push(format!("{name}: exact release tag is required")),
+        _ => {}
+    }
+
+    let policy_name = string(raw, "protection_policy");
+    if policy_name.as_deref() != Some(RELEASE_PROTECTION_POLICY) {
+        errors.push(format!(
+            "{name}: protection_policy must be {RELEASE_PROTECTION_POLICY}"
+        ));
+    } else if let Some(policy) = manifest
+        .get("protection_policies")
+        .and_then(|policies| policies.get(RELEASE_PROTECTION_POLICY))
+    {
+        let bool_field = |key: &str| policy.get(key).and_then(toml::Value::as_bool);
+        if policy
+            .get("required_approvals")
+            .and_then(toml::Value::as_integer)
+            != Some(1)
+            || bool_field("required_status_check") != Some(true)
+            || bool_field("linear_history") != Some(true)
+            || bool_field("enforce_admins") != Some(true)
+            || bool_field("allow_force_push") != Some(false)
+            || bool_field("allow_deletions") != Some(false)
+        {
+            errors.push(format!(
+                "{name}: {RELEASE_PROTECTION_POLICY} is not an immutable reviewed-main policy"
+            ));
+        }
+    } else {
+        errors.push(format!(
+            "{name}: manifest is missing protection_policies.{RELEASE_PROTECTION_POLICY}"
+        ));
+    }
+
+    let release_commit = string(raw, "release_commit");
+    let release_checksum = string(raw, "release_checksum_sha256");
+    match (release_commit.as_deref(), release_checksum.as_deref()) {
+        (Some("PENDING"), Some("PENDING")) => {}
+        (Some(commit), Some(checksum))
+            if valid_hex(commit, 40) && valid_hex(checksum, 64) =>
+        {
+            if let (Some(checkout), Some(tag)) = (checkout, tag.as_deref()) {
+                if checkout.is_dir() {
+                    let tag_ref = format!("refs/tags/{tag}^{{}}");
+                    match git_query(checkout, &["rev-parse", &tag_ref]) {
+                        Some(actual) if actual == commit => {}
+                        Some(actual) => errors.push(format!(
+                            "{name}: release_commit {commit} differs from {tag} at {actual}"
+                        )),
+                        None => {}
+                    }
+                    match release_tree_checksum(checkout, commit) {
+                        Ok(actual) if actual == checksum => {}
+                        Ok(actual) => errors.push(format!(
+                            "{name}: release_checksum_sha256 {checksum} differs from {actual}"
+                        )),
+                        Err(error) => errors.push(format!(
+                            "{name}: unable to verify release checksum: {error}"
+                        )),
+                    }
+                }
+            }
+        }
+        (Some("PENDING"), _) | (_, Some("PENDING")) => errors.push(format!(
+            "{name}: release_commit and release_checksum_sha256 must become exact together"
+        )),
+        _ => errors.push(format!(
+            "{name}: release_commit must be a 40-character SHA and release_checksum_sha256 a 64-character digest, or both must be PENDING"
+        )),
+    }
+}
+
+fn valid_hex(value: &str, length: usize) -> bool {
+    value.len() == length && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn release_tree_checksum(repo: &Path, commit: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["archive", "--format=tar", commit])
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "git archive failed for {commit}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    Ok(format!("{:x}", Sha256::digest(output.stdout)))
 }
 
 fn manifest_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
@@ -1111,10 +1293,8 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
     if string(&lock_data, "source_manifest_sha256").as_deref() != Some(expected_hash.as_str()) {
         errors.push("source_manifest_sha256 does not match the canonical manifest".to_owned());
     }
-    if string(&lock_data, "release").as_deref()
-        != Some(format!("{RELEASE_VERSION}-split.0").as_str())
-    {
-        errors.push("lock release is not 8.0.0-split.0".to_owned());
+    if string(&lock_data, "release").as_deref() != Some(RELEASE_VERSION) {
+        errors.push("lock release is not the 8.0.0 product version".to_owned());
     }
     let family = family_repos(&data)?;
     let lock_repos = lock_data
@@ -1127,6 +1307,19 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
             "lock has {} family entries, expected {}",
             lock_repos.len(),
             family.len()
+        ));
+    }
+    let expected_infrastructure = data
+        .get("infrastructure_repo")
+        .and_then(toml::Value::as_array)
+        .map_or(0, Vec::len);
+    let locked_infrastructure = lock_data
+        .get("infrastructure_repo")
+        .and_then(toml::Value::as_array)
+        .map_or(0, Vec::len);
+    if locked_infrastructure != expected_infrastructure {
+        errors.push(format!(
+            "lock has {locked_infrastructure} infrastructure entries, expected {expected_infrastructure}"
         ));
     }
     for raw in family.iter().copied().chain(
@@ -1163,9 +1356,76 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
                         "{name}: lock commit is not an immutable 40-character SHA"
                     ));
                 }
+                if string(raw, "release_commit").as_deref() != Some(commit.as_str()) {
+                    errors.push(format!(
+                        "{name}: lock commit does not match manifest release_commit"
+                    ));
+                }
+                if string(entry, "checksum_sha256") != string(raw, "release_checksum_sha256") {
+                    errors.push(format!(
+                        "{name}: lock checksum does not match manifest release_checksum_sha256"
+                    ));
+                }
+                if string(entry, "product_version") != string(raw, "product_version") {
+                    errors.push(format!(
+                        "{name}: lock product_version does not match the manifest"
+                    ));
+                }
+                if entry.get("tag_revision").and_then(toml::Value::as_integer)
+                    != raw.get("tag_revision").and_then(toml::Value::as_integer)
+                {
+                    errors.push(format!(
+                        "{name}: lock tag_revision does not match the manifest"
+                    ));
+                }
+                if string(entry, "jeryu") != declared_remote(raw) {
+                    errors.push(format!("{name}: lock remote does not match the manifest"));
+                }
+                if string(entry, "required_check") != string(raw, "required_check") {
+                    errors.push(format!(
+                        "{name}: lock required_check does not match the manifest"
+                    ));
+                }
             }
             None => errors.push(format!("{name}: missing from family lock")),
         }
+    }
+    let redline = data
+        .get("external_dependencies")
+        .and_then(|value| value.get("redline"))
+        .ok_or("manifest is missing external_dependencies.redline")?;
+    let nested = lock_data
+        .get("nested")
+        .and_then(|value| value.get("redline"));
+    if let Some(nested) = nested {
+        for (field, expected) in [
+            ("remote", string(redline, "remote")),
+            ("tag", string(redline, "immutable_tag")),
+            ("product_version", string(redline, "product_version")),
+            ("commit", string(redline, "release_commit")),
+            (
+                "checksum_sha256",
+                string(redline, "release_checksum_sha256"),
+            ),
+            ("required_check", string(redline, "required_check")),
+        ] {
+            if string(nested, field) != expected {
+                errors.push(format!(
+                    "nested.redline.{field} does not match the canonical manifest"
+                ));
+            }
+        }
+        if nested.get("tag_revision").and_then(toml::Value::as_integer)
+            != redline
+                .get("tag_revision")
+                .and_then(toml::Value::as_integer)
+        {
+            errors.push(
+                "nested.redline.tag_revision does not match the canonical manifest".to_owned(),
+            );
+        }
+    } else {
+        errors.push("family lock is missing [nested.redline]".to_owned());
     }
     if !errors.is_empty() {
         return Err(format!("family lock validation failed:\n{}", errors.join("\n")).into());
@@ -1196,7 +1456,7 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     let manifest_hash = manifest_sha256(&manifest)?;
     let release = string(&data, "release_version").ok_or("manifest missing release_version")?;
     let mut text = format!(
-        "schema_version = \"1.0.0\"\nfamily = \"jain-split\"\nrelease = \"{release}-split.0\"\ngenerator_version = \"splitctl 0.1.0\"\nsource = \"{}\"\nsource_manifest_sha256 = \"{manifest_hash}\"\nfamily_repo_count = {}\ninfrastructure_repo_count = {}\ndependency_resolution = \"immutable-git-tag\"\n\n",
+        "schema_version = \"1.0.0\"\nfamily = \"jain-split\"\nrelease = \"{release}\"\ngenerator_version = \"splitctl 0.1.0\"\nsource = \"{}\"\nsource_manifest_sha256 = \"{manifest_hash}\"\nfamily_repo_count = {}\ninfrastructure_repo_count = {}\ndependency_resolution = \"immutable-git-tag\"\n\n",
         manifest.display(),
         family_repos(&data)?.len(),
         data.get("infrastructure_repo")
@@ -1211,6 +1471,31 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
         let tag_ref = format!("refs/tags/{tag}^{{}}");
         let commit = git_query(&repo.path, &["rev-parse", &tag_ref])
             .ok_or_else(|| format!("{} is missing immutable tag {tag}", repo.name))?;
+        let declared_commit = string(raw, "release_commit")
+            .ok_or_else(|| format!("{} missing release_commit", repo.name))?;
+        if commit != declared_commit {
+            return Err(format!(
+                "{} tag {tag} resolves to {commit}, manifest declares {declared_commit}",
+                repo.name
+            )
+            .into());
+        }
+        let checksum = release_tree_checksum(&repo.path, &commit)?;
+        let declared_checksum = string(raw, "release_checksum_sha256")
+            .ok_or_else(|| format!("{} missing release checksum", repo.name))?;
+        if checksum != declared_checksum {
+            return Err(format!(
+                "{} checksum {checksum} differs from manifest {declared_checksum}",
+                repo.name
+            )
+            .into());
+        }
+        let product_version = string(raw, "product_version")
+            .ok_or_else(|| format!("{} missing product_version", repo.name))?;
+        let tag_revision = raw
+            .get("tag_revision")
+            .and_then(toml::Value::as_integer)
+            .ok_or_else(|| format!("{} missing tag_revision", repo.name))?;
         let table =
             if raw.get("kind").and_then(toml::Value::as_str) == Some("required-infrastructure") {
                 "infrastructure_repo"
@@ -1218,7 +1503,7 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
                 "repo"
             };
         text.push_str(&format!(
-            "[[{table}]]\nrepo = \"{}\"\ntag = \"{tag}\"\ncommit = \"{commit}\"\njeryu = \"{}\"\nrequired_check = \"{}\"\n\n",
+            "[[{table}]]\nrepo = \"{}\"\nproduct_version = \"{product_version}\"\ntag_revision = {tag_revision}\ntag = \"{tag}\"\ncommit = \"{commit}\"\nchecksum_sha256 = \"{checksum}\"\njeryu = \"{}\"\nrequired_check = \"{}\"\n\n",
             repo.name,
             declared_remote(raw).ok_or_else(|| format!("{} missing remote", repo.name))?,
             string(raw, "required_check").unwrap_or_else(|| format!("{}/required", repo.name))
@@ -1228,10 +1513,21 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
         .get("external_dependencies")
         .and_then(|value| value.get("redline"))
     {
+        let product_version = string(redline, "product_version")
+            .ok_or("Redline dependency is missing product_version")?;
+        let tag_revision = redline
+            .get("tag_revision")
+            .and_then(toml::Value::as_integer)
+            .ok_or("Redline dependency is missing tag_revision")?;
+        let release_commit = string(redline, "release_commit")
+            .ok_or("Redline dependency is missing release_commit")?;
+        let release_checksum = string(redline, "release_checksum_sha256")
+            .ok_or("Redline dependency is missing release_checksum_sha256")?;
         text.push_str(&format!(
-            "[nested.redline]\nfamily = \"redline-split\"\nremote = \"{}\"\ntag = \"{}\"\n\n",
+            "[nested.redline]\nfamily = \"redline-split\"\nproduct_version = \"{product_version}\"\ntag_revision = {tag_revision}\nremote = \"{}\"\ntag = \"{}\"\ncommit = \"{release_commit}\"\nchecksum_sha256 = \"{release_checksum}\"\nrequired_check = \"{}\"\n\n",
             string(redline, "remote").unwrap_or_default(),
-            string(redline, "immutable_tag").unwrap_or_default()
+            string(redline, "immutable_tag").unwrap_or_default(),
+            string(redline, "required_check").unwrap_or_default()
         ));
     }
     if let Some(parent) = output.parent() {
@@ -1263,7 +1559,39 @@ fn release_snapshot(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
     validate_manifest_data(&data, &manifest, false)?;
     let rows = snapshot_rows(&data)?;
-    let status = if rows.iter().all(|row| row["status"] == "pass") {
+    let managed_rows = managed_repositories(&data, &manifest)?
+        .iter()
+        .map(verify_managed_worktree)
+        .collect::<Vec<_>>();
+    let external_failures = external_dependency_failures(&data);
+    let family_lock = root.parent().unwrap_or(&root).join("jain/family.lock");
+    let family_lock_failure = validate_family_lock(vec![
+        "--manifest".to_owned(),
+        manifest.display().to_string(),
+        "--lock".to_owned(),
+        family_lock.display().to_string(),
+    ])
+    .err()
+    .map(|error| error.to_string());
+    let derived_failures = manifest_sha256(&manifest).and_then(|hash| {
+        derived_manifest_targets(&data, &manifest).and_then(|targets| {
+            let failures = targets
+                .into_iter()
+                .filter_map(|(target, path)| {
+                    validate_derived_manifest(&path, &hash, &data, &manifest, &target)
+                        .err()
+                        .map(|error| error.to_string())
+                })
+                .collect::<Vec<_>>();
+            Ok(failures)
+        })
+    })?;
+    let status = if rows.iter().all(|row| row["status"] == "pass")
+        && managed_rows.iter().all(|row| row["status"] == "pass")
+        && external_failures.is_empty()
+        && family_lock_failure.is_none()
+        && derived_failures.is_empty()
+    {
         "pass"
     } else {
         "fail"
@@ -1274,6 +1602,11 @@ fn release_snapshot(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
         "manifest": manifest,
         "manifest_sha256": manifest_sha256(&manifest)?,
         "repositories": rows,
+        "managed_worktrees": managed_rows,
+        "external_dependency_failures": external_failures,
+        "family_lock": family_lock,
+        "family_lock_failure": family_lock_failure,
+        "derived_manifest_failures": derived_failures,
         "status": status,
     });
     if let Some(path) = output {
@@ -1308,11 +1641,19 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    validate_manifest_data(&data, &manifest, false)?;
+    let status = string(&data, "status").ok_or("manifest missing status")?;
+    let formal_ga = data
+        .get("formal_ga")
+        .and_then(toml::Value::as_bool)
+        .ok_or("manifest missing formal_ga")?;
+    let sagemaker = string(&data, "sagemaker").ok_or("manifest missing sagemaker")?;
     let report = json!({
         "schema_version": "jain.release.status/v1",
         "release": RELEASE_VERSION,
-        "status": "candidate",
-        "formal_ga": false,
+        "status": status,
+        "formal_ga": formal_ga,
+        "sagemaker": sagemaker,
         "manifest_sha256": manifest_sha256(&manifest)?,
         "family_repo_count": family_repos(&data)?.len(),
         "infrastructure_repo_count": data.get("infrastructure_repo").and_then(toml::Value::as_array).map_or(0, Vec::len),
@@ -1332,7 +1673,9 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
 
 fn snapshot_rows(data: &toml::Value) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
     let mut rows = Vec::new();
-    for raw in manifest_repos(data)? {
+    let split_root =
+        PathBuf::from(string(data, "split_root").ok_or("manifest missing split_root")?);
+    for raw in release_manifest_repos(data)? {
         let repo = repo_from(raw)?;
         let mut failures = Vec::new();
         if !repo.path.join(".git").exists() {
@@ -1359,14 +1702,49 @@ fn snapshot_rows(data: &toml::Value) -> Result<Vec<JsonValue>, Box<dyn std::erro
             .or_else(|| string(raw, "current_tag"))
             .unwrap_or_default();
         let commit = git_query(&repo.path, &["rev-parse", "HEAD"]);
-        let tag_ref = format!("refs/tags/{tag}^{{}}");
-        let tag_commit = git_query(&repo.path, &["rev-parse", &tag_ref]);
+        let declared_commit = string(raw, "release_commit").unwrap_or_default();
+        if declared_commit == "PENDING" || commit.as_deref() != Some(declared_commit.as_str()) {
+            failures.push(format!(
+                "HEAD {:?} does not match declared release_commit {}",
+                commit, declared_commit
+            ));
+        }
+        let tag_ref = format!("refs/tags/{tag}");
+        let tag_commit = local_ref_commit(&repo.path, &tag_ref)?;
         if commit.is_none() || tag_commit != commit {
             failures.push(format!(
                 "immutable tag {tag} is absent or does not point to HEAD"
             ));
         }
-        rows.push(json!({"name": repo.name, "kind": raw.get("kind").and_then(toml::Value::as_str).unwrap_or("family"), "path": repo.path, "branch": branch, "commit": commit, "tag": tag, "tag_commit": tag_commit, "remote": origin, "status": if failures.is_empty() {"pass"} else {"fail"}, "failures": failures}));
+        let remote_main = ls_remote_ref(&repo.path, &expected, "refs/heads/main")?;
+        if remote_main != commit {
+            failures.push("Jeryu main does not resolve to the release commit".to_owned());
+        }
+        let remote_tag = ls_remote_ref(&repo.path, &expected, &tag_ref)?;
+        if remote_tag != commit {
+            failures.push("Jeryu immutable tag does not resolve to the release commit".to_owned());
+        }
+        let mirror_path = split_root
+            .join("target/bare-mirrors")
+            .join(format!("{}.git", repo.name));
+        let mirror_tag = if mirror_path.is_dir() {
+            local_ref_commit(&mirror_path, &tag_ref)?
+        } else {
+            None
+        };
+        if mirror_tag != commit {
+            failures.push("bare mirror tag does not resolve to the release commit".to_owned());
+        }
+        let declared_checksum = string(raw, "release_checksum_sha256").unwrap_or_default();
+        let actual_checksum = commit
+            .as_deref()
+            .and_then(|commit| release_tree_checksum(&repo.path, commit).ok());
+        if declared_checksum == "PENDING"
+            || actual_checksum.as_deref() != Some(declared_checksum.as_str())
+        {
+            failures.push("release tree checksum does not match the manifest".to_owned());
+        }
+        rows.push(json!({"name": repo.name, "kind": raw.get("kind").and_then(toml::Value::as_str).unwrap_or("family"), "path": repo.path, "branch": branch, "commit": commit, "declared_commit": declared_commit, "release_checksum_sha256": actual_checksum, "declared_release_checksum_sha256": declared_checksum, "tag": tag, "tag_commit": tag_commit, "remote": origin, "remote_main": remote_main, "remote_tag": remote_tag, "mirror": mirror_path, "mirror_tag": mirror_tag, "status": if failures.is_empty() {"pass"} else {"fail"}, "failures": failures}));
     }
     Ok(rows)
 }
@@ -1522,10 +1900,18 @@ fn local_jeryu_bare_repo(remote: &str) -> Result<Option<PathBuf>, Box<dyn std::e
 }
 
 fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    immutable_tag_command_impl(args, true)
+}
+
+fn immutable_tag_command_impl(
+    args: Vec<String>,
+    enforce_canonical_authority: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut repo = None;
     let mut remote = None;
     let mut tag = None;
     let mut commit = None;
+    let mut manifest = None;
     let mut receipt = None;
     let mut apply = false;
     let mut iter = args.into_iter();
@@ -1535,6 +1921,9 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "--remote" => remote = Some(iter.next().ok_or("--remote needs a URL")?),
             "--tag" => tag = Some(iter.next().ok_or("--tag needs a name")?),
             "--commit" => commit = Some(iter.next().ok_or("--commit needs a SHA")?),
+            "--manifest" => {
+                manifest = Some(PathBuf::from(iter.next().ok_or("--manifest needs a path")?))
+            }
             "--receipt" => {
                 receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
             }
@@ -1546,6 +1935,10 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let remote = remote.ok_or("immutable-tag requires --remote")?;
     let tag = tag.ok_or("immutable-tag requires --tag")?;
     let commit = commit.ok_or("immutable-tag requires --commit")?;
+    let manifest = manifest.ok_or("immutable-tag requires --manifest")?;
+    if enforce_canonical_authority {
+        validate_canonical_manifest_authority(&manifest)?;
+    }
     let receipt = match receipt {
         Some(path) => path,
         None => release_evidence_path(&format!("immutable-tag-{}.json", receipt_component(&tag))),
@@ -1555,8 +1948,153 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     report["remote"] = json!(remote);
     report["tag"] = json!(tag);
     report["commit_input"] = json!(commit);
-    let result = create_or_verify_immutable_tag(&repo, &remote, &tag, &commit, apply, &mut report);
+    report["manifest"] = json!(manifest);
+    let result = (|| {
+        let managed_name = validate_manifest_tag_request(&manifest, &repo, &remote, &tag, &commit)?;
+        create_or_verify_immutable_tag(&repo, &remote, &tag, &commit, apply, &mut report)?;
+        if apply {
+            let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+            if data.get("split_root").is_some() {
+                let manifest_root = manifest.parent().unwrap_or(Path::new("."));
+                let mirror_receipt = manifest_root
+                    .join("docs/release-evidence")
+                    .join(RELEASE_VERSION)
+                    .join(format!(
+                        "mirrors/{}-{}.json",
+                        receipt_component(&managed_name),
+                        receipt_component(&tag)
+                    ));
+                refresh_bare_mirrors(vec![
+                    "--manifest".to_owned(),
+                    manifest.display().to_string(),
+                    "--repo".to_owned(),
+                    managed_name.clone(),
+                    "--receipt".to_owned(),
+                    mirror_receipt.display().to_string(),
+                    "--apply".to_owned(),
+                ])?;
+                let mirror = PathBuf::from(string(&data, "split_root").unwrap())
+                    .join("target/bare-mirrors")
+                    .join(format!("{managed_name}.git"));
+                let mirrored = local_ref_commit(&mirror, &format!("refs/tags/{tag}"))?;
+                let reviewed = resolve_commit(&repo, &commit)?;
+                if mirrored.as_deref() != Some(reviewed.as_str()) {
+                    return Err(format!(
+                        "mirror readback for {tag} is {:?}, expected {reviewed}",
+                        mirrored
+                    )
+                    .into());
+                }
+                report["mirror"] = json!({
+                    "path": mirror,
+                    "tag_commit": mirrored,
+                    "receipt": mirror_receipt,
+                    "status": "pass",
+                });
+            }
+        }
+        Ok(())
+    })();
     finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn validate_canonical_manifest_authority(
+    manifest_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let expected = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let actual = fs::canonicalize(manifest_path).map_err(|error| {
+        format!(
+            "canonicalize immutable-tag manifest {}: {error}",
+            manifest_path.display()
+        )
+    })?;
+    let expected = fs::canonicalize(&expected).map_err(|error| {
+        format!(
+            "canonicalize compiled manifest authority {}: {error}",
+            expected.display()
+        )
+    })?;
+    if actual != expected {
+        return Err(format!(
+            "immutable-tag manifest {} is not the canonical authority {}",
+            actual.display(),
+            expected.display()
+        )
+        .into());
+    }
+    let data: toml::Value = fs::read_to_string(&actual)?.parse()?;
+    let declared = string(&data, "manifest_authority")
+        .ok_or("canonical manifest is missing manifest_authority")?;
+    let declared = fs::canonicalize(&declared)
+        .map_err(|error| format!("canonicalize declared manifest_authority {declared}: {error}"))?;
+    if declared != actual {
+        return Err("declared manifest_authority does not resolve to the supplied manifest".into());
+    }
+    validate_manifest_data(&data, &actual, false)
+}
+
+fn validate_manifest_tag_request(
+    manifest_path: &Path,
+    repo: &Path,
+    remote: &str,
+    tag: &str,
+    commit: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let data: toml::Value = fs::read_to_string(manifest_path)?.parse()?;
+    let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
+    let canonical_repo = fs::canonicalize(repo).unwrap_or_else(|_| repo.to_path_buf());
+    let raw = release_manifest_repos(&data)?
+        .into_iter()
+        .find(|raw| {
+            string(raw, "path").is_some_and(|path| {
+                let path = PathBuf::from(path);
+                let resolved = if path.is_absolute() {
+                    path
+                } else {
+                    manifest_dir.join(path)
+                };
+                fs::canonicalize(&resolved).unwrap_or(resolved) == canonical_repo
+            })
+        })
+        .ok_or_else(|| {
+            format!(
+                "{} is not a repository declared by {}",
+                repo.display(),
+                manifest_path.display()
+            )
+        })?;
+    let name = string(raw, "name").ok_or("manifest repository is missing name")?;
+    let expected_remote = string(raw, "remote").ok_or("manifest repository is missing remote")?;
+    let expected_tag = string(raw, "immutable_tag")
+        .or_else(|| string(raw, "current_tag"))
+        .ok_or("manifest repository is missing exact release tag")?;
+    let expected_commit =
+        string(raw, "release_commit").ok_or("manifest repository is missing release_commit")?;
+    let expected_checksum = string(raw, "release_checksum_sha256")
+        .ok_or("manifest repository is missing release checksum")?;
+    let reviewed = resolve_commit(repo, commit)?;
+    let actual_checksum = release_tree_checksum(repo, &reviewed)?;
+    if expected_remote != remote
+        || expected_tag != tag
+        || expected_commit != reviewed
+        || expected_checksum != actual_checksum
+    {
+        return Err(format!(
+            "{name}: immutable-tag request differs from canonical manifest (remote={remote}, tag={tag}, commit={reviewed}, checksum={actual_checksum})"
+        )
+        .into());
+    }
+    let mut errors = Vec::new();
+    let namespace = if tag.contains("-jain.") {
+        "jain"
+    } else {
+        "split"
+    };
+    validate_release_metadata(&data, raw, &name, namespace, Some(repo), &mut errors);
+    if !errors.is_empty() {
+        return Err(format!("{name}: {}", errors.join("; ")).into());
+    }
+    Ok(name)
 }
 
 fn create_or_verify_immutable_tag(
@@ -2365,6 +2903,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         .first()
         .ok_or("jeryu-local needs a subcommand")?
         .as_str();
+    if command == "pr-open" {
+        return jeryu_pr_open(args);
+    }
     if matches!(
         command,
         "pr-ready"
@@ -2386,7 +2927,7 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             .cloned()
             .ok_or_else(|| format!("{flag} needs a value").into())
     };
-    let (method, path, body) = match command {
+    let (method, path, body): (&str, String, Option<String>) = match command {
         "repo-list" => ("GET", "/api/v1/repos?host=jeryu".to_owned(), None),
         "pr-list" => {
             let repo = value("--repo")?;
@@ -2397,22 +2938,6 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                     value("--state").unwrap_or_else(|_| "open".to_owned())
                 ),
                 None,
-            )
-        }
-        "pr-open" => {
-            let repo = value("--repo")?;
-            let payload = json!({
-                "title": value("--title")?,
-                "head": value("--head")?,
-                "base": value("--base").unwrap_or_else(|_| "main".to_owned()),
-                "body": value("--body").unwrap_or_default(),
-                "draft": args.iter().any(|arg| arg == "--draft"),
-                "actor": value("--actor").unwrap_or_else(|_| "codex".to_owned())
-            });
-            (
-                "POST",
-                format!("/repos/{repo}/pulls"),
-                Some(payload.to_string()),
             )
         }
         "checks" => {
@@ -2469,6 +2994,123 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", raw.trim());
     }
     Ok(())
+}
+
+fn jeryu_pr_open(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut title = None;
+    let mut head = None;
+    let mut base = "main".to_owned();
+    let mut body = String::new();
+    let mut actor = "codex".to_owned();
+    let mut draft = false;
+    let mut receipt = None;
+    let mut apply = false;
+    let mut iter = args.into_iter().skip(1);
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--title" => title = Some(iter.next().ok_or("--title needs a value")?),
+            "--head" => head = Some(iter.next().ok_or("--head needs a branch")?),
+            "--base" => base = iter.next().ok_or("--base needs a branch")?,
+            "--body" => body = iter.next().ok_or("--body needs a value")?,
+            "--actor" => actor = iter.next().ok_or("--actor needs a value")?,
+            "--draft" => draft = true,
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            "--apply" => apply = true,
+            value => return Err(format!("unknown pr-open argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("pr-open requires --repo")?;
+    validate_jeryu_repo_slug(&repo)?;
+    let title = title.ok_or("pr-open requires --title")?;
+    let head = head.ok_or("pr-open requires --head")?;
+    if base != "main" {
+        return Err("release PR base must be main".into());
+    }
+    let safe_branch = |branch: &str| {
+        !branch.is_empty()
+            && !branch.starts_with('/')
+            && !branch.ends_with('/')
+            && !branch.contains("..")
+            && branch
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/'))
+    };
+    if !safe_branch(&head) {
+        return Err("--head is not a safe branch name".into());
+    }
+    if title.trim().is_empty() || actor.trim().is_empty() {
+        return Err("PR title and actor must not be empty".into());
+    }
+    let receipt = receipt.unwrap_or_else(|| {
+        release_evidence_path(&format!(
+            "jeryu-pr-open-{}-{}.json",
+            receipt_component(&repo),
+            receipt_component(&head)
+        ))
+    });
+    let request = JeryuRequest {
+        method: "POST",
+        path: format!("/repos/{repo}/pulls"),
+        body: Some(
+            json!({
+                "title": title,
+                "head": head,
+                "base": base,
+                "body": body,
+                "draft": draft,
+                "actor": actor,
+            })
+            .to_string(),
+        ),
+    };
+    let mut report = receipt_header("jain.jeryu-pr-open/v1", "jeryu-local pr-open", apply);
+    report["repository"] = json!(repo);
+    report["request"] = jeryu_request_json(&request);
+    let result = (|| {
+        if !apply {
+            report["action"] = json!("would-open");
+            return Ok(());
+        }
+        let base_url = env::var("JERYU_BASE").unwrap_or_else(|_| LOCAL_JERYU_BASE.to_owned());
+        let token = local_jeryu_token()?;
+        let response = execute_jeryu_request(&base_url, &token, &request)?;
+        let number = response
+            .get("number")
+            .and_then(JsonValue::as_u64)
+            .filter(|number| *number > 0)
+            .ok_or("Jeryu PR creation response is missing a positive number")?;
+        let readback = execute_jeryu_request(
+            &base_url,
+            &token,
+            &JeryuRequest {
+                method: "GET",
+                path: format!("/repos/{repo}/pulls/{number}"),
+                body: None,
+            },
+        )?;
+        if readback
+            .get("head")
+            .and_then(|value| value.get("ref"))
+            .and_then(JsonValue::as_str)
+            != Some(head.as_str())
+            || readback
+                .get("base")
+                .and_then(|value| value.get("ref"))
+                .and_then(JsonValue::as_str)
+                != Some("main")
+        {
+            return Err("Jeryu PR readback does not match the requested head/base".into());
+        }
+        report["response"] = response;
+        report["readback"] = readback;
+        report["action"] = json!("opened-and-verified");
+        Ok(())
+    })();
+    finish_receipted_operation(&receipt, &mut report, result)
 }
 
 fn local_jeryu_token() -> Result<String, Box<dyn std::error::Error>> {
@@ -3249,34 +3891,56 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
         .parent()
         .ok_or("split root unavailable")?
         .to_path_buf();
-    let mut files = Vec::new();
-    collect_python(&root, &mut files)?;
+    let registry_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python-parity-exceptions.toml");
+    let exceptions = load_python_parity_exceptions(&root, &registry_path)?;
+    let inline_exceptions = load_python_inline_parity_exceptions(&root, &registry_path)?;
+    let tracked_files = release_tracked_files(&root)?;
+    let files = tracked_files
+        .iter()
+        .filter(|path| {
+            matches!(
+                path.extension().and_then(|ext| ext.to_str()),
+                Some("py" | "pyw" | "pyi" | "pyc" | "pyo")
+            ) || python_shebang(path).unwrap_or(false)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
     let mut unexpected = Vec::new();
     let mut declared = Vec::new();
+    let mut observed = std::collections::BTreeSet::new();
     for path in files {
         let rel = path
             .strip_prefix(&root)
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");
-        if let Some((purpose, rust_evidence)) = python_parity_declaration(&rel) {
-            if root.join(rust_evidence).exists() {
-                declared.push(json!({
-                    "path": rel,
-                    "purpose": purpose,
-                    "rust_evidence": rust_evidence,
-                }));
-            } else {
-                unexpected.push(format!(
-                    "{rel} (declared Rust evidence is missing: {rust_evidence})"
-                ));
-            }
+        observed.insert(rel.clone());
+        if let Some(exception) = exceptions.get(&rel) {
+            declared.push(json!({
+                "path": exception.path,
+                "justification": exception.justification,
+                "rust_owner": exception.rust_owner,
+                "rust_evidence": exception.rust_evidence,
+                "output_path": exception.output_path,
+                "input_sha256": exception.input_sha256,
+                "output_sha256": exception.output_sha256,
+                "comparison": exception.comparison,
+                "invocation_paths": exception.invocation_paths,
+            }));
         } else {
             unexpected.push(rel);
         }
     }
-    let mut runtime_files = Vec::new();
-    collect_python_runtime_files(&root, &mut runtime_files)?;
+    for path in exceptions.keys().filter(|path| !observed.contains(*path)) {
+        unexpected.push(format!(
+            "{path} (stale parity exception: Python file is absent)"
+        ));
+    }
+    let runtime_files = tracked_files
+        .into_iter()
+        .filter(|path| python_runtime_source(path).unwrap_or(false))
+        .collect::<Vec<_>>();
     let mut allowed_invocations = Vec::new();
     let mut unexpected_invocations = Vec::new();
     for path in runtime_files {
@@ -3286,12 +3950,39 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             .to_string_lossy()
             .replace('\\', "/");
         let content = fs::read_to_string(&path)?;
+        if matches!(
+            path.extension().and_then(|value| value.to_str()),
+            Some("json" | "toml")
+        ) {
+            if structured_python_runtime(&path, &content)? {
+                unexpected_invocations.push(json!({
+                    "path": rel,
+                    "line": 0,
+                    "text": "structured command field contains a Python interpreter or tool"
+                }));
+            }
+            continue;
+        }
+        let mut detected_in_file = false;
         for (index, line) in content.lines().enumerate() {
-            if !line_has_python_runtime(line) {
+            if !line_has_python_runtime(&path, line) {
                 continue;
             }
+            detected_in_file = true;
             let row = json!({"path": rel, "line": index + 1, "text": line.trim()});
-            if python_parity_invocation_allowed(&rel, line) {
+            if python_parity_invocation_allowed(&exceptions, &inline_exceptions, &rel, line) {
+                allowed_invocations.push(row);
+            } else {
+                unexpected_invocations.push(row);
+            }
+        }
+        if !detected_in_file && source_has_python_runtime(&path, &content) {
+            let row = json!({
+                "path": rel,
+                "line": 0,
+                "text": "interpreter token and process invocation occur in the same source file"
+            });
+            if python_parity_invocation_allowed(&exceptions, &inline_exceptions, &rel, &content) {
                 allowed_invocations.push(row);
             } else {
                 unexpected_invocations.push(row);
@@ -3305,6 +3996,12 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     );
     report["policy"] =
         json!("Python is permitted only for parity testing against Rust implementations");
+    report["registry"] = json!({
+        "path": registry_path,
+        "sha256": sha256_bytes(&fs::read(&registry_path)?),
+        "file_exception_count": exceptions.len(),
+        "inline_exception_count": inline_exceptions.len(),
+    });
     report["allowed"] = json!(declared);
     report["unexpected"] = json!(unexpected);
     report["allowed_runtime_invocations"] = json!(allowed_invocations);
@@ -3355,91 +4052,270 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     finish_receipted_operation(&receipt, &mut report, result)
 }
 
-fn python_parity_declaration(path: &str) -> Option<(&'static str, &'static str)> {
-    const ALLOWED: &[(&str, &str, &str)] = &[
-        (
-            "jain-deploy/ops/ci/testdata/invention-export/model.py",
-            "fixture consumed by Rust export compatibility tests",
-            "jain-deploy/ops/ci/testdata/invention-export/model.rs",
-        ),
-        (
-            "jain-model-zoo/ops/parity/parity_suite.py",
-            "Rust model parity harness",
-            "jain-model-zoo/ops/parity/run.sh",
-        ),
-        (
-            "jain-model-zoo/ops/parity/plot_errors.py",
-            "Rust model parity report renderer",
-            "jain-model-zoo/ops/parity/parity_errors.json",
-        ),
-        (
-            "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/tabdpt_classifier/src/bin/verify_oracle.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/tabdpt_regressor/src/bin/verify_oracle.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/_nm/parity/oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs",
-        ),
-        (
-            "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py",
-            "frozen oracle for a Rust model port",
-            "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs",
-        ),
-    ];
-    ALLOWED
-        .iter()
-        .find(|(allowed, _, _)| *allowed == path)
-        .map(|(_, purpose, evidence)| (*purpose, *evidence))
+fn load_python_parity_exceptions(
+    root: &Path,
+    registry_path: &Path,
+) -> Result<std::collections::BTreeMap<String, PythonParityException>, Box<dyn std::error::Error>> {
+    let registry: toml::Value = fs::read_to_string(registry_path)?.parse()?;
+    if string(&registry, "schema_version").as_deref() != Some("1") {
+        return Err("Python parity exception registry schema_version must be 1".into());
+    }
+    let raw_entries = registry
+        .get("exception")
+        .and_then(toml::Value::as_array)
+        .ok_or("Python parity exception registry has no [[exception]] entries")?;
+    let mut exceptions = std::collections::BTreeMap::new();
+    for raw in raw_entries {
+        let required = |field: &str| {
+            string(raw, field).ok_or_else(|| format!("parity exception missing {field}"))
+        };
+        let exception = PythonParityException {
+            path: required("path")?,
+            justification: required("justification")?,
+            rust_owner: required("rust_owner")?,
+            rust_evidence: required("rust_evidence")?,
+            output_path: required("output_path")?,
+            input_sha256: required("input_sha256")?,
+            output_sha256: required("output_sha256")?,
+            comparison: required("comparison")?,
+            invocation_paths: strings(raw, "invocation_paths"),
+        };
+        if exception.justification.trim().len() < 24 {
+            return Err(format!(
+                "{}: parity justification is not specific enough",
+                exception.path
+            )
+            .into());
+        }
+        if !exception.rust_owner.contains('/') {
+            return Err(
+                format!("{}: rust_owner must name repository/owner", exception.path).into(),
+            );
+        }
+        if !exception.rust_evidence.ends_with(".rs") {
+            return Err(format!(
+                "{}: rust_evidence must be an owned Rust source file",
+                exception.path
+            )
+            .into());
+        }
+        if !matches!(
+            exception.comparison.as_str(),
+            "byte-identical" | "normalized-semantic"
+        ) {
+            return Err(format!(
+                "{}: comparison must be byte-identical or normalized-semantic",
+                exception.path
+            )
+            .into());
+        }
+        for invocation in &exception.invocation_paths {
+            if !root.join(invocation).is_file() {
+                return Err(format!(
+                    "{}: declared parity invocation is missing: {invocation}",
+                    exception.path
+                )
+                .into());
+            }
+        }
+        for (label, path, expected) in [
+            ("input", &exception.path, &exception.input_sha256),
+            ("output", &exception.output_path, &exception.output_sha256),
+        ] {
+            if !valid_hex(expected, 64) {
+                return Err(format!(
+                    "{}: {label}_sha256 is not a 64-character digest",
+                    exception.path
+                )
+                .into());
+            }
+            let absolute = root.join(path);
+            let actual = sha256_bytes(
+                &fs::read(&absolute)
+                    .map_err(|error| format!("read {}: {error}", absolute.display()))?,
+            );
+            if &actual != expected {
+                return Err(format!(
+                    "{}: {label}_sha256 mismatch: expected {expected}, got {actual}",
+                    exception.path
+                )
+                .into());
+            }
+        }
+        if !root.join(&exception.rust_evidence).is_file() {
+            return Err(format!(
+                "{}: Rust evidence is missing: {}",
+                exception.path, exception.rust_evidence
+            )
+            .into());
+        }
+        let path = exception.path.clone();
+        if exceptions.insert(path.clone(), exception).is_some() {
+            return Err(format!("duplicate Python parity exception: {path}").into());
+        }
+    }
+    Ok(exceptions)
 }
 
-fn collect_python_runtime_files(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
+fn load_python_inline_parity_exceptions(
+    root: &Path,
+    registry_path: &Path,
+) -> Result<
+    std::collections::BTreeMap<String, PythonInlineParityException>,
+    Box<dyn std::error::Error>,
+> {
+    let registry: toml::Value = fs::read_to_string(registry_path)?.parse()?;
+    let mut exceptions = std::collections::BTreeMap::new();
+    for raw in registry
+        .get("inline_exception")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let required = |field: &str| {
+            string(raw, field).ok_or_else(|| format!("inline parity exception missing {field}"))
+        };
+        let exception = PythonInlineParityException {
+            rust_evidence: required("rust_evidence")?,
+            justification: required("justification")?,
+            rust_owner: required("rust_owner")?,
+            input_path: required("input_path")?,
+            output_path: required("output_path")?,
+            input_sha256: required("input_sha256")?,
+            output_sha256: required("output_sha256")?,
+            comparison: required("comparison")?,
+        };
+        if !exception.rust_evidence.ends_with(".rs")
+            || exception.justification.trim().len() < 24
+            || !exception.rust_owner.contains('/')
+            || !matches!(
+                exception.comparison.as_str(),
+                "byte-identical" | "normalized-semantic"
+            )
+        {
+            return Err(format!(
+                "{}: invalid inline Python parity ownership or comparison metadata",
+                exception.rust_evidence
+            )
+            .into());
+        }
+        for (label, path, expected) in [
+            ("input", &exception.input_path, &exception.input_sha256),
+            ("output", &exception.output_path, &exception.output_sha256),
+        ] {
+            if !valid_hex(expected, 64) {
+                return Err(format!(
+                    "{}: {label}_sha256 is not a 64-character digest",
+                    exception.rust_evidence
+                )
+                .into());
+            }
+            let absolute = root.join(path);
+            let actual = sha256_bytes(
+                &fs::read(&absolute)
+                    .map_err(|error| format!("read {}: {error}", absolute.display()))?,
+            );
+            if &actual != expected {
+                return Err(format!(
+                    "{}: inline {label}_sha256 mismatch: expected {expected}, got {actual}",
+                    exception.rust_evidence
+                )
+                .into());
+            }
+        }
+        let path = exception.rust_evidence.clone();
+        if exceptions.insert(path.clone(), exception).is_some() {
+            return Err(format!("duplicate inline Python parity exception: {path}").into());
+        }
+    }
+    Ok(exceptions)
+}
+
+fn python_runtime_source(path: &Path) -> io::Result<bool> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    let extension = path.extension().and_then(|value| value.to_str());
+    Ok(matches!(
+        extension,
+        Some(
+            "sh" | "bash"
+                | "yml"
+                | "yaml"
+                | "just"
+                | "rs"
+                | "js"
+                | "mjs"
+                | "cjs"
+                | "ts"
+                | "tsx"
+                | "json"
+                | "toml"
+        )
+    ) || name == "Justfile"
+        || name == "Makefile"
+        || name.starts_with("Dockerfile")
+        || name == "pre-commit"
+        || name.starts_with("pre-push")
+        || name == "generated-zones.toml"
+        || name == "test-map.json"
+        || executable_text_file(path)?)
+}
+
+fn release_tracked_files(root: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut repositories = Vec::new();
+    discover_release_worktrees(root, &mut repositories)?;
+    let mut files = std::collections::BTreeSet::new();
+    for repository in repositories {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&repository)
+            .args(["ls-files", "-z"])
+            .output()?;
+        if !output.status.success() {
+            return Err(io::Error::other(format!(
+                "git ls-files failed in {}: {}",
+                repository.display(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+        for relative in output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|path| !path.is_empty())
+        {
+            let relative = std::str::from_utf8(relative).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "non-UTF-8 tracked path in {}: {error}",
+                        repository.display()
+                    ),
+                )
+            })?;
+            let path = repository.join(relative);
+            if path.is_file() {
+                files.insert(path);
+            }
+        }
+    }
+    Ok(files.into_iter().collect())
+}
+
+fn discover_release_worktrees(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
     if !root.is_dir() {
+        return Ok(());
+    }
+    if root.join(".git").exists() {
+        out.push(root.to_path_buf());
         return Ok(());
     }
     for entry in fs::read_dir(root)? {
         let path = entry?.path();
+        if !path.is_dir() {
+            continue;
+        }
         if path
             .file_name()
             .and_then(|name| name.to_str())
@@ -3452,42 +4328,169 @@ fn collect_python_runtime_files(root: &Path, out: &mut Vec<PathBuf>) -> io::Resu
         {
             continue;
         }
-        if path.is_dir() {
-            collect_python_runtime_files(&path, out)?;
-            continue;
-        }
-        let name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("");
-        let extension = path.extension().and_then(|value| value.to_str());
-        let runtime_source = matches!(extension, Some("sh" | "bash" | "yml" | "yaml" | "just"))
-            || name == "Justfile"
-            || name == "Makefile"
-            || name.starts_with("Dockerfile")
-            || name == "pre-commit"
-            || name.starts_with("pre-push")
-            || name == "generated-zones.toml"
-            || name == "test-map.json";
-        if runtime_source {
-            out.push(path);
-        }
+        discover_release_worktrees(&path, out)?;
     }
     Ok(())
 }
 
-fn line_has_python_runtime(line: &str) -> bool {
+fn line_has_python_runtime(path: &Path, line: &str) -> bool {
     let trimmed = line.trim_start();
-    if trimmed.starts_with('#') {
-        return false;
-    }
-    if trimmed.starts_with("python_command=") {
+    if (trimmed.starts_with('#') && !trimmed.starts_with("#!"))
+        || trimmed.starts_with("//")
+        || trimmed.starts_with('*')
+        || trimmed.starts_with("<!--")
+    {
         return false;
     }
     if line.contains("actions/setup-python@") {
+        return matches!(
+            path.extension().and_then(|value| value.to_str()),
+            Some("yml" | "yaml")
+        );
+    }
+    let has_token = line
+        .split(|character: char| {
+            character.is_whitespace()
+                || matches!(
+                    character,
+                    '\'' | '"'
+                        | '('
+                        | ')'
+                        | '{'
+                        | '}'
+                        | '['
+                        | ']'
+                        | ';'
+                        | '|'
+                        | '&'
+                        | '!'
+                        | ','
+                        | ':'
+                        | '\\'
+                        | '$'
+                        | '='
+                )
+        })
+        .any(python_runtime_token);
+    if !has_token {
+        return false;
+    }
+    match path.extension().and_then(|value| value.to_str()) {
+        Some("rs") => {
+            let marker = ["Command::new", "process::Command", "command.arg"]
+                .iter()
+                .filter_map(|marker| line.find(marker))
+                .min();
+            marker.is_some_and(|index| !line[..index].contains('"'))
+        }
+        Some("js" | "mjs" | "cjs" | "ts" | "tsx") => [
+            "spawn(",
+            "spawnSync(",
+            "exec(",
+            "execFile(",
+            "execa(",
+            "command:",
+        ]
+        .iter()
+        .any(|marker| line.contains(marker)),
+        Some("json" | "toml") => false,
+        Some("sh" | "bash" | "just" | "yml" | "yaml") => shell_line_has_python_runtime(line),
+        _ => {
+            let name = path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("");
+            if name.starts_with("Dockerfile") {
+                shell_line_has_python_runtime(line)
+                    || trimmed
+                        .strip_prefix("FROM ")
+                        .and_then(|value| value.split_whitespace().next())
+                        .is_some_and(python_runtime_token)
+            } else if matches!(name, "Justfile" | "Makefile" | "pre-commit")
+                || name.starts_with("pre-push")
+                || path.extension().is_none()
+            {
+                shell_line_has_python_runtime(line)
+            } else {
+                false
+            }
+        }
+    }
+}
+
+fn shell_line_has_python_runtime(line: &str) -> bool {
+    let normalized = line.replace(['\'', '"'], "");
+    let trimmed = normalized.trim_start();
+    if trimmed.starts_with("#!") {
+        return text_has_python_runtime_token(trimmed);
+    }
+    if let Some((left, right)) = normalized.split_once('=') {
+        let variable = left
+            .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
+            .filter(|value| !value.is_empty())
+            .next_back()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let right = right.trim_start_matches(|character: char| {
+            character.is_whitespace() || matches!(character, '$' | '(' | '{')
+        });
+        if variable.contains("python") && text_has_python_runtime_token(right) {
+            return true;
+        }
+        if right
+            .split_whitespace()
+            .next()
+            .is_some_and(python_runtime_token)
+        {
+            return true;
+        }
+    }
+    normalized
+        .split(|character| matches!(character, ';' | '|' | '&'))
+        .any(|segment| {
+            let mut words = segment
+                .trim_start_matches(|character: char| {
+                    character.is_whitespace() || matches!(character, '-' | '$' | '(' | '{')
+                })
+                .split_whitespace()
+                .filter(|word| !word.contains('=') || word.starts_with("python"));
+            let mut command = words.next().unwrap_or_default();
+            while matches!(
+                command,
+                "exec" | "command" | "env" | "sudo" | "xargs" | "time"
+            ) {
+                command = words.next().unwrap_or_default();
+            }
+            if command.contains('/') && !command.starts_with('/') && !command.starts_with("./") {
+                return false;
+            }
+            python_runtime_token(command)
+        })
+}
+
+fn python_runtime_token(token: &str) -> bool {
+    let token = token
+        .trim_matches(|character: char| !character.is_ascii_alphanumeric() && character != '.')
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if matches!(
+        token.as_str(),
+        "python" | "pytest" | "ruff" | "pip" | "pip3"
+    ) {
         return true;
     }
-    line.split(|character: char| {
+    token.strip_prefix("python").is_some_and(|suffix| {
+        !suffix.is_empty()
+            && suffix
+                .chars()
+                .all(|character| character.is_ascii_digit() || character == '.')
+    })
+}
+
+fn text_has_python_runtime_token(text: &str) -> bool {
+    text.split(|character: char| {
         character.is_whitespace()
             || matches!(
                 character,
@@ -3509,19 +4512,161 @@ fn line_has_python_runtime(line: &str) -> bool {
                     | '='
             )
     })
-    .any(|token| {
+    .any(python_runtime_token)
+}
+
+fn structured_python_runtime(
+    path: &Path,
+    content: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    if !text_has_python_runtime_token(content) {
+        return Ok(false);
+    }
+    fn suspicious_key(key: &str) -> bool {
+        let key = key.to_ascii_lowercase();
         matches!(
-            token,
-            "python" | "python3" | "python3-pip" | "pytest" | "ruff" | "pip" | "pip3"
-        )
+            key.as_str(),
+            "command"
+                | "commands"
+                | "script"
+                | "scripts"
+                | "image"
+                | "interpreter"
+                | "install"
+                | "exec"
+                | "run"
+        ) || key.ends_with("_command")
+            || key.ends_with("_script")
+            || key.ends_with("_image")
+            || key.ends_with("_interpreter")
+    }
+    fn json_value_has_python(value: &JsonValue) -> bool {
+        match value {
+            JsonValue::String(value) => text_has_python_runtime_token(value),
+            JsonValue::Array(values) => values.iter().any(json_value_has_python),
+            JsonValue::Object(_) => false,
+            _ => false,
+        }
+    }
+    fn json_commands_have_python(value: &JsonValue) -> bool {
+        match value {
+            JsonValue::Object(values) => values.iter().any(|(key, value)| {
+                (suspicious_key(key) && json_value_has_python(value))
+                    || json_commands_have_python(value)
+            }),
+            JsonValue::Array(values) => values.iter().any(json_commands_have_python),
+            _ => false,
+        }
+    }
+    fn toml_value_has_python(value: &toml::Value) -> bool {
+        match value {
+            toml::Value::String(value) => text_has_python_runtime_token(value),
+            toml::Value::Array(values) => values.iter().any(toml_value_has_python),
+            toml::Value::Table(_) => false,
+            _ => false,
+        }
+    }
+    fn toml_commands_have_python(value: &toml::Value) -> bool {
+        match value {
+            toml::Value::Table(values) => values.iter().any(|(key, value)| {
+                (suspicious_key(key) && toml_value_has_python(value))
+                    || toml_commands_have_python(value)
+            }),
+            toml::Value::Array(values) => values.iter().any(toml_commands_have_python),
+            _ => false,
+        }
+    }
+
+    match path.extension().and_then(|value| value.to_str()) {
+        Some("json") => {
+            let value: JsonValue = serde_json::from_str(content)
+                .map_err(|error| format!("parse tracked JSON {}: {error}", path.display()))?;
+            Ok(json_commands_have_python(&value))
+        }
+        Some("toml") => {
+            let value: toml::Value = content
+                .parse()
+                .map_err(|error| format!("parse tracked TOML {}: {error}", path.display()))?;
+            Ok(toml_commands_have_python(&value))
+        }
+        _ => Ok(false),
+    }
+}
+
+fn source_has_python_runtime(path: &Path, content: &str) -> bool {
+    let mut tainted_identifiers = std::collections::BTreeSet::new();
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if (trimmed.starts_with('#') && !trimmed.starts_with("#!"))
+            || trimmed.starts_with("//")
+            || trimmed.starts_with('*')
+        {
+            continue;
+        }
+        if text_has_python_runtime_token(line) {
+            if let Some((left, _)) = line.split_once('=') {
+                if let Some(identifier) = left
+                    .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
+                    .filter(|value| !value.is_empty())
+                    .next_back()
+                {
+                    tainted_identifiers.insert(identifier.to_owned());
+                }
+            }
+        }
+    }
+    let markers: &[&str] = match path.extension().and_then(|value| value.to_str()) {
+        Some("rs") => &["Command::new", "process::Command::new"],
+        Some("js" | "mjs" | "cjs" | "ts" | "tsx") => &[
+            "spawn(",
+            "spawnSync(",
+            "exec(",
+            "execFile(",
+            "execa(",
+            "command:",
+        ],
+        _ => return false,
+    };
+    markers.iter().any(|marker| {
+        content.match_indices(marker).any(|(index, _)| {
+            let line_start = content[..index].rfind('\n').map_or(0, |offset| offset + 1);
+            if content[line_start..index].contains('"') {
+                return false;
+            }
+            let rest = &content[index..];
+            let call_end = rest
+                .find(')')
+                .map_or(rest.len().min(512), |offset| offset + 1);
+            let invocation = &rest[..call_end];
+            text_has_python_runtime_token(&invocation)
+                || tainted_identifiers.iter().any(|identifier| {
+                    invocation
+                        .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+                        .any(|word| word == identifier)
+                })
+        })
     })
 }
 
-fn python_parity_invocation_allowed(path: &str, line: &str) -> bool {
-    (path == "jain-model-zoo/ops/parity/run.sh" && line.contains("ops/parity/parity_suite.py"))
-        || ((path == "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh"
-            || path == "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh")
-            && line.contains("_nm/parity/oracle.py"))
+fn python_parity_invocation_allowed(
+    exceptions: &std::collections::BTreeMap<String, PythonParityException>,
+    inline_exceptions: &std::collections::BTreeMap<String, PythonInlineParityException>,
+    path: &str,
+    line: &str,
+) -> bool {
+    if Path::new(path).extension().and_then(|value| value.to_str()) == Some("rs")
+        && inline_exceptions.contains_key(path)
+    {
+        return true;
+    }
+    exceptions.values().any(|exception| {
+        let reference_name = Path::new(&exception.path)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or(&exception.path);
+        (exception.rust_evidence == path || exception.invocation_paths.iter().any(|p| p == path))
+            && line.contains(reference_name)
+    })
 }
 
 fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -3876,18 +5021,35 @@ fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
     if git_query(&core_path, &["remote", "get-url", "origin"]).as_deref() != Some(remote.as_str()) {
         failures.push(format!("redline-core origin must be {remote}"));
     }
-    let tag_ref = format!("refs/tags/{tag}^{{}}");
-    let local_commit = git_query(&core_path, &["rev-parse", &tag_ref]);
-    if local_commit.is_none() {
+    let tag_ref = format!("refs/tags/{tag}");
+    let declared_commit = string(redline, "release_commit").unwrap_or_default();
+    let declared_checksum = string(redline, "release_checksum_sha256").unwrap_or_default();
+    let local_commit = local_ref_commit(&core_path, &tag_ref).ok().flatten();
+    if local_commit.as_deref() != Some(declared_commit.as_str()) {
         failures.push(format!(
-            "redline-core immutable tag {tag} is absent locally"
+            "redline-core local tag {tag} resolves to {:?}, manifest declares {declared_commit}",
+            local_commit
         ));
     }
-    let remote_tag = git_query(&core_path, &["ls-remote", "origin", &tag_ref]);
-    if remote_tag.is_none() {
+    let remote_commit = ls_remote_ref(&core_path, &remote, &tag_ref).ok().flatten();
+    if remote_commit.as_deref() != Some(declared_commit.as_str()) {
         failures.push(format!(
-            "redline-core immutable tag {tag} is absent from Jeryu"
+            "redline-core Jeryu tag {tag} resolves to {:?}, manifest declares {declared_commit}",
+            remote_commit
         ));
+    }
+    if valid_hex(&declared_commit, 40) && valid_hex(&declared_checksum, 64) {
+        match release_tree_checksum(&core_path, &declared_commit) {
+            Ok(actual) if actual == declared_checksum => {}
+            Ok(actual) => failures.push(format!(
+                "redline-core release checksum {actual} differs from manifest {declared_checksum}"
+            )),
+            Err(error) => failures.push(format!(
+                "unable to verify redline-core release checksum: {error}"
+            )),
+        }
+    } else {
+        failures.push("Redline release commit/checksum metadata is still PENDING".to_owned());
     }
     let lock_path = core_path
         .parent()
@@ -3942,6 +5104,7 @@ fn git_query_with_status(root: &Path, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
+#[cfg(test)]
 fn collect_python(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
     if !root.is_dir() {
         return Ok(());
@@ -3962,11 +5125,53 @@ fn collect_python(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
         }
         if path.is_dir() {
             collect_python(&path, out)?;
-        } else if path.extension().and_then(|ext| ext.to_str()) == Some("py") {
+        } else if matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("py" | "pyw" | "pyi" | "pyc" | "pyo")
+        ) || python_shebang(&path)?
+        {
             out.push(path);
         }
     }
     Ok(())
+}
+
+fn python_shebang(path: &Path) -> io::Result<bool> {
+    use std::io::Read as _;
+
+    let mut file = fs::File::open(path)?;
+    let mut prefix = [0_u8; 512];
+    let count = file.read(&mut prefix)?;
+    let Ok(prefix) = std::str::from_utf8(&prefix[..count]) else {
+        return Ok(false);
+    };
+    let first_line = prefix
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    Ok(first_line.starts_with("#!") && first_line.contains("python"))
+}
+
+fn executable_text_file(path: &Path) -> io::Result<bool> {
+    #[cfg(unix)]
+    {
+        use std::io::Read as _;
+        use std::os::unix::fs::PermissionsExt as _;
+
+        if fs::metadata(path)?.permissions().mode() & 0o111 == 0 {
+            return Ok(false);
+        }
+        let mut file = fs::File::open(path)?;
+        let mut prefix = [0_u8; 8192];
+        let count = file.read(&mut prefix)?;
+        return Ok(!prefix[..count].contains(&0) && std::str::from_utf8(&prefix[..count]).is_ok());
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(false)
+    }
 }
 
 fn git_files(root: &Path, sha: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -4318,7 +5523,7 @@ fn refresh_bare_mirrors(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
     let split_root =
         PathBuf::from(string(&data, "split_root").ok_or("manifest missing split_root")?);
     let mirror_root = split_root.join("target/bare-mirrors");
-    let repos = manifest_repos(&data)?;
+    let repos = release_manifest_repos(&data)?;
     let known: Vec<String> = repos.iter().filter_map(|r| string(r, "name")).collect();
     for name in &selected {
         if !known.iter().any(|known_name| known_name == name) {
@@ -4459,6 +5664,16 @@ fn manifest_repos(data: &toml::Value) -> Result<Vec<&toml::Value>, Box<dyn std::
         .and_then(toml::Value::as_array)
     {
         repos.extend(infrastructure.iter());
+    }
+    Ok(repos)
+}
+
+fn release_manifest_repos(
+    data: &toml::Value,
+) -> Result<Vec<&toml::Value>, Box<dyn std::error::Error>> {
+    let mut repos = manifest_repos(data)?;
+    if let Some(control) = data.get("control_plane") {
+        repos.push(control);
     }
     Ok(repos)
 }
@@ -5008,6 +6223,45 @@ mod tests {
         serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
     }
 
+    fn write_tag_manifest(
+        root: &Path,
+        repo: &Path,
+        remote: &Path,
+        name: &str,
+        revision: i64,
+        commit: &str,
+    ) -> PathBuf {
+        let manifest = root.join("tag-manifest.toml");
+        let checksum = release_tree_checksum(repo, commit).unwrap();
+        fs::write(
+            &manifest,
+            format!(
+                r#"[protection_policies.immutable-main-v1]
+required_approvals = 1
+required_status_check = true
+linear_history = true
+enforce_admins = true
+allow_force_push = false
+allow_deletions = false
+[[repo]]
+name = "{name}"
+path = "{}"
+remote = "{}"
+product_version = "8.0.0"
+tag_revision = {revision}
+current_tag = "{name}-v8.0.0-split.{revision}"
+release_commit = "{commit}"
+release_checksum_sha256 = "{checksum}"
+protection_policy = "immutable-main-v1"
+"#,
+                repo.display(),
+                remote.display(),
+            ),
+        )
+        .unwrap();
+        manifest
+    }
+
     #[test]
     fn canonical_release_feature_matrices_derive_exact_cargo_commands() {
         let manifest: toml::Value = fs::read_to_string(
@@ -5241,9 +6495,12 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let remote = init_bare(root.path());
         let main_refspec = format!("{reviewed}:refs/heads/main");
         run_git_strict(&repo, &["push", remote.to_str().unwrap(), &main_refspec]).unwrap();
+        let manifest = write_tag_manifest(root.path(), &repo, &remote, "example", 0, &reviewed);
         let receipt = root.path().join("tag.json");
         let args = || {
             vec![
+                "--manifest".to_owned(),
+                manifest.display().to_string(),
                 "--repo".to_owned(),
                 repo.display().to_string(),
                 "--remote".to_owned(),
@@ -5256,15 +6513,15 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 receipt.display().to_string(),
             ]
         };
-        immutable_tag_command(args()).unwrap();
+        immutable_tag_command_impl(args(), false).unwrap();
         assert_eq!(
             local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
             None
         );
         let mut apply = args();
         apply.push("--apply".to_owned());
-        immutable_tag_command(apply.clone()).unwrap();
-        immutable_tag_command(apply).unwrap();
+        immutable_tag_command_impl(apply.clone(), false).unwrap();
+        immutable_tag_command_impl(apply, false).unwrap();
         assert_eq!(read_json(&receipt)["action"], "verified-existing");
 
         let different = commit_next(&repo);
@@ -5272,7 +6529,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let index = refuse.iter().position(|value| value == "--commit").unwrap();
         refuse[index + 1] = different;
         refuse.push("--apply".to_owned());
-        assert!(immutable_tag_command(refuse).is_err());
+        assert!(immutable_tag_command_impl(refuse, false).is_err());
         assert_eq!(
             local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
             Some(reviewed.clone())
@@ -5282,6 +6539,83 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 &repo,
                 remote.to_str().unwrap(),
                 "refs/tags/example-v8.0.0-split.0"
+            )
+            .unwrap(),
+            Some(reviewed)
+        );
+    }
+
+    #[test]
+    fn immutable_tag_binds_manifest_and_refreshes_mirror() {
+        let root = TestDir::new("immutable-tag-manifest");
+        let (repo, reviewed) = init_source(root.path());
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &repo,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{reviewed}:refs/heads/main"),
+            ],
+        )
+        .unwrap();
+        let checksum = release_tree_checksum(&repo, &reviewed).unwrap();
+        let manifest = root.path().join("repos.manifest.toml");
+        fs::write(
+            &manifest,
+            format!(
+                r#"split_root = "{}"
+[protection_policies.immutable-main-v1]
+required_approvals = 1
+required_status_check = true
+linear_history = true
+enforce_admins = true
+allow_force_push = false
+allow_deletions = false
+[[repo]]
+name = "source"
+path = "{}"
+remote = "{}"
+product_version = "8.0.0"
+tag_revision = 1
+current_tag = "source-v8.0.0-split.1"
+release_commit = "{}"
+release_checksum_sha256 = "{}"
+protection_policy = "immutable-main-v1"
+"#,
+                root.path().display(),
+                repo.display(),
+                remote.display(),
+                reviewed,
+                checksum
+            ),
+        )
+        .unwrap();
+        let receipt = root.path().join("tag.json");
+        immutable_tag_command_impl(
+            vec![
+                "--manifest".to_owned(),
+                manifest.display().to_string(),
+                "--repo".to_owned(),
+                repo.display().to_string(),
+                "--remote".to_owned(),
+                remote.display().to_string(),
+                "--tag".to_owned(),
+                "source-v8.0.0-split.1".to_owned(),
+                "--commit".to_owned(),
+                reviewed.clone(),
+                "--receipt".to_owned(),
+                receipt.display().to_string(),
+                "--apply".to_owned(),
+            ],
+            false,
+        )
+        .unwrap();
+        assert_eq!(read_json(&receipt)["mirror"]["status"], "pass");
+        assert_eq!(
+            local_ref_commit(
+                &root.path().join("target/bare-mirrors/source.git"),
+                "refs/tags/source-v8.0.0-split.1"
             )
             .unwrap(),
             Some(reviewed)
@@ -5312,19 +6646,25 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let main_refspec = format!("{reviewed}:refs/heads/main");
         run_git_strict(&repo, &["push", remote.to_str().unwrap(), &main_refspec]).unwrap();
         let receipt = root.path().join("tag.json");
-        let result = immutable_tag_command(vec![
-            "--repo".to_owned(),
-            repo.display().to_string(),
-            "--remote".to_owned(),
-            remote.display().to_string(),
-            "--tag".to_owned(),
-            "example-v8.0.0-split.0".to_owned(),
-            "--commit".to_owned(),
-            reviewed,
-            "--receipt".to_owned(),
-            receipt.display().to_string(),
-            "--apply".to_owned(),
-        ]);
+        let manifest = write_tag_manifest(root.path(), &repo, &remote, "example", 0, &reviewed);
+        let result = immutable_tag_command_impl(
+            vec![
+                "--manifest".to_owned(),
+                manifest.display().to_string(),
+                "--repo".to_owned(),
+                repo.display().to_string(),
+                "--remote".to_owned(),
+                remote.display().to_string(),
+                "--tag".to_owned(),
+                "example-v8.0.0-split.0".to_owned(),
+                "--commit".to_owned(),
+                reviewed,
+                "--receipt".to_owned(),
+                receipt.display().to_string(),
+                "--apply".to_owned(),
+            ],
+            false,
+        );
         assert!(result.is_err());
         let report = read_json(&receipt);
         assert_eq!(report["status"], "fail");
@@ -5345,62 +6685,156 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
+    fn release_metadata_accepts_explicit_corrective_revision_and_rejects_implicit_tag() {
+        let manifest: toml::Value = r#"
+[protection_policies.immutable-main-v1]
+required_approvals = 1
+required_status_check = true
+linear_history = true
+enforce_admins = true
+allow_force_push = false
+allow_deletions = false
+"#
+        .parse()
+        .unwrap();
+        let valid: toml::Value = r#"
+product_version = "8.0.0"
+tag_revision = 1
+current_tag = "example-v8.0.0-split.1"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+protection_policy = "immutable-main-v1"
+"#
+        .parse()
+        .unwrap();
+        let mut errors = Vec::new();
+        validate_release_metadata(&manifest, &valid, "example", "split", None, &mut errors);
+        assert!(errors.is_empty(), "{errors:?}");
+
+        let mut invalid = valid.clone();
+        invalid.as_table_mut().unwrap().insert(
+            "current_tag".to_owned(),
+            toml::Value::String("example-v8.0.0-split.0".to_owned()),
+        );
+        validate_release_metadata(&manifest, &invalid, "example", "split", None, &mut errors);
+        assert!(errors.iter().any(|error| error.contains("split.1")));
+    }
+
+    #[test]
+    fn release_tree_checksum_is_stable_and_content_bound() {
+        let root = TestDir::new("release-tree-checksum");
+        let (repo, first) = init_source(root.path());
+        let first_checksum = release_tree_checksum(&repo, &first).unwrap();
+        assert!(valid_hex(&first_checksum, 64));
+        assert_eq!(
+            first_checksum,
+            release_tree_checksum(&repo, &first).unwrap()
+        );
+        let second = commit_next(&repo);
+        assert_ne!(
+            first_checksum,
+            release_tree_checksum(&repo, &second).unwrap()
+        );
+    }
+
+    #[test]
+    fn immutable_tag_accepts_only_the_compiled_canonical_manifest_authority() {
+        let canonical = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        validate_canonical_manifest_authority(&canonical).unwrap();
+
+        let root = TestDir::new("noncanonical-tag-manifest");
+        let forged = root.path().join("repos.manifest.toml");
+        fs::write(
+            &forged,
+            format!("manifest_authority = {:?}\n", forged.display().to_string()),
+        )
+        .unwrap();
+        let error = validate_canonical_manifest_authority(&forged).unwrap_err();
+        assert!(error.to_string().contains("is not the canonical authority"));
+    }
+
+    #[test]
     fn python_boundary_allows_only_rust_parity_surfaces() {
-        assert_eq!(
-            python_parity_declaration("jain-model-zoo/ops/parity/parity_suite.py"),
-            Some((
-                "Rust model parity harness",
-                "jain-model-zoo/ops/parity/run.sh"
-            ))
-        );
-        assert_eq!(
-            python_parity_declaration(
-                "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py"
-            ),
-            Some((
-                "frozen oracle for a Rust model port",
-                "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs"
-            ))
-        );
-        assert_eq!(
-            python_parity_declaration("jain-deploy/ops/ci/testdata/invention-export/model.py"),
-            Some((
-                "fixture consumed by Rust export compatibility tests",
-                "jain-deploy/ops/ci/testdata/invention-export/model.rs"
-            ))
-        );
-        assert_eq!(
-            python_parity_declaration("jain-python/python/ai-service/src/client.py"),
-            None
-        );
-        assert_eq!(
-            python_parity_declaration("redline-split/redline-core/scripts/perf/diff.py"),
-            None
-        );
-        assert_eq!(
-            python_parity_declaration("anything/oracle/production.py"),
-            None
-        );
-        assert!(line_has_python_runtime("python3 - <<'PY'"));
-        assert!(line_has_python_runtime("if command -v python3; then"));
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let registry = load_python_parity_exceptions(
+            &root,
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python-parity-exceptions.toml"),
+        )
+        .unwrap();
+        let inline_registry = load_python_inline_parity_exceptions(
+            &root,
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python-parity-exceptions.toml"),
+        )
+        .unwrap();
+        let fixture = &registry["jain-deploy/ops/ci/testdata/invention-export/model.py"];
+        assert_eq!(fixture.rust_owner, "jain-deploy/release-engineering");
+        assert!(valid_hex(&fixture.input_sha256, 64));
+        assert!(valid_hex(&fixture.output_sha256, 64));
+
+        let shell = Path::new("ops/ci/check.sh");
+        assert!(line_has_python_runtime(shell, "python3 - <<'PY'"));
         assert!(line_has_python_runtime(
+            shell,
             "actual=\"$(python3 -c 'print(1)')\""
         ));
-        assert!(line_has_python_runtime("pip install example"));
-        assert!(line_has_python_runtime("uses: actions/setup-python@v5"));
-        assert!(!line_has_python_runtime("# python3 is forbidden here"));
-        assert!(!line_has_python_runtime("python_command=\"python\"\"3\""));
+        assert!(line_has_python_runtime(shell, "pip install example"));
+        assert!(line_has_python_runtime(shell, "#!/usr/bin/env python3"));
+        assert!(line_has_python_runtime(
+            shell,
+            "python_command=/usr/bin/python3.12"
+        ));
         assert!(!line_has_python_runtime(
+            shell,
+            "# python3 is forbidden here"
+        ));
+        assert!(!line_has_python_runtime(
+            shell,
             "rm -rf vendor/xgboost/python-package"
         ));
+        let rust = Path::new("tests/parity.rs");
+        let rust_command = ["Command", "::new(\"py", "thon3\").arg(REFERENCE)"].concat();
+        assert!(line_has_python_runtime(rust, &rust_command));
+        assert!(!line_has_python_runtime(
+            rust,
+            "let documentation = \"python3 reference\";"
+        ));
+        assert!(source_has_python_runtime(
+            rust,
+            "let interpreter = \"python3\";\nCommand::new(interpreter);"
+        ));
         assert!(python_parity_invocation_allowed(
+            &registry,
+            &inline_registry,
             "jain-model-zoo/ops/parity/run.sh",
-            "exec python3 \"$REPO/ops/parity/parity_suite.py\" \"$@\""
+            "exec python3 parity_suite.py"
         ));
-        assert!(!python_parity_invocation_allowed(
-            "somewhere/else.sh",
-            "python3 parity_suite.py"
+        assert!(python_parity_invocation_allowed(
+            &registry,
+            &inline_registry,
+            "jain-math/crates/feat-math/tests/golden.rs",
+            &rust_command
         ));
+
+        let temp = TestDir::new("python-file-detection");
+        let typed = temp.path().join("reference.pyi");
+        let extensionless = temp.path().join("reference-oracle");
+        fs::write(&typed, b"frozen fixture\n").unwrap();
+        fs::write(&extensionless, b"#!/usr/bin/env python3\nprint(1)\n").unwrap();
+        let mut detected = Vec::new();
+        collect_python(temp.path(), &mut detected).unwrap();
+        detected.sort();
+        assert_eq!(detected, vec![extensionless.clone(), typed]);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mut permissions = fs::metadata(&extensionless).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&extensionless, permissions).unwrap();
+            assert!(executable_text_file(&extensionless).unwrap());
+        }
     }
 
     #[test]
@@ -5604,13 +7038,14 @@ family = "redline-split"
 name = "redline-split-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
 required_check = "redline-split-ops/required"
+current_tag = "redline-split-ops-v4.1.0-jain.2"
 [[repo]]
 name = "redline-core"
 path = "../redline-split/redline-core"
 jeryu_slug = "jeryu/redline-core"
 required_check = "redline-core/required"
 default_branch = "main"
-current_tag = "redline-core-v4.1.0-jain.1"
+current_tag = "redline-core-v4.1.0-jain.2"
 "#,
         )
         .unwrap();
@@ -5624,6 +7059,7 @@ name = "jain-split-ops"
 path = "{}/jain-split-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
 required_check = "jain-split-ops/required"
+current_tag = "jain-split-ops-v8.0.0-split.0"
 [nested_families.redline]
 manifest_path = "{}"
 control_plane = "{}/redline-split-ops"
