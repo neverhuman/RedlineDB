@@ -39,6 +39,8 @@ jobs:
       - name: Install pinned security tools
         run: bash ops/ci/install-tools.sh
       - name: Secret, dependency, workflow, and SBOM scans
+        env:
+          REQUIRED_SECURITY_COMMANDS: "cargo audit; cargo deny; gitleaks; actionlint; zizmor; syft SBOM"
         run: bash ops/ci/security.sh
       - name: Upload security and SBOM evidence
         if: always()
@@ -63,6 +65,8 @@ jobs:
       - name: Install exact audit toolchain
         run: bash ops/ci/install-tools.sh
       - name: Jankurai score and hard-finding gate
+        env:
+          JANKURAI_AUDIT_COMMAND: "jankurai audit . --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
         run: bash ops/ci/score.sh
       - name: Upload JSON and Markdown audit evidence
         if: always()
@@ -91,6 +95,8 @@ jobs:
       - name: Install exact release evidence tools
         run: bash ops/ci/install-tools.sh
       - name: Reproduce security evidence in the release snapshot
+        env:
+          REQUIRED_SECURITY_COMMANDS: "cargo audit; cargo deny; gitleaks; actionlint; zizmor; syft SBOM"
         run: bash ops/ci/security.sh
       - name: Release readiness
         run: bash ops/ci/release-readiness.sh

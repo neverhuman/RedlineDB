@@ -3,6 +3,11 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 cd "$repo_root"
 require_jankurai
+expected_audit="jankurai audit . --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
+[[ "${JANKURAI_AUDIT_COMMAND:-$expected_audit}" == "$expected_audit" ]] || {
+  printf 'Jankurai audit command contract differs from the governed lane\n' >&2
+  exit 1
+}
 mkdir -p .jankurai target/jankurai/coverage
 jankurai coverage audit . \
   --config agent/coverage-sources.toml \
