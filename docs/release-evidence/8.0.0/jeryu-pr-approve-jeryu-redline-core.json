@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Reviewable v8 release-candidate CI repair: apply the two cargo fmt changes reported by the required lane.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T10:31:28.578384163+00:00",
+      "head_sha": "d17b89eb7cab1356e9988d8e2058c07b4a2ce21d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:d17b89eb7cab1356e9988d8e2058c07b4a2ce21d:Blocked:1:2:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "11c72660892277db68d40a18f6805a02a4503c23",
+      "checks": {
+        "failing": 2,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "3953a0da-646b-4656-bfbd-92ecf679773d#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-core-ci",
+      "head_sha": "d17b89eb7cab1356e9988d8e2058c07b4a2ce21d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "d17b89eb7cab1356e9988d8e2058c07b4a2ce21d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:d17b89eb7cab1356e9988d8e2058c07b4a2ce21d:Blocked:1:2:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "3953a0da-646b-4656-bfbd-92ecf679773d",
+        "name": "redline-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: satisfy redline-core formatting gate",
+      "updated_at": "2026-07-12T10:31:12.677508572+00:00"
+    }
+  },
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact Redline core head after redline-core/required success and protection readback.",
+      "evidence": null,
+      "expected_head_sha": "d17b89eb7cab1356e9988d8e2058c07b4a2ce21d",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-core/pulls/1/reviews"
+  },
+  "response": {
+    "description": "Reviewable v8 release-candidate CI repair: apply the two cargo fmt changes reported by the required lane.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T10:31:28.569058038+00:00",
+      "head_sha": "d17b89eb7cab1356e9988d8e2058c07b4a2ce21d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:d17b89eb7cab1356e9988d8e2058c07b4a2ce21d:Blocked:1:2:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "11c72660892277db68d40a18f6805a02a4503c23",
+      "checks": {
+        "failing": 2,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "3953a0da-646b-4656-bfbd-92ecf679773d#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-core-ci",
+      "head_sha": "d17b89eb7cab1356e9988d8e2058c07b4a2ce21d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "d17b89eb7cab1356e9988d8e2058c07b4a2ce21d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:d17b89eb7cab1356e9988d8e2058c07b4a2ce21d:Blocked:1:2:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "3953a0da-646b-4656-bfbd-92ecf679773d",
+        "name": "redline-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: satisfy redline-core formatting gate",
+      "updated_at": "2026-07-12T10:31:12.677508572+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783852287
+}

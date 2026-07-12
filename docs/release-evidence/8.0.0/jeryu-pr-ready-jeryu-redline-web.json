@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/redline-web",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/redline-web/pulls/1"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-web"
+      },
+      "sha": "7b893f0d75df8d0ccf45855584d09c03576a0450"
+    },
+    "body": "Reviewable nested Redline CI repair: remove the stale import, update audited frontend dependencies, fix deterministic Playwright selectors, and meet WCAG contrast.",
+    "created_at": "2026-07-12T04:55:38.941872227Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-redline-web-ci",
+      "ref": "codex/v8-redline-web-ci",
+      "repo": {
+        "full_name": "jeryu/redline-web"
+      },
+      "sha": "208973b6fcfa37c2f4b008acf57070200a0f1b07"
+    },
+    "html_url": "/jeryu/redline-web/pull/1",
+    "id": "7a1c72b7-fe9b-4870-8a81-df02eaf06ac6",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "jeryu/redline-web",
+    "state": "open",
+    "title": "ci: repair web security and browser smoke gates",
+    "updated_at": "2026-07-12T10:33:59.158881773Z",
+    "url": "/repos/jeryu/redline-web/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783852439
+}
