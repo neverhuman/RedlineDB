@@ -123,7 +123,7 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
     jain jain-docs jain-domain jain-math jain-contracts jain-catboost \
     jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge \
     jain-core jain-llm jain-agent jain-jnoccio jain-zyal jain-jailgun \
-    jain-research jain-report jain-tui jain-cli jain-web jain-python \
+    jain-research jain-report jain-tui jain-cli jain-web \
     jain-model-zoo jain-ops jain-smartcluster jain-deploy; do
     [ "$sib" = "$REPO" ] && continue
     [ -d "$SPLIT_ROOT/$sib" ] && ln -s "$SPLIT_ROOT/$sib" "$tmp/$sib"
