@@ -25,6 +25,18 @@ if ! has "$JANKURAI"; then
 fi
 
 base_ref="${JANKURAI_BASE_REF:-origin/main}"
+proofbind_changed_file="target/jankurai/proofbind-existing-paths"
+proofbind_changed_args=()
+
+if ! git diff --diff-filter=d --name-only -z "${base_ref}...HEAD" >"$proofbind_changed_file"; then
+    fail "cannot resolve proof paths from ${base_ref}...HEAD"
+fi
+while IFS= read -r -d '' changed_path; do
+    proofbind_changed_args+=(--changed "$changed_path")
+done <"$proofbind_changed_file"
+if [ "${#proofbind_changed_args[@]}" -eq 0 ]; then
+    fail "proofbind has no existing changed paths to verify"
+fi
 
 run_step() {
     local name="$1"
@@ -41,6 +53,10 @@ run_step() {
 run_step_soft() {
     local name="$1"
     shift
+    if [ "$STRICT_TOOLS" = "1" ]; then
+        run_step "$name" "$@"
+        return
+    fi
     log "$name"
     if ! ci_run "$@"; then
         warn "$name failed (non-fatal supplementary evidence lane)"
@@ -85,10 +101,10 @@ run_step_soft "jankurai: proof routing" \
     --md target/jankurai/proof-routing.md
 
 run_step_soft "jankurai: proofbind verify" \
-    "$JANKURAI" proofbind verify . --changed-from "$base_ref"
+    "$JANKURAI" proofbind verify . "${proofbind_changed_args[@]}"
 
 run_step_soft "jankurai: proofmark rust" \
-    "$JANKURAI" proofmark rust . \
+    "$JANKURAI" proofmark rust . "${proofbind_changed_args[@]}" \
     --obligations target/jankurai/proofbind/obligations.json
 
 exit "$status"

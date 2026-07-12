@@ -1,4 +1,5 @@
 {
+  "workspace": "redline-testing",
   "owners": {
     "src/": "runner",
     "tests/": "runner",
