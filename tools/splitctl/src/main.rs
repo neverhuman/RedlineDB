@@ -1610,7 +1610,10 @@ fn valid_hex(value: &str, length: usize) -> bool {
     value.len() == length && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-fn release_tree_checksum(repo: &Path, commit: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub(crate) fn release_tree_checksum(
+    repo: &Path,
+    commit: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(repo)

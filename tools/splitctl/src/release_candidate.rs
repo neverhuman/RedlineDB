@@ -157,9 +157,10 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             .values()
             .all(|status| matches!(status.as_str(), "pass" | "cached"));
         if options.apply_tags {
+            let mut wave_bound_identity = false;
             for repo in &wave_repositories {
-                let step = if prerequisites_green && wave_ci_green {
-                    run_repo_tag(
+                let tag_steps = if prerequisites_green && wave_ci_green {
+                    run_repo_tag_sequence(
                         repo,
                         wave_ci
                             .get(&repo.name)
@@ -169,13 +170,35 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                         &executable,
                     )?
                 } else {
-                    blocked_step(
+                    vec![blocked_step(
                         &format!("tag:{}", repo.name),
                         "all prior waves and every CI lane in this wave must pass first",
-                    )
+                    )]
                 };
-                prerequisites_green &= step_green(&step);
-                steps.push(step);
+                wave_bound_identity |= tag_steps.iter().any(|step| {
+                    step["name"] == format!("bind-identity:{}", repo.name) && step_green(step)
+                });
+                prerequisites_green &= tag_steps.iter().all(step_green);
+                steps.extend(tag_steps);
+            }
+            if wave_bound_identity {
+                let sync_receipt = options
+                    .evidence_dir
+                    .join(format!("sync-derived-wave-{wave}.json"));
+                let sync = run_control_step(
+                    &format!("sync-derived-wave-{wave}"),
+                    Command::new(&executable)
+                        .arg("sync-derived-manifests")
+                        .arg("--manifest")
+                        .arg(&options.manifest)
+                        .arg("--receipt")
+                        .arg(sync_receipt)
+                        .arg("--apply"),
+                    &options.evidence_dir,
+                    "fail",
+                )?;
+                prerequisites_green &= step_green(&sync);
+                steps.push(sync);
             }
         } else {
             prerequisites_green &= wave_ci_green;
@@ -225,6 +248,10 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let overall = overall_status(&steps);
     report["steps"] = json!(steps);
     report["status"] = json!(overall);
+    let final_manifest_sha256 = sha256_file(&options.manifest)?;
+    let manifest_changed = report["manifest_sha256"] != final_manifest_sha256;
+    report["final_manifest_sha256"] = json!(final_manifest_sha256);
+    report["manifest_changed"] = json!(manifest_changed);
     report["finished_at_unix"] = json!(now_unix());
     write_json(&aggregate_path, &report)?;
     println!("release candidate {overall}: {}", aggregate_path.display());
@@ -233,6 +260,197 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Err(format!("release candidate is {overall}; see the aggregate receipt").into())
     }
+}
+
+fn run_repo_tag_sequence(
+    repo: &FleetRepo,
+    ci_status: &str,
+    options: &Options,
+    executable: &Path,
+) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
+    if repo.release_commit != PENDING {
+        return Ok(vec![run_repo_tag(repo, ci_status, options, executable)?]);
+    }
+    let (bound, identity) = bind_reviewed_identity(repo, options)?;
+    let Some(bound) = bound else {
+        return Ok(vec![identity]);
+    };
+    let tag = run_repo_tag(&bound, ci_status, options, executable)?;
+    Ok(vec![identity, tag])
+}
+
+fn bind_reviewed_identity(
+    repo: &FleetRepo,
+    options: &Options,
+) -> Result<(Option<FleetRepo>, JsonValue), Box<dyn std::error::Error>> {
+    let step_name = format!("bind-identity:{}", repo.name);
+    if repo.kind == "control-plane" {
+        return Ok((
+            None,
+            blocked_step(
+                &step_name,
+                "the control plane cannot self-bind its own commit inside the commit it identifies",
+            ),
+        ));
+    }
+    let branch = git_output(&repo.path, &["branch", "--show-current"])?;
+    let head = git_output(&repo.path, &["rev-parse", "--verify", "HEAD^{commit}"])?;
+    let porcelain = git_output(
+        &repo.path,
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+    )?;
+    let dirty_paths = release_relevant_dirty_paths(repo, &porcelain);
+    if branch != repo.expected_branch || !dirty_paths.is_empty() {
+        return Ok((
+            None,
+            json!({
+                "name": step_name,
+                "repository": repo.name,
+                "status": "blocked",
+                "reason": "identity binding requires a clean checkout on the reviewed branch",
+                "branch": branch,
+                "expected_branch": repo.expected_branch,
+                "dirty_paths": dirty_paths,
+            }),
+        ));
+    }
+    let remote = remote_branch_commit(&repo.path, &repo.remote, &repo.expected_branch)?;
+    if remote.as_deref() != Some(head.as_str()) {
+        return Ok((
+            None,
+            json!({
+                "name": step_name,
+                "repository": repo.name,
+                "status": "blocked",
+                "reason": "reviewed checkout HEAD does not equal live forge main",
+                "head": head,
+                "remote_main": remote,
+            }),
+        ));
+    }
+    let checksum = super::release_tree_checksum(&repo.path, &head)?;
+    update_manifest_identity(&options.manifest, &repo.name, &head, &checksum)?;
+    let mut bound = repo.clone();
+    bound.release_commit.clone_from(&head);
+    let receipt = options
+        .evidence_dir
+        .join("identities")
+        .join(format!("{}.json", repo.name));
+    let step = json!({
+        "schema_version": "jain.release-identity-binding/v1",
+        "name": step_name,
+        "repository": repo.name,
+        "status": "pass",
+        "manifest": options.manifest,
+        "release_commit": head,
+        "release_checksum_sha256": checksum,
+        "source": "clean-reviewed-forge-main",
+        "timestamp_unix": now_unix(),
+    });
+    write_json(&receipt, &step)?;
+    Ok((Some(bound), step))
+}
+
+fn update_manifest_identity(
+    manifest: &Path,
+    repo_name: &str,
+    commit: &str,
+    checksum: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = fs::read_to_string(manifest)?;
+    let mut lines = source
+        .split_inclusive('\n')
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let starts = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            matches!(
+                line.trim(),
+                "[[repo]]" | "[[infrastructure_repo]]" | "[control_plane]"
+            )
+            .then_some(index)
+        })
+        .collect::<Vec<_>>();
+    let mut target = None;
+    for (position, start) in starts.iter().copied().enumerate() {
+        let end = starts.get(position + 1).copied().unwrap_or(lines.len());
+        let name_line = format!("name = \"{repo_name}\"");
+        if lines[start..end]
+            .iter()
+            .any(|line| line.trim() == name_line)
+        {
+            target = Some((start, end));
+            break;
+        }
+    }
+    let (start, end) = target.ok_or_else(|| {
+        format!("canonical manifest has no mutable repository block for {repo_name}")
+    })?;
+    let mut replaced_commit = false;
+    let mut replaced_checksum = false;
+    for line in &mut lines[start..end] {
+        let trimmed = line.trim();
+        if trimmed.starts_with("release_commit = ") {
+            validate_replaceable_identity(trimmed, "release_commit", commit)?;
+            *line = format!("release_commit = \"{commit}\"\n");
+            replaced_commit = true;
+        } else if trimmed.starts_with("release_checksum_sha256 = ") {
+            validate_replaceable_identity(trimmed, "release_checksum_sha256", checksum)?;
+            *line = format!("release_checksum_sha256 = \"{checksum}\"\n");
+            replaced_checksum = true;
+        }
+    }
+    if !replaced_commit || !replaced_checksum {
+        return Err(format!("{repo_name} identity fields are incomplete in the manifest").into());
+    }
+    let staging = manifest.with_extension(format!("tmp-{}", std::process::id()));
+    fs::write(&staging, lines.concat())?;
+    fs::rename(staging, manifest)?;
+    Ok(())
+}
+
+fn validate_replaceable_identity(
+    line: &str,
+    key: &str,
+    replacement: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let current = line
+        .split_once('=')
+        .map(|(_, value)| value.trim().trim_matches('"'))
+        .ok_or_else(|| format!("malformed {key} identity line"))?;
+    if current != PENDING && current != replacement {
+        return Err(format!(
+            "refusing to replace immutable {key} value {current} with {replacement}"
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn remote_branch_commit(
+    repo: &Path,
+    remote: &str,
+    branch: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let reference = format!("refs/heads/{branch}");
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["ls-remote", remote, &reference])
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "git ls-remote failed for {}: {}",
+            repo.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    Ok(String::from_utf8(output.stdout)?
+        .lines()
+        .find_map(|line| line.split_whitespace().next().map(str::to_owned)))
 }
 
 fn parse_options(args: Vec<String>) -> Result<Options, Box<dyn std::error::Error>> {
@@ -1059,5 +1277,38 @@ sagemaker = "passed"
             ),
             vec!["docs/release-evidence/8.0.0/orchestrator/run.json"]
         );
+    }
+
+    #[test]
+    fn identity_binding_replaces_only_pending_fields_and_never_moves_identity() {
+        let root =
+            env::temp_dir().join(format!("jain-release-identity-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let manifest = root.join("repos.manifest.toml");
+        fs::write(
+            &manifest,
+            r#"[[repo]]
+name = "one"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+
+[[repo]]
+name = "two"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+"#,
+        )
+        .unwrap();
+        let commit = "a".repeat(40);
+        let checksum = "b".repeat(64);
+        update_manifest_identity(&manifest, "two", &commit, &checksum).unwrap();
+        let updated = fs::read_to_string(&manifest).unwrap();
+        assert!(updated.contains("name = \"one\"\nrelease_commit = \"PENDING\""));
+        assert!(updated.contains(&format!(
+            "name = \"two\"\nrelease_commit = \"{commit}\"\nrelease_checksum_sha256 = \"{checksum}\""
+        )));
+        assert!(update_manifest_identity(&manifest, "two", &"c".repeat(40), &checksum).is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 }

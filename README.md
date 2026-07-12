@@ -19,7 +19,8 @@ Start with [AGENTS.md](AGENTS.md) for agent instructions.
 
 That single resumable command reads the canonical manifest, runs Redline and
 every selected Jain repository from detached exact commits in rollout-wave
-order, applies only manifest-bound compare-and-swap tags, and finishes with the
+order, binds `PENDING` identities only from clean reviewed forge `main`, applies
+only manifest-bound compare-and-swap tags, and finishes with the
 AtomicSoul 8.0.0 dry run. It records every result under
 `docs/release-evidence/8.0.0/orchestrator/` and stops on dirty work, missing
 review identities, failed gates, or host capability blockers. Use

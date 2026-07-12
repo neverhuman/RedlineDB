@@ -27,9 +27,10 @@ The thin shell launcher sets the immutable safety environment and hands all
 orchestration to Rust. The runner validates the canonical/derived manifests and
 Python boundary, executes Redline family CI, runs every Jain repository from a
 detached exact commit in declared wave order, reuses only fresh receipts whose
-commit/policy/log hash still match, applies only canonical compare-and-swap
-tags, runs final preflight, and invokes AtomicSoul only in its push-disabled
-dry-run mode. Its aggregate receipt and durable logs are under
+commit/policy/log hash still match, binds a `PENDING` identity only when a clean
+reviewed checkout equals live forge `main`, refreshes derived manifests, applies
+only canonical compare-and-swap tags, runs final preflight, and invokes
+AtomicSoul only in its push-disabled dry-run mode. Its aggregate receipt and durable logs are under
 `docs/release-evidence/8.0.0/orchestrator/`.
 
 The command is intentionally resumable: fix the blocker named in the aggregate
