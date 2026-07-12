@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:4ffd905e8efecb6d69807b22f1edc2e8019c2c68cf9040ffbfec1578ed2994ee",
-  "input_fingerprint": "sha256:e8f19db86735e0e85bc2ef8892707db3c5da32ede721497561f72fa7af8f2ff4",
+  "report_fingerprint": "sha256:7a193af97900dc7c8d6c3650bbdf82dbb17a0e26563a3a2c26dba85379f92bb5",
+  "input_fingerprint": "sha256:a4320f3cdc98f89ddc6035255b1a2798498294ebcf460c4e9fc3008544fc54c8",
   "policy_fingerprint": "sha256:e29ddbb7ec7bed306210ac0ba290b3886d210b93e45de6b8e0f873e01945315c",
   "manifest_fingerprints": {
     "owner_map": "sha256:749c10305f421e201388852dd44d90a93c2228229651ca1372b0878cc17cd91e",
@@ -10,8 +10,8 @@
     "proof_lanes": "sha256:0f90587c471b00e4ff17e57632a271650e430bbac67ced986a9f9582b92bd9d7",
     "standard_version": "sha256:f7a56ea0a95fc9be14aa355b0604e104993a8c75e562a2fe03d0313cc53fbc3b"
   },
-  "dirty_worktree": true,
-  "generated_at": "1783848282",
+  "dirty_worktree": false,
+  "generated_at": "1783848878",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1783848282",
-  "started_at": "1783848282",
-  "elapsed_ms": 1530,
+  "run_id": "1783848878",
+  "started_at": "1783848878",
+  "elapsed_ms": 1651,
   "scope": {
     "mode": "full",
     "paths": []
@@ -35,7 +35,7 @@
   "score": 86,
   "raw_score": 86,
   "decision": {
-    "status": "advisory",
+    "status": "pass",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
@@ -45,27 +45,27 @@
       "allowed_drop": 0,
       "passed": true,
       "score_delta": 0,
-      "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "baseline_report_fingerprint": "sha256:4ffd905e8efecb6d69807b22f1edc2e8019c2c68cf9040ffbfec1578ed2994ee",
+      "baseline_input_fingerprint": "sha256:e8f19db86735e0e85bc2ef8892707db3c5da32ede721497561f72fa7af8f2ff4",
+      "baseline_policy_fingerprint": "sha256:e29ddbb7ec7bed306210ac0ba290b3886d210b93e45de6b8e0f873e01945315c",
       "new_caps": [],
       "new_hard_findings": [],
       "policy_changed": false
     }
   },
   "git": {
-    "head": "9d38aba",
+    "head": "117115e",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": true
+    "dirty_worktree": false
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
     "minimum_score": 85,
     "fail_on": [],
     "advisory_on": [],
-    "mode": "advisory",
+    "mode": "ratchet",
     "standard_version": "0.9.0",
     "auditor_version": "1.6.10",
     "schema_version": "1.9.0",
@@ -308,9 +308,12 @@
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
         "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=0 missing=0 high_or_critical_missing=0 verdict=pass"
+        "proofbind artifact found: surfaces=56 missing=56 high_or_critical_missing=32 verdict=review"
       ],
-      "notes": []
+      "notes": [
+        "proofbind reports 56 unresolved obligation(s)",
+        "proofbind reports 32 missing high/critical semantic proof obligation(s)"
+      ]
     },
     {
       "name": "Security and supply-chain posture",
@@ -420,7 +423,8 @@
     "missing_categories": [],
     "evidence": {
       "accessibility": [
-        ".jankurai/repo-score.json"
+        ".jankurai/repo-score.json",
+        "agent/jankurai-baseline.json"
       ],
       "api_mocks": [],
       "artifact_backed_proof": [],
@@ -429,7 +433,8 @@
       "layout_stability": [],
       "playwright_visual": [],
       "storybook": [
-        ".jankurai/repo-score.json"
+        ".jankurai/repo-score.json",
+        "agent/jankurai-baseline.json"
       ],
       "visual_review": []
     }
@@ -967,7 +972,7 @@
     "artifact": {
       "path": "target/jankurai/security/evidence.json",
       "envelope_exit_code": 0,
-      "elapsed_ms": 3254,
+      "elapsed_ms": 4037,
       "wrapper_strict": true,
       "profile": "ci",
       "commands_ran": 6,
@@ -976,8 +981,8 @@
       "required_commands_skipped": 0,
       "required_commands_failed": 0,
       "blocking_commands": [],
-      "generated_at": "1783847969",
-      "git_head": "9d38aba9aa6f0142dec141d1c379040eb6381a5f"
+      "generated_at": "1783848747",
+      "git_head": "7c74d2184e1af8f9b4da63179ed0024b5f1999dc"
     }
   },
   "boundaries": {
@@ -986,7 +991,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-12T09:24:41.329120122+00:00",
+    "generated_at": "2026-07-12T09:34:37.200945974+00:00",
     "repo": ".",
     "auditor_version": "1.6.10",
     "status": "review",
@@ -1024,7 +1029,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 52,
+      "files_scanned": 53,
       "files_considered": 1,
       "active_files": 1,
       "exact_file_classes": 0,
