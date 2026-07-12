@@ -72,13 +72,31 @@
     }
   ],
   "allowed_count": 14,
-  "error": "Python outside the Rust-parity boundary:\nredline-split/redline/scripts/bench/export_benchmark_results.py\nredline-split/redline/scripts/perf/run_subset.py\nredline-split/redline/scripts/perf/diff.py\nredline-split/redline/scripts/perf/build_case_lists.py\nredline-split/redline/paper/scripts/build_figs.py\nredline-split/redline/paper/scripts/check_refs.py",
+  "allowed_runtime_invocation_count": 3,
+  "allowed_runtime_invocations": [
+    {
+      "line": 15,
+      "path": "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh",
+      "text": "python3 \"$PORTED/_nm/parity/oracle.py\" \"$OUT\" \"$DS\" 2>/dev/null | sed 's/^/   /'"
+    },
+    {
+      "line": 35,
+      "path": "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh",
+      "text": "python3 \"$PORTED/_nm/parity/oracle.py\" \"$OUT\" \"$DS\" 2>/dev/null | sed 's/^/   /'"
+    },
+    {
+      "line": 16,
+      "path": "jain-model-zoo/ops/parity/run.sh",
+      "text": "exec python3 \"$REPO/ops/parity/parity_suite.py\" \"$@\""
+    }
+  ],
+  "error": "Python outside the Rust-parity boundary:\nredline-split/redline/scripts/bench/export_benchmark_results.py\nredline-split/redline/scripts/perf/run_subset.py\nredline-split/redline/scripts/perf/diff.py\nredline-split/redline/scripts/perf/build_case_lists.py\nredline-split/redline/paper/scripts/build_figs.py\nredline-split/redline/paper/scripts/check_refs.py\nredline-split/redline/.gitlab-ci.yml:881: - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3\nredline-split/redline/.gitlab-ci.yml:953: - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3\nredline-split/redline/scripts/ci/fix-bench-runner-env.sh:45: python3 - \"$CONFIG\" \"$RUNNER_NAME\" \"$USER_PATH\" \"$USER_CARGO\" \"$USER_RUSTUP\" <<'PY'\nredline-split/redline/scripts/ci/register-bench-runner.sh:97: | python3 -c 'import sys,json; print(json.load(sys.stdin).get(\"token\",\"\"))')\"\nredline-split/redline/scripts/ci/register-bench-runner.sh:139: | python3 -c \"\nredline-split/redline/scripts/ci/fix-bench-runner-dns.sh:61: python3 - \"$GITLAB_RUNNER_CONFIG\" \"$PATCH_SCRIPT\" <<'PY'\nredline-split/redline/scripts/ci/fix-bench-runner-shell.sh:32: python3 - \"$CONFIG\" \"$RUNNER_NAME\" <<'PY'\nredline-split/redline/scripts/bench/dick_head_choas_xbabe1.sh:71: python3 scripts/bench/export_benchmark_results.py\nredline-split/redline/scripts/ci-doctor.sh:121: if ! command -v python3 >/dev/null 2>&1; then\nredline-split/redline/scripts/ci-doctor.sh:122: fail python3 \"missing (expected >=3.10)\"\nredline-split/redline/scripts/ci-doctor.sh:126: actual=\"$(python3 -c 'import sys; print(\"{}.{}.{}\".format(*sys.version_info[:3]))' 2>/dev/null)\"\nredline-split/redline/scripts/ci-doctor.sh:130: pass python3 \"${actual} (>=3.10)\"\nredline-split/redline/scripts/ci-doctor.sh:132: fail python3 \"expected>=3.10 actual=${actual}\"\nredline-split/redline/scripts/generate-metrics-readme.sh:132: python3 <<'PY'\nredline-split/redline/scripts/process-redline-testing-evidence.sh:34: python3 - \"$repo_root\" \"$root\" \"$official_evidence\" \"$processed\" <<'PY'\nredline-split/redline/scripts/perf/pgo.sh:175: python3 scripts/perf/run_subset.py \\\\\nredline-split/redline/scripts/perf/pgo.sh:247: python3 scripts/perf/run_subset.py \\\nredline-split/redline/scripts/perf/profile-one.sh:43: python3 - \"$snapshot\" \"$case_name\" \"$out_dir\" <<'PYEOF'\nredline-split/redline/scripts/perf/stable.sh:51: python3 - <<PY\nredline-split/redline/scripts/perf/gap-closure-verify.sh:77: python3 - \"$BASELINE_RANKED\" \"$NEW_RANKED\" >\"$OUT_DIR/deltas.tsv\" <<'PYEOF'\nredline-split/redline/scripts/perf/build-case-lists.sh:34: python3 \"$(dirname \"$0\")/build_case_lists.py\" \\\nredline-split/redline/scripts/perf/lib.sh:116: python3 \"$(dirname \"${BASH_SOURCE[0]}\")/run_subset.py\" \\\nredline-split/redline/scripts/perf/lib.sh:146: python3 - \"$jsonl\" <<'PYEOF'\nredline-split/redline/scripts/perf/w2-matrix.sh:200: python3 - <<'PY'\nredline-split/redline/just/lanes.just:162: python3 ./scripts/perf/diff.py {{BEFORE}} {{AFTER}}\nredline-split/redline/tools/jankurai-hooks/pre-push-score-ratchet:56: python3 - \"$baseline_json\" \".jankurai/repo-score.json\" <<'PY'\nredline-split/redline/ops/git-hooks/pre-commit:52: python3 - \"$baseline_json\" \".jankurai/repo-score.json\" <<'PY'\nredline-split/redline/ops/ci/artifact_support.sh:118: python3 - \"$out_dir\" \"$entrypoint\" \"$sha\" \"$tree\" \"$generated_at\" \"$workers\" <<'PY'\nredline-split/redline/ops/ci/jankurai-audit.sh:108: if python3 - \"$TARGET_DIR/repo-score.json\" <<'PY'\nredline-split/redline/ops/deploy/telemetry.sh:45: python3 - \"$repo\" \"$sha\" \"$ring_percent\" \"$slug\" \"$store_root\" <<'PY'\njain-contracts/agent/generated-zones.toml:18: command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\"\njain-core/agent/generated-zones.toml:18: command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\"\njain-web/agent/generated-zones.toml:18: command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\"\njain-web/ops/ci/artifact_support.sh:14: python3 - <<'PY_ART'\njain-web/ops/ci/score.sh:35: python3 - <<'PY_SCORE'\njain-web/ops/ci/check.sh:22: python3 -m compileall -q python/ai-service\njain-web/ops/ci/check.sh:25: python3 - <<'PY'\njain-web/ops/ci/check.sh:44: find ops/split -maxdepth 1 -name '*.py' -print0 | xargs -0 -r python3 -m py_compile\njain-web/ops/ci/contract-drift.sh:9: python3 -m json.tool contracts/progress-event.schema.json >/dev/null\njain-web/ops/ci/contract-drift.sh:10: python3 - <<'PY'",
   "mode": "dry-run",
   "operation": "python-boundary",
   "policy": "Python is permitted only for parity testing against Rust implementations",
   "schema_version": "jain.rust-parity-python-boundary/v1",
   "status": "fail",
-  "timestamp_unix": 1783853061,
+  "timestamp_unix": 1783854174,
   "unexpected": [
     "redline-split/redline/scripts/bench/export_benchmark_results.py",
     "redline-split/redline/scripts/perf/run_subset.py",
@@ -87,5 +105,208 @@
     "redline-split/redline/paper/scripts/build_figs.py",
     "redline-split/redline/paper/scripts/check_refs.py"
   ],
-  "unexpected_count": 6
+  "unexpected_count": 6,
+  "unexpected_runtime_invocation_count": 40,
+  "unexpected_runtime_invocations": [
+    {
+      "line": 881,
+      "path": "redline-split/redline/.gitlab-ci.yml",
+      "text": "- apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3"
+    },
+    {
+      "line": 953,
+      "path": "redline-split/redline/.gitlab-ci.yml",
+      "text": "- apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3"
+    },
+    {
+      "line": 45,
+      "path": "redline-split/redline/scripts/ci/fix-bench-runner-env.sh",
+      "text": "python3 - \"$CONFIG\" \"$RUNNER_NAME\" \"$USER_PATH\" \"$USER_CARGO\" \"$USER_RUSTUP\" <<'PY'"
+    },
+    {
+      "line": 97,
+      "path": "redline-split/redline/scripts/ci/register-bench-runner.sh",
+      "text": "| python3 -c 'import sys,json; print(json.load(sys.stdin).get(\"token\",\"\"))')\""
+    },
+    {
+      "line": 139,
+      "path": "redline-split/redline/scripts/ci/register-bench-runner.sh",
+      "text": "| python3 -c \""
+    },
+    {
+      "line": 61,
+      "path": "redline-split/redline/scripts/ci/fix-bench-runner-dns.sh",
+      "text": "python3 - \"$GITLAB_RUNNER_CONFIG\" \"$PATCH_SCRIPT\" <<'PY'"
+    },
+    {
+      "line": 32,
+      "path": "redline-split/redline/scripts/ci/fix-bench-runner-shell.sh",
+      "text": "python3 - \"$CONFIG\" \"$RUNNER_NAME\" <<'PY'"
+    },
+    {
+      "line": 71,
+      "path": "redline-split/redline/scripts/bench/dick_head_choas_xbabe1.sh",
+      "text": "python3 scripts/bench/export_benchmark_results.py"
+    },
+    {
+      "line": 121,
+      "path": "redline-split/redline/scripts/ci-doctor.sh",
+      "text": "if ! command -v python3 >/dev/null 2>&1; then"
+    },
+    {
+      "line": 122,
+      "path": "redline-split/redline/scripts/ci-doctor.sh",
+      "text": "fail python3 \"missing (expected >=3.10)\""
+    },
+    {
+      "line": 126,
+      "path": "redline-split/redline/scripts/ci-doctor.sh",
+      "text": "actual=\"$(python3 -c 'import sys; print(\"{}.{}.{}\".format(*sys.version_info[:3]))' 2>/dev/null)\""
+    },
+    {
+      "line": 130,
+      "path": "redline-split/redline/scripts/ci-doctor.sh",
+      "text": "pass python3 \"${actual} (>=3.10)\""
+    },
+    {
+      "line": 132,
+      "path": "redline-split/redline/scripts/ci-doctor.sh",
+      "text": "fail python3 \"expected>=3.10 actual=${actual}\""
+    },
+    {
+      "line": 132,
+      "path": "redline-split/redline/scripts/generate-metrics-readme.sh",
+      "text": "python3 <<'PY'"
+    },
+    {
+      "line": 34,
+      "path": "redline-split/redline/scripts/process-redline-testing-evidence.sh",
+      "text": "python3 - \"$repo_root\" \"$root\" \"$official_evidence\" \"$processed\" <<'PY'"
+    },
+    {
+      "line": 175,
+      "path": "redline-split/redline/scripts/perf/pgo.sh",
+      "text": "python3 scripts/perf/run_subset.py \\\\"
+    },
+    {
+      "line": 247,
+      "path": "redline-split/redline/scripts/perf/pgo.sh",
+      "text": "python3 scripts/perf/run_subset.py \\"
+    },
+    {
+      "line": 43,
+      "path": "redline-split/redline/scripts/perf/profile-one.sh",
+      "text": "python3 - \"$snapshot\" \"$case_name\" \"$out_dir\" <<'PYEOF'"
+    },
+    {
+      "line": 51,
+      "path": "redline-split/redline/scripts/perf/stable.sh",
+      "text": "python3 - <<PY"
+    },
+    {
+      "line": 77,
+      "path": "redline-split/redline/scripts/perf/gap-closure-verify.sh",
+      "text": "python3 - \"$BASELINE_RANKED\" \"$NEW_RANKED\" >\"$OUT_DIR/deltas.tsv\" <<'PYEOF'"
+    },
+    {
+      "line": 34,
+      "path": "redline-split/redline/scripts/perf/build-case-lists.sh",
+      "text": "python3 \"$(dirname \"$0\")/build_case_lists.py\" \\"
+    },
+    {
+      "line": 116,
+      "path": "redline-split/redline/scripts/perf/lib.sh",
+      "text": "python3 \"$(dirname \"${BASH_SOURCE[0]}\")/run_subset.py\" \\"
+    },
+    {
+      "line": 146,
+      "path": "redline-split/redline/scripts/perf/lib.sh",
+      "text": "python3 - \"$jsonl\" <<'PYEOF'"
+    },
+    {
+      "line": 200,
+      "path": "redline-split/redline/scripts/perf/w2-matrix.sh",
+      "text": "python3 - <<'PY'"
+    },
+    {
+      "line": 162,
+      "path": "redline-split/redline/just/lanes.just",
+      "text": "python3 ./scripts/perf/diff.py {{BEFORE}} {{AFTER}}"
+    },
+    {
+      "line": 56,
+      "path": "redline-split/redline/tools/jankurai-hooks/pre-push-score-ratchet",
+      "text": "python3 - \"$baseline_json\" \".jankurai/repo-score.json\" <<'PY'"
+    },
+    {
+      "line": 52,
+      "path": "redline-split/redline/ops/git-hooks/pre-commit",
+      "text": "python3 - \"$baseline_json\" \".jankurai/repo-score.json\" <<'PY'"
+    },
+    {
+      "line": 118,
+      "path": "redline-split/redline/ops/ci/artifact_support.sh",
+      "text": "python3 - \"$out_dir\" \"$entrypoint\" \"$sha\" \"$tree\" \"$generated_at\" \"$workers\" <<'PY'"
+    },
+    {
+      "line": 108,
+      "path": "redline-split/redline/ops/ci/jankurai-audit.sh",
+      "text": "if python3 - \"$TARGET_DIR/repo-score.json\" <<'PY'"
+    },
+    {
+      "line": 45,
+      "path": "redline-split/redline/ops/deploy/telemetry.sh",
+      "text": "python3 - \"$repo\" \"$sha\" \"$ring_percent\" \"$slug\" \"$store_root\" <<'PY'"
+    },
+    {
+      "line": 18,
+      "path": "jain-contracts/agent/generated-zones.toml",
+      "text": "command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\""
+    },
+    {
+      "line": 18,
+      "path": "jain-core/agent/generated-zones.toml",
+      "text": "command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\""
+    },
+    {
+      "line": 18,
+      "path": "jain-web/agent/generated-zones.toml",
+      "text": "command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\""
+    },
+    {
+      "line": 14,
+      "path": "jain-web/ops/ci/artifact_support.sh",
+      "text": "python3 - <<'PY_ART'"
+    },
+    {
+      "line": 35,
+      "path": "jain-web/ops/ci/score.sh",
+      "text": "python3 - <<'PY_SCORE'"
+    },
+    {
+      "line": 22,
+      "path": "jain-web/ops/ci/check.sh",
+      "text": "python3 -m compileall -q python/ai-service"
+    },
+    {
+      "line": 25,
+      "path": "jain-web/ops/ci/check.sh",
+      "text": "python3 - <<'PY'"
+    },
+    {
+      "line": 44,
+      "path": "jain-web/ops/ci/check.sh",
+      "text": "find ops/split -maxdepth 1 -name '*.py' -print0 | xargs -0 -r python3 -m py_compile"
+    },
+    {
+      "line": 9,
+      "path": "jain-web/ops/ci/contract-drift.sh",
+      "text": "python3 -m json.tool contracts/progress-event.schema.json >/dev/null"
+    },
+    {
+      "line": 10,
+      "path": "jain-web/ops/ci/contract-drift.sh",
+      "text": "python3 - <<'PY'"
+    }
+  ]
 }

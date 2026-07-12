@@ -152,7 +152,7 @@ refresh-mirrors-apply:
   cargo run --locked --quiet -- refresh-bare-mirrors --manifest repos.manifest.toml --apply
 
 atomicsoul-dry-run:
-  cd ../jain-deploy && ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION=8.0.0 ./scripts/atomicsoul-v8-dry-run.sh
+  cd ../jain-deploy && ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION=8.0.0 ./scripts/atomicsoul-dry-run.sh
 
 profile:
   printf '%s\n' "split-ops-control-plane"

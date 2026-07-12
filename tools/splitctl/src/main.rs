@@ -3275,6 +3275,29 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             unexpected.push(rel);
         }
     }
+    let mut runtime_files = Vec::new();
+    collect_python_runtime_files(&root, &mut runtime_files)?;
+    let mut allowed_invocations = Vec::new();
+    let mut unexpected_invocations = Vec::new();
+    for path in runtime_files {
+        let rel = path
+            .strip_prefix(&root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let content = fs::read_to_string(&path)?;
+        for (index, line) in content.lines().enumerate() {
+            if !line_has_python_runtime(line) {
+                continue;
+            }
+            let row = json!({"path": rel, "line": index + 1, "text": line.trim()});
+            if python_parity_invocation_allowed(&rel, line) {
+                allowed_invocations.push(row);
+            } else {
+                unexpected_invocations.push(row);
+            }
+        }
+    }
     let mut report = receipt_header(
         "jain.rust-parity-python-boundary/v1",
         "python-boundary",
@@ -3284,24 +3307,51 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
         json!("Python is permitted only for parity testing against Rust implementations");
     report["allowed"] = json!(declared);
     report["unexpected"] = json!(unexpected);
+    report["allowed_runtime_invocations"] = json!(allowed_invocations);
+    report["unexpected_runtime_invocations"] = json!(unexpected_invocations);
     report["allowed_count"] = json!(report["allowed"].as_array().map_or(0, Vec::len));
     report["unexpected_count"] = json!(report["unexpected"].as_array().map_or(0, Vec::len));
-    let result = if report["unexpected_count"] == 0 {
-        println!(
-            "python boundary ok: {} Rust-parity files",
-            report["allowed_count"]
-        );
-        Ok(())
-    } else {
-        let paths = report["unexpected"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(JsonValue::as_str)
-            .collect::<Vec<_>>()
-            .join("\n");
-        Err(format!("Python outside the Rust-parity boundary:\n{paths}").into())
-    };
+    report["allowed_runtime_invocation_count"] = json!(report["allowed_runtime_invocations"]
+        .as_array()
+        .map_or(0, Vec::len));
+    report["unexpected_runtime_invocation_count"] = json!(report["unexpected_runtime_invocations"]
+        .as_array()
+        .map_or(0, Vec::len));
+    let result =
+        if report["unexpected_count"] == 0 && report["unexpected_runtime_invocation_count"] == 0 {
+            println!(
+                "python boundary ok: {} Rust-parity files; {} approved interpreter invocations",
+                report["allowed_count"], report["allowed_runtime_invocation_count"]
+            );
+            Ok(())
+        } else {
+            let mut violations = report["unexpected"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(JsonValue::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            violations.extend(
+                report["unexpected_runtime_invocations"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|row| {
+                        format!(
+                            "{}:{}: {}",
+                            row["path"].as_str().unwrap_or("<unknown>"),
+                            row["line"].as_u64().unwrap_or(0),
+                            row["text"].as_str().unwrap_or("<unknown>")
+                        )
+                    }),
+            );
+            Err(format!(
+                "Python outside the Rust-parity boundary:\n{}",
+                violations.join("\n")
+            )
+            .into())
+        };
     finish_receipted_operation(&receipt, &mut report, result)
 }
 
@@ -3382,6 +3432,96 @@ fn python_parity_declaration(path: &str) -> Option<(&'static str, &'static str)>
         .iter()
         .find(|(allowed, _, _)| *allowed == path)
         .map(|(_, purpose, evidence)| (*purpose, *evidence))
+}
+
+fn collect_python_runtime_files(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
+    if !root.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(root)? {
+        let path = entry?.path();
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                matches!(
+                    name,
+                    ".git" | "target" | ".stage" | ".venv" | "vendor" | "node_modules"
+                )
+            })
+        {
+            continue;
+        }
+        if path.is_dir() {
+            collect_python_runtime_files(&path, out)?;
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        let extension = path.extension().and_then(|value| value.to_str());
+        let runtime_source = matches!(extension, Some("sh" | "bash" | "yml" | "yaml" | "just"))
+            || name == "Justfile"
+            || name == "Makefile"
+            || name.starts_with("Dockerfile")
+            || name == "pre-commit"
+            || name.starts_with("pre-push")
+            || name == "generated-zones.toml"
+            || name == "test-map.json";
+        if runtime_source {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn line_has_python_runtime(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#') {
+        return false;
+    }
+    if trimmed.starts_with("python_command=") {
+        return false;
+    }
+    if line.contains("actions/setup-python@") {
+        return true;
+    }
+    line.split(|character: char| {
+        character.is_whitespace()
+            || matches!(
+                character,
+                '\'' | '"'
+                    | '('
+                    | ')'
+                    | '{'
+                    | '}'
+                    | '['
+                    | ']'
+                    | ';'
+                    | '|'
+                    | '&'
+                    | '!'
+                    | ','
+                    | ':'
+                    | '\\'
+                    | '$'
+                    | '='
+            )
+    })
+    .any(|token| {
+        matches!(
+            token,
+            "python" | "python3" | "python3-pip" | "pytest" | "ruff" | "pip" | "pip3"
+        )
+    })
+}
+
+fn python_parity_invocation_allowed(path: &str, line: &str) -> bool {
+    (path == "jain-model-zoo/ops/parity/run.sh" && line.contains("ops/parity/parity_suite.py"))
+        || ((path == "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh"
+            || path == "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh")
+            && line.contains("_nm/parity/oracle.py"))
 }
 
 fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -5241,6 +5381,26 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             python_parity_declaration("anything/oracle/production.py"),
             None
         );
+        assert!(line_has_python_runtime("python3 - <<'PY'"));
+        assert!(line_has_python_runtime("if command -v python3; then"));
+        assert!(line_has_python_runtime(
+            "actual=\"$(python3 -c 'print(1)')\""
+        ));
+        assert!(line_has_python_runtime("pip install example"));
+        assert!(line_has_python_runtime("uses: actions/setup-python@v5"));
+        assert!(!line_has_python_runtime("# python3 is forbidden here"));
+        assert!(!line_has_python_runtime("python_command=\"python\"\"3\""));
+        assert!(!line_has_python_runtime(
+            "rm -rf vendor/xgboost/python-package"
+        ));
+        assert!(python_parity_invocation_allowed(
+            "jain-model-zoo/ops/parity/run.sh",
+            "exec python3 \"$REPO/ops/parity/parity_suite.py\" \"$@\""
+        ));
+        assert!(!python_parity_invocation_allowed(
+            "somewhere/else.sh",
+            "python3 parity_suite.py"
+        ));
     }
 
     #[test]

@@ -223,7 +223,7 @@ Run the audited wrapper from `jain-deploy` after the dependency graph resolves:
 
 ```bash
 cd /home/ubuntu/jain-split/jain-deploy
-JAIN_RELEASE_VERSION=8.0.0 ATOMICSOUL_PUSH=0 ./scripts/atomicsoul-v8-dry-run.sh
+JAIN_RELEASE_VERSION=8.0.0 ATOMICSOUL_PUSH=0 ./scripts/atomicsoul-dry-run.sh
 ```
 
 It performs the local `BuildLocal` gate and plans image publish, canary, public-route, promotion,
@@ -231,7 +231,7 @@ rollback to known target `7.0.6`, retention, and registry cleanup. Dry-run opera
 as `planned`, never `passed`. Verify the wrapper contract separately:
 
 ```bash
-bash scripts/test-atomicsoul-v8-dry-run.sh
+bash scripts/test-atomicsoul-dry-run.sh
 ```
 
 There is no live/apply mode in this workflow. A command attempting to set `ATOMICSOUL_PUSH=1`,
