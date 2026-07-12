@@ -5,20 +5,16 @@ cd "$REPO_ROOT"
 
 log 'artifact-support lane: record score and policy artifacts'
 mkdir -p target/artifact-support
-python3 - <<'PY'
-from pathlib import Path
-import json
-
-artifacts = [
-    "repos.manifest.toml",
-    "agent/audit-policy.toml",
-    ".jankurai/repo-score.json",
-    ".jankurai/repo-score.md",
-]
-present = [path for path in artifacts if Path(path).exists()]
-Path("target/artifact-support/receipt.json").write_text(
-    json.dumps({"schema": "jain-split-ops.artifact-support/v1", "present": present}, indent=2) + "\n"
-)
-PY
+present=()
+for artifact in repos.manifest.toml agent/audit-policy.toml .jankurai/repo-score.json .jankurai/repo-score.md; do
+  [[ -f "$artifact" ]] && present+=("$artifact")
+done
+{
+  printf '{"schema":"jain-split-ops.artifact-support/v1","present":['
+  for i in "${!present[@]}"; do
+    (( i > 0 )) && printf ','
+    printf '"%s"' "${present[$i]}"
+  done
+  printf ']}\n'
+} > target/artifact-support/receipt.json
 printf 'artifact-support ok: jain-split-ops\n'
-

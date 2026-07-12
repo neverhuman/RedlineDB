@@ -2,17 +2,17 @@
 
 - Standard: `jankurai`
 - Auditor: `1.6.10`
-- Schema: `jain-split-ops-v7.0.1-split.0`
+- Schema: `jain-split-ops-v8.0.0-split.0`
 - Paper edition: `2026.05-ed8`
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1783722917`
-- Started at: `1783722917`
-- Elapsed: `931` ms
+- Run ID: `1783840601`
+- Started at: `1783840601`
+- Elapsed: `1809` ms
 - Scope: `full`
-- Raw score: `89`
-- Final score: `89`
+- Raw score: `92`
+- Final score: `92`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,22 +70,14 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`5` files=`7`
+- Status: `pass` hard=`0` warning=`0` files=`1`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`11` tokens=`69` bytes=`468`
+- Duplicate volume: lines=`0` tokens=`0` bytes=`0`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-
-| Kind | Severity | Language | Lines | Tokens | Instances | Reason |
-| --- | --- | --- | ---: | ---: | --- | --- |
-| `ExactUnitDifferentName` | `Warning` | `python` | 1 | 5 | `ops/split/materialize.py:597-598, ops/split/materialize.py:657-658, ops/split/materialize.py:721-722, ops/split/materialize.py:804-805, ops/split/materialize.py:850-851, ops/split/materialize.py:871-872, ops/split/materialize.py:926-927, ops/split/materialize.py:961-962, ops/split/materialize.py:999-1000, ops/split/materialize.py:1663-1664, ops/split/materialize.py:1682-1683, ops/split/materialize.py:1691-1692, ops/split/materialize.py:1733-1734` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `python` | 5 | 38 | `ops/split/jeryu-doctor.py:25-32, ops/split/validate-local-jeryu.py:29-36` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `python` | 2 | 10 | `ops/split/bump-family-version.py:24-28, ops/split/reconcile.py:28-32, ops/split/source_coverage.py:17-21` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `python` | 2 | 10 | `ops/split/reconcile.py:28-32, ops/split/source_coverage.py:17-21` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `python` | 1 | 6 | `ops/split/materialize.py:579-581, ops/split/materialize.py:1045-1047` | `same body appears under different names across files` |
 
 ## Dimensions
 
@@ -93,15 +85,15 @@
 | --- | ---: | ---: | ---: | --- |
 | Ownership and navigation surface | 13 | 100 | 13.00 | root `AGENTS.md` present; owner map present |
 | Contract and boundary integrity | 13 | 75 | 9.75 | generated contract artifacts found; boundary manifest present |
-| Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
-| Security and supply-chain posture | 12 | 66 | 7.92 | secret or dependency scan tooling found; provenance/SBOM tooling found |
+| Proof lanes and test routing | 12 | 96 | 11.52 | one-command setup/validation lane found; deterministic fast lane found |
+| Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
 | Code shape and semantic surface | 12 | 90 | 10.80 | no authored adopter product code files in scope |
 | Data truth and workflow safety | 8 | 100 | 8.00 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 100 | 8.00 | ops/observability directory present; repair receipts or raw artifact language found |
 | Context economy and agent instructions | 7 | 93 | 6.51 | root `AGENTS.md` present; root `AGENTS.md` stays short |
-| Jankurai tool adoption and CI replacement | 7 | 100 | 7.00 | control-plane files present; applicable=13 |
+| Jankurai tool adoption and CI replacement | 7 | 100 | 7.00 | control-plane files present; applicable=17 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
-| Build speed signals | 4 | 50 | 2.00 | build acceleration markers found; targeted test/build commands found |
+| Build speed signals | 4 | 70 | 2.80 | build acceleration markers found; targeted test/build commands found |
 
 ## Reference Profile Structure
 
@@ -129,23 +121,23 @@
 ## Tool Adoption
 
 - Control plane present: `true`
-- Applicable tools: `13`
-- Configured: `13`
-- CI evidence: `13`
-- Artifact verified: `13`
-- Replaced count: `13`
+- Applicable tools: `17`
+- Configured: `17`
+- CI evidence: `17`
+- Artifact verified: `17`
+- Replaced count: `17`
 - Missing CI evidence: `none`
 
 | Tool | Category | Mode | Status | Replaced | Artifacts |
 | --- | --- | --- | --- | --- | --- |
-| `audit-ci` | `audit` | `auto` | `not_applicable` | `manual repo scoring, ad hoc score gates` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+| `audit-ci` | `audit` | `auto` | `artifact_verified` | `manual repo scoring, ad hoc score gates` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
 | `proof-routing` | `proof` | `auto` | `artifact_verified` | `ad hoc proof lane selection, manual proof receipts` | `.jankurai/repo-score.json, .jankurai/repo-score.md, target/jankurai/repair-queue.jsonl` |
 | `proofbind` | `proof` | `auto` | `artifact_verified` | `manual changed-surface routing, ad hoc proof obligation lists` | `target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json` |
 | `proofmark-rust` | `proof` | `advisory` | `artifact_verified` | `line-only coverage review, manual in-diff mutation review` | `target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json` |
 | `copy-code` | `audit` | `advisory` | `artifact_verified` | `ad hoc copy-code review, manual duplication triage` | `target/jankurai/copy-code.json, target/jankurai/copy-code.md` |
-| `security` | `security` | `auto` | `not_applicable` | `gitleaks, dependency review, SBOM/provenance` | `target/jankurai/security/evidence.json` |
-| `ci-bad-behavior` | `security` | `auto` | `not_applicable` | `mutable workflow refs, secret echo/debug workflow checks, non-blocking security scans` | `target/jankurai/language-bad-behavior.log` |
-| `git-bad-behavior` | `audit` | `auto` | `not_applicable` | `destructive git automation, force-push release scripts, hidden stash-based state` | `target/jankurai/language-bad-behavior.log` |
+| `security` | `security` | `auto` | `artifact_verified` | `gitleaks, dependency review, SBOM/provenance` | `target/jankurai/security/evidence.json` |
+| `ci-bad-behavior` | `security` | `auto` | `artifact_verified` | `mutable workflow refs, secret echo/debug workflow checks, non-blocking security scans` | `target/jankurai/language-bad-behavior.log` |
+| `git-bad-behavior` | `audit` | `auto` | `artifact_verified` | `destructive git automation, force-push release scripts, hidden stash-based state` | `target/jankurai/language-bad-behavior.log` |
 | `release-bad-behavior` | `release` | `auto` | `artifact_verified` | `manual release checklist, ad hoc tag and artifact review, manual provenance review` | `target/jankurai/language-bad-behavior.log` |
 | `ux-qa` | `ux` | `auto` | `not_applicable` | `playwright, axe-core, visual baselines` | `target/jankurai/ux-qa.json` |
 | `db-migration-analyze` | `db` | `auto` | `not_applicable` | `manual migration review` | `target/jankurai/migration-report.json` |
@@ -172,27 +164,17 @@ No audited runtime boundary reclassifications declared.
 
 ## Findings
 
-1. `medium` `security` `.github/workflows/jankurai.yml`
-   Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
-   Check: `HLT-016-SUPPLY-CHAIN-DRIFT:security` `soft` confidence `0.76`
-   Route: TLR `Security, secrets, agency`, lane `security`, owner `ops`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Reason: `Security and supply-chain posture` scored 66 below the standard floor of 85
-   Fix: wire secret, dependency, provenance, and workflow scans into an operational CI lane
-   Rerun: `just security`
-   Fingerprint: `sha256:eb6acb55678ae606bd1e3575fe3aa79da832aa766b88714c480c15225d48b3aa`
-   Evidence: secret or dependency scan tooling found, provenance/SBOM tooling found, security lane present, canonical security lane wrapper present
-2. `medium` `proof` `Justfile`
+1. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `fast`, owner `workspace`
    Docs: `docs/testing.md`
-   Reason: `Build speed signals` scored 50 below the standard floor of 85
+   Reason: `Build speed signals` scored 70 below the standard floor of 85
    Fix: add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Rerun: `just fast`
-   Fingerprint: `sha256:2de2252211c8f732333544c01158b75a5d5884dee6bd9ba33d5aa94617e09cc5`
-   Evidence: build acceleration markers found, targeted test/build commands found
-3. `medium` `boundary` `agent/boundaries.toml`
+   Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
+   Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
+2. `medium` `boundary` `agent/boundaries.toml`
    Rule: `HLT-007-HANDWRITTEN-CONTRACT`
    Check: `HLT-007-HANDWRITTEN-CONTRACT:boundary` `soft` confidence `0.76`
    Route: TLR `Contracts/data`, lane `contract`, owner `agent`
@@ -202,18 +184,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:993eec07ffbd3370fe6126f0b1f95bf9e6c57a5c7133dc00526a401f4e344e42`
    Evidence: generated contract artifacts found, boundary manifest present, machine-readable schemas present, schema/tooling contract posture is clean
-4. `medium` `proof` `ops/split/materialize.py:2312`
-   Rule: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP`
-   Check: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof` `soft` confidence `0.88`
-   Route: TLR `Repair`, lane `audit`, owner `split`
-   Docs: `docs/testing.md`
-   Matched term: `review evidence`
-   Reason: proof and review claims need receipts
-   Fix: attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
-   Rerun: `just score`
-   Fingerprint: `sha256:9c192cecd69293f9f6181d5407ec996b577880380c2dc940b447de2315029aa2`
-   Evidence: # evidence rather than a fabricated "checked" log.
-5. `medium` `test` `agent/coverage-sources.toml`
+3. `medium` `test` `agent/coverage-sources.toml`
    Rule: `HLT-008-FALSE-GREEN-RISK`
    Check: `HLT-008-FALSE-GREEN-RISK:coverage-evidence` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `coverage-audit`, owner `agent`
@@ -239,7 +210,3 @@ No audited runtime boundary reclassifications declared.
    Route: `Verification`/`fast`
 3. `medium` `HLT-008-FALSE-GREEN-RISK` `agent/coverage-sources.toml` - run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`
    Route: `Verification`/`coverage-audit`
-4. `medium` `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP` `ops/split/materialize.py` - attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
-   Route: `Repair`/`audit`
-5. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
-   Route: `Security, secrets, agency`/`security`

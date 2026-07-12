@@ -1,0 +1,12 @@
+{
+  "schema_version": "jain.release.evidence/v1",
+  "lane": "aws-sagemaker-smoke",
+  "status": "not_run",
+  "reason": "The bounded AWS smoke lane requires verified credentials, quota, region, role access, and an explicit cost budget; those external prerequisites are not available in this workspace.",
+  "capability": "AWS SageMaker execution",
+  "repository": "jain-split/jain-deploy",
+  "tag": "jain-deploy-v8.0.0-split.0",
+  "commit": "PENDING",
+  "cleanup_verified": false,
+  "timestamp": "2026-07-12T00:00:00Z"
+}

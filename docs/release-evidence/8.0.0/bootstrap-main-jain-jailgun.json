@@ -1,0 +1,19 @@
+{
+  "action": "created",
+  "after": {
+    "remote_main": "f9ebf1b380227f89ff34bb538182b4113a4a90f9"
+  },
+  "before": {
+    "remote_main": null
+  },
+  "mode": "apply",
+  "operation": "bootstrap-main",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-jailgun.git",
+  "repository": "/home/ubuntu/jain-split/jain-jailgun",
+  "reviewed_commit": "f9ebf1b380227f89ff34bb538182b4113a4a90f9",
+  "reviewed_commit_input": "f9ebf1b380227f89ff34bb538182b4113a4a90f9",
+  "schema_version": "jain.bootstrap-main/v1",
+  "status": "pass",
+  "timestamp_unix": 1783838398,
+  "transport": "local-jeryu-server-update-ref-cas"
+}

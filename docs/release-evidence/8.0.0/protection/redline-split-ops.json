@@ -1,0 +1,85 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local protection-apply",
+  "readback": {
+    "allow_deletions": {
+      "enabled": false
+    },
+    "allow_force_pushes": {
+      "enabled": false
+    },
+    "enforce_admins": {
+      "enabled": true
+    },
+    "required_jankurai_proof": {
+      "enabled": false
+    },
+    "required_linear_history": {
+      "enabled": true
+    },
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 1
+    },
+    "required_signatures": {
+      "enabled": false
+    },
+    "required_status_checks": {
+      "contexts": [
+        "redline-split-ops/required"
+      ],
+      "strict": true
+    },
+    "updated_at": "2026-07-12T06:40:54.810077628Z",
+    "url": "/repos/jeryu/redline-split-ops/branches/main/protection"
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "allow_deletions": false,
+      "allow_force_pushes": false,
+      "enforce_admins": true,
+      "required_approving_review_count": 1,
+      "required_linear_history": true,
+      "required_status_checks": [
+        "redline-split-ops/required"
+      ]
+    },
+    "method": "PUT",
+    "path": "/repos/jeryu/redline-split-ops/branches/main/protection"
+  },
+  "response": {
+    "allow_deletions": {
+      "enabled": false
+    },
+    "allow_force_pushes": {
+      "enabled": false
+    },
+    "enforce_admins": {
+      "enabled": true
+    },
+    "required_jankurai_proof": {
+      "enabled": false
+    },
+    "required_linear_history": {
+      "enabled": true
+    },
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 1
+    },
+    "required_signatures": {
+      "enabled": false
+    },
+    "required_status_checks": {
+      "contexts": [
+        "redline-split-ops/required"
+      ],
+      "strict": true
+    },
+    "updated_at": "2026-07-12T06:40:54.810077628Z",
+    "url": "/repos/jeryu/redline-split-ops/branches/main/protection"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783838454
+}

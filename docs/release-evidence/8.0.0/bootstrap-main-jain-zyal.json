@@ -1,0 +1,19 @@
+{
+  "action": "created",
+  "after": {
+    "remote_main": "815ba81c7654a8b08b76e91a8197e571f6b7cd08"
+  },
+  "before": {
+    "remote_main": null
+  },
+  "mode": "apply",
+  "operation": "bootstrap-main",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-zyal.git",
+  "repository": "/home/ubuntu/jain-split/jain-zyal",
+  "reviewed_commit": "815ba81c7654a8b08b76e91a8197e571f6b7cd08",
+  "reviewed_commit_input": "815ba81c7654a8b08b76e91a8197e571f6b7cd08",
+  "schema_version": "jain.bootstrap-main/v1",
+  "status": "pass",
+  "timestamp_unix": 1783838398,
+  "transport": "local-jeryu-server-update-ref-cas"
+}

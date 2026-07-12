@@ -32,6 +32,7 @@
     "docs/": "docs",
     "docs/**": "docs",
     "family.lock": "split",
+    "infrastructure.lock.toml": "split",
     "ops/": "ops",
     "ops/**": "ops",
     "ops/AGENTS.md": "split",
@@ -51,8 +52,8 @@
     "schemas/**": "audit",
     "tests/": "tests",
     "tests/**": "tests",
-    "tools/": "split",
-    "tools/**": "split"
+    "tools/": "tools",
+    "tools/**": "tools"
   },
-  "workspace": "jain"
+  "workspace": "jain-split-ops"
 }

@@ -1,0 +1,175 @@
+{
+  "schema_version": "jain.forge-family-registration/v1",
+  "status": "pass",
+  "mode": "apply",
+  "manifest": "repos.manifest.toml",
+  "forge": "http://127.0.0.1:8787",
+  "repositories": [
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-docs"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-domain"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-math"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-contracts"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-catboost"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-xgboost"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-lightgbm"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-jable"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-battle-gpu"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-starforge"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-core"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-llm"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-agent"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-jnoccio"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-zyal"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-jailgun"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-research"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-report"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-tui"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-cli"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-web"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-python"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-model-zoo"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-ops"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-deploy"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jain-split",
+      "name": "jain-smartcluster"
+    },
+    {
+      "family": "jain-split",
+      "owner": "jeryu",
+      "name": "jain-split-ops"
+    },
+    {
+      "family": "redline-split",
+      "owner": "jeryu",
+      "name": "redlineDB"
+    },
+    {
+      "family": "redline-split",
+      "owner": "jeryu",
+      "name": "redline-core"
+    },
+    {
+      "family": "redline-split",
+      "owner": "jeryu",
+      "name": "redline-testing"
+    },
+    {
+      "family": "redline-split",
+      "owner": "jeryu",
+      "name": "redline-web"
+    },
+    {
+      "family": "redline-split",
+      "owner": "jeryu",
+      "name": "redline-split-ops"
+    }
+  ],
+  "generated_at": "2026-07-12T06:33:35Z"
+}

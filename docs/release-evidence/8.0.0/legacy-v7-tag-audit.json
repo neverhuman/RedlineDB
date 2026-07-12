@@ -1,0 +1,47 @@
+{
+  "schema_version": "jain.legacy-tag-audit/v1",
+  "release_version": "8.0.0",
+  "status": "blocked",
+  "scope": "pre-existing v7 local-versus-forge refs",
+  "timestamp": "2026-07-12T07:13:03Z",
+  "mutation_performed": false,
+  "policy": "preserve both refs; never move, delete, or force-push a v7 tag",
+  "mismatches": [
+    {
+      "repository": "jain-cli",
+      "tag": "jain-cli-v7.0.1-split.0",
+      "local": "134d7fe3b09113184da490bd768e3740374186fc",
+      "forge": "6223b5f44cff75bbb9f89d885d41803cd4052698"
+    },
+    {
+      "repository": "jain-deploy",
+      "tag": "jain-deploy-v7.0.1-split.0",
+      "local": "721b3c770f9c2dfee5496c78b3ee9bb0dc930b9c",
+      "forge": "6b44d2a421216ecde9036a0c44d566dbad4f0ebb"
+    },
+    {
+      "repository": "jain-python",
+      "tag": "jain-python-v7.0.1-split.0",
+      "local": "95b749551b9999b68681a2337c6715c8a8a56c43",
+      "forge": "610cc51faf13b751390b7ed404c99561a7fcc8ed"
+    },
+    {
+      "repository": "jain-contracts",
+      "tag": "jain-contracts-v7.0.1-split.0",
+      "local": "5d1a62fab665f5921690b1ba1c9b2d9737395baf",
+      "forge": "8afc293d949012619834c446bfb9fa97686ae096"
+    },
+    {
+      "repository": "jain-docs",
+      "tag": "jain-docs-v7.0.1-split.0",
+      "local": "3754bd3d9dc7dce5838ae2feb30437922561f1d5",
+      "forge": "e5a78cb089f0243e28c5dd31db30caa0acb7aa03"
+    },
+    {
+      "repository": "jain-model-zoo",
+      "tag": "jain-model-zoo-v7.0.1-split.0",
+      "local": "b9ad31bb9ef6d93a8b15df9789c2d48af85726f6",
+      "forge": "1f70690291ed23713e139e9acc51c73ed0f85fbc"
+    }
+  ]
+}

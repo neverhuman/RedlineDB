@@ -15,7 +15,7 @@ forge at `http://127.0.0.1:8787`.
 - Do not run `gh auth login` for `127.0.0.1:8787`.
 - Do not use generic GitHub connector or MCP tools for the local Jeryu host.
 - Prefer `jeryu.*` MCP tools when they are exposed.
-- If `jeryu.*` tools are not exposed, use `ops/split/jeryu-local.py` or the
+- If `jeryu.*` tools are not exposed, use `cargo run --locked -- jeryu-local` or the
   `just jeryu-*` recipes from this control-plane repo.
 
 ## Git And Forge
@@ -69,14 +69,14 @@ Check CI status for a commit:
 
 ```bash
 sha=<commit-sha>
-./ops/split/jeryu-local.py checks --repo jain-core --sha "$sha"
+cargo run --locked -- jeryu-local checks --repo jain-core --sha "$sha"
 ```
 
 Merge a PR after the required check is green:
 
 ```bash
 pr=<number>
-./ops/split/jeryu-local.py pr-merge --repo jain-core --number "$pr"
+cargo run --locked -- jeryu-local pr-merge --repo jain-core --number "$pr"
 ```
 
 ## Required CI

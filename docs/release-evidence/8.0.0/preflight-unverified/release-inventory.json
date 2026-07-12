@@ -1,0 +1,39 @@
+{
+  "schema_version": "jain.release.inventory/v1",
+  "release": "8.0.0",
+  "source_manifest": "repos.manifest.toml",
+  "source_manifest_sha256": "c7355cf33d01aae437ca7bf7650e6bb1d3cee212c9cca7bb2b82df77411e48a7",
+  "generator_version": "splitctl 0.1.0",
+  "family_repo_count": 26,
+  "infrastructure_repo_count": 1,
+  "dependency_resolution": "immutable-git-tag",
+  "managed_family": [
+    "jain", "jain-docs", "jain-domain", "jain-math", "jain-contracts",
+    "jain-catboost", "jain-xgboost", "jain-lightgbm", "jain-jable",
+    "jain-battle-gpu", "jain-starforge", "jain-core", "jain-llm",
+    "jain-agent", "jain-jnoccio", "jain-zyal", "jain-jailgun",
+    "jain-research", "jain-report", "jain-tui", "jain-cli", "jain-web",
+    "jain-python", "jain-model-zoo", "jain-ops", "jain-deploy"
+  ],
+  "infrastructure": ["jain-smartcluster"],
+  "control_plane": "jain-split-ops",
+  "external_dependencies": {
+    "redline-core": {
+      "remote": "http://127.0.0.1:8787/git/jeryu/redline-core.git",
+      "immutable_tag": "redline-core-v4.1.0-jain.1"
+    }
+  },
+  "excluded_paths": [
+    {"path": "/home/ubuntu/jain-split/redline-split-ops", "owner": "redline-split", "reason": "external dependency control plane"},
+    {"path": "/home/ubuntu/jain-split/jain-tools", "owner": "workspace-ops", "reason": "local tooling checkout"},
+    {"path": "/home/ubuntu/jain-split/jain-feature-expansion", "owner": "feature-expansion", "reason": "feature branch checkout"},
+    {"path": "/home/ubuntu/jain-split/jain-web-brand-favicon", "owner": "web", "reason": "branding worktree"}
+  ],
+  "preservation_notes": [
+    "jain-agent, jain-jnoccio, jain-zyal, and jain-jailgun are materialized locally and seeded to protected review branches; their onboarding PRs are not yet merged.",
+    "jain-catboost and jain-web source work remains on feature branches and was not silently treated as release main.",
+    "Existing v7 tags were not moved or deleted.",
+    "The workspace was not reset, cleaned, or destructively replaced."
+  ],
+  "current_release_state": "candidate_pending_reviewed_commits_and_immutable_tags"
+}

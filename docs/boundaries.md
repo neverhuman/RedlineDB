@@ -12,6 +12,7 @@ This repo may edit:
 This repo should not own product source. Product changes belong in the matching
 split member repository, then flow through local Jeryu PRs and immutable tags.
 
-Generated member standards are changed in `ops/split/materialize.py` first, then
-regenerated or manually ported with the same content.
-
+Generated member standards are changed through the Rust `splitctl` contract
+commands first (`cargo run --locked -- refresh-ci-contract`), then regenerated
+or manually ported with the same content. The old Python materializer is
+deleted and must not be recreated.

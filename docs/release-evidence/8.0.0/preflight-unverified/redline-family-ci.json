@@ -1,0 +1,51 @@
+{
+  "schema_version": "jain.redline-family-ci/v1",
+  "release": "8.0.0",
+  "status": "candidate",
+  "generated_at": "2026-07-12T04:59:48Z",
+  "workspace": "/home/ubuntu/jain-split",
+  "manifest": "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml",
+  "control_plane": "/home/ubuntu/jain-split/redline-split-ops",
+  "family": "redline-split",
+  "family_ci": {
+    "status": "pass",
+    "command": "redline-split-ops/redlinectl family-ci",
+    "repositories": [
+      {
+        "name": "redline",
+        "required_check": "redline/required",
+        "head": "c944e796f5a4fc725bd91420eebaec947c611515",
+        "status": "pass",
+        "lane": "guard-no-duplicate-engine"
+      },
+      {
+        "name": "redline-core",
+        "required_check": "redline-core/required",
+        "head": "69871e3becb81744a77db0375749f4f8f96f9cbc",
+        "status": "pass",
+        "lane": "pr-ci"
+      },
+      {
+        "name": "redline-testing",
+        "required_check": "redline-testing/required",
+        "head": "8cd183679511880d213e7994e9a5539ae008b2c0",
+        "status": "pass",
+        "lane": "pr-ci"
+      },
+      {
+        "name": "redline-web",
+        "required_check": "redline-web/required",
+        "head": "d88a6a178b499b8b7d05e8e1e09453a68ff792b3",
+        "status": "pass",
+        "lane": "pr-ci-plus-playwright"
+      }
+    ]
+  },
+  "lock_verification": {
+    "status": "blocked",
+    "reason": "review-branch commits are not yet the immutable tagged Redline release commits",
+    "required_tag": "redline-core-v4.1.0-jain.1",
+    "cutover_eligible": false
+  },
+  "aws_sagemaker": "N/A for this cut"
+}

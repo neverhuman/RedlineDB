@@ -1,0 +1,15 @@
+[package]
+name = "jain-split-ops"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+sha2 = "0.10"
+serde_json = "1"
+toml = "0.8"
+
+[[bin]]
+name = "splitctl"
+path = "tools/splitctl/src/main.rs"

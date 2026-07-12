@@ -1,0 +1,17 @@
+[advisories]
+ignore = []
+unmaintained = "workspace"
+
+# This control plane's locked graph uses only Apache-2.0 and MIT-compatible
+# choices. Keep the allowlist intentionally smaller than the family template.
+[licenses]
+allow = ["Apache-2.0", "MIT"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = []

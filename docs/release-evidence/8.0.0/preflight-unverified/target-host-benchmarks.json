@@ -1,0 +1,13 @@
+{
+  "schema_version": "jain.benchmark.receipt/v1",
+  "lane": "target-host-benchmarks",
+  "status": "not_run",
+  "reason": "The governed target-host scheduler, runtime-image, and recovery benchmark suite has not been executed from a reviewed v8.0.0 snapshot.",
+  "capability": "target-host benchmark harness",
+  "repository": "jain-split/jain-smartcluster",
+  "dependency_tag": "jain-smartcluster-v8.0.0-split.0",
+  "commit": "PENDING",
+  "warmup_samples": 0,
+  "samples": 0,
+  "timestamp": "2026-07-12T00:00:00Z"
+}

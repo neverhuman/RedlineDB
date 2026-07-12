@@ -107,9 +107,9 @@ Use `~/jeryu-split/ops/split` and `~/jeryu-split/ops/ci/split-host-ci.sh` as the
 
 Files to fork or adapt into `/home/ubuntu/jain-split/ops/split`:
 
-- `materialize.py`
+- `splitctl materialize`
 - `manifest.sh`
-- `source_coverage.py`
+- `splitctl source-coverage`
 - `reconcile.py`
 - `register-family.sh`
 - `rollout-pr-flow.sh`

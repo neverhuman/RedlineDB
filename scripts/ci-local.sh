@@ -7,8 +7,8 @@ cd "$(git rev-parse --show-toplevel)"
 
 lane="${1:-required}"
 case "$lane" in
-  jeryu-doctor) python3 ops/split/jeryu-doctor.py ;;
-  jeryu-ready) python3 ops/split/jeryu-doctor.py --setup-auth --fix-remotes ;;
+  jeryu-doctor) cargo run --locked --quiet -- jeryu-doctor --manifest repos.manifest.toml ;;
+  jeryu-ready) cargo run --locked --quiet -- jeryu-doctor --manifest repos.manifest.toml --fix-remotes ;;
   fast) bash ops/ci/fast.sh ;;
   check) bash ops/ci/check.sh ;;
   required) bash ops/ci/required.sh ;;

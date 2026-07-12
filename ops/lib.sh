@@ -30,51 +30,8 @@ j_health() { curl -fsS --max-time 5 "$JERYU_BASE/health" >/dev/null 2>&1; }
 # All check-runs for a commit, as compact JSON array.
 check_runs_json() {
   local owner="$1" repo="$2" sha="$3"
-  python3 - "$JERYU_BASE" "$owner" "$repo" "$sha" <<'PY'
-import json
-import sys
-import urllib.error
-import urllib.request
-
-base, owner, repo, sha = sys.argv[1:5]
-items = []
-page = 1
-per_page = 100
-
-while True:
-    url = (
-        f"{base}/repos/{owner}/{repo}/commits/{sha}/check-runs"
-        f"?per_page={per_page}&page={page}"
-    )
-    try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            data = json.load(resp)
-    except Exception:
-        break
-
-    if isinstance(data, list):
-        page_items = data
-        total = None
-    else:
-        page_items = data.get("check_runs", data.get("items", []))
-        total = data.get("total_count")
-
-    if not page_items:
-        break
-
-    items.extend(page_items)
-    if total is not None:
-        try:
-            if len(items) >= int(total):
-                break
-        except (TypeError, ValueError):
-            pass
-    if len(page_items) < per_page:
-        break
-    page += 1
-
-print(json.dumps({"total_count": len(items), "check_runs": items}))
-PY
+  curl -fsS --max-time 10 \
+    "$JERYU_BASE/repos/$owner/$repo/commits/$sha/check-runs?per_page=100"
 }
 
 # NOTE: the jeryu /commits/{sha}/check-runs endpoint returns ALL of the repo's
@@ -85,35 +42,22 @@ PY
 # Conclusion of a single named check on a sha (empty if absent).
 check_conclusion() {
   local owner="$1" repo="$2" sha="$3" name="$4"
-  check_runs_json "$owner" "$repo" "$sha" | python3 -c '
-import sys, json
-sha, name = sys.argv[1], sys.argv[2]
-try: d = json.load(sys.stdin)
-except Exception: sys.exit(0)
-runs = [r for r in (d if isinstance(d, list) else d.get("check_runs", [])) if r.get("head_sha") == sha]
-runs.sort(key=lambda r: (r.get("completed_at") or r.get("started_at") or ""))
-latest = {}
-for r in runs: latest[r.get("name")] = r.get("conclusion", "")
-print(latest.get(name, ""))
-' "$sha" "$name"
+  check_runs_json "$owner" "$repo" "$sha" |
+    jq -r --arg sha "$sha" --arg name "$name" '
+      [.check_runs[]? | select(.head_sha == $sha and .name == $name)]
+      | sort_by(.completed_at // .started_at // "") | last.conclusion // empty'
 }
 
 # True iff (for THIS sha) at least one ci/* check exists and ALL ci/* latest=success.
 ci_green() {
   local owner="$1" repo="$2" sha="$3"
-  check_runs_json "$owner" "$repo" "$sha" | python3 -c '
-import sys, json
-sha = sys.argv[1]
-try: d = json.load(sys.stdin)
-except Exception: sys.exit(1)
-runs = [r for r in (d if isinstance(d, list) else d.get("check_runs", [])) if r.get("head_sha") == sha]
-runs.sort(key=lambda r: (r.get("completed_at") or r.get("started_at") or ""))
-latest = {}
-for r in runs: latest[r.get("name")] = r.get("conclusion")
-ci = [(n, c) for n, c in latest.items() if str(n).startswith("ci/")]
-ok = len(ci) > 0 and all(c == "success" for _, c in ci)
-sys.exit(0 if ok else 1)
-' "$sha"
+  check_runs_json "$owner" "$repo" "$sha" |
+    jq -e --arg sha "$sha" '
+      [.check_runs[]? | select(.head_sha == $sha)]
+      | sort_by(.completed_at // .started_at // "")
+      | group_by(.name) | map(last)
+      | map(select(.name | startswith("ci/")))
+      | (length > 0 and all(.conclusion == "success"))' >/dev/null
 }
 
 # Post a completed check-run with a conclusion (success|failure|neutral).
@@ -122,7 +66,8 @@ post_check() {
   curl -fsS --max-time 10 -X POST \
     "$JERYU_BASE/repos/$owner/$repo/check-runs" \
     -H 'content-type: application/json' \
-    -d "$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"head_sha":sys.argv[2],"status":"completed","conclusion":sys.argv[3]}))' "$name" "$sha" "$conclusion")" \
+    -d "$(jq -cn --arg name "$name" --arg sha "$sha" --arg conclusion "$conclusion" \
+      '{name:$name,head_sha:$sha,status:"completed",conclusion:$conclusion}')" \
     >/dev/null 2>&1
 }
 

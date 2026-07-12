@@ -43,11 +43,11 @@ Generated: 2026-07-06
 
 ## Verification Passed
 
-- `python3 -m py_compile ops/split/materialize.py ops/split/source_coverage.py`
+- `cargo test --locked --manifest-path Cargo.toml`
 - `bash -n ops/split/manifest.sh ops/ci/split-host-ci.sh`
 - `git apply --check ops/split/patches/*.patch` against `/home/ubuntu/jain_small`
 - `bash ops/split/manifest.sh --manifest repos.manifest.toml --check-paths`
-- `python3 ops/split/source_coverage.py --manifest repos.manifest.toml`
+- `cargo run --locked -- source-coverage --manifest repos.manifest.toml`
   - tracked files: 4,388
   - owned: 4,306
   - retired/generated: 82

@@ -1,0 +1,24 @@
+{
+  "schema_version": "jain.release.status/v1",
+  "release": "8.0.0",
+  "status": "candidate",
+  "formal_ga": false,
+  "reason": "Managed worktrees are not clean/reviewed release snapshots, v8 immutable tags are not present on the reviewed heads, and the Redline immutable tag is absent from Jeryu.",
+  "preflight": {
+    "status": "fail",
+    "family_repo_count": 26,
+    "infrastructure_repo_count": 1,
+    "unmanaged_extras": [],
+    "external_dependency_failures": [
+      "redline-core-v4.1.0-jain.1 is absent from Jeryu",
+      "Redline proof lock is not cutover eligible"
+    ]
+  },
+  "required_follow_up": [
+    "Merge the four companion onboarding PRs and the reviewed family changes.",
+    "Promote the reviewed heads through protected main branches and create immutable v8 tags.",
+    "Create immutable v8.0.0 split tags and regenerate Cargo locks from their commits.",
+    "Publish the Redline immutable tag, then run image, target-host benchmark, AWS, security, and Jankurai gates."
+  ],
+  "timestamp": "2026-07-12T00:00:00Z"
+}

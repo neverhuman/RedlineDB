@@ -16,6 +16,27 @@ For family-level proof, run each changed member repo's `just required` and
 `just score` from its own checkout, then post statuses through
 `ops/ci/split-host-ci.sh`.
 
+## Release-candidate launch gates
+
+The 8.0.0 result remains a release candidate until a separately authorized
+production promotion. A formal launch gate must fail closed unless its raw
+receipts prove all of the following:
+
+- security scans, SBOM, provenance, signatures, and image inspection;
+- backup and restore readiness for persistent state;
+- monitoring for the CLI, web, Redline persistence, and SmartCluster daemon,
+  client, and worker health;
+- rollback rehearsal to the known `7.0.6` target;
+- rate limit and abuse controls for uploads, storage, public routes, and
+  bounded cleanup.
+
+The AtomicSoul candidate commands are dry-run only. The budget, quota, spend
+cap, stop condition, and kill switch policy is explicit: they set
+`ATOMICSOUL_PUSH=0`, cannot change Caddy or production aliases, and use the
+following cost budget: zero paid production operations, zero external compute,
+and zero image pushes. Any attempted external write stops the run. Missing evidence keeps
+`formal_ga = false`; it must never be restated as a passed gate.
+
 ## Repair Receipts
 
 Every failing lane should leave a repair receipt or raw artifact under

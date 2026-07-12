@@ -29,18 +29,7 @@ target/jankurai/rust/witness-graph.json
 target/jankurai/coverage/coverage-audit.json
 target/jankurai/coverage/coverage-audit.md
 JANKURAI_TOOL_ADOPTION_COMMANDS
-python3 - <<'PY'
-from pathlib import Path
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
-
-data = tomllib.loads(Path("agent/tool-adoption.toml").read_text())
-tools = data.get("tools", [])
-if not tools:
-    raise SystemExit("agent/tool-adoption.toml has no [[tools]] entries")
-print(f"tool adoption entries: {len(tools)}")
-PY
+rg -q '^\[\[tools\]\]' agent/tool-adoption.toml
+printf 'tool adoption policy entries present\n'
 write_receipt target/jankurai/tool-adoption/receipt.json pass
 printf 'tool-adoption ok: jain-split-ops\n'

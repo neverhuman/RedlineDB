@@ -5,19 +5,7 @@ set -euo pipefail
 split="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
 manifest="${JAIN_SPLIT_MANIFEST:-${split}/repos.manifest.toml}"
 
-mapfile -t rows < <(
-  python3 - "$manifest" <<'PY'
-import sys
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
-with open(sys.argv[1], "rb") as fh:
-    data = tomllib.load(fh)
-for repo in data.get("repo", []):
-    print("|".join([repo["name"], repo["path"]]))
-PY
-)
+mapfile -t rows < <(bash "$(dirname "\${BASH_SOURCE[0]}")/manifest.sh" --manifest "$manifest" | cut -d'|' -f1-2)
 
 commit_group() {
   local repo_dir="$1" message="$2"; shift 2

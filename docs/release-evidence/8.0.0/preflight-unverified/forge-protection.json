@@ -1,0 +1,11 @@
+{
+  "schema_version": "jain.release.evidence/v1",
+  "lane": "forge-protection",
+  "status": "pass",
+  "reason": "SmartCluster branch protection was applied and read back through the supported local-Jeryu API; release merge/tag gates remain pending.",
+  "capability": "jain-split/jain-smartcluster branch protection API",
+  "repository": "jain-split/jain-smartcluster",
+  "tag": "jain-smartcluster-v8.0.0-split.0",
+  "commit": "eda63ace6da63a7ee80c3ce381c2ccfb4fe8ff50",
+  "timestamp": "2026-07-12T00:00:00Z"
+}

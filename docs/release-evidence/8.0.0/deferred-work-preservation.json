@@ -1,0 +1,51 @@
+{
+  "schema_version": "jain.deferred-work-preservation/v1",
+  "release_version": "8.0.0",
+  "status": "pass",
+  "timestamp": "2026-07-12T07:13:03Z",
+  "release_workspace": "/home/ubuntu/jain-split",
+  "deferred_root": "/home/ubuntu/jain-split-deferred",
+  "production_state_changed": false,
+  "items": [
+    {
+      "name": "jain-web-feature",
+      "source_branch": "agent/live-key-feature-expansion",
+      "preservation_branch": "preserve/v8.0.0-web-feature-20260712",
+      "commit": "0f723d082af5bb773d14a49266d8aff66ed314b2",
+      "remote_ref_verified": true,
+      "moved_checkout": "/home/ubuntu/jain-split-deferred/jain-web-feature-20260712"
+    },
+    {
+      "name": "jain-catboost-feature",
+      "source_branch": "agent/catboost-gpu-acceleration",
+      "preservation_branch": "preserve/v8.0.0-catboost-feature-20260712",
+      "commit": "5b17755e553697874f1af4f85a67e54d61670f46",
+      "remote_ref_verified": true,
+      "moved_checkout": "/home/ubuntu/jain-split-deferred/jain-catboost-feature-20260712"
+    },
+    {
+      "name": "jain-feature-expansion",
+      "preservation_branch": "agent/live-feature-expansion-proof",
+      "commit": "f6156e1fbbe48cb1f3ea5955017033eb970f1e24",
+      "remote_ref_verified": true,
+      "moved_checkout": "/home/ubuntu/jain-split-deferred/jain-feature-expansion-20260712"
+    },
+    {
+      "name": "jain-core-chimera-submit",
+      "preservation_branch": "codex/chimera-starforge-required",
+      "commit": "4872a701d55b97f48aedf5ba655be84070f075f5",
+      "remote_ref_verified": true,
+      "moved_checkout": "/home/ubuntu/jain-split-deferred/jain-core-chimera-submit-20260712"
+    },
+    {
+      "name": "jain-tools-prototype",
+      "preservation_branch": "preserve/v8.0.0-tools-20260712",
+      "commit": "6921f5db06cd1c3e94d51f3dcf7a4d4ae1512230",
+      "remote_ref_verified": false,
+      "reason": "prototype repository has no configured remote",
+      "bundle": "/home/ubuntu/jain-split-deferred/jain-tools-preserve-20260712.bundle",
+      "bundle_sha256": "221671767d95015e95cdfed79d1911c9c81c4cce0169540e911cabdd1ede8487",
+      "moved_checkout": "/home/ubuntu/jain-split-deferred/jain-tools-20260712"
+    }
+  ]
+}

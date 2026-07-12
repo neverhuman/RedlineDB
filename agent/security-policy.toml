@@ -2,6 +2,7 @@ schema_version = "1.0.0"
 workspace = "jain-split-ops"
 
 enabled_tools = [
+  "actionlint",
   "gitleaks",
   "cargo-audit",
   "zizmor",
@@ -11,18 +12,18 @@ enabled_tools = [
   "trivy"
 ]
 
-required_tools = ["gitleaks"]
-advisory_tools = ["cargo-audit", "zizmor", "syft", "cargo-deny", "grype", "trivy"]
+required_tools = ["actionlint", "gitleaks", "cargo-audit", "cargo-deny", "syft", "grype", "zizmor"]
+advisory_tools = ["trivy"]
 
 [severity_thresholds]
 fail_lane_on = "high"
 
 [profiles.local]
-enabled_tools = ["gitleaks", "cargo-audit", "zizmor", "syft"]
-required_tools = ["gitleaks"]
-advisory_tools = ["cargo-audit", "zizmor", "syft"]
+enabled_tools = ["actionlint", "gitleaks", "cargo-audit", "zizmor", "syft"]
+required_tools = ["actionlint", "gitleaks", "cargo-audit", "syft", "zizmor"]
+advisory_tools = []
 
 [profiles.ci]
-enabled_tools = ["gitleaks", "cargo-audit", "zizmor", "syft", "cargo-deny"]
-required_tools = ["gitleaks"]
-advisory_tools = ["cargo-audit", "zizmor", "syft", "cargo-deny"]
+enabled_tools = ["actionlint", "gitleaks", "cargo-audit", "zizmor", "syft", "cargo-deny", "grype"]
+required_tools = ["actionlint", "gitleaks", "cargo-audit", "cargo-deny", "syft", "grype", "zizmor"]
+advisory_tools = ["trivy"]

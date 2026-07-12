@@ -33,13 +33,14 @@ jeryu_token() {
 post_check() {
   local conclusion="$1" token
   token="$(jeryu_token)"
-  if [ -z "$token" ]; then say "WARN: no merge token; cannot post status"; return; fi
+  if [ -z "$token" ]; then say "no merge token; cannot post required status"; return 1; fi
   # A check-run is the human-facing run record.
   curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
     -H "Authorization: Bearer $token" \
     -H 'content-type: application/json' \
     -d "{\"name\":\"$CHECK\",\"head_sha\":\"$SHA\",\"status\":\"completed\",\"conclusion\":\"$conclusion\"}" \
-    >/dev/null && say "posted check-run $CHECK=$conclusion on ${SHA:0:8}" || say "WARN: failed to post check-run"
+    >/dev/null || return 1
+  say "posted check-run $CHECK=$conclusion on ${SHA:0:8}"
   # Branch protection gates on a COMMIT STATUS (required_status_checks.contexts), which is a
   # DIFFERENT object from a check-run — without it a protected merge fails MissingStatusCheck.
   # The status must be keyed on the FULL head sha the PR records (short shas do not match).
@@ -49,11 +50,13 @@ post_check() {
     -H "Authorization: Bearer $token" \
     -H 'content-type: application/json' \
     -d "{\"state\":\"$status_state\",\"context\":\"$CHECK\",\"description\":\"$CHECK via split-host-ci\"}" \
-    >/dev/null && say "posted status $CHECK=$status_state on ${SHA:0:8}" || say "WARN: failed to post status"
+    >/dev/null || return 1
+  say "posted status $CHECK=$status_state on ${SHA:0:8}"
 }
 
 [ -e "$REPO_PATH/.git" ] || { echo "not a git repo: $REPO_PATH" >&2; exit 2; }
 curl -fsS "$JAIN_BASE/health" >/dev/null || { echo "forge not healthy" >&2; exit 2; }
+[ -n "$(jeryu_token)" ] || { echo "forge status credential is unavailable" >&2; exit 2; }
 
 # Governed worker count (load-aware; never default high).
 if command -v jain-ci-governor >/dev/null 2>&1; then
@@ -85,9 +88,10 @@ git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
 if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
   for sib in \
     jain jain-docs jain-domain jain-math jain-contracts jain-catboost \
-    jain-xgboost jain-lightgbm jain-battle-gpu jain-starforge jain-core \
-    jain-report jain-tui jain-cli jain-web jain-python jain-model-zoo \
-    jain-ops jain-deploy; do
+    jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge \
+    jain-core jain-llm jain-agent jain-jnoccio jain-zyal jain-jailgun \
+    jain-research jain-report jain-tui jain-cli jain-web jain-python \
+    jain-model-zoo jain-ops jain-smartcluster jain-deploy; do
     [ "$sib" = "$REPO" ] && continue
     [ -d "$SPLIT_ROOT/$sib" ] && ln -s "$SPLIT_ROOT/$sib" "$tmp/$sib"
   done
@@ -100,13 +104,17 @@ if [ "${JAIN_NEEDS_ARTIFACTS:-0}" = "1" ] && [ -d "$SPLIT_ROOT/jain-starforge/ar
   ln -s "$SPLIT_ROOT/jain-starforge/artifacts" "$wt/artifacts"
 fi
 
-# Shared compile caches: persistent per-repo target dir + sccache when present,
-# so the fresh worktree does not cold-compile the world (host-ci.sh precedent).
-if [ -z "${CARGO_TARGET_DIR:-}" ]; then
+# Release CI deliberately uses clean Cargo/target caches. Merge CI may retain
+# its governed per-repository cache for latency.
+if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+  export CARGO_HOME="$tmp/cargo-home"
+  export CARGO_TARGET_DIR="$tmp/cargo-target"
+  mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR"
+elif [ -z "${CARGO_TARGET_DIR:-}" ]; then
   export CARGO_TARGET_DIR="${JAIN_CI_CACHE:-$HOME/.cache/jain-ci}/${OWNER}__${REPO}/target"
   mkdir -p "$CARGO_TARGET_DIR"
 fi
-if [ -z "${RUSTC_WRAPPER:-}" ] && command -v sccache >/dev/null 2>&1; then
+if [ "${JAIN_RELEASE_CI:-0}" != "1" ] && [ -z "${RUSTC_WRAPPER:-}" ] && command -v sccache >/dev/null 2>&1; then
   export RUSTC_WRAPPER="$(command -v sccache)"
 fi
 export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
@@ -122,7 +130,7 @@ export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
 if [ "$REPO" != "jain-split-ops" ]; then
   ci_gitconfig="$SPLIT_ROOT/target/ci-gitconfig"
   mkdir -p "$SPLIT_ROOT/target"
-  printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
+  printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n\tinsteadOf = http://127.0.0.1:8787/git/jain-split/\n\tinsteadOf = http://127.0.0.1:8787/git/redline/\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
   say "cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)"
   export GIT_CONFIG_GLOBAL="$ci_gitconfig"
 fi
@@ -142,13 +150,32 @@ fi
 log="$tmp/ci.log"
 say "running scripts/ci-local.sh required for $OWNER/$REPO @ ${SHA:0:8}"
 if (cd "$wt" && bash scripts/ci-local.sh required) >"$log" 2>&1; then
-  post_check success
+  if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+    if [ -f "$wt/Cargo.toml" ]; then
+      (cd "$wt" && cargo metadata --locked --format-version 1 >/dev/null && cargo test --locked --all-features --all-targets) >>"$log" 2>&1 || {
+        tail -30 "$log" >&2
+        post_check failure || true
+        say "FAIL release all-features lane $OWNER/$REPO @ ${SHA:0:8}"
+        exit 1
+      }
+    fi
+    for lane in security score contract-drift artifact-support; do
+      if (cd "$wt" && bash scripts/ci-local.sh "$lane") >>"$log" 2>&1; then
+        continue
+      fi
+      tail -30 "$log" >&2
+      post_check failure || true
+      say "FAIL release $lane lane $OWNER/$REPO @ ${SHA:0:8}"
+      exit 1
+    done
+  fi
+  post_check success || { say "CI passed but required status publication failed"; exit 1; }
   say "PASS $OWNER/$REPO @ ${SHA:0:8}"
   exit 0
 else
   rc=$?
   tail -30 "$log" >&2
-  post_check failure
+  post_check failure || say "required failure status publication also failed"
   say "FAIL ($rc) $OWNER/$REPO @ ${SHA:0:8}"
   exit 1
 fi

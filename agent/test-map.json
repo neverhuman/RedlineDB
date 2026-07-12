@@ -160,6 +160,11 @@
       "lane": "required",
       "purpose": "verify family lock parses and records split pins"
     },
+    "infrastructure.lock.toml": {
+      "command": "just required",
+      "lane": "required",
+      "purpose": "verify required infrastructure remains manifest-bound"
+    },
     "ops/": {
       "command": "just check && just tool-adoption",
       "lane": "ci",
@@ -261,15 +266,15 @@
       "purpose": "verify negative proof evidence remains routed"
     },
     "tools/": {
-      "command": "just check",
-      "lane": "check",
-      "purpose": "verify workspace metadata remains parseable"
+      "command": "just required",
+      "lane": "required",
+      "purpose": "verify the Rust control plane and its safety invariants"
     },
     "tools/**": {
-      "command": "just check",
-      "lane": "check",
-      "purpose": "verify workspace metadata remains parseable"
+      "command": "just required",
+      "lane": "required",
+      "purpose": "verify the Rust control plane and its safety invariants"
     }
   },
-  "workspace": "jain"
+  "workspace": "jain-split-ops"
 }

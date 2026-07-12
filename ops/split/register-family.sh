@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-manifest="repos.manifest.toml"
+ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+manifest="${ops_root}/repos.manifest.toml"
 base="${JERYU_BASE:-http://127.0.0.1:8787}"
-family="${JERYU_REPO_FAMILY:-}"
+family_filter=""
 check_only=0
+receipt="${ops_root}/docs/release-evidence/8.0.0/forge-family-registration.json"
+rows=()
 
 usage() {
-  printf 'usage: %s [--manifest PATH] [--base URL] [--family NAME] [--check-only]\n' "$0" >&2
+  printf 'usage: %s [--manifest PATH] [--base URL] [--family NAME] [--check-only] [--receipt PATH]\n' "$0" >&2
 }
 
 jeryu_token() {
@@ -15,116 +18,90 @@ jeryu_token() {
     printf '%s' "$JERYU_MERGE_TOKEN"
     return
   fi
-  local f="${JERYU_MERGE_TOKEN_FILE:-$HOME/.jeryu/secrets/merge-token}"
-  [[ -r "$f" ]] && tr -d '\n' < "$f"
+  local file="${JERYU_MERGE_TOKEN_FILE:-$HOME/.jeryu/secrets/merge-token}"
+  [[ -r "$file" ]] && tr -d '\n' <"$file"
 }
+
+emit_receipt() {
+  local rc="$?" status=pass mode=apply repositories='[]'
+  [[ "$rc" -eq 0 ]] || status=fail
+  [[ "$check_only" == "1" ]] && mode=check-only
+  if (( ${#rows[@]} > 0 )); then
+    repositories="$(printf '%s\n' "${rows[@]}" | jq -Rsc '
+      split("\n") | map(select(length > 0) | split("|") |
+      {family:.[0],owner:.[1],name:.[2]})')"
+  fi
+  mkdir -p "$(dirname "$receipt")"
+  jq -n --arg schema_version 'jain.forge-family-registration/v1' \
+    --arg status "$status" --arg mode "$mode" --arg manifest "$manifest" \
+    --arg base "$base" --arg generated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    --argjson repositories "$repositories" \
+    '{schema_version:$schema_version,status:$status,mode:$mode,manifest:$manifest,forge:$base,repositories:$repositories,generated_at:$generated_at}' \
+    >"$receipt"
+  return "$rc"
+}
+trap emit_receipt EXIT
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --manifest)
-      shift
-      manifest="${1:-}"
-      ;;
-    --base)
-      shift
-      base="${1:-}"
-      ;;
-    --family)
-      shift
-      family="${1:-}"
-      ;;
-    --check-only)
-      check_only=1
-      ;;
-    *)
-      usage
-      exit 2
-      ;;
+    --manifest) shift; manifest="${1:-}" ;;
+    --base) shift; base="${1:-}" ;;
+    --family) shift; family_filter="${1:-}" ;;
+    --check-only) check_only=1 ;;
+    --receipt) shift; receipt="${1:-}" ;;
+    *) usage; exit 2 ;;
   esac
   shift
 done
 
-[[ -n "$manifest" ]] || { usage; exit 2; }
 [[ -r "$manifest" ]] || { printf 'manifest not readable: %s\n' "$manifest" >&2; exit 1; }
-[[ -n "$base" ]] || { printf 'base URL must not be empty\n' >&2; exit 1; }
+for tool in cargo curl jq; do
+  command -v "$tool" >/dev/null 2>&1 || { printf 'required tool missing: %s\n' "$tool" >&2; exit 1; }
+done
 
-mapfile -t rows < <(
-  python3 - "$manifest" "$family" <<'PY'
-import sys
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
+managed_json="$(cargo run --locked --quiet --manifest-path "$ops_root/Cargo.toml" -- \
+  managed-repos --manifest "$manifest" --json)"
+mapfile -t rows < <(jq -r --arg family "$family_filter" '
+  .repositories[]
+  | select(.family_registered == true)
+  | select($family == "" or .family == $family)
+  | (.remote | sub("^.*/git/"; "") | sub("\\.git$"; "")) as $slug
+  | select($slug | contains("/"))
+  | [.family, ($slug | split("/")[0]), ($slug | split("/")[1])]
+  | join("|")
+' <<<"$managed_json")
+(( ${#rows[@]} > 0 )) || { printf 'managed repository set is empty\n' >&2; exit 1; }
 
-manifest_path, override_family = sys.argv[1], sys.argv[2]
-with open(manifest_path, "rb") as fh:
-    data = tomllib.load(fh)
-
-family = override_family or data.get("repo_family") or "jain-split"
-if not isinstance(family, str) or not family.strip():
-    raise SystemExit("repo family must be a non-empty string")
-
-for repo in data.get("repo", []):
-    slug = repo.get("jeryu_slug")
-    if not isinstance(slug, str) or "/" not in slug:
-        raise SystemExit(f"invalid jeryu_slug for {repo.get('name', '<unknown>')}: {slug!r}")
-    owner, name = slug.split("/", 1)
-    print("|".join([family.strip(), owner, name]))
-PY
-)
-
-[[ "${#rows[@]}" -gt 0 ]] || { printf 'manifest has no repo entries\n' >&2; exit 1; }
-family="${rows[0]%%|*}"
-auth_args=()
 token="$(jeryu_token)"
-if [[ -n "$token" ]]; then
+auth_args=()
+if [[ "$check_only" != "1" ]]; then
+  [[ -n "$token" ]] || { printf 'local forge write credential is unavailable\n' >&2; exit 1; }
+  auth_args=(-H "Authorization: Bearer $token")
+  for row in "${rows[@]}"; do
+    IFS='|' read -r family owner name <<<"$row"
+    curl -fsS -X PATCH "$base/api/v1/repos/${owner}%2F${name}" \
+      "${auth_args[@]}" -H 'content-type: application/json' \
+      -d "$(jq -cn --arg family "$family" '{family:$family}')" >/dev/null
+    printf 'registered %s/%s -> %s\n' "$owner" "$name" "$family"
+  done
+elif [[ -n "$token" ]]; then
   auth_args=(-H "Authorization: Bearer $token")
 fi
 
-if [[ "$check_only" != "1" ]]; then
-  for row in "${rows[@]}"; do
-    IFS='|' read -r row_family owner name <<<"$row"
-    body="$(python3 -c 'import json,sys; print(json.dumps({"family": sys.argv[1]}))' "$row_family")"
-    curl -fsS -X PATCH "$base/api/v1/repos/${owner}%2F${name}" \
-      "${auth_args[@]}" \
-      -H 'content-type: application/json' \
-      -d "$body" >/dev/null
-    printf 'registered %s/%s -> %s\n' "$owner" "$name" "$row_family"
-  done
-fi
-
 repos_json="$(curl -fsS "${auth_args[@]}" "$base/api/v1/repos?host=jeryu")"
-REPOS_JSON="$repos_json" python3 - "$family" "${rows[@]}" <<'PY'
-import json
-import os
-import sys
-
-family = sys.argv[1]
-expected = [tuple(row.split("|", 2)[1:]) for row in sys.argv[2:]]
-payload = json.loads(os.environ["REPOS_JSON"])
-by_slug = {
-    (repo["id"]["owner"], repo["id"]["name"]): repo
-    for repo in payload.get("repositories", [])
-}
-missing = []
-wrong = []
-for owner, name in expected:
-    repo = by_slug.get((owner, name))
-    if repo is None:
-        missing.append(f"{owner}/{name}")
-    elif repo.get("family") != family:
-        wrong.append(f"{owner}/{name}={repo.get('family')!r}")
-
-facets = set(payload.get("facets", {}).get("families", []))
-if family not in facets:
-    wrong.append(f"facets missing {family!r}")
-
-if missing or wrong:
-    if missing:
-        print("missing repos: " + ", ".join(missing), file=sys.stderr)
-    if wrong:
-        print("family mismatch: " + ", ".join(wrong), file=sys.stderr)
-    raise SystemExit(1)
-
-print(f"verified {len(expected)} repos in family {family}")
-PY
+for row in "${rows[@]}"; do
+  IFS='|' read -r family owner name <<<"$row"
+  jq -e --arg owner "$owner" --arg name "$name" --arg family "$family" '
+    [.repositories[]? | select(.id.owner == $owner and .id.name == $name and .family == $family)]
+    | length == 1
+  ' <<<"$repos_json" >/dev/null || {
+    printf 'family mismatch or missing repo: %s/%s -> %s\n' "$owner" "$name" "$family" >&2
+    exit 1
+  }
+done
+mapfile -t families < <(printf '%s\n' "${rows[@]}" | cut -d'|' -f1 | sort -u)
+for family in "${families[@]}"; do
+  jq -e --arg family "$family" '.facets.families // [] | any(. == $family)' \
+    <<<"$repos_json" >/dev/null || { printf 'facets missing family: %s\n' "$family" >&2; exit 1; }
+done
+printf 'verified %s managed repositories across %s forge families\n' "${#rows[@]}" "${#families[@]}"
