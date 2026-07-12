@@ -36,17 +36,10 @@ CI_REDLINE_TESTING_VERSION="${CI_REDLINE_TESTING_VERSION:-latest}"
 CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256:-}"
 CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-}"
 readonly CI_REDLINE_TESTING_ATTESTATION_REPO="${CI_REDLINE_TESTING_ATTESTATION_REPO:-neverhuman/redline-testing}"
-readonly CI_JANKURAI_VERSION="${CI_JANKURAI_VERSION:-1.5.1}"
-readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-https://github.com/neverhuman/jankurai.git}"
+readonly CI_JANKURAI_VERSION="${CI_JANKURAI_VERSION:-1.6.10}"
+readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-http://127.0.0.1:8787/git/jeryu/jankurai.git}"
 readonly CI_JANKURAI_TAG="${CI_JANKURAI_TAG:-v${CI_JANKURAI_VERSION}}"
-readonly CI_JANKURAI_REV="${CI_JANKURAI_REV:-6f1aa45fca09ebb523f79b38ad465da28a86dfb1}"
-readonly CI_JANKURAI_RELEASE_BASE_URL="${CI_JANKURAI_RELEASE_BASE_URL:-https://github.com/neverhuman/jankurai/releases/download/v${CI_JANKURAI_VERSION}}"
-readonly CI_JANKURAI_LINUX_ASSET="${CI_JANKURAI_LINUX_ASSET:-jankurai-${CI_JANKURAI_VERSION}-x86_64-unknown-linux-gnu.tar.gz}"
-readonly CI_JANKURAI_ASSET_URL="${CI_JANKURAI_ASSET_URL:-${CI_JANKURAI_RELEASE_BASE_URL}/${CI_JANKURAI_LINUX_ASSET}}"
-readonly CI_JANKURAI_SHA256_URL="${CI_JANKURAI_SHA256_URL:-${CI_JANKURAI_ASSET_URL}.sha256}"
-readonly CI_JANKURAI_SOURCE_ARCHIVE_URL="${CI_JANKURAI_SOURCE_ARCHIVE_URL:-https://github.com/neverhuman/jankurai/archive/refs/tags/v${CI_JANKURAI_VERSION}.tar.gz}"
-readonly CI_JANKURAI_COMPILED_REPO_ROOT="${CI_JANKURAI_COMPILED_REPO_ROOT:-/home/runner/work/jankurai/jankurai}"
-readonly CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT="${CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT:-/tmp/jankurai-v1.5.1-runtime-root00}"
+readonly CI_JANKURAI_REV="${CI_JANKURAI_REV:-3c804453e6c7a6e0e4028d95cc3bccea467277ef}"
 
 ci_redline_testing_version_from_tag() {
     local tag="${1:?release tag required}"
@@ -765,8 +758,14 @@ ci_soft_gate() {
 ci_verify_jankurai_source() {
     local resolved_rev
     resolved_rev="$(
-        git ls-remote "${CI_JANKURAI_GIT}" "refs/tags/${CI_JANKURAI_TAG}^{}" \
-            | awk 'NR == 1 { print $1 }' || true
+        git ls-remote "${CI_JANKURAI_GIT}" \
+            "refs/tags/${CI_JANKURAI_TAG}" \
+            "refs/tags/${CI_JANKURAI_TAG}^{}" \
+            | awk '
+                $2 ~ /\^\{\}$/ { peeled = $1 }
+                $2 !~ /\^\{\}$/ { direct = $1 }
+                END { print (peeled != "" ? peeled : direct) }
+            ' || true
     )"
 
     if [ -z "$resolved_rev" ]; then
@@ -782,118 +781,60 @@ ci_verify_jankurai_source() {
     fi
 }
 
-ci_install_jankurai_runtime_schemas() {
-    local tmp_dir="$1"
-    local binary_path="$2"
-    local schema_root="$CI_JANKURAI_COMPILED_REPO_ROOT"
-    local schema_dir
-    local source_archive="$tmp_dir/jankurai-source-${CI_JANKURAI_VERSION}.tar.gz"
-    local source_dir="$tmp_dir/jankurai-source"
-    local source_root
-
-    curl -fsSL -o "$source_archive" "$CI_JANKURAI_SOURCE_ARCHIVE_URL"
-    mkdir -p "$source_dir"
-    tar -xzf "$source_archive" -C "$source_dir"
-    source_root="$(find "$source_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-    if [ -z "$source_root" ] || [ ! -d "$source_root/schemas" ]; then
-        printf 'jankurai source archive missing schemas directory: %s\n' \
-            "$CI_JANKURAI_SOURCE_ARCHIVE_URL" >&2
-        return 1
-    fi
-
-    schema_dir="${schema_root}/schemas"
-    if ! mkdir -p "${schema_root}/crates/jankurai" "$schema_dir" 2>/dev/null; then
-        if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-            printf 'failed to create jankurai runtime schema path: %s\n' "$schema_dir" >&2
-            return 1
-        fi
-
-        local compiled_root_len="${#CI_JANKURAI_COMPILED_REPO_ROOT}"
-        local runtime_root_len="${#CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT}"
-        local compiled_root_matches
-        local runtime_root_matches
-        if [ "$compiled_root_len" -ne "$runtime_root_len" ]; then
-            printf 'jankurai local runtime root must match compiled root length: %s != %s\n' \
-                "$runtime_root_len" "$compiled_root_len" >&2
-            return 1
-        fi
-        compiled_root_matches="$(
-            LC_ALL=C grep -a -o -F "$CI_JANKURAI_COMPILED_REPO_ROOT" "$binary_path" \
-                | wc -l \
-                | tr -d ' '
-        )"
-        if [ "${compiled_root_matches:-0}" -eq 0 ]; then
-            printf 'jankurai binary missing compiled schema root: %s\n' \
-                "$CI_JANKURAI_COMPILED_REPO_ROOT" >&2
-            return 1
-        fi
-        OLD_JANKURAI_ROOT="$CI_JANKURAI_COMPILED_REPO_ROOT" \
-            NEW_JANKURAI_ROOT="$CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT" \
-            perl -0pi -e 's/\Q$ENV{OLD_JANKURAI_ROOT}\E/$ENV{NEW_JANKURAI_ROOT}/g' \
-            "$binary_path"
-        runtime_root_matches="$(
-            LC_ALL=C grep -a -o -F "$CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT" "$binary_path" \
-                | wc -l \
-                | tr -d ' '
-        )"
-        if [ "$runtime_root_matches" -ne "$compiled_root_matches" ]; then
-            printf 'jankurai local schema root relocation mismatch: %s -> %s\n' \
-                "$compiled_root_matches" "$runtime_root_matches" >&2
-            return 1
-        fi
-
-        schema_root="$CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT"
-        schema_dir="${schema_root}/schemas"
-        mkdir -p "${schema_root}/crates/jankurai" "$schema_dir"
-        printf 'jankurai local schema root relocated: %s -> %s (matches=%s)\n' \
-            "$CI_JANKURAI_COMPILED_REPO_ROOT" "$CI_JANKURAI_LOCAL_RUNTIME_REPO_ROOT" \
-            "$runtime_root_matches"
-    fi
-
-    find "$schema_dir" -type f -name '*.schema.json' -delete
-    install -m 0644 "$source_root"/schemas/*.schema.json "$schema_dir/"
-    if [ ! -s "$schema_dir/proofbind-witness.schema.json" ]; then
-        printf 'jankurai runtime schemas missing proofbind witness schema: %s\n' \
-            "$schema_dir/proofbind-witness.schema.json" >&2
-        return 1
-    fi
-
-    printf 'jankurai runtime schemas installed: %s\n' "$schema_dir"
-    printf 'jankurai runtime schemas source: %s\n' "$CI_JANKURAI_SOURCE_ARCHIVE_URL"
-}
-
-# Install the pinned upstream jankurai release binary. The tag provenance
-# check stays in place, but CI/local gates consume the reviewed release asset
-# instead of rebuilding jankurai from source.
+# Build and install the exact reviewed Jeryu commit. Cargo retains its verified
+# source checkout under CARGO_HOME, which is also where the binary's embedded
+# runtime schema path points.
 ci_install_jankurai() {
     ci_verify_jankurai_source
 
     local install_dir
+    local cargo_home
     install_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
+    cargo_home="${CARGO_HOME:-$HOME/.cargo}"
     mkdir -p "$install_dir"
     export PATH="$install_dir:$PATH"
 
     local tmp_dir
     tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jankurai-release.XXXXXX")"
-
-    curl -fsSL -o "$tmp_dir/$CI_JANKURAI_LINUX_ASSET" "$CI_JANKURAI_ASSET_URL"
-    curl -fsSL -o "$tmp_dir/$CI_JANKURAI_LINUX_ASSET.sha256" "$CI_JANKURAI_SHA256_URL"
     (
-        cd "$tmp_dir"
-        sha256sum -c "$CI_JANKURAI_LINUX_ASSET.sha256"
+        trap 'rm -rf "$tmp_dir"' EXIT
+        cargo install \
+            --git "$CI_JANKURAI_GIT" \
+            --rev "$CI_JANKURAI_REV" \
+            --locked \
+            --root "$tmp_dir/install-root" \
+            jankurai
+
+        local built_binary="$tmp_dir/install-root/bin/jankurai"
+        if [ ! -x "$built_binary" ]; then
+            printf 'jankurai source install missing executable: %s\n' "$built_binary" >&2
+            return 1
+        fi
+
+        local source_root=""
+        local candidate
+        while IFS= read -r candidate; do
+            if [ "$(git -C "$candidate" rev-parse HEAD 2>/dev/null || true)" != "$CI_JANKURAI_REV" ]; then
+                continue
+            fi
+            if [ ! -s "$candidate/schemas/proofbind-witness.schema.json" ]; then
+                continue
+            fi
+            if ! LC_ALL=C grep -a -q -F "$candidate/crates/jankurai" "$built_binary"; then
+                continue
+            fi
+            source_root="$candidate"
+            break
+        done < <(find "$cargo_home/git/checkouts" -mindepth 2 -maxdepth 2 -type d 2>/dev/null)
+
+        if [ -z "$source_root" ]; then
+            printf 'jankurai binary has no retained, exact-revision runtime schema root\n' >&2
+            return 1
+        fi
+
+        install -m 0755 "$built_binary" "$install_dir/jankurai"
+        printf 'jankurai runtime schemas verified: %s/schemas\n' "$source_root"
     )
-
-    tar -xzf "$tmp_dir/$CI_JANKURAI_LINUX_ASSET" -C "$tmp_dir"
-
-    local extracted_binary
-    extracted_binary="$tmp_dir/${CI_JANKURAI_LINUX_ASSET%.tar.gz}/jankurai"
-    if [ ! -x "$extracted_binary" ]; then
-        printf 'jankurai release asset missing executable: %s\n' "$extracted_binary" >&2
-        return 1
-    fi
-
-    ci_install_jankurai_runtime_schemas "$tmp_dir" "$extracted_binary"
-    install -m 0755 "$extracted_binary" "$install_dir/jankurai"
     hash -r 2>/dev/null || true
 
     local version_output
@@ -906,9 +847,9 @@ ci_install_jankurai() {
             return 1
             ;;
     esac
-    printf 'jankurai release asset verified: %s\n' "$CI_JANKURAI_ASSET_URL"
+    printf 'jankurai source verified: %s %s %s\n' \
+        "$CI_JANKURAI_GIT" "$CI_JANKURAI_TAG" "$CI_JANKURAI_REV"
     printf 'jankurai installed: %s (%s)\n' "$(command -v jankurai)" "$version_output"
-    rm -rf "$tmp_dir"
 }
 
 ci_install_jankurai_logged() {
