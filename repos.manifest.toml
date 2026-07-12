@@ -624,7 +624,7 @@ required_check = "jain-zyal/required"
 note = "ZYAL 2.6 compiler and durable supervisor."
 cargo_members = ["."]
 copy_paths = []
-source_paths = ["src/**"]
+source_paths = ["src/**", "tests/**", "contracts/**"]
 cross_repo_deps = []
 
 [[repo]]
@@ -651,7 +651,7 @@ required_check = "jain-jailgun/required"
 note = "Managed browser accounts and Jailgun lifecycle."
 cargo_members = ["."]
 copy_paths = []
-source_paths = ["src/**"]
+source_paths = ["src/**", "tests/**", "contracts/**"]
 cross_repo_deps = []
 
 [[repo]]

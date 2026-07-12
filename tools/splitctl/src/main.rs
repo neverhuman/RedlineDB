@@ -6241,6 +6241,12 @@ fn refresh_repo(repo: &Repo) -> Result<(), Box<dyn std::error::Error>> {
             &repo.path.join("ops/ci/required.sh"),
             &render_companion_required(package),
         )?;
+        write(
+            &repo.path.join("ops/ci/contract-drift.sh"),
+            &render_companion_contract_drift(package),
+        )?;
+        retarget_companion_scaffold(repo, package)?;
+        refresh_companion_contract_zones(repo, package)?;
     }
     write(&repo.path.join("scripts/ci-local.sh"), render_ci_local())?;
     Ok(())
@@ -6669,6 +6675,152 @@ fn render_companion_required(package: &str) -> String {
     format!(
         "#!/usr/bin/env bash\nset -euo pipefail\n\nbash ops/ci/check.sh\ncargo clippy --locked -p {package} --all-targets\ncargo test --locked -p {package} --jobs \"${{JAIN_CI_JOBS:-8}}\"\nprintf 'required ok: {package}\\n'\n"
     )
+}
+
+fn render_companion_contract_drift(package: &str) -> String {
+    format!(
+        "#!/usr/bin/env bash\nset -euo pipefail\n\ncargo test --locked -p {package} --test release_contract\nprintf 'contract drift ok: {package}\\n'\n"
+    )
+}
+
+const COMPANION_IDENTITY_FILES: [&str; 10] = [
+    "ops/AGENTS.md",
+    "db/README.md",
+    "ops/ci/score.sh",
+    "ops/ci/artifact_support.sh",
+    "ops/ci/fast.sh",
+    "ops/ci/tool-adoption.sh",
+    "agent/JANKURAI_STANDARD.md",
+    "agent/repair-fixture.toml",
+    "agent/audit-policy.toml",
+    "agent/proofmark.toml",
+];
+
+fn retarget_companion_scaffold(repo: &Repo, package: &str) -> io::Result<()> {
+    for relative in COMPANION_IDENTITY_FILES {
+        let path = repo.path.join(relative);
+        let body = fs::read_to_string(&path)?;
+        let mut updated = body
+            .replace("jain-llm", package)
+            .replace("${JAIN_CI_JOBS:-40}", "${JAIN_CI_JOBS:-8}");
+        if relative == "ops/ci/score.sh" {
+            updated = harden_companion_score(&updated)?;
+        }
+        if updated == body && !body.contains(package) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("{} has no companion identity marker", path.display()),
+            ));
+        }
+        write(&path, &updated)?;
+    }
+
+    let architecture_path = repo.path.join("docs/architecture.md");
+    let architecture = fs::read_to_string(&architecture_path)?;
+    let owned_surface = repo
+        .source_paths
+        .iter()
+        .map(|path| format!("- `{path}`"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let architecture = architecture
+        .replace("- `crates/jain-llm/**`", &owned_surface)
+        .replace(&format!("- `crates/{package}/**`"), &owned_surface)
+        .replace("jain-llm", package);
+    write(&architecture_path, &architecture)?;
+
+    let boundaries_path = repo.path.join("agent/boundaries.toml");
+    let boundaries = fs::read_to_string(&boundaries_path)?;
+    let cargo_members = repo
+        .cargo_members
+        .iter()
+        .map(|member| format!("  \"{member}\","))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let boundaries = boundaries
+        .replace(
+            "cargo_members = [\n  \"crates/jain-llm\",\n]",
+            &format!("cargo_members = [\n{cargo_members}\n]"),
+        )
+        .replace(
+            &format!("cargo_members = [\n  \"crates/{package}\",\n]"),
+            &format!("cargo_members = [\n{cargo_members}\n]"),
+        )
+        .replace("jain-llm", package);
+    write(&boundaries_path, &boundaries)?;
+
+    let gitignore_path = repo.path.join(".gitignore");
+    let mut gitignore = fs::read_to_string(&gitignore_path)?;
+    for pattern in [".jankurai/repo-score.json", ".jankurai/repo-score.md"] {
+        if !gitignore.lines().any(|line| line.trim() == pattern) {
+            if !gitignore.ends_with('\n') {
+                gitignore.push('\n');
+            }
+            gitignore.push_str(pattern);
+            gitignore.push('\n');
+        }
+    }
+    write(&gitignore_path, &gitignore)
+}
+
+fn harden_companion_score(body: &str) -> io::Result<String> {
+    if body.contains("cap_count=") {
+        return Ok(body.to_owned());
+    }
+    let hard_anchor = "hard_count=\"$(jq -r '(.decision.hard_findings // .hard_findings // 0) | if type == \"array\" then length else . end' .jankurai/repo-score.json)\"\n";
+    let error_anchor =
+        "(( hard_count == 0 )) || errors+=(\"hard findings present: $hard_count\")\n";
+    if !body.contains(hard_anchor) || !body.contains(error_anchor) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "companion score lane lacks the governed hard-finding anchors",
+        ));
+    }
+    Ok(body
+        .replace(
+            hard_anchor,
+            &format!(
+                "{hard_anchor}cap_count=\"$(jq -r '(.caps_applied // []) | length' .jankurai/repo-score.json)\"\n"
+            ),
+        )
+        .replace(
+            error_anchor,
+            &format!(
+                "{error_anchor}(( cap_count == 0 )) || errors+=(\"caps applied: $cap_count\")\n"
+            ),
+        ))
+}
+
+fn refresh_companion_contract_zones(repo: &Repo, package: &str) -> io::Result<()> {
+    const START: &str = "# splitctl companion contract zones begin";
+    const END: &str = "# splitctl companion contract zones end";
+    let zones_path = repo.path.join("agent/generated-zones.toml");
+    let zones = fs::read_to_string(&zones_path)?;
+    let base = zones
+        .split_once(START)
+        .map(|(base, _)| base.trim_end())
+        .unwrap_or_else(|| zones.trim_end());
+    let contracts = repo.path.join("contracts");
+    let mut schemas = if contracts.is_dir() {
+        fs::read_dir(contracts)?
+            .filter_map(Result::ok)
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .filter(|name| name.ends_with(".schema.json"))
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    schemas.sort();
+    let mut updated = format!("{base}\n\n{START}\n");
+    for schema in schemas {
+        let receipt = schema.trim_end_matches(".json");
+        updated.push_str(&format!(
+            "[[zone]]\npath = \"contracts/generated/{receipt}.md\"\nsource = \"contracts/{schema}\"\ncommand = \"JAIN_UPDATE_CONTRACTS=1 cargo test --locked -p {package} --test release_contract\"\nread_only = true\nwrite_policy = \"generated_contract\"\n\n"
+        ));
+    }
+    updated.push_str(END);
+    updated.push('\n');
+    write(&zones_path, &updated)
 }
 
 #[cfg(test)]
@@ -7683,8 +7835,89 @@ current_tag = "jain-v8.0.0-split.0"
             assert!(lane.contains(&format!("required ok: {package}")));
             assert!(!lane.contains("jain-llm"));
             assert!(!lane.contains("--skip"));
+            let contract = render_companion_contract_drift(package);
+            assert!(contract.contains(&format!(
+                "cargo test --locked -p {package} --test release_contract"
+            )));
+            assert!(!contract.contains("jq"));
+            assert!(!contract.contains("python"));
         }
         assert_eq!(companion_package("jain-core"), None);
+    }
+
+    #[test]
+    fn companion_scaffold_retargeting_is_complete_and_idempotent() {
+        let root = TestDir::new("companion-retarget");
+        for relative in COMPANION_IDENTITY_FILES {
+            let path = root.path().join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let body = if relative == "ops/ci/score.sh" {
+                "jain-llm ${JAIN_CI_JOBS:-40}\nhard_count=\"$(jq -r '(.decision.hard_findings // .hard_findings // 0) | if type == \"array\" then length else . end' .jankurai/repo-score.json)\"\nerrors=()\n(( hard_count == 0 )) || errors+=(\"hard findings present: $hard_count\")\n"
+            } else {
+                "jain-llm ${JAIN_CI_JOBS:-40}\n"
+            };
+            fs::write(&path, body).unwrap();
+        }
+        fs::create_dir_all(root.path().join("docs")).unwrap();
+        fs::write(
+            root.path().join("docs/architecture.md"),
+            "`jain-llm`\n- `crates/jain-llm/**`\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("agent/boundaries.toml"),
+            "workspace = \"jain-llm\"\ncargo_members = [\n  \"crates/jain-llm\",\n]\n",
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("agent/generated-zones.toml"),
+            "[[zone]]\npath = \"target/\"\n",
+        )
+        .unwrap();
+        fs::write(root.path().join(".gitignore"), "/target/\n").unwrap();
+        fs::create_dir_all(root.path().join("contracts")).unwrap();
+        fs::write(root.path().join("contracts/example.schema.json"), "{}\n").unwrap();
+        let repo = Repo {
+            name: "jain-zyal".to_owned(),
+            path: root.path().to_owned(),
+            profile: "rust-workspace".to_owned(),
+            authored: true,
+            cargo_members: vec![".".to_owned()],
+            copy_paths: Vec::new(),
+            source_paths: vec!["src/**".to_owned()],
+        };
+
+        retarget_companion_scaffold(&repo, "jain-zyal").unwrap();
+        retarget_companion_scaffold(&repo, "jain-zyal").unwrap();
+        refresh_companion_contract_zones(&repo, "jain-zyal").unwrap();
+        refresh_companion_contract_zones(&repo, "jain-zyal").unwrap();
+        for relative in COMPANION_IDENTITY_FILES {
+            let text = fs::read_to_string(root.path().join(relative)).unwrap();
+            assert!(text.contains("jain-zyal"));
+            assert!(text.contains("${JAIN_CI_JOBS:-8}"));
+            assert!(!text.contains("jain-llm"));
+        }
+        let architecture = fs::read_to_string(root.path().join("docs/architecture.md")).unwrap();
+        assert!(architecture.contains("- `src/**`"));
+        assert!(!architecture.contains("jain-llm"));
+        let boundaries = fs::read_to_string(root.path().join("agent/boundaries.toml")).unwrap();
+        assert!(boundaries.contains("cargo_members = [\n  \".\",\n]"));
+        assert!(!boundaries.contains("jain-llm"));
+        let zones = fs::read_to_string(root.path().join("agent/generated-zones.toml")).unwrap();
+        assert_eq!(
+            zones
+                .matches("source = \"contracts/example.schema.json\"")
+                .count(),
+            1
+        );
+        assert!(zones.contains("path = \"contracts/generated/example.schema.md\""));
+        assert!(zones.contains("JAIN_UPDATE_CONTRACTS=1 cargo test --locked -p jain-zyal"));
+        let score = fs::read_to_string(root.path().join("ops/ci/score.sh")).unwrap();
+        assert!(score.contains("cap_count="));
+        assert!(score.contains("caps applied: $cap_count"));
+        let gitignore = fs::read_to_string(root.path().join(".gitignore")).unwrap();
+        assert_eq!(gitignore.matches(".jankurai/repo-score.json").count(), 1);
+        assert_eq!(gitignore.matches(".jankurai/repo-score.md").count(), 1);
     }
 
     #[test]
