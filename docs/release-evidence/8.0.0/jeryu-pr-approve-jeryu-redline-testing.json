@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Reviewable nested Redline CI repair: apply cargo fmt output and update anyhow to 1.0.103 for the current RustSec advisory.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-12T10:03:33.963158185+00:00",
+      "head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+      "status": "pass"
+    },
+    "passport_hash": "passport:fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "67b98f3d6010fbdf22325e4a07d98d8c3f27ae4a",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-testing-ci",
+      "head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 2,
+      "passport_hash": "passport:fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: format and update testing security dependency",
+      "updated_at": "2026-07-12T10:03:12.938063984+00:00"
+    }
+  },
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact Redline-testing Rust CI head; strict PR, security, Jankurai score 86, SQLite/PostgreSQL parity, generator, and release packaging gates passed.",
+      "evidence": null,
+      "expected_head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-testing/pulls/2/reviews"
+  },
+  "response": {
+    "description": "Reviewable nested Redline CI repair: apply cargo fmt output and update anyhow to 1.0.103 for the current RustSec advisory.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-12T10:03:33.952463211+00:00",
+      "head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+      "status": "pass"
+    },
+    "passport_hash": "passport:fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "67b98f3d6010fbdf22325e4a07d98d8c3f27ae4a",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-testing-ci",
+      "head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 2,
+      "passport_hash": "passport:fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: format and update testing security dependency",
+      "updated_at": "2026-07-12T10:03:12.938063984+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783850612
+}
