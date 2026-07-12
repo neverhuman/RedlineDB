@@ -12,10 +12,12 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-cargo build --release --locked
-
 version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
 test -n "$version"
+tag="${GITHUB_REF_NAME:-${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v${version}-jain.1}}"
+cargo run --locked --quiet -p xtask -- validate-release-tag --tag "$tag"
+cargo build --release --locked
+
 target_name="linux-x86_64"
 package="redline-testing-${version}-${target_name}"
 pkg_dir="dist/${package}"
@@ -65,13 +67,14 @@ artifact_hashes_obj="$(cd "${pkg_dir}" && find . -type f \
     ')"
 
 commit="$(git rev-parse HEAD 2>/dev/null || printf unknown)"
-tag="${GITHUB_REF_NAME:-$(git describe --tags --exact-match 2>/dev/null || printf v%s "$version")}"
+tag_revision="${tag##*.}"
 
 jq -n \
   --arg version "$version" \
   --arg target "$target_name" \
   --arg commit "$commit" \
   --arg tag "$tag" \
+  --argjson tag_revision "$tag_revision" \
   --arg binary_sha "$binary_sha" \
   --argjson hashes "$artifact_hashes_obj" \
   '{
@@ -80,6 +83,7 @@ jq -n \
     target: $target,
     release_commit: $commit,
     release_tag: $tag,
+    tag_revision: $tag_revision,
     binary: "bin/redline-testing",
     binary_sha256: $binary_sha,
     tarball_sha256_source: ".sha256 sidecar",

@@ -59,6 +59,9 @@ fn security_workflow_is_blocking_and_delegates_to_the_local_lane() {
 fn release_workflow_delegates_to_the_canonical_ops_lanes() {
     let workflow = repo_file(".github/workflows/release.yml");
 
+    assert!(workflow.contains("redline-testing-v*-jain.*"));
+    assert!(!workflow.contains("- \"v*\""));
+    assert!(workflow.contains("validate-release-tag --tag \"$GITHUB_REF_NAME\""));
     assert!(workflow.contains("run: bash ops/ci/pr-ci.sh"));
     assert!(workflow.contains("run: bash ops/ci/release.sh"));
 }

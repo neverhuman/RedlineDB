@@ -7,6 +7,14 @@ for the publish + attestation flow.
 
 ## [Unreleased]
 
+### Changed
+
+- Bound Jain release packaging to the Cargo product version through the Rust
+  `xtask validate-release-tag` gate and the authorized immutable corrective tag
+  `redline-testing-v1.0.1-jain.1`; the existing `.0` tag remains unchanged.
+- Removed the remaining Python CI helper in favor of the tested Rust xtask
+  implementation.
+
 ## [1.0.1] - 2026-05-26
 
 ### Fixed

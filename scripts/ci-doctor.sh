@@ -31,6 +31,8 @@ grep -q 'cargo run --locked --quiet -p xtask -- update-badge' "$ci_workflow" || 
 grep -q 'actions/upload-artifact' "$ci_workflow" || fail "github ci workflow must upload the beyond-SQLite artifact"
 grep -q 'workflow_dispatch' "$release_workflow" || fail "github release workflow must support workflow_dispatch"
 grep -q 'tags:' "$release_workflow" || fail "github release workflow must trigger on tags"
+grep -Fq 'redline-testing-v*-jain.*' "$release_workflow" || fail "github release workflow must use Jain release tags"
+grep -Fq 'validate-release-tag --tag "$GITHUB_REF_NAME"' "$release_workflow" || fail "github release workflow must validate tag product identity in Rust"
 grep -q 'bash ops/ci/pr-ci.sh' "$release_workflow" || fail "github release workflow must run the canonical pr-ci lane"
 grep -q 'bash ops/ci/release.sh' "$release_workflow" || fail "github release workflow must run the canonical release lane"
 grep -q 'actions/attest-build-provenance' "$release_workflow" || fail "github release workflow must attest release artifacts"

@@ -47,6 +47,25 @@ struct ReleaseReadinessReceipt<'a> {
     artifact_paths: [&'static str; 3],
 }
 
+#[derive(Debug, Deserialize)]
+struct CargoManifest {
+    package: CargoPackage,
+}
+
+#[derive(Debug, Deserialize)]
+struct CargoPackage {
+    version: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ReleaseTagReceipt<'a> {
+    ok: bool,
+    product: &'static str,
+    product_version: &'a str,
+    tag_revision: u64,
+    tag: &'a str,
+}
+
 pub fn cost_budget(repo_root: &Path) -> Result<()> {
     let manifest_relative = "agent/cost-budget.toml";
     let manifest_path = repo_root.join(manifest_relative);
@@ -165,6 +184,39 @@ pub fn release_readiness(repo_root: &Path) -> Result<()> {
     } else {
         bail!("release readiness missing evidence: files={missing_files:?} terms={missing_terms:?}")
     }
+}
+
+pub fn validate_release_tag(repo_root: &Path, tag: &str) -> Result<()> {
+    let manifest_path = repo_root.join("Cargo.toml");
+    let manifest: CargoManifest = toml::from_str(
+        &fs::read_to_string(&manifest_path)
+            .with_context(|| format!("read {}", manifest_path.display()))?,
+    )
+    .with_context(|| format!("parse {}", manifest_path.display()))?;
+    let prefix = format!("redline-testing-v{}-jain.", manifest.package.version);
+    let revision = tag.strip_prefix(&prefix).with_context(|| {
+        format!("release tag must match {prefix}<positive revision>; found {tag}")
+    })?;
+    let tag_revision: u64 = revision
+        .parse()
+        .with_context(|| format!("release tag revision must be decimal; found {revision}"))?;
+    ensure!(tag_revision > 0, "corrective tag revision must be positive");
+    ensure!(
+        revision == tag_revision.to_string(),
+        "release tag revision must use canonical decimal form"
+    );
+
+    println!(
+        "{}",
+        serde_json::to_string(&ReleaseTagReceipt {
+            ok: true,
+            product: "redline-testing",
+            product_version: &manifest.package.version,
+            tag_revision,
+            tag,
+        })?
+    );
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -514,6 +566,36 @@ on_kill_switch = true
                 "target/jankurai/cost-budget.json",
                 "target/jankurai/security/evidence.json"
             ])
+        );
+    }
+
+    #[test]
+    fn release_tag_must_match_the_cargo_product_version() {
+        let fixture = Fixture::new("release-tag");
+        write(
+            fixture.path(),
+            "Cargo.toml",
+            "[package]\nname = \"redline-testing\"\nversion = \"1.0.1\"\n",
+        );
+
+        validate_release_tag(fixture.path(), "redline-testing-v1.0.1-jain.1").unwrap();
+        assert!(
+            validate_release_tag(fixture.path(), "redline-testing-v1.0.0-jain.1")
+                .unwrap_err()
+                .to_string()
+                .contains("redline-testing-v1.0.1-jain")
+        );
+        assert!(
+            validate_release_tag(fixture.path(), "redline-testing-v1.0.1-jain.0")
+                .unwrap_err()
+                .to_string()
+                .contains("must be positive")
+        );
+        assert!(
+            validate_release_tag(fixture.path(), "redline-testing-v1.0.1-jain.01")
+                .unwrap_err()
+                .to_string()
+                .contains("canonical decimal")
         );
     }
 

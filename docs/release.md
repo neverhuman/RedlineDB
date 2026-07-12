@@ -21,10 +21,12 @@ surface; GitHub Releases is the public download host. The release workflow is:
    recomputes every bundled file's SHA-256 against the manifest. If a file is
    in the tarball but missing from `artifact_hashes` (or vice versa), this
    test fails loudly. It runs as part of `just pr-ci`.
-4. **Tag the release.** `git tag -s v<version>` (signed) → `git push origin
-   v<version>`. The GitHub release workflow in
-   `.github/workflows/release.yml` triggers on tag push and can also be
-   started manually against an existing tag ref.
+4. **Tag the release.** The Redline family controller creates the manifest-bound
+   immutable tag with compare-and-swap semantics. The authorized corrective
+   identity for this candidate is `redline-testing-v1.0.1-jain.1`; the older
+   `.0` tag is never moved. The GitHub release workflow validates that the
+   tagged commit's `Cargo.toml` product version matches the tag before it builds
+   and can also be started manually against an existing tag ref.
 5. **CI build + attestation.** The GitHub release workflow re-runs `pr-ci`,
    rebuilds the tarball via `just release-local`, requests
    `actions/attest-build-provenance` for the tarball + `.sha256` +

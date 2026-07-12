@@ -63,6 +63,21 @@ fn release_manifest_enumerates_every_bundled_file() {
         .get("artifact_hashes")
         .and_then(|v| v.as_object())
         .expect("release-manifest.json missing artifact_hashes object");
+    assert_eq!(manifest["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        manifest["release_tag"],
+        format!(
+            "redline-testing-v{}-jain.{}",
+            env!("CARGO_PKG_VERSION"),
+            manifest["tag_revision"]
+        )
+    );
+    assert!(
+        manifest["tag_revision"]
+            .as_u64()
+            .is_some_and(|value| value > 0),
+        "release manifest requires a positive corrective tag revision"
+    );
 
     // Walk every file under dist/<package>/ EXCEPT release-manifest.json itself
     // and bin/redline-testing (which is hashed separately via binary_sha256).

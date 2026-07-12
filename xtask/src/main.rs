@@ -50,6 +50,11 @@ enum Command {
     CostBudget,
     /// Validate launch-gate documentation and emit its readiness receipt.
     ReleaseReadiness,
+    /// Validate that a Jain corrective tag matches Cargo.toml's product version.
+    ValidateReleaseTag {
+        #[arg(long)]
+        tag: String,
+    },
     /// Write the artifact-support context, manifest, and local-CI receipt.
     ArtifactSupportJson {
         #[arg(long)]
@@ -110,6 +115,7 @@ fn main() -> Result<()> {
         Command::UpdateBadge => badge::run(&repo_root),
         Command::CostBudget => repo_ops::cost_budget(&repo_root),
         Command::ReleaseReadiness => repo_ops::release_readiness(&repo_root),
+        Command::ValidateReleaseTag { tag } => repo_ops::validate_release_tag(&repo_root, &tag),
         Command::ArtifactSupportJson {
             out_dir,
             entrypoint,

@@ -3,7 +3,7 @@ name: release
 on:
   push:
     tags:
-      - "v*"
+      - "redline-testing-v*-jain.*"
   workflow_dispatch:
 
 permissions:
@@ -33,6 +33,7 @@ jobs:
           test "${GITHUB_REF_TYPE:-}" = "tag"
           test -n "${GITHUB_REF_NAME:-}"
           git describe --tags --exact-match >/dev/null
+          cargo run --locked --quiet -p xtask -- validate-release-tag --tag "$GITHUB_REF_NAME"
       - name: Test
         run: bash ops/ci/pr-ci.sh
       - name: Build package
