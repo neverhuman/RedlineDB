@@ -13,6 +13,12 @@ Jeryu consumer evidence, `just proof-refresh ...`, then
 both SHA256 sidecars, and operation receipt as one rollback-safe transaction.
 SBOM integrity evidence is produced by `just security`.
 
+The authorized corrective family identities are
+`redline-core-v4.1.0-jain.2`, `redline-v4.1.0-jain.2`,
+`redline-testing-v1.0.1-jain.1`, and `redline-web-v0.1.0-jain.1`. Earlier tags
+remain immutable. Before proof refresh, every manifest commit and release-tree
+SHA256 must be exact and must match the reviewed main commit and immutable tag.
+
 This control plane is stateless, so backups are not applicable; the durable
 truth is reviewed Git history plus checksummed receipts. Monitoring is the
 machine-readable family and cutover status. Abuse controls are not applicable

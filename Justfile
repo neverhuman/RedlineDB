@@ -1,6 +1,6 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-redlinectl := "{{invocation_directory()}}/redlinectl"
+redlinectl := invocation_directory() / "redlinectl"
 
 default: check
 

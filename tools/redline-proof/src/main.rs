@@ -19,6 +19,9 @@ const CONSUMER_SCHEMA: &str = "redline.consumer-evidence/v1";
 const LOCK_SCHEMA: &str = "redline.split.lock/v2";
 const PROOF_REFRESH_SCHEMA: &str = "redline.proof-refresh/v1";
 const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787/git/";
+const RELEASE_VERSION: &str = "8.0.0";
+const RELEASE_PROTECTION_POLICY: &str = "immutable-main-v1";
+const PENDING: &str = "PENDING";
 const MAX_EVIDENCE_HOURS: i64 = 24;
 const MAX_CLOCK_SKEW_MINUTES: i64 = 5;
 const REQUIRED_CONSUMERS: [&str; 2] = ["jain-split", "jeryu-split"];
@@ -308,8 +311,13 @@ struct Repo {
     name: String,
     path: PathBuf,
     github_slug: String,
-    jeryu_slug: String,
+    remote: String,
+    product_version: String,
+    tag_revision: i64,
     current_tag: String,
+    release_commit: String,
+    release_checksum_sha256: String,
+    protection_policy: String,
     required_check: String,
     default_branch: String,
 }
@@ -329,6 +337,100 @@ fn toml_string(table: &toml::value::Table, key: &str, context: &str) -> Result<S
         .ok_or_else(|| error(format!("{context} lacks {key}")))
 }
 
+fn toml_integer(table: &toml::value::Table, key: &str, context: &str) -> Result<i64> {
+    table
+        .get(key)
+        .and_then(toml::Value::as_integer)
+        .ok_or_else(|| error(format!("{context} lacks integer {key}")))
+}
+
+fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
+    match name {
+        "redline" | "redline-core" => Some(("4.1.0", 2)),
+        "redline-testing" => Some(("1.0.1", 1)),
+        "redline-web" => Some(("0.1.0", 1)),
+        _ => None,
+    }
+}
+
+fn validate_release_identity(
+    table: &toml::value::Table,
+    name: &str,
+    revision_namespace: &str,
+    expected_product_version: &str,
+    expected_revision: i64,
+) -> Result<(String, i64, String, String, String, String)> {
+    let product_version = toml_string(table, "product_version", name)?;
+    let tag_revision = toml_integer(table, "tag_revision", name)?;
+    let current_tag = toml_string(table, "current_tag", name)?;
+    let release_commit = toml_string(table, "release_commit", name)?;
+    let release_checksum_sha256 = toml_string(table, "release_checksum_sha256", name)?;
+    let protection_policy = toml_string(table, "protection_policy", name)?;
+    if product_version != expected_product_version || tag_revision != expected_revision {
+        return Err(error(format!(
+            "{name}: expected product {expected_product_version} revision {expected_revision}, found {product_version} revision {tag_revision}"
+        )));
+    }
+    let expected_tag = format!("{name}-v{product_version}-{revision_namespace}.{tag_revision}");
+    if current_tag != expected_tag {
+        return Err(error(format!(
+            "{name}: current_tag must be {expected_tag}, found {current_tag}"
+        )));
+    }
+    if protection_policy != RELEASE_PROTECTION_POLICY {
+        return Err(error(format!(
+            "{name}: protection_policy must be {RELEASE_PROTECTION_POLICY}"
+        )));
+    }
+    match (
+        release_commit.as_str(),
+        release_checksum_sha256.as_str(),
+    ) {
+        (PENDING, PENDING) => {}
+        (commit, checksum) if is_sha1(commit) && is_sha256(checksum) => {}
+        (PENDING, _) | (_, PENDING) => {
+            return Err(error(format!(
+                "{name}: release commit and checksum must become exact together"
+            )))
+        }
+        _ => {
+            return Err(error(format!(
+                "{name}: release identity must contain exact SHA-1/SHA-256 values or two PENDING values"
+            )))
+        }
+    }
+    Ok((
+        product_version,
+        tag_revision,
+        current_tag,
+        release_commit,
+        release_checksum_sha256,
+        protection_policy,
+    ))
+}
+
+fn validate_protection_policy(value: &toml::Value) -> Result<()> {
+    let policy = value
+        .get("protection_policies")
+        .and_then(|value| value.get(RELEASE_PROTECTION_POLICY))
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| error("manifest lacks immutable-main-v1 protection policy"))?;
+    let integer = |key: &str| policy.get(key).and_then(toml::Value::as_integer);
+    let boolean = |key: &str| policy.get(key).and_then(toml::Value::as_bool);
+    if integer("required_approvals") != Some(1)
+        || boolean("required_status_check") != Some(true)
+        || boolean("linear_history") != Some(true)
+        || boolean("enforce_admins") != Some(true)
+        || boolean("allow_force_push") != Some(false)
+        || boolean("allow_deletions") != Some(false)
+    {
+        return Err(error(
+            "immutable-main-v1 protection policy is incomplete or unsafe",
+        ));
+    }
+    Ok(())
+}
+
 fn load_manifest(path: &Path) -> Result<Manifest> {
     let text = fs::read_to_string(path)?;
     let value: toml::Value = text.parse()?;
@@ -339,6 +441,29 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             "manifest must describe the independent redline-split family",
         ));
     }
+    if value.get("release_version").and_then(toml::Value::as_str) != Some(RELEASE_VERSION)
+        || value.get("status").and_then(toml::Value::as_str) != Some("candidate")
+        || value.get("formal_ga").and_then(toml::Value::as_bool) != Some(false)
+        || value.get("sagemaker").and_then(toml::Value::as_str) != Some("N/A")
+    {
+        return Err(error(
+            "manifest must describe the Jain 8.0.0 candidate with SageMaker N/A",
+        ));
+    }
+    validate_protection_policy(&value)?;
+    let control = value
+        .get("control_plane")
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| error("manifest lacks control_plane"))?;
+    if toml_string(control, "name", "control_plane")? != "redline-split-ops"
+        || toml_string(control, "remote", "control_plane")?
+            != "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
+        || toml_string(control, "required_check", "control_plane")? != "redline-split-ops/required"
+        || toml_string(control, "family", "control_plane")? != FAMILY
+    {
+        return Err(error("manifest control-plane identity is invalid"));
+    }
+    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 0)?;
     let rows = value
         .get("repo")
         .and_then(toml::Value::as_array)
@@ -367,12 +492,44 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         if default_branch != "main" {
             return Err(error(format!("{name}: default branch must be main")));
         }
+        let (expected_product_version, expected_revision) = expected_repo_release(&name)
+            .ok_or_else(|| error(format!("{name}: release identity is not authorized")))?;
+        let (
+            product_version,
+            tag_revision,
+            current_tag,
+            release_commit,
+            release_checksum_sha256,
+            protection_policy,
+        ) = validate_release_identity(
+            table,
+            &name,
+            "jain",
+            expected_product_version,
+            expected_revision,
+        )?;
+        let jeryu_slug = toml_string(table, "jeryu_slug", "manifest repository")?;
+        let remote = toml_string(table, "remote", "manifest repository")?;
+        let expected_remote = format!(
+            "{LOCAL_JERYU_BASE}{}.git",
+            jeryu_slug.trim_start_matches('/')
+        );
+        if remote != expected_remote {
+            return Err(error(format!(
+                "{name}: remote must be {expected_remote}, found {remote}"
+            )));
+        }
         repos.push(Repo {
             name,
             path: repo_path,
             github_slug: toml_string(table, "github_slug", "manifest repository")?,
-            jeryu_slug: toml_string(table, "jeryu_slug", "manifest repository")?,
-            current_tag: toml_string(table, "current_tag", "manifest repository")?,
+            remote,
+            product_version,
+            tag_revision,
+            current_tag,
+            release_commit,
+            release_checksum_sha256,
+            protection_policy,
             required_check: toml_string(table, "required_check", "manifest repository")?,
             default_branch,
         });
@@ -398,10 +555,7 @@ impl Manifest {
 }
 
 fn expected_origin(repo: &Repo) -> String {
-    format!(
-        "{LOCAL_JERYU_BASE}{}.git",
-        repo.jeryu_slug.trim_start_matches('/')
-    )
+    repo.remote.clone()
 }
 
 fn command_output(command: &mut Command) -> Result<Output> {
@@ -437,6 +591,52 @@ fn git_optional(root: &Path, args: &[&str]) -> Result<Option<String>> {
     } else {
         Ok(None)
     }
+}
+
+fn git_tree_checksum(root: &Path, commit: &str) -> Result<String> {
+    let output = command_output(Command::new("git").arg("-C").arg(root).args([
+        "archive",
+        "--format=tar",
+        commit,
+    ]))?;
+    Ok(sha256_bytes(&output.stdout))
+}
+
+fn cargo_package_version(path: &Path) -> Result<String> {
+    let value: toml::Value = fs::read_to_string(path)?.parse()?;
+    value
+        .get("package")
+        .and_then(|value| value.get("version"))
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| error(format!("{} lacks package.version", path.display())))
+}
+
+fn validate_product_version(root: &Path, repo: &Repo) -> Result<()> {
+    let found = match repo.name.as_str() {
+        "redline" => fs::read_to_string(root.join("VERSION"))?.trim().to_owned(),
+        "redline-core" => cargo_package_version(&root.join("crates/redlinedb/Cargo.toml"))?,
+        "redline-testing" => cargo_package_version(&root.join("Cargo.toml"))?,
+        "redline-web" => cargo_package_version(&root.join("apps/api/Cargo.toml"))?,
+        _ => {
+            return Err(error(format!(
+                "{}: unsupported product version source",
+                repo.name
+            )))
+        }
+    };
+    let expected = if repo.name == "redline" {
+        format!("{}-jain.{}", repo.product_version, repo.tag_revision)
+    } else {
+        repo.product_version.clone()
+    };
+    if found != expected {
+        return Err(error(format!(
+            "{}: tagged product version must be {expected}, found {found}",
+            repo.name
+        )));
+    }
+    Ok(())
 }
 
 fn forge_ref(root: &Path, reference: &str) -> Result<Option<String>> {
@@ -619,6 +819,22 @@ fn current_reviewed_state(
             repo.name, forge_main
         )));
     }
+    validate_product_version(&root, repo)?;
+    if repo.release_commit != PENDING {
+        if repo.release_commit != commit {
+            return Err(error(format!(
+                "{}: reviewed main {commit} differs from manifest release commit {}",
+                repo.name, repo.release_commit
+            )));
+        }
+        let checksum = git_tree_checksum(&root, &commit)?;
+        if repo.release_checksum_sha256 != checksum {
+            return Err(error(format!(
+                "{}: reviewed release tree checksum differs from manifest",
+                repo.name
+            )));
+        }
+    }
     let metadata = if local_tag_exists(&root, &repo.current_tag)? {
         let found = tag_metadata(&root, &repo.current_tag, false)?;
         if found.commit != commit {
@@ -654,7 +870,12 @@ fn current_reviewed_state(
         "forge_main": forge_main,
         "origin": origin,
         "required_check": repo.required_check,
+        "product_version": repo.product_version,
+        "tag_revision": repo.tag_revision,
         "tag": repo.current_tag,
+        "release_commit": repo.release_commit,
+        "release_checksum_sha256": repo.release_checksum_sha256,
+        "protection_policy": repo.protection_policy,
         "tag_state": if metadata.is_some() { "verified" } else { "absent" },
         "tag_metadata": metadata.as_ref().map(metadata_json),
     }))
@@ -742,7 +963,15 @@ fn family_ci(manifest_path: &Path, receipt: &Path) -> Result<()> {
                         json!(repo.path.to_string_lossy().replace('\\', "/")),
                     ),
                     ("required_check", json!(repo.required_check)),
+                    ("product_version", json!(repo.product_version)),
+                    ("tag_revision", json!(repo.tag_revision)),
                     ("tag", json!(repo.current_tag)),
+                    ("release_commit", json!(repo.release_commit)),
+                    (
+                        "release_checksum_sha256",
+                        json!(repo.release_checksum_sha256),
+                    ),
+                    ("protection_policy", json!(repo.protection_policy)),
                     ("commands", json!([])),
                     ("log", JsonValue::Null),
                     ("log_sha256", JsonValue::Null),
@@ -952,7 +1181,7 @@ const FAMILY_RECEIPT_FIELDS: [&str; 9] = [
     "status",
     "repositories",
 ];
-const FAMILY_ROW_FIELDS: [&str; 15] = [
+const FAMILY_ROW_FIELDS: [&str; 20] = [
     "name",
     "path",
     "branch",
@@ -960,7 +1189,12 @@ const FAMILY_ROW_FIELDS: [&str; 15] = [
     "forge_main",
     "origin",
     "required_check",
+    "product_version",
+    "tag_revision",
     "tag",
+    "release_commit",
+    "release_checksum_sha256",
+    "protection_policy",
     "tag_state",
     "tag_metadata",
     "commands",
@@ -1085,7 +1319,16 @@ fn validate_family_receipt(
             )));
         }
         if row.get("required_check").and_then(JsonValue::as_str) != Some(&repo.required_check)
+            || row.get("product_version").and_then(JsonValue::as_str) != Some(&repo.product_version)
+            || row.get("tag_revision").and_then(JsonValue::as_i64) != Some(repo.tag_revision)
             || row.get("tag").and_then(JsonValue::as_str) != Some(&repo.current_tag)
+            || row.get("release_commit").and_then(JsonValue::as_str) != Some(&repo.release_commit)
+            || row
+                .get("release_checksum_sha256")
+                .and_then(JsonValue::as_str)
+                != Some(&repo.release_checksum_sha256)
+            || row.get("protection_policy").and_then(JsonValue::as_str)
+                != Some(&repo.protection_policy)
         {
             return Err(error(format!(
                 "{name}: family CI metadata differs from manifest"
@@ -1233,6 +1476,12 @@ fn checked_tag_rows(manifest_path: &Path, family_receipt: &JsonValue) -> Result<
         .ok_or_else(|| error("family receipt repositories are missing"))?;
     let mut result = Vec::new();
     for repo in &manifest.repos {
+        if repo.release_commit == PENDING || repo.release_checksum_sha256 == PENDING {
+            return Err(error(format!(
+                "{}: proof-refresh requires exact manifest release commit and checksum",
+                repo.name
+            )));
+        }
         let state = current_reviewed_state(&manifest, repo, false)?;
         let row = receipt_rows
             .iter()
@@ -1248,6 +1497,15 @@ fn checked_tag_rows(manifest_path: &Path, family_receipt: &JsonValue) -> Result<
         if row.get("commit").and_then(JsonValue::as_str) != Some(&metadata.commit) {
             return Err(error(format!(
                 "{}: immutable tag does not point to family CI commit",
+                repo.name
+            )));
+        }
+        if metadata.commit != repo.release_commit
+            || git_tree_checksum(&manifest.repo_root(repo), &metadata.commit)?
+                != repo.release_checksum_sha256
+        {
+            return Err(error(format!(
+                "{}: immutable tag differs from exact manifest release identity",
                 repo.name
             )));
         }
@@ -1407,6 +1665,11 @@ fn render_lock(
             String::new(),
             "[[repo]]".to_owned(),
             format!("name = {}", toml_quote(&row.repo.name)?),
+            format!(
+                "product_version = {}",
+                toml_quote(&row.repo.product_version)?
+            ),
+            format!("tag_revision = {}", row.repo.tag_revision),
             format!("tag = {}", toml_quote(&row.repo.current_tag)?),
             format!(
                 "commit = {}",
@@ -1418,11 +1681,19 @@ fn render_lock(
                 )?
             ),
             format!(
+                "checksum_sha256 = {}",
+                toml_quote(&row.repo.release_checksum_sha256)?
+            ),
+            format!(
                 "github = {}",
                 toml_quote(&format!("https://github.com/{}.git", row.repo.github_slug))?
             ),
             format!("jeryu = {}", toml_quote(&expected_origin(&row.repo))?),
             format!("required_check = {}", toml_quote(&row.repo.required_check)?),
+            format!(
+                "protection_policy = {}",
+                toml_quote(&row.repo.protection_policy)?
+            ),
             format!("tag_object = {}", toml_quote(&row.metadata.object)?),
             format!(
                 "tag_object_type = {}",
@@ -1690,17 +1961,33 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Resu
                 repo.name
             )));
         }
-        if entry.get("tag").and_then(toml::Value::as_str) != Some(&repo.current_tag)
-            || entry.get("required_check").and_then(toml::Value::as_str)
-                != Some(&repo.required_check)
+        if entry.get("required_check").and_then(toml::Value::as_str) != Some(&repo.required_check)
             || entry.get("jeryu").and_then(toml::Value::as_str) != Some(&expected_origin(repo))
         {
             return Err(error(format!(
-                "{}: lock tag, required check, or Jeryu remote differs from manifest",
+                "{}: lock required check or Jeryu remote differs from manifest",
                 repo.name
             )));
         }
         if eligible {
+            if repo.release_commit == PENDING
+                || repo.release_checksum_sha256 == PENDING
+                || entry.get("product_version").and_then(toml::Value::as_str)
+                    != Some(&repo.product_version)
+                || entry.get("tag_revision").and_then(toml::Value::as_integer)
+                    != Some(repo.tag_revision)
+                || entry.get("tag").and_then(toml::Value::as_str) != Some(&repo.current_tag)
+                || commit != repo.release_commit
+                || entry.get("checksum_sha256").and_then(toml::Value::as_str)
+                    != Some(&repo.release_checksum_sha256)
+                || entry.get("protection_policy").and_then(toml::Value::as_str)
+                    != Some(&repo.protection_policy)
+            {
+                return Err(error(format!(
+                    "{}: eligible lock release identity differs from manifest",
+                    repo.name
+                )));
+            }
             let object = entry
                 .get("tag_object")
                 .and_then(toml::Value::as_str)
@@ -2575,6 +2862,83 @@ mod tests {
     }
 
     #[test]
+    fn canonical_manifest_uses_authorized_corrective_revisions() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
+        let identities: BTreeMap<&str, (&str, i64, &str)> = manifest
+            .repos
+            .iter()
+            .map(|repo| {
+                (
+                    repo.name.as_str(),
+                    (
+                        repo.product_version.as_str(),
+                        repo.tag_revision,
+                        repo.current_tag.as_str(),
+                    ),
+                )
+            })
+            .collect();
+        assert_eq!(
+            identities.get("redline"),
+            Some(&("4.1.0", 2, "redline-v4.1.0-jain.2"))
+        );
+        assert_eq!(
+            identities.get("redline-core"),
+            Some(&("4.1.0", 2, "redline-core-v4.1.0-jain.2"))
+        );
+        assert_eq!(
+            identities.get("redline-testing"),
+            Some(&("1.0.1", 1, "redline-testing-v1.0.1-jain.1"))
+        );
+        assert_eq!(
+            identities.get("redline-web"),
+            Some(&("0.1.0", 1, "redline-web-v0.1.0-jain.1"))
+        );
+    }
+
+    #[test]
+    fn manifest_rejects_implicit_old_revision() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let fixture = TestDir::new("old-revision");
+        let path = fixture.path().join("repos.manifest.toml");
+        let text = fs::read_to_string(source)
+            .unwrap()
+            .replace("redline-v4.1.0-jain.2", "redline-v4.1.0-jain.1");
+        fs::write(&path, text).unwrap();
+        assert!(load_manifest(&path)
+            .unwrap_err()
+            .to_string()
+            .contains("current_tag must be redline-v4.1.0-jain.2"));
+    }
+
+    #[test]
+    fn manifest_requires_atomic_commit_checksum_binding() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let fixture = TestDir::new("half-bound");
+        let path = fixture.path().join("repos.manifest.toml");
+        let text = fs::read_to_string(source).unwrap().replacen(
+            "release_commit = \"PENDING\"",
+            "release_commit = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+            1,
+        );
+        fs::write(&path, text).unwrap();
+        assert!(load_manifest(&path)
+            .unwrap_err()
+            .to_string()
+            .contains("must become exact together"));
+    }
+
+    #[test]
+    fn release_tree_checksum_is_stable_for_a_commit() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let head = git(root, &["rev-parse", "HEAD"]).unwrap();
+        let first = git_tree_checksum(root, &head).unwrap();
+        assert!(is_sha256(&first));
+        assert_eq!(first, git_tree_checksum(root, &head).unwrap());
+    }
+
+    #[test]
     fn checksum_sidecar_detects_tampering() {
         let root = TestDir::new("tamper");
         let path = root.path().join("receipt.json");
@@ -2612,7 +2976,7 @@ mod tests {
             "status": "pass",
             "source_commit": "dddddddddddddddddddddddddddddddddddddddd",
             "required_check": "jain-split/redline-consumer",
-            "engine_tag": "redline-core-v4.1.0-jain.1",
+            "engine_tag": "redline-core-v4.1.0-jain.2",
             "engine_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "proof_lock_id": "redline-proof/v2/4.1.0/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "family_ci_receipt_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2626,7 +2990,7 @@ mod tests {
                 now,
                 family_generated: now,
                 family_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                engine_tag: "redline-core-v4.1.0-jain.1",
+                engine_tag: "redline-core-v4.1.0-jain.2",
                 engine_commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 expected_proof: "redline-proof/v2/4.1.0/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             },
@@ -2677,7 +3041,7 @@ mod tests {
 
     #[test]
     fn version_tag_parser_is_exact() {
-        assert_eq!(core_version("redline-core-v4.1.0-jain.1").unwrap(), "4.1.0");
+        assert_eq!(core_version("redline-core-v4.1.0-jain.2").unwrap(), "4.1.0");
         assert!(core_version("redline-core-v4.1-jain.1").is_err());
         assert!(core_version("redline-core-v4.1.0-jain.next").is_err());
     }
@@ -2687,10 +3051,10 @@ mod tests {
         let root = TestDir::new("derived-lock");
         let names = ["redline", "redline-core", "redline-testing", "redline-web"];
         let tags = [
-            "redline-v4.1.0-jain.1",
-            "redline-core-v4.1.0-jain.1",
-            "redline-testing-v1.0.1-jain.0",
-            "redline-web-v0.1.0-jain.0",
+            "redline-v4.1.0-jain.2",
+            "redline-core-v4.1.0-jain.2",
+            "redline-testing-v1.0.1-jain.1",
+            "redline-web-v0.1.0-jain.1",
         ];
         let mut rows = Vec::new();
         for (index, (name, tag)) in names.iter().zip(tags).enumerate() {
@@ -2701,8 +3065,23 @@ mod tests {
                     name: (*name).to_owned(),
                     path: PathBuf::from(format!("../redline-split/{name}")),
                     github_slug: format!("neverhuman/{name}"),
-                    jeryu_slug: format!("jeryu/{name}"),
+                    remote: format!("{LOCAL_JERYU_BASE}jeryu/{name}.git"),
+                    product_version: match *name {
+                        "redline" | "redline-core" => "4.1.0",
+                        "redline-testing" => "1.0.1",
+                        "redline-web" => "0.1.0",
+                        _ => unreachable!(),
+                    }
+                    .to_owned(),
+                    tag_revision: if matches!(*name, "redline" | "redline-core") {
+                        2
+                    } else {
+                        1
+                    },
                     current_tag: tag.to_owned(),
+                    release_commit: commit.clone(),
+                    release_checksum_sha256: "f".repeat(64),
+                    protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
                     required_check: format!("{name}/required"),
                     default_branch: "main".to_owned(),
                 },

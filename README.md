@@ -19,6 +19,12 @@ clone/update delegation, bounded family CI, and diagnostics. The four child
 repositories remain independent Git repositories and are never included in an
 umbrella Cargo workspace.
 
+The manifest is the sole release-identity authority. Each repository declares
+its product version, corrective tag revision, exact tag, Jeryu remote,
+release commit/tree checksum binding, and protection policy. Commit/checksum
+pairs may both be `PENDING` while review is underway; `proof-refresh` refuses
+them until both are exact.
+
 ```text
 redline-split-ops/              # this repository
 redline-split-ops/repos.manifest.toml # canonical child manifest
@@ -67,7 +73,7 @@ fields (replace the values with their reviewed consumer check output):
   "status": "pass",
   "source_commit": "0123456789abcdef0123456789abcdef01234567",
   "required_check": "jain-split/redline-consumer",
-  "engine_tag": "redline-core-v4.1.0-jain.1",
+  "engine_tag": "redline-core-v4.1.0-jain.2",
   "engine_commit": "<family-ci redline-core commit>",
   "proof_lock_id": "redline-proof/v2/4.1.0/<family-ci redline-core commit>",
   "family_ci_receipt_sha256": "<family-ci receipt SHA256>"

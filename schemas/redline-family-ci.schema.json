@@ -20,7 +20,7 @@
       "maxItems": 4,
       "items": {
         "type": "object",
-        "required": ["name", "required_check", "tag", "commands", "status", "failure"],
+        "required": ["name", "required_check", "product_version", "tag_revision", "tag", "release_commit", "release_checksum_sha256", "protection_policy", "commands", "status", "failure"],
         "properties": {
           "name": {"enum": ["redline", "redline-core", "redline-testing", "redline-web"]},
           "path": {"type": "string"},
@@ -29,7 +29,12 @@
           "forge_main": {"type": ["string", "null"]},
           "origin": {"type": "string"},
           "required_check": {"type": "string"},
+          "product_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+          "tag_revision": {"type": "integer", "minimum": 0},
           "tag": {"type": "string"},
+          "release_commit": {"anyOf": [{"const": "PENDING"}, {"type": "string", "pattern": "^[0-9a-f]{40}$"}]},
+          "release_checksum_sha256": {"anyOf": [{"const": "PENDING"}, {"type": "string", "pattern": "^[0-9a-f]{64}$"}]},
+          "protection_policy": {"const": "immutable-main-v1"},
           "tag_state": {"enum": ["absent", "verified"]},
           "tag_metadata": {"type": ["object", "null"]},
           "commands": {"type": "array"},

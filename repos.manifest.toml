@@ -2,15 +2,33 @@
 schema_version = "1"
 family = "redline-split"
 parent_family = "independent"
+release_version = "8.0.0"
+status = "candidate"
+formal_ga = false
+sagemaker = "N/A"
 container = "../redline-split"
 lock = "redline.lock.toml"
 consumers = ["jain-split", "jeryu-split"]
+
+[protection_policies.immutable-main-v1]
+required_approvals = 1
+required_status_check = true
+linear_history = true
+enforce_admins = true
+allow_force_push = false
+allow_deletions = false
 
 [control_plane]
 name = "redline-split-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
 required_check = "redline-split-ops/required"
 family = "redline-split"
+product_version = "8.0.0"
+tag_revision = 0
+current_tag = "redline-split-ops-v8.0.0-split.0"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+protection_policy = "immutable-main-v1"
 
 [[consumer]]
 family = "jain-split"
@@ -27,10 +45,16 @@ name = "redline"
 path = "../redline-split/redline"
 github_slug = "neverhuman/RedlineDB"
 jeryu_slug = "jeryu/redlineDB"
+remote = "http://127.0.0.1:8787/git/jeryu/redlineDB.git"
 role = "public-hub"
 profile = "custom"
 has_jeryu_std = true
-current_tag = "redline-v4.1.0-jain.1"
+product_version = "4.1.0"
+tag_revision = 2
+current_tag = "redline-v4.1.0-jain.2"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+protection_policy = "immutable-main-v1"
 required_check = "redline/required"
 default_branch = "main"
 
@@ -39,10 +63,16 @@ name = "redline-core"
 path = "../redline-split/redline-core"
 github_slug = "neverhuman/redline-core"
 jeryu_slug = "jeryu/redline-core"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
 role = "canonical-engine"
 profile = "custom"
 has_jeryu_std = true
-current_tag = "redline-core-v4.1.0-jain.1"
+product_version = "4.1.0"
+tag_revision = 2
+current_tag = "redline-core-v4.1.0-jain.2"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+protection_policy = "immutable-main-v1"
 required_check = "redline-core/required"
 default_branch = "main"
 
@@ -51,10 +81,16 @@ name = "redline-testing"
 path = "../redline-split/redline-testing"
 github_slug = "neverhuman/redline-testing"
 jeryu_slug = "jeryu/redline-testing"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-testing.git"
 role = "parity-harness"
 profile = "custom"
 has_jeryu_std = true
-current_tag = "redline-testing-v1.0.1-jain.0"
+product_version = "1.0.1"
+tag_revision = 1
+current_tag = "redline-testing-v1.0.1-jain.1"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+protection_policy = "immutable-main-v1"
 required_check = "redline-testing/required"
 default_branch = "main"
 
@@ -63,9 +99,15 @@ name = "redline-web"
 path = "../redline-split/redline-web"
 github_slug = "neverhuman/redline-web"
 jeryu_slug = "jeryu/redline-web"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-web.git"
 role = "observability-console"
 profile = "custom"
 has_jeryu_std = true
-current_tag = "redline-web-v0.1.0-jain.0"
+product_version = "0.1.0"
+tag_revision = 1
+current_tag = "redline-web-v0.1.0-jain.1"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+protection_policy = "immutable-main-v1"
 required_check = "redline-web/required"
 default_branch = "main"
