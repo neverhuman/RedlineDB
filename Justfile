@@ -22,6 +22,10 @@ verify: check
 ci:
     bash ops/ci/pr-ci.sh
 
+# Authenticated host-runner entrypoint: the full gate with every tool required.
+required:
+    REDLINE_STRICT_TOOLS=1 bash ops/ci/pr-ci.sh
+
 # Fast deterministic lane (shell, fmt, check, lockfile, actionlint).
 fast:
     bash ops/ci/fast.sh

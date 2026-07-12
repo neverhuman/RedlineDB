@@ -8,54 +8,64 @@ cd "$ROOT_DIR"
 ensure_artifacts
 
 log "contract-drift: checking OpenAPI <-> Rust DTOs <-> TS DTOs"
-python3 - <<'PY'
-import json
-import re
-from pathlib import Path
+if ! has jq; then
+  missing_tool jq "contract drift receipt"
+  exit 0
+fi
 
-openapi = json.loads(Path("contracts/openapi/redline-web.openapi.json").read_text())
-schemas = openapi["components"]["schemas"]
-model = Path("apps/api/src/model.rs").read_text()
-types = Path("apps/web/src/api/types.ts").read_text()
-contract = Path("CONTRACT.md").read_text()
+openapi="contracts/openapi/redline-web.openapi.json"
+rust_model="apps/api/src/model.rs"
+ts_types="apps/web/src/api/types.ts"
+human_contract="CONTRACT.md"
+schemas_json="$(jq -ce '.components.schemas | keys' "$openapi")" \
+  || fail "contract-drift: invalid OpenAPI schemas"
+paths_json="$(jq -ce '.paths | keys' "$openapi")" \
+  || fail "contract-drift: invalid OpenAPI paths"
+missing=()
 
-# Rust struct/enum name == OpenAPI schema name, except where the wire envelope
-# differs from the internal type name.
-ts_alias = {"ApiError": "ApiErrorBody"}
+while IFS= read -r name; do
+  if ! grep -Eq "(struct|enum)[[:space:]]+${name}([[:space:]<{]|$)" "$rust_model"; then
+    missing+=("Rust model.rs missing type: ${name}")
+  fi
+  ts_name="$name"
+  [[ "$name" == "ApiError" ]] && ts_name="ApiErrorBody"
+  if ! grep -Eq "(interface|type)[[:space:]]+${ts_name}([[:space:]<{=]|$)" "$ts_types"; then
+    missing+=("TS types.ts missing type: ${ts_name}")
+  fi
+done < <(jq -r '.[]' <<<"$schemas_json")
 
-missing = []
-for name in schemas:
-    rust_name = name
-    if not re.search(rf"\b(struct|enum)\s+{re.escape(rust_name)}\b", model):
-        missing.append(f"Rust model.rs missing type: {rust_name}")
-    ts_name = ts_alias.get(name, name)
-    if not re.search(rf"\b(interface|type)\s+{re.escape(ts_name)}\b", types):
-        missing.append(f"TS types.ts missing type: {ts_name}")
+while IFS= read -r path; do
+  token="${path//\{name\}/:name}"
+  if ! grep -Fq -- "$path" "$human_contract" && ! grep -Fq -- "$token" "$human_contract"; then
+    missing+=("CONTRACT.md missing endpoint: ${path}")
+  fi
+done < <(jq -r '.[]' <<<"$paths_json")
 
-# Every documented endpoint path in the OpenAPI must appear in CONTRACT.md.
-for path in openapi["paths"]:
-    token = path.replace("{name}", ":name")
-    if path not in contract and token not in contract:
-        missing.append(f"CONTRACT.md missing endpoint: {path}")
+missing_json="$(json_array "${missing[@]}")"
+ok=true
+[[ "${#missing[@]}" -eq 0 ]] || ok=false
+jq -n \
+  --argjson ok "$ok" \
+  --argjson schemas "$schemas_json" \
+  --argjson paths "$paths_json" \
+  --argjson drift "$missing_json" \
+  '{
+    ok: $ok,
+    schemas_checked: $schemas,
+    paths_checked: $paths,
+    drift: $drift,
+    sources: {
+      openapi: "contracts/openapi/redline-web.openapi.json",
+      rust: "apps/api/src/model.rs",
+      typescript: "apps/web/src/api/types.ts",
+      human: "CONTRACT.md"
+    }
+  }' >target/jankurai/contract-drift.json
 
-receipt = {
-    "ok": not missing,
-    "schemas_checked": sorted(schemas.keys()),
-    "paths_checked": sorted(openapi["paths"].keys()),
-    "drift": missing,
-    "sources": {
-        "openapi": "contracts/openapi/redline-web.openapi.json",
-        "rust": "apps/api/src/model.rs",
-        "typescript": "apps/web/src/api/types.ts",
-        "human": "CONTRACT.md",
-    },
-}
-Path("target/jankurai/contract-drift.json").write_text(json.dumps(receipt, indent=2) + "\n")
-if missing:
-    for m in missing:
-        print(f"[contract-drift] DRIFT: {m}")
-    raise SystemExit("contract drift detected")
-print(f"[contract-drift] ok: {len(schemas)} schemas, {len(openapi['paths'])} paths in sync")
-PY
+if [[ "$ok" != true ]]; then
+  printf '[contract-drift] DRIFT: %s\n' "${missing[@]}" >&2
+  fail "contract drift detected"
+fi
+log "contract-drift: ok: $(jq 'length' <<<"$schemas_json") schemas, $(jq 'length' <<<"$paths_json") paths in sync"
 
 log "contract-drift: complete"

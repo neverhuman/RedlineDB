@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 
 printf '[redline-ci] doctor: repository %s\n' "$ROOT_DIR"
 
-for tool in bash node npm cargo just gitleaks cargo-audit cargo-deny zizmor syft actionlint jankurai python3; do
+for tool in bash node npm cargo just jq gitleaks cargo-audit cargo-deny zizmor syft actionlint jankurai; do
   if command -v "$tool" >/dev/null 2>&1; then
     version="$("$tool" --version 2>/dev/null | head -n 1 || true)"
     printf '[redline-ci] tool %-12s %s\n' "$tool" "${version:-present}"

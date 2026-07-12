@@ -10,33 +10,34 @@ ensure_artifacts
 
 if JBIN="$(jankurai_bin)"; then
   log "ux-qa: jankurai ux audit"
-  "$JBIN" ux audit --config agent/ux-qa.toml --out "${ARTIFACT_DIR}/ux-qa.json" \
-    || warn "ux-qa: jankurai ux audit emitted a non-zero status (supplementary lane)"
+  if ! "$JBIN" ux audit --config agent/ux-qa.toml --out "${ARTIFACT_DIR}/ux-qa.json"; then
+    if [[ "$STRICT_TOOLS" == "1" ]]; then
+      fail "ux-qa: jankurai ux audit failed"
+    fi
+    warn "ux-qa: jankurai ux audit emitted a non-zero status (supplementary lane)"
+  fi
 else
   missing_tool jankurai "rendered UX audit"
 fi
 
 log "ux-qa: recording rendered-UX evidence receipt"
-python3 - <<'PY'
-import json
-from pathlib import Path
-
-evidence = json.loads(Path("agent/ux-qa-evidence.json").read_text())
-receipt = {
-    "ok": True,
-    "repo": "redline-web",
-    "owned_surface": "Vite/React SQL console + observability dashboard",
-    "e2e": evidence["playwright_visual"],
-    "accessibility": evidence["accessibility"],
-    "api_mocks": evidence["api_mocks"],
-    "design_tokens": evidence["design_tokens"],
-    "config": "agent/ux-qa.toml",
-    "playwright_config": "apps/web/playwright.config.ts",
-    "e2e_spec": "apps/web/e2e/smoke.spec.ts",
-}
-out = Path("target/jankurai/ux-qa.json")
-if not out.exists():
-    out.write_text(json.dumps(receipt, indent=2) + "\n")
-PY
+if [[ ! -s "${ARTIFACT_DIR}/ux-qa.json" ]]; then
+  if ! has jq; then
+    missing_tool jq "rendered UX receipt"
+    exit 0
+  fi
+  jq '{
+    ok: true,
+    repo: "redline-web",
+    owned_surface: "Vite/React SQL console + observability dashboard",
+    e2e: .playwright_visual,
+    accessibility: .accessibility,
+    api_mocks: .api_mocks,
+    design_tokens: .design_tokens,
+    config: "agent/ux-qa.toml",
+    playwright_config: "apps/web/playwright.config.ts",
+    e2e_spec: "apps/web/e2e/smoke.spec.ts"
+  }' agent/ux-qa-evidence.json >"${ARTIFACT_DIR}/ux-qa.json"
+fi
 
 log "ux-qa: complete"

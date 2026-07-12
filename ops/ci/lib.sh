@@ -83,3 +83,11 @@ jankurai_bin() {
 ensure_artifacts() {
   mkdir -p "$ARTIFACT_DIR"
 }
+
+json_array() {
+  if [[ "$#" -eq 0 ]]; then
+    printf '[]'
+    return
+  fi
+  printf '%s\n' "$@" | jq -R . | jq -s .
+}

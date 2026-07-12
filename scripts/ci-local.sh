@@ -14,10 +14,14 @@ case "$COMMAND" in
   jankurai)        exec bash "${ROOT_DIR}/ops/ci/jankurai.sh" ;;
   cost-budget)     exec bash "${ROOT_DIR}/ops/ci/cost-budget.sh" ;;
   release-readiness) exec bash "${ROOT_DIR}/ops/ci/release-readiness.sh" ;;
+  required)
+    export REDLINE_STRICT_TOOLS=1
+    exec bash "${ROOT_DIR}/ops/ci/pr-ci.sh"
+    ;;
   pr-ci)           exec bash "${ROOT_DIR}/ops/ci/pr-ci.sh" ;;
   doctor)          exec bash "${ROOT_DIR}/scripts/ci-doctor.sh" ;;
   *)
-    printf 'usage: %s [fast|web|backend|security|e2e|jankurai|cost-budget|release-readiness|pr-ci|doctor]\n' "$0" >&2
+    printf 'usage: %s [fast|web|backend|security|e2e|jankurai|cost-budget|release-readiness|required|pr-ci|doctor]\n' "$0" >&2
     exit 64
     ;;
 esac

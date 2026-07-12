@@ -9,6 +9,14 @@ while IFS= read -r script; do
   bash -n "$script"
 done < <(find scripts ops/ci ops/git-hooks -type f -name '*.sh' 2>/dev/null | sort)
 
+log "fast: checking CI language boundary"
+python_command="python""3"
+if hits="$(grep -RIn --include='*.sh' "${python_command}[[:space:]]" scripts ops/ci 2>/dev/null)" \
+  && [[ -n "$hits" ]]; then
+  printf '%s\n' "$hits" >&2
+  fail "CI scripts must use Rust, TypeScript, or shell tooling"
+fi
+
 if repo_has Cargo.toml && ! has cargo; then
   missing_tool cargo "Rust formatting and checks"
 elif cargo_workspace_ready; then

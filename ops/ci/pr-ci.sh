@@ -22,7 +22,7 @@ bash ops/ci/contract-drift.sh
 log "pr-ci: security lane"
 bash ops/ci/security.sh
 
-log "pr-ci: web e2e lane (best-effort without browsers)"
+log "pr-ci: web e2e lane (browser required by the canonical required dispatcher)"
 bash ops/ci/e2e.sh
 
 log "pr-ci: cost-budget + release-readiness lanes"
