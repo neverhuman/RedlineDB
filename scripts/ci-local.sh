@@ -6,6 +6,7 @@
 # Audit reference: HLT-042 ci-local-parity.lib-missing.
 #
 # Usage:
+#   scripts/ci-local.sh required           # canonical host-required PR CI lane
 #   scripts/ci-local.sh pr-ci              # exact local mirror of .github/workflows/ci.yml
 #   scripts/ci-local.sh fast               # quick iteration lane
 #   scripts/ci-local.sh security           # cargo audit + cargo deny + gitleaks
@@ -23,8 +24,9 @@ cd "$ROOT"
 
 usage() {
     cat >&2 <<'USAGE'
-usage: scripts/ci-local.sh {pr-ci|fast|security|audit|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
+usage: scripts/ci-local.sh {required|pr-ci|fast|security|audit|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
 
+  required            run ops/ci/pr-ci.sh                 (canonical host-required lane)
   pr-ci              run the exact local mirror of .github/workflows/ci.yml
   fast                run scripts/just/fast.sh          (quick iteration lane)
   security            run ops/ci/security.sh            (cargo audit + deny + gitleaks)
@@ -79,6 +81,9 @@ run_ci_yml_pr_mirror() {
 }
 
 case "$1" in
+    required)
+        bash "$ROOT/ops/ci/pr-ci.sh"
+        ;;
     pr-ci)
         run_ci_yml_pr_mirror
         ;;

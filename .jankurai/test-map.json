@@ -269,8 +269,13 @@
       "proof_lane": "redline-testing-official"
     },
     "scripts/ci-local.sh": {
-      "command": "rtk bash -n scripts/ci-local.sh && rtk bash scripts/ci-local.sh pr-ci",
-      "purpose": "verify the local PR CI mirror uses the same redline-testing official wrapper as GitHub CI",
+      "command": "rtk bash -n scripts/ci-local.sh && rtk bash -n scripts/ci-doctor.sh && rtk bash scripts/ci-doctor.sh && rtk bash scripts/ci-local.sh pr-ci",
+      "purpose": "verify the host-required alias dispatches directly to ops/ci/pr-ci.sh and the local PR CI mirror uses the same redline-testing official wrapper as GitHub CI",
+      "proof_lane": "pr-ci"
+    },
+    "scripts/ci-doctor.sh": {
+      "command": "rtk bash -n scripts/ci-doctor.sh && rtk bash scripts/ci-doctor.sh",
+      "purpose": "verify pinned tools and the canonical required-lane dispatcher contract",
       "proof_lane": "pr-ci"
     },
     ".jankurai/zyal/": {

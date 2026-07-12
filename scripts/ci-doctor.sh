@@ -133,6 +133,17 @@ check_python() {
     fi
 }
 
+check_required_dispatch() {
+    local required_block expected
+    required_block="$(sed -n '/^[[:space:]]*required)/,/^[[:space:]]*;;/p' "$ROOT/scripts/ci-local.sh")"
+    expected='bash "$ROOT/ops/ci/pr-ci.sh"'
+    if printf '%s\n' "$required_block" | grep -Fq "$expected"; then
+        pass ci-required "scripts/ci-local.sh -> ops/ci/pr-ci.sh"
+    else
+        fail ci-required "required must dispatch directly to ops/ci/pr-ci.sh"
+    fi
+}
+
 main() {
     printf 'ci-doctor: pinned-tool report (ops/ci/lib.sh + rust-toolchain.toml)\n'
     printf '%-4s %-14s %s\n' STAT TOOL DETAIL
@@ -147,6 +158,7 @@ main() {
     check_presence just
     check_presence rtk
     check_python
+    check_required_dispatch
     printf '%s\n' '----------------------------------------------------------'
     if [ "${overall}" -eq 0 ]; then
         printf 'ci-doctor: all required tools present and pinned\n'
