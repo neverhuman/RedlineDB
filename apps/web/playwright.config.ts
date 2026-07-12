@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { backendBinaryPath } from "./src/lib/backend-binary";
+import { serverBinaryPath } from "./src/lib/server-binary";
 
 // Web e2e smoke: boot the REAL built binary (which embeds apps/web/dist) and
 // drive the served UI + a live /api/query round-trip. The binary is built by
@@ -24,7 +24,7 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
   webServer: {
-    command: `${backendBinaryPath(process.env.CARGO_TARGET_DIR)} --db /tmp/rw-e2e.sqlite --bind 127.0.0.1:${PORT}`,
+    command: `${serverBinaryPath(process.env.CARGO_TARGET_DIR)} --db /tmp/rw-e2e.sqlite --bind 127.0.0.1:${PORT}`,
     url: `${BASE_URL}/api/health`,
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,

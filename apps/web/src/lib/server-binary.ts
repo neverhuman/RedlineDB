@@ -1,3 +1,3 @@
-export function backendBinaryPath(targetDir?: string): string {
+export function serverBinaryPath(targetDir?: string): string {
   return `${targetDir || "../../target"}/release/redline-web`;
 }

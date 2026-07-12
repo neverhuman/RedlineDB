@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { backendBinaryPath } from "./backend-binary";
+import { serverBinaryPath } from "./server-binary";
 
-describe("backendBinaryPath", () => {
+describe("serverBinaryPath", () => {
   it("uses the repository target directory by default", () => {
-    expect(backendBinaryPath()).toBe("../../target/release/redline-web");
+    expect(serverBinaryPath()).toBe("../../target/release/redline-web");
   });
 
   it("honors the host runner Cargo target directory", () => {
-    expect(backendBinaryPath("/tmp/jain-ci-target/redline-web")).toBe(
+    expect(serverBinaryPath("/tmp/jain-ci-target/redline-web")).toBe(
       "/tmp/jain-ci-target/redline-web/release/redline-web",
     );
   });

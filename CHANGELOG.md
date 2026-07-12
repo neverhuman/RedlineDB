@@ -14,6 +14,8 @@ version source is `apps/api/Cargo.toml`.
 
 ### Added
 
+- A locked, isolated Rust release-control tool that enforces the repository's
+  interpreter boundary in local and hosted CI.
 - ci-local parity: `ops/ci/*.sh` lanes sourced by a single `ops/ci/pr-ci.sh`
   gate, mirrored 1:1 by `.github/workflows/ci.yml`; pre-push hook, ci-doctor,
   and ci-local runner.

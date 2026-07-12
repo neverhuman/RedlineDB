@@ -6,10 +6,19 @@ The single version source is `apps/api/Cargo.toml` (`package.version`), mirrored
 by `apps/web/package.json`. Bump both together; record the change in
 [`CHANGELOG.md`](../CHANGELOG.md).
 
+For the Jain 8.0.0 candidate, the product version remains `0.1.0` and the
+authorized corrective identity is `redline-web-v0.1.0-jain.1`. The earlier
+`redline-web-v0.1.0-jain.0` tag remains immutable. The canonical Redline family
+manifest owns the exact tag revision, reviewed commit, and release-tree
+checksum; this repository's release gate verifies the product version before
+that tag is created.
+
 ## Cutting a release
 
 1. Update `CHANGELOG.md` (move `Unreleased` items under the new version + date).
-2. Bump `version` in `apps/api/Cargo.toml` and `apps/web/package.json`.
+2. Bump `version` in `apps/api/Cargo.toml` and `apps/web/package.json` when the
+   product version changes. A corrective Jain tag does not change either
+   product-version field.
 3. Validate: `bash ops/ci/pr-ci.sh` (fast + web + backend + security + e2e +
    `ops/ci/security.sh` + `ops/ci/release-readiness.sh` + jankurai evidence).
 4. Build the artifact: `cargo build --release --locked` — a single self-contained

@@ -10,12 +10,11 @@ while IFS= read -r script; do
 done < <(find scripts ops/ci ops/git-hooks -type f -name '*.sh' 2>/dev/null | sort)
 
 log "fast: checking CI language boundary"
-python_command="python""3"
-if hits="$(grep -RIn --include='*.sh' "${python_command}[[:space:]]" scripts ops/ci 2>/dev/null)" \
-  && [[ -n "$hits" ]]; then
-  printf '%s\n' "$hits" >&2
-  fail "CI scripts must use Rust, TypeScript, or shell tooling"
-fi
+cargo fmt --manifest-path tools/release-control/Cargo.toml -- --check
+cargo clippy --locked --manifest-path tools/release-control/Cargo.toml --all-targets -- -D warnings
+cargo test --locked --manifest-path tools/release-control/Cargo.toml
+cargo run --quiet --locked --manifest-path tools/release-control/Cargo.toml -- \
+  language-boundary .
 
 if repo_has Cargo.toml && ! has cargo; then
   missing_tool cargo "Rust formatting and checks"

@@ -1,5 +1,5 @@
 [stack]
-id = "rust-ts-vite-react-postgres-bounded-python"
+id = "rust-ts-vite-react-postgres"
 version = "0.1.0"
 
 [rust]
