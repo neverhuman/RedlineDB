@@ -2,82 +2,90 @@
   "allowed": [
     {
       "path": "jain-deploy/ops/ci/testdata/invention-export/model.py",
-      "purpose": "fixture consumed by Rust export compatibility tests"
+      "purpose": "fixture consumed by Rust export compatibility tests",
+      "rust_evidence": "jain-deploy/ops/ci/testdata/invention-export/model.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabdpt_classifier/src/bin/verify_oracle.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabdpt_regressor/src/bin/verify_oracle.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/_nm/parity/oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs"
     },
     {
       "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py",
-      "purpose": "frozen oracle for a Rust model port"
+      "purpose": "frozen oracle for a Rust model port",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs"
     },
     {
       "path": "jain-model-zoo/ops/parity/plot_errors.py",
-      "purpose": "Rust model parity harness"
+      "purpose": "Rust model parity report renderer",
+      "rust_evidence": "jain-model-zoo/ops/parity/parity_errors.json"
     },
     {
       "path": "jain-model-zoo/ops/parity/parity_suite.py",
-      "purpose": "Rust model parity harness"
+      "purpose": "Rust model parity harness",
+      "rust_evidence": "jain-model-zoo/ops/parity/run.sh"
     }
   ],
   "allowed_count": 14,
-  "error": "Python outside the Rust-parity boundary:\nredline-split/redline/scripts/bench/export_benchmark_results.py\nredline-split/redline/scripts/perf/run_subset.py\nredline-split/redline/scripts/perf/diff.py\nredline-split/redline/scripts/perf/build_case_lists.py\nredline-split/redline/paper/scripts/build_figs.py\nredline-split/redline/paper/scripts/check_refs.py\nredline-split/redline-core/scripts/bench/export_benchmark_results.py\nredline-split/redline-core/scripts/perf/run_subset.py\nredline-split/redline-core/scripts/perf/diff.py\nredline-split/redline-core/scripts/perf/build_case_lists.py\nredline-split/redline-core/paper/scripts/build_figs.py\nredline-split/redline-core/paper/scripts/check_refs.py",
+  "error": "Python outside the Rust-parity boundary:\nredline-split/redline/scripts/bench/export_benchmark_results.py\nredline-split/redline/scripts/perf/run_subset.py\nredline-split/redline/scripts/perf/diff.py\nredline-split/redline/scripts/perf/build_case_lists.py\nredline-split/redline/paper/scripts/build_figs.py\nredline-split/redline/paper/scripts/check_refs.py",
   "mode": "dry-run",
   "operation": "python-boundary",
   "policy": "Python is permitted only for parity testing against Rust implementations",
   "schema_version": "jain.rust-parity-python-boundary/v1",
   "status": "fail",
-  "timestamp_unix": 1783852858,
+  "timestamp_unix": 1783853061,
   "unexpected": [
     "redline-split/redline/scripts/bench/export_benchmark_results.py",
     "redline-split/redline/scripts/perf/run_subset.py",
     "redline-split/redline/scripts/perf/diff.py",
     "redline-split/redline/scripts/perf/build_case_lists.py",
     "redline-split/redline/paper/scripts/build_figs.py",
-    "redline-split/redline/paper/scripts/check_refs.py",
-    "redline-split/redline-core/scripts/bench/export_benchmark_results.py",
-    "redline-split/redline-core/scripts/perf/run_subset.py",
-    "redline-split/redline-core/scripts/perf/diff.py",
-    "redline-split/redline-core/scripts/perf/build_case_lists.py",
-    "redline-split/redline-core/paper/scripts/build_figs.py",
-    "redline-split/redline-core/paper/scripts/check_refs.py"
+    "redline-split/redline/paper/scripts/check_refs.py"
   ],
-  "unexpected_count": 12
+  "unexpected_count": 6
 }

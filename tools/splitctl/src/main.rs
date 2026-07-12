@@ -3259,8 +3259,18 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");
-        if let Some(purpose) = python_parity_purpose(&rel) {
-            declared.push(json!({"path": rel, "purpose": purpose}));
+        if let Some((purpose, rust_evidence)) = python_parity_declaration(&rel) {
+            if root.join(rust_evidence).exists() {
+                declared.push(json!({
+                    "path": rel,
+                    "purpose": purpose,
+                    "rust_evidence": rust_evidence,
+                }));
+            } else {
+                unexpected.push(format!(
+                    "{rel} (declared Rust evidence is missing: {rust_evidence})"
+                ));
+            }
         } else {
             unexpected.push(rel);
         }
@@ -3295,18 +3305,83 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     finish_receipted_operation(&receipt, &mut report, result)
 }
 
-fn python_parity_purpose(path: &str) -> Option<&'static str> {
-    if path.starts_with("jain-model-zoo/ops/parity/") {
-        Some("Rust model parity harness")
-    } else if path.starts_with("jain-model-zoo/reference/ported/")
-        && (path.contains("/parity/") || path.contains("/oracle/"))
-    {
-        Some("frozen oracle for a Rust model port")
-    } else if path == "jain-deploy/ops/ci/testdata/invention-export/model.py" {
-        Some("fixture consumed by Rust export compatibility tests")
-    } else {
-        None
-    }
+fn python_parity_declaration(path: &str) -> Option<(&'static str, &'static str)> {
+    const ALLOWED: &[(&str, &str, &str)] = &[
+        (
+            "jain-deploy/ops/ci/testdata/invention-export/model.py",
+            "fixture consumed by Rust export compatibility tests",
+            "jain-deploy/ops/ci/testdata/invention-export/model.rs",
+        ),
+        (
+            "jain-model-zoo/ops/parity/parity_suite.py",
+            "Rust model parity harness",
+            "jain-model-zoo/ops/parity/run.sh",
+        ),
+        (
+            "jain-model-zoo/ops/parity/plot_errors.py",
+            "Rust model parity report renderer",
+            "jain-model-zoo/ops/parity/parity_errors.json",
+        ),
+        (
+            "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/tabdpt_classifier/src/bin/verify_oracle.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/tabdpt_regressor/src/bin/verify_oracle.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/_nm/parity/oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs",
+        ),
+        (
+            "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py",
+            "frozen oracle for a Rust model port",
+            "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs",
+        ),
+    ];
+    ALLOWED
+        .iter()
+        .find(|(allowed, _, _)| *allowed == path)
+        .map(|(_, purpose, evidence)| (*purpose, *evidence))
 }
 
 fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -5132,26 +5207,40 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     #[test]
     fn python_boundary_allows_only_rust_parity_surfaces() {
         assert_eq!(
-            python_parity_purpose("jain-model-zoo/ops/parity/parity_suite.py"),
-            Some("Rust model parity harness")
+            python_parity_declaration("jain-model-zoo/ops/parity/parity_suite.py"),
+            Some((
+                "Rust model parity harness",
+                "jain-model-zoo/ops/parity/run.sh"
+            ))
         );
         assert_eq!(
-            python_parity_purpose("jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py"),
-            Some("frozen oracle for a Rust model port")
+            python_parity_declaration(
+                "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py"
+            ),
+            Some((
+                "frozen oracle for a Rust model port",
+                "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs"
+            ))
         );
         assert_eq!(
-            python_parity_purpose("jain-deploy/ops/ci/testdata/invention-export/model.py"),
-            Some("fixture consumed by Rust export compatibility tests")
+            python_parity_declaration("jain-deploy/ops/ci/testdata/invention-export/model.py"),
+            Some((
+                "fixture consumed by Rust export compatibility tests",
+                "jain-deploy/ops/ci/testdata/invention-export/model.rs"
+            ))
         );
         assert_eq!(
-            python_parity_purpose("jain-python/python/ai-service/src/client.py"),
+            python_parity_declaration("jain-python/python/ai-service/src/client.py"),
             None
         );
         assert_eq!(
-            python_parity_purpose("redline-split/redline-core/scripts/perf/diff.py"),
+            python_parity_declaration("redline-split/redline-core/scripts/perf/diff.py"),
             None
         );
-        assert_eq!(python_parity_purpose("anything/oracle/production.py"), None);
+        assert_eq!(
+            python_parity_declaration("anything/oracle/production.py"),
+            None
+        );
     }
 
     #[test]
