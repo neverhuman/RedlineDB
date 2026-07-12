@@ -11,7 +11,6 @@
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use rusqlite::types::ValueRef;
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 
 use super::sqlite_support::{

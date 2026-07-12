@@ -30,8 +30,8 @@ test("running a query from the UI shows results", async ({ page }) => {
   const editor = page.getByLabel("SQL editor");
   await editor.fill("select 42 as answer");
   await page.getByRole("button", { name: /run/i }).click();
-  await expect(page.getByText("answer")).toBeVisible();
-  await expect(page.getByText("42")).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "answer" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "42" })).toBeVisible();
 });
 
 test("the workbench has no critical accessibility violations", async ({ page }) => {
