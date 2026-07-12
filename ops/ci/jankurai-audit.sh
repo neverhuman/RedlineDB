@@ -22,8 +22,10 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 LOG_DIR=".jankurai"
+TARGET_DIR="target/jankurai"
 AUDIT_POLICY="agent/audit-policy.toml"
 mkdir -p "$LOG_DIR" "$LOG_DIR/security" "$LOG_DIR/proofbind" "$LOG_DIR/proofmark" "$LOG_DIR/rust"
+mkdir -p "$TARGET_DIR/security" "$TARGET_DIR/proofmark" "$TARGET_DIR/rust"
 JANKURAI_INSTALL_LOG="$LOG_DIR/jankurai-install.log"
 
 force_full_smart_scan() {
@@ -58,15 +60,8 @@ step_audit_advisory() {
     bash scripts/check_audit_policy_mirror.sh
     cleanup_jankurai_upstream_scratch
     force_full_smart_scan
-    jankurai audit . \
-        --mode advisory \
-        --baseline .jankurai/repo-score.json \
-        --json .jankurai/repo-score.json \
-        --md .jankurai/repo-score.md \
-        --sarif "$LOG_DIR/jankurai.sarif" \
-        --github-step-summary "$LOG_DIR/summary.md" \
-        --repair-queue-jsonl "$LOG_DIR/repair-queue.jsonl" \
-        --policy "$AUDIT_POLICY"
+    local -a audit_cmd=(jankurai audit . --mode advisory --baseline .jankurai/repo-score.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md --sarif .jankurai/jankurai.sarif --github-step-summary .jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --policy agent/audit-policy.toml)
+    "${audit_cmd[@]}"
 }
 
 # ---- 3) Fetch reviewed accepted baseline -----------------------------------
@@ -77,10 +72,10 @@ step_audit_advisory() {
 # (HLT-034 ci.ratchet.self-generated-baseline).
 step_fetch_baseline() {
     if [ -f .jankurai/baselines/accepted-baseline.json ]; then
-        install -m 0644 .jankurai/baselines/accepted-baseline.json "$LOG_DIR/accepted-baseline.json"
+        install -m 0644 .jankurai/baselines/accepted-baseline.json "$TARGET_DIR/accepted-baseline.json"
         echo "baseline sourced from .jankurai/baselines/accepted-baseline.json"
     else
-        git show origin/main:.jankurai/repo-score.json > "$LOG_DIR/accepted-baseline.json"
+        git show origin/main:.jankurai/repo-score.json > "$TARGET_DIR/accepted-baseline.json"
         echo "baseline sourced from origin/main"
     fi
 }
@@ -94,7 +89,7 @@ step_security_run() {
     jankurai security run . \
         --strict \
         --profile ci \
-        --out "$LOG_DIR/security/evidence.json"
+        --out "$TARGET_DIR/security/evidence.json"
 }
 
 # ---- 5) jankurai audit (ratchet) — tool-adoption CI evidence ---------------
@@ -103,18 +98,14 @@ step_audit_ratchet() {
     bash scripts/check_audit_policy_mirror.sh
     cleanup_jankurai_upstream_scratch
     force_full_smart_scan
-    jankurai audit . \
-        --mode ratchet \
-        --baseline "$LOG_DIR/accepted-baseline.json" \
-        --json "$LOG_DIR/repo-score.json" \
-        --md "$LOG_DIR/repo-score.md" \
-        --policy "$AUDIT_POLICY" || rc=$?
+    local -a ratchet_cmd=(jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml)
+    "${ratchet_cmd[@]}" || rc=$?
 
     if [ "$rc" -eq 0 ]; then
         return 0
     fi
 
-    if python3 - "$LOG_DIR/repo-score.json" <<'PY'
+    if python3 - "$TARGET_DIR/repo-score.json" <<'PY'
 import json
 import sys
 
@@ -149,23 +140,36 @@ step_doctor() {
 
 # ---- 7) Proofbind verify ---------------------------------------------------
 step_proofbind() {
-    local -a changed_paths=()
-    local path
-
-    while IFS= read -r -d '' path; do
-        changed_paths+=(--changed "$path")
-    done < <(git diff --name-only -z --diff-filter=ACMRT origin/main...HEAD --)
-
-    jankurai proofbind verify . "${changed_paths[@]}"
+    jankurai proofbind verify . --changed-from origin/main
 }
 
 # ---- 8) Proofmark rust -----------------------------------------------------
 step_proofmark() {
-    jankurai proofmark rust . --obligations "$LOG_DIR/proofbind/obligations.json"
+    if [ ! -e Cargo.toml ] && [ ! -e Cargo.lock ]; then
+        printf '%s\n' \
+            '{"status":"not_applicable","reason":"thin hub has no Rust source"}' \
+            > "$TARGET_DIR/proofmark/not-applicable.json"
+        return 0
+    fi
+    if [ ! -f Cargo.toml ] || [ ! -f Cargo.lock ]; then
+        printf 'incomplete Rust dependency graph: Cargo.toml and Cargo.lock must be present together\n' >&2
+        return 1
+    fi
+    jankurai proofmark rust . --obligations "$TARGET_DIR/proofbind/obligations.json"
 }
 
 # ---- 9) Rust witness build -------------------------------------------------
 step_rust_witness() {
+    if [ ! -e Cargo.toml ] && [ ! -e Cargo.lock ]; then
+        printf '%s\n' \
+            '{"status":"not_applicable","reason":"thin hub has no Rust source"}' \
+            > "$TARGET_DIR/rust/not-applicable.json"
+        return 0
+    fi
+    if [ ! -f Cargo.toml ] || [ ! -f Cargo.lock ]; then
+        printf 'incomplete Rust dependency graph: Cargo.toml and Cargo.lock must be present together\n' >&2
+        return 1
+    fi
     jankurai rust witness build .
 }
 
@@ -191,7 +195,7 @@ step_ux_qa() {
 #   cargo test -p jankurai --test language_bad_behavior
 # Run against the upstream jankurai source (jankurai is not a workspace
 # member here) and capture the output as the canonical evidence artifact
-# .jankurai/language-bad-behavior.log.
+# target/jankurai/language-bad-behavior.log.
 #
 # Hard gate: the workflow YAML carries NO `continue-on-error: true` for
 # this step. Soft-gate semantics (upstream-clone-failed -> exit 0) live
@@ -219,17 +223,18 @@ step_language_bad_behavior() {
 
     if [ "${cloned}" -eq 1 ] && [ -d "$upstream_dir" ]; then
         local rc=0
-        ( cd "$upstream_dir" && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
-            > >(tee "$LOG_DIR/language-bad-behavior.log") 2>&1 || rc=$?
+        local -a language_test_cmd=(cargo test -p jankurai --test language_bad_behavior --no-fail-fast)
+        ( cd "$upstream_dir" && "${language_test_cmd[@]}" ) \
+            > >(tee "$TARGET_DIR/language-bad-behavior.log") 2>&1 || rc=$?
         printf 'status: %s\n' "$( [ "$rc" -eq 0 ] && echo upstream-tests-passed || echo upstream-tests-failed )" \
-            >> "$LOG_DIR/language-bad-behavior.log"
+            >> "$TARGET_DIR/language-bad-behavior.log"
         cleanup_jankurai_upstream_scratch
         # Hard gate when the clone succeeds: test failure is a real failure.
         return "$rc"
     fi
 
     printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior-local ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-        | tee "$LOG_DIR/language-bad-behavior.log"
+        | tee "$TARGET_DIR/language-bad-behavior.log"
     cleanup_jankurai_upstream_scratch
     return 0
 }

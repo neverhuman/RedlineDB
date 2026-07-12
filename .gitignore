@@ -39,7 +39,10 @@
 !.jankurai/unsafe-ledger.toml
 !.jankurai/ux-qa.toml
 agent/*
+!agent/JANKURAI_STANDARD.md
 !agent/audit-policy.toml
+!agent/boundaries.toml
+!agent/tool-adoption.toml
 :memory:/
 FUCKIT.md
 

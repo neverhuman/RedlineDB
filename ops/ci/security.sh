@@ -61,16 +61,10 @@ gitleaks detect --source . --redact --no-banner
 # for both Rust workspaces and the shell/docs-only hub. Requires syft in PATH;
 # installed in CI by the jankurai.yml security job.
 # See ledger: .jankurai/ci-soft-gate-ledger.toml#syft-sbom.
-ci_soft_gate \
-    syft-sbom \
-    .jankurai/security/syft.log \
-    -- syft . -o cyclonedx-json=.jankurai/security/sbom-syft.json
+ci_soft_gate syft-sbom .jankurai/security/syft.log -- just security-sbom
 
 # Workflow linting via actionlint — soft-gated; validates CI YAML for
 # schema correctness and security best practices. Requires actionlint
 # in PATH; installed in CI by the jankurai.yml security job.
 # See ledger: .jankurai/ci-soft-gate-ledger.toml#actionlint-workflow-lint.
-ci_soft_gate \
-    actionlint-workflow-lint \
-    .jankurai/security/actionlint.log \
-    -- actionlint .github/workflows/*.yml
+ci_soft_gate actionlint-workflow-lint .jankurai/security/actionlint.log -- just security-workflows
