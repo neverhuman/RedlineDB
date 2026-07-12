@@ -24,6 +24,10 @@ metadata use `8.0.0`; immutable repository tags retain the separate `*-v8.0.0-sp
   against an absent ref. Preserve its receipt.
 - Preserve deferred CatBoost/Web/tooling state on remote branches or a verifiable bundle before
   moving its checkout outside the release workspace.
+- Python is allowed only as an exact, declared parity oracle or fixture for a named Rust test.
+  Product, SDK, control-plane, CI, benchmark, paper, and deployment Python are forbidden. The
+  standalone `jain-python` service is preserved but deferred from v8; it is not a managed release
+  repository.
 - Never edit Redline locks by hand. `proof-refresh` is their only accepted writer.
 - Never use Redline's GitHub-oriented `redlinectl clone` as a release refresh path. Release heads
   come from reviewed local-Jeryu `main`.
@@ -47,6 +51,20 @@ just verify-worktrees
 The managed inventory must contain all Jain repositories, SmartCluster, `jain-split-ops`, Redline,
 Redline core/testing/web, and `redline-split-ops`. Generated views are changed only with
 `just sync-derived-apply`; validate them again immediately afterward.
+
+Run `splitctl python-boundary` before accepting any source graph. Its exact allowlist binds each
+Python file to existing Rust evidence; a directory name alone never grants an exception. Preserve
+and move a deferred checkout with the receipted Rust operation rather than an unrecorded filesystem
+move:
+
+```bash
+cargo run --locked --quiet -- defer-worktree \
+  --repo /absolute/source --destination /absolute/deferred/source \
+  --expected-head FULL_SHA --receipt docs/release-evidence/8.0.0/deferred-source.json
+cargo run --locked --quiet -- defer-worktree \
+  --repo /absolute/source --destination /absolute/deferred/source \
+  --expected-head FULL_SHA --receipt docs/release-evidence/8.0.0/deferred-source.json --apply
+```
 
 For a repository whose forge has no `main`, first run the dry plan, inspect it, and then apply the
 same reviewed SHA:
@@ -131,7 +149,7 @@ artifact gates, immutable tag, mirror refresh, and downstream lock update before
 4. Core.
 5. LLM, agent, jnoccio, zyal, jailgun, and research.
 6. SmartCluster.
-7. Report, TUI, CLI, Web mainline, and Python.
+7. Report, TUI, CLI, and Web mainline. The Python product remains deferred.
 8. Model-zoo and operations.
 9. Deploy.
 10. Portal.
@@ -147,9 +165,11 @@ just immutable-tag /absolute/checkout REMOTE_URL REPO-v8.0.0-split.0 REVIEWED_MA
 just immutable-tag-apply /absolute/checkout REMOTE_URL REPO-v8.0.0-split.0 REVIEWED_MAIN_SHA
 ```
 
-The operation refuses a local or remote tag that resolves to another commit. Refresh local bare
-mirrors and verify their refs after each wave. Existing v7 tags are audit inputs only and remain
-untouched, including any pre-existing local/forge mismatch.
+The operation reads metadata from the exact reviewed commit before touching refs. It refuses a
+Cargo package version that differs from the product version encoded by the tag, a `VERSION` file
+that differs from the immutable tag, a non-main commit, or a local/remote tag that resolves to
+another commit. Refresh local bare mirrors and verify their refs after each wave. Existing v7 tags
+are audit inputs only and remain untouched, including any pre-existing local/forge mismatch.
 
 ## 5. Locks and clean-cache verification
 
