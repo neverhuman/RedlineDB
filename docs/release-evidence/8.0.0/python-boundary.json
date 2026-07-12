@@ -1,0 +1,120 @@
+{
+  "allowed": [
+    {
+      "path": "jain-deploy/ops/ci/testdata/invention-export/model.py",
+      "purpose": "fixture consumed by Rust export compatibility tests"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/_nm/parity/oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py",
+      "purpose": "frozen oracle for a Rust model port"
+    },
+    {
+      "path": "jain-model-zoo/ops/parity/plot_errors.py",
+      "purpose": "Rust model parity harness"
+    },
+    {
+      "path": "jain-model-zoo/ops/parity/parity_suite.py",
+      "purpose": "Rust model parity harness"
+    }
+  ],
+  "allowed_count": 14,
+  "error": "Python outside the Rust-parity boundary:\nredline-split/redline/scripts/bench/export_benchmark_results.py\nredline-split/redline/scripts/perf/run_subset.py\nredline-split/redline/scripts/perf/diff.py\nredline-split/redline/scripts/perf/build_case_lists.py\nredline-split/redline/paper/scripts/build_figs.py\nredline-split/redline/paper/scripts/check_refs.py\nredline-split/redline-core/scripts/bench/export_benchmark_results.py\nredline-split/redline-core/scripts/perf/run_subset.py\nredline-split/redline-core/scripts/perf/diff.py\nredline-split/redline-core/scripts/perf/build_case_lists.py\nredline-split/redline-core/paper/scripts/build_figs.py\nredline-split/redline-core/paper/scripts/check_refs.py\njain-python/python/ai-service/examples/quickstart_local.py\njain-python/python/ai-service/tests/test_csvio.py\njain-python/python/ai-service/tests/test_contract.py\njain-python/python/ai-service/tests/test_exports.py\njain-python/python/ai-service/tests/test_control_plane.py\njain-python/python/ai-service/tests/test_endpoint.py\njain-python/python/ai-service/tests/test_progress.py\njain-python/python/ai-service/tests/test_aws.py\njain-python/python/ai-service/tests/test_no_banned_terms.py\njain-python/python/ai-service/src/jain_sagemaker/__init__.py\njain-python/python/ai-service/src/jain_sagemaker/contract.py\njain-python/python/ai-service/src/jain_sagemaker/cli.py\njain-python/python/ai-service/src/jain_sagemaker/backends/__init__.py\njain-python/python/ai-service/src/jain_sagemaker/backends/aws.py\njain-python/python/ai-service/src/jain_sagemaker/backends/local_docker.py\njain-python/python/ai-service/src/jain_sagemaker/backends/base.py\njain-python/python/ai-service/src/jain_sagemaker/endpoint.py\njain-python/python/ai-service/src/jain_sagemaker/render/__init__.py\njain-python/python/ai-service/src/jain_sagemaker/render/detect.py\njain-python/python/ai-service/src/jain_sagemaker/render/plain.py\njain-python/python/ai-service/src/jain_sagemaker/render/notebook.py\njain-python/python/ai-service/src/jain_sagemaker/render/base.py\njain-python/python/ai-service/src/jain_sagemaker/errors.py\njain-python/python/ai-service/src/jain_sagemaker/__main__.py\njain-python/python/ai-service/src/jain_sagemaker/mcp_server.py\njain-python/python/ai-service/src/jain_sagemaker/csvio.py\njain-python/python/ai-service/src/jain_sagemaker/exports.py\njain-python/python/ai-service/src/jain_sagemaker/client.py\njain-python/python/ai-service/src/jain_sagemaker/progress/stages.py\njain-python/python/ai-service/src/jain_sagemaker/progress/__init__.py\njain-python/python/ai-service/src/jain_sagemaker/progress/status.py\njain-python/python/ai-service/src/jain_sagemaker/progress/engine.py\njain-python/python/ai-service/src/jain_sagemaker/progress/grammar.py\njain-python/python/ai-service/src/jain_sagemaker/progress/events.py\njain-python/python/ai-service/src/jain_sagemaker/progress/sources.py\njain-python/python/ai-service/src/jain_sagemaker/models.py\njain-python/python/ai-service/src/jain_sagemaker/control_plane.py",
+  "mode": "dry-run",
+  "operation": "python-boundary",
+  "policy": "Python is permitted only for parity testing against Rust implementations",
+  "schema_version": "jain.rust-parity-python-boundary/v1",
+  "status": "fail",
+  "timestamp_unix": 1783852380,
+  "unexpected": [
+    "redline-split/redline/scripts/bench/export_benchmark_results.py",
+    "redline-split/redline/scripts/perf/run_subset.py",
+    "redline-split/redline/scripts/perf/diff.py",
+    "redline-split/redline/scripts/perf/build_case_lists.py",
+    "redline-split/redline/paper/scripts/build_figs.py",
+    "redline-split/redline/paper/scripts/check_refs.py",
+    "redline-split/redline-core/scripts/bench/export_benchmark_results.py",
+    "redline-split/redline-core/scripts/perf/run_subset.py",
+    "redline-split/redline-core/scripts/perf/diff.py",
+    "redline-split/redline-core/scripts/perf/build_case_lists.py",
+    "redline-split/redline-core/paper/scripts/build_figs.py",
+    "redline-split/redline-core/paper/scripts/check_refs.py",
+    "jain-python/python/ai-service/examples/quickstart_local.py",
+    "jain-python/python/ai-service/tests/test_csvio.py",
+    "jain-python/python/ai-service/tests/test_contract.py",
+    "jain-python/python/ai-service/tests/test_exports.py",
+    "jain-python/python/ai-service/tests/test_control_plane.py",
+    "jain-python/python/ai-service/tests/test_endpoint.py",
+    "jain-python/python/ai-service/tests/test_progress.py",
+    "jain-python/python/ai-service/tests/test_aws.py",
+    "jain-python/python/ai-service/tests/test_no_banned_terms.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/__init__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/contract.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/cli.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/backends/__init__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/backends/aws.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/backends/local_docker.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/backends/base.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/endpoint.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/__init__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/detect.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/plain.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/notebook.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/base.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/errors.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/__main__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/mcp_server.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/csvio.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/exports.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/client.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/stages.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/__init__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/status.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/engine.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/grammar.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/events.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/sources.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/models.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/control_plane.py"
+  ],
+  "unexpected_count": 49
+}

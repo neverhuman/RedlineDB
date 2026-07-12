@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             source_coverage(&manifest, json_output)?;
         }
-        Some("python-boundary") => python_boundary()?,
+        Some("python-boundary") => python_boundary(args.collect())?,
         Some("jeryu-doctor") => {
             let mut manifest = None;
             let mut skip_remotes = false;
@@ -154,7 +154,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -1554,6 +1554,7 @@ fn create_or_verify_immutable_tag(
     run_git_strict(repo, &["check-ref-format", &tag_ref])?;
     let reviewed = resolve_commit(repo, commit)?;
     report["commit"] = json!(reviewed);
+    validate_tag_release_identity(repo, tag, &reviewed, report)?;
     let remote_main = ls_remote_ref(repo, remote, "refs/heads/main")?;
     report["remote_main"] = json!(remote_main);
     if remote_main.as_deref() != Some(reviewed.as_str()) {
@@ -1626,6 +1627,199 @@ fn create_or_verify_immutable_tag(
     } else {
         Err("immutable tag verification did not resolve to the reviewed commit".into())
     }
+}
+
+fn validate_tag_release_identity(
+    repo: &Path,
+    tag: &str,
+    commit: &str,
+    report: &mut JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let expected = product_version_from_tag(tag)?;
+    if tag.contains("-split.") && expected != RELEASE_VERSION {
+        report["release_identity"] = json!({
+            "status": "fail",
+            "expected_product_version": RELEASE_VERSION,
+            "tag_product_version": expected,
+        });
+        return Err(format!(
+            "split tag {tag} encodes product version {expected}, expected {RELEASE_VERSION}"
+        )
+        .into());
+    }
+
+    let version_file = git_file_at_commit(repo, commit, "VERSION")?;
+    if let Some(value) = version_file.as_deref() {
+        if value.trim() != tag {
+            report["release_identity"] = json!({
+                "status": "fail",
+                "expected_product_version": expected,
+                "version_file": value.trim(),
+                "expected_version_file": tag,
+            });
+            return Err(format!(
+                "VERSION at {commit} is {:?}, expected exact immutable tag {tag:?}",
+                value.trim()
+            )
+            .into());
+        }
+    }
+
+    let Some(root_manifest) = git_file_at_commit(repo, commit, "Cargo.toml")? else {
+        report["release_identity"] = json!({
+            "status": "pass",
+            "expected_product_version": expected,
+            "version_file": version_file.as_deref().map(str::trim),
+            "cargo_packages": [],
+        });
+        return Ok(());
+    };
+    let root: toml::Value = root_manifest.parse()?;
+    let workspace_version = root
+        .get("workspace")
+        .and_then(|value| value.get("package"))
+        .and_then(|value| value.get("version"))
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned);
+    if let Some(version) = workspace_version.as_deref() {
+        if version != expected {
+            report["release_identity"] = json!({
+                "status": "fail",
+                "expected_product_version": expected,
+                "workspace_package_version": version,
+            });
+            return Err(format!(
+                "workspace.package.version at {commit} is {version}, expected {expected}"
+            )
+            .into());
+        }
+    }
+
+    let tracked = strict_git_output(repo, &["ls-tree", "-r", "--name-only", commit])?;
+    let members = root
+        .get("workspace")
+        .and_then(|value| value.get("members"))
+        .and_then(toml::Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(toml::Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let mut manifests = Vec::new();
+    if root.get("package").is_some() {
+        manifests.push(("Cargo.toml".to_owned(), root));
+    }
+    for path in tracked.lines().filter(|path| path.ends_with("/Cargo.toml")) {
+        let directory = path.trim_end_matches("/Cargo.toml");
+        if !members
+            .iter()
+            .any(|pattern| workspace_member_matches(pattern, directory))
+        {
+            continue;
+        }
+        let content = git_file_at_commit(repo, commit, path)?
+            .ok_or_else(|| format!("workspace member manifest disappeared at {commit}:{path}"))?;
+        manifests.push((path.to_owned(), content.parse()?));
+    }
+    let mut packages = Vec::new();
+    for (path, manifest) in manifests {
+        let Some(package) = manifest.get("package") else {
+            continue;
+        };
+        let name = package
+            .get("name")
+            .and_then(toml::Value::as_str)
+            .unwrap_or("<unnamed>");
+        let declared = package
+            .get("version")
+            .ok_or_else(|| format!("{path}: package {name} has no version"))?;
+        let version = if let Some(value) = declared.as_str() {
+            value
+        } else if declared.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
+            workspace_version.as_deref().ok_or_else(|| {
+                format!("{path}: package {name} inherits a missing workspace.package.version")
+            })?
+        } else {
+            return Err(
+                format!("{path}: package {name} has an unsupported version declaration").into(),
+            );
+        };
+        packages.push(json!({"manifest": path.clone(), "name": name, "version": version}));
+        if version != expected {
+            report["release_identity"] = json!({
+                "status": "fail",
+                "expected_product_version": expected,
+                "version_file": version_file.as_deref().map(str::trim),
+                "cargo_packages": packages,
+                "mismatch": {"manifest": path, "name": name, "version": version},
+            });
+            return Err(format!(
+                "{path}: package {name} version is {version}, expected {expected} from tag {tag}"
+            )
+            .into());
+        }
+    }
+    report["release_identity"] = json!({
+        "status": "pass",
+        "expected_product_version": expected,
+        "version_file": version_file.as_deref().map(str::trim),
+        "workspace_package_version": workspace_version,
+        "cargo_packages": packages,
+    });
+    Ok(())
+}
+
+fn product_version_from_tag(tag: &str) -> Result<&str, Box<dyn std::error::Error>> {
+    let suffix = ["-split.", "-jain."]
+        .iter()
+        .filter_map(|marker| tag.rfind(marker))
+        .max()
+        .ok_or_else(|| format!("release tag has no supported -split.N or -jain.N suffix: {tag}"))?;
+    let prefix = &tag[..suffix];
+    let version_start = prefix
+        .rfind("-v")
+        .map(|index| index + 2)
+        .ok_or_else(|| format!("release tag has no product version: {tag}"))?;
+    let version = &tag[version_start..suffix];
+    if version.is_empty()
+        || !version
+            .split('.')
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+    {
+        return Err(format!("release tag has an invalid product version: {tag}").into());
+    }
+    Ok(version)
+}
+
+fn git_file_at_commit(
+    repo: &Path,
+    commit: &str,
+    path: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let object = format!("{commit}:{path}");
+    let exists = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["cat-file", "-e", &object])
+        .output()?;
+    if !exists.status.success() {
+        return Ok(None);
+    }
+    Ok(Some(strict_git_output(repo, &["show", &object])?))
+}
+
+fn workspace_member_matches(pattern: &str, directory: &str) -> bool {
+    let pattern = pattern.trim_end_matches('/');
+    let pattern_parts = pattern.split('/').collect::<Vec<_>>();
+    let directory_parts = directory.split('/').collect::<Vec<_>>();
+    pattern_parts.len() == directory_parts.len()
+        && pattern_parts
+            .iter()
+            .zip(directory_parts)
+            .all(|(expected, actual)| *expected == "*" || *expected == actual)
 }
 
 fn verify_worktrees_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -2868,7 +3062,15 @@ fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std
     }
 }
 
-fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
+fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut receipt = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/python-boundary.json");
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--receipt" => receipt = PathBuf::from(iter.next().ok_or("--receipt needs a path")?),
+            value => return Err(format!("unknown python-boundary argument: {value}").into()),
+        }
+    }
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or("split root unavailable")?
@@ -2883,34 +3085,54 @@ fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");
-        let allowed = rel.starts_with("jain-model-zoo/ops/parity/")
-            || rel.starts_with("redline-split/")
-            || rel == "redline-split-ops/scripts/redline_proof.py"
-            || rel == "redline-split-ops/tests/test_redline_proof.py"
-            || rel.contains("/parity/")
-            || rel.contains("/oracle/")
-            || rel.starts_with("jain-deploy/ops/ci/testdata/")
-            || rel.starts_with("jain-python/python/ai-service/examples/")
-            || rel.starts_with("jain-python/python/ai-service/src/")
-            || rel.starts_with("jain-python/python/ai-service/tests/");
-        if allowed {
-            declared.push(rel);
+        if let Some(purpose) = python_parity_purpose(&rel) {
+            declared.push(json!({"path": rel, "purpose": purpose}));
         } else {
             unexpected.push(rel);
         }
     }
-    if !unexpected.is_empty() {
-        return Err(format!(
-            "unexpected Python outside declared parity/customer boundary:\n{}",
-            unexpected.join("\n")
-        )
-        .into());
-    }
-    println!(
-        "python boundary ok: {} declared files (customer SDK, parity, and nested Redline proof only)",
-        declared.len()
+    let mut report = receipt_header(
+        "jain.rust-parity-python-boundary/v1",
+        "python-boundary",
+        false,
     );
-    Ok(())
+    report["policy"] =
+        json!("Python is permitted only for parity testing against Rust implementations");
+    report["allowed"] = json!(declared);
+    report["unexpected"] = json!(unexpected);
+    report["allowed_count"] = json!(report["allowed"].as_array().map_or(0, Vec::len));
+    report["unexpected_count"] = json!(report["unexpected"].as_array().map_or(0, Vec::len));
+    let result = if report["unexpected_count"] == 0 {
+        println!(
+            "python boundary ok: {} Rust-parity files",
+            report["allowed_count"]
+        );
+        Ok(())
+    } else {
+        let paths = report["unexpected"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(JsonValue::as_str)
+            .collect::<Vec<_>>()
+            .join("\n");
+        Err(format!("Python outside the Rust-parity boundary:\n{paths}").into())
+    };
+    finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn python_parity_purpose(path: &str) -> Option<&'static str> {
+    if path.starts_with("jain-model-zoo/ops/parity/") {
+        Some("Rust model parity harness")
+    } else if path.starts_with("jain-model-zoo/reference/ported/")
+        && (path.contains("/parity/") || path.contains("/oracle/"))
+    {
+        Some("frozen oracle for a Rust model port")
+    } else if path == "jain-deploy/ops/ci/testdata/invention-export/model.py" {
+        Some("fixture consumed by Rust export compatibility tests")
+    } else {
+        None
+    }
 }
 
 fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -4681,6 +4903,87 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             .unwrap(),
             Some(reviewed)
         );
+    }
+
+    #[test]
+    fn immutable_tag_refuses_mismatched_cargo_package_identity() {
+        let root = TestDir::new("immutable-tag-package-identity");
+        let (repo, _) = init_source(root.path());
+        fs::create_dir_all(repo.join("crates/example")).unwrap();
+        fs::write(
+            repo.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n\n[workspace.package]\nversion = \"8.0.0\"\n",
+        )
+        .unwrap();
+        fs::write(
+            repo.join("crates/example/Cargo.toml"),
+            "[package]\nname = \"example\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        fs::write(repo.join("crates/example/src.rs"), "pub fn example() {}\n").unwrap();
+        fs::write(repo.join("VERSION"), "example-v8.0.0-split.0\n").unwrap();
+        run_git_strict(&repo, &["add", "Cargo.toml", "VERSION", "crates/example"]).unwrap();
+        run_git_strict(&repo, &["commit", "-m", "candidate metadata"]).unwrap();
+        let reviewed = resolve_commit(&repo, "HEAD").unwrap();
+        let remote = init_bare(root.path());
+        let main_refspec = format!("{reviewed}:refs/heads/main");
+        run_git_strict(&repo, &["push", remote.to_str().unwrap(), &main_refspec]).unwrap();
+        let receipt = root.path().join("tag.json");
+        let result = immutable_tag_command(vec![
+            "--repo".to_owned(),
+            repo.display().to_string(),
+            "--remote".to_owned(),
+            remote.display().to_string(),
+            "--tag".to_owned(),
+            "example-v8.0.0-split.0".to_owned(),
+            "--commit".to_owned(),
+            reviewed,
+            "--receipt".to_owned(),
+            receipt.display().to_string(),
+            "--apply".to_owned(),
+        ]);
+        assert!(result.is_err());
+        let report = read_json(&receipt);
+        assert_eq!(report["status"], "fail");
+        assert_eq!(report["release_identity"]["mismatch"]["version"], "0.1.0");
+        assert_eq!(
+            local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
+            None
+        );
+        assert_eq!(
+            ls_remote_ref(
+                &repo,
+                remote.to_str().unwrap(),
+                "refs/tags/example-v8.0.0-split.0"
+            )
+            .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn python_boundary_allows_only_rust_parity_surfaces() {
+        assert_eq!(
+            python_parity_purpose("jain-model-zoo/ops/parity/parity_suite.py"),
+            Some("Rust model parity harness")
+        );
+        assert_eq!(
+            python_parity_purpose("jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py"),
+            Some("frozen oracle for a Rust model port")
+        );
+        assert_eq!(
+            python_parity_purpose("jain-deploy/ops/ci/testdata/invention-export/model.py"),
+            Some("fixture consumed by Rust export compatibility tests")
+        );
+        assert_eq!(
+            python_parity_purpose("jain-python/python/ai-service/src/client.py"),
+            None
+        );
+        assert_eq!(
+            python_parity_purpose("redline-split/redline-core/scripts/perf/diff.py"),
+            None
+        );
+        assert_eq!(python_parity_purpose("anything/oracle/production.py"), None);
     }
 
     #[test]
