@@ -212,20 +212,6 @@ fn run_one_case(case: &BeyondCase, pg: &PostgresReference) -> CaseOutcome {
             };
         }
     };
-    if first.exit_code != 0 {
-        return CaseOutcome {
-            case_id: case.id,
-            name: case.name.clone(),
-            feature_rank: case.feature_rank,
-            category: case.category.clone(),
-            status: "skipped".to_owned(),
-            diagnostic: Some(format!(
-                "reference psql nonzero exit: {} stderr={}",
-                first.exit_code, first.stderr
-            )),
-            target: None,
-        };
-    }
     let second = match invoke_psql(&pg.bin, &pg.connection, &stdin, &case.pg_settings, timeout) {
         Ok(out) => out,
         Err(err) => {
@@ -235,14 +221,15 @@ fn run_one_case(case: &BeyondCase, pg: &PostgresReference) -> CaseOutcome {
                 feature_rank: case.feature_rank,
                 category: case.category.clone(),
                 status: "skipped".to_owned(),
-                diagnostic: Some(format!("target invocation error: {err}")),
+                diagnostic: Some(format!("second reference invocation error: {err}")),
                 target: None,
             };
         }
     };
     let ref_norm = normalize_for_compare(&first.stdout, case);
     let tgt_norm = normalize_for_compare(&second.stdout, case);
-    if ref_norm == tgt_norm {
+    if first.exit_code == second.exit_code && ref_norm == tgt_norm && first.stderr == second.stderr
+    {
         CaseOutcome {
             case_id: case.id,
             name: case.name.clone(),
@@ -260,7 +247,13 @@ fn run_one_case(case: &BeyondCase, pg: &PostgresReference) -> CaseOutcome {
             category: case.category.clone(),
             status: "failed".to_owned(),
             diagnostic: Some(format!(
-                "psql self-compare mismatch\n-- run 1 --\n{ref_norm}\n-- run 2 --\n{tgt_norm}"
+                "reference self-compare mismatch: exits=({}, {}) stdout=({:?}, {:?}) stderr=({:?}, {:?})",
+                first.exit_code,
+                second.exit_code,
+                truncate(&ref_norm, 256),
+                truncate(&tgt_norm, 256),
+                truncate(&first.stderr, 256),
+                truncate(&second.stderr, 256)
             )),
             target: None,
         }
@@ -513,4 +506,43 @@ pub fn append_outcomes_jsonl(outcomes: &[CaseOutcome], output: &Path) -> Result<
     existing.push_str(&buf);
     fs::write(output, existing)
         .with_context(|| format!("append oracle outcomes to {}", output.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires REDLINE_TESTING_POSTGRES_URL or the documented local PostgreSQL socket"]
+    fn postgres_self_compare_all_published_cases() {
+        let (summary, outcomes) = run_cases().expect("run published beyond-SQLite cases");
+        let blockers = outcomes
+            .iter()
+            .filter(|outcome| outcome.status != "passed")
+            .take(20)
+            .map(|outcome| {
+                format!(
+                    "{} {}: {}",
+                    outcome.case_id,
+                    outcome.status,
+                    outcome.diagnostic.as_deref().unwrap_or("no diagnostic")
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert!(summary.total > 0, "published beyond-SQLite corpus is empty");
+        assert_eq!(summary.failed, 0, "reference failures: {blockers:#?}");
+        assert_eq!(
+            summary.skipped_unavailable, 0,
+            "PostgreSQL unavailable or invocation failed: {blockers:#?}"
+        );
+        assert_eq!(
+            summary.skipped_feature_missing, 0,
+            "published cases require unavailable features: {blockers:#?}"
+        );
+        assert_eq!(
+            summary.passed, summary.total,
+            "not every published case passed psql self-compare: {blockers:#?}"
+        );
+    }
 }

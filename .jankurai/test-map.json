@@ -17,7 +17,7 @@
       "purpose": "verify generated shards match their rule files"
     },
     "corpus/beyond_sqlite/": {
-      "command": "rtk cargo test --locked --features pg-embedded --test beyond_sqlite_oracle -- --ignored",
+      "command": "rtk cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact",
       "purpose": "verify every beyond-SQLite case passes psql↔psql self-compare before shipping"
     },
     "metadata/": {

@@ -21,7 +21,7 @@ commands = [
 # psql↔psql; cases that don't pass are rejected from the corpus.
 [lane.beyond-postgres-reference]
 commands = [
-  "rtk cargo test --locked --features pg-embedded --test beyond_sqlite_oracle -- --ignored",
+  "rtk cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact",
 ]
 
 # Generator drift detector for matrix-product shards. `xtask generate --check`
