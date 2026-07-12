@@ -11,6 +11,7 @@ use std::{
 const RELEASE_VERSION: &str = "8.0.0";
 const PENDING: &str = "PENDING";
 const DEFAULT_MAX_AGE_HOURS: u64 = 24;
+const USAGE: &str = "usage: release-candidate [--plan] [--repo NAME]... [--from-wave N] [--through-wave N] [--force] [--no-tags] [--no-atomicsoul] [--max-age-hours N] [--manifest PATH] [--evidence-dir PATH]";
 
 #[derive(Debug, Clone)]
 struct Options {
@@ -41,6 +42,10 @@ struct FleetRepo {
 }
 
 pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    if help_requested(&args) {
+        println!("{USAGE}");
+        return Ok(());
+    }
     let options = parse_options(args)?;
     reject_unsafe_environment()?;
     let manifest_bytes = fs::read(&options.manifest)?;
@@ -53,7 +58,9 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     repositories.sort_by(|left, right| (left.wave, &left.name).cmp(&(right.wave, &right.name)));
 
     fs::create_dir_all(&options.evidence_dir)?;
-    let aggregate_path = options.evidence_dir.join("release-candidate.json");
+    let aggregate_path = options
+        .evidence_dir
+        .join(aggregate_receipt_name(options.plan));
     let mut report = json!({
         "schema_version": "jain.release-candidate-runner/v1",
         "release_version": RELEASE_VERSION,
@@ -500,11 +507,6 @@ fn parse_options(args: Vec<String>) -> Result<Options, Box<dyn std::error::Error
             "--force" => options.force = true,
             "--no-tags" => options.apply_tags = false,
             "--no-atomicsoul" => options.atomicsoul = false,
-            "--help" | "-h" => {
-                println!("usage: release-candidate [--plan] [--repo NAME]... [--from-wave N] [--through-wave N] [--force] [--no-tags] [--no-atomicsoul] [--max-age-hours N] [--manifest PATH] [--evidence-dir PATH]");
-                options.plan = true;
-                options.selected.clear();
-            }
             value => return Err(format!("unknown release-candidate argument: {value}").into()),
         }
     }
@@ -512,6 +514,19 @@ fn parse_options(args: Vec<String>) -> Result<Options, Box<dyn std::error::Error
         return Err("--from-wave cannot exceed --through-wave".into());
     }
     Ok(options)
+}
+
+fn help_requested(args: &[String]) -> bool {
+    args.iter()
+        .any(|arg| matches!(arg.as_str(), "--help" | "-h"))
+}
+
+fn aggregate_receipt_name(plan: bool) -> &'static str {
+    if plan {
+        "release-candidate-plan.json"
+    } else {
+        "release-candidate.json"
+    }
 }
 
 fn reject_unsafe_environment() -> Result<(), Box<dyn std::error::Error>> {
@@ -1428,6 +1443,15 @@ cross_repo_deps = ["typo"]
             overall_status(&[json!({"status":"blocked"}), json!({"status":"fail"})]),
             "fail"
         );
+    }
+
+    #[test]
+    fn help_and_plan_cannot_replace_the_execution_receipt() {
+        assert!(help_requested(&["--help".to_owned()]));
+        assert!(help_requested(&["-h".to_owned()]));
+        assert!(!help_requested(&["--plan".to_owned()]));
+        assert_eq!(aggregate_receipt_name(true), "release-candidate-plan.json");
+        assert_eq!(aggregate_receipt_name(false), "release-candidate.json");
     }
 
     #[test]
