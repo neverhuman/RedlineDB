@@ -1,27 +1,27 @@
 {
-  "canonical_manifest_sha256": "d1294a8d411d649c3e09ee46f128b1aa2b149497c4eb3fa652d3e5d098df857f",
+  "canonical_manifest_sha256": "bf1f6e7d8a02c158d9b9f01c0c19793de5a542366d8d33a737c745dd14d43320",
   "derived_manifests": [
     {
       "action": "updated",
       "changed": true,
-      "current_sha256": "c62caf72628b223968d35589c739f3aa12309d6b328758166ce3013f61d3032a",
-      "expected_sha256": "e85f4e86f45796084395bb3f46aa6df5158338254b9d7f5b53cdfe629bcdc03c",
+      "current_sha256": "b84ce86903ed801e38723d9fcbc5563b75d3267e0963258e16e7b62c197610e4",
+      "expected_sha256": "03e59182b8a516fa80c2faaa4d18c253e9d8503856e2e6d9b4448b9ac7eee014",
       "path": "/home/ubuntu/jain-split/jain/repos.manifest.toml",
       "target": "portal"
     },
     {
       "action": "updated",
       "changed": true,
-      "current_sha256": "c62caf72628b223968d35589c739f3aa12309d6b328758166ce3013f61d3032a",
-      "expected_sha256": "e85f4e86f45796084395bb3f46aa6df5158338254b9d7f5b53cdfe629bcdc03c",
+      "current_sha256": "b84ce86903ed801e38723d9fcbc5563b75d3267e0963258e16e7b62c197610e4",
+      "expected_sha256": "03e59182b8a516fa80c2faaa4d18c253e9d8503856e2e6d9b4448b9ac7eee014",
       "path": "/home/ubuntu/jain-split/jain-deploy/repos.manifest.toml",
       "target": "deploy"
     }
   ],
-  "manifest": "repos.manifest.toml",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
   "mode": "apply",
   "operation": "sync-derived-manifests",
   "schema_version": "jain.derived-manifest-sync/v1",
   "status": "pass",
-  "timestamp_unix": 1783840756
+  "timestamp_unix": 1783852662
 }

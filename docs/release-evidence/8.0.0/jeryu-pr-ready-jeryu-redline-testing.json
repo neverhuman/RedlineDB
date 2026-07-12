@@ -8,7 +8,7 @@
       "draft": false
     },
     "method": "PATCH",
-    "path": "/repos/jeryu/redline-testing/pulls/2"
+    "path": "/repos/jeryu/redline-testing/pulls/3"
   },
   "response": {
     "base": {
@@ -17,32 +17,32 @@
       "repo": {
         "full_name": "jeryu/redline-testing"
       },
-      "sha": "67b98f3d6010fbdf22325e4a07d98d8c3f27ae4a"
+      "sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac"
     },
-    "body": "Reviewable nested Redline CI repair: apply cargo fmt output and update anyhow to 1.0.103 for the current RustSec advisory.",
-    "created_at": "2026-07-12T04:55:37.162412854Z",
+    "body": "Replaces the badge updater and all remaining runtime Python helpers with tested Rust xtask commands. Preserves badge, cost/readiness, artifact, and telemetry contracts; adds a fail-closed no-Python test and updates CI/docs.",
+    "created_at": "2026-07-12T10:24:10.465230287Z",
     "draft": false,
     "head": {
-      "label": "codex/v8-redline-testing-ci",
-      "ref": "codex/v8-redline-testing-ci",
+      "label": "codex/redline-testing-rust-badge",
+      "ref": "codex/redline-testing-rust-badge",
       "repo": {
         "full_name": "jeryu/redline-testing"
       },
-      "sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac"
+      "sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6"
     },
-    "html_url": "/jeryu/redline-testing/pull/2",
-    "id": "1c493474-ad63-4bcf-ba53-5d686809c0b9",
+    "html_url": "/jeryu/redline-testing/pull/3",
+    "id": "d3e29405-e475-40c2-9501-3d2925b3174c",
     "merge_commit_sha": null,
     "mergeable": false,
     "mergeable_state": "blocked",
     "merged": false,
     "merged_at": null,
-    "number": 2,
+    "number": 3,
     "source_repository": "jeryu/redline-testing",
     "state": "open",
-    "title": "ci: format and update testing security dependency",
-    "updated_at": "2026-07-12T10:03:12.938063984Z",
-    "url": "/repos/jeryu/redline-testing/pulls/2",
+    "title": "ci: replace Python helpers with Rust",
+    "updated_at": "2026-07-12T10:44:51.517233133Z",
+    "url": "/repos/jeryu/redline-testing/pulls/3",
     "user": {
       "login": "codex",
       "type": "User",
@@ -51,5 +51,5 @@
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783850592
+  "timestamp_unix": 1783853091
 }

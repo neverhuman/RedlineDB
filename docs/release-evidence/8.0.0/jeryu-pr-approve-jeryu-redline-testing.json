@@ -3,14 +3,20 @@
   "mode": "apply",
   "operation": "jeryu-local pr-approve",
   "readback": {
-    "description": "Reviewable nested Redline CI repair: apply cargo fmt output and update anyhow to 1.0.103 for the current RustSec advisory.",
+    "description": "Replaces the badge updater and all remaining runtime Python helpers with tested Rust xtask commands. Preserves badge, cost/readiness, artifact, and telemetry contracts; adds a fail-closed no-Python test and updates CI/docs.",
     "merge_passport": {
-      "blockers": [],
-      "evaluated_at": "2026-07-12T10:03:33.963158185+00:00",
-      "head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
-      "status": "pass"
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T10:45:10.520557369+00:00",
+      "head_sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6",
+      "status": "blocked"
     },
-    "passport_hash": "passport:fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac:Pass:0:0:0:1",
+    "passport_hash": "passport:17b55e1fdbd72c7781ba0932c2a5777e0578a4e6:Blocked:1:1:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -32,31 +38,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "67b98f3d6010fbdf22325e4a07d98d8c3f27ae4a",
+      "base_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
       "checks": {
-        "failing": 0,
-        "passing": 2,
+        "failing": 1,
+        "passing": 1,
         "pending": 0,
-        "skipped": 1,
-        "total": 3
+        "skipped": 0,
+        "total": 2
       },
       "draft": false,
       "entity": {
-        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#2",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#3",
         "kind": "pull_request"
       },
-      "head_ref": "codex/v8-redline-testing-ci",
-      "head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+      "head_ref": "codex/redline-testing-rust-badge",
+      "head_sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6",
       "labels": [],
       "mergeable": {
-        "can_merge": true,
-        "exact_head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
-        "level": "mergeable",
-        "reason": null,
-        "required_gate": null
+        "can_merge": false,
+        "exact_head_sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
       },
-      "number": 2,
-      "passport_hash": "passport:fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac:Pass:0:0:0:1",
+      "number": 3,
+      "passport_hash": "passport:17b55e1fdbd72c7781ba0932c2a5777e0578a4e6:Blocked:1:1:0:1",
       "repo": {
         "host": "jeryu",
         "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
@@ -71,31 +77,37 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "ci: format and update testing security dependency",
-      "updated_at": "2026-07-12T10:03:12.938063984+00:00"
+      "title": "ci: replace Python helpers with Rust",
+      "updated_at": "2026-07-12T10:44:51.517233133+00:00"
     }
   },
   "repository": "jeryu/redline-testing",
   "request": {
     "body": {
-      "body_markdown": "Reviewed exact Redline-testing Rust CI head; strict PR, security, Jankurai score 86, SQLite/PostgreSQL parity, generator, and release packaging gates passed.",
+      "body_markdown": "Reviewed exact Rust-only helper replacement and host-required evidence.",
       "evidence": null,
-      "expected_head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+      "expected_head_sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6",
       "thread_comments": [],
       "verdict": "approve"
     },
     "method": "POST",
-    "path": "/api/v1/repos/jeryu%2Fredline-testing/pulls/2/reviews"
+    "path": "/api/v1/repos/jeryu%2Fredline-testing/pulls/3/reviews"
   },
   "response": {
-    "description": "Reviewable nested Redline CI repair: apply cargo fmt output and update anyhow to 1.0.103 for the current RustSec advisory.",
+    "description": "Replaces the badge updater and all remaining runtime Python helpers with tested Rust xtask commands. Preserves badge, cost/readiness, artifact, and telemetry contracts; adds a fail-closed no-Python test and updates CI/docs.",
     "merge_passport": {
-      "blockers": [],
-      "evaluated_at": "2026-07-12T10:03:33.952463211+00:00",
-      "head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
-      "status": "pass"
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T10:45:10.511969715+00:00",
+      "head_sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6",
+      "status": "blocked"
     },
-    "passport_hash": "passport:fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac:Pass:0:0:0:1",
+    "passport_hash": "passport:17b55e1fdbd72c7781ba0932c2a5777e0578a4e6:Blocked:1:1:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -117,31 +129,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "67b98f3d6010fbdf22325e4a07d98d8c3f27ae4a",
+      "base_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
       "checks": {
-        "failing": 0,
-        "passing": 2,
+        "failing": 1,
+        "passing": 1,
         "pending": 0,
-        "skipped": 1,
-        "total": 3
+        "skipped": 0,
+        "total": 2
       },
       "draft": false,
       "entity": {
-        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#2",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#3",
         "kind": "pull_request"
       },
-      "head_ref": "codex/v8-redline-testing-ci",
-      "head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
+      "head_ref": "codex/redline-testing-rust-badge",
+      "head_sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6",
       "labels": [],
       "mergeable": {
-        "can_merge": true,
-        "exact_head_sha": "fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac",
-        "level": "mergeable",
-        "reason": null,
-        "required_gate": null
+        "can_merge": false,
+        "exact_head_sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
       },
-      "number": 2,
-      "passport_hash": "passport:fd5035a2c072c3ef9aef2fd6b7aa0069fe1ebaac:Pass:0:0:0:1",
+      "number": 3,
+      "passport_hash": "passport:17b55e1fdbd72c7781ba0932c2a5777e0578a4e6:Blocked:1:1:0:1",
       "repo": {
         "host": "jeryu",
         "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
@@ -156,11 +168,11 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "ci: format and update testing security dependency",
-      "updated_at": "2026-07-12T10:03:12.938063984+00:00"
+      "title": "ci: replace Python helpers with Rust",
+      "updated_at": "2026-07-12T10:44:51.517233133+00:00"
     }
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783850612
+  "timestamp_unix": 1783853109
 }
