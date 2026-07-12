@@ -1,0 +1,8 @@
+title = "redline-split-ops secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated evidence and build outputs"
+paths = ['''^target/''', '''^\.jankurai/''']

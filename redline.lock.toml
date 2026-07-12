@@ -1,14 +1,21 @@
-schema_version = "1"
+schema_version = "redline.split.lock/v2"
 family = "redline-split"
-parent_family = "jain-split"
+parent_family = "independent"
 engine_package = "redlinedb"
 engine_version = "4.1.0"
+engine_tag = "redline-core-v4.1.0-jain.1"
+engine_commit = "9c72c26fac280ebf861eef43aa406c04ecbcf024"
 parity_harness_commit = "e87cf01ab9386e0f49b7523343119b2532a6e717"
+proof_lock_id = "redline-proof/v2/4.1.0/9c72c26fac280ebf861eef43aa406c04ecbcf024"
+consumers = ["jain-split", "jeryu-split"]
 
 [proof]
 parity_status = "historical-only-until-refreshed"
 accepted_core_evidence_sha256 = "8e811b14306795b82f8422d7a1522e1cddd026ce8b5a96e1987c91c4c43f2ccf"
 accepted_testing_manifest_sha256 = "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3"
+required_consumer_evidence = ["jain-split", "jeryu-split"]
+accepted_consumer_evidence = []
+cutover_eligible = false
 
 [[repo]]
 name = "redline"

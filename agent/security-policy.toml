@@ -1,0 +1,11 @@
+schema_version = "1.0.0"
+workspace = "redline-split-ops"
+required_tools = ["cargo-audit", "cargo-deny", "gitleaks", "actionlint", "zizmor", "syft"]
+advisory_tools = []
+
+[severity_thresholds]
+fail_lane_on = "high"
+
+[profiles.ci]
+required_tools = ["cargo-audit", "cargo-deny", "gitleaks", "actionlint", "zizmor", "syft"]
+advisory_tools = []

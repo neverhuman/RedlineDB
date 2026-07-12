@@ -11,3 +11,8 @@ family lock is `../redline-split/redline.lock.toml`.
 
 Use `./redlinectl doctor`, `./redlinectl validate`, and
 `./redlinectl family-ci` as the control-plane proof lanes.
+
+Operational boundaries are documented in `docs/architecture.md`; exact test,
+security, receipt, and repair commands are in `docs/testing.md`; cutover and
+rollback rules are in `docs/release.md`. New control-plane implementation and
+tests are Rust. Python belongs only in genuine cross-language parity harnesses.

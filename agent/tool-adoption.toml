@@ -1,0 +1,20 @@
+schema_version = "1.0.0"
+workspace = "redline-split-ops"
+
+[[tool]]
+id = "audit-ci"
+command = "just score"
+lane = "score"
+artifacts = [".jankurai/repo-score.json", ".jankurai/repo-score.md"]
+
+[[tool]]
+id = "security"
+command = "just security"
+lane = "security"
+artifacts = ["target/security/redline-split-ops.spdx.json"]
+
+[[tool]]
+id = "release-readiness"
+command = "./redlinectl cutover-verify"
+lane = "cutover"
+artifacts = ["redline.lock.toml"]
