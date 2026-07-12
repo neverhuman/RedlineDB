@@ -23,6 +23,8 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 mkdir -p .jankurai/security
+control_manifest="tools/evidence-processor/Cargo.toml"
+control_lock="tools/evidence-processor/Cargo.lock"
 
 if ! command -v gitleaks >/dev/null 2>&1 \
     || [ "$(gitleaks version 2>/dev/null || true)" != "$CI_GITLEAKS_VERSION" ]; then
@@ -46,6 +48,18 @@ if [ -f Cargo.toml ] && [ -f Cargo.lock ]; then
         > .jankurai/security/sbom-cargo-metadata.json
 elif [ -e Cargo.toml ] || [ -e Cargo.lock ]; then
     printf 'incomplete Rust dependency graph: Cargo.toml and Cargo.lock must be present together\n' >&2
+    exit 1
+elif [ -f "$control_manifest" ] && [ -f "$control_lock" ]; then
+    cargo audit --file "$control_lock"
+    ci_soft_gate \
+        cargo-deny-check \
+        .jankurai/security/cargo-deny.log \
+        -- cargo deny --manifest-path "$control_manifest" check
+    cargo metadata --manifest-path "$control_manifest" --format-version 1 --locked \
+        > .jankurai/security/sbom-cargo-metadata.json
+elif [ -e "$control_manifest" ] || [ -e "$control_lock" ]; then
+    printf 'incomplete bundled control-tool dependency graph: %s and %s must be present together\n' \
+        "$control_manifest" "$control_lock" >&2
     exit 1
 else
     printf '%s\n' \

@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-for path in Cargo.toml Cargo.lock crates rust-toolchain.toml; do
+for path in Cargo.toml Cargo.lock crates; do
   if [[ -e "$repo_root/$path" ]]; then
     printf 'redline hub contains forbidden engine path: %s\n' "$path" >&2
     exit 1

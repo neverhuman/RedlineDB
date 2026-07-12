@@ -101,6 +101,17 @@ check_presence() {
     fi
 }
 
+check_rust_toolchain() {
+    local detail
+    if detail="$(bash "$ROOT/tools/evidence-processor/run.sh" \
+        toolchain-check "$ROOT/rust-toolchain.toml" 2>&1)"
+    then
+        pass rust-toolchain "$detail"
+    else
+        fail rust-toolchain "$detail"
+    fi
+}
+
 check_mold() {
     # mold is required on Linux (see .cargo/config.toml [target.x86_64-unknown-linux-gnu])
     case "$(uname -s)" in
@@ -117,22 +128,6 @@ check_mold() {
     esac
 }
 
-check_python() {
-    if ! command -v python3 >/dev/null 2>&1; then
-        fail python3 "missing (expected >=3.10)"
-        return
-    fi
-    local actual major minor
-    actual="$(python3 -c 'import sys; print("{}.{}.{}".format(*sys.version_info[:3]))' 2>/dev/null)"
-    major="$(printf '%s' "$actual" | cut -d. -f1)"
-    minor="$(printf '%s' "$actual" | cut -d. -f2)"
-    if [ "${major:-0}" -gt 3 ] || { [ "${major:-0}" -eq 3 ] && [ "${minor:-0}" -ge 10 ]; }; then
-        pass python3 "${actual} (>=3.10)"
-    else
-        fail python3 "expected>=3.10 actual=${actual}"
-    fi
-}
-
 main() {
     printf 'ci-doctor: thin-hub required tool report\n'
     printf '%-4s %-14s %s\n' STAT TOOL DETAIL
@@ -146,7 +141,7 @@ main() {
     check_presence curl
     check_presence just
     check_presence rtk
-    check_python
+    check_rust_toolchain
     printf '%s\n' '----------------------------------------------------------'
     if [ "${overall}" -eq 0 ]; then
         printf 'ci-doctor: all required tools present and pinned\n'

@@ -75,6 +75,22 @@ SQLite parity boundary: the official evidence flow lives in
 is the only lane that produces committed parity evidence. RedlineDB does not
 expose a local SQLite parity coverage/benchmark/report/sentinel producer; the
 in-tree `sqlite_parity` commands and prior parity bundle workflows fail closed.
+The retired quick/medium replay, case-list, and local diff helpers are not
+release lanes; performance measurements use `perf-full` or the official report
+workflow through the verified external runner.
+
+The thin-hub PR gate also compiles and executes
+`tools/no-python-policy.rs`. The Rust proof enumerates tracked and unignored
+worktree files through Git, fails closed on Git or UTF-8 errors, and rejects
+both `.py` files and interpreter/package invocations in executable surfaces.
+The same gate formats, builds, and tests the isolated, locked
+`tools/evidence-processor` Rust utility. In addition to official-evidence
+normalization, that utility owns artifact metadata, SignRail telemetry,
+performance summaries, W2 manifests, and score-ratchet decisions; the shell
+call sites only dispatch arguments. Positive and negative tests cover malformed
+inputs, identity and hash mismatches, path confinement, and missing evidence so
+the controls remain available in detached snapshots without sibling checkouts.
+
 The proof-lane definitions and audit policy remain pinned in
 `.jankurai/proof-lanes.toml` and `agent/audit-policy.toml`.
 

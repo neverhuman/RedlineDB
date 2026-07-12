@@ -27,7 +27,7 @@ printf '==> full.sh: %s -> %s\n' "$target_bin" "$out"
 # post-filter exit code.
 set +e
 PERF_WORKERS="${PERF_WORKERS:-10}" PERF_TASKSET_DISABLE=1 perf_run_jsonl \
-  "$target_bin" "" 3 1 "$out" "full-${out_name}"
+  "$target_bin" 3 1 "$out" "full-${out_name}"
 run_exit=$?
 set -e
 

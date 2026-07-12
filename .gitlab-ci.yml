@@ -4,7 +4,7 @@
 # Coverage:
 #   - .github/workflows/ci.yml              → preflight, tests:* (5 shards),
 #                                              parity, official-evidence-guard,
-#                                              metrics-readme, relay jobs
+#                                              relay jobs
 #   - .github/workflows/jankurai.yml        → branch-freshness, audit, security,
 #                                              dependency-review
 #   - .github/workflows/jankurai-tools.yml  → tools:audit-ci, proof-routing,
@@ -170,14 +170,11 @@ stages:
   # `parity` stage waits on the test shards via `needs:` so a regression
   # short-circuits before the 90-min parity run. `benchmark` is the
   # heavy native-compile + full-corpus perf measurement (main-only /
-  # manual). `metrics` waits on parity and (optionally) benchmark so
-  # README perf numbers prefer the ultra-fast native-compile evidence
-  # when available.
+  # manual).
   - smoke
   - test
   - parity
   - benchmark
-  - metrics
   - jankurai
   - tools
 
@@ -221,6 +218,15 @@ workflow:
 # race together. Net: pipeline duration goes from
 # (preflight + max(test)) ≈ 25 + 15 = 40 min
 # to max(test, release-smoke) ≈ 15-20 min on warm cache.
+
+hub-rust-control:
+  stage: smoke
+  needs: []
+  timeout: 15 minutes
+  script:
+    - bash scripts/guard-no-duplicate-engine.sh
+    - bash ops/ci/no-python-policy.sh
+    - bash ops/ci/evidence-processor.sh
 
 fmt-check:
   stage: smoke
@@ -392,46 +398,6 @@ official-evidence-guard:
   script:
     - apk add --no-cache bash git
     - bash scripts/guard-official-evidence.sh
-
-metrics-readme:
-  stage: metrics
-  needs:
-    - job: parity
-      artifacts: true
-    # benchmark stage is main-only/manual; when present, its target/perf/*.jsonl
-    # is the preferred input for the README perf numbers (native-compile,
-    # target-cpu=znver2). When absent (MR pipelines), the script falls
-    # back to the parity job's sqlite_parity.raw.jsonl.
-    - job: benchmark
-      artifacts: true
-      optional: true
-  # README regenerator — non-blocking. The .github workflow's
-  # metrics-readme is in the same posture: it only auto-commits back on
-  # main (`if: github.ref == 'refs/heads/main'`) and is excluded from
-  # the required-check set. Mirror that policy here so MR merging isn't
-  # blocked by a README drift detector that needs main-only ops.
-  allow_failure: true
-  timeout: 30 minutes
-  script:
-    - cargo install tokei --locked --version 14.0.0
-    - bash scripts/sqlite/build-reference.sh
-    # audit-ci writes target/jankurai/repo-score.json regardless of
-    # ratchet decision; tolerate non-zero exit so the README generator
-    # downstream still gets the score artifact. (The audit gate itself
-    # runs as a separate `jankurai-audit` job in the jankurai stage.)
-    - bash ops/ci/jankurai-tools.sh audit-ci || true
-    - bash scripts/generate-metrics-readme.sh
-    - |
-      if git diff --quiet README.md; then
-        echo "README.md is already current."
-      else
-        echo "README drift detected:"
-        git diff --numstat README.md
-      fi
-  artifacts:
-    name: "refreshed-readme"
-    paths: [README.md]
-    expire_in: 7 days
 
 # ── merge-gate evidence job ─────────────────────────────────────────────────
 # Runs only when an api-source pipeline is triggered directly on a branch
@@ -850,8 +816,8 @@ dependency-review:
 benchmark:
   stage: benchmark
   # Default to the docker [build] pool. For maximum-fidelity bare-metal
-  # benchmarks, the operator should register a shell runner tagged
-  # [bench-native] (see scripts/ci/register-bench-runner.sh) and bump
+  # benchmarks, the operator should provision a managed shell runner tagged
+  # [bench-native] through the Jeryu control plane and bump
   # this `tags:` line to [bench-native, build] so jobs prefer the shell
   # runner. Docker's overhead is ~2-5% on syscall-heavy workloads vs
   # bare-metal; the JSONL evidence is comparable across runs on the
@@ -878,7 +844,7 @@ benchmark:
     PERF_ROOT: "target/perf"
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3
+    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
   script:
@@ -906,8 +872,8 @@ benchmark:
     #    can be stripped by some kernel configs. Pinning to `znver2`
     #    deterministically captures all 18 Zen 2 microarch ISA hints
     #    (avx2/bmi2/fma/pclmul/sse4a/etc.) regardless of cpuid masking.
-    #    When the operator switches to a shell runner (see
-    #    scripts/ci/register-bench-runner.sh), `znver2` still applies;
+    #    When the operator switches to a managed shell runner, `znver2`
+    #    still applies;
     #    on a non-Zen-2 host the operator should change this line.
     - 'RUSTFLAGS="-C link-arg=-fuse-ld=mold -C target-cpu=znver2" cargo build --release --locked -p redlinedb-cli --bin redlinedb'
     - 'sha256sum target/release/redlinedb | tee target/perf-native-binary.sha256.txt || true'
@@ -950,7 +916,7 @@ benchmark-rql:
     PERF_ROOT: "target/perf"
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3
+    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
   script:

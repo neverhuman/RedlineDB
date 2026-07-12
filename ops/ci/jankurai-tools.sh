@@ -39,14 +39,8 @@ audit_cmd="jankurai audit . --mode ratchet --baseline target/jankurai/accepted-b
 sec_cmd="jankurai security run . --out target/jankurai/security/evidence.json"
 
 audit_ratchet_acceptable() {
-    jq -e '
-      (.score // 0) >= (.decision.minimum_score // 85)
-      and ((.decision.hard_findings // 0) == 0)
-      and (((.caps_applied // []) | length) == 0)
-      and ((.decision.ratchet.score_delta // -999999) >= 0)
-      and (((.decision.ratchet.new_caps // []) | length) == 0)
-      and (((.decision.ratchet.new_hard_findings // []) | length) == 0)
-    ' "$LOG_DIR/repo-score.json" >/dev/null 2>&1
+    bash tools/evidence-processor/run.sh \
+        jankurai-ratchet "$LOG_DIR/repo-score.json"
 }
 
 run_or_record() {

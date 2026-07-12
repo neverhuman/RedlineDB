@@ -9,6 +9,16 @@ name = "pr-ci"
 purpose = "exact local mirror of .github/workflows/ci.yml"
 
 [[lane]]
+command = "bash ops/ci/no-python-policy.sh"
+name = "no-python-policy"
+purpose = "fail closed on Python source files and executable interpreter or package invocations"
+
+[[lane]]
+command = "bash ops/ci/evidence-processor.sh"
+name = "evidence-processor"
+purpose = "build and test the locked, bundled Rust official-evidence processor without sibling checkouts"
+
+[[lane]]
 command = "just setup"
 name = "setup"
 purpose = "workspace cache warmup proof"
@@ -139,21 +149,6 @@ name = "audit"
 purpose = "write jankurai score artifacts"
 
 [[lane]]
-command = "just perf-case-lists"
-name = "perf-case-lists"
-purpose = "regenerate quick-set/medium-set from the pinned redline-testing corpus"
-
-[[lane]]
-command = "just perf-quick target/release/redlinedb candidate"
-name = "perf-quick"
-purpose = "sub-5-minute A/B perf proof against the ~40-case curated quick-set"
-
-[[lane]]
-command = "just perf-medium target/release/redlinedb candidate"
-name = "perf-medium"
-purpose = "PR-gate perf proof against ~300 cases (~20-30 min)"
-
-[[lane]]
 command = "just perf-full target/release/redlinedb candidate"
 name = "perf-full"
 purpose = "full 1127-case parity corpus, mirrors CI official gate"
@@ -164,7 +159,7 @@ name = "security"
 purpose = "secret, dependency, and workflow proof"
 
 [[lane]]
-command = "just check"
+command = "just release"
 name = "release"
 purpose = "full merge gate"
 

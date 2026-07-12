@@ -2,11 +2,18 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 default: check
 
+fast: check
+
 check:
   bash scripts/ci-local.sh required
 
 score:
   jankurai audit . --full --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --policy agent/audit-policy.toml
+
+security:
+  bash tools/security-lane.sh
+
+release: check security score
 
 security-sbom:
   mkdir -p .jankurai/security

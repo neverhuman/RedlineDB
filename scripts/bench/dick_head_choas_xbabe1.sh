@@ -64,12 +64,10 @@ STAMP="dick-head-choas-${PROFILE}-$(date +%Y%m%d-%H%M%S)"
   --config "${CONFIG}" \
   --out-dir "target/bench/xbabe1/${STAMP}" \
   --seed 7 \
-  --repetitions $([ "${PROFILE}" = "extreme" ] && printf '1' || printf '2') \
-  --warmup $([ "${PROFILE}" = "extreme" ] && printf '0' || printf '1')
+  --repetitions "$([ "${PROFILE}" = "extreme" ] && printf '1' || printf '2')" \
+  --warmup "$([ "${PROFILE}" = "extreme" ] && printf '0' || printf '1')"
 
 ./scripts/bench/xbabe1_fetch.sh "${STAMP}"
-python3 scripts/bench/export_benchmark_results.py
-
 ARCHIVE="/tmp/redlinedb-xbabe1-${STAMP}.tar.gz"
 tar -czf "${ARCHIVE}" -C target/bench/xbabe1 "${STAMP}"
 shasum -a 256 "${ARCHIVE}"

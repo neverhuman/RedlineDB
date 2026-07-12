@@ -13,7 +13,7 @@
 #   * llvm-bolt v18 or newer.
 #   * `perf` with LBR support (cycles:u -j any,u,k).
 #   * A PGO build done with --emit-relocs in the link step. Run:
-#         scripts/perf/pgo.sh --for-bolt --training-subset medium
+#         scripts/perf/pgo.sh --for-bolt
 #     first; otherwise BOLT cannot rewrite the binary.
 #
 # Usage:
@@ -75,7 +75,7 @@ fi
 # (it bails out with "BOLT-ERROR: relocations against code are missing").
 if ! readelf -S "$INPUT_BIN" 2>/dev/null | grep -q '\.rela\.text\|\.rel\.text'; then
     echo "bolt.sh: $INPUT_BIN appears to lack code relocations (.rela.text)." >&2
-    echo "         Rebuild with: scripts/perf/pgo.sh --for-bolt --training-subset medium" >&2
+    echo "         Rebuild with: scripts/perf/pgo.sh --for-bolt" >&2
     exit 2
 fi
 

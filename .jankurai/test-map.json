@@ -264,8 +264,8 @@
       "proof_lane": "official-evidence-guard"
     },
     "scripts/process-redline-testing-evidence.sh": {
-      "command": "rtk bash -n scripts/process-redline-testing-evidence.sh",
-      "purpose": "verify the official evidence processor stays shell-parseable",
+      "command": "rtk bash -n scripts/process-redline-testing-evidence.sh && rtk bash ops/ci/evidence-processor.sh",
+      "purpose": "verify the official evidence wrapper resolves the locked bundled Rust processor",
       "proof_lane": "redline-testing-official"
     },
     "scripts/ci-local.sh": {
@@ -350,6 +350,26 @@
       "command": "rtk bash scripts/ci-local.sh pr-ci",
       "purpose": "verify GitHub CI remains mirrored by the local PR dispatcher and runs the verified redline-testing official gate",
       "proof_lane": "pr-ci"
+    },
+    "ops/ci/no-python-policy.sh": {
+      "command": "rtk bash ops/ci/no-python-policy.sh",
+      "purpose": "compile and run the fail-closed Rust repository language-policy tests",
+      "proof_lane": "no-python-policy"
+    },
+    "ops/ci/evidence-processor.sh": {
+      "command": "rtk bash ops/ci/evidence-processor.sh",
+      "purpose": "test the locked bundled Rust evidence processor, including missing-input refusal",
+      "proof_lane": "evidence-processor"
+    },
+    "tools/evidence-processor/": {
+      "command": "rtk bash ops/ci/evidence-processor.sh",
+      "purpose": "verify official evidence processing remains reproducible in detached hub snapshots",
+      "proof_lane": "evidence-processor"
+    },
+    "tools/no-python-policy.rs": {
+      "command": "rtk bash ops/ci/no-python-policy.sh",
+      "purpose": "reject Python source files and executable interpreter or package invocations",
+      "proof_lane": "no-python-policy"
     },
     "ops/ci/lib.sh": {
       "command": "rtk bash -n ops/ci/lib.sh && rtk just redline-testing-official",
