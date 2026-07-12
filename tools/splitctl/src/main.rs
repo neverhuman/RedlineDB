@@ -166,6 +166,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("manifest") => manifest_command(args.collect())?,
         Some("managed-repos") => managed_repos_command(args.collect())?,
         Some("release-cargo-commands") => release_cargo_commands_command(args.collect())?,
+        Some("run-release-cargo-commands") => {
+            run_release_cargo_commands_command(args.collect())?
+        }
+        Some("validate-score") => validate_score_command(args.collect())?,
+        Some("release-tree-identity") => release_tree_identity_command(args.collect())?,
         Some("sync-derived-manifests") => sync_derived_manifests_command(args.collect())?,
         Some("validate-manifest") => validate_manifest_command(args.collect())?,
         Some("validate-family") => preflight(args.collect())?,
@@ -340,6 +345,230 @@ fn release_cargo_commands_command(args: Vec<String>) -> Result<(), Box<dyn std::
         serde_json::to_string_pretty(&release_cargo_policy(&repo_name, raw)?)?
     );
     Ok(())
+}
+
+fn run_release_cargo_commands_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut repo_name = None;
+    let mut receipt = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--repo" => repo_name = Some(iter.next().ok_or("--repo needs a name")?),
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            value => {
+                return Err(format!("unknown run-release-cargo-commands argument: {value}").into())
+            }
+        }
+    }
+    let repo_name = repo_name.ok_or("run-release-cargo-commands requires --repo")?;
+    let receipt = receipt.ok_or("run-release-cargo-commands requires --receipt")?;
+    let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    validate_manifest_data(&data, &manifest, false)?;
+    let raw = release_repo_entry(&data, &repo_name)?;
+    let policy = release_cargo_policy(&repo_name, raw)?;
+    let commands = policy
+        .get("commands")
+        .and_then(JsonValue::as_array)
+        .ok_or("release Cargo policy has no commands")?;
+    if commands.is_empty() {
+        return Err("release Cargo policy has no commands".into());
+    }
+    let mut report = receipt_header(
+        "jain.release-cargo-execution/v1",
+        "run-release-cargo-commands",
+        true,
+    );
+    report["repository"] = json!(repo_name);
+    report["manifest"] = json!(manifest);
+    report["working_directory"] = json!(env::current_dir()?);
+    report["policy"] = policy.clone();
+    let mut executed = Vec::new();
+    let result = (|| {
+        for command in commands {
+            let label = command
+                .get("label")
+                .and_then(JsonValue::as_str)
+                .ok_or("release Cargo command is missing label")?;
+            if command.get("program").and_then(JsonValue::as_str) != Some("cargo") {
+                return Err(format!("unsupported release command program for {label}").into());
+            }
+            let arguments = command
+                .get("args")
+                .and_then(JsonValue::as_array)
+                .ok_or("release Cargo command is missing args")?
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .map(str::to_owned)
+                        .ok_or("release Cargo argument is not a string")
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            eprintln!("running release Cargo command: {label}");
+            let status = Command::new("cargo").args(&arguments).status()?;
+            executed.push(json!({
+                "label": label,
+                "program": "cargo",
+                "args": arguments,
+                "exit_code": status.code(),
+                "status": if status.success() {"pass"} else {"fail"},
+            }));
+            if !status.success() {
+                return Err(format!("release Cargo command failed: {label}").into());
+            }
+        }
+        Ok(())
+    })();
+    report["executed"] = json!(executed);
+    finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn validate_score_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut report_path = None;
+    let mut baseline_path = None;
+    let mut policy_path = None;
+    let mut receipt = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--report" => {
+                report_path = Some(PathBuf::from(iter.next().ok_or("--report needs a path")?))
+            }
+            "--baseline" => {
+                baseline_path = Some(PathBuf::from(iter.next().ok_or("--baseline needs a path")?))
+            }
+            "--policy" => {
+                policy_path = Some(PathBuf::from(iter.next().ok_or("--policy needs a path")?))
+            }
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            value => return Err(format!("unknown validate-score argument: {value}").into()),
+        }
+    }
+    let report_path = report_path.ok_or("validate-score requires --report")?;
+    let baseline_path = baseline_path.ok_or("validate-score requires --baseline")?;
+    let policy_path = policy_path.ok_or("validate-score requires --policy")?;
+    let receipt = receipt.ok_or("validate-score requires --receipt")?;
+    let score_report: JsonValue = serde_json::from_slice(&fs::read(&report_path)?)?;
+    let baseline: JsonValue = serde_json::from_slice(&fs::read(&baseline_path)?)?;
+    let policy: toml::Value = fs::read_to_string(&policy_path)?.parse()?;
+    let score = score_report
+        .get("score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report is missing numeric score")?;
+    let baseline_score = baseline
+        .get("score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score baseline is missing numeric score")?;
+    let hard_value = score_report
+        .get("decision")
+        .and_then(|value| value.get("hard_findings"))
+        .or_else(|| score_report.get("hard_findings"));
+    let hard_findings = match hard_value {
+        Some(JsonValue::Array(values)) => values.len() as u64,
+        Some(value) => value
+            .as_u64()
+            .ok_or("hard_findings must be an array or integer")?,
+        None => 0,
+    };
+    let allowed_drop = policy
+        .get("allowed_score_drop")
+        .and_then(toml::Value::as_float)
+        .or_else(|| {
+            policy
+                .get("allowed_score_drop")
+                .and_then(toml::Value::as_integer)
+                .map(|value| value as f64)
+        })
+        .unwrap_or(0.0);
+    let minimum_score = policy
+        .get("minimum_score")
+        .and_then(toml::Value::as_float)
+        .or_else(|| {
+            policy
+                .get("minimum_score")
+                .and_then(toml::Value::as_integer)
+                .map(|value| value as f64)
+        })
+        .unwrap_or(85.0);
+    let floor_enforced = policy
+        .get("floor_enforced")
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true);
+    let mut failures = Vec::new();
+    if hard_findings != 0 {
+        failures.push(format!("hard findings present: {hard_findings}"));
+    }
+    if score < baseline_score - allowed_drop {
+        failures.push(format!(
+            "score regression: {score} < baseline {baseline_score} (allowed_drop={allowed_drop})"
+        ));
+    }
+    if floor_enforced && score < minimum_score {
+        failures.push(format!(
+            "score {score} below enforced absolute floor {minimum_score}"
+        ));
+    }
+    let mut validation = receipt_header("jain.score-validation/v1", "validate-score", false);
+    validation["score_report"] = json!(report_path);
+    validation["baseline"] = json!(baseline_path);
+    validation["policy"] = json!(policy_path);
+    validation["score"] = json!(score);
+    validation["baseline_score"] = json!(baseline_score);
+    validation["allowed_drop"] = json!(allowed_drop);
+    validation["minimum_score"] = json!(minimum_score);
+    validation["floor_enforced"] = json!(floor_enforced);
+    validation["hard_findings"] = json!(hard_findings);
+    validation["failures"] = json!(failures);
+    let result = if failures.is_empty() {
+        println!("score ok: {score} (baseline posture; hard={hard_findings})");
+        Ok(())
+    } else {
+        Err(format!("score check failed: {}", failures.join("; ")).into())
+    };
+    finish_receipted_operation(&receipt, &mut validation, result)
+}
+
+fn release_tree_identity_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut commit = None;
+    let mut receipt = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(PathBuf::from(iter.next().ok_or("--repo needs a path")?)),
+            "--commit" => commit = Some(iter.next().ok_or("--commit needs a ref")?),
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            value => return Err(format!("unknown release-tree-identity argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("release-tree-identity requires --repo")?;
+    let commit_input = commit.ok_or("release-tree-identity requires --commit")?;
+    let receipt = receipt.ok_or("release-tree-identity requires --receipt")?;
+    let mut report = receipt_header(
+        "jain.release-tree-identity/v1",
+        "release-tree-identity",
+        false,
+    );
+    report["repository"] = json!(repo);
+    report["commit_input"] = json!(commit_input);
+    let result = (|| {
+        let commit = resolve_commit(&repo, &commit_input)?;
+        let checksum = release_tree_checksum(&repo, &commit)?;
+        report["commit"] = json!(commit);
+        report["release_checksum_sha256"] = json!(checksum);
+        println!("{commit} {checksum}");
+        Ok(())
+    })();
+    finish_receipted_operation(&receipt, &mut report, result)
 }
 
 fn release_repo_entry<'a>(

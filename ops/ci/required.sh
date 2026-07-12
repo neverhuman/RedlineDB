@@ -7,7 +7,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 say() { printf '[required:jain-split-ops] %s\n' "$*" >&2; }
 
-for tool in bash cargo git jq rg sha256sum shellcheck; do
+for tool in bash cargo git rg sha256sum shellcheck; do
   command -v "$tool" >/dev/null 2>&1 || {
     printf 'required tool is unavailable: %s\n' "$tool" >&2
     exit 1

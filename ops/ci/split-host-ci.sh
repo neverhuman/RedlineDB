@@ -56,28 +56,6 @@ post_check() {
   say "posted status $CHECK=$status_state on ${SHA:0:8}"
 }
 
-run_release_cargo_commands() {
-  local policy="$1" count index program label
-  local -a args=()
-  count="$(jq -er '.commands | length | select(. > 0)' <<<"$policy")" || return 1
-  for ((index = 0; index < count; index++)); do
-    program="$(jq -er --argjson index "$index" '.commands[$index].program' <<<"$policy")" || return 1
-    label="$(jq -er --argjson index "$index" '.commands[$index].label' <<<"$policy")" || return 1
-    [ "$program" = "cargo" ] || {
-      say "unsupported release command program: $program"
-      return 1
-    }
-    args=()
-    mapfile -t args < <(jq -er --argjson index "$index" '.commands[$index].args[]' <<<"$policy")
-    [ "${#args[@]}" -gt 0 ] || {
-      say "release cargo command has no arguments: $label"
-      return 1
-    }
-    say "running release cargo command: $label"
-    cargo "${args[@]}" || return 1
-  done
-}
-
 [ -e "$REPO_PATH/.git" ] || { echo "not a git repo: $REPO_PATH" >&2; exit 2; }
 curl -fsS "$JAIN_BASE/health" >/dev/null || { echo "forge not healthy" >&2; exit 2; }
 [ -n "$(jeryu_token)" ] || { echo "forge status credential is unavailable" >&2; exit 2; }
@@ -91,13 +69,10 @@ fi
 export JAIN_CI_JOBS="$JOBS" CARGO_BUILD_JOBS="$JOBS" WORKERS="$JOBS"
 say "governed jobs=$JOBS"
 
-release_cargo_policy=""
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
-  command -v jq >/dev/null 2>&1 || { echo "release CI requires jq" >&2; exit 2; }
-  release_cargo_policy="$(
-    cargo run --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" -- \
-      release-cargo-commands --manifest "$CANONICAL_MANIFEST" --repo "$REPO"
-  )" || { echo "failed to derive canonical release Cargo policy for $REPO" >&2; exit 2; }
+  cargo run --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" -- \
+    release-cargo-commands --manifest "$CANONICAL_MANIFEST" --repo "$REPO" \
+    >/dev/null || { echo "failed to derive canonical release Cargo policy for $REPO" >&2; exit 2; }
 fi
 
 git -C "$REPO_PATH" cat-file -e "$SHA^{commit}" 2>/dev/null || { echo "sha $SHA not in $REPO_PATH" >&2; exit 2; }
@@ -185,7 +160,11 @@ say "running scripts/ci-local.sh required for $OWNER/$REPO @ ${SHA:0:8}"
 if (cd "$wt" && bash scripts/ci-local.sh required) >"$log" 2>&1; then
   if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
     if [ -f "$wt/Cargo.toml" ]; then
-      (cd "$wt" && cargo metadata --locked --format-version 1 >/dev/null && run_release_cargo_commands "$release_cargo_policy") >>"$log" 2>&1 || {
+      cargo_receipt="$OPS_ROOT/docs/release-evidence/8.0.0/ci/${REPO}-${SHA}-cargo.json"
+      (cd "$wt" && cargo metadata --locked --format-version 1 >/dev/null && \
+        cargo run --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" -- \
+          run-release-cargo-commands --manifest "$CANONICAL_MANIFEST" --repo "$REPO" \
+          --receipt "$cargo_receipt") >>"$log" 2>&1 || {
         tail -30 "$log" >&2
         post_check failure || true
         say "FAIL release Cargo policy $OWNER/$REPO @ ${SHA:0:8}"
