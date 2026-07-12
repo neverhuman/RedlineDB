@@ -1,0 +1,35 @@
+{
+  "action": "verified-existing",
+  "after": {
+    "local": "a8d683aec6843d0becab2184206354ba774317ac",
+    "remote": "a8d683aec6843d0becab2184206354ba774317ac"
+  },
+  "before": {
+    "local": "a8d683aec6843d0becab2184206354ba774317ac",
+    "remote": "a8d683aec6843d0becab2184206354ba774317ac"
+  },
+  "commit": "a8d683aec6843d0becab2184206354ba774317ac",
+  "commit_input": "a8d683aec6843d0becab2184206354ba774317ac",
+  "mode": "dry-run",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/feat-math/Cargo.toml",
+        "name": "feat-math",
+        "version": "8.0.0"
+      }
+    ],
+    "expected_product_version": "8.0.0",
+    "status": "pass",
+    "version_file": "jain-math-v8.0.0-split.0",
+    "workspace_package_version": "8.0.0"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-math.git",
+  "remote_main": "a8d683aec6843d0becab2184206354ba774317ac",
+  "repository": "/home/ubuntu/jain-split/jain-math",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-math-v8.0.0-split.0",
+  "timestamp_unix": 1783853228
+}
