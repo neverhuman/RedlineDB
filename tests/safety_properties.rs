@@ -128,6 +128,54 @@ fn cli_reports_the_pinned_control_plane_version() {
 }
 
 #[test]
+fn release_cargo_commands_exposes_the_canonical_feature_matrix() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let output = splitctl(&[
+        "release-cargo-commands",
+        "--manifest",
+        manifest.to_str().expect("UTF-8 manifest path"),
+        "--repo",
+        "jain-battle-gpu",
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let policy: Value = serde_json::from_slice(&output.stdout).expect("parse release policy");
+    assert_eq!(policy["mode"], "feature-matrix");
+    assert_eq!(policy["commands"].as_array().unwrap().len(), 4);
+    assert_eq!(policy["commands"][0]["label"], "build-feature-set-1");
+    assert_eq!(policy["commands"][1]["label"], "test-feature-set-1");
+    assert_eq!(
+        policy["commands"][3]["args"][5],
+        "battle-gpu/gpu-dynamic-linking"
+    );
+}
+
+#[test]
+fn manifest_validation_rejects_a_non_maximal_release_feature_set() {
+    let scratch = Scratch::new();
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let canonical = fs::read_to_string(source).expect("read canonical manifest");
+    let invalid = canonical.replace(
+        "release_feature_sets = [\n  [\"gpu\", \"gpu-dynamic-loading\"],\n  [\"gpu-dynamic-linking\"],\n]",
+        "release_feature_sets = [\n  [\"gpu\"],\n  [\"gpu\", \"gpu-dynamic-loading\"],\n]",
+    );
+    assert_ne!(canonical, invalid, "Battle matrix fixture must be replaced");
+    let manifest = scratch.path().join("repos.manifest.toml");
+    fs::write(&manifest, invalid).expect("write invalid manifest");
+
+    let output = splitctl(&[
+        "validate-manifest",
+        "--manifest",
+        manifest.to_str().expect("UTF-8 manifest path"),
+    ]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("is not maximal"));
+}
+
+#[test]
 fn bare_mirror_refresh_is_dry_run_by_default_and_verifies_applied_refs() {
     let scratch = Scratch::new();
     let source = scratch.path().join("source");

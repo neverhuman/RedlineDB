@@ -360,6 +360,11 @@ current_tag = "jain-battle-gpu-v8.0.0-split.0"
 required_check = "jain-battle-gpu/required"
 note = "Optional GPU kernel factory over feat-math."
 cargo_members = ["crates/battle-gpu"]
+release_package = "battle-gpu"
+release_feature_sets = [
+  ["gpu", "gpu-dynamic-loading"],
+  ["gpu-dynamic-linking"],
+]
 copy_paths = ["crates/battle-gpu"]
 source_paths = ["crates/battle-gpu/**"]
 cross_repo_deps = ["jain-math"]
@@ -400,6 +405,11 @@ current_tag = "jain-core-v8.0.0-split.0"
 required_check = "jain-core/required"
 note = "Pipeline hub and canonical progress-event contract producer."
 cargo_members = ["crates/feat-core"]
+release_package = "feat-core"
+release_feature_sets = [
+  ["ci-smoke", "catboost", "xgboost", "lightgbm", "jable", "jable_required_smoke", "starforge-cpu", "hyperion-cpu", "jope", "invention-gpu"],
+  ["ci-smoke", "catboost", "xgboost", "lightgbm", "jable", "jable_required_smoke", "starforge-cpu", "starforge-cuda", "hyperion-cpu", "hyperion-cuda", "jope"],
+]
 copy_paths = ["crates/feat-core", "contracts"]
 source_paths = ["crates/feat-core/**", "contracts/**"]
 cross_repo_deps = ["jain-domain", "jain-math", "jain-catboost", "jain-xgboost", "jain-lightgbm", "jain-jable", "jain-starforge"]

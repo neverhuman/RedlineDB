@@ -44,6 +44,12 @@ struct JeryuRequest {
     body: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReleaseFeatureMatrix {
+    package: String,
+    feature_sets: Vec<Vec<String>>,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args().skip(1);
     match args.next().as_deref() {
@@ -133,6 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("jeryu-local") => jeryu_local(args.collect())?,
         Some("manifest") => manifest_command(args.collect())?,
         Some("managed-repos") => managed_repos_command(args.collect())?,
+        Some("release-cargo-commands") => release_cargo_commands_command(args.collect())?,
         Some("sync-derived-manifests") => sync_derived_manifests_command(args.collect())?,
         Some("validate-manifest") => validate_manifest_command(args.collect())?,
         Some("validate-family") => preflight(args.collect())?,
@@ -147,7 +154,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -283,6 +290,200 @@ fn managed_repo_json(repo: &ManagedRepo) -> JsonValue {
         "family": repo.family,
         "family_registered": repo.family_registered,
     })
+}
+
+fn release_cargo_commands_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut repo_name = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--repo" => repo_name = Some(iter.next().ok_or("--repo needs a name")?),
+            value => return Err(format!("unknown release-cargo-commands argument: {value}").into()),
+        }
+    }
+    let repo_name = repo_name.ok_or("release-cargo-commands requires --repo")?;
+    let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    validate_manifest_data(&data, &manifest, false)?;
+    let raw = release_repo_entry(&data, &repo_name)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&release_cargo_policy(&repo_name, raw)?)?
+    );
+    Ok(())
+}
+
+fn release_repo_entry<'a>(
+    data: &'a toml::Value,
+    repo_name: &str,
+) -> Result<&'a toml::Value, String> {
+    for key in ["repo", "infrastructure_repo"] {
+        if let Some(raw) = data
+            .get(key)
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+            .find(|raw| string(raw, "name").as_deref() == Some(repo_name))
+        {
+            return Ok(raw);
+        }
+    }
+    if let Some(control) = data.get("control_plane") {
+        if string(control, "name").as_deref() == Some(repo_name) {
+            return Ok(control);
+        }
+    }
+    Err(format!(
+        "repository {repo_name} is not declared by the canonical manifest"
+    ))
+}
+
+fn release_cargo_policy(repo_name: &str, raw: &toml::Value) -> Result<JsonValue, String> {
+    let Some(matrix) = release_feature_matrix(raw)? else {
+        return Ok(json!({
+            "schema_version": "jain.split.release-cargo-commands/v1",
+            "repo": repo_name,
+            "mode": "all-features",
+            "commands": [
+                release_cargo_command("build-all-features", "build", None),
+                release_cargo_command("test-all-features", "test", None),
+            ],
+        }));
+    };
+
+    let commands = matrix
+        .feature_sets
+        .iter()
+        .enumerate()
+        .flat_map(|(index, features)| {
+            let qualified = features
+                .iter()
+                .map(|feature| format!("{}/{feature}", matrix.package))
+                .collect::<Vec<_>>()
+                .join(",");
+            [
+                release_cargo_command(
+                    &format!("build-feature-set-{}", index + 1),
+                    "build",
+                    Some(&qualified),
+                ),
+                release_cargo_command(
+                    &format!("test-feature-set-{}", index + 1),
+                    "test",
+                    Some(&qualified),
+                ),
+            ]
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "schema_version": "jain.split.release-cargo-commands/v1",
+        "repo": repo_name,
+        "mode": "feature-matrix",
+        "release_package": matrix.package,
+        "release_feature_sets": matrix.feature_sets,
+        "commands": commands,
+    }))
+}
+
+fn release_cargo_command(label: &str, subcommand: &str, features: Option<&str>) -> JsonValue {
+    let mut args = vec![subcommand.to_owned(), "--locked".to_owned()];
+    if subcommand == "build" {
+        args.push("--release".to_owned());
+    }
+    if let Some(features) = features {
+        args.extend([
+            "--workspace".to_owned(),
+            "--no-default-features".to_owned(),
+            "--features".to_owned(),
+            features.to_owned(),
+        ]);
+    } else {
+        args.push("--all-features".to_owned());
+    }
+    args.push("--all-targets".to_owned());
+    json!({"label": label, "program": "cargo", "args": args})
+}
+
+fn release_feature_matrix(raw: &toml::Value) -> Result<Option<ReleaseFeatureMatrix>, String> {
+    let package_value = raw.get("release_package");
+    let sets_value = raw.get("release_feature_sets");
+    if package_value.is_none() && sets_value.is_none() {
+        return Ok(None);
+    }
+    let package = package_value
+        .and_then(toml::Value::as_str)
+        .ok_or("release_package must be a string when release_feature_sets is declared")?;
+    if !valid_cargo_token(package) {
+        return Err(format!(
+            "release_package contains an unsafe Cargo token: {package}"
+        ));
+    }
+    let raw_sets = sets_value
+        .and_then(toml::Value::as_array)
+        .ok_or("release_feature_sets must be an array when release_package is declared")?;
+    if raw_sets.len() < 2 {
+        return Err("release_feature_sets must declare at least two legal feature sets".to_owned());
+    }
+
+    let mut feature_sets = Vec::with_capacity(raw_sets.len());
+    let mut normalized_sets = Vec::with_capacity(raw_sets.len());
+    let mut seen_sets = std::collections::BTreeSet::new();
+    for (set_index, raw_set) in raw_sets.iter().enumerate() {
+        let raw_features = raw_set
+            .as_array()
+            .ok_or_else(|| format!("release_feature_sets[{set_index}] must be an array"))?;
+        if raw_features.is_empty() {
+            return Err(format!(
+                "release_feature_sets[{set_index}] must not be empty"
+            ));
+        }
+        let mut features = Vec::with_capacity(raw_features.len());
+        let mut normalized = std::collections::BTreeSet::new();
+        for raw_feature in raw_features {
+            let feature = raw_feature.as_str().ok_or_else(|| {
+                format!("release_feature_sets[{set_index}] must contain only strings")
+            })?;
+            if !valid_cargo_token(feature) {
+                return Err(format!(
+                    "release_feature_sets[{set_index}] contains an unsafe Cargo token: {feature}"
+                ));
+            }
+            if !normalized.insert(feature.to_owned()) {
+                return Err(format!(
+                    "release_feature_sets[{set_index}] contains duplicate feature {feature}"
+                ));
+            }
+            features.push(feature.to_owned());
+        }
+        let normalized_key = normalized.iter().cloned().collect::<Vec<_>>();
+        if !seen_sets.insert(normalized_key) {
+            return Err("release_feature_sets contains duplicate legal sets".to_owned());
+        }
+        feature_sets.push(features);
+        normalized_sets.push(normalized);
+    }
+    for (left_index, left) in normalized_sets.iter().enumerate() {
+        for (right_index, right) in normalized_sets.iter().enumerate() {
+            if left_index != right_index && left.is_subset(right) {
+                return Err(format!(
+                    "release_feature_sets[{left_index}] is not maximal; it is a subset of release_feature_sets[{right_index}]"
+                ));
+            }
+        }
+    }
+    Ok(Some(ReleaseFeatureMatrix {
+        package: package.to_owned(),
+        feature_sets,
+    }))
+}
+
+fn valid_cargo_token(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
 }
 
 fn managed_repositories(
@@ -644,13 +845,8 @@ fn validate_manifest_data(
         errors.push("repo_family must be jain-split".to_owned());
     }
     let split_root = string(data, "split_root").map(PathBuf::from);
-    if split_root.is_none() {
-        errors.push("split_root is required".to_owned());
-    } else {
-        let expected_authority = split_root
-            .as_ref()
-            .unwrap()
-            .join("jain-split-ops/repos.manifest.toml");
+    if let Some(split_root) = &split_root {
+        let expected_authority = split_root.join("jain-split-ops/repos.manifest.toml");
         if string(data, "manifest_authority").as_deref()
             != Some(expected_authority.to_string_lossy().as_ref())
         {
@@ -659,6 +855,8 @@ fn validate_manifest_data(
                 expected_authority.display()
             ));
         }
+    } else {
+        errors.push("split_root is required".to_owned());
     }
     let repos = family_repos(data)?;
     let mut names = std::collections::BTreeSet::new();
@@ -715,6 +913,9 @@ fn validate_manifest_data(
         }
         if raw.get("has_jeryu_std").and_then(toml::Value::as_bool) != Some(true) {
             errors.push(format!("{name}: has_jeryu_std must be true"));
+        }
+        if let Err(error) = release_feature_matrix(raw) {
+            errors.push(format!("{name}: {error}"));
         }
         let expected_remote = format!("{FAMILY_REMOTE_PREFIX}{name}.git");
         if declared_remote(raw).as_deref() != Some(expected_remote.as_str()) {
@@ -1353,6 +1554,16 @@ fn create_or_verify_immutable_tag(
     run_git_strict(repo, &["check-ref-format", &tag_ref])?;
     let reviewed = resolve_commit(repo, commit)?;
     report["commit"] = json!(reviewed);
+    let remote_main = ls_remote_ref(repo, remote, "refs/heads/main")?;
+    report["remote_main"] = json!(remote_main);
+    if remote_main.as_deref() != Some(reviewed.as_str()) {
+        report["action"] = json!("refused-non-main-tag");
+        return Err(format!(
+            "refusing to tag {reviewed}: remote main resolves to {}",
+            remote_main.as_deref().unwrap_or("<absent>")
+        )
+        .into());
+    }
     let local_before = local_ref_commit(repo, &tag_ref)?;
     let remote_before = ls_remote_ref(repo, remote, &tag_ref)?;
     report["before"] = json!({"local": local_before, "remote": remote_before});
@@ -4193,6 +4404,180 @@ mod tests {
     }
 
     #[test]
+    fn canonical_release_feature_matrices_derive_exact_cargo_commands() {
+        let manifest: toml::Value = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml"),
+        )
+        .unwrap()
+        .parse()
+        .unwrap();
+
+        let battle = release_cargo_policy(
+            "jain-battle-gpu",
+            release_repo_entry(&manifest, "jain-battle-gpu").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(battle["mode"], "feature-matrix");
+        assert_eq!(
+            battle["commands"][0]["args"],
+            json!([
+                "build",
+                "--locked",
+                "--release",
+                "--workspace",
+                "--no-default-features",
+                "--features",
+                "battle-gpu/gpu,battle-gpu/gpu-dynamic-loading",
+                "--all-targets",
+            ])
+        );
+        assert_eq!(
+            battle["commands"][1]["args"],
+            json!([
+                "test",
+                "--locked",
+                "--workspace",
+                "--no-default-features",
+                "--features",
+                "battle-gpu/gpu,battle-gpu/gpu-dynamic-loading",
+                "--all-targets",
+            ])
+        );
+        assert_eq!(
+            battle["commands"][2]["args"],
+            json!([
+                "build",
+                "--locked",
+                "--release",
+                "--workspace",
+                "--no-default-features",
+                "--features",
+                "battle-gpu/gpu-dynamic-linking",
+                "--all-targets",
+            ])
+        );
+        assert_eq!(
+            battle["commands"][3]["args"],
+            json!([
+                "test",
+                "--locked",
+                "--workspace",
+                "--no-default-features",
+                "--features",
+                "battle-gpu/gpu-dynamic-linking",
+                "--all-targets",
+            ])
+        );
+
+        let core = release_cargo_policy(
+            "jain-core",
+            release_repo_entry(&manifest, "jain-core").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(core["mode"], "feature-matrix");
+        assert_eq!(
+            core["commands"][0]["args"],
+            json!([
+                "build",
+                "--locked",
+                "--release",
+                "--workspace",
+                "--no-default-features",
+                "--features",
+                "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/hyperion-cpu,feat-core/jope,feat-core/invention-gpu",
+                "--all-targets",
+            ])
+        );
+        assert_eq!(
+            core["commands"][1]["args"],
+            json!([
+                "test",
+                "--locked",
+                "--workspace",
+                "--no-default-features",
+                "--features",
+                "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/hyperion-cpu,feat-core/jope,feat-core/invention-gpu",
+                "--all-targets",
+            ])
+        );
+        assert_eq!(
+            core["commands"][2]["args"],
+            json!([
+                "build",
+                "--locked",
+                "--release",
+                "--workspace",
+                "--no-default-features",
+                "--features",
+                "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/starforge-cuda,feat-core/hyperion-cpu,feat-core/hyperion-cuda,feat-core/jope",
+                "--all-targets",
+            ])
+        );
+        assert_eq!(
+            core["commands"][3]["args"],
+            json!([
+                "test",
+                "--locked",
+                "--workspace",
+                "--no-default-features",
+                "--features",
+                "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/starforge-cuda,feat-core/hyperion-cpu,feat-core/hyperion-cuda,feat-core/jope",
+                "--all-targets",
+            ])
+        );
+
+        let generic: toml::Value = "name = \"example\"".parse().unwrap();
+        let generic = release_cargo_policy("example", &generic).unwrap();
+        assert_eq!(generic["mode"], "all-features");
+        assert_eq!(
+            generic["commands"][0]["args"],
+            json!([
+                "build",
+                "--locked",
+                "--release",
+                "--all-features",
+                "--all-targets"
+            ])
+        );
+        assert_eq!(
+            generic["commands"][1]["args"],
+            json!(["test", "--locked", "--all-features", "--all-targets"])
+        );
+    }
+
+    #[test]
+    fn release_feature_matrix_rejects_partial_unsafe_and_non_maximal_policy() {
+        let partial: toml::Value = r#"
+release_feature_sets = [["gpu"], ["gpu-dynamic-linking"]]
+"#
+        .parse()
+        .unwrap();
+        assert!(release_feature_matrix(&partial)
+            .unwrap_err()
+            .contains("release_package must be a string"));
+
+        let unsafe_feature: toml::Value = r#"
+release_package = "battle-gpu"
+release_feature_sets = [["gpu"], ["gpu,dynamic-linking"]]
+"#
+        .parse()
+        .unwrap();
+        assert!(release_feature_matrix(&unsafe_feature)
+            .unwrap_err()
+            .contains("unsafe Cargo token"));
+
+        let non_maximal: toml::Value = r#"
+release_package = "battle-gpu"
+release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
+"#
+        .parse()
+        .unwrap();
+        assert!(release_feature_matrix(&non_maximal)
+            .unwrap_err()
+            .contains("is not maximal"));
+    }
+
+    #[test]
     fn bootstrap_main_is_dry_run_cas_idempotent_and_refuses_history() {
         let root = TestDir::new("bootstrap-main");
         let (repo, reviewed) = init_source(root.path());
@@ -4249,6 +4634,8 @@ mod tests {
         let root = TestDir::new("immutable-tag");
         let (repo, reviewed) = init_source(root.path());
         let remote = init_bare(root.path());
+        let main_refspec = format!("{reviewed}:refs/heads/main");
+        run_git_strict(&repo, &["push", remote.to_str().unwrap(), &main_refspec]).unwrap();
         let receipt = root.path().join("tag.json");
         let args = || {
             vec![

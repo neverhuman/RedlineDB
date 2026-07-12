@@ -155,13 +155,24 @@ untouched, including any pre-existing local/forge mismatch.
 
 Regenerate locks only after all referenced upstream tags exist on local Jeryu. Verify every lock
 URL, tag, commit, package version, and checksum against the canonical manifest. Run from a fresh
-`CARGO_HOME` and target directory:
+`CARGO_HOME` and target directory. The canonical manifest is also the sole authority for legal
+release feature sets; inspect the exact Cargo build and test commands before executing them:
 
 ```bash
 cargo metadata --locked --all-features
-cargo build --locked --all-features --release
-cargo test --locked --all-features
+cargo run --locked --quiet --manifest-path /home/ubuntu/jain-split/jain-split-ops/Cargo.toml -- \
+  release-cargo-commands \
+  --manifest /home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml \
+  --repo REPOSITORY
 ```
+
+Repositories without `release_feature_sets` retain the generic locked all-features release build
+and test gates. Repositories with a declared matrix build and then test every emitted maximal
+compatible set independently with `--no-default-features`; never union the sets. In particular,
+Battle GPU's cudarc dynamic-loading and dynamic-linking modes are exclusive, and Core's
+`invention-gpu` set selects Battle dynamic-loading. Core's `starforge-cuda` and `hyperion-cuda`
+features both select Candle's cudarc dynamic-linking, so they appear only in the separate linking
+set.
 
 Family CI uses detached locked snapshots without sibling source checkouts. `jain-deploy` is the
 single explicit integration exception because its reviewed workspace patches are part of the
