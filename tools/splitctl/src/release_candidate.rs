@@ -112,7 +112,7 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     if (options.selected.is_empty() && options.from_wave == 0)
         || options.selected.iter().any(|name| name == "redline")
     {
-        let redline_ci = run_redline_family(&manifest, &options, false)?;
+        let redline_ci = run_redline_family(&manifest, &options, false, false)?;
         prerequisites_green &= step_green(&redline_ci);
         steps.push(redline_ci);
         if options.apply_tags {
@@ -127,7 +127,7 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             prerequisites_green &= redline_tags.iter().all(step_green);
             steps.extend(redline_tags);
             if prerequisites_green {
-                let mut post_tag = run_redline_family(&manifest, &options, true)?;
+                let mut post_tag = run_redline_family(&manifest, &options, false, true)?;
                 post_tag["name"] = json!("redline-family-ci-post-tag");
                 prerequisites_green &= step_green(&post_tag);
                 steps.push(post_tag);
@@ -821,6 +821,7 @@ fn run_redline_family(
     manifest: &toml::Value,
     options: &Options,
     force: bool,
+    require_verified_tags: bool,
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
     let nested = manifest
         .get("nested_families")
@@ -839,9 +840,21 @@ fn run_redline_family(
             .ok_or("Redline manifest_path is missing")?,
     );
     let nested_hash = sha256_file(&nested_manifest)?;
-    let receipt = options.evidence_dir.join("redline-family-ci.json");
+    let release_root = options
+        .evidence_dir
+        .parent()
+        .ok_or("orchestrator evidence directory has no release root")?;
+    let receipt = release_root.join("redline-family-ci.json");
     let log = options.evidence_dir.join("redline-family-ci.log");
-    if !force && !options.force && cached_family(&receipt, &nested_hash, options.max_age_hours)? {
+    if !force
+        && !options.force
+        && cached_family(
+            &receipt,
+            &nested_hash,
+            options.max_age_hours,
+            require_verified_tags,
+        )?
+    {
         return Ok(json!({
             "name": "redline-family-ci",
             "status": "cached",
@@ -1095,6 +1108,7 @@ fn cached_family(
     receipt: &Path,
     manifest_sha256: &str,
     max_age_hours: u64,
+    require_verified_tags: bool,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     if !receipt.is_file() {
         return Ok(false);
@@ -1116,7 +1130,7 @@ fn cached_family(
     Ok(value["status"] == "pass"
         && value["manifest_sha256"] == manifest_sha256
         && generated
-        && tags_verified
+        && (!require_verified_tags || tags_verified)
         && now_unix().saturating_sub(modified) <= max_age_hours.saturating_mul(3600))
 }
 
