@@ -25,6 +25,8 @@
     "rust-toolchain.toml": "tools",
     "scripts/": "ops",
     "scripts/**": "ops",
+    "schemas/": "tools",
+    "schemas/**": "tools",
     "ops/": "ops",
     "ops/**": "ops",
     "tools/": "tools",

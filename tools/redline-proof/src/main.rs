@@ -2186,6 +2186,7 @@ fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
 
 fn validate(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
     let manifest = load_manifest(manifest_path)?;
+    validate_receipt_schemas(manifest.path.parent().unwrap_or(Path::new(".")))?;
     for repo in &manifest.repos {
         let checkout = manifest.repo_root(repo);
         if !checkout.join(".git").exists() {
@@ -2226,6 +2227,36 @@ fn validate(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
         "redline manifest and lock ok: {} repositories",
         lock_entries(&value)?.len()
     );
+    Ok(())
+}
+
+fn validate_receipt_schemas(root: &Path) -> Result<()> {
+    for name in [
+        "redline-family-ci.schema.json",
+        "redline-consumer-evidence.schema.json",
+        "redline-proof-refresh.schema.json",
+    ] {
+        let path = root.join("schemas").join(name);
+        let value = read_json(&path)?;
+        if value.get("$schema").and_then(JsonValue::as_str)
+            != Some("https://json-schema.org/draft/2020-12/schema")
+            || value.get("$id").and_then(JsonValue::as_str).is_none()
+            || value.get("type").and_then(JsonValue::as_str) != Some("object")
+            || value
+                .get("required")
+                .and_then(JsonValue::as_array)
+                .is_none()
+            || value
+                .get("properties")
+                .and_then(JsonValue::as_object)
+                .is_none()
+        {
+            return Err(error(format!(
+                "receipt schema lacks governed draft, identity, object type, required fields, or properties: {}",
+                path.display()
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -2703,5 +2734,11 @@ mod tests {
         )
         .unwrap();
         assert!(audit_verify(&report).is_err());
+    }
+
+    #[test]
+    fn governed_receipt_schemas_parse() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        validate_receipt_schemas(root).unwrap();
     }
 }

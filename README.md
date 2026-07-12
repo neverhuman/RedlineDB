@@ -1,5 +1,19 @@
 # Redline split operations
 
+[Agent entrypoint](AGENTS.md) · Candidate status: CI and cutover evidence are
+reported by the protected `redline-split-ops/required` lane and checksummed
+receipts; no production promotion is claimed.
+
+## Quick start
+
+With Rust 1.96.0 and the pinned local security tools installed, run:
+
+```bash
+just check
+just security
+just score
+```
+
 `redline-split-ops` owns the nested Redline family manifest, lock verification,
 clone/update delegation, bounded family CI, and diagnostics. The four child
 repositories remain independent Git repositories and are never included in an

@@ -25,6 +25,8 @@
     "rust-toolchain.toml": {"command": "just check", "lane": "check", "purpose": "verify the pinned Rust toolchain"},
     "scripts/": {"command": "just check", "lane": "check", "purpose": "verify local CI dispatchers"},
     "scripts/**": {"command": "just check", "lane": "check", "purpose": "verify local CI dispatchers"},
+    "schemas/": {"command": "just required", "lane": "contract", "purpose": "parse governed receipt schemas"},
+    "schemas/**": {"command": "just required", "lane": "contract", "purpose": "parse governed receipt schemas"},
     "ops/": {"command": "bash ops/ci/quality-gates.sh", "lane": "ci", "purpose": "verify canonical CI orchestration"},
     "ops/**": {"command": "bash ops/ci/quality-gates.sh", "lane": "ci", "purpose": "verify canonical CI orchestration"},
     "tools/": {"command": "just required", "lane": "required", "purpose": "run Rust proof and safety tests"},

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/redline-consumer-evidence.schema.json",
+  "title": "Redline consumer evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "consumer", "family", "generated_at", "status", "source_commit", "required_check", "engine_tag", "engine_commit", "proof_lock_id", "family_ci_receipt_sha256"],
+  "properties": {
+    "schema_version": {"const": "redline.consumer-evidence/v1"},
+    "consumer": {"enum": ["jain-split", "jeryu-split"]},
+    "family": {"const": "redline-split"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "status": {"const": "pass"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "required_check": {"type": "string", "pattern": "^(jain|jeryu)-split/redline-consumer$"},
+    "engine_tag": {"type": "string", "pattern": "^redline-core-v[0-9]+\\.[0-9]+\\.[0-9]+-jain\\.[0-9]+$"},
+    "engine_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "proof_lock_id": {"type": "string", "minLength": 1},
+    "family_ci_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

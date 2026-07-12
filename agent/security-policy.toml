@@ -7,5 +7,11 @@ advisory_tools = []
 fail_lane_on = "high"
 
 [profiles.ci]
+enabled_tools = ["cargo-audit", "cargo-deny", "gitleaks", "actionlint", "zizmor", "syft"]
+required_tools = ["cargo-audit", "cargo-deny", "gitleaks", "actionlint", "zizmor", "syft"]
+advisory_tools = []
+
+[profiles.local]
+enabled_tools = ["cargo-audit", "cargo-deny", "gitleaks", "actionlint", "zizmor", "syft"]
 required_tools = ["cargo-audit", "cargo-deny", "gitleaks", "actionlint", "zizmor", "syft"]
 advisory_tools = []

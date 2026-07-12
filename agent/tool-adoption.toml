@@ -1,20 +1,69 @@
 schema_version = "1.0.0"
-workspace = "redline-split-ops"
 
-[[tool]]
+[[tools]]
 id = "audit-ci"
-command = "just score"
-lane = "score"
-artifacts = [".jankurai/repo-score.json", ".jankurai/repo-score.md"]
+mode = "auto"
 
-[[tool]]
+[[tools]]
+id = "proof-routing"
+mode = "auto"
+
+[[tools]]
+id = "proofbind"
+mode = "auto"
+
+[[tools]]
+id = "proofmark-rust"
+mode = "auto"
+
+[[tools]]
+id = "copy-code"
+mode = "auto"
+
+[[tools]]
 id = "security"
-command = "just security"
-lane = "security"
-artifacts = ["target/security/redline-split-ops.spdx.json"]
+mode = "auto"
 
-[[tool]]
+[[tools]]
+id = "ci-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "git-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "release-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "coverage-evidence"
+mode = "auto"
+
+[[tools]]
+id = "contract-drift"
+mode = "auto"
+
+[[tools]]
+id = "rust-witness"
+mode = "auto"
+
+[[tools]]
+id = "authz-matrix"
+mode = "auto"
+
+[[tools]]
+id = "input-boundary"
+mode = "auto"
+
+[[tools]]
+id = "agent-tool-supply"
+mode = "auto"
+
+[[tools]]
 id = "release-readiness"
-command = "./redlinectl cutover-verify"
-lane = "cutover"
-artifacts = ["redline.lock.toml"]
+mode = "auto"
+
+[[tools]]
+id = "cost-budget"
+mode = "auto"

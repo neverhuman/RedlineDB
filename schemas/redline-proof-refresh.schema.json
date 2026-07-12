@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/redline-proof-refresh.schema.json",
+  "title": "Redline proof refresh receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "family", "generated_at", "status", "cutover_eligible", "proof_lock_id", "engine_tag", "engine_commit", "family_ci_receipt", "family_ci_receipt_sha256", "consumer_evidence_sha256", "authoritative_lock", "compatibility_mirror", "lock_sha256"],
+  "properties": {
+    "schema_version": {"const": "redline.proof-refresh/v1"},
+    "family": {"const": "redline-split"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "status": {"const": "pass"},
+    "cutover_eligible": {"const": true},
+    "proof_lock_id": {"type": "string"},
+    "engine_tag": {"type": "string"},
+    "engine_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "family_ci_receipt": {"type": "string"},
+    "family_ci_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "consumer_evidence_sha256": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jain-split", "jeryu-split"],
+      "properties": {
+        "jain-split": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "jeryu-split": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "authoritative_lock": {"type": "string"},
+    "compatibility_mirror": {"type": "string"},
+    "lock_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

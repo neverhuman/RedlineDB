@@ -64,10 +64,29 @@ jobs:
           cache: false
       - name: Install exact audit toolchain
         run: bash ops/ci/install-tools.sh
+      - name: Prepare exact Jankurai source and reviewed baseline
+        run: |
+          bash ops/ci/prepare-jankurai-source.sh
+          install -d target/jankurai .jankurai
+          install -m 0644 agent/jankurai-baseline.json target/jankurai/accepted-baseline.json
+      - name: Bind strict security evidence
+        run: |
+          jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json --script ops/ci/security.sh
+          jankurai security run . --out target/jankurai/security/evidence.json --strict --profile ci --script ops/ci/security.sh
+      - name: Bind changed surfaces to proof obligations
+        run: jankurai proofbind verify . --changed-from origin/main --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
+      - name: Run exact language bad-behavior suite
+        run: |
+          set -o pipefail
+          (cd target/jankurai-source-1.6.10 && cargo test -p jankurai --test language_bad_behavior) 2>&1 | tee target/jankurai/language-bad-behavior.log
+      - name: Verify coverage and evidence sources
+        run: jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md
       - name: Jankurai score and hard-finding gate
-        env:
-          JANKURAI_AUDIT_COMMAND: "jankurai audit . --json .jankurai/repo-score.json --md .jankurai/repo-score.md"
-        run: bash ops/ci/score.sh
+        run: |
+          jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml --repair-queue-jsonl target/jankurai/repair-queue.jsonl
+          install -m 0644 target/jankurai/repo-score.json .jankurai/repo-score.json
+          install -m 0644 target/jankurai/repo-score.md .jankurai/repo-score.md
+          ./redlinectl audit-verify target/jankurai/repo-score.json
       - name: Upload JSON and Markdown audit evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -76,7 +95,15 @@ jobs:
           path: |
             .jankurai/repo-score.json
             .jankurai/repo-score.md
-            target/jankurai/
+            target/jankurai/repo-score.json
+            target/jankurai/repo-score.md
+            target/jankurai/repair-queue.jsonl
+            target/jankurai/proofbind/surface-witness.json
+            target/jankurai/proofbind/obligations.json
+            target/jankurai/security/evidence.json
+            target/jankurai/language-bad-behavior.log
+            target/jankurai/coverage/coverage-audit.json
+            target/jankurai/coverage/coverage-audit.md
           if-no-files-found: error
 
   release-readiness:

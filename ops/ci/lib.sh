@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034 # Constants are consumed by scripts that source this library.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -30,5 +31,7 @@ require_jankurai() {
     printf 'expected jankurai %s\n' "$JANKURAI_VERSION" >&2
     return 1
   }
-  export PATH="$(dirname "$binary"):$PATH"
+  local binary_dir
+  binary_dir="$(dirname "$binary")"
+  export PATH="$binary_dir:$PATH"
 }

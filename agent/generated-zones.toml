@@ -11,3 +11,10 @@ source = "pinned Jankurai audit"
 command = "just score"
 read_only = true
 write_policy = "auditor_output"
+
+[[zone]]
+path = "schemas/"
+source = "Rust receipt and lock validators"
+command = "cargo test --locked"
+read_only = false
+write_policy = "reviewed_contract"

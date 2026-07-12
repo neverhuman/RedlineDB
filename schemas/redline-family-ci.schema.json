@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/redline-family-ci.schema.json",
+  "title": "Redline family CI receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "family", "generated_at", "started_at", "manifest", "manifest_sha256", "strict_tools", "status", "repositories"],
+  "properties": {
+    "schema_version": {"const": "redline.family-ci/v1"},
+    "family": {"const": "redline-split"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "manifest": {"type": "string", "minLength": 1},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "strict_tools": {"const": true},
+    "status": {"enum": ["pass", "fail"]},
+    "repositories": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["name", "required_check", "tag", "commands", "status", "failure"],
+        "properties": {
+          "name": {"enum": ["redline", "redline-core", "redline-testing", "redline-web"]},
+          "path": {"type": "string"},
+          "branch": {"type": "string"},
+          "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "forge_main": {"type": ["string", "null"]},
+          "origin": {"type": "string"},
+          "required_check": {"type": "string"},
+          "tag": {"type": "string"},
+          "tag_state": {"enum": ["absent", "verified"]},
+          "tag_metadata": {"type": ["object", "null"]},
+          "commands": {"type": "array"},
+          "log": {"type": ["string", "null"]},
+          "log_sha256": {"type": ["string", "null"]},
+          "status": {"enum": ["pass", "fail", "blocked"]},
+          "failure": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

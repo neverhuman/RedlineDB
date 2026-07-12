@@ -5,6 +5,7 @@ hard_findings_allowed = 0
 required_tool = "jankurai"
 required_tool_version = "1.6.10"
 floor_enforced = true
+cost_surface = []
 
 [inherited_source_caps]
 documented_in = "docs/architecture.md"
