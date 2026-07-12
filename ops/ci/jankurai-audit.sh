@@ -114,16 +114,8 @@ step_audit_ratchet() {
         return 0
     fi
 
-    if jq -e '
-        (.decision // {}) as $decision
-        | ($decision.ratchet // {}) as $ratchet
-        | (.score // 0) >= ($decision.minimum_score // 85)
-        and ($decision.hard_findings // 1) == 0
-        and ((.caps_applied // []) | length) == 0
-        and (($ratchet.new_caps // []) | length) == 0
-        and (($ratchet.new_hard_findings // []) | length) == 0
-        and ($ratchet.score_delta // -1) >= 0
-    ' "$LOG_DIR/repo-score.json" >/dev/null
+    if cargo run --quiet --locked -p redlinedb-bench --bin score_policy -- \
+        audit-acceptance "$LOG_DIR/repo-score.json"
     then
         printf 'jankurai ratchet accepted: no score drop, new caps, or new hard findings vs baseline\n'
         return 0

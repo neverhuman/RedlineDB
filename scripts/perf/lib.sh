@@ -20,6 +20,7 @@ set -euo pipefail
 
 PERF_ROOT="${PERF_ROOT:-target/perf}"
 
+REDLINE_CORE_ROOT="${REDLINE_CORE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 REDLINE_TESTING_BIN_DEFAULT="${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing"
 REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-$REDLINE_TESTING_BIN_DEFAULT}"
@@ -32,6 +33,11 @@ SQLITE_REF_BIN="${SQLITE_REF_BIN:-$SQLITE_REF_BIN_DEFAULT}"
 if [ -n "${CI_REDLINE_TESTING_BIN:-}" ]; then
   REDLINE_TESTING_BIN="$CI_REDLINE_TESTING_BIN"
 fi
+
+perf_evidence() {
+  cargo run --quiet --locked --manifest-path "$REDLINE_CORE_ROOT/Cargo.toml" \
+    -p redlinedb-bench --bin perf_evidence -- "$@"
+}
 
 perf_require_bins() {
   local target_bin="$1"
@@ -50,13 +56,7 @@ perf_require_bins() {
     exit 2
   fi
   # Refuse to time sqlite3 vs itself — guards against accidental misuse.
-  local target_sha sqlite_sha
-  target_sha="$(sha256sum "$target_bin" | awk '{print $1}')"
-  sqlite_sha="$(sha256sum "$SQLITE_REF_BIN" | awk '{print $1}')"
-  if [ "$target_sha" = "$sqlite_sha" ]; then
-    printf 'perf: target binary sha256 equals sqlite3 reference — refusing\n' >&2
-    exit 2
-  fi
+  perf_evidence assert-distinct-binaries "$target_bin" "$SQLITE_REF_BIN"
 }
 
 perf_tmp_root() {
@@ -112,47 +112,5 @@ perf_run_jsonl() {
 # the user sees results inline.
 perf_summarize_jsonl() {
   local jsonl="$1"
-  local summary cases samples median p90 faster
-  summary="$(jq -Rsr '
-    def median:
-      sort as $values
-      | ($values | length) as $count
-      | if $count == 0 then null
-        elif ($count % 2) == 1 then $values[($count / 2 | floor)]
-        else (($values[$count / 2 - 1] + $values[$count / 2]) / 2)
-        end;
-    [
-      split("\n")[]
-      | fromjson?
-      | select(
-          .status == "passed"
-          and (.sample_role | type) == "string"
-          and (.sample_role | startswith("measured"))
-          and (.latency_ratio | type) == "number"
-          and .latency_ratio > 0
-        )
-    ] as $measured
-    | ($measured | map(.latency_ratio)) as $ratios
-    | [
-        ($measured | map(.case_id) | unique | length),
-        ($measured | length),
-        ($ratios | median),
-        (if ($ratios | length) >= 10
-         then ($ratios | sort | .[((length - 1) * 0.9 | floor)])
-         else null end),
-        ($ratios | map(select(. < 1.0)) | length)
-      ]
-    | map(if . == null then "null" else tostring end)
-    | join("|")
-  ' "$jsonl")"
-  IFS='|' read -r cases samples median p90 faster <<<"$summary"
-  printf '  cases measured: %s\n' "$cases"
-  printf '  samples:        %s\n' "$samples"
-  if [ "$median" != "null" ]; then
-    printf '  ratio median:   %.3f\n' "$median"
-    if [ "$p90" != "null" ]; then
-      printf '  ratio p90:      %.3f\n' "$p90"
-    fi
-    printf '  cases faster than sqlite: %s/%s\n' "$faster" "$samples"
-  fi
+  perf_evidence summarize-jsonl "$jsonl"
 }

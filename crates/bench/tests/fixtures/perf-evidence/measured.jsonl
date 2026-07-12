@@ -1,0 +1,13 @@
+{"case_id":"case-01","status":"passed","sample_role":"measured-1","latency_ratio":1}
+this malformed line is ignored like the frozen reference
+{"case_id":"case-02","status":"passed","sample_role":"measured-1","latency_ratio":2}
+{"case_id":"case-03","status":"passed","sample_role":"measured-1","latency_ratio":3}
+{"case_id":"case-04","status":"passed","sample_role":"measured-1","latency_ratio":4}
+{"case_id":"case-05","status":"passed","sample_role":"measured-1","latency_ratio":5}
+{"case_id":"case-06","status":"passed","sample_role":"measured-1","latency_ratio":6}
+{"case_id":"case-07","status":"passed","sample_role":"measured-1","latency_ratio":7}
+{"case_id":"case-08","status":"passed","sample_role":"measured-1","latency_ratio":8}
+{"case_id":"case-09","status":"passed","sample_role":"measured-1","latency_ratio":9}
+{"case_id":"case-10","status":"passed","sample_role":"measured-1","latency_ratio":10}
+{"case_id":"warmup","status":"passed","sample_role":"warmup","latency_ratio":0.5}
+{"case_id":"failed","status":"failed","sample_role":"measured-1","latency_ratio":0.5}

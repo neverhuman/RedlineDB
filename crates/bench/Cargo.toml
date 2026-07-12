@@ -45,6 +45,14 @@ path = "src/bin/sqlite_parity.rs"
 name = "evidence_processor"
 path = "src/bin/evidence_processor.rs"
 
+[[bin]]
+name = "score_policy"
+path = "src/bin/score_policy.rs"
+
+[[bin]]
+name = "perf_evidence"
+path = "src/bin/perf_evidence.rs"
+
 [dev-dependencies]
 # Lane F6: integration tests in `tests/failpoint_matrix.rs` drive
 # the `fail` crate directly to assert that a `return` action takes

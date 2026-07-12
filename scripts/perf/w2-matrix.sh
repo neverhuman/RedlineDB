@@ -164,55 +164,20 @@ write_manifest_entry() {
   if [ "$DRY_RUN" = "1" ]; then
     return
   fi
-  local bin_sha bin_size rustc_version
-  bin_sha="$(sha256sum "$bin" | awk '{print $1}')"
-  bin_size="$(stat -c %s "$bin" 2>/dev/null || stat -f %z "$bin")"
-  rustc_version="$(rustc --version)"
-  MANIFEST_PATH="$MANIFEST" \
-  PROFILE="$profile" \
-  ALLOCATOR="$allocator" \
-  LABEL="$label" \
-  BIN_PATH="$bin" \
-  BIN_SHA="$bin_sha" \
-  BIN_SIZE="$bin_size" \
-  SUITE="$SUITE" \
-  PERF_JSONL="$perf_jsonl" \
-  REDLINE_BASE_RUSTFLAGS="$REDLINE_BASE_RUSTFLAGS" \
-  RUSTC_VERSION="$rustc_version" \
-  CAPTURED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  HOST_NODE="$(hostname)" \
-  HOST_MACHINE="$(uname -m)" \
-  HOST_SYSTEM="$(uname -s)" \
-  HOST_RELEASE="$(uname -r)" \
-  jq -cn '
-    {
-      schema_version: "w2-matrix/1",
-      captured_at_utc: env.CAPTURED_AT_UTC,
-      profile: env.PROFILE,
-      allocator: env.ALLOCATOR,
-      label: env.LABEL,
-      binary: {
-        path: env.BIN_PATH,
-        sha256: env.BIN_SHA,
-        size_bytes: (env.BIN_SIZE | tonumber)
-      },
-      perf: {
-        suite: env.SUITE,
-        jsonl: (if env.PERF_JSONL == "" then null else env.PERF_JSONL end),
-        pgo_training_corpus: "full"
-      },
-      build: {
-        rustc: env.RUSTC_VERSION,
-        base_rustflags: env.REDLINE_BASE_RUSTFLAGS
-      },
-      host: {
-        node: env.HOST_NODE,
-        machine: env.HOST_MACHINE,
-        system: env.HOST_SYSTEM,
-        release: env.HOST_RELEASE
-      }
-    }
-  ' >>"$MANIFEST"
+  local -a perf_jsonl_arg=()
+  if [ -n "$perf_jsonl" ]; then
+    perf_jsonl_arg=(--perf-jsonl "$perf_jsonl")
+  fi
+  cargo run --quiet --locked -p redlinedb-bench --bin perf_evidence -- \
+    append-w2-manifest \
+    --output "$MANIFEST" \
+    --profile "$profile" \
+    --allocator "$allocator" \
+    --label "$label" \
+    --binary "$bin" \
+    --suite "$SUITE" \
+    "${perf_jsonl_arg[@]}" \
+    --base-rustflags="$REDLINE_BASE_RUSTFLAGS"
 }
 
 build_variant() {

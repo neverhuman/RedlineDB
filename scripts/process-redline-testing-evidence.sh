@@ -14,7 +14,6 @@ cd "$repo_root"
 root="${1:-target/redline-testing}"
 official_evidence="$root/official-evidence.json"
 provenance="$root/redline-testing-provenance.env"
-processed="$root/official-evidence.processed.json"
 
 if [ ! -s "$official_evidence" ]; then
     printf 'redline-testing evidence processor: missing official evidence %s\n' "$official_evidence" >&2

@@ -69,7 +69,7 @@ fn repository_contains_no_python_surfaces() {
         });
         for (index, line) in contents.lines().enumerate() {
             let trimmed = line.trim_start();
-            if trimmed.starts_with('#') {
+            if trimmed.starts_with('#') && !(index == 0 && trimmed.starts_with("#!")) {
                 continue;
             }
             if let Some(token) = prohibited_token(line) {
@@ -88,6 +88,7 @@ fn repository_contains_no_python_surfaces() {
 #[test]
 fn invocation_scanner_uses_token_boundaries() {
     assert_eq!(prohibited_token("python3 -c pass"), Some("python3"));
+    assert_eq!(prohibited_token("#!/usr/bin/env python3"), Some("python3"));
     assert_eq!(
         prohibited_token("apt-get install python3-pip"),
         Some("python3")
