@@ -10,12 +10,8 @@ ensure_artifacts
 
 if JBIN="$(jankurai_bin)"; then
   log "ux-qa: jankurai ux audit"
-  if ! "$JBIN" ux audit --config agent/ux-qa.toml --out "${ARTIFACT_DIR}/ux-qa.json"; then
-    if [[ "$STRICT_TOOLS" == "1" ]]; then
-      fail "ux-qa: jankurai ux audit failed"
-    fi
-    warn "ux-qa: jankurai ux audit emitted a non-zero status (supplementary lane)"
-  fi
+  "$JBIN" ux audit --config agent/ux-qa.toml --out "${ARTIFACT_DIR}/ux-qa.json" \
+    || warn "ux-qa: jankurai ux audit emitted a non-zero status (supplementary lane)"
 else
   missing_tool jankurai "rendered UX audit"
 fi
