@@ -327,7 +327,8 @@ pub unsafe extern "C" fn sqlite3_create_function_v2(
     // reads only until the first NUL; ledgered at .jankurai/unsafe-ledger.toml
     // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
     // detector=rust.unsafe.extern-fn).
-    let name = match unsafe { name_to_string(name) } { // SAFETY: `name` is a NUL-terminated C string per the # Safety contract (see above).
+    let name = match unsafe { name_to_string(name) } {
+        // SAFETY: `name` is a NUL-terminated C string per the # Safety contract (see above).
         Some(n) => n,
         None => return RLDB_MISUSE,
     };
