@@ -6236,6 +6236,12 @@ fn refresh_repo(repo: &Repo) -> Result<(), Box<dyn std::error::Error>> {
     if !repo.cargo_members.is_empty() || repo.path.join("Cargo.toml").exists() {
         write(&repo.path.join("deny.toml"), &render_deny())?;
     }
+    if let Some(package) = companion_package(&repo.name) {
+        write(
+            &repo.path.join("ops/ci/required.sh"),
+            &render_companion_required(package),
+        )?;
+    }
     write(&repo.path.join("scripts/ci-local.sh"), render_ci_local())?;
     Ok(())
 }
@@ -6650,6 +6656,19 @@ fn render_deny() -> String {
 
 fn render_ci_local() -> &'static str {
     "#!/usr/bin/env bash\nset -euo pipefail\n\nlane=\"${1:-required}\"\ncase \"$lane\" in\n  required) bash ops/ci/required.sh ;;\n  fast) bash ops/ci/fast.sh ;;\n  check) bash ops/ci/check.sh ;;\n  score) bash ops/ci/score.sh ;;\n  security) bash ops/ci/security.sh ;;\n  security-network) bash ops/ci/security-network.sh ;;\n  tool-adoption) bash ops/ci/tool-adoption.sh ;;\n  contract-drift) bash ops/ci/contract-drift.sh ;;\n  artifact-support) bash ops/ci/artifact_support.sh ;;\n  e2e) bash ops/ci/e2e.sh ;;\n  *) printf 'unknown lane: %s\\n' \"$lane\" >&2; exit 2 ;;\nesac\n"
+}
+
+fn companion_package(repo: &str) -> Option<&str> {
+    match repo {
+        "jain-agent" | "jain-jailgun" | "jain-jnoccio" | "jain-zyal" => Some(repo),
+        _ => None,
+    }
+}
+
+fn render_companion_required(package: &str) -> String {
+    format!(
+        "#!/usr/bin/env bash\nset -euo pipefail\n\nbash ops/ci/check.sh\ncargo clippy --locked -p {package} --all-targets\ncargo test --locked -p {package} --jobs \"[object Object]\"\nprintf 'required ok: {package}\\n'\n"
+    )
 }
 
 #[cfg(test)]
@@ -7651,6 +7670,20 @@ current_tag = "jain-v8.0.0-split.0"
                 .unwrap()
                 .family_registered
         );
+    }
+
+    #[test]
+    fn companion_required_lane_targets_only_its_own_package() {
+        for package in ["jain-agent", "jain-jailgun", "jain-jnoccio", "jain-zyal"] {
+            assert_eq!(companion_package(package), Some(package));
+            let lane = render_companion_required(package);
+            assert!(lane.contains(&format!("cargo clippy --locked -p {package}")));
+            assert!(lane.contains(&format!("cargo test --locked -p {package}")));
+            assert!(lane.contains(&format!("required ok: {package}")));
+            assert!(!lane.contains("jain-llm"));
+            assert!(!lane.contains("--skip"));
+        }
+        assert_eq!(companion_package("jain-core"), None);
     }
 
     #[test]
