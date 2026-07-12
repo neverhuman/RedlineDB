@@ -1,0 +1,14 @@
+{
+  "schema_version": "jain.rust-port-parity/v1",
+  "repository": "jain-model-zoo",
+  "surface": "coverage-report",
+  "python_role": "reference-only parity oracle",
+  "python_reference_commit": "3f4443d75cc27df14f6e279f76e16c365cf2de96",
+  "rust_commit": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+  "reference_command": "bash scripts/coverage-report.sh --summary",
+  "rust_command": "bash scripts/coverage-report.sh --summary",
+  "comparison": "byte-for-byte cmp of .ci-status/coverage-summary.tsv",
+  "output_sha256": "3dcabf8042d7c0791de7dd8ae0e83852d22bb425dd11a398285fca9eb0497cfc",
+  "output_bytes": 77,
+  "status": "pass"
+}
