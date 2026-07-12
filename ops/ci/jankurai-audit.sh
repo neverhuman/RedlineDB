@@ -10,8 +10,8 @@
 # HLT-034 ci-bad-behavior.
 #
 # jankurai is a hard dependency for this lane. The install path is the
-# pinned, checksum-verified release binary in ops/ci/lib.sh so CI and local
-# proof runs consume the same artifact.
+# pinned, exact-revision Jeryu source in ops/ci/lib.sh so CI and local proof
+# runs consume the same reviewed code and its matching runtime schemas.
 #
 # Usage:
 #   bash ops/ci/jankurai-audit.sh
