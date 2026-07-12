@@ -15,8 +15,10 @@ mkdir -p target/jankurai
 JANKURAI="${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}"
 [ -x "$JANKURAI" ] || JANKURAI="$(command -v jankurai || true)"
 if [ -n "${JANKURAI:-}" ] && [ -x "$JANKURAI" ]; then
+  rm -f target/jankurai/audit-state.json
   "$JANKURAI" audit . --mode advisory \
-    --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md || true
+    --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md \
+    --no-score-history --policy agent/audit-policy.toml || true
   echo "jankurai score written to target/jankurai/repo-score.md"
 fi
 

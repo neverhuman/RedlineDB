@@ -111,9 +111,9 @@ pub enum MorselRouteMode {
 /// Cached `REDLINE_MORSEL_ROUTE` parse.
 ///
 /// **W4-Flip**: As of the W4-A2..A8 wave, primitive-scan routing is
-/// the DEFAULT when the env var is unset. Medium-set differential
-/// validation against the tuple path (`scripts/perf/medium.sh` with
-/// the env on vs off) showed 289 / 289 cases passing in both modes,
+/// the DEFAULT when the env var is unset. Historical medium-set differential
+/// validation against the tuple path with the env on vs off showed 289 / 289
+/// cases passing in both modes,
 /// 0 new failures, and median ratio 1.895× → 1.843× (-2.7 pp,
 /// +9 faster cases). The decline guards in
 /// `morsel::route::classify_for_routing` keep semantically risky

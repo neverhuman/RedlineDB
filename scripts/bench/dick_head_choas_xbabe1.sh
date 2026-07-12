@@ -68,7 +68,6 @@ STAMP="dick-head-choas-${PROFILE}-$(date +%Y%m%d-%H%M%S)"
   --warmup $([ "${PROFILE}" = "extreme" ] && printf '0' || printf '1')
 
 ./scripts/bench/xbabe1_fetch.sh "${STAMP}"
-python3 scripts/bench/export_benchmark_results.py
 
 ARCHIVE="/tmp/redlinedb-xbabe1-${STAMP}.tar.gz"
 tar -czf "${ARCHIVE}" -C target/bench/xbabe1 "${STAMP}"

@@ -114,26 +114,16 @@ step_audit_ratchet() {
         return 0
     fi
 
-    if python3 - "$LOG_DIR/repo-score.json" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], "r", encoding="utf-8") as fh:
-    report = json.load(fh)
-
-ratchet = report.get("decision", {}).get("ratchet", {})
-if (
-    report.get("score", 0) >= report.get("decision", {}).get("minimum_score", 85)
-    and report.get("decision", {}).get("hard_findings", 1) == 0
-    and not report.get("caps_applied")
-    and not ratchet.get("new_caps")
-    and not ratchet.get("new_hard_findings")
-    and ratchet.get("score_delta", -1) >= 0
-):
-    sys.exit(0)
-
-sys.exit(1)
-PY
+    if jq -e '
+        (.decision // {}) as $decision
+        | ($decision.ratchet // {}) as $ratchet
+        | (.score // 0) >= ($decision.minimum_score // 85)
+        and ($decision.hard_findings // 1) == 0
+        and ((.caps_applied // []) | length) == 0
+        and (($ratchet.new_caps // []) | length) == 0
+        and (($ratchet.new_hard_findings // []) | length) == 0
+        and ($ratchet.score_delta // -1) >= 0
+    ' "$LOG_DIR/repo-score.json" >/dev/null
     then
         printf 'jankurai ratchet accepted: no score drop, new caps, or new hard findings vs baseline\n'
         return 0

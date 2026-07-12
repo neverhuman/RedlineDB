@@ -24,7 +24,7 @@ forbidden_web_imports = ["sqlx", "pg", "postgres", "mysql", "better-sqlite3", "@
 generated_contract_paths = ["contracts/generated"]
 
 [python]
-allowed_truth_paths = ["python/ai-service"]
+allowed_truth_paths = []
 
 [queues]
 adapter_paths = ["crates/adapters/queues", "crates/adapters/src/queues"]

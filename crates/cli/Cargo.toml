@@ -22,7 +22,7 @@ csv = "1.3.0"
 crossterm = "0.27.0"
 itoa = "1"
 memchr = "2"
-memmap2 = "0.9"
+memmap2 = "0.9.11"
 mimalloc = { version = "0.1", default-features = false, optional = true }
 tikv-jemallocator = { version = "0.6", optional = true }
 # snmalloc-rs requires a working `cmake` and a C++17 toolchain at build time.

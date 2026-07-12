@@ -52,8 +52,9 @@ v4.0.9 and v4.1.0 additionally PGO-optimized (quick training set, `clang-18`).
 
 _Cumulative v4.0.8 → v4.1.0: median **−5.3%**, p95 **−22.3%**._
 
-> Measurements use `scripts/perf/medium.sh` (PERF\_WORKERS=2 default).
-> Full raw JSONL committed under `target/perf/` on the benchmark branch.
+> These are retained historical subset measurements from before the
+> external-only evidence cutover. Current release evidence uses the complete
+> corpus through the verified `redline-testing` workflow.
 
 ## What's new in v4.0.1 → v4.0.8 (Phase 5 / Phase 6 release train)
 

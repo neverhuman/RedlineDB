@@ -7,7 +7,7 @@
 #
 # Usage:
 #   scripts/perf/w2-matrix.sh \
-#     --suite quick \
+#     --suite none \
 #     --profiles release,release-native \
 #     --allocators mimalloc,jemalloc
 #
@@ -18,7 +18,7 @@
 #   release-pgo-bolt   scripts/perf/pgo.sh --for-bolt, then scripts/perf/bolt.sh
 #
 # Suites:
-#   none, quick, medium, full
+#   none, full
 
 set -euo pipefail
 
@@ -27,10 +27,9 @@ cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/perf/lib-rustflags.sh
 . "$(git rev-parse --show-toplevel)/scripts/perf/lib-rustflags.sh"
 
-SUITE="${W2_SUITE:-quick}"
+SUITE="${W2_SUITE:-none}"
 PROFILES="${W2_PROFILES:-release,release-native}"
 ALLOCATORS="${W2_ALLOCATORS:-mimalloc,jemalloc}"
-PGO_TRAINING_SUBSET="${W2_PGO_TRAINING_SUBSET:-quick}"
 RUN_ID="${W2_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 DRY_RUN=0
 
@@ -64,14 +63,6 @@ while [ $# -gt 0 ]; do
       ALLOCATORS="${2:?--allocators requires a value}"
       shift 2
       ;;
-    --pgo-training-subset=*)
-      PGO_TRAINING_SUBSET="${1#*=}"
-      shift
-      ;;
-    --pgo-training-subset)
-      PGO_TRAINING_SUBSET="${2:?--pgo-training-subset requires a value}"
-      shift 2
-      ;;
     --dry-run)
       DRY_RUN=1
       shift
@@ -88,17 +79,9 @@ while [ $# -gt 0 ]; do
 done
 
 case "$SUITE" in
-  none|quick|medium|full) ;;
+  none|full) ;;
   *)
-    printf 'w2-matrix.sh: --suite must be one of {none,quick,medium,full}, got: %s\n' "$SUITE" >&2
-    exit 2
-    ;;
-esac
-
-case "$PGO_TRAINING_SUBSET" in
-  quick|medium|full) ;;
-  *)
-    printf 'w2-matrix.sh: --pgo-training-subset must be one of {quick,medium,full}, got: %s\n' "$PGO_TRAINING_SUBSET" >&2
+    printf 'w2-matrix.sh: --suite must be one of {none,full}, got: %s\n' "$SUITE" >&2
     exit 2
     ;;
 esac
@@ -194,46 +177,42 @@ write_manifest_entry() {
   BIN_SIZE="$bin_size" \
   SUITE="$SUITE" \
   PERF_JSONL="$perf_jsonl" \
-  PGO_TRAINING_SUBSET="$PGO_TRAINING_SUBSET" \
   REDLINE_BASE_RUSTFLAGS="$REDLINE_BASE_RUSTFLAGS" \
   RUSTC_VERSION="$rustc_version" \
-  python3 - <<'PY'
-import json
-import os
-import platform
-from datetime import datetime, timezone
-
-entry = {
-    "schema_version": "w2-matrix/1",
-    "captured_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    "profile": os.environ["PROFILE"],
-    "allocator": os.environ["ALLOCATOR"],
-    "label": os.environ["LABEL"],
-    "binary": {
-        "path": os.environ["BIN_PATH"],
-        "sha256": os.environ["BIN_SHA"],
-        "size_bytes": int(os.environ["BIN_SIZE"]),
-    },
-    "perf": {
-        "suite": os.environ["SUITE"],
-        "jsonl": os.environ["PERF_JSONL"] or None,
-        "pgo_training_subset": os.environ["PGO_TRAINING_SUBSET"],
-    },
-    "build": {
-        "rustc": os.environ["RUSTC_VERSION"],
-        "base_rustflags": os.environ["REDLINE_BASE_RUSTFLAGS"],
-    },
-    "host": {
-        "node": platform.node(),
-        "machine": platform.machine(),
-        "system": platform.system(),
-        "release": platform.release(),
-    },
-}
-
-with open(os.environ["MANIFEST_PATH"], "a", encoding="utf-8") as f:
-    f.write(json.dumps(entry, sort_keys=True) + "\n")
-PY
+  CAPTURED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  HOST_NODE="$(hostname)" \
+  HOST_MACHINE="$(uname -m)" \
+  HOST_SYSTEM="$(uname -s)" \
+  HOST_RELEASE="$(uname -r)" \
+  jq -cn '
+    {
+      schema_version: "w2-matrix/1",
+      captured_at_utc: env.CAPTURED_AT_UTC,
+      profile: env.PROFILE,
+      allocator: env.ALLOCATOR,
+      label: env.LABEL,
+      binary: {
+        path: env.BIN_PATH,
+        sha256: env.BIN_SHA,
+        size_bytes: (env.BIN_SIZE | tonumber)
+      },
+      perf: {
+        suite: env.SUITE,
+        jsonl: (if env.PERF_JSONL == "" then null else env.PERF_JSONL end),
+        pgo_training_corpus: "full"
+      },
+      build: {
+        rustc: env.RUSTC_VERSION,
+        base_rustflags: env.REDLINE_BASE_RUSTFLAGS
+      },
+      host: {
+        node: env.HOST_NODE,
+        machine: env.HOST_MACHINE,
+        system: env.HOST_SYSTEM,
+        release: env.HOST_RELEASE
+      }
+    }
+  ' >>"$MANIFEST"
 }
 
 build_variant() {
@@ -253,12 +232,12 @@ build_variant() {
       ;;
     release-pgo)
       run_cmd env REDLINE_CARGO_FEATURE_ARGS="${CARGO_ALLOCATOR_ARGS[*]}" \
-        bash scripts/perf/pgo.sh --training-subset "$PGO_TRAINING_SUBSET"
+        bash scripts/perf/pgo.sh
       src_bin="target/release-pgo/redlinedb"
       ;;
     release-pgo-bolt)
       run_cmd env REDLINE_CARGO_FEATURE_ARGS="${CARGO_ALLOCATOR_ARGS[*]}" \
-        bash scripts/perf/pgo.sh --training-subset "$PGO_TRAINING_SUBSET" --for-bolt
+        bash scripts/perf/pgo.sh --for-bolt
       run_cmd bash scripts/perf/bolt.sh
       src_bin="target/release-pgo/redlinedb.bolt"
       ;;
@@ -291,7 +270,7 @@ printf 'run id:      %s\n' "$RUN_ID"
 printf 'suite:       %s\n' "$SUITE"
 printf 'profiles:    %s\n' "$PROFILES"
 printf 'allocators:  %s\n' "$ALLOCATORS"
-printf 'pgo subset:  %s\n' "$PGO_TRAINING_SUBSET"
+printf 'pgo corpus:  full (external redline-testing)\n'
 printf 'output dir:  %s\n' "$OUT_DIR"
 
 for profile in "${PROFILE_LIST[@]}"; do

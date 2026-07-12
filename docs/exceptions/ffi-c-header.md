@@ -15,7 +15,7 @@
 ## Why this is allowed (exception, not the optimal stack)
 
 The optimal stack for this repo is Rust core + TypeScript/React/Vite +
-PostgreSQL + generated contracts + exception-only Python. A hand-authored C
+PostgreSQL + generated contracts. A hand-authored C
 header file (`.h`) is technically a non-optimal product language artifact.
 We keep it because:
 

@@ -36,8 +36,12 @@ allocator A/B runs:
 
 ```bash
 REDLINE_CARGO_FEATURE_ARGS="--no-default-features --features alloc-jemalloc" \
-  scripts/perf/pgo.sh --training-subset quick
+  scripts/perf/pgo.sh
 ```
+
+PGO always trains against the complete official corpus through the verified
+external `redline-testing` runner. The former core-owned quick/medium replay
+paths were retired because they duplicated the official evidence producer.
 
 By default the script also allocates unique temporary PGO data/profile
 directories per run, which avoids collisions when multiple perf jobs are
@@ -61,15 +65,18 @@ Heavier runs can opt into PGO and BOLT explicitly:
 
 ```bash
 scripts/perf/w2-matrix.sh \
-  --suite medium \
+  --suite full \
   --profiles release,release-native,release-pgo,release-pgo-bolt \
-  --allocators mimalloc,jemalloc \
-  --pgo-training-subset medium
+  --allocators mimalloc,jemalloc
 ```
 
 The matrix passes the allocator feature set through to `pgo.sh`, so the
 `release-pgo` and `release-pgo-bolt` legs train and rebuild under the
 selected allocator as well.
+
+The matrix accepts `--suite none` for build-only comparisons and `--suite
+full` for an external-corpus measurement. It does not expose local subset
+producers.
 
 Allocator choices are currently the mutually exclusive CLI features
 `alloc-mimalloc`, `alloc-jemalloc`, and `alloc-snmalloc`. There is no

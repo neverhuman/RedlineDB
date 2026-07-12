@@ -36,8 +36,8 @@ mirror_required = false
 mirror_max_rows = 5000
 
 # The C ABI surface lives in hand-authored `.h` files. The optimal stack for
-# this repo is Rust + TypeScript + SQL + generated contracts + exception-only
-# Python, so the stack-language scanner would otherwise flag those headers as
+# this repo is Rust + TypeScript + SQL + generated contracts, so the
+# stack-language scanner would otherwise flag those headers as
 # `non-optimal-product-language-found`. The exclusions below cover:
 #
 # * `contracts/c-abi/**` - canonical C ABI header surface, including the thin
@@ -79,22 +79,6 @@ excluded_paths = [
   # workflow rules, artifacts.reports.sast).
   ".gitlab-ci.yml",
   "tips/",
-  "paper/scripts/",
-  "scripts/bench/export_benchmark_results.py",
-  # Phase 0 perf measurement helpers (replay driver + case-list selector
-  # + diff). Pure stdlib Python, lives in scripts/perf/ which is repo
-  # tooling — never touched by the product surface, the proof-lane
-  # runner, or production DB ownership. Scoped to the same posture as
-  # scripts/bench/export_benchmark_results.py above.
-  "scripts/perf/build_case_lists.py",
-  "scripts/perf/run_subset.py",
-  "scripts/perf/diff.py",
-  # python-ai cell routing note: AGENTS.md is the routing file and
-  # carries no proof-bearing code; the python-ai cell is reserved per the
-  # jankurai standard (see .jankurai/repo-score.md python-ai row) and has no
-  # runnable test-map proof of its own. Exclude from scan to clear
-  # HLT-004-UNMAPPED-PROOF.
-  "python/ai-service/AGENTS.md",
 ]
 # Vendor adapters: files whose only purpose is to wrap an external crate's
 # enum variant whose identifier we cannot rename (e.g. the sqlparser

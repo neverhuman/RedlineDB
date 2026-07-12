@@ -117,22 +117,6 @@ check_mold() {
     esac
 }
 
-check_python() {
-    if ! command -v python3 >/dev/null 2>&1; then
-        fail python3 "missing (expected >=3.10)"
-        return
-    fi
-    local actual major minor
-    actual="$(python3 -c 'import sys; print("{}.{}.{}".format(*sys.version_info[:3]))' 2>/dev/null)"
-    major="$(printf '%s' "$actual" | cut -d. -f1)"
-    minor="$(printf '%s' "$actual" | cut -d. -f2)"
-    if [ "${major:-0}" -gt 3 ] || { [ "${major:-0}" -eq 3 ] && [ "${minor:-0}" -ge 10 ]; }; then
-        pass python3 "${actual} (>=3.10)"
-    else
-        fail python3 "expected>=3.10 actual=${actual}"
-    fi
-}
-
 check_required_dispatch() {
     local required_block expected
     required_block="$(sed -n '/^[[:space:]]*required)/,/^[[:space:]]*;;/p' "$ROOT/scripts/ci-local.sh")"
@@ -157,7 +141,6 @@ main() {
     check_presence curl
     check_presence just
     check_presence rtk
-    check_python
     check_required_dispatch
     printf '%s\n' '----------------------------------------------------------'
     if [ "${overall}" -eq 0 ]; then

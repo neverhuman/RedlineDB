@@ -1,12 +1,12 @@
 {
-  "report_fingerprint": "sha256:9f6100d7aa9e4ee6fe4b0d222678641a5006b97fd8a83fb372af41e4ecdfae72",
-  "input_fingerprint": "sha256:144f2bd4a638295ba08acacebea322e395986da0b9af2d9b8b1b70e0783e6902",
-  "policy_fingerprint": "sha256:9d9ae51a37d9001806269172f2676a2ede8116325018150186d8e9af0508fafa",
+  "report_fingerprint": "sha256:649e0339a1396b6324e279332ee0c4802ed389e0b0ba78e611eb22a78086c1b8",
+  "input_fingerprint": "sha256:ac89ea2f49ac52796e707bc0eff24dd31e69ff1162c63d6f3c91f85c841a1f3e",
+  "policy_fingerprint": "sha256:e7c7611fb6dc511d7cf461b144e5c3b76087325b45622c209814f5a2288a841c",
   "manifest_fingerprints": {
     "generated_zones": "sha256:d2bdfa3f1f251b03f2e2399761019ed64c456f0bbbc34dfec620c602d6737811"
   },
   "dirty_worktree": true,
-  "generated_at": "1781137501",
+  "generated_at": "1783854447",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -20,9 +20,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1781137501",
-  "started_at": "1781137501",
-  "elapsed_ms": 23761,
+  "run_id": "1783854447",
+  "started_at": "1783854447",
+  "elapsed_ms": 21133,
   "scope": {
     "mode": "full",
     "paths": []
@@ -30,11 +30,11 @@
   "score": 86,
   "raw_score": 86,
   "decision": {
-    "status": "pass",
+    "status": "advisory",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
-    "soft_findings": 2,
+    "soft_findings": 9,
     "ratchet": {
       "baseline_score": 86,
       "allowed_drop": 0,
@@ -49,7 +49,7 @@
     }
   },
   "git": {
-    "head": "11c7266",
+    "head": "d17b89e",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -66,7 +66,7 @@
       "medium",
       "low"
     ],
-    "mode": "standard",
+    "mode": "advisory",
     "standard_version": "0.9.0",
     "auditor_version": "1.6.10",
     "schema_version": "1.9.0",
@@ -338,9 +338,9 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 3952",
+        "rust bad-behavior advisory signals: 3961",
         "ci bad-behavior advisory signals: 3",
-        "git bad-behavior advisory signals: 2",
+        "git bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
       "notes": []
@@ -351,14 +351,14 @@
       "score": 45,
       "weighted_points": 5.4,
       "evidence": [
-        "largest authored code file: crates/sql/src/parser.rs (5267 LOC)",
+        "largest authored code file: crates/sql/src/parser.rs (5270 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 163 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 3952",
+        "copy-code advisory classes found: 164 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 3961",
         "ci bad-behavior advisory signals: 3",
-        "git bad-behavior advisory signals: 2",
+        "git bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
       ],
       "notes": []
@@ -1027,7 +1027,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-06-11T00:24:38.141674563+00:00",
+    "generated_at": "2026-07-12T11:07:06.923908922+00:00",
     "repo": ".",
     "auditor_version": "1.6.10",
     "status": "review",
@@ -1065,20 +1065,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 2424,
-      "files_considered": 1570,
-      "active_files": 1570,
+      "files_scanned": 3546,
+      "files_considered": 444,
+      "active_files": 444,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 163,
+      "warning_classes": 164,
       "hard_instances": 0,
-      "warning_instances": 447,
-      "duplicate_lines": 295,
-      "duplicate_tokens": 934,
-      "duplicate_bytes": 8586,
-      "total_redundant_lines": 508,
-      "total_redundant_tokens": 1443,
-      "total_redundant_bytes": 13845
+      "warning_instances": 449,
+      "duplicate_lines": 296,
+      "duplicate_tokens": 937,
+      "duplicate_bytes": 8608,
+      "total_redundant_lines": 509,
+      "total_redundant_tokens": 1446,
+      "total_redundant_bytes": 13867
     },
     "classes": [
       {
@@ -1597,64 +1597,64 @@
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 1818,
-            "end_line": 1819,
+            "start_line": 1821,
+            "end_line": 1822,
             "unit_name": "strip_create_index_using_clause"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 1923,
-            "end_line": 1924,
+            "start_line": 1926,
+            "end_line": 1927,
             "unit_name": "has_jsonb_question_op"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2022,
-            "end_line": 2023,
+            "start_line": 2025,
+            "end_line": 2026,
             "unit_name": "rewrite_jsonb_question_ops"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2498,
-            "end_line": 2499,
+            "start_line": 2501,
+            "end_line": 2502,
             "unit_name": "rewrite_pg_array_literal"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2650,
-            "end_line": 2651,
+            "start_line": 2653,
+            "end_line": 2654,
             "unit_name": "rewrite_pg_bytea_literal"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2693,
-            "end_line": 2694,
+            "start_line": 2696,
+            "end_line": 2697,
             "unit_name": "rewrite_pg_array_overlap"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 2838,
-            "end_line": 2839,
+            "start_line": 2841,
+            "end_line": 2842,
             "unit_name": "rewrite_postfix_index"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 3148,
-            "end_line": 3149,
+            "start_line": 3151,
+            "end_line": 3152,
             "unit_name": "rewrite_pg_interval_literal"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 3196,
-            "end_line": 3197,
+            "start_line": 3199,
+            "end_line": 3200,
             "unit_name": "rewrite_date_arith_with_modifier"
           },
           {
@@ -2261,15 +2261,15 @@
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 3052,
-            "end_line": 3053,
+            "start_line": 3055,
+            "end_line": 3056,
             "unit_name": "rewrite_array_length_function"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 3116,
-            "end_line": 3117,
+            "start_line": 3119,
+            "end_line": 3120,
             "unit_name": "rewrite_array_agg_function"
           }
         ]
@@ -3428,8 +3428,8 @@
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 1642,
-            "end_line": 1643,
+            "start_line": 1645,
+            "end_line": 1646,
             "unit_name": "is_word_char"
           },
           {
@@ -3572,7 +3572,7 @@
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 113 lower-ranked classes"
+      "showing the top 50 classes and omitting 114 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3858,7 +3858,7 @@
       "problem": "`Code shape and semantic surface` scored 45 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/parser.rs (5267 LOC)",
+        "largest authored code file: crates/sql/src/parser.rs (5270 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC"
@@ -3868,7 +3868,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:4efefec24e65b87bf3d57436aba7d3f71935a06616a0cf91e2ace01d6490394e",
+      "fingerprint": "sha256:18ea4127df71db067f61d63ceb34a985b4082441cd148efe216323adb654e68e",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -3898,6 +3898,167 @@
       "lane": "fast",
       "docs_url": "docs/testing.md",
       "owner": "workspace"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/bench/src/fuzz/normalize.rs",
+      "problem": "enum `Cell` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `Cell` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `Cell` is defined with diverging shapes in 2 modules (crates/bench/src/fuzz/normalize.rs:19, crates/cli/src/render.rs:10)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:06abf3e40a8c91cd5bd3a90c2801aa5769be3e9a2c1e83dba0430881ddec8173",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 19,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/kernel/src/error.rs",
+      "problem": "enum `Error` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `Error` is defined with diverging shapes in 2 modules (crates/kernel/src/error.rs:21, crates/sql/src/error.rs:5)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:0c9d695968a4c3656809617dc18f78a9c390dfb8bf704adb486db7cd6f8a193f",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 21,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/kernel/src/json/path_bytecode.rs",
+      "problem": "enum `Op` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `Op` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `Op` is defined with diverging shapes in 2 modules (crates/kernel/src/json/path_bytecode.rs:27, crates/sql/src/exec/expr/program.rs:305)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:b3bb182f6967fe53e8a9863ef4ed7ac2446a6997b89e3e61cae7832373f73b23",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 27,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/redlinedb/src/iter.rs",
+      "problem": "enum `Step` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `Step` is defined with diverging shapes in 2 modules (crates/redlinedb/src/iter.rs:13, crates/sql/src/statement.rs:733)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:60c8d0460af256677624e4f982952ee141a6eb69520c6bab4c0b91d073f797c0",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 13,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/sql/src/exec/morsel/hash_agg.rs",
+      "problem": "enum `AggKind` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `AggKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `AggKind` is defined with diverging shapes in 2 modules (crates/sql/src/exec/morsel/hash_agg.rs:43, crates/sql/src/exec/vec/hash_agg.rs:23)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:1792bb4ccf76315d0f67831b6b9614a39d3305eda161b9a07cf4b4a21f986665",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 43,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/sql/src/planner.rs",
+      "problem": "enum `JoinKind` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `JoinKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `JoinKind` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:113, crates/sql/src/statement.rs:491)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:727b18f3f2599d194006380d54645ddf5dd2248425597bed1813530843f81b7e",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 113,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/sql/src/planner.rs",
+      "problem": "enum `AccessPath` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `AccessPath` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `AccessPath` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:121, crates/sql/src/planner/access_path.rs:104)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:1d2df57702312ed0db60cbea557e9e0b0fed4b41a92170f55d8adcf2919e24ae",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 121,
+      "matched_term": "unnecessary-variety"
     }
   ],
   "agent_fix_queue": [
@@ -3920,6 +4081,76 @@
       "owner": "tools",
       "task": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "why": "`Code shape and semantic surface` scored 45 below the standard floor of 85"
+    },
+    {
+      "path": "crates/bench/src/fuzz/normalize.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `Cell` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `Cell` has 2 divergent definitions across modules where one consistent definition is expected"
+    },
+    {
+      "path": "crates/kernel/src/error.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `Error` has 2 divergent definitions across modules where one consistent definition is expected"
+    },
+    {
+      "path": "crates/kernel/src/json/path_bytecode.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `Op` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `Op` has 2 divergent definitions across modules where one consistent definition is expected"
+    },
+    {
+      "path": "crates/redlinedb/src/iter.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `Step` has 2 divergent definitions across modules where one consistent definition is expected"
+    },
+    {
+      "path": "crates/sql/src/exec/morsel/hash_agg.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `AggKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `AggKind` has 2 divergent definitions across modules where one consistent definition is expected"
+    },
+    {
+      "path": "crates/sql/src/planner.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `JoinKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `JoinKind` has 2 divergent definitions across modules where one consistent definition is expected"
+    },
+    {
+      "path": "crates/sql/src/planner.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `AccessPath` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `AccessPath` has 2 divergent definitions across modules where one consistent definition is expected"
     }
   ]
 }

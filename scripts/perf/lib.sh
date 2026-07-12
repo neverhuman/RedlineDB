@@ -2,8 +2,7 @@
 # scripts/perf/lib.sh — shared environment for A/B measurement against
 # the redline-testing parity harness.
 #
-# Sourced by: quick.sh, medium.sh, full.sh, profile-one.sh,
-# build-case-lists.sh, and any new perf scripts.
+# Sourced by: full.sh and any new full-corpus perf scripts.
 #
 # Conventions match scripts/just/run.sh + scripts/perf/pgo.sh + the
 # CI parity gate (ops/ci/lib.sh::ci_resolve_redline_testing_release).
@@ -20,9 +19,6 @@
 set -euo pipefail
 
 PERF_ROOT="${PERF_ROOT:-target/perf}"
-# Case-lists live in the source tree so reviewers can audit drift.
-# Output JSONLs and per-run scratch live under PERF_ROOT (target/perf).
-PERF_CASES_DIR="${PERF_CASES_DIR:-bench/perf/cases}"
 
 REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 REDLINE_TESTING_BIN_DEFAULT="${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing"
@@ -83,18 +79,12 @@ perf_quiet_system() {
   fi
 }
 
-# Run the parity workload with variance-controlled defaults.
+# Run the complete parity workload through the verified external runner with
+# variance-controlled defaults.
 #
-# `redline-testing run` itself does not accept a case-list filter (only
-# `report` and `list` do), so for subset runs we use the local custom
-# replay driver at scripts/perf/run_subset.py which replays cases from
-# the corpus snapshot and emits JSONL matching the official schema.
-# For full-corpus runs (case-list empty) we use `redline-testing run`
-# directly.
-#
-# Usage: perf_run_jsonl <target-bin> <case-list-file-or-empty> <reps> <warmup> <output.jsonl> <tmp-tag>
+# Usage: perf_run_jsonl <target-bin> <reps> <warmup> <output.jsonl> <tmp-tag>
 perf_run_jsonl() {
-  local target_bin="$1" case_list="$2" reps="$3" warmup="$4" out="$5" tag="$6"
+  local target_bin="$1" reps="$2" warmup="$3" out="$4" tag="$5"
   local tmp
   tmp="$(perf_tmp_root "$tag")"
   mkdir -p "$(dirname "$out")" "$tmp"
@@ -105,78 +95,64 @@ perf_run_jsonl() {
     taskset_cmd=("taskset" "-c" "${PERF_TASKSET_CPUS:-2-5}")
   fi
 
-  if [ -n "$case_list" ] && [ -f "$case_list" ]; then
-    # Subset run via the custom replay driver.
-    local snapshot="$PERF_ROOT/corpus-snapshot.json"
-    if [ ! -f "$snapshot" ]; then
-      printf 'corpus snapshot missing at %s — run scripts/perf/build-case-lists.sh\n' "$snapshot" >&2
-      exit 2
-    fi
-    REDLINEDB_DEFAULT_DURABILITY=normal \
-    "${taskset_cmd[@]}" \
-      python3 "$(dirname "${BASH_SOURCE[0]}")/run_subset.py" \
-        --case-list   "$case_list" \
-        --target-bin  "$target_bin" \
-        --sqlite-bin  "$SQLITE_REF_BIN" \
-        --output      "$out" \
-        --repetitions "$reps" \
-        --warmup      "$warmup" \
-        --snapshot    "$snapshot" \
-        --tmp-root    "$tmp" \
-        --workers     "${PERF_WORKERS:-1}"
-  else
-    # Full-corpus run via the official harness.
-    REDLINEDB_DEFAULT_DURABILITY=normal \
-    "${taskset_cmd[@]}" \
-      "$REDLINE_TESTING_BIN" run \
-        --target-bin   "$target_bin" \
-        --sqlite-bin   "$SQLITE_REF_BIN" \
-        --suite        sqlite_parity \
-        --workers      "${PERF_WORKERS:-1}" \
-        --tmp-root     "$tmp" \
-        --repetitions  "$reps" \
-        --warmup       "$warmup" \
-        --output       "$out"
-  fi
+  REDLINEDB_DEFAULT_DURABILITY=normal \
+  "${taskset_cmd[@]}" \
+    "$REDLINE_TESTING_BIN" run \
+      --target-bin   "$target_bin" \
+      --sqlite-bin   "$SQLITE_REF_BIN" \
+      --suite        sqlite_parity \
+      --workers      "${PERF_WORKERS:-1}" \
+      --tmp-root     "$tmp" \
+      --repetitions  "$reps" \
+      --warmup       "$warmup" \
+      --output       "$out"
 }
 
 # Print a compact summary of a JSONL file. Used by the runner scripts so
-# the user sees results inline without having to run diff.py separately.
+# the user sees results inline.
 perf_summarize_jsonl() {
   local jsonl="$1"
-  python3 - "$jsonl" <<'PYEOF'
-import json
-import statistics
-import sys
-from collections import defaultdict
-
-path = sys.argv[1]
-rows = []
-with open(path) as f:
-    for line in f:
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-
-measured = [
-    r for r in rows
-    if r.get("status") == "passed"
-    and isinstance(r.get("sample_role"), str)
-    and r["sample_role"].startswith("measured")
-    and isinstance(r.get("latency_ratio"), (int, float))
-    and r["latency_ratio"] > 0
-]
-ratios = [r["latency_ratio"] for r in measured]
-case_ids = {r["case_id"] for r in measured}
-print(f"  cases measured: {len(case_ids)}")
-print(f"  samples:        {len(measured)}")
-if ratios:
-    print(f"  ratio median:   {statistics.median(ratios):.3f}")
-    if len(ratios) >= 10:
-        deciles = statistics.quantiles(ratios, n=10)
-        print(f"  ratio p90:      {deciles[-1]:.3f}")
-    faster = sum(1 for r in ratios if r < 1.0)
-    print(f"  cases faster than sqlite: {faster}/{len(ratios)}")
-PYEOF
+  local summary cases samples median p90 faster
+  summary="$(jq -Rsr '
+    def median:
+      sort as $values
+      | ($values | length) as $count
+      | if $count == 0 then null
+        elif ($count % 2) == 1 then $values[($count / 2 | floor)]
+        else (($values[$count / 2 - 1] + $values[$count / 2]) / 2)
+        end;
+    [
+      split("\n")[]
+      | fromjson?
+      | select(
+          .status == "passed"
+          and (.sample_role | type) == "string"
+          and (.sample_role | startswith("measured"))
+          and (.latency_ratio | type) == "number"
+          and .latency_ratio > 0
+        )
+    ] as $measured
+    | ($measured | map(.latency_ratio)) as $ratios
+    | [
+        ($measured | map(.case_id) | unique | length),
+        ($measured | length),
+        ($ratios | median),
+        (if ($ratios | length) >= 10
+         then ($ratios | sort | .[((length - 1) * 0.9 | floor)])
+         else null end),
+        ($ratios | map(select(. < 1.0)) | length)
+      ]
+    | map(if . == null then "null" else tostring end)
+    | join("|")
+  ' "$jsonl")"
+  IFS='|' read -r cases samples median p90 faster <<<"$summary"
+  printf '  cases measured: %s\n' "$cases"
+  printf '  samples:        %s\n' "$samples"
+  if [ "$median" != "null" ]; then
+    printf '  ratio median:   %.3f\n' "$median"
+    if [ "$p90" != "null" ]; then
+      printf '  ratio p90:      %.3f\n' "$p90"
+    fi
+    printf '  cases faster than sqlite: %s/%s\n' "$faster" "$samples"
+  fi
 }
