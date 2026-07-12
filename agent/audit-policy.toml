@@ -3,12 +3,6 @@ fail_on = ["critical", "high"]
 advisory_on = ["medium", "low"]
 
 disabled_rules = [
-  # repo-rot.path.fake-versioned-source fires on "BACKUP_RESTORE" in the
-  # generated test-case filename SQLITE_PARITY_150_DOT_BACKUP_RESTORE_TEMPFILE.rs.
-  # That name encodes the SQLite parity test identifier, not a backup copy.
-  # The path is already in excluded_paths and declared in generated-zones.toml;
-  # the repo-rot path detector does not honor excluded_paths, so we suppress here.
-  "HLT-040-REPO-ROT-BAD-BEHAVIOR",
   # Code-shape fires on legitimately large parser/exec files that are in
   # extra_excluded_paths. Suppressed because the files are domain-required
   # (SQL parser, exec engine) and already path-excluded from scoring.
@@ -46,11 +40,9 @@ mirror_max_rows = 5000
 # Python, so the stack-language scanner would otherwise flag those headers as
 # `non-optimal-product-language-found`. The exclusions below cover:
 #
-# * `contracts/c-abi/**` - canonical C ABI header surface (relocated out of
-#   `crates/` so consumers can find it under the standard `contracts/` cell;
-#   see docs/exceptions/ffi-c-header.md for rationale).
-# * `crates/ffi/include/**` - the thin `sqlite3.h` alias shim that re-includes
-#   the canonical header so existing SQLite drivers link without code changes.
+# * `contracts/c-abi/**` - canonical C ABI header surface, including the thin
+#   `sqlite3.h` alias shim (relocated out of `crates/` so consumers can find it
+#   under the standard `contracts/` cell; see docs/exceptions/ffi-c-header.md).
 
 [scan]
 excluded_paths = [
@@ -97,12 +89,6 @@ excluded_paths = [
   "scripts/perf/build_case_lists.py",
   "scripts/perf/run_subset.py",
   "scripts/perf/diff.py",
-  # Auto-generated SQLite parity corpus wrappers, retained as diagnostic
-  # mirrors of the verified neverhuman/redline-testing corpus. They are NOT
-  # compiled (the runtime catalog loads generated_manifest.json) and now live
-  # under a `generated_cases/` segment so the auditor recognises them as
-  # generated (is_generated) and skips them in the product-language scan.
-  "crates/bench/sqlite_parity/generated_cases/",
   # python-ai cell routing note: AGENTS.md is the routing file and
   # carries no proof-bearing code; the python-ai cell is reserved per the
   # jankurai standard (see .jankurai/repo-score.md python-ai row) and has no
@@ -151,12 +137,6 @@ excluded_paths = [
 # `libc::getrusage(RUSAGE_SELF, ...)` on rc == 0 and discarded
 # otherwise. Same detector limitation as above.
 extra_excluded_paths = [
-  # Generated SQLite parity test case wrappers. Path contains "BACKUP_RESTORE"
-  # which is the SQLite test identifier, not a backup file. The repo-rot path
-  # detector fires on this name segment; the directory is already in
-  # excluded_paths and generated-zones.toml but content-scan exclusions do not
-  # suppress the structural path detector, hence this extra_excluded_paths entry.
-  "crates/bench/sqlite_parity/generated_cases/",
   "crates/cli/src/main.rs",
   "install.sh",
   "crates/kernel/src/vector/diskann/sectors.rs",
@@ -286,15 +266,8 @@ extra_excluded_paths = [
   "crates/cli/src/dot/io_cmd.rs",
 ]
 extra_excluded_globs = [
-  # Auto-generated SQLite parity test-case wrappers. The path contains the
-  # test identifier "BACKUP_RESTORE" (not a backup copy), which triggers the
-  # repo-rot.path.fake-versioned-source detector. Glob here covers all
-  # generated_cases/ files since the path-level exclusions above do not
-  # suppress the structural path detector.
-  "crates/bench/sqlite_parity/generated_cases/**",
   # Local upstream source cache sometimes left by tool install/debug lanes.
   # It is upstream jankurai source, not RedlineDB product evidence.
   "target/jankurai-src-v*/**",
   "contracts/c-abi/**/*.h",
-  "crates/ffi/include/**/*.h",
 ]

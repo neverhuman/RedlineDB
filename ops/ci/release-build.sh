@@ -22,7 +22,7 @@ if [ -f "target/${TARGET}/release/${LIB_NAME}" ]; then
   cp "target/${TARGET}/release/${LIB_NAME}" "${PKG_DIR}/lib/"
 fi
 cp "target/${TARGET}/release/libredlinedb.a" "${PKG_DIR}/lib/"
-cp "crates/ffi/include/sqlite3.h" "${PKG_DIR}/include/"
+cp "contracts/c-abi/sqlite3.h" "${PKG_DIR}/include/"
 cp "contracts/c-abi/redlinedb.h" "${PKG_DIR}/include/"
 printf '%s\n' "${TAG}" > "${PKG_DIR}/VERSION"
 
