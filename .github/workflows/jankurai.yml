@@ -24,8 +24,8 @@ jobs:
       - name: Required Rust lane
         run: bash ops/ci/required.sh
 
-  security-and-audit:
-    name: Security and audit evidence
+  security:
+    name: Security and supply-chain evidence
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -40,7 +40,57 @@ jobs:
         run: bash ops/ci/install-tools.sh
       - name: Secret, dependency, workflow, and SBOM scans
         run: bash ops/ci/security.sh
+      - name: Upload security and SBOM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: redline-split-ops-security
+          path: target/security/
+          if-no-files-found: error
+
+  audit:
+    name: Jankurai audit evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c
+        with:
+          go-version: 1.25.5
+          cache: false
+      - name: Install exact audit toolchain
+        run: bash ops/ci/install-tools.sh
       - name: Jankurai score and hard-finding gate
         run: bash ops/ci/score.sh
+      - name: Upload JSON and Markdown audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: redline-split-ops-audit
+          path: |
+            .jankurai/repo-score.json
+            .jankurai/repo-score.md
+            target/jankurai/
+          if-no-files-found: error
+
+  release-readiness:
+    name: Candidate release readiness
+    needs: [required, security, audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c
+        with:
+          go-version: 1.25.5
+          cache: false
+      - name: Install exact release evidence tools
+        run: bash ops/ci/install-tools.sh
+      - name: Reproduce security evidence in the release snapshot
+        run: bash ops/ci/security.sh
       - name: Release readiness
         run: bash ops/ci/release-readiness.sh
