@@ -1,8 +1,10 @@
 use super::evidence::{
-    histogram_bars, human_duration_ns, median_gap, median_sqlite_ns, median_target_ns, suite_accent,
-    suite_display_name, worst_gap,
+    histogram_bars, human_duration_ns, median_gap, median_sqlite_ns, median_target_ns,
+    suite_accent, suite_display_name, worst_gap,
 };
-use super::types::{RankedCase, RawRecord, ReportOptions, SummaryJson, SvgArtifact, SvgBar, SvgSpec};
+use super::types::{
+    RankedCase, RawRecord, ReportOptions, SummaryJson, SvgArtifact, SvgBar, SvgSpec,
+};
 
 pub(crate) fn build_svg_artifacts(
     summary: &SummaryJson,

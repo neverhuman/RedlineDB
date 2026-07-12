@@ -15,10 +15,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
-use evidence::{artifact_names_for_suite, read_official_evidence_versions,
-    validate_official_evidence_binding};
+use evidence::{
+    artifact_names_for_suite, read_official_evidence_versions, validate_official_evidence_binding,
+};
 use render::{
     ksloc_csv, parse_raw_records, rank_cases, ranked_csv, render_metrics_block,
     render_report_block, replace_block,
@@ -187,7 +188,8 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         .unwrap_or_else(|| PathBuf::from("target/release/redlinedb"));
     let target_binary_path = canonical_display(&target_bin);
     let target_binary_sha256 = sha256_file(&target_bin).unwrap_or_else(|_| "<unknown>".to_owned());
-    let target_version = utils::capture_version(&target_bin).unwrap_or_else(|_| "<unknown>".to_owned());
+    let target_version =
+        utils::capture_version(&target_bin).unwrap_or_else(|_| "<unknown>".to_owned());
     let sqlite_binary_path = std::env::var_os("REDLINE_TESTING_SQLITE_BIN")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)

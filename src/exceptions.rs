@@ -89,7 +89,12 @@ const GENERIC: HarnessException = HarnessException {
 
 const CATALOG: &[Classified] = &[
     Classified {
-        signatures: &["no such file", "not found", "cannot find", "no such program"],
+        signatures: &[
+            "no such file",
+            "not found",
+            "cannot find",
+            "no such program",
+        ],
         exception: HarnessException {
             code: "MISSING_REFERENCE_CLI",
             purpose: "resolve and probe the reference / target database CLI",
@@ -103,7 +108,12 @@ const CATALOG: &[Classified] = &[
         },
     },
     Classified {
-        signatures: &["create tmp root", "permission denied", "read-only", "create dir"],
+        signatures: &[
+            "create tmp root",
+            "permission denied",
+            "read-only",
+            "create dir",
+        ],
         exception: HarnessException {
             code: "OUTPUT_DIR_UNWRITABLE",
             purpose: "prepare the per-suite output directory for raw JSONL",

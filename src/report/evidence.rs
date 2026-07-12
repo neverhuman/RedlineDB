@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::types::{ArtifactNames, EvidenceVersions, RankedCase, RawRecord, SvgBar};
 use super::utils::median_u64;

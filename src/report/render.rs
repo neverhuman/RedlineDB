@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 
 use anyhow::{Context, Result};
 
-use super::evidence::{memory_peak_summary, memory_status_summary, suite_display_name, suite_subject};
+use super::evidence::{
+    memory_peak_summary, memory_status_summary, suite_display_name, suite_subject,
+};
 use super::types::{EvidenceVersions, RankedCase, RawRecord, ReportOptions, SummaryJson};
 use super::utils::{csv, improvement_pct, is_measured, median};
 

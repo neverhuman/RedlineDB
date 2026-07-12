@@ -285,9 +285,8 @@ fn report_uses_official_evidence_versions_in_readme_block() {
         "{rendered}"
     );
     assert!(
-        rendered.contains(
-            "SQLite reference version **3.53.1 2026-05-05 10:34:17 example (64-bit)**"
-        ),
+        rendered
+            .contains("SQLite reference version **3.53.1 2026-05-05 10:34:17 example (64-bit)**"),
         "{rendered}"
     );
     assert!(

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::render::parse_raw_records;
 use super::types::{JankuraiCompareOptions, SentinelOptions};
