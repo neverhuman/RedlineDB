@@ -130,6 +130,11 @@ fn required_lane_runs_security_with_strict_tool_checks() {
 fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
     let lane = repo_file("ops/ci/jankurai.sh");
 
+    assert!(lane.contains("--full"));
+    assert!(lane.contains("--mode ratchet"));
+    assert!(lane.contains("--baseline .jankurai/baselines/accepted-baseline.json"));
+    assert!(lane.contains("--policy agent/audit-policy.toml"));
+    assert!(lane.contains("--no-score-history"));
     assert!(lane.contains("proof . \"${proofbind_changed_args[@]}\""));
     assert!(lane.contains("git diff --diff-filter=d --name-only -z"));
     assert!(lane.contains("git diff-tree --no-commit-id --name-only -r -z --diff-filter=d HEAD"));

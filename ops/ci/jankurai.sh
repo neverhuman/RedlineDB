@@ -75,7 +75,11 @@ run_step_soft() {
 # audit-ci / contract-drift / authz-matrix / input-boundary / agent-tool-supply
 run_step "jankurai: audit" \
     "$JANKURAI" audit . \
-    --mode advisory \
+    --full \
+    --mode ratchet \
+    --baseline .jankurai/baselines/accepted-baseline.json \
+    --policy agent/audit-policy.toml \
+    --no-score-history \
     --json target/jankurai/repo-score.json \
     --md target/jankurai/repo-score.md \
     --sarif target/jankurai/jankurai.sarif \

@@ -125,6 +125,12 @@ disabled_rules = [
 [scan]
 # Audit-output and dist-output paths are noise.
 excluded_paths = [
+  # CI keeps Cargo state inside the detached checkout. These are downloaded
+  # third-party caches, not Redline Testing source or release evidence.
+  ".cargo/registry/",
+  ".cargo/git/",
+  ".cargo/advisory-db/",
+  ".jankurai/baselines/",
   ".jankurai/repo-score.json",
   ".jankurai/repo-score.md",
   ".jankurai/jankurai.sarif",
