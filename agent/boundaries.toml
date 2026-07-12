@@ -7,6 +7,13 @@ required_check = "jain-split-ops/required"
 cross_repo_dependency_policy = "pinned-local-jeryu-git-tags"
 local_path_patches = false
 
+[release_automation]
+entrypoint = "release-candidate.sh"
+owner = "tools/splitctl/src/release_candidate.rs"
+shell_policy = "thin-exec-only"
+production_mode = false
+receipt_root = "docs/release-evidence/8.0.0/orchestrator"
+
 cargo_members = [
 
 ]

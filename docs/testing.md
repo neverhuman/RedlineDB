@@ -32,6 +32,12 @@ receipts prove all of the following:
 - rate limit and abuse controls for uploads, storage, public routes, and
   bounded cleanup.
 
+The fleet release proof starts with `./release-candidate.sh` (or
+`./release-candidate.sh --plan` for an execution-free inventory). Rust owns the
+wave plan, receipt reuse, exact-commit CI orchestration, canonical tag requests,
+and the final rollout gate; the shell file only fixes the safety environment and
+executes `splitctl`.
+
 The AtomicSoul candidate commands are dry-run only. The budget, quota, spend
 cap, stop condition, and kill switch policy is explicit: they set
 `ATOMICSOUL_PUSH=0`, cannot change Caddy or production aliases, and use the

@@ -114,9 +114,13 @@ release-ci:
   ./ops/ci/score.sh
   ./ops/ci/contract-drift.sh
 
-# Candidate-only release gate. Production application is intentionally absent.
+# One-command candidate runner. It resumes fresh exact-commit receipts and has
+# no production apply mode; AtomicSoul is always push-disabled and dry-run.
+release-plan:
+  ./release-candidate.sh --plan
+
 release:
-  just release-ci
+  ./release-candidate.sh
 
 release-artifacts version="8.0.0":
   ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- build-local --version "{{version}}" --gate-dir "target/release-evidence/{{version}}"

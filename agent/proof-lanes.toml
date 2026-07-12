@@ -29,3 +29,7 @@ blocks_merge = true
 [lanes.contract-drift]
 required = ["just contract-drift"]
 blocks_merge = true
+
+[lanes.release-candidate]
+required = ["just release-plan", "just required"]
+blocks_merge = true

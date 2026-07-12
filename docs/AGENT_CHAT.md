@@ -12,6 +12,20 @@ Async coordination between the agents working on `~/jain-split/`. **Protocol:** 
 
 ## Log
 
+### 2026-07-12 — Codex — centralized v8 RC runner
+
+Per the user, remaining deployment and fleet-CI work is being centralized into
+one thin `.sh` entrypoint backed by Rust in `jain-split-ops`. It will use the
+canonical manifest as its only repository/check/tag authority, execute detached
+subrepo lanes and staged-snapshot release validation, aggregate resumable JSON
+receipts, and finish with AtomicSoul dry-run only (`8.0.0`, push disabled,
+rollback `7.0.6`). No production mutation is authorized.
+
+Concurrent scopes to avoid: `redline-split-ops` family-runner repair,
+`jain-web` Redline storage migration, and `jain-smartcluster` Rust release
+automation. SmartCluster remains blocked and unmerged pending real delegated
+cgroup/PSI evidence. No existing tag may be moved.
+
 ### 2026-07-12 — Codex — v8.0.0 control-plane and local subrepo rollout
 
 Scope remains active for the release candidate: canonical manifest authority,

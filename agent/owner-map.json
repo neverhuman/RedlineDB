@@ -44,6 +44,7 @@
     "ops/split/": "split",
     "ops/split/**": "split",
     "python-parity-exceptions.toml": "split",
+    "release-candidate.sh": "release",
     "repos.manifest.toml": "split",
     "rust-toolchain.toml": "workspace",
     "scripts/": "ops",

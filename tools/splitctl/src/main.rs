@@ -1,4 +1,6 @@
 // Repository-local release and Jeryu control-plane CLI.
+mod release_candidate;
+
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
@@ -173,6 +175,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("release-tree-identity") => release_tree_identity_command(args.collect())?,
         Some("contract-drift") => contract_drift_command(args.collect())?,
         Some("security-evidence") => security_evidence_command(args.collect())?,
+        Some("release-candidate") => release_candidate::run(args.collect())?,
         Some("sync-derived-manifests") => sync_derived_manifests_command(args.collect())?,
         Some("validate-manifest") => validate_manifest_command(args.collect())?,
         Some("validate-family") => preflight(args.collect())?,
@@ -188,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --manifest PATH --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-candidate [--plan] [--repo NAME]... [--from-wave N] [--through-wave N] [--force] [--no-tags] [--no-atomicsoul] | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --manifest PATH --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }

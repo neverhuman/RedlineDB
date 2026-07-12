@@ -509,15 +509,15 @@ release_checksum_sha256 = "PENDING"
 protection_policy = "immutable-main-v1"
 required_check = "jain-core/required"
 note = "Pipeline hub and canonical progress-event contract producer."
-cargo_members = ["crates/feat-core"]
+cargo_members = ["crates/feat-core", "crates/jain-redline-store"]
 release_package = "feat-core"
 release_feature_sets = [
   ["ci-smoke", "catboost", "xgboost", "lightgbm", "jable", "jable_required_smoke", "starforge-cpu", "hyperion-cpu", "jope", "invention-gpu"],
   ["ci-smoke", "catboost", "xgboost", "lightgbm", "jable", "jable_required_smoke", "starforge-cpu", "starforge-cuda", "hyperion-cpu", "hyperion-cuda", "jope"],
 ]
-copy_paths = ["crates/feat-core", "contracts"]
-source_paths = ["crates/feat-core/**", "contracts/**"]
-cross_repo_deps = ["jain-domain", "jain-math", "jain-catboost", "jain-xgboost", "jain-lightgbm", "jain-jable", "jain-starforge"]
+copy_paths = ["crates/feat-core", "crates/jain-redline-store", "contracts"]
+source_paths = ["crates/feat-core/**", "crates/jain-redline-store/**", "contracts/**"]
+cross_repo_deps = ["jain-domain", "jain-math", "jain-catboost", "jain-xgboost", "jain-lightgbm", "jain-jable", "jain-starforge", "redline-core"]
 
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-llm"

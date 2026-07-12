@@ -225,6 +225,11 @@
       "lane": "required",
       "purpose": "verify every frozen Python parity exception has current hashes and named Rust ownership"
     },
+    "release-candidate.sh": {
+      "command": "just release-plan && just required",
+      "lane": "release-candidate",
+      "purpose": "verify the one-command launcher stays thin and the Rust fleet plan remains canonical"
+    },
     "repos.manifest.toml": {
       "command": "just check && just score",
       "lane": "check",

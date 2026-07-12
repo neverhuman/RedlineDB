@@ -15,6 +15,38 @@ metadata use `8.0.0`; immutable repository tags use the exact per-repository ide
 the canonical manifest. Most Jain repositories use `*-v8.0.0-split.0`; Battle GPU and Contracts
 use their authorized corrective `split.1` identities.
 
+## One-command operation
+
+New agents and release operators run one command from this repository:
+
+```bash
+./release-candidate.sh
+```
+
+The thin shell launcher sets the immutable safety environment and hands all
+orchestration to Rust. The runner validates the canonical/derived manifests and
+Python boundary, executes Redline family CI, runs every Jain repository from a
+detached exact commit in declared wave order, reuses only fresh receipts whose
+commit/policy/log hash still match, applies only canonical compare-and-swap
+tags, runs final preflight, and invokes AtomicSoul only in its push-disabled
+dry-run mode. Its aggregate receipt and durable logs are under
+`docs/release-evidence/8.0.0/orchestrator/`.
+
+The command is intentionally resumable: fix the blocker named in the aggregate
+receipt and run the same script again. Previously passing exact-commit work is
+not repeated within the configured freshness window. Useful bounded forms are:
+
+```bash
+./release-candidate.sh --plan
+./release-candidate.sh --repo jain-core --no-tags --no-atomicsoul
+./release-candidate.sh --from-wave 3 --through-wave 6
+./release-candidate.sh --force
+```
+
+There is no production mode. A dirty worktree is preserved and reported as
+blocked; a `PENDING` manifest identity blocks tagging; existing tags are never
+moved; and AtomicSoul cannot run until all preceding steps are green.
+
 ## Non-negotiable safety rules
 
 - Release reviewed `main` commits only. Never tag a review or feature branch.
