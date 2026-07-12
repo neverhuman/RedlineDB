@@ -1,0 +1,25 @@
+{
+  "action": "moved-and-verified",
+  "after": {
+    "branch": "codex/v8.0.0-release-review",
+    "head": "fb64cafb1f109bad4d2bc4f76c84e132b57c882f",
+    "refs_sha256": "6d1eeda85125b04b50423c7bc07609a28bf140456b22acc13d52bfa9811ec3cd",
+    "remotes": "origin\thttp://127.0.0.1:8787/git/jeryu/jain-python.git (fetch)\norigin\thttp://127.0.0.1:8787/git/jeryu/jain-python.git (push)",
+    "status_porcelain_v2": "# branch.oid fb64cafb1f109bad4d2bc4f76c84e132b57c882f\n# branch.head codex/v8.0.0-release-review\n# branch.upstream origin/codex/v8.0.0-release-review\n# branch.ab +0 -0"
+  },
+  "before": {
+    "branch": "codex/v8.0.0-release-review",
+    "head": "fb64cafb1f109bad4d2bc4f76c84e132b57c882f",
+    "refs_sha256": "6d1eeda85125b04b50423c7bc07609a28bf140456b22acc13d52bfa9811ec3cd",
+    "remotes": "origin\thttp://127.0.0.1:8787/git/jeryu/jain-python.git (fetch)\norigin\thttp://127.0.0.1:8787/git/jeryu/jain-python.git (push)",
+    "status_porcelain_v2": "# branch.oid fb64cafb1f109bad4d2bc4f76c84e132b57c882f\n# branch.head codex/v8.0.0-release-review\n# branch.upstream origin/codex/v8.0.0-release-review\n# branch.ab +0 -0"
+  },
+  "destination": "/home/ubuntu/jain-deferred/jain-python",
+  "expected_head": "fb64cafb1f109bad4d2bc4f76c84e132b57c882f",
+  "mode": "apply",
+  "operation": "defer-worktree",
+  "schema_version": "jain.deferred-worktree/v1",
+  "source": "/home/ubuntu/jain-split/jain-python",
+  "status": "pass",
+  "timestamp_unix": 1783852851
+}

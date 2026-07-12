@@ -150,11 +150,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("release-status") => release_status(args.collect())?,
         Some("bootstrap-main") => bootstrap_main_command(args.collect())?,
         Some("immutable-tag") => immutable_tag_command(args.collect())?,
+        Some("defer-worktree") => defer_worktree_command(args.collect())?,
         Some("verify-worktrees") => verify_worktrees_command(args.collect())?,
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -1836,6 +1837,163 @@ fn workspace_member_matches(pattern: &str, directory: &str) -> bool {
             .iter()
             .zip(directory_parts)
             .all(|(expected, actual)| *expected == "*" || *expected == actual)
+}
+
+fn defer_worktree_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut destination = None;
+    let mut expected_head = None;
+    let mut receipt = None;
+    let mut apply = false;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(PathBuf::from(iter.next().ok_or("--repo needs a path")?)),
+            "--destination" => {
+                destination = Some(PathBuf::from(
+                    iter.next().ok_or("--destination needs a path")?,
+                ))
+            }
+            "--expected-head" => {
+                expected_head = Some(iter.next().ok_or("--expected-head needs a SHA")?)
+            }
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            "--apply" => apply = true,
+            value => return Err(format!("unknown defer-worktree argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("defer-worktree requires --repo")?;
+    let destination = destination.ok_or("defer-worktree requires --destination")?;
+    let expected_head = expected_head.ok_or("defer-worktree requires --expected-head")?;
+    let receipt = receipt.unwrap_or_else(|| release_evidence_path("deferred-worktree.json"));
+    let mut report = receipt_header("jain.deferred-worktree/v1", "defer-worktree", apply);
+    report["source"] = json!(repo);
+    report["destination"] = json!(destination);
+    report["expected_head"] = json!(expected_head);
+    let result = defer_worktree(&repo, &destination, &expected_head, apply, &mut report);
+    finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn defer_worktree(
+    repo: &Path,
+    destination: &Path,
+    expected_head: &str,
+    apply: bool,
+    report: &mut JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if destination.starts_with(repo) {
+        return Err("deferred destination must not be inside the source worktree".into());
+    }
+    if !repo.exists() {
+        if !destination.exists() {
+            return Err("source and deferred destination are both absent".into());
+        }
+        let existing = worktree_identity(destination)?;
+        require_expected_worktree_head(&existing, expected_head)?;
+        report["action"] = json!("verified-existing");
+        report["before"] = JsonValue::Null;
+        report["after"] = existing;
+        return Ok(());
+    }
+    if destination.exists() {
+        return Err(format!(
+            "refusing to overwrite existing deferred destination {}",
+            destination.display()
+        )
+        .into());
+    }
+    if !repo.join(".git").exists() {
+        return Err(format!("source is not a Git worktree: {}", repo.display()).into());
+    }
+    let before = worktree_identity(repo)?;
+    require_expected_worktree_head(&before, expected_head)?;
+    report["before"] = before.clone();
+    if !apply {
+        report["action"] = json!("would-move");
+        report["after"] = JsonValue::Null;
+        return Ok(());
+    }
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::rename(repo, destination)?;
+    let after = match worktree_identity(destination) {
+        Ok(identity) => identity,
+        Err(error) => {
+            let rollback = fs::rename(destination, repo);
+            return Err(format!(
+                "deferred worktree verification failed: {error}; rollback {}",
+                if rollback.is_ok() {
+                    "succeeded"
+                } else {
+                    "failed"
+                }
+            )
+            .into());
+        }
+    };
+    if before != after {
+        let rollback = fs::rename(destination, repo);
+        return Err(format!(
+            "deferred worktree identity changed during move; rollback {}",
+            if rollback.is_ok() {
+                "succeeded"
+            } else {
+                "failed"
+            }
+        )
+        .into());
+    }
+    report["action"] = json!("moved-and-verified");
+    report["after"] = after;
+    Ok(())
+}
+
+fn require_expected_worktree_head(
+    identity: &JsonValue,
+    expected: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let actual = identity["head"].as_str().unwrap_or("<missing>");
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!("worktree HEAD is {actual}, expected {expected}").into())
+    }
+}
+
+fn worktree_identity(repo: &Path) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let head = resolve_commit(repo, "HEAD")?;
+    let branch_output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .output()?;
+    let branch = if branch_output.status.success() {
+        Some(String::from_utf8(branch_output.stdout)?.trim().to_owned())
+    } else {
+        None
+    };
+    let status = strict_git_output(repo, &["status", "--porcelain=v2", "--branch"])?;
+    let remotes = strict_git_output(repo, &["remote", "-v"])?;
+    let refs = strict_git_output(
+        repo,
+        &[
+            "for-each-ref",
+            "--sort=refname",
+            "--format=%(objectname) %(refname)",
+            "refs/heads",
+            "refs/tags",
+        ],
+    )?;
+    Ok(json!({
+        "head": head,
+        "branch": branch,
+        "status_porcelain_v2": status,
+        "remotes": remotes,
+        "refs_sha256": sha256_bytes(refs.as_bytes()),
+    }))
 }
 
 fn verify_worktrees_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -4994,6 +5152,45 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             None
         );
         assert_eq!(python_parity_purpose("anything/oracle/production.py"), None);
+    }
+
+    #[test]
+    fn defer_worktree_is_dry_run_idempotent_and_preserves_dirty_identity() {
+        let root = TestDir::new("defer-worktree");
+        let (repo, head) = init_source(root.path());
+        fs::write(repo.join("preserved-untracked.txt"), "keep me\n").unwrap();
+        let destination = root.path().join("deferred/source");
+        let receipt = root.path().join("defer.json");
+        let args = || {
+            vec![
+                "--repo".to_owned(),
+                repo.display().to_string(),
+                "--destination".to_owned(),
+                destination.display().to_string(),
+                "--expected-head".to_owned(),
+                head.clone(),
+                "--receipt".to_owned(),
+                receipt.display().to_string(),
+            ]
+        };
+        defer_worktree_command(args()).unwrap();
+        assert!(repo.exists());
+        assert!(!destination.exists());
+        assert_eq!(read_json(&receipt)["action"], "would-move");
+
+        let mut apply = args();
+        apply.push("--apply".to_owned());
+        defer_worktree_command(apply.clone()).unwrap();
+        assert!(!repo.exists());
+        assert!(destination.join("preserved-untracked.txt").is_file());
+        let moved = read_json(&receipt);
+        assert_eq!(moved["action"], "moved-and-verified");
+        assert_eq!(moved["before"], moved["after"]);
+
+        defer_worktree_command(apply).unwrap();
+        let repeated = read_json(&receipt);
+        assert_eq!(repeated["action"], "verified-existing");
+        assert_eq!(repeated["after"]["head"], head);
     }
 
     #[test]
