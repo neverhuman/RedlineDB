@@ -243,7 +243,8 @@ jobs:
       # so CI and local (`scripts/ci-local.sh security`, `just security`)
       # run identical commands. Cargo-deny is soft-gated INSIDE the script
       # (see .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
-      # and gitleaks remain hard gates. actionlint and syft are soft-gated
+      # is hard when a Rust graph exists, and a partial graph fails closed.
+      # Gitleaks remains hard. Actionlint and syft are soft-gated
       # (see ledger entries actionlint-workflow-lint, syft-sbom).
       - name: security lane (ops/ci/security.sh)
         run: bash ops/ci/security.sh

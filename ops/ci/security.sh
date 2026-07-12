@@ -11,7 +11,8 @@
 # soft-gate semantics live in this script via `ci_soft_gate`, which
 # always returns 0 for the wrapped command while writing an explicit
 # `soft-gate=cargo-deny-check status=...` marker line to the audit log.
-# cargo-audit and gitleaks remain hard-gated end-to-end.
+# cargo-audit is hard-gated when a complete Rust dependency graph exists;
+# gitleaks remains hard-gated for every repository profile.
 #
 # Usage:
 #   bash ops/ci/security.sh
@@ -28,27 +29,36 @@ if ! command -v gitleaks >/dev/null 2>&1 \
     ci_install_gitleaks
 fi
 
-# Hard gate: cargo-audit must succeed for the lane to pass.
-cargo audit
+if [ -f Cargo.toml ] && [ -f Cargo.lock ]; then
+    # Hard gate: cargo-audit must succeed for an applicable Rust graph.
+    cargo audit
 
-# Soft gate: cargo-deny `cargo metadata` JSON parser drift against
-# rust 1.95.0 on the current workspace. See ledger for unblock.
-ci_soft_gate \
-    cargo-deny-check \
-    .jankurai/security/cargo-deny.log \
-    -- cargo deny --all-features check
+    # Soft gate: cargo-deny `cargo metadata` JSON parser drift against
+    # rust 1.95.0 on the current workspace. See ledger for unblock.
+    ci_soft_gate \
+        cargo-deny-check \
+        .jankurai/security/cargo-deny.log \
+        -- cargo deny --all-features check
+
+    # Hard gate: the locked dependency graph must produce reviewable SBOM
+    # input whenever Rust manifests are present.
+    cargo metadata --format-version 1 --locked \
+        > .jankurai/security/sbom-cargo-metadata.json
+elif [ -e Cargo.toml ] || [ -e Cargo.lock ]; then
+    printf 'incomplete Rust dependency graph: Cargo.toml and Cargo.lock must be present together\n' >&2
+    exit 1
+else
+    printf '%s\n' \
+        '{"status":"not_applicable","reason":"thin hub has no Rust dependency graph"}' \
+        > .jankurai/security/sbom-cargo-metadata.json
+    printf 'cargo dependency audit: not applicable (no Cargo.toml or Cargo.lock)\n'
+fi
 
 # Hard gate: gitleaks must succeed for the lane to pass.
 gitleaks detect --source . --redact --no-banner
 
-# Provenance/SBOM evidence — capture the workspace dependency
-# manifest so the supply-chain lane writes a reviewable artifact
-# alongside the audit/deny/gitleaks outputs. Hard gate: must succeed.
-cargo metadata --format-version 1 --locked \
-    > .jankurai/security/sbom-cargo-metadata.json
-
-# SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
-# artifact alongside the cargo-metadata evidence. Requires syft in PATH;
+# General SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
+# for both Rust workspaces and the shell/docs-only hub. Requires syft in PATH;
 # installed in CI by the jankurai.yml security job.
 # See ledger: .jankurai/ci-soft-gate-ledger.toml#syft-sbom.
 ci_soft_gate \

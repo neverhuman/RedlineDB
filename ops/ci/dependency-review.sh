@@ -33,6 +33,14 @@ mkdir -p "$(dirname "$LOG_PATH")"
 # in non-strict mode. The GitHub `actions/dependency-review-action` step
 # is the authoritative producer in CI; this is the soft-gated mirror.
 run_dependency_review() {
+    if [ ! -e Cargo.toml ] && [ ! -e Cargo.lock ]; then
+        printf 'dependency review: not applicable (no Rust dependency graph)\n'
+        return 0
+    fi
+    if [ ! -f Cargo.toml ] || [ ! -f Cargo.lock ]; then
+        printf 'incomplete Rust dependency graph: Cargo.toml and Cargo.lock must be present together\n' >&2
+        return 1
+    fi
     if command -v cargo-deny >/dev/null 2>&1; then
         cargo deny --all-features check advisories bans licenses sources
     else

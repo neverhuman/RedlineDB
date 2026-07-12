@@ -24,9 +24,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# cargo audit + cargo deny check + gitleaks detect (hard-gated end-to-end
-# except for cargo deny, which is soft-gated inside ops/ci/security.sh
-# per .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check).
+# Applicable cargo audit + cargo deny check, plus gitleaks detect. Rust
+# dependency checks are explicitly not applicable for this thin hub; a partial
+# Cargo graph fails closed. Cargo deny remains soft-gated inside
+# ops/ci/security.sh per the reviewed ledger entry.
 bash "$ROOT/ops/ci/security.sh"
 
 # dependency-review-action mirror (soft-gated inside the script per
