@@ -5,6 +5,11 @@ and structural lock validation. Run `just security` for fail-closed secret,
 dependency, workflow, and SBOM checks. Run `just score` for the pinned audit
 and the Rust score/hard-finding/cap gate.
 
+The required lane uses `./redlinectl control-validate`, which validates the
+canonical manifest, lock, mirror, and receipt schemas without requiring sibling
+checkouts. Live family checkout and hub-engine guards remain in
+`./redlinectl validate` and `./redlinectl family-ci`.
+
 `just family-ci` is intentionally stronger: every child must be clean `main`,
 equal its local-Jeryu forge head, and either have no proposed tag yet or have an
 immutable tag already bound to that exact commit. It executes the complete

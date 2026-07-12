@@ -7,4 +7,4 @@ cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 ./redlinectl test-receipt target/jankurai/coverage/rust-tests.json
-./redlinectl validate
+./redlinectl control-validate

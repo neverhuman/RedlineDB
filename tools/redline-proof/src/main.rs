@@ -1624,20 +1624,25 @@ fn proof_table(value: &toml::Value) -> Result<&toml::value::Table> {
         .ok_or_else(|| error("Redline lock proof table is missing"))
 }
 
-fn verify_lock(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<toml::Value> {
-    if !lock.is_file() || !mirror.is_file() {
-        return Err(error(
-            "authoritative Redline lock and compatibility mirror are both required",
-        ));
+fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Result<toml::Value> {
+    if !lock.is_file() {
+        return Err(error("authoritative Redline lock is required"));
     }
-    if fs::read(lock)? != fs::read(mirror)? {
-        return Err(error(
-            "control-plane lock mirror drift: files differ byte-for-byte",
-        ));
+    if let Some(mirror) = mirror {
+        if !mirror.is_file() {
+            return Err(error("Redline compatibility lock mirror is required"));
+        }
+        if fs::read(lock)? != fs::read(mirror)? {
+            return Err(error(
+                "control-plane lock mirror drift: files differ byte-for-byte",
+            ));
+        }
     }
     let value = load_lock(lock)?;
-    if value != load_lock(mirror)? {
-        return Err(error("control-plane lock mirror drift after TOML parsing"));
+    if let Some(mirror) = mirror {
+        if value != load_lock(mirror)? {
+            return Err(error("control-plane lock mirror drift after TOML parsing"));
+        }
     }
     if value.get("parent_family").and_then(toml::Value::as_str) != Some("independent") {
         return Err(error("Redline lock family ownership is invalid"));
@@ -1696,28 +1701,50 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<toml:
             )));
         }
         if eligible {
-            let state = current_reviewed_state(&manifest, repo, false)?;
-            if state.get("commit").and_then(JsonValue::as_str) != Some(commit) {
-                return Err(error(format!(
-                    "{}: reviewed main differs from lock commit",
-                    repo.name
-                )));
-            }
-            let metadata = tag_metadata(&manifest.repo_root(repo), &repo.current_tag, true)?;
-            if metadata.commit != commit
-                || entry.get("tag_object").and_then(toml::Value::as_str) != Some(&metadata.object)
-                || entry.get("tag_object_type").and_then(toml::Value::as_str)
-                    != Some(&metadata.object_type)
-                || entry.get("tag_subject").and_then(toml::Value::as_str) != Some(&metadata.subject)
+            let object = entry
+                .get("tag_object")
+                .and_then(toml::Value::as_str)
+                .unwrap_or("");
+            let object_type = entry
+                .get("tag_object_type")
+                .and_then(toml::Value::as_str)
+                .unwrap_or("");
+            let subject = entry
+                .get("tag_subject")
+                .and_then(toml::Value::as_str)
+                .unwrap_or("");
+            if !is_sha1(object)
+                || !matches!(object_type, "commit" | "tag")
+                || subject.is_empty()
                 || entry
                     .get("remote_tag_verified")
                     .and_then(toml::Value::as_bool)
                     != Some(true)
             {
                 return Err(error(format!(
-                    "{}: lock metadata differs from immutable Jeryu tag",
+                    "{}: eligible lock lacks immutable tag metadata",
                     repo.name
                 )));
+            }
+            if mirror.is_some() {
+                let state = current_reviewed_state(&manifest, repo, false)?;
+                if state.get("commit").and_then(JsonValue::as_str) != Some(commit) {
+                    return Err(error(format!(
+                        "{}: reviewed main differs from lock commit",
+                        repo.name
+                    )));
+                }
+                let metadata = tag_metadata(&manifest.repo_root(repo), &repo.current_tag, true)?;
+                if metadata.commit != commit
+                    || object != metadata.object
+                    || object_type != metadata.object_type
+                    || subject != metadata.subject
+                {
+                    return Err(error(format!(
+                        "{}: lock metadata differs from immutable Jeryu tag",
+                        repo.name
+                    )));
+                }
             }
         }
     }
@@ -1742,8 +1769,10 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<toml:
         ));
     }
     if eligible {
-        if verify_checksum(lock)? != verify_checksum(mirror)? {
-            return Err(error("lock checksum mirrors differ"));
+        if let Some(mirror) = mirror {
+            if verify_checksum(lock)? != verify_checksum(mirror)? {
+                return Err(error("lock checksum mirrors differ"));
+            }
         }
     } else {
         let accepted = proof
@@ -1769,7 +1798,7 @@ fn parse_time_string(raw: Option<&str>, field: &str) -> Result<DateTime<Utc>> {
 
 fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
     let now = Utc::now();
-    let value = verify_lock(manifest_path, lock, mirror)?;
+    let value = verify_lock(manifest_path, lock, Some(mirror))?;
     let proof = proof_table(&value)?;
     if proof.get("parity_status").and_then(toml::Value::as_str) != Some("accepted")
         || proof.get("cutover_eligible").and_then(toml::Value::as_bool) != Some(true)
@@ -2155,7 +2184,7 @@ fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
             "release readiness requires passing security evidence",
         ));
     }
-    verify_lock(&paths.manifest, &paths.lock, &paths.mirror)?;
+    verify_lock(&paths.manifest, &paths.lock, Some(&paths.mirror))?;
     let payload = json!({
         "schema_version": "redline.release-readiness/v1",
         "family": FAMILY,
@@ -2184,19 +2213,9 @@ fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-fn validate(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
+fn validate_control(manifest_path: &Path, lock: &Path) -> Result<usize> {
     let manifest = load_manifest(manifest_path)?;
     validate_receipt_schemas(manifest.path.parent().unwrap_or(Path::new(".")))?;
-    for repo in &manifest.repos {
-        let checkout = manifest.repo_root(repo);
-        if !checkout.join(".git").exists() {
-            return Err(error(format!(
-                "{}: missing independent Git checkout: {}",
-                repo.name,
-                checkout.display()
-            )));
-        }
-    }
     let control_cargo = manifest
         .path
         .parent()
@@ -2208,6 +2227,24 @@ fn validate(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
             return Err(error(
                 "redline-split-ops must not become an umbrella Cargo workspace",
             ));
+        }
+    }
+    let value = verify_lock(manifest_path, lock, None)?;
+    Ok(lock_entries(&value)?.len())
+}
+
+fn validate(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
+    let count = validate_control(manifest_path, lock)?;
+    verify_lock(manifest_path, lock, Some(mirror))?;
+    let manifest = load_manifest(manifest_path)?;
+    for repo in &manifest.repos {
+        let checkout = manifest.repo_root(repo);
+        if !checkout.join(".git").exists() {
+            return Err(error(format!(
+                "{}: missing independent Git checkout: {}",
+                repo.name,
+                checkout.display()
+            )));
         }
     }
     let hub = manifest
@@ -2222,11 +2259,7 @@ fn validate(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
                 .join("scripts/guard-no-duplicate-engine.sh"),
         ),
     )?;
-    let value = verify_lock(manifest_path, lock, mirror)?;
-    println!(
-        "redline manifest and lock ok: {} repositories",
-        lock_entries(&value)?.len()
-    );
+    println!("redline family and lock ok: {count} repositories");
     Ok(())
 }
 
@@ -2432,10 +2465,16 @@ fn real_main() -> Result<()> {
     };
     match command.as_str() {
         "validate" => { if !args.is_empty() { return Err(error("validate accepts no arguments")); } validate(&paths.manifest, &paths.lock, &paths.mirror) }
+        "control-validate" => {
+            if !args.is_empty() { return Err(error("control-validate accepts no arguments")); }
+            let count = validate_control(&paths.manifest, &paths.lock)?;
+            println!("redline control manifest and lock ok: {count} repositories");
+            Ok(())
+        }
         "doctor" => { if !args.is_empty() { return Err(error("doctor accepts no arguments")); } doctor(&paths.manifest, &paths.lock, &paths.mirror) }
         "lock-verify" => {
             if !args.is_empty() { return Err(error("lock-verify accepts no arguments")); }
-            let value = verify_lock(&paths.manifest, &paths.lock, &paths.mirror)?;
+            let value = verify_lock(&paths.manifest, &paths.lock, Some(&paths.mirror))?;
             println!("redline lock ok: {} repositories", lock_entries(&value)?.len());
             Ok(())
         }
@@ -2499,7 +2538,7 @@ fn real_main() -> Result<()> {
         }
         "update" => { if !args.is_empty() { return Err(error("update accepts no arguments")); } clone_or_update(&paths.manifest, false) }
         "--version" | "version" => { println!("redline-proof 0.1.0"); Ok(()) }
-        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|validate|lock-verify|family-ci [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
+        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|control-validate|validate|lock-verify|family-ci [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
     }
 }
 
@@ -2740,5 +2779,47 @@ mod tests {
     fn governed_receipt_schemas_parse() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         validate_receipt_schemas(root).unwrap();
+    }
+
+    #[test]
+    fn control_validation_does_not_require_family_checkouts() {
+        let fixture = TestDir::new("standalone-control");
+        let control = fixture.path().join("redline-split-ops");
+        let mirror_dir = fixture.path().join("redline-split");
+        fs::create_dir_all(control.join("schemas")).unwrap();
+        fs::create_dir_all(&mirror_dir).unwrap();
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+        for name in ["repos.manifest.toml", "redline.lock.toml", "Cargo.toml"] {
+            fs::copy(source.join(name), control.join(name)).unwrap();
+        }
+        for name in [
+            "redline-family-ci.schema.json",
+            "redline-consumer-evidence.schema.json",
+            "redline-proof-refresh.schema.json",
+        ] {
+            fs::copy(
+                source.join("schemas").join(name),
+                control.join("schemas").join(name),
+            )
+            .unwrap();
+        }
+        assert!(!mirror_dir.join("redline.lock.toml").exists());
+        assert_eq!(
+            validate_control(
+                &control.join("repos.manifest.toml"),
+                &control.join("redline.lock.toml"),
+            )
+            .unwrap(),
+            4
+        );
+        assert!(verify_lock(
+            &control.join("repos.manifest.toml"),
+            &control.join("redline.lock.toml"),
+            Some(&mirror_dir.join("redline.lock.toml")),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("compatibility lock mirror is required"));
+        assert!(!mirror_dir.join("redline").exists());
     }
 }
