@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/jain-split-ops",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-split-ops/pulls/12"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-split-ops"
+      },
+      "sha": "2931d81f28f86f8d55b35272e4d260442e8f3818"
+    },
+    "body": "Release-critical control-plane review: manifest-authoritative legal Battle/Core feature matrices, immutable tag remote-main guard, Rust safety tests, and checksummed v8 evidence. No production promotion.",
+    "created_at": "2026-07-12T09:58:13.708289832Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-release-control",
+      "ref": "codex/v8-release-control",
+      "repo": {
+        "full_name": "jeryu/jain-split-ops"
+      },
+      "sha": "beb0c1957a77a9c33eeb44d03b27c07def2daa47"
+    },
+    "html_url": "/jeryu/jain-split-ops/pull/12",
+    "id": "59874e00-fcc3-4eee-828f-c8deee9c76c3",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 12,
+    "source_repository": "jeryu/jain-split-ops",
+    "state": "open",
+    "title": "release: manifest-driven v8 Cargo matrices",
+    "updated_at": "2026-07-12T09:59:16.977264213Z",
+    "url": "/repos/jeryu/jain-split-ops/pulls/12",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783850356
+}

@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Release-critical control-plane review: manifest-authoritative legal Battle/Core feature matrices, immutable tag remote-main guard, Rust safety tests, and checksummed v8 evidence. No production promotion.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T09:59:53.501650769+00:00",
+      "head_sha": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:beb0c1957a77a9c33eeb44d03b27c07def2daa47:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "2931d81f28f86f8d55b35272e4d260442e8f3818",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f5892098-c835-47f7-9cc0-e739ec82d025#12",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-release-control",
+      "head_sha": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 12,
+      "passport_hash": "passport:beb0c1957a77a9c33eeb44d03b27c07def2daa47:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f5892098-c835-47f7-9cc0-e739ec82d025",
+        "name": "jain-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: manifest-driven v8 Cargo matrices",
+      "updated_at": "2026-07-12T09:59:16.977264213+00:00"
+    }
+  },
+  "repository": "jeryu/jain-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact manifest-driven v8 control head; detached required, security, score 92, contract drift, and Battle build/test matrices passed.",
+      "evidence": null,
+      "expected_head_sha": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-split-ops/pulls/12/reviews"
+  },
+  "response": {
+    "description": "Release-critical control-plane review: manifest-authoritative legal Battle/Core feature matrices, immutable tag remote-main guard, Rust safety tests, and checksummed v8 evidence. No production promotion.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T09:59:53.492245033+00:00",
+      "head_sha": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:beb0c1957a77a9c33eeb44d03b27c07def2daa47:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "2931d81f28f86f8d55b35272e4d260442e8f3818",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f5892098-c835-47f7-9cc0-e739ec82d025#12",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-release-control",
+      "head_sha": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 12,
+      "passport_hash": "passport:beb0c1957a77a9c33eeb44d03b27c07def2daa47:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f5892098-c835-47f7-9cc0-e739ec82d025",
+        "name": "jain-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: manifest-driven v8 Cargo matrices",
+      "updated_at": "2026-07-12T09:59:16.977264213+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783850392
+}
