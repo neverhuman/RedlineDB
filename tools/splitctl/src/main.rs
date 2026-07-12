@@ -939,9 +939,25 @@ fn validate_manifest_data(
             names.len()
         ));
     }
-    if repos.len() != 26 {
+    if names.contains("jain-python")
+        || repos
+            .iter()
+            .any(|raw| string(raw, "profile").as_deref() == Some("python"))
+    {
+        errors.push(
+            "product Python repositories are forbidden; Python is limited to Rust parity tests"
+                .to_owned(),
+        );
+    }
+    if !strings(data, "retired_paths")
+        .iter()
+        .any(|path| path == "python/ai-service/**")
+    {
+        errors.push("retired_paths must include python/ai-service/**".to_owned());
+    }
+    if repos.len() != 25 {
         errors.push(format!(
-            "expected 26 family repositories, found {}",
+            "expected 25 Rust/parity-policy family repositories, found {}",
             repos.len()
         ));
     }
@@ -4209,9 +4225,6 @@ fn standard_routes(repo: &Repo) -> Vec<String> {
             ["apps/web/", "contracts/", "package.json", "pnpm-lock.yaml"].map(str::to_owned),
         );
     }
-    if repo.name == "jain-python" {
-        routes.extend(["python/ai-service/", "contracts/"].map(str::to_owned));
-    }
     if repo.name == "jain-deploy" {
         routes.extend(["deployment/", "jain-split.lock.toml", ".stage/"].map(str::to_owned));
     }
@@ -4434,10 +4447,7 @@ fn render_test_map(repo: &Repo) -> String {
     ] {
         add_route(&mut tests, route, value);
     }
-    let source_command = if !repo.cargo_members.is_empty()
-        || repo.name == "jain-web"
-        || repo.name == "jain-python"
-    {
+    let source_command = if !repo.cargo_members.is_empty() || repo.name == "jain-web" {
         "just required"
     } else {
         "just check"
