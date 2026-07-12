@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/jain-contracts",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-contracts/pulls/7"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-contracts"
+      },
+      "sha": "3640d85291fe396755689f7388452268a9f8be48"
+    },
+    "body": "Strict Rust-parity-only policy: the mirror now verifies progress contracts through its Rust/shell required and contract-drift lanes; no pytest or Python product exception remains. Required, contract, security, artifact, and score gates pass. Existing split.0 tag is immutable and is not moved by this PR.",
+    "created_at": "2026-07-12T11:08:09.251889674Z",
+    "draft": false,
+    "head": {
+      "label": "codex/contracts-rust-only-boundary",
+      "ref": "codex/contracts-rust-only-boundary",
+      "repo": {
+        "full_name": "jeryu/jain-contracts"
+      },
+      "sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f"
+    },
+    "html_url": "/jeryu/jain-contracts/pull/7",
+    "id": "9f752daa-9495-41b9-8dcf-6670c83ef90e",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 7,
+    "source_repository": "jeryu/jain-contracts",
+    "state": "open",
+    "title": "ci: remove Python contract command",
+    "updated_at": "2026-07-12T11:08:43.399157354Z",
+    "url": "/repos/jeryu/jain-contracts/pulls/7",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783854523
+}

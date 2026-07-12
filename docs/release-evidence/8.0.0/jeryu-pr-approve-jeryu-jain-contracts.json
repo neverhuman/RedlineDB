@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Strict Rust-parity-only policy: the mirror now verifies progress contracts through its Rust/shell required and contract-drift lanes; no pytest or Python product exception remains. Required, contract, security, artifact, and score gates pass. Existing split.0 tag is immutable and is not moved by this PR.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T11:08:56.610386545+00:00",
+      "head_sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:df5f793371393188cf21ba09dcbf57e3bb629e1f:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "3640d85291fe396755689f7388452268a9f8be48",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/contracts-rust-only-boundary",
+      "head_sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 7,
+      "passport_hash": "passport:df5f793371393188cf21ba09dcbf57e3bb629e1f:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff",
+        "name": "jain-contracts",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: remove Python contract command",
+      "updated_at": "2026-07-12T11:08:43.399157354+00:00"
+    }
+  },
+  "repository": "jeryu/jain-contracts",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact Rust-only contract command and host-required evidence.",
+      "evidence": null,
+      "expected_head_sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-contracts/pulls/7/reviews"
+  },
+  "response": {
+    "description": "Strict Rust-parity-only policy: the mirror now verifies progress contracts through its Rust/shell required and contract-drift lanes; no pytest or Python product exception remains. Required, contract, security, artifact, and score gates pass. Existing split.0 tag is immutable and is not moved by this PR.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T11:08:56.600228309+00:00",
+      "head_sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:df5f793371393188cf21ba09dcbf57e3bb629e1f:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "3640d85291fe396755689f7388452268a9f8be48",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/contracts-rust-only-boundary",
+      "head_sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 7,
+      "passport_hash": "passport:df5f793371393188cf21ba09dcbf57e3bb629e1f:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff",
+        "name": "jain-contracts",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: remove Python contract command",
+      "updated_at": "2026-07-12T11:08:43.399157354+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783854535
+}
