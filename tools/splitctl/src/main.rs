@@ -2183,12 +2183,9 @@ fn immutable_tag_command_impl(
         create_or_verify_immutable_tag(&repo, &remote, &tag, &commit, apply, &mut report)?;
         if apply {
             let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
-            if data.get("split_root").is_some() {
-                let manifest_root = manifest.parent().unwrap_or(Path::new("."));
-                let mirror_receipt = manifest_root
-                    .join("docs/release-evidence")
-                    .join(RELEASE_VERSION)
-                    .join(format!(
+            if let Some(mirror_root) = manifest_mirror_root(&data, &manifest) {
+                let mirror_receipt =
+                    manifest_release_evidence_root(&data, &manifest).join(format!(
                         "mirrors/{}-{}.json",
                         receipt_component(&managed_name),
                         receipt_component(&tag)
@@ -2202,9 +2199,7 @@ fn immutable_tag_command_impl(
                     mirror_receipt.display().to_string(),
                     "--apply".to_owned(),
                 ])?;
-                let mirror = PathBuf::from(string(&data, "split_root").unwrap())
-                    .join("target/bare-mirrors")
-                    .join(format!("{managed_name}.git"));
+                let mirror = mirror_root.join(format!("{managed_name}.git"));
                 let mirrored = local_ref_commit(&mirror, &format!("refs/tags/{tag}"))?;
                 let reviewed = resolve_commit(&repo, &commit)?;
                 if mirrored.as_deref() != Some(reviewed.as_str()) {
@@ -2230,7 +2225,12 @@ fn immutable_tag_command_impl(
 fn validate_canonical_manifest_authority(
     manifest_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let expected = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let control_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let expected = control_root.join("repos.manifest.toml");
+    let redline_expected = control_root
+        .parent()
+        .ok_or("Jain control root has no parent")?
+        .join("redline-split-ops/repos.manifest.toml");
     let actual = fs::canonicalize(manifest_path).map_err(|error| {
         format!(
             "canonicalize immutable-tag manifest {}: {error}",
@@ -2243,11 +2243,18 @@ fn validate_canonical_manifest_authority(
             expected.display()
         )
     })?;
-    if actual != expected {
+    let redline_expected = fs::canonicalize(&redline_expected).map_err(|error| {
+        format!(
+            "canonicalize Redline manifest authority {}: {error}",
+            redline_expected.display()
+        )
+    })?;
+    if actual != expected && actual != redline_expected {
         return Err(format!(
-            "immutable-tag manifest {} is not the canonical authority {}",
+            "immutable-tag manifest {} is not a canonical authority ({}, {})",
             actual.display(),
-            expected.display()
+            expected.display(),
+            redline_expected.display()
         )
         .into());
     }
@@ -2259,7 +2266,72 @@ fn validate_canonical_manifest_authority(
     if declared != actual {
         return Err("declared manifest_authority does not resolve to the supplied manifest".into());
     }
-    validate_manifest_data(&data, &actual, false)
+    if actual == expected {
+        validate_manifest_data(&data, &actual, false)
+    } else {
+        validate_redline_manifest_authority(&data, &actual)
+    }
+}
+
+fn validate_redline_manifest_authority(
+    data: &toml::Value,
+    manifest: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut errors = Vec::new();
+    if string(data, "schema_version").as_deref() != Some("1")
+        || string(data, "family").as_deref() != Some("redline-split")
+    {
+        errors.push("Redline manifest schema/family identity is invalid".to_owned());
+    }
+    if string(data, "status").as_deref() != Some("candidate")
+        || data.get("formal_ga").and_then(toml::Value::as_bool) != Some(false)
+        || string(data, "sagemaker").as_deref() != Some("N/A")
+    {
+        errors.push(
+            "Redline release metadata must remain candidate/formal_ga=false/SageMaker N/A"
+                .to_owned(),
+        );
+    }
+    let manifest_dir = manifest.parent().unwrap_or(Path::new("."));
+    for raw in release_manifest_repos(data)? {
+        let name = string(raw, "name").unwrap_or_else(|| "<missing-name>".to_owned());
+        let tag = string(raw, "immutable_tag").or_else(|| string(raw, "current_tag"));
+        let namespace = if tag.as_deref().is_some_and(|tag| tag.contains("-jain.")) {
+            "jain"
+        } else {
+            "split"
+        };
+        let checkout = string(raw, "path").map(|path| {
+            let path = PathBuf::from(path);
+            if path.is_absolute() {
+                path
+            } else {
+                manifest_dir.join(path)
+            }
+        });
+        validate_release_metadata(
+            data,
+            raw,
+            &name,
+            namespace,
+            checkout.as_deref(),
+            &mut errors,
+        );
+        if string(raw, "remote").is_none() || string(raw, "required_check").is_none() {
+            errors.push(format!(
+                "{name}: Redline remote and required_check are required"
+            ));
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Redline canonical manifest validation failed:\n{}",
+            errors.join("\n")
+        )
+        .into())
+    }
 }
 
 fn validate_manifest_tag_request(
@@ -2434,16 +2506,22 @@ fn validate_tag_release_identity(
 
     let version_file = git_file_at_commit(repo, commit, "VERSION")?;
     if let Some(value) = version_file.as_deref() {
-        if value.trim() != tag {
+        let redline_version = tag
+            .contains("-jain.")
+            .then(|| tag.rfind("-v").map(|index| &tag[index + 2..]))
+            .flatten();
+        if value.trim() != tag && redline_version != Some(value.trim()) {
             report["release_identity"] = json!({
                 "status": "fail",
                 "expected_product_version": expected,
                 "version_file": value.trim(),
                 "expected_version_file": tag,
+                "accepted_redline_version_file": redline_version,
             });
             return Err(format!(
-                "VERSION at {commit} is {:?}, expected exact immutable tag {tag:?}",
-                value.trim()
+                "VERSION at {commit} is {:?}, expected {tag:?}{}",
+                value.trim(),
+                redline_version.map_or(String::new(), |value| format!(" or {value:?}"))
             )
             .into());
         }
@@ -2932,6 +3010,34 @@ fn release_evidence_path(filename: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("docs/release-evidence/8.0.0")
         .join(filename)
+}
+
+fn manifest_release_evidence_root(data: &toml::Value, manifest: &Path) -> PathBuf {
+    if let Some(path) = string(data, "release_evidence_root") {
+        let path = PathBuf::from(path);
+        return if path.is_absolute() {
+            path
+        } else {
+            manifest.parent().unwrap_or(Path::new(".")).join(path)
+        };
+    }
+    manifest
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("docs/release-evidence")
+        .join(RELEASE_VERSION)
+}
+
+fn manifest_mirror_root(data: &toml::Value, manifest: &Path) -> Option<PathBuf> {
+    if let Some(path) = string(data, "mirror_root") {
+        let path = PathBuf::from(path);
+        return Some(if path.is_absolute() {
+            path
+        } else {
+            manifest.parent().unwrap_or(Path::new(".")).join(path)
+        });
+    }
+    string(data, "split_root").map(|root| PathBuf::from(root).join("target/bare-mirrors"))
 }
 
 fn receipt_component(value: &str) -> String {
@@ -5749,9 +5855,8 @@ fn refresh_bare_mirrors(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
     report["manifest"] = json!(manifest.display().to_string());
     report["selected_repositories"] = json!(selected);
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
-    let split_root =
-        PathBuf::from(string(&data, "split_root").ok_or("manifest missing split_root")?);
-    let mirror_root = split_root.join("target/bare-mirrors");
+    let mirror_root = manifest_mirror_root(&data, &manifest)
+        .ok_or("manifest is missing split_root or mirror_root")?;
     let repos = release_manifest_repos(&data)?;
     let known: Vec<String> = repos.iter().filter_map(|r| string(r, "name")).collect();
     for name in &selected {
@@ -6979,7 +7084,7 @@ protection_policy = "immutable-main-v1"
         )
         .unwrap();
         let error = validate_canonical_manifest_authority(&forged).unwrap_err();
-        assert!(error.to_string().contains("is not the canonical authority"));
+        assert!(error.to_string().contains("is not a canonical authority"));
     }
 
     #[test]
