@@ -12,6 +12,8 @@ use sha2::{Digest, Sha256};
 
 const EXPECTED_SCHEMA: &str = "redline-testing-official-evidence-v1";
 const PROCESSED_SCHEMA: &str = "redline-testing-official-evidence-processed-v1";
+const EXPECTED_SQLITE_CASES: u64 = 2_445;
+const EXPECTED_RQL_PHASE1_CASES: u64 = 1_385;
 const REQUIRED_TOP_LEVEL_FIELDS: &[&str] = &[
     "schema_version",
     "runner",
@@ -266,16 +268,19 @@ fn validated_suite(
     match name {
         "sqlite_parity" | "memory" => {
             let max_skips = 4;
-            if total != 1127 || passed + skipped != 1127 || skipped > max_skips {
+            if total != EXPECTED_SQLITE_CASES
+                || passed + skipped != EXPECTED_SQLITE_CASES
+                || skipped > max_skips
+            {
                 bail!(
-                    "suite {name} expected 1127 with at most {max_skips} target-capability skips, got total={total} passed={passed} skipped={skipped}"
+                    "suite {name} expected {EXPECTED_SQLITE_CASES} with at most {max_skips} target-capability skips, got total={total} passed={passed} skipped={skipped}"
                 );
             }
         }
         "rql_phase1" => {
-            if total != 594 || passed + skipped != 594 {
+            if total != EXPECTED_RQL_PHASE1_CASES || passed + skipped != EXPECTED_RQL_PHASE1_CASES {
                 bail!(
-                    "suite {name} expected 594 runnable cases, got total={total} passed={passed} skipped={skipped}"
+                    "suite {name} expected {EXPECTED_RQL_PHASE1_CASES} runnable cases, got total={total} passed={passed} skipped={skipped}"
                 );
             }
         }
@@ -513,5 +518,27 @@ mod tests {
         let digest = "c".repeat(64);
         let array = serde_json::json!([{"path": "summary.json", "sha256": digest}]);
         assert_eq!(normalize_hash_map(&array)["summary.json"], digest);
+    }
+
+    #[test]
+    fn accepts_the_pinned_v101_suite_sizes() {
+        let suite = |total, passed, skipped| {
+            serde_json::json!({
+                "total": total,
+                "passed": passed,
+                "failed": 0,
+                "skipped": skipped,
+                "raw_path": "raw.jsonl",
+                "summary_path": "summary.json",
+                "ranked_path": "ranked.csv",
+                "manifest_path": "manifest.json",
+                "provenance_path": "provenance.json"
+            })
+        };
+        let mut paths = BTreeSet::new();
+        assert!(validated_suite("sqlite_parity", &suite(2_445, 2_441, 4), &mut paths).is_ok());
+        assert!(validated_suite("memory", &suite(2_445, 2_441, 4), &mut paths).is_ok());
+        assert!(validated_suite("rql_phase1", &suite(1_385, 1_129, 256), &mut paths).is_ok());
+        assert!(validated_suite("sqlite_parity", &suite(1_127, 1_123, 4), &mut paths).is_err());
     }
 }
