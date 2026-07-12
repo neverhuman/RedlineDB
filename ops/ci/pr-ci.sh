@@ -22,8 +22,6 @@ ci_run cargo check --locked
 ci_run cargo test --locked
 ci_run scripts/release-package.sh
 
-# Security scanning (secret + dependency + workflow lint). Skips any tool that
-# is not installed locally, so this stays green during bootstrap while still
-# running every scan that IS available. The dedicated CI `security` job runs
-# the same script with the tools provisioned.
-ci_run bash "$repo_root/ops/ci/security.sh"
+# Security evidence is part of the required lane. Missing scanners fail closed
+# so a runner cannot report success from a partial tool installation.
+ci_run env REDLINE_STRICT_TOOLS=1 bash "$repo_root/ops/ci/security.sh"

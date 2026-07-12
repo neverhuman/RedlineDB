@@ -155,6 +155,8 @@ jobs:
           command -v cargo-audit >/dev/null 2>&1 || cargo install cargo-audit --locked
           command -v cargo-deny >/dev/null 2>&1 || cargo install cargo-deny --locked
       - name: "Security scan: gitleaks detect, cargo audit, cargo deny, zizmor, syft"
+        env:
+          REDLINE_STRICT_TOOLS: "1"
         run: bash ops/ci/security.sh
 
   # Jankurai tool-suite lane: runs the adopted jankurai tools and uploads their
