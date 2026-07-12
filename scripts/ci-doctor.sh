@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# CI doctor: enumerate every tool version pin and PASS/FAIL each one.
+# CI doctor: enumerate the thin hub's required shell/tool pins.
 #
-# Mirrors the pinned tool set in ops/ci/lib.sh + rust-toolchain.toml so
-# the operator knows up-front when their local environment will drift
-# from CI. Audit reference: HLT-042 ci-local-parity.doctor-missing.
+# The public hub has no Rust workspace. Engine-only Rust, nextest, cargo-deny,
+# and linker checks belong to redline-core; requiring them here makes the hub
+# impossible to validate independently. Audit reference: HLT-042.
 #
 # Usage:
 #   bash scripts/ci-doctor.sh
@@ -134,14 +134,14 @@ check_python() {
 }
 
 main() {
-    printf 'ci-doctor: pinned-tool report (ops/ci/lib.sh + rust-toolchain.toml)\n'
+    printf 'ci-doctor: thin-hub required tool report\n'
     printf '%-4s %-14s %s\n' STAT TOOL DETAIL
     printf '%s\n' '----------------------------------------------------------'
-    check_rust
-    check_nextest
-    check_cargo_deny
     check_gitleaks
-    check_mold
+    check_presence bash
+    check_presence shellcheck
+    check_presence actionlint
+    check_presence zizmor
     check_presence jq
     check_presence curl
     check_presence just
