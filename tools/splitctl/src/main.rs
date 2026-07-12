@@ -171,6 +171,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some("validate-score") => validate_score_command(args.collect())?,
         Some("release-tree-identity") => release_tree_identity_command(args.collect())?,
+        Some("contract-drift") => contract_drift_command(args.collect())?,
+        Some("security-evidence") => security_evidence_command(args.collect())?,
         Some("sync-derived-manifests") => sync_derived_manifests_command(args.collect())?,
         Some("validate-manifest") => validate_manifest_command(args.collect())?,
         Some("validate-family") => preflight(args.collect())?,
@@ -566,6 +568,166 @@ fn release_tree_identity_command(args: Vec<String>) -> Result<(), Box<dyn std::e
         report["commit"] = json!(commit);
         report["release_checksum_sha256"] = json!(checksum);
         println!("{commit} {checksum}");
+        Ok(())
+    })();
+    finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn contract_drift_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut output_dir = root.join("target/jankurai/contract-drift");
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--output-dir" => {
+                output_dir = PathBuf::from(iter.next().ok_or("--output-dir needs a path")?)
+            }
+            value => return Err(format!("unknown contract-drift argument: {value}").into()),
+        }
+    }
+    fs::create_dir_all(&output_dir)?;
+    let receipt = output_dir.join("receipt.json");
+    let mut report = receipt_header("jain.contract-drift/v1", "contract-drift", false);
+    report["manifest"] = json!(manifest);
+    let result = (|| {
+        let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+        validate_manifest_data(&data, &manifest, false)?;
+        let expected = manifest_sha256(&manifest)?;
+        for (target, derived) in derived_manifest_targets(&data, &manifest)? {
+            validate_derived_manifest(&derived, &expected, &data, &manifest, &target)?;
+        }
+        validate_local_jeryu(Some(manifest.clone()), true)?;
+        let repositories = managed_repositories(&data, &manifest)?;
+        if repositories.len() != 33 {
+            return Err(format!(
+                "managed repository inventory must contain 33 repositories, found {}",
+                repositories.len()
+            )
+            .into());
+        }
+        for required in ["jain-split-ops", "jain-smartcluster", "redline-split-ops"] {
+            if !repositories.iter().any(|repo| repo.name == required) {
+                return Err(format!("managed repository inventory is missing {required}").into());
+            }
+        }
+        let inventory = json!({
+            "schema_version": "jain.managed-repositories/v1",
+            "manifest": manifest,
+            "repositories": repositories.iter().map(managed_repo_json).collect::<Vec<_>>(),
+            "repository_count": repositories.len(),
+        });
+        write_atomic_bytes(
+            &output_dir.join("managed-repositories.json"),
+            &serde_json::to_vec_pretty(&inventory)?,
+        )?;
+        report["repository_count"] = json!(repositories.len());
+        println!(
+            "contract-drift ok: jain-split-ops ({} managed repos)",
+            repositories.len()
+        );
+        Ok(())
+    })();
+    finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn security_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut zizmor = None;
+    let mut gitleaks = None;
+    let mut sbom = None;
+    let mut grype = None;
+    let mut receipt = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--zizmor" => zizmor = Some(PathBuf::from(iter.next().ok_or("--zizmor needs a path")?)),
+            "--gitleaks" => {
+                gitleaks = Some(PathBuf::from(iter.next().ok_or("--gitleaks needs a path")?))
+            }
+            "--sbom" => sbom = Some(PathBuf::from(iter.next().ok_or("--sbom needs a path")?)),
+            "--grype" => grype = Some(PathBuf::from(iter.next().ok_or("--grype needs a path")?)),
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            value => return Err(format!("unknown security-evidence argument: {value}").into()),
+        }
+    }
+    let zizmor = zizmor.ok_or("security-evidence requires --zizmor")?;
+    let gitleaks = gitleaks.ok_or("security-evidence requires --gitleaks")?;
+    let sbom = sbom.ok_or("security-evidence requires --sbom")?;
+    let grype = grype.ok_or("security-evidence requires --grype")?;
+    let receipt = receipt.ok_or("security-evidence requires --receipt")?;
+    let mut report = receipt_header("jain-split-ops.security/v1", "security-evidence", false);
+    report["scans"] = json!([
+        "actionlint",
+        "zizmor",
+        "gitleaks",
+        "cargo-audit",
+        "cargo-deny",
+        "syft",
+        "grype"
+    ]);
+    report["fallbacks"] = json!(false);
+    let result = (|| {
+        let zizmor_data: JsonValue = serde_json::from_slice(&fs::read(&zizmor)?)?;
+        if !zizmor_data.as_array().is_some_and(Vec::is_empty) {
+            return Err("zizmor report must be an empty JSON array".into());
+        }
+        let gitleaks_data: JsonValue = serde_json::from_slice(&fs::read(&gitleaks)?)?;
+        if !gitleaks_data.as_array().is_some_and(Vec::is_empty) {
+            return Err("gitleaks report must be an empty JSON array".into());
+        }
+        let sbom_bytes = fs::read(&sbom)?;
+        let sbom_data: JsonValue = serde_json::from_slice(&sbom_bytes)?;
+        if sbom_data
+            .get("spdxVersion")
+            .and_then(JsonValue::as_str)
+            .is_none()
+        {
+            return Err("SBOM is missing spdxVersion".into());
+        }
+        let package_count = sbom_data
+            .get("packages")
+            .and_then(JsonValue::as_array)
+            .ok_or("SBOM packages must be an array")?
+            .len();
+        let grype_bytes = fs::read(&grype)?;
+        let grype_data: JsonValue = serde_json::from_slice(&grype_bytes)?;
+        if !grype_data.get("source").is_some_and(JsonValue::is_object) {
+            return Err("grype report source must be an object".into());
+        }
+        let matches = grype_data
+            .get("matches")
+            .and_then(JsonValue::as_array)
+            .ok_or("grype matches must be an array")?;
+        let high_or_critical = matches
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry
+                        .get("vulnerability")
+                        .and_then(|value| value.get("severity"))
+                        .and_then(JsonValue::as_str),
+                    Some("High" | "Critical")
+                )
+            })
+            .count();
+        if high_or_critical != 0 {
+            return Err(
+                format!("grype found {high_or_critical} high or critical vulnerabilities").into(),
+            );
+        }
+        report["sbom"] = json!({
+            "format": "spdx-json",
+            "sha256": sha256_bytes(&sbom_bytes),
+            "packages": package_count,
+        });
+        report["vulnerabilities"] = json!({
+            "grype_sha256": sha256_bytes(&grype_bytes),
+            "fail_on": "high",
+            "high_or_critical": high_or_critical,
+        });
         Ok(())
     })();
     finish_receipted_operation(&receipt, &mut report, result)
@@ -6594,6 +6756,53 @@ protection_policy = "immutable-main-v1"
         )
         .unwrap();
         manifest
+    }
+
+    #[test]
+    fn security_evidence_is_rust_validated_and_fail_closed() {
+        let root = TestDir::new("security-evidence");
+        let zizmor = root.path().join("zizmor.json");
+        let gitleaks = root.path().join("gitleaks.json");
+        let sbom = root.path().join("sbom.spdx.json");
+        let grype = root.path().join("grype.json");
+        let receipt = root.path().join("receipt.json");
+        fs::write(&zizmor, "[]\n").unwrap();
+        fs::write(&gitleaks, "[]\n").unwrap();
+        fs::write(
+            &sbom,
+            r#"{"spdxVersion":"SPDX-2.3","packages":[{"name":"splitctl"}]}"#,
+        )
+        .unwrap();
+        fs::write(&grype, r#"{"matches":[],"source":{}}"#).unwrap();
+        let args = || {
+            vec![
+                "--zizmor".to_owned(),
+                zizmor.display().to_string(),
+                "--gitleaks".to_owned(),
+                gitleaks.display().to_string(),
+                "--sbom".to_owned(),
+                sbom.display().to_string(),
+                "--grype".to_owned(),
+                grype.display().to_string(),
+                "--receipt".to_owned(),
+                receipt.display().to_string(),
+            ]
+        };
+
+        security_evidence_command(args()).unwrap();
+        let passing = read_json(&receipt);
+        assert_eq!(passing["status"], "pass");
+        assert_eq!(passing["sbom"]["packages"], 1);
+        assert_eq!(passing["vulnerabilities"]["high_or_critical"], 0);
+        assert!(valid_hex(passing["sbom"]["sha256"].as_str().unwrap(), 64));
+
+        fs::write(
+            &grype,
+            r#"{"matches":[{"vulnerability":{"severity":"High"}}],"source":{}}"#,
+        )
+        .unwrap();
+        assert!(security_evidence_command(args()).is_err());
+        assert_eq!(read_json(&receipt)["status"], "fail");
     }
 
     #[test]
